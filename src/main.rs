@@ -20,6 +20,7 @@ enum Action {
     SwitchCalendar(String),
     ToggleTask(usize),
     CreateTask(String),
+    EditTask(usize, String), // Index, Smart String
     DeleteTask(usize),
     ChangePriority(usize, i8),
     Quit,
@@ -36,7 +37,6 @@ enum AppEvent {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Panic Hook
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         use std::io::Write;
@@ -56,6 +56,7 @@ async fn main() -> Result<()> {
             let args: Vec<String> = env::args().collect();
             if args.len() < 4 {
                 eprintln!("Usage: rustache <URL> <USER> <PASS>");
+                eprintln!("Or create config at ~/.config/rustache/config.toml");
                 return Ok(());
             }
             (args[1].clone(), args[2].clone(), args[3].clone(), None)
@@ -72,7 +73,6 @@ async fn main() -> Result<()> {
     let (action_tx, mut action_rx) = mpsc::channel(10);
     let (event_tx, mut event_rx) = mpsc::channel(10);
 
-    // Actor
     tokio::spawn(async move {
         let mut client = match RustyClient::new(&url, &user, &pass) {
             Ok(c) => c,
@@ -85,7 +85,6 @@ async fn main() -> Result<()> {
             .send(AppEvent::Status("Connecting...".to_string()))
             .await;
 
-        // A. Fetch Calendars
         let calendars = match client.get_calendars().await {
             Ok(cals) => {
                 let _ = event_tx.send(AppEvent::CalendarsLoaded(cals.clone())).await;
@@ -99,7 +98,6 @@ async fn main() -> Result<()> {
             }
         };
 
-        // B. Select Active
         let mut selected = false;
         if let Some(def_name) = &default_cal {
             if let Some(cals) = &calendars {
@@ -125,8 +123,6 @@ async fn main() -> Result<()> {
         let _ = event_tx
             .send(AppEvent::Status("Fetching tasks...".to_string()))
             .await;
-
-        // C. Initial Fetch
         let mut local_tasks: Vec<Task> = match client.get_tasks().await {
             Ok(t) => t,
             Err(e) => {
@@ -139,7 +135,6 @@ async fn main() -> Result<()> {
             .send(AppEvent::TasksLoaded(local_tasks.clone()))
             .await;
 
-        // D. Action Loop
         while let Some(action) = action_rx.recv().await {
             match action {
                 Action::Quit => break,
@@ -186,6 +181,33 @@ async fn main() -> Result<()> {
                     }
                 }
 
+                Action::EditTask(index, smart_string) => {
+                    if index < local_tasks.len() {
+                        let task = &mut local_tasks[index];
+                        task.apply_smart_input(&smart_string); // Apply new text
+                        let _ = event_tx
+                            .send(AppEvent::Status("Updating...".to_string()))
+                            .await;
+
+                        let mut task_copy = task.clone();
+                        match client.update_task(&mut task_copy).await {
+                            Ok(_) => {
+                                local_tasks[index] = task_copy;
+                                local_tasks.sort();
+                                let _ = event_tx
+                                    .send(AppEvent::TasksLoaded(local_tasks.clone()))
+                                    .await;
+                                let _ = event_tx
+                                    .send(AppEvent::Status("Updated.".to_string()))
+                                    .await;
+                            }
+                            Err(e) => {
+                                let _ = event_tx.send(AppEvent::Error(e)).await;
+                            }
+                        }
+                    }
+                }
+
                 Action::ToggleTask(index) => {
                     if index < local_tasks.len() {
                         let task = &mut local_tasks[index];
@@ -193,7 +215,6 @@ async fn main() -> Result<()> {
                         let _ = event_tx
                             .send(AppEvent::Status("Syncing...".to_string()))
                             .await;
-
                         let mut task_copy = task.clone();
                         match client.update_task(&mut task_copy).await {
                             Ok(_) => {
@@ -258,7 +279,6 @@ async fn main() -> Result<()> {
                                 _ => 0,
                             }
                         };
-
                         if new_prio != task.priority {
                             task.priority = new_prio;
                             let _ = event_tx
@@ -287,7 +307,6 @@ async fn main() -> Result<()> {
         }
     });
 
-    // UI Loop
     loop {
         terminal.draw(|f| draw(f, &mut app_state))?;
 
@@ -298,7 +317,7 @@ async fn main() -> Result<()> {
                 }
                 AppEvent::TasksLoaded(tasks) => {
                     app_state.tasks = tasks;
-                    app_state.recalculate_view(); // FIX: Apply filter
+                    app_state.recalculate_view();
                     app_state.loading = false;
                     if app_state.tasks.is_empty() {
                         app_state.message = "No tasks found.".to_string();
@@ -320,129 +339,148 @@ async fn main() -> Result<()> {
         if crossterm::event::poll(Duration::from_millis(50))? {
             let event = event::read()?;
             match event {
-                // --- MOUSE ---
                 Event::Mouse(mouse) => match mouse.kind {
                     MouseEventKind::ScrollDown => app_state.next(),
                     MouseEventKind::ScrollUp => app_state.previous(),
                     _ => {}
                 },
-                // --- KEYS ---
-                Event::Key(key) => {
-                    match app_state.mode {
-                        InputMode::Creating => match key.code {
-                            KeyCode::Enter => {
-                                if !app_state.input_buffer.is_empty() {
-                                    let summary = app_state.input_buffer.clone();
-                                    let _ = action_tx.send(Action::CreateTask(summary)).await;
-                                    app_state.input_buffer.clear();
-                                    app_state.mode = InputMode::Normal;
-                                }
-                            }
-                            KeyCode::Esc => {
-                                app_state.mode = InputMode::Normal;
+                Event::Key(key) => match app_state.mode {
+                    InputMode::Creating => match key.code {
+                        KeyCode::Enter => {
+                            if !app_state.input_buffer.is_empty() {
+                                let summary = app_state.input_buffer.clone();
+                                let _ = action_tx.send(Action::CreateTask(summary)).await;
                                 app_state.input_buffer.clear();
-                            }
-                            KeyCode::Char(c) => app_state.input_buffer.push(c),
-                            KeyCode::Backspace => {
-                                app_state.input_buffer.pop();
-                            }
-                            _ => {}
-                        },
-
-                        InputMode::Searching => match key.code {
-                            KeyCode::Enter | KeyCode::Esc => {
                                 app_state.mode = InputMode::Normal;
                             }
-                            KeyCode::Char(c) => {
-                                app_state.input_buffer.push(c);
-                                app_state.recalculate_view();
-                            }
-                            KeyCode::Backspace => {
-                                app_state.input_buffer.pop();
-                                app_state.recalculate_view();
-                            }
-                            _ => {}
-                        },
+                        }
+                        KeyCode::Esc => {
+                            app_state.mode = InputMode::Normal;
+                            app_state.input_buffer.clear();
+                        }
+                        KeyCode::Char(c) => app_state.input_buffer.push(c),
+                        KeyCode::Backspace => {
+                            app_state.input_buffer.pop();
+                        }
+                        _ => {}
+                    },
 
-                        InputMode::Normal => match key.code {
-                            KeyCode::Char('q') => {
-                                let _ = action_tx.send(Action::Quit).await;
-                                break;
+                    InputMode::Editing => match key.code {
+                        KeyCode::Enter => {
+                            if let Some(idx) = app_state.editing_index {
+                                let new_text = app_state.input_buffer.clone();
+                                let _ = action_tx.send(Action::EditTask(idx, new_text)).await;
                             }
+                            app_state.input_buffer.clear();
+                            app_state.editing_index = None;
+                            app_state.mode = InputMode::Normal;
+                        }
+                        KeyCode::Esc => {
+                            app_state.mode = InputMode::Normal;
+                            app_state.input_buffer.clear();
+                            app_state.editing_index = None;
+                        }
+                        KeyCode::Char(c) => app_state.input_buffer.push(c),
+                        KeyCode::Backspace => {
+                            app_state.input_buffer.pop();
+                        }
+                        _ => {}
+                    },
 
-                            // SEARCH
-                            KeyCode::Char('/') => {
-                                app_state.mode = InputMode::Searching;
-                                app_state.input_buffer.clear();
-                                app_state.recalculate_view();
-                            }
-                            KeyCode::Esc => {
-                                app_state.input_buffer.clear();
-                                app_state.recalculate_view();
-                            }
+                    InputMode::Searching => match key.code {
+                        KeyCode::Enter | KeyCode::Esc => {
+                            app_state.mode = InputMode::Normal;
+                        }
+                        KeyCode::Char(c) => {
+                            app_state.input_buffer.push(c);
+                            app_state.recalculate_view();
+                        }
+                        KeyCode::Backspace => {
+                            app_state.input_buffer.pop();
+                            app_state.recalculate_view();
+                        }
+                        _ => {}
+                    },
 
-                            // SIDEBAR
-                            KeyCode::Tab => app_state.toggle_focus(),
-                            KeyCode::Enter => {
-                                if app_state.active_focus == Focus::Sidebar {
-                                    if let Some(idx) = app_state.cal_state.selected() {
-                                        if idx < app_state.calendars.len() {
-                                            let href = app_state.calendars[idx].href.clone();
-                                            let _ =
-                                                action_tx.send(Action::SwitchCalendar(href)).await;
-                                            app_state.active_focus = Focus::Main;
-                                        }
+                    InputMode::Normal => match key.code {
+                        KeyCode::Char('q') => {
+                            let _ = action_tx.send(Action::Quit).await;
+                            break;
+                        }
+                        KeyCode::Char('/') => {
+                            app_state.mode = InputMode::Searching;
+                            app_state.input_buffer.clear();
+                            app_state.recalculate_view();
+                        }
+                        KeyCode::Esc => {
+                            app_state.input_buffer.clear();
+                            app_state.recalculate_view();
+                        }
+                        KeyCode::Tab => app_state.toggle_focus(),
+                        KeyCode::Enter => {
+                            if app_state.active_focus == Focus::Sidebar {
+                                if let Some(idx) = app_state.cal_state.selected() {
+                                    if idx < app_state.calendars.len() {
+                                        let href = app_state.calendars[idx].href.clone();
+                                        let _ = action_tx.send(Action::SwitchCalendar(href)).await;
+                                        app_state.active_focus = Focus::Main;
                                     }
                                 }
                             }
+                        }
+                        KeyCode::Char('a') => {
+                            app_state.mode = InputMode::Creating;
+                            app_state.input_buffer.clear();
+                            app_state.message = "Example: Buy Milk @tomorrow !1".to_string();
+                        }
+                        KeyCode::Char('e') => {
+                            if app_state.active_focus == Focus::Main {
+                                if let Some(idx) = app_state.get_selected_master_index() {
+                                    let task = &app_state.tasks[idx];
+                                    app_state.mode = InputMode::Editing;
+                                    app_state.input_buffer = task.to_smart_string();
+                                    app_state.editing_index = Some(idx);
+                                }
+                            }
+                        }
+                        KeyCode::Down | KeyCode::Char('j') => app_state.next(),
+                        KeyCode::Up | KeyCode::Char('k') => app_state.previous(),
+                        KeyCode::PageDown => app_state.jump_forward(10),
+                        KeyCode::PageUp => app_state.jump_backward(10),
 
-                            // MAIN ACTIONS
-                            KeyCode::Char('a') => {
-                                app_state.mode = InputMode::Creating;
-                                app_state.input_buffer.clear();
-                                app_state.message = "Example: Buy Milk @tomorrow !1".to_string();
-                            }
-                            KeyCode::Down | KeyCode::Char('j') => app_state.next(),
-                            KeyCode::Up | KeyCode::Char('k') => app_state.previous(),
-                            KeyCode::PageDown => app_state.jump_forward(10),
-                            KeyCode::PageUp => app_state.jump_backward(10),
-
-                            KeyCode::Char(' ') => {
-                                if app_state.active_focus == Focus::Main {
-                                    if let Some(idx) = app_state.get_selected_master_index() {
-                                        app_state.tasks[idx].completed =
-                                            !app_state.tasks[idx].completed;
-                                        let _ = action_tx.send(Action::ToggleTask(idx)).await;
-                                    }
+                        KeyCode::Char(' ') => {
+                            if app_state.active_focus == Focus::Main {
+                                if let Some(idx) = app_state.get_selected_master_index() {
+                                    app_state.tasks[idx].completed =
+                                        !app_state.tasks[idx].completed;
+                                    let _ = action_tx.send(Action::ToggleTask(idx)).await;
                                 }
                             }
-                            KeyCode::Char('d') => {
-                                if app_state.active_focus == Focus::Main {
-                                    if let Some(idx) = app_state.get_selected_master_index() {
-                                        let _ = action_tx.send(Action::DeleteTask(idx)).await;
-                                    }
+                        }
+                        KeyCode::Char('d') => {
+                            if app_state.active_focus == Focus::Main {
+                                if let Some(idx) = app_state.get_selected_master_index() {
+                                    let _ = action_tx.send(Action::DeleteTask(idx)).await;
                                 }
                             }
-                            KeyCode::Char('+') => {
-                                if app_state.active_focus == Focus::Main {
-                                    if let Some(idx) = app_state.get_selected_master_index() {
-                                        let _ =
-                                            action_tx.send(Action::ChangePriority(idx, 1)).await;
-                                    }
+                        }
+                        KeyCode::Char('+') => {
+                            if app_state.active_focus == Focus::Main {
+                                if let Some(idx) = app_state.get_selected_master_index() {
+                                    let _ = action_tx.send(Action::ChangePriority(idx, 1)).await;
                                 }
                             }
-                            KeyCode::Char('-') => {
-                                if app_state.active_focus == Focus::Main {
-                                    if let Some(idx) = app_state.get_selected_master_index() {
-                                        let _ =
-                                            action_tx.send(Action::ChangePriority(idx, -1)).await;
-                                    }
+                        }
+                        KeyCode::Char('-') => {
+                            if app_state.active_focus == Focus::Main {
+                                if let Some(idx) = app_state.get_selected_master_index() {
+                                    let _ = action_tx.send(Action::ChangePriority(idx, -1)).await;
                                 }
                             }
-                            _ => {}
-                        },
-                    }
-                }
+                        }
+                        _ => {}
+                    },
+                },
                 _ => {}
             }
         }

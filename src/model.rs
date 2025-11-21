@@ -1,14 +1,7 @@
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone, Utc}; // <--- Fixed imports
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use icalendar::{Calendar, CalendarComponent, Component, Todo, TodoStatus};
 use std::cmp::Ordering;
 use uuid::Uuid;
-
-#[derive(Debug, Clone)]
-pub struct CalendarListEntry {
-    pub name: String,
-    pub href: String,
-    pub color: Option<String>, // WebDAV often sends colors like "#FF0000"
-}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Task {
@@ -23,18 +16,20 @@ pub struct Task {
 }
 
 impl Task {
-    // --- SMART INPUT PARSER ---
-    pub fn new(input: &str) -> Self {
+    // --- SMART LOGIC ---
+    pub fn apply_smart_input(&mut self, input: &str) {
         let mut summary_words = Vec::new();
-        let mut priority = 0;
-        let mut due = None;
+
+        // Reset fields we are about to parse
+        self.priority = 0;
+        self.due = None;
 
         for word in input.split_whitespace() {
             // 1. Check Priority (!1 - !9)
             if word.starts_with('!') {
                 if let Ok(p) = word[1..].parse::<u8>() {
                     if p >= 1 && p <= 9 {
-                        priority = p;
+                        self.priority = p;
                         continue;
                     }
                 }
@@ -43,48 +38,59 @@ impl Task {
             // 2. Check Date (@YYYY-MM-DD or @today/tomorrow)
             if word.starts_with('@') {
                 let date_str = &word[1..];
-
-                // Try strict date format YYYY-MM-DD
                 if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
-                    due = Some(date.and_hms_opt(23, 59, 59).unwrap().and_utc());
+                    self.due = Some(date.and_hms_opt(23, 59, 59).unwrap().and_utc());
                     continue;
                 }
 
-                // Natural language shortcuts
                 let now = Local::now().date_naive();
                 if date_str == "today" {
-                    due = Some(now.and_hms_opt(23, 59, 59).unwrap().and_utc());
+                    self.due = Some(now.and_hms_opt(23, 59, 59).unwrap().and_utc());
                     continue;
                 }
                 if date_str == "tomorrow" {
                     let tomorrow = now + chrono::Duration::days(1);
-                    due = Some(tomorrow.and_hms_opt(23, 59, 59).unwrap().and_utc());
+                    self.due = Some(tomorrow.and_hms_opt(23, 59, 59).unwrap().and_utc());
                     continue;
                 }
             }
-
-            // If not a tag, it's part of the title
             summary_words.push(word);
         }
+        self.summary = summary_words.join(" ");
+    }
 
-        Self {
+    // Convert task back to string for editing (e.g., "Buy Milk !1 @2023-01-01")
+    pub fn to_smart_string(&self) -> String {
+        let mut s = self.summary.clone();
+        if self.priority > 0 {
+            s.push_str(&format!(" !{}", self.priority));
+        }
+        if let Some(d) = self.due {
+            s.push_str(&format!(" @{}", d.format("%Y-%m-%d")));
+        }
+        s
+    }
+
+    pub fn new(input: &str) -> Self {
+        let mut task = Self {
             uid: Uuid::new_v4().to_string(),
-            summary: summary_words.join(" "),
+            summary: String::new(),
             completed: false,
-            due,
-            priority,
+            due: None,
+            priority: 0,
             parent_uid: None,
             etag: String::new(),
             href: String::new(),
-        }
+        };
+        task.apply_smart_input(input);
+        task
     }
 
+    // --- ICAL LOGIC ---
     pub fn to_ics(&self) -> String {
         let mut todo = Todo::new();
         todo.uid(&self.uid);
         todo.summary(&self.summary);
-
-        // Mandatory DTSTAMP
         todo.timestamp(Utc::now());
 
         if self.completed {
@@ -169,6 +175,7 @@ impl Task {
     }
 }
 
+// --- SORTING ---
 impl Ord for Task {
     fn cmp(&self, other: &Self) -> Ordering {
         if self.completed != other.completed {
@@ -194,16 +201,21 @@ impl Ord for Task {
         } else {
             other.priority
         };
-
         if p1 != p2 {
             return p1.cmp(&p2);
         }
         self.summary.cmp(&other.summary)
     }
 }
-
 impl PartialOrd for Task {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct CalendarListEntry {
+    pub name: String,
+    pub href: String,
+    pub color: Option<String>,
 }

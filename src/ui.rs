@@ -18,24 +18,24 @@ pub enum InputMode {
     Normal,
     Creating,
     Searching,
+    Editing,
 }
 
 pub struct AppState {
-    // Data
     pub tasks: Vec<Task>,
-    pub view_indices: Vec<usize>, // Indices of tasks currently visible (filtered)
+    pub view_indices: Vec<usize>,
     pub calendars: Vec<CalendarListEntry>,
 
-    // State
     pub list_state: ListState,
     pub cal_state: ListState,
     pub active_focus: Focus,
     pub message: String,
     pub loading: bool,
 
-    // Input
     pub mode: InputMode,
     pub input_buffer: String,
+    // Track which task we are editing
+    pub editing_index: Option<usize>,
 }
 
 impl AppState {
@@ -52,10 +52,11 @@ impl AppState {
             list_state: l_state,
             cal_state: c_state,
             active_focus: Focus::Main,
-            message: "Tab: View | /: Search | a: Add".to_string(),
+            message: "Tab: View | /: Search | a: Add | e: Edit".to_string(),
             loading: true,
             mode: InputMode::Normal,
             input_buffer: String::new(),
+            editing_index: None,
         }
     }
 
@@ -72,8 +73,6 @@ impl AppState {
         } else {
             self.view_indices = (0..self.tasks.len()).collect();
         }
-
-        // Fix selection bounds
         let sel = self.list_state.selected().unwrap_or(0);
         if self.view_indices.is_empty() {
             self.list_state.select(Some(0));
@@ -90,8 +89,6 @@ impl AppState {
         }
         None
     }
-
-    // --- Navigation ---
 
     pub fn next(&mut self) {
         match self.active_focus {
@@ -257,7 +254,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         );
     f.render_stateful_widget(sidebar, h_chunks[0], &mut state.cal_state);
 
-    // Main List (Render using VIEW INDICES)
+    // Main List
     let task_items: Vec<ListItem> = state
         .view_indices
         .iter()
@@ -285,8 +282,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     } else {
         Style::default()
     };
-
-    // FIX: Return String in both branches
     let title = if state.loading {
         " Tasks (Loading...) ".to_string()
     } else {
@@ -319,6 +314,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 );
             f.render_widget(input, v_chunks[1]);
         }
+        InputMode::Editing => {
+            let input = Paragraph::new(format!("> {}_", state.input_buffer))
+                .style(Style::default().fg(Color::Magenta))
+                .block(Block::default().borders(Borders::ALL).title(" Edit Task "));
+            f.render_widget(input, v_chunks[1]);
+        }
         InputMode::Searching => {
             let input = Paragraph::new(format!("/ {}_", state.input_buffer))
                 .style(Style::default().fg(Color::Green))
@@ -339,7 +340,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         .title(" Status "),
                 );
 
-            let help = Paragraph::new("Tab:View | Enter:Sel | /:Find | a:Add | Space:Done")
+            let help = Paragraph::new("Tab:View | /:Find | a:Add | e:Edit | Space:Done")
                 .style(Style::default().fg(Color::DarkGray))
                 .alignment(Alignment::Right)
                 .block(
