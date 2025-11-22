@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # 1. Install System Dependencies (Required for Iced GUI)
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfontconfig1-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev
+
+      # 2. Build both binaries (TUI and GUI)
+      - name: Build Release
+        run: cargo build --release --features gui
+
+      # 3. Package Tarball
+      - name: Create Archive
+        run: |
+          # Create a staging directory
+          STAGING="fairouille-${{ github.ref_name }}"
+          mkdir -p "$STAGING"
+
+          # Copy Main Binary (TUI) -> matches [[bin]] name = "fairouille"
+          cp target/release/fairouille "$STAGING/"
+          
+          # Copy GUI Binary -> matches [[bin]] name = "gui", renamed for user
+          cp target/release/gui "$STAGING/fairouille-gui"
+          
+          # Assets
+          cp README.md LICENSE "$STAGING/"
+          cp assets/fairouille.desktop "$STAGING/"
+
+          # Compress
+          tar -czvf "fairouille-linux-${{ github.ref_name }}.tar.gz" "$STAGING"
+
+      # 4. Publish to GitHub Releases
+      - name: Upload Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            fairouille-linux-${{ github.ref_name }}.tar.gz

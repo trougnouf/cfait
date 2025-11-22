@@ -1,7 +1,7 @@
-use rustache::cache::Cache;
-use rustache::client::RustyClient;
-use rustache::config::Config;
-use rustache::model::{CalendarListEntry, Task as TodoTask};
+use fairouille::cache::Cache;
+use fairouille::client::RustyClient;
+use fairouille::config::Config;
+use fairouille::model::{CalendarListEntry, Task as TodoTask};
 
 use iced::widget::{
     Rule, button, checkbox, column, container, horizontal_space, row, scrollable, text, text_input,
@@ -19,12 +19,12 @@ pub fn main() -> iced::Result {
         .set(runtime)
         .expect("Failed to set global runtime");
 
-    iced::application("Rustache", RustacheGui::update, RustacheGui::view)
-        .theme(RustacheGui::theme)
-        .run_with(RustacheGui::new)
+    iced::application("Fairouille", FairouilleGui::update, FairouilleGui::view)
+        .theme(FairouilleGui::theme)
+        .run_with(FairouilleGui::new)
 }
 
-struct RustacheGui {
+struct FairouilleGui {
     tasks: Vec<TodoTask>,
     calendars: Vec<CalendarListEntry>,
     active_cal_href: Option<String>,
@@ -38,7 +38,7 @@ struct RustacheGui {
     error_msg: Option<String>,
 }
 
-impl Default for RustacheGui {
+impl Default for FairouilleGui {
     fn default() -> Self {
         Self {
             tasks: vec![],
@@ -89,7 +89,7 @@ enum Message {
     DeleteComplete(#[allow(dead_code)] Result<(), String>),
 }
 
-impl RustacheGui {
+impl FairouilleGui {
     fn new() -> (Self, Task<Message>) {
         (
             Self::default(),
@@ -407,7 +407,7 @@ impl RustacheGui {
         let title_text = if self.loading {
             "Loading..."
         } else {
-            "Rustache"
+            "Fairouille"
         };
         let search_input = text_input("Search...", &self.search_value)
             .on_input(Message::SearchChanged)

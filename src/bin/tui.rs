@@ -1,8 +1,8 @@
-use rustache::cache::Cache;
-use rustache::client::RustyClient;
-use rustache::config;
-use rustache::model::{CalendarListEntry, Task};
-use rustache::ui::{AppState, Focus, InputMode, draw};
+use fairouille::cache::Cache;
+use fairouille::client::RustyClient;
+use fairouille::config;
+use fairouille::model::{CalendarListEntry, Task};
+use fairouille::ui::{AppState, Focus, InputMode, draw};
 
 use anyhow::Result;
 use crossterm::{
@@ -44,7 +44,7 @@ async fn main() -> Result<()> {
         if let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open("rustache_panic.log")
+            .open("fairouille_panic.log")
         {
             let _ = writeln!(file, "PANIC: {:?}", info);
         }

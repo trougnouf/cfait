@@ -13,8 +13,8 @@ pub struct Config {
 
 impl Config {
     pub fn load() -> Result<Self> {
-        // Now looks in ~/.config/rustache/config.toml
-        if let Some(proj_dirs) = ProjectDirs::from("com", "trougnouf", "rustache") {
+        // Now looks in ~/.config/fairouille/config.toml
+        if let Some(proj_dirs) = ProjectDirs::from("com", "trougnouf", "fairouille") {
             let config_path = proj_dirs.config_dir().join("config.toml");
 
             if config_path.exists() {

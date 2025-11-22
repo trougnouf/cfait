@@ -1,9 +1,9 @@
 [Desktop Entry]
-Name=Rustache
+Name=Fairouille
 Comment=Elegant CalDAV Task Manager
-Exec=rustache-gui
+Exec=fairouille-gui
 Terminal=false
 Type=Application
 Categories=Office;Utility;
 Keywords=todo;caldav;task;
-# Icon=rustache
+# Icon=fairouille

@@ -1,12 +1,12 @@
-# Rustache
+# Fairouille
 
-**Rustache** is a simple, elegant, and lightweight CalDAV task manager, written in Rust.
+**Fairouille** is a simple, elegant, and lightweight CalDAV task manager, written in Rust.
 
 It features both a lightning-fast **TUI (Terminal UI)** and a modern **GUI (Graphical UI)** for desktop integration.
 
 ## Features
 
-*   **Dual Interface:** Run it in your terminal (`rustache`) or as a windowed app (`rustache-gui`).
+*   **Dual Interface:** Run it in your terminal (`fairouille`) or as a windowed app (`fairouille-gui`).
 *   **Smart Input:** Add tasks naturally: `Buy cat food !1 @tomorrow` sets High Priority and Due Date automatically.
 *   **Syncs Everywhere:** Fully compatible with standard CalDAV servers (Radicale, Nextcloud, iCloud, etc.).
 *   **Hierarchy Support:** Create sub-tasks and organize nested lists easily.
@@ -29,17 +29,17 @@ cargo install --path . --bin gui --no-default-features --features gui
 ### 2. Run
 ```bash
 # Run TUI
-rustache
+fairouille
 
 # Run GUI
-rustache-gui
+fairouille-gui
 ```
 
 ## Configuration
 
 Create a config file at:
-*   **Linux:** `~/.config/rustache/config.toml`
-*   **Mac:** `~/Library/Application Support/com.rustache.rustache/config.toml`
+*   **Linux:** `~/.config/fairouille/config.toml`
+*   **Mac:** `~/Library/Application Support/com.fairouille.fairouille/config.toml`
 
 ```toml
 url = "https://caldav.example.com/remote.php/dav/calendars/user/"
