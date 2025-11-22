@@ -108,7 +108,7 @@ async fn main() -> Result<()> {
             println!("Testing connection...");
 
             let check_result = async {
-                let mut client = RustyClient::new(&url, &user, &pass).map_err(|e| e.to_string())?;
+                let client = RustyClient::new(&url, &user, &pass).map_err(|e| e.to_string())?;
                 // 1. Force a Principal lookup (Actually hits the server)
                 if let Err(e) = client.get_calendars().await {
                     return Err(format!("Could not list calendars: {}", e));

@@ -86,6 +86,7 @@ When adding (`a`) or editing (`e`) a task, you can use shortcuts directly in the
 * [ ] TUI: list keywords when naming tasks
 * [ ] switch this todo to cfait and version control it here
 * [>] rename
+* [ ] move to gitlab-ci?
 
 ## License
 GPL3

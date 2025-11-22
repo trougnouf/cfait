@@ -112,7 +112,6 @@ enum Message {
     SyncToggleComplete(Result<(TodoTask, Option<TodoTask>), String>),
     TasksRefreshed(Result<Vec<TodoTask>, String>),
     DeleteComplete(#[allow(dead_code)] Result<(), String>),
-    CacheLoaded(Vec<TodoTask>),
 }
 
 impl RustacheGui {
@@ -177,12 +176,6 @@ impl RustacheGui {
                 self.state = AppState::Loading;
                 self.error_msg = Some("Connecting...".to_string());
                 Task::perform(connect_and_fetch_wrapper(config), Message::Loaded)
-            }
-            Message::CacheLoaded(tasks) => {
-                if let AppState::Loading = self.state {
-                    self.tasks = TodoTask::organize_hierarchy(tasks);
-                }
-                Task::none()
             }
             Message::Loaded(Ok((client, cals, tasks, active))) => {
                 self.client = Some(client);

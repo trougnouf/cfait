@@ -17,11 +17,16 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      # 1. Install System Dependencies
+# 1. Install System Dependencies
       - name: Install Dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libfontconfig1-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev
+
+      # Run Tests ---
+      - name: Run Unit Tests
+        run: cargo test --verbose
+      # ----------------------
 
       # 2. Install Packaging Tools
       - name: Install cargo-deb
