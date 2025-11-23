@@ -149,6 +149,33 @@ impl RustyClient {
         Ok(tasks)
     }
 
+    // Fetch ALL tasks from ALL calendars concurrently
+    pub async fn get_all_tasks(
+        &self,
+        calendars: &[CalendarListEntry],
+    ) -> Result<Vec<(String, Vec<Task>)>, String> {
+        let mut handles = Vec::new();
+
+        for cal in calendars {
+            let client = self.clone();
+            let href = cal.href.clone();
+            handles.push(tokio::spawn(async move {
+                let tasks = client.get_tasks(&href).await;
+                (href, tasks)
+            }));
+        }
+
+        let mut results = Vec::new();
+        for handle in handles {
+            if let Ok((href, task_res)) = handle.await {
+                if let Ok(tasks) = task_res {
+                    results.push((href, tasks));
+                }
+            }
+        }
+        Ok(results)
+    }
+
     pub async fn update_task(&self, task: &mut Task) -> Result<(), String> {
         let bytes = task.to_ics().as_bytes().to_vec();
         let res = self

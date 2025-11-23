@@ -10,6 +10,12 @@ pub struct Config {
     pub username: String,
     pub password: String,
     pub default_calendar: Option<String>,
+
+    // NEW FIELDS
+    #[serde(default)]
+    pub hide_completed: bool,
+    #[serde(default)]
+    pub hide_completed_in_tags: bool,
 }
 
 impl Config {
@@ -34,7 +40,6 @@ impl Config {
         Err(anyhow::anyhow!("Config file not found"))
     }
 
-    // NEW: Save to disk
     pub fn save(&self) -> Result<()> {
         let path = Self::get_path()?;
         let toml_str = toml::to_string_pretty(self)?;

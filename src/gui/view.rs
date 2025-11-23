@@ -1,5 +1,5 @@
 use crate::gui::message::Message;
-use crate::gui::state::{AppState, GuiApp};
+use crate::gui::state::{AppState, GuiApp, SidebarMode};
 use crate::model::Task as TodoTask;
 
 use iced::widget::{
@@ -32,8 +32,72 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
     }
 }
 
+// --- SIDEBAR COMPONENT ---
+
 fn view_sidebar(app: &GuiApp) -> Element<'_, Message> {
-    let cal_list = column(
+    // 1. Tab Switcher
+    let btn_cals = button(
+        container(text("Calendars").size(14))
+            .width(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Center),
+    )
+    .padding(5)
+    .width(Length::Fill)
+    .style(if app.sidebar_mode == SidebarMode::Calendars {
+        button::primary
+    } else {
+        button::secondary
+    })
+    .on_press(Message::SidebarModeChanged(SidebarMode::Calendars));
+
+    let btn_tags = button(
+        container(text("Tags").size(14))
+            .width(Length::Fill)
+            .align_x(iced::alignment::Horizontal::Center),
+    )
+    .padding(5)
+    .width(Length::Fill)
+    .style(if app.sidebar_mode == SidebarMode::Categories {
+        button::primary
+    } else {
+        button::secondary
+    })
+    .on_press(Message::SidebarModeChanged(SidebarMode::Categories));
+
+    let tabs = row![btn_cals, btn_tags].spacing(5);
+
+    // 2. Content based on Tab
+    let content = match app.sidebar_mode {
+        SidebarMode::Calendars => view_sidebar_calendars(app),
+        SidebarMode::Categories => view_sidebar_categories(app),
+    };
+
+    // 3. Footer (Settings)
+    let settings_btn = button(row![text("Settings").size(16)].align_y(iced::Alignment::Center))
+        .padding(10)
+        .width(Length::Fill)
+        .style(button::secondary)
+        .on_press(Message::OpenSettings);
+
+    let sidebar_inner = column![tabs, scrollable(content).height(Length::Fill), settings_btn]
+        .spacing(10)
+        .padding(10);
+
+    container(sidebar_inner)
+        .width(200)
+        .height(Length::Fill)
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                background: Some(Background::Color(palette.background.weak.color)),
+                ..Default::default()
+            }
+        })
+        .into()
+}
+
+fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
+    column(
         app.calendars
             .iter()
             .map(|cal| {
@@ -53,33 +117,80 @@ fn view_sidebar(app: &GuiApp) -> Element<'_, Message> {
             .collect::<Vec<_>>(),
     )
     .spacing(10)
-    .width(Length::Fill);
-
-    let settings_btn = button(row![text("Settings").size(16)].align_y(iced::Alignment::Center))
-        .padding(10)
-        .width(Length::Fill)
-        .style(button::secondary)
-        .on_press(Message::OpenSettings);
-
-    let sidebar_inner = column![scrollable(cal_list).height(Length::Fill), settings_btn]
-        .spacing(10)
-        .padding(10);
-
-    container(sidebar_inner)
-        .width(200)
-        .height(Length::Fill)
-        .style(|theme: &Theme| {
-            let palette = theme.extended_palette();
-            container::Style {
-                background: Some(Background::Color(palette.background.weak.color)),
-                ..Default::default()
-            }
-        })
-        .into()
+    .width(Length::Fill)
+    .into()
 }
 
+fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
+    let all_cats = app.store.get_all_categories();
+
+    let logic_text = if app.match_all_categories {
+        "Match: AND"
+    } else {
+        "Match: OR"
+    };
+    let logic_btn = button(text(logic_text).size(12))
+        .style(button::secondary)
+        .padding(5)
+        .on_press(Message::CategoryMatchModeChanged(!app.match_all_categories));
+
+    let header = row![
+        text("Filter Tags")
+            .size(14)
+            .color(Color::from_rgb(0.7, 0.7, 0.7)),
+        horizontal_space(),
+        logic_btn
+    ]
+    .align_y(iced::Alignment::Center);
+
+    if all_cats.is_empty() {
+        return column![
+            header,
+            text("No tags found")
+                .size(14)
+                .color(Color::from_rgb(0.5, 0.5, 0.5))
+        ]
+        .spacing(10)
+        .into();
+    }
+
+    let list = column(
+        all_cats
+            .into_iter()
+            .map(|cat| {
+                let is_selected = app.selected_categories.contains(&cat);
+                let cat_clone = cat.clone();
+                checkbox(format!("#{}", cat), is_selected)
+                    .size(18)
+                    .text_size(16)
+                    .on_toggle(move |_| Message::CategoryToggled(cat_clone.clone()))
+                    .into()
+            })
+            .collect::<Vec<_>>(),
+    )
+    .spacing(5);
+
+    column![header, list].spacing(10).into()
+}
+
+// --- MAIN CONTENT COMPONENT ---
+
 fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
-    let title_text = if app.loading { "Loading..." } else { "Cfait" };
+    let title_text = if app.loading {
+        "Loading...".to_string()
+    } else if app.active_cal_href.is_none() {
+        if app.selected_categories.is_empty() {
+            "All Tasks".to_string()
+        } else {
+            format!("Tasks ({})", app.tasks.len())
+        }
+    } else {
+        app.calendars
+            .iter()
+            .find(|c| Some(&c.href) == app.active_cal_href.as_ref())
+            .map(|c| c.name.clone())
+            .unwrap_or("Calendar".to_string())
+    };
 
     let search_input = text_input("Search...", &app.search_value)
         .on_input(Message::SearchChanged)
@@ -95,26 +206,11 @@ fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
 
     let input_area = view_input_area(app);
 
-    let is_searching = !app.search_value.is_empty();
-    let filtered_tasks: Vec<(usize, &TodoTask)> = app
-        .tasks
-        .iter()
-        .enumerate()
-        .filter(|(_, t)| {
-            if is_searching {
-                t.summary
-                    .to_lowercase()
-                    .contains(&app.search_value.to_lowercase())
-            } else {
-                true
-            }
-        })
-        .collect();
-
     let tasks_view = column(
-        filtered_tasks
-            .into_iter()
-            .map(|(real_index, task)| view_task_row(app, real_index, task, is_searching))
+        app.tasks
+            .iter()
+            .enumerate()
+            .map(|(real_index, task)| view_task_row(app, real_index, task))
             .collect::<Vec<_>>(),
     )
     .spacing(2);
@@ -134,7 +230,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
     let input_placeholder = if app.editing_uid.is_some() {
         "Edit Title..."
     } else {
-        "Add task (Buy cat food !1 @weekly #chore)..."
+        "Add task (Buy cat food !1 @weekly #groceries)..."
     };
 
     let input_title = text_input(input_placeholder, &app.input_value)
@@ -178,19 +274,16 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
     }
 }
 
-fn view_task_row<'a>(
-    app: &'a GuiApp,
-    index: usize,
-    task: &'a TodoTask,
-    is_searching: bool,
-) -> Element<'a, Message> {
+fn view_task_row<'a>(app: &'a GuiApp, index: usize, task: &'a TodoTask) -> Element<'a, Message> {
     let color = match task.priority {
         1..=4 => Color::from_rgb(0.8, 0.2, 0.2),
         5 => Color::from_rgb(0.8, 0.8, 0.2),
         _ => Color::WHITE,
     };
 
-    let indent_size = if is_searching { 0 } else { task.depth * 20 };
+    // Only indent if in Calendar Mode and not Searching
+    let show_indent = app.active_cal_href.is_some() && app.search_value.is_empty();
+    let indent_size = if show_indent { task.depth * 20 } else { 0 };
     let indent = horizontal_space().width(Length::Fixed(indent_size as f32));
 
     let summary = text(&task.summary)
@@ -296,7 +389,7 @@ fn view_task_row<'a>(
 
     let padded_row = container(row_main).padding(iced::Padding {
         top: 5.0,
-        right: 15.0, // Fix for scrollbar overlap
+        right: 15.0,
         bottom: 5.0,
         left: 5.0,
     });
@@ -349,6 +442,25 @@ fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         horizontal_space().width(0).into()
     };
 
+    // FIX: Wrap in container explicitly to help type inference
+    let prefs: Element<_> = if is_settings {
+        container(
+            column![
+                checkbox("Hide Completed Tasks (Everywhere)", app.hide_completed)
+                    .on_toggle(Message::ToggleHideCompleted),
+                checkbox(
+                    "Hide Completed Tasks (in Tags view)",
+                    app.hide_completed_in_tags
+                )
+                .on_toggle(Message::ToggleHideCompletedInTags),
+            ]
+            .spacing(10),
+        )
+        .into()
+    } else {
+        horizontal_space().width(0).into()
+    };
+
     let mut buttons = row![].spacing(10);
     if is_settings {
         buttons = buttons.push(
@@ -383,6 +495,7 @@ fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             .secure(true)
             .padding(10),
         picker,
+        prefs,
         buttons
     ]
     .spacing(15)

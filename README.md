@@ -43,6 +43,10 @@ cfait-gui
 
 ## Configuration
 
+The GUI includes a configuration dialog which writes to the config file below.
+
+The TUI has on onboarding dialog but it is only used to populate the `url`, `username`, and `password` fields.
+
 Create a config file at:
 *   **Linux:** `~/.config/cfait/config.toml`
 *   **Mac:** `~/Library/Application Support/com.cfait.cfait/config.toml`
@@ -52,6 +56,11 @@ url = "https://caldav.example.com/remote.php/dav/calendars/user/"
 username = "myuser"
 password = "mypassword"
 default_calendar = "Personal" # Optional: Auto-selects this list on startup
+
+# Hide completed tasks in all views
+hide_completed = false
+# Hide completed tasks only when viewing Tags/Categories
+hide_completed_in_tags = true
 ```
 
 ## TUI Keybindings
