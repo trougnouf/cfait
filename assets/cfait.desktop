@@ -7,3 +7,4 @@ Type=Application
 Categories=Office;Utility;
 Keywords=todo;caldav;task;
 Icon=cfait
+StartupWMClass=cfait-gui

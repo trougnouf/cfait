@@ -79,7 +79,7 @@ jobs:
         run: |
           VERSION=${{ github.ref_name }}
           # Note: Assuming your gitlab tags match github tags
-          SOURCE_URL="https://gitlab.com/trougnouf/cfait/-/archive/${VERSION}/cfait-${VERSION}.tar.gz"
+          SOURCE_URL="https://github.com/${{ github.repository }}/archive/${{ github.ref_name }}.tar.gz"
           wget -O source.tar.gz "$SOURCE_URL"
           
           HASH=$(sha256sum source.tar.gz | awk '{print $1}')

@@ -7,7 +7,9 @@ use iced::widget::{
     Rule, button, checkbox, column, container, horizontal_space, pick_list, row, scrollable, text,
     text_input,
 };
-use iced::{Background, Color, Element, Length, Padding, Task, Theme};
+
+use iced::{Background, Color, Element, Length, Padding, Task, Theme, window};
+
 use std::collections::HashSet;
 use std::sync::OnceLock;
 use tokio::runtime::Runtime;
@@ -20,8 +22,15 @@ pub fn main() -> iced::Result {
         .set(runtime)
         .expect("Failed to set global runtime");
 
-    iced::application("Cfait", RustacheGui::update, RustacheGui::view)
+    iced::application("Fairouille", RustacheGui::update, RustacheGui::view)
         .theme(RustacheGui::theme)
+        .window(window::Settings {
+            platform_specific: window::settings::PlatformSpecific {
+                application_id: String::from("cfait"),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
         .run_with(RustacheGui::new)
 }
 
