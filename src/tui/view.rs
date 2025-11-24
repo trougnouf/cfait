@@ -127,7 +127,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             }
 
             let summary = format!(
-                "{}{}{} {}{}{}",
+                "{}{} {} {}{}{}", // Added space between 2nd and 3rd bracket
                 indent, checkbox, t.summary, due_str, recur_str, cat_str
             );
             ListItem::new(Line::from(vec![Span::styled(summary, style)]))
