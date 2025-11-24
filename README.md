@@ -15,6 +15,8 @@ It features both a lightning-fast **TUI (Terminal UI)** and a modern **GUI (Grap
 *   **Dual Interface:** Run it in your terminal (`cfait`) or as a windowed app (`cfait-gui`).
 *   **Smart Input:** Add tasks naturally: `Buy cat food !1 @tomorrow` sets High Priority and Due Date automatically.
 *   **Syncs Everywhere:** Fully compatible with standard CalDAV servers (Radicale, Nextcloud, iCloud, etc.).
+*   **Tag Support:** Organize tasks across all calendars using tags (e.g., `#work`, `#urgent`).
+*   **Dependencies:** Link tasks using RFC 9253 (Blocked By) logic.
 *   **Hierarchy Support:** Create sub-tasks and organize nested lists easily.
 *   **Multiple Calendars:** Seamlessly switch between "Work", "Personal", and other lists.
 *   **Offline-First:** Optimistic UI updates mean you never wait for the server.
@@ -67,17 +69,23 @@ hide_completed_in_tags = true
 
 | Context | Key | Action |
 | :--- | :--- | :--- |
-| **Global** | `Tab` | Switch focus (Tasks ↔ Calendars) |
+| **Global** | `Tab` | Switch focus (Tasks ↔ Sidebar) |
 | | `q` | Quit |
 | **Task List** | `j` / `k` | Move Down / Up |
 | | `Space` | **Toggle** Completion |
 | | `a` | **Add** Task (Type name, press Enter) |
 | | `e` | **Edit** Title (Shift+E for Description) |
 | | `d` | **Delete** Task |
+| | `y` | **Yank** (Copy ID for linking) |
+| | `b` | **Block** (Mark current task as blocked by Yanked task) |
+| | `H` | Toggle **Hide Completed** tasks |
 | | `/` | **Search** / Filter Tasks |
 | | `+` / `-` | Increase / Decrease **Priority** |
 | | `>` / `<` | **Indent** / **Outdent** (Create Sub-tasks) |
-| **Sidebar** | `Enter` | Select Calendar |
+| **Sidebar** | `Enter` | Select Calendar / Toggle Tag |
+| | `1` | Switch to **Calendars** View |
+| | `2` | Switch to **Tags** View |
+| | `m` | Toggle Tag Match Mode (AND / OR) |
 
 ## Input Syntax
 When adding (`a`) or editing (`e`) a task, you can use shortcuts directly in the text:
@@ -91,17 +99,18 @@ When adding (`a`) or editing (`e`) a task, you can use shortcuts directly in the
 ## TODO
 * [ ] TUI: clickable
 * [ ] CLI interface (non-interactive, e.g. --add-task or -a)
-* [ ] Unit Tests
-* [ ] Multi-calendar Search
+* [ ] Multi-calendar Search (Text search across everything)
 * [ ] Desktop Notifications
 * [ ] Add lightweight font w/ monochrome emojis (embedded font or iced_aw or ??? or use system standard font or use system standard icons)
-* [ ] TUI/GUI(/CLI): multiple instances ok
+* [ ] TUI/GUI(/CLI): multiple instances ok (File locking?)
 * [ ] TUI: cursor when naming tasks
 * [ ] TUI: list keywords when naming tasks
 * [ ] switch this todo to cfait and version control it here?
 * [ ] move to gitlab-ci?
 * [ ] publish crate
-* [ ] Implement RFC 9253 (e.g. FINISHTOSTART)
+* [ ] More Unit Tests
+* [ ] Implement RFC 9253 (Dependencies) in the GUI
 
 ## License
 GPL3
+```

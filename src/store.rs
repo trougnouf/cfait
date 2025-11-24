@@ -151,4 +151,38 @@ impl TaskStore {
 
         Task::organize_hierarchy(filtered)
     }
+
+    pub fn get_task_status(&self, uid: &str) -> Option<bool> {
+        for tasks in self.calendars.values() {
+            if let Some(t) = tasks.iter().find(|t| t.uid == uid) {
+                return Some(t.completed);
+            }
+        }
+        None // Task not found (maybe deleted?)
+    }
+
+    pub fn is_blocked(&self, task: &Task) -> bool {
+        if task.dependencies.is_empty() {
+            return false;
+        }
+        for dep_uid in &task.dependencies {
+            // If we can't find the dependency, assume it's not blocking (or external)
+            // If found and NOT completed, then we are blocked.
+            if let Some(completed) = self.get_task_status(dep_uid) {
+                if !completed {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    pub fn get_summary(&self, uid: &str) -> Option<String> {
+        for tasks in self.calendars.values() {
+            if let Some(t) = tasks.iter().find(|t| t.uid == uid) {
+                return Some(t.summary.clone());
+            }
+        }
+        None
+    }
 }

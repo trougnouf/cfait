@@ -413,13 +413,46 @@ fn view_task_row<'a>(app: &'a GuiApp, index: usize, task: &'a TodoTask) -> Eleme
     });
 
     if is_expanded {
-        let desc_text = text(&task.description)
-            .size(14)
-            .color(Color::from_rgb(0.7, 0.7, 0.7));
+        let mut details_col = column![].spacing(5);
+
+        // 1. Description
+        if !task.description.is_empty() {
+            details_col = details_col.push(
+                text(&task.description)
+                    .size(14)
+                    .color(Color::from_rgb(0.7, 0.7, 0.7)),
+            );
+        }
+
+        // 2. Blockers (Text only)
+        if !task.dependencies.is_empty() {
+            details_col = details_col.push(
+                text("[Blocked By]:")
+                    .size(12)
+                    .color(Color::from_rgb(0.8, 0.4, 0.4)),
+            );
+
+            for dep_uid in &task.dependencies {
+                let name = app
+                    .store
+                    .get_summary(dep_uid)
+                    .unwrap_or_else(|| "Unknown Task".to_string());
+                let is_done = app.store.get_task_status(dep_uid).unwrap_or(false);
+                let check = if is_done { "[x]" } else { "[ ]" };
+
+                details_col = details_col.push(
+                    text(format!(" {} {}", check, name))
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.6, 0.6)),
+                );
+            }
+        }
+
         let desc_row = row![
             horizontal_space().width(Length::Fixed(indent_size as f32 + 30.0)),
-            desc_text
+            details_col
         ];
+
         container(column![padded_row, desc_row].spacing(5))
             .padding(5)
             .into()

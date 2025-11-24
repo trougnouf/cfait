@@ -625,6 +625,54 @@ pub async fn run() -> Result<()> {
                                 }
                             }
                         }
+                        KeyCode::Char('y') => {
+                            let selection = app_state
+                                .get_selected_task()
+                                .map(|t| (t.uid.clone(), t.summary.clone()));
+
+                            if let Some((uid, summary)) = selection {
+                                app_state.yanked_uid = Some(uid);
+                                app_state.message = format!("Yanked: {}", summary);
+                            }
+                        }
+                        KeyCode::Char('b') => {
+                            // "Block this task with the yanked one"
+                            if let Some(yanked) = &app_state.yanked_uid {
+                                if let Some(current) = app_state.get_selected_task() {
+                                    if current.uid == *yanked {
+                                        app_state.message = "Cannot depend on self!".to_string();
+                                    } else {
+                                        // Clone to modify
+                                        let mut t_clone = current.clone();
+                                        // Add dependency if not exists
+                                        if !t_clone.dependencies.contains(yanked) {
+                                            t_clone.dependencies.push(yanked.clone());
+
+                                            // Optimistic update
+                                            let href = t_clone.calendar_href.clone();
+                                            if let Some(list) =
+                                                app_state.store.calendars.get_mut(&href)
+                                            {
+                                                if let Some(t) =
+                                                    list.iter_mut().find(|t| t.uid == t_clone.uid)
+                                                {
+                                                    t.dependencies.push(yanked.clone());
+                                                }
+                                            }
+
+                                            let _ =
+                                                action_tx.send(Action::UpdateTask(t_clone)).await;
+                                            app_state.refresh_filtered_view();
+                                            app_state.message = "Dependency added.".to_string();
+                                        }
+                                    }
+                                }
+                            } else {
+                                app_state.message =
+                                    "Nothing yanked! Press 'y' on a task first.".to_string();
+                            }
+                        }
+
                         _ => {}
                     },
                 },

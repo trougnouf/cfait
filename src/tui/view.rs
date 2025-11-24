@@ -101,12 +101,25 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .tasks
         .iter()
         .map(|t| {
-            let style = match t.priority {
-                1..=4 => Style::default().fg(Color::Red),
-                5 => Style::default().fg(Color::Yellow),
-                _ => Style::default().fg(Color::White),
+            // Logic: Check if blocked
+            let is_blocked = state.store.is_blocked(t);
+
+            let style = if is_blocked {
+                // Gray out blocked tasks
+                Style::default().fg(Color::DarkGray)
+            } else {
+                match t.priority {
+                    1..=4 => Style::default().fg(Color::Red),
+                    5 => Style::default().fg(Color::Yellow),
+                    _ => Style::default().fg(Color::White),
+                }
             };
+
             let checkbox = if t.completed { "[x]" } else { "[ ]" };
+
+            // Add [B] indicator if blocked
+            let blocked_str = if is_blocked { " [B]" } else { "" };
+
             let due_str = match t.due {
                 Some(d) => format!(" ({})", d.format("%d/%m")),
                 None => "".to_string(),
@@ -127,8 +140,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             }
 
             let summary = format!(
-                "{}{} {} {}{}{}", // Added space between 2nd and 3rd bracket
-                indent, checkbox, t.summary, due_str, recur_str, cat_str
+                "{}{} {}{}{}{}{}",
+                indent, checkbox, t.summary, due_str, recur_str, cat_str, blocked_str
             );
             ListItem::new(Line::from(vec![Span::styled(summary, style)]))
         })
@@ -156,22 +169,40 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
-                .bg(Color::DarkGray),
+                .bg(Color::Blue), // <--- Fixed color
         );
     f.render_stateful_widget(task_list, main_chunks[0], &mut state.list_state);
 
-    // --- Details ---
-    let details_text = if let Some(task) = state.get_selected_task() {
-        if task.description.is_empty() {
-            "No description.".to_string()
-        } else {
-            task.description.clone()
-        }
-    } else {
-        "".to_string()
-    };
+    // 2. SHOW DEPENDENCIES IN DETAILS (Text only)
+    let mut full_details = String::new();
 
-    let details = Paragraph::new(details_text)
+    if let Some(task) = state.get_selected_task() {
+        // A. Description
+        if !task.description.is_empty() {
+            full_details.push_str(&task.description);
+            full_details.push_str("\n\n");
+        }
+
+        // B. Dependencies
+        if !task.dependencies.is_empty() {
+            full_details.push_str("[Blocked By]:\n"); // <--- Text only
+            for dep_uid in &task.dependencies {
+                let name = state
+                    .store
+                    .get_summary(dep_uid)
+                    .unwrap_or_else(|| "Unknown Task".to_string());
+                let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
+                let check = if is_done { "[x]" } else { "[ ]" };
+                full_details.push_str(&format!(" {} {}\n", check, name));
+            }
+        }
+    }
+
+    if full_details.is_empty() {
+        full_details = "No details.".to_string();
+    }
+
+    let details = Paragraph::new(full_details)
         .wrap(Wrap { trim: true })
         .block(Block::default().borders(Borders::ALL).title(" Details "));
     f.render_widget(details, main_chunks[1]);
@@ -216,7 +247,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     SidebarMode::Calendars => "Enter:Select | 2:Tags",
                     SidebarMode::Categories => "Enter:Toggle | m:Match(AND/OR) | 1:Cals",
                 },
-                Focus::Main => "/:Find | a:Add | e:Title | E:Desc | d:Del | H:Hide",
+                // ADDED: y:Yank | b:Block
+                Focus::Main => "/:Find | a:Add | e:Edit | d:Del | y:Yank | b:Block | H:Hide",
             };
 
             let help = Paragraph::new(help_str)

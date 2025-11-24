@@ -45,6 +45,8 @@ pub struct AppState {
     pub input_buffer: String,
     pub cursor_position: usize,
     pub editing_index: Option<usize>,
+
+    pub yanked_uid: Option<String>, // Clipboard for linking tasks
 }
 
 impl AppState {
@@ -75,6 +77,7 @@ impl AppState {
             input_buffer: String::new(),
             cursor_position: 0,
             editing_index: None,
+            yanked_uid: None,
         }
     }
 

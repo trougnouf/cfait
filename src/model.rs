@@ -326,8 +326,10 @@ impl Task {
 
         // --- RFC 9253: DEPENDENCIES ---
         for dep_uid in &self.dependencies {
-            // RELATED-TO;RELTYPE=DEPENDS-ON:uid
-            todo.add_property_with_params("RELATED-TO", dep_uid, vec![("RELTYPE", "DEPENDS-ON")]);
+            // Create Property manually
+            let mut prop = icalendar::Property::new("RELATED-TO", dep_uid);
+            prop.add_parameter("RELTYPE", "DEPENDS-ON");
+            todo.append_property(prop); // Use append_property instead of add_property_with_params
         }
 
         let mut calendar = Calendar::new();
@@ -435,7 +437,9 @@ impl Task {
         for prop in related_props {
             let val = prop.value().to_string();
             let params = prop.params();
-            let reltype = params.get("RELTYPE").map(|s| s.to_uppercase());
+
+            // Fix: Access value() on the parameter if it exists
+            let reltype = params.get("RELTYPE").map(|p| p.value().to_uppercase()); // Access .value() first
 
             match reltype.as_deref() {
                 Some("DEPENDS-ON") => {
