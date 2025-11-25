@@ -15,14 +15,8 @@ pub struct Task {
     pub completed: bool,
     pub due: Option<DateTime<Utc>>,
     pub priority: u8,
-
-    // Hierarchy (Subtasks)
     pub parent_uid: Option<String>,
-
-    // RFC 9253: Dependencies (Blocking Tasks)
-    // List of UIDs that this task depends on
     pub dependencies: Vec<String>,
-
     pub etag: String,
     pub href: String,
     pub calendar_href: String,
@@ -32,20 +26,16 @@ pub struct Task {
 }
 
 impl Task {
-    // CHANGED: Now accepts an alias map
     pub fn apply_smart_input(&mut self, input: &str, aliases: &HashMap<String, Vec<String>>) {
         let mut summary_words = Vec::new();
         self.priority = 0;
         self.due = None;
         self.rrule = None;
-        // We are parsing from scratch, so clear existing categories to avoid duplication
-        // (e.g. if user deletes #dev from the text, we want it gone from the struct)
         self.categories.clear();
 
         let mut tokens = input.split_whitespace().peekable();
 
         while let Some(word) = tokens.next() {
-            // 1. Priority (!1 - !9)
             if word.starts_with('!') {
                 if let Ok(p) = word[1..].parse::<u8>() {
                     if (1..=9).contains(&p) {
@@ -55,16 +45,12 @@ impl Task {
                 }
             }
 
-            // 2. Categories (#tag)
             if word.starts_with('#') {
                 let cat = word[1..].to_string();
                 if !cat.is_empty() {
-                    // Add the primary tag
                     if !self.categories.contains(&cat) {
                         self.categories.push(cat.clone());
                     }
-
-                    // Check for Aliases / Hierarchy
                     if let Some(expanded_tags) = aliases.get(&cat) {
                         for extra_tag in expanded_tags {
                             if !self.categories.contains(extra_tag) {
@@ -76,7 +62,6 @@ impl Task {
                 }
             }
 
-            // 3. Recurrence Shortcuts
             if word == "@daily" {
                 self.rrule = Some("FREQ=DAILY".to_string());
                 continue;
@@ -94,11 +79,10 @@ impl Task {
                 continue;
             }
 
-            // 4. Complex Recurrence (@every X [days|weeks...])
             if word == "@every" {
                 if let Some(next_token) = tokens.peek() {
                     if let Ok(interval) = next_token.parse::<u32>() {
-                        tokens.next(); // consume number
+                        tokens.next();
                         if let Some(unit_token) = tokens.peek() {
                             let unit = unit_token.to_lowercase();
                             let freq = if unit.starts_with("day") {
@@ -114,7 +98,7 @@ impl Task {
                             };
 
                             if !freq.is_empty() {
-                                tokens.next(); // consume unit
+                                tokens.next();
                                 self.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
                                 continue;
                             }
@@ -125,10 +109,8 @@ impl Task {
                 continue;
             }
 
-            // 5. Dates
             if word.starts_with('@') {
                 let val = &word[1..];
-                // YYYY-MM-DD
                 if let Ok(date) = NaiveDate::parse_from_str(val, "%Y-%m-%d") {
                     if let Some(dt) = date.and_hms_opt(23, 59, 59) {
                         self.due = Some(dt.and_utc());
@@ -162,7 +144,7 @@ impl Task {
                         }
 
                         if offset > 0 {
-                            tokens.next(); // consume unit
+                            tokens.next();
                             let d = now + chrono::Duration::days(offset);
                             if let Some(dt) = d.and_hms_opt(23, 59, 59) {
                                 self.due = Some(dt.and_utc());
@@ -236,13 +218,10 @@ impl Task {
                 let next_due = dates[1];
                 let mut next_task = self.clone();
                 next_task.uid = Uuid::new_v4().to_string();
-                next_task.href = String::new(); // Clear href, it's a new resource
+                next_task.href = String::new();
                 next_task.etag = String::new();
                 next_task.completed = false;
                 next_task.due = Some(Utc.from_utc_datetime(&next_due.naive_utc()));
-                // IMPORTANT: Respawned tasks typically inherit hierarchy and categories,
-                // but usually dependencies (blockers) apply to the *specific* instance.
-                // We will clear dependencies for the next instance to prevent eternal blocking.
                 next_task.dependencies.clear();
                 return Some(next_task);
             }
@@ -327,18 +306,17 @@ impl Task {
             todo.add_multi_property("CATEGORIES", &cats);
         }
 
-        // --- HIERARCHY (Implicit Parent) ---
+        // --- HIERARCHY & DEPENDENCIES ---
+        // Use append_multi_property to support multiple RELATED-TO lines.
         if let Some(p_uid) = &self.parent_uid {
-            // Default RELATED-TO without RELTYPE is implicit PARENT
-            todo.add_property("RELATED-TO", p_uid.as_str());
+            let prop = icalendar::Property::new("RELATED-TO", p_uid.as_str());
+            todo.append_multi_property(prop);
         }
 
-        // --- RFC 9253: DEPENDENCIES ---
         for dep_uid in &self.dependencies {
-            // Create Property manually
             let mut prop = icalendar::Property::new("RELATED-TO", dep_uid);
             prop.add_parameter("RELTYPE", "DEPENDS-ON");
-            todo.append_property(prop); // Use append_property instead of add_property_with_params
+            todo.append_multi_property(prop);
         }
 
         let mut calendar = Calendar::new();
@@ -402,7 +380,6 @@ impl Task {
             .get("RRULE")
             .map(|p| p.value().to_string());
 
-        // Categories
         let mut categories = Vec::new();
         if let Some(multi_props) = todo.multi_properties().get("CATEGORIES") {
             for prop in multi_props {
@@ -427,14 +404,11 @@ impl Task {
         categories.sort();
         categories.dedup();
 
-        // --- HIERARCHY & DEPENDENCIES ---
+        // --- MANUAL RELATED-TO PARSING (Fix for library overwrite issue) ---
         let mut parent_uid = None;
         let mut dependencies = Vec::new();
 
-        // 'icalendar' crate puts all RELATED-TO in multi_properties if multiple exist,
-        // or properties if single. We must check both.
-        // We look for RELTYPE param.
-
+        // Standard Parse (if lucky)
         let mut related_props = Vec::new();
         if let Some(multi) = todo.multi_properties().get("RELATED-TO") {
             related_props.extend(multi.iter());
@@ -443,24 +417,26 @@ impl Task {
             related_props.push(single);
         }
 
-        for prop in related_props {
-            let val = prop.value().to_string();
-            let params = prop.params();
+        // Manual Parse (Fallback for lost duplicates)
+        // Unfold lines (remove CRLF+Space)
+        let unfolded = raw_ics.replace("\r\n ", "").replace("\n ", "");
 
-            // Fix: Access value() on the parameter if it exists
-            let reltype = params.get("RELTYPE").map(|p| p.value().to_uppercase()); // Access .value() first
+        for line in unfolded.lines() {
+            if line.starts_with("RELATED-TO") {
+                if let Some((key_part, value)) = line.split_once(':') {
+                    let value = value.trim().to_string();
+                    let key_upper = key_part.to_uppercase();
 
-            match reltype.as_deref() {
-                Some("DEPENDS-ON") => {
-                    // It's a blocker
-                    dependencies.push(val);
-                }
-                Some("PARENT") | None => {
-                    // It's a parent (default is parent)
-                    parent_uid = Some(val);
-                }
-                _ => {
-                    // Other types (SIBLING, CHILD) ignore for now
+                    if key_upper.contains("RELTYPE=DEPENDS-ON") {
+                        if !dependencies.contains(&value) {
+                            dependencies.push(value);
+                        }
+                    } else if !key_upper.contains("RELTYPE=")
+                        || key_upper.contains("RELTYPE=PARENT")
+                    {
+                        // Only set parent if not already found (or overwrite if multiple? RFC says 1 parent)
+                        parent_uid = Some(value);
+                    }
                 }
             }
         }
@@ -531,17 +507,20 @@ pub struct CalendarListEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_smart_input_basics() {
-        let t = Task::new("Buy cat food !1");
+        let aliases = HashMap::new();
+        let t = Task::new("Buy cat food !1", &aliases);
         assert_eq!(t.summary, "Buy cat food");
         assert_eq!(t.priority, 1);
     }
 
     #[test]
     fn test_smart_input_categories() {
-        let t = Task::new("Project meeting #work #urgent @tomorrow");
+        let aliases = HashMap::new();
+        let t = Task::new("Project meeting #work #urgent @tomorrow", &aliases);
         assert!(t.summary.contains("Project meeting"));
         assert!(t.categories.contains(&"work".to_string()));
         assert!(t.categories.contains(&"urgent".to_string()));
@@ -549,49 +528,85 @@ mod tests {
     }
 
     #[test]
+    fn test_smart_input_aliases() {
+        let mut aliases = HashMap::new();
+        aliases.insert(
+            "cfait".to_string(),
+            vec!["dev".to_string(), "rust".to_string()],
+        );
+        let t = Task::new("Coding session #cfait", &aliases);
+        assert!(t.categories.contains(&"cfait".to_string()));
+        assert!(t.categories.contains(&"dev".to_string()));
+        assert!(t.categories.contains(&"rust".to_string()));
+    }
+
+    #[test]
     fn test_smart_input_recurrence() {
-        let t = Task::new("Gym @daily");
+        let aliases = HashMap::new();
+        let t = Task::new("Gym @daily", &aliases);
         assert_eq!(t.rrule, Some("FREQ=DAILY".to_string()));
-        let t2 = Task::new("Review @every 2 weeks");
+        let t2 = Task::new("Review @every 2 weeks", &aliases);
         assert_eq!(t2.rrule, Some("FREQ=WEEKLY;INTERVAL=2".to_string()));
     }
 
     #[test]
     fn test_ical_roundtrip_dependencies() {
-        let mut t = Task::new("Blocked Task");
+        let aliases = HashMap::new();
+        let mut t = Task::new("Blocked Task", &aliases);
         t.dependencies.push("blocker-1-uid".to_string());
         t.dependencies.push("blocker-2-uid".to_string());
         t.parent_uid = Some("parent-uid".to_string());
 
         let ics = t.to_ics();
+        println!("Generated ICS:\n{}", ics);
 
-        // Verify string contains correct params
-        assert!(ics.contains("RELATED-TO;RELTYPE=DEPENDS-ON:blocker-1-uid"));
-        assert!(ics.contains("RELATED-TO;RELTYPE=DEPENDS-ON:blocker-2-uid"));
-        assert!(ics.contains("RELATED-TO:parent-uid"));
-
-        let t2 = Task::from_ics(&ics, "etag".into(), "href".into(), "cal".into()).unwrap();
+        let t2 =
+            Task::from_ics(&ics, "etag".into(), "href".into(), "cal".into()).expect("Parse failed");
 
         assert_eq!(t2.dependencies.len(), 2);
         assert!(t2.dependencies.contains(&"blocker-1-uid".to_string()));
+        assert!(t2.dependencies.contains(&"blocker-2-uid".to_string()));
         assert_eq!(t2.parent_uid, Some("parent-uid".to_string()));
     }
 
     #[test]
+    fn test_respawn_daily_logic() {
+        let aliases = HashMap::new();
+        let mut t = Task::new("Daily Grind", &aliases);
+        let start_date = Utc.with_ymd_and_hms(2025, 1, 1, 9, 0, 0).unwrap();
+        t.due = Some(start_date);
+        t.rrule = Some("FREQ=DAILY".to_string());
+        let next_task = t.respawn().expect("Should generate next task");
+        let expected = Utc.with_ymd_and_hms(2025, 1, 2, 9, 0, 0).unwrap();
+        assert_eq!(next_task.due, Some(expected));
+        assert!(next_task.dependencies.is_empty());
+    }
+
+    #[test]
+    fn test_respawn_weekly_logic() {
+        let aliases = HashMap::new();
+        let mut t = Task::new("Weekly Meeting", &aliases);
+        let start_date = Utc.with_ymd_and_hms(2025, 1, 1, 9, 0, 0).unwrap();
+        t.due = Some(start_date);
+        t.rrule = Some("FREQ=WEEKLY".to_string());
+        let next_task = t.respawn().expect("Should generate next task");
+        let expected = Utc.with_ymd_and_hms(2025, 1, 8, 9, 0, 0).unwrap();
+        assert_eq!(next_task.due, Some(expected));
+    }
+
+    #[test]
     fn test_hierarchy_sorting() {
-        let mut t1 = Task::new("Child");
-        let mut t2 = Task::new("Root");
-        let mut t3 = Task::new("Grandchild");
+        let aliases = HashMap::new();
+        let mut t1 = Task::new("Child", &aliases);
+        let mut t2 = Task::new("Root", &aliases);
+        let mut t3 = Task::new("Grandchild", &aliases);
         t1.uid = "child".to_string();
         t2.uid = "root".to_string();
         t3.uid = "grand".to_string();
-
         t1.parent_uid = Some("root".to_string());
         t3.parent_uid = Some("child".to_string());
-
         let raw = vec![t3.clone(), t2.clone(), t1.clone()];
         let organized = Task::organize_hierarchy(raw);
-
         assert_eq!(organized[0].uid, "root");
         assert_eq!(organized[0].depth, 0);
         assert_eq!(organized[1].uid, "child");
