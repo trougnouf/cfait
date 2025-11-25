@@ -22,6 +22,7 @@ It features both a lightning-fast **TUI (Terminal UI)** and a modern **GUI (Grap
 *   **Hierarchy Support:** Create sub-tasks and organize nested lists easily.
 *   **Multiple Calendars:** Seamlessly switch between "Work", "Personal", and other lists.
 *   **Offline-First:** Optimistic UI updates mean you never wait for the server.
+*   **Sane sorting:** Tasks are sorted by due date, then undated tasks are ordered by priority.
 
 ## Installation
 
