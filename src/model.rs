@@ -426,9 +426,9 @@ impl Task {
 
         // Helper for ISO Duration
         fn format_iso_duration(mins: u32) -> String {
-            if mins % (24 * 60) == 0 {
+            if mins.is_multiple_of(24 * 60) {
                 format!("P{}D", mins / (24 * 60))
-            } else if mins % 60 == 0 {
+            } else if mins.is_multiple_of(60) {
                 format!("PT{}H", mins / 60)
             } else {
                 format!("PT{}M", mins)

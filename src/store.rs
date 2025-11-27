@@ -113,16 +113,14 @@ impl TaskStore {
                 // Duration Filter
                 match t.estimated_duration {
                     Some(mins) => {
-                        if let Some(min) = options.min_duration {
-                            if mins < min {
+                        if let Some(min) = options.min_duration
+                            && mins < min {
                                 return false;
                             }
-                        }
-                        if let Some(max) = options.max_duration {
-                            if mins > max {
+                        if let Some(max) = options.max_duration
+                            && mins > max {
                                 return false;
                             }
-                        }
                     }
                     None => {
                         if !options.include_unset_duration {
@@ -206,22 +204,22 @@ impl TaskStore {
                                 match t.estimated_duration {
                                     Some(d) => match op {
                                         "<" => {
-                                            if !(d < target) {
+                                            if (d >= target) {
                                                 return false;
                                             }
                                         }
                                         ">" => {
-                                            if !(d > target) {
+                                            if (d <= target) {
                                                 return false;
                                             }
                                         }
                                         "<=" => {
-                                            if !(d <= target) {
+                                            if (d > target) {
                                                 return false;
                                             }
                                         }
                                         ">=" => {
-                                            if !(d >= target) {
+                                            if (d < target) {
                                                 return false;
                                             }
                                         }
@@ -256,22 +254,22 @@ impl TaskStore {
                                 // Or strict? Strict is safer. 0 is 0.
                                 match op {
                                     "<" => {
-                                        if !(p < target) {
+                                        if (p >= target) {
                                             return false;
                                         }
                                     }
                                     ">" => {
-                                        if !(p > target) {
+                                        if (p <= target) {
                                             return false;
                                         }
                                     }
                                     "<=" => {
-                                        if !(p <= target) {
+                                        if (p > target) {
                                             return false;
                                         }
                                     }
                                     ">=" => {
-                                        if !(p >= target) {
+                                        if (p < target) {
                                             return false;
                                         }
                                     }
@@ -333,22 +331,22 @@ impl TaskStore {
                                         let t_date = dt.naive_utc().date();
                                         match op {
                                             "<" => {
-                                                if !(t_date < target) {
+                                                if (t_date >= target) {
                                                     return false;
                                                 }
                                             }
                                             ">" => {
-                                                if !(t_date > target) {
+                                                if (t_date <= target) {
                                                     return false;
                                                 }
                                             }
                                             "<=" => {
-                                                if !(t_date <= target) {
+                                                if (t_date > target) {
                                                     return false;
                                                 }
                                             }
                                             ">=" => {
-                                                if !(t_date >= target) {
+                                                if (t_date < target) {
                                                     return false;
                                                 }
                                             }
