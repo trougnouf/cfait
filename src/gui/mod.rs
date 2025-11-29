@@ -262,10 +262,8 @@ impl GuiApp {
                 self.error_msg = None;
 
                 // Check if initialized (avoid unused variable warning)
-                if self.client.is_some() {
-                    if let Ok(cfg) = Config::load() {
-                        return Task::perform(connect_and_fetch_wrapper(cfg), Message::Loaded);
-                    }
+                if self.client.is_some() && let Ok(cfg) = Config::load() {
+                    return Task::perform(connect_and_fetch_wrapper(cfg), Message::Loaded);
                 }
                 Task::none()
             }
@@ -323,12 +321,8 @@ impl GuiApp {
                 }
 
                 // If we have fresh tasks from network (and no error forcing offline), update store
-                if self.error_msg.is_none() {
-                    if let Some(href) = &active {
-                        if href != LOCAL_CALENDAR_HREF {
-                            self.store.insert(href.clone(), tasks);
-                        }
-                    }
+                if self.error_msg.is_none() && let Some(href) = &active && href != LOCAL_CALENDAR_HREF {
+                    self.store.insert(href.clone(), tasks);
                 }
 
                 self.active_cal_href = active;
@@ -458,7 +452,7 @@ impl GuiApp {
                 if let Some(client) = &self.client {
                     // Don't set loading=true if we have cached data to show immediately!
                     // This makes the UI feel snappier.
-                    if self.store.calendars.get(&href).is_none() {
+                    if !self.store.calendars.contains_key(&href) {
                         self.loading = true;
                     }
 
@@ -954,10 +948,8 @@ impl GuiApp {
                 // Save immediately so it persists
                 self.save_config();
                 // Refresh main view if we just hid the active calendar
-                if let Some(active) = &self.active_cal_href {
-                    if self.hidden_calendars.contains(active) {
-                        self.active_cal_href = None;
-                    }
+                if let Some(active) = &self.active_cal_href && self.hidden_calendars.contains(active) {
+                    self.active_cal_href = None;
                 }
                 self.refresh_filtered_tasks();
                 Task::none()

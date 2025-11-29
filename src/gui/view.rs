@@ -462,10 +462,9 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .spacing(10);
 
         // 2. Move Section (Conditional, Filtered, Scrollable)
-        let mut move_element: Element<'_, Message> = row![].into();
+    let mut move_element: Element<'_, Message> = row![].into();
 
-        if let Some(edit_uid) = &app.editing_uid {
-            if let Some(task) = app.tasks.iter().find(|t| t.uid == *edit_uid) {
+        if let Some(edit_uid) = &app.editing_uid && let Some(task) = app.tasks.iter().find(|t| t.uid == *edit_uid) {
                 // Filter: Exclude current calendar AND hidden calendars
                 let targets: Vec<_> = app
                     .calendars
@@ -498,7 +497,6 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                     .align_y(iced::Alignment::Center)
                     .into();
                 }
-            }
         }
 
         // 3. Assemble Layout
@@ -536,74 +534,76 @@ fn view_task_row<'a>(app: &'a GuiApp, index: usize, task: &'a TodoTask) -> Eleme
 
     // 2. Title Row (Just Summary) - replaced later with direct text in-line to avoid wrapping issues
 
-    // 3. Tags / Meta Row (Blocked Badge + Categories + Recurrence)
-    // Slightly tighter tags spacing
-    let mut tags_row: iced::widget::Row<'_, Message> = row![].spacing(3);
+    // Build tags_element on demand so we can reuse the construction in
+    // multiple layout branches without moving a value twice.
+    let build_tags = || -> Element<'a, Message> {
+        let mut tags_row: iced::widget::Row<'_, Message> = row![].spacing(3);
 
-    // [Blocked] Badge moved here
-    if is_blocked {
-        tags_row = tags_row.push(
-            container(text("[Blocked]").size(12).color(Color::WHITE))
-                .style(|_| container::Style {
-                    background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()), // Red background for visibility
-                    border: iced::Border {
-                        radius: 4.0.into(),
+        if is_blocked {
+            tags_row = tags_row.push(
+                container(text("[Blocked]").size(12).color(Color::WHITE))
+                    .style(|_| container::Style {
+                        background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
+                        border: iced::Border {
+                            radius: 4.0.into(),
+                            ..Default::default()
+                        },
                         ..Default::default()
-                    },
-                    ..Default::default()
-                })
-                .padding(3),
-        );
-    }
+                    })
+                    .padding(3),
+            );
+        }
 
-    for cat in &task.categories {
-        tags_row = tags_row.push(
-            container(text(format!("#{}", cat)).size(12).color(Color::BLACK))
-                .style(|_| container::Style {
-                    background: Some(Color::from_rgb(0.6, 0.8, 1.0).into()),
-                    border: iced::Border {
-                        radius: 4.0.into(),
+        for cat in &task.categories {
+            tags_row = tags_row.push(
+                container(text(format!("#{}", cat)).size(12).color(Color::BLACK))
+                    .style(|_| container::Style {
+                        background: Some(Color::from_rgb(0.6, 0.8, 1.0).into()),
+                        border: iced::Border {
+                            radius: 4.0.into(),
+                            ..Default::default()
+                        },
                         ..Default::default()
-                    },
-                    ..Default::default()
-                })
-                .padding(3),
-        );
-    }
+                    })
+                    .padding(3),
+            );
+        }
 
-    if task.rrule.is_some() {
-        // Show a repeat icon for recurring tasks (nf-fa-repeat)
-        tags_row = tags_row.push(container(icon::icon(icon::REPEAT).size(14)).padding(0));
-    }
+        if let Some(mins) = task.estimated_duration {
+            let label = if mins >= 525600 {
+                format!("{}y", mins / 525600)
+            } else if mins >= 43200 {
+                format!("{}mo", mins / 43200)
+            } else if mins >= 10080 {
+                format!("{}w", mins / 10080)
+            } else if mins >= 1440 {
+                format!("{}d", mins / 1440)
+            } else if mins >= 60 {
+                format!("{}h", mins / 60)
+            } else {
+                format!("{}m", mins)
+            };
 
-    if let Some(mins) = task.estimated_duration {
-        let label = if mins >= 525600 {
-            format!("{}y", mins / 525600)
-        } else if mins >= 43200 {
-            format!("{}mo", mins / 43200)
-        } else if mins >= 10080 {
-            format!("{}w", mins / 10080)
-        } else if mins >= 1440 {
-            format!("{}d", mins / 1440)
-        } else if mins >= 60 {
-            format!("{}h", mins / 60)
-        } else {
-            format!("{}m", mins)
-        };
-
-        tags_row = tags_row.push(
-            container(text(label).size(10).color(Color::WHITE))
-                .style(|_| container::Style {
-                    background: Some(Color::from_rgb(0.5, 0.5, 0.5).into()),
-                    border: iced::Border {
-                        radius: 4.0.into(),
+            tags_row = tags_row.push(
+                container(text(label).size(10).color(Color::WHITE))
+                    .style(|_| container::Style {
+                        background: Some(Color::from_rgb(0.5, 0.5, 0.5).into()),
+                        border: iced::Border {
+                            radius: 4.0.into(),
+                            ..Default::default()
+                        },
                         ..Default::default()
-                    },
-                    ..Default::default()
-                })
-                .padding(3),
-        );
-    }
+                    })
+                    .padding(3),
+            );
+        }
+
+        if task.rrule.is_some() {
+            tags_row = tags_row.push(container(icon::icon(icon::REPEAT).size(14)).padding(0));
+        }
+
+        tags_row.into()
+    };
 
     // Reserve a modest width for the date so the title has more room; reduce wasted gap after date
     let date_text: Element<'a, Message> = match task.due {
@@ -614,7 +614,8 @@ fn view_task_row<'a>(app: &'a GuiApp, index: usize, task: &'a TodoTask) -> Eleme
         )
         .width(Length::Fixed(80.0))
         .into(),
-        None => horizontal_space().width(Length::Fixed(80.0)).into(),
+        // If no date is set, don't reserve space so tags/actions can use it
+        None => horizontal_space().width(Length::Fixed(0.0)).into(),
     };
 
     // 4. Info Button
@@ -740,8 +741,6 @@ fn view_task_row<'a>(app: &'a GuiApp, index: usize, task: &'a TodoTask) -> Eleme
     );
 
     // 6. Construct Main Row
-    // Cast tags_row to Element to avoid type inference issues
-    let tags_element: Element<'a, Message> = tags_row.into();
 
     // --- CUSTOM MULTI-STATE CHECKBOX ---
     // We define the look (Icon + Background Color) based on status
@@ -817,21 +816,50 @@ fn view_task_row<'a>(app: &'a GuiApp, index: usize, task: &'a TodoTask) -> Eleme
         }
     });
     // Build the title row (Fill) and a main text column (title + tags)
-    let title_row = row![
-        text(&task.summary)
-            .size(20)
-            .color(color)
-            .width(Length::Fill)
-    ]
-    .spacing(6);
+    // Decide whether to place tags inline with the title or below it.
+    // We can't know pixel width here, so use a simple heuristic based on
+    // the title length and number of tags. If the combined estimated
+    // length is small, render tags inline; otherwise render tags on a
+    // separate right-aligned row below the title.
+    let title_chars = task.summary.chars().count();
+    let est_tags_len = task.categories.len() * 4
+        + if task.estimated_duration.is_some() { 3 } else { 0 }
+        + if task.rrule.is_some() { 1 } else { 0 }
+        + if is_blocked { 9 } else { 0 };
+    // threshold tuned to typical widths; tweak as needed
+    let place_inline = (title_chars + est_tags_len) <= 60;
+
+    let title_row = if place_inline {
+        row![
+            text(&task.summary)
+                .size(20)
+                .color(color)
+                .width(Length::Fill),
+            // show tags inline to the right when small enough
+            if !task.categories.is_empty() || task.rrule.is_some() || is_blocked {
+                build_tags()
+            } else {
+                horizontal_space().width(Length::Fixed(0.0)).into()
+            }
+        ]
+        .spacing(6)
+    } else {
+        row![
+            text(&task.summary)
+                .size(20)
+                .color(color)
+                .width(Length::Fill)
+        ]
+        .spacing(6)
+    };
 
     let main_text_col = column![
         title_row,
-        // Show tags line if there are tags OR recurrence OR task is blocked
-        if !task.categories.is_empty() || task.rrule.is_some() || is_blocked {
-            tags_element
+        // If we didn't place tags inline, show them on a separate right-aligned row
+        if !place_inline && (!task.categories.is_empty() || task.rrule.is_some() || is_blocked) {
+            row![horizontal_space(), build_tags()]
         } else {
-            row![].into()
+            row![]
         }
     ]
     .width(Length::Fill)
