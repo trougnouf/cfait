@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.2.3] - 2025-12-01
+
+### 🚀 Features
+
+- *(core)* Implement layered calendars, disabled state, and robust tui visibility toggles
+
+### 🐛 Bug Fixes
+
+- *(gui)* Add close button to error banner and clear on success
+- *(sync)* Implement safe conflict resolution (copy on 412), atomic file writes, and atomic move operations
+- *(gui)* Preserve active calendar on refresh, always inject local calendar, and show duration metadata for untagged tasks
+- *(model)* Treat no priority as implied normal priority (5) for sorting
+
+### 🚜 Refactor
+
+- *(sync)* Implement CTag caching, optimize fetch, and fix journal atomicity bugs
+
+### ⚡ Performance
+
+- *(net)* Constrain concurrent calendar fetches to 4 to prevent server overload
+- *(core)* Implement bounded concurrency and delta sync for task fetching
+
+### ⚙️ Miscellaneous Tasks
+
+- Add licenses
+- Lint
 ## [0.2.2] - 2025-11-29
 
 ### 🐛 Bug Fixes
@@ -13,6 +39,8 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Lint
+- Update changelog
+- Release cfait version 0.2.2
 ## [0.2.1] - 2025-11-29
 
 ### 🚀 Features
