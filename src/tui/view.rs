@@ -11,13 +11,84 @@ use ratatui::{
 };
 
 pub fn draw(f: &mut Frame, state: &mut AppState) {
+    // PREPARE HELP CONTENT FIRST (To calculate height)
+    let full_help_text = vec![
+        Line::from(vec![
+            Span::styled(
+                " GLOBAL ",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" Tab:Switch Focus  ?:Toggle Help  q:Quit"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " NAVIGATION ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" j/k:Up/Down  PgUp/PgDn:Scroll"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " TASKS ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" a:Add  e:Edit Title  E:Edit Desc  d:Delete  Space:Toggle Done"),
+        ]),
+        Line::from(vec![Span::raw(
+            "       s:Start/Pause  x:Cancel  M:Move  r:Sync  X:Export(Local)",
+        )]),
+        Line::from(vec![
+            Span::styled(
+                " ORGANIZATION ",
+                Style::default()
+                    .fg(Color::Magenta)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(
+                " +/-:Priority  </>:Indent  y:Yank  b:Block(w/Yank)  c:Child(w/Yank)  C:NewChild",
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " VIEW & FILTER ",
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" /:Search  H:Hide Completed  1:Cal View  2:Tag View"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " SIDEBAR ",
+                Style::default()
+                    .fg(Color::LightCyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(
+                " Enter:Select/Toggle  Space:Toggle Visibility  *:Show All  Right:Focus(Solo)",
+            ),
+        ]),
+    ];
+
+    // DYNAMIC LAYOUT
+    let footer_height = if state.mode == InputMode::EditingDescription {
+        Constraint::Length(10)
+    } else if state.show_full_help {
+        // Height = Lines + Borders(2)
+        Constraint::Length(full_help_text.len() as u16 + 2)
+    } else {
+        Constraint::Length(3) // Standard compact footer
+    };
+
     let v_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints(if state.mode == InputMode::EditingDescription {
-            [Constraint::Min(0), Constraint::Length(10)]
-        } else {
-            [Constraint::Min(0), Constraint::Length(3)]
-        })
+        .constraints([Constraint::Min(0), footer_height])
         .split(f.area());
 
     let h_chunks = Layout::default()
@@ -127,7 +198,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let is_blocked = state.store.is_blocked(t);
 
             let style = if is_blocked {
-                // Gray out blocked tasks
                 Style::default().fg(Color::DarkGray)
             } else {
                 match t.priority {
@@ -262,10 +332,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .block(Block::default().borders(Borders::ALL).title(" Details "));
     f.render_widget(details, main_chunks[1]);
 
-    // --- Footer ---
+    // --- FOOTER (DYNAMIC) ---
     let footer_area = v_chunks[1];
-    // ALWAYS CLEAR FOOTER AREA before rendering input/help
     f.render_widget(Clear, footer_area);
+
     match state.mode {
         InputMode::Creating
         | InputMode::Editing
@@ -356,59 +426,82 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
 
         InputMode::Normal | InputMode::Moving | InputMode::Exporting => {
-            let f_chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .split(v_chunks[1]);
-            let status = Paragraph::new(state.message.clone())
-                .style(Style::default().fg(Color::Cyan))
-                .block(
-                    Block::default()
-                        .borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM)
-                        .title(" Status "),
-                );
+            if state.show_full_help {
+                // --- FULL HELP VIEW ---
+                let h_chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+                    .split(footer_area);
 
-            let help_str = match state.active_focus {
-                Focus::Sidebar => match state.sidebar_mode {
-                    // Sidebar Context
-                    SidebarMode::Calendars => {
-                        "Ret:Target Spc:Toggle *:All →:Solo Tab:Tasks q:Quit".to_string()
+                // Render Full Help on Left
+                let block = Block::default()
+                    .borders(Borders::ALL)
+                    .title(" Keyboard Shortcuts (Press ? to minimize) ")
+                    .border_style(Style::default().fg(Color::Cyan));
+
+                let p = Paragraph::new(full_help_text)
+                    .block(block)
+                    .wrap(Wrap { trim: false });
+                f.render_widget(p, h_chunks[0]);
+
+                // Render Status on Right
+                let status = Paragraph::new(state.message.clone())
+                    .style(Style::default().fg(Color::Cyan))
+                    .block(Block::default().borders(Borders::ALL).title(" Status "));
+                f.render_widget(status, h_chunks[1]);
+            } else {
+                // --- COMPACT VIEW ---
+                let f_chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                    .split(footer_area);
+
+                let status = Paragraph::new(state.message.clone())
+                    .style(Style::default().fg(Color::Cyan))
+                    .block(
+                        Block::default()
+                            .borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM)
+                            .title(" Status "),
+                    );
+
+                // Condensed help
+                let help_str = match state.active_focus {
+                    Focus::Sidebar => match state.sidebar_mode {
+                        SidebarMode::Calendars => {
+                            "Ret:Target Spc:Vis Right:Solo *:All Tab:Tasks ?:Help".to_string()
+                        }
+                        SidebarMode::Categories => {
+                            "Ret:Toggle m:Match(AND/OR) 1:Cals Tab:Tasks ?:Help".to_string()
+                        }
+                    },
+                    Focus::Main => {
+                        let mut s = "a:Add e:Edit Spc:Done d:Del /:Find".to_string();
+                        if state.yanked_uid.is_some() {
+                            s.push_str(" b:Block c:Child");
+                        } else {
+                            s.push_str(" y:Yank");
+                        }
+                        s.push_str(" C:NewChild");
+
+                        if state.active_cal_href.as_deref() == Some(LOCAL_CALENDAR_HREF) {
+                            s.push_str(" X:Export");
+                        }
+                        s.push_str(" ?:Help");
+                        s
                     }
-                    SidebarMode::Categories => {
-                        "Ret:Toggle m:Match(AND/OR) 1:Cals Tab:Tasks".to_string()
-                    }
-                },
-                Focus::Main => {
-                    // Main Context - Split into common and advanced if needed,
-                    // but here is a compact comprehensive list.
-                    let mut s = "a:Add e:Edit Spc:Done x:Cancel d:Del /:Find".to_string();
+                };
 
-                    // Contextual actions appear only when relevant to save space
-                    if state.yanked_uid.is_some() {
-                        s.push_str(" b:Block c:Child");
-                    } else {
-                        s.push_str(" y:Yank");
-                    }
-
-                    if state.active_cal_href.as_deref() == Some(LOCAL_CALENDAR_HREF) {
-                        s.push_str(" X:Export");
-                    }
-
-                    s.push_str(" M:Move r:Sync Tab:Side q:Quit");
-                    s
-                }
-            };
-
-            let help = Paragraph::new(help_str)
-                .style(Style::default().fg(Color::DarkGray))
-                .alignment(Alignment::Right)
-                .block(
-                    Block::default()
-                        .borders(Borders::RIGHT | Borders::TOP | Borders::BOTTOM)
-                        .title(" Actions "),
-                );
-            f.render_widget(status, f_chunks[0]);
-            f.render_widget(help, f_chunks[1]);
+                let help = Paragraph::new(help_str)
+                    .style(Style::default().fg(Color::DarkGray))
+                    .alignment(Alignment::Right)
+                    .block(
+                        Block::default()
+                            .borders(Borders::RIGHT | Borders::TOP | Borders::BOTTOM)
+                            .title(" Actions "),
+                    );
+                f.render_widget(status, f_chunks[0]);
+                f.render_widget(help, f_chunks[1]);
+            }
         }
     }
     if state.mode == InputMode::Moving {

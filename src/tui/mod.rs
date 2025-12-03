@@ -730,6 +730,9 @@ pub async fn run() -> Result<()> {
                     },
 
                     InputMode::Normal => match key.code {
+                        KeyCode::Char('?') => {
+                            app_state.show_full_help = !app_state.show_full_help;
+                        }
                         KeyCode::Char('s') => {
                             if app_state.active_focus == Focus::Main
                                 && let Some(task) = app_state.get_selected_task().cloned()

@@ -57,6 +57,7 @@ pub struct AppState {
 
     pub yanked_uid: Option<String>,
     pub creating_child_of: Option<String>,
+    pub show_full_help: bool,
     pub tag_aliases: HashMap<String, Vec<String>>,
 
     // Track unsynced status
@@ -104,6 +105,7 @@ impl AppState {
             move_targets: Vec::new(),
             yanked_uid: None,
             creating_child_of: None,
+            show_full_help: false,
 
             tag_aliases: HashMap::new(),
             export_selection_state: ListState::default(),
