@@ -192,6 +192,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     f.render_stateful_widget(sidebar, h_chunks[0], &mut state.cal_state);
 
     // --- Task List ---
+    // Calculate available width for content (Total Width - Borders (2))
+    let list_inner_width = main_chunks[0].width.saturating_sub(2) as usize;
+
     let task_items: Vec<ListItem> = state
         .tasks
         .iter()
@@ -199,7 +202,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             // Logic: Check if blocked
             let is_blocked = state.store.is_blocked(t);
 
-            let style = if is_blocked {
+            // Left Side Style (Checkbox, Title, Metadata)
+            // Blocked items are DarkGray, but Highlight style will override FG to White when selected
+            let base_style = if is_blocked {
                 Style::default().fg(Color::DarkGray)
             } else {
                 match t.priority {
@@ -215,8 +220,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 crate::model::TaskStatus::InProcess => "[>]",
                 crate::model::TaskStatus::NeedsAction => "[ ]",
             };
-            // Add [B] indicator if blocked
-            let blocked_str = if is_blocked { " [B]" } else { "" };
 
             let due_str = match t.due {
                 Some(d) => format!(" ({})", d.format("%d/%m")),
@@ -250,16 +253,48 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             let recur_str = if t.rrule.is_some() { " (R)" } else { "" };
 
-            let mut cat_str = String::new();
-            if !t.categories.is_empty() {
-                cat_str = format!(" [{}]", t.categories.join(", "));
+            // Tags (Right aligned, Cyan)
+            let tags_vec: Vec<String> = t.categories.iter().map(|c| format!("#{}", c)).collect();
+            let tags_str = if tags_vec.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", tags_vec.join(" "))
+            };
+
+            // Construction
+            // Left: Indent + Checkbox + Summary + Metadata
+            let left_text = format!(
+                "{}{} {}{}{}{}",
+                indent, checkbox, t.summary, dur_str, due_str, recur_str
+            );
+
+            // Right: Tags + Blocked Indicator
+            // [B] is right-most
+            let right_text = format!("{}{}", tags_str, if is_blocked { " [B]" } else { "" });
+
+            // Calculate Padding to push Right Text to the edge
+            // We use simple char count as a proxy for width (assuming monospaced)
+            let left_width = left_text.chars().count();
+            let right_width = right_text.chars().count();
+
+            // Calculate spacing
+            let padding_len = list_inner_width.saturating_sub(left_width + right_width);
+            let padding = " ".repeat(padding_len);
+
+            // Build the spans
+            let mut spans = vec![Span::styled(left_text, base_style), Span::raw(padding)];
+
+            // Append Tags (Cyan)
+            if !tags_vec.is_empty() {
+                spans.push(Span::styled(tags_str, Style::default().fg(Color::Cyan)));
             }
 
-            let summary = format!(
-                "{}{} {}{}{}{}{}{}",
-                indent, checkbox, t.summary, dur_str, due_str, recur_str, cat_str, blocked_str
-            );
-            ListItem::new(Line::from(vec![Span::styled(summary, style)]))
+            // Append Blocked Indicator (Red)
+            if is_blocked {
+                spans.push(Span::styled(" [B]", Style::default().fg(Color::Red)));
+            }
+
+            ListItem::new(Line::from(spans))
         })
         .collect();
 
@@ -294,7 +329,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
-                .bg(Color::DarkGray),
+                .bg(Color::Green)
+                .fg(Color::Black), // White text on Blue background for high contrast
         );
     f.render_stateful_widget(task_list, main_chunks[0], &mut state.list_state);
 
@@ -555,6 +591,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     }
 }
 
+/// Helper function to create a centered rect using up certain percentages of the available rect.
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
