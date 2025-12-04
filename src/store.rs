@@ -37,56 +37,98 @@ impl TaskStore {
         self.calendars.clear();
     }
 
+    /// Returns a list of (Category Name, Active Task Count)
     pub fn get_all_categories(
         &self,
-        hide_completed: bool,
+        _hide_completed: bool, // Param kept for API compat, but logic is improved below
         hide_fully_completed_tags: bool,
         forced_includes: &HashSet<String>,
         hidden_calendars: &HashSet<String>,
-    ) -> Vec<String> {
-        let mut set = HashSet::new();
-        let mut has_uncategorized = false;
+    ) -> Vec<(String, usize)> {
+        let mut active_counts: HashMap<String, usize> = HashMap::new();
+        let mut present_tags: HashSet<String> = HashSet::new();
+        let mut has_uncategorized_active = false;
+        let mut has_uncategorized_any = false;
 
         for (href, tasks) in &self.calendars {
             if hidden_calendars.contains(href) {
                 continue;
             }
             for task in tasks {
-                let is_done = task.status.is_done();
-
-                if hide_completed && is_done {
-                    continue;
-                }
-
-                if !hide_completed && hide_fully_completed_tags && is_done {
-                    continue;
-                }
+                let is_active = !task.status.is_done();
 
                 if task.categories.is_empty() {
-                    has_uncategorized = true;
+                    has_uncategorized_any = true;
+                    if is_active {
+                        has_uncategorized_active = true;
+                    }
                 } else {
                     for cat in &task.categories {
-                        set.insert(cat.clone());
+                        present_tags.insert(cat.clone());
+                        if is_active {
+                            *active_counts.entry(cat.clone()).or_insert(0) += 1;
+                        }
                     }
                 }
             }
         }
 
-        // Ensure selected tags remain visible
-        for included in forced_includes {
-            if included != UNCATEGORIZED_ID {
-                set.insert(included.clone());
+        let mut result = Vec::new();
+
+        // Process standard tags
+        for tag in present_tags {
+            let count = *active_counts.get(&tag).unwrap_or(&0);
+
+            // Logic:
+            // 1. If hide_fully_completed_tags is TRUE: Only show if count > 0 or it's selected.
+            // 2. If hide_fully_completed_tags is FALSE: Show it because it exists (even if count is 0).
+            let should_show = if hide_fully_completed_tags {
+                count > 0 || forced_includes.contains(&tag)
+            } else {
+                true
+            };
+
+            if should_show {
+                result.push((tag, count));
             }
         }
 
-        let mut list: Vec<String> = set.into_iter().collect();
-        list.sort();
+        // Process Uncategorized
+        // Same logic: If hiding completed tags, only show Uncategorized if it has active tasks or is selected.
+        let show_uncategorized = if hide_fully_completed_tags {
+            has_uncategorized_active || forced_includes.contains(UNCATEGORIZED_ID)
+        } else {
+            has_uncategorized_any || forced_includes.contains(UNCATEGORIZED_ID)
+        };
 
-        if has_uncategorized || forced_includes.contains(UNCATEGORIZED_ID) {
-            list.push(UNCATEGORIZED_ID.to_string());
+        if show_uncategorized {
+            let count = if has_uncategorized_active {
+                // We need to actually count them if we haven't tracked exact numbers above
+                // To save a second loop, let's assume we want exact numbers:
+                self.count_uncategorized_active(hidden_calendars)
+            } else {
+                0
+            };
+            result.push((UNCATEGORIZED_ID.to_string(), count));
         }
 
-        list
+        result.sort_by(|a, b| a.0.cmp(&b.0));
+        result
+    }
+
+    fn count_uncategorized_active(&self, hidden_calendars: &HashSet<String>) -> usize {
+        let mut count = 0;
+        for (href, tasks) in &self.calendars {
+            if hidden_calendars.contains(href) {
+                continue;
+            }
+            for task in tasks {
+                if task.categories.is_empty() && !task.status.is_done() {
+                    count += 1;
+                }
+            }
+        }
+        count
     }
 
     pub fn filter(&self, options: FilterOptions) -> Vec<Task> {

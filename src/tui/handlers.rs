@@ -426,7 +426,7 @@ pub async fn handle_key_event(
                                 &state.hidden_calendars,
                             );
                             if let Some(idx) = state.cal_state.selected()
-                                && let Some(c) = cats.get(idx)
+                                && let Some((c, _)) = cats.get(idx)
                             {
                                 if state.selected_categories.contains(c) {
                                     state.selected_categories.remove(c);

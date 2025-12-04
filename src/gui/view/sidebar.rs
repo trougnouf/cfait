@@ -138,13 +138,13 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         let list = column(
             all_cats
                 .into_iter()
-                .map(|cat| {
+                .map(|(cat, count)| {
                     let is_selected = app.selected_categories.contains(&cat);
                     let cat_clone = cat.clone();
                     let display_name = if cat == UNCATEGORIZED_ID {
-                        "Uncategorized".to_string()
+                        format!("Uncategorized ({})", count)
                     } else {
-                        format!("#{}", cat)
+                        format!("#{} ({})", cat, count)
                     };
 
                     checkbox(display_name, is_selected)

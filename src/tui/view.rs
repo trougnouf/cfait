@@ -1,3 +1,4 @@
+// File: ./src/tui/view.rs
 use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::store::UNCATEGORIZED_ID;
 use crate::tui::action::SidebarMode;
@@ -151,7 +152,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             let items: Vec<ListItem> = all_cats
                 .iter()
-                .map(|c| {
+                .map(|(c, count)| {
                     let selected = if state.selected_categories.contains(c) {
                         "[x]"
                     } else {
@@ -159,9 +160,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     };
 
                     let display_name = if c == UNCATEGORIZED_ID {
-                        "Uncategorized".to_string()
+                        format!("Uncategorized ({})", count)
                     } else {
-                        format!("#{}", c)
+                        format!("#{} ({})", c, count)
                     };
 
                     ListItem::new(Line::from(format!("{} {}", selected, display_name)))
@@ -189,6 +190,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 .bg(Color::Blue),
         );
     f.render_stateful_widget(sidebar, h_chunks[0], &mut state.cal_state);
+
     // --- Task List ---
     let task_items: Vec<ListItem> = state
         .tasks
@@ -260,8 +262,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             ListItem::new(Line::from(vec![Span::styled(summary, style)]))
         })
         .collect();
-
-    // (main_style is defined later with more context; skip this earlier unused declaration)
 
     // Main Title to show Offline/Unsynced status
     let mut title = if state.loading {
@@ -555,7 +555,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     }
 }
 
-/// Helper function to create a centered rect using up certain percentages of the available rect.
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
