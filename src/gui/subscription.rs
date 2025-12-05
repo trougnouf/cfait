@@ -10,10 +10,10 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
 
     if matches!(app.state, AppState::Onboarding | AppState::Settings) {
         subs.push(keyboard::listen().filter_map(|event| {
-            if let keyboard::Event::KeyPressed { key, modifiers, .. } = event {
-                if key == key::Key::Named(key::Named::Tab) {
-                    return Some(Message::TabPressed(modifiers.shift()));
-                }
+            if let keyboard::Event::KeyPressed { key, modifiers, .. } = event
+                && key == key::Key::Named(key::Named::Tab)
+            {
+                return Some(Message::TabPressed(modifiers.shift()));
             }
             None
         }));
