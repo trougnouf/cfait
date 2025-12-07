@@ -1,4 +1,4 @@
-// File: ./src/gui/view/mod.rs
+// File: src/gui/view/mod.rs
 pub mod help;
 pub mod settings;
 pub mod sidebar;
@@ -15,7 +15,7 @@ use crate::storage::LOCAL_CALENDAR_HREF;
 
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{MouseArea, Space, column, container, row, scrollable, stack, svg, text};
-use iced::{Background, Color, Element, Length, Theme, mouse};
+use iced::{Color, Element, Length, Theme, mouse};
 
 pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
     match app.state {
@@ -87,7 +87,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     .height(Length::Fixed(c)),
             )
             .on_press(Message::ResizeStart(ResizeDirection::NorthWest))
-            .interaction(mouse::Interaction::ResizingDiagonallyDown); // Visually maps to up-left
+            .interaction(mouse::Interaction::ResizingDiagonallyDown);
 
             let ne_grip = MouseArea::new(
                 container(text(""))
@@ -95,7 +95,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     .height(Length::Fixed(c)),
             )
             .on_press(Message::ResizeStart(ResizeDirection::NorthEast))
-            .interaction(mouse::Interaction::ResizingDiagonallyUp); // Visually maps to up-right
+            .interaction(mouse::Interaction::ResizingDiagonallyUp);
 
             let sw_grip = MouseArea::new(
                 container(text(""))
@@ -234,7 +234,7 @@ fn view_sidebar(app: &GuiApp) -> Element<'_, Message> {
         .style(|theme: &Theme| {
             let palette = theme.extended_palette();
             container::Style {
-                background: Some(Background::Color(palette.background.weak.color)),
+                background: Some(iced::Background::Color(palette.background.weak.color)),
                 ..Default::default()
             }
         })
@@ -402,6 +402,35 @@ fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
     let input_area = view_input_area(app);
 
     let mut main_col = column![header_drag_area, export_ui, input_area];
+
+    // FEATURE: Jump to Tag in search
+    if app.search_value.starts_with('#') {
+        let tag = app.search_value.trim_start_matches('#').trim().to_string();
+        if !tag.is_empty() {
+            main_col = main_col.push(
+                container(
+                    iced::widget::button(
+                        row![
+                            icon::icon(icon::TAG).size(14),
+                            text(format!(" Go to tag: #{}", tag)).size(14)
+                        ]
+                        .spacing(5)
+                        .align_y(iced::Alignment::Center),
+                    )
+                    .style(iced::widget::button::secondary)
+                    .padding(5)
+                    .width(Length::Fill)
+                    .on_press(Message::JumpToTag(tag)),
+                )
+                .padding(iced::Padding {
+                    left: 10.0,
+                    right: 10.0,
+                    bottom: 5.0,
+                    ..Default::default()
+                }),
+            );
+        }
+    }
 
     if let Some(err) = &app.error_msg {
         let error_content = row![

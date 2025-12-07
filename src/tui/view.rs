@@ -1,4 +1,4 @@
-// File: ./src/tui/view.rs
+// File: src/tui/view.rs
 use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::store::UNCATEGORIZED_ID;
 use crate::tui::action::SidebarMode;
@@ -377,25 +377,36 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         | InputMode::Editing
         | InputMode::Searching
         | InputMode::EditingDescription => {
-            let (title, prefix, color) = match state.mode {
-                InputMode::Searching => (" Search ", "/ ", Color::Green),
-                InputMode::Editing => (" Edit Title ", "> ", Color::Magenta),
-                InputMode::EditingDescription => (" Edit Description ", "📝 ", Color::Blue),
+            let (mut title_str, prefix, color) = match state.mode {
+                InputMode::Searching => (" Search ".to_string(), "/ ", Color::Green),
+                InputMode::Editing => (" Edit Title ".to_string(), "> ", Color::Magenta),
+                InputMode::EditingDescription => {
+                    (" Edit Description ".to_string(), "📝 ", Color::Blue)
+                }
                 InputMode::Creating => {
                     // If app_state.creating_child_of is Some, change title color or text
                     if state.creating_child_of.is_some() {
-                        (" Create Child Task ", "> ", Color::LightYellow)
+                        (" Create Child Task ".to_string(), "> ", Color::LightYellow)
                     } else {
-                        (" Create Task ", "> ", Color::Yellow)
+                        (" Create Task ".to_string(), "> ", Color::Yellow)
                     }
                 }
-                _ => (" Create Task ", "> ", Color::Yellow),
+                _ => (" Create Task ".to_string(), "> ", Color::Yellow),
             };
+
+            if state.mode == InputMode::Searching && state.input_buffer.starts_with('#') {
+                title_str.push_str(" [Enter to jump to tag] ");
+            } else if state.mode == InputMode::Creating
+                && state.input_buffer.starts_with('#')
+                && state.creating_child_of.is_none()
+            {
+                title_str.push_str(" [Enter to jump to tag] ");
+            }
 
             let input_text = format!("{}{}", prefix, state.input_buffer);
             let input = Paragraph::new(input_text.clone())
                 .style(Style::default().fg(color))
-                .block(Block::default().borders(Borders::ALL).title(title))
+                .block(Block::default().borders(Borders::ALL).title(title_str))
                 // IMPORTANT: Disable wrapping for input to match our linear cursor logic
                 // OR implement complex 2D cursor logic.
                 // Disabling wrap is safer for now to prevent corruption.
@@ -507,7 +518,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             "Ret:Target Spc:Vis Right:Solo *:All Tab:Tasks ?:Help".to_string()
                         }
                         SidebarMode::Categories => {
-                            "Ret:Toggle m:Match(AND/OR) 1:Cals Tab:Tasks ?:Help".to_string()
+                            "Ret:Toggle m:Match(AND/OR) *:Clear 1:Cals Tab:Tasks ?:Help".to_string()
                         }
                     },
                     Focus::Main => {

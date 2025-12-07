@@ -164,6 +164,7 @@ cfait = ["dev", "rust"]           # Typing #cfait will add #cfait, #dev and #rus
 | | `*` | **Toggle All** (Show all / Hide others) |
 | **Sidebar (Tags)** | `Enter` | Toggle Tag Filter |
 | | `m` | Toggle Tag Match Mode (AND / OR) |
+| | `*` | **Clear All Tags** (Show all tasks) |
 | **Task List** | `j` / `k` | Move Down / Up |
 | | `Space` | **Toggle** Completion |
 | | `s` | **Start / Pause** (Mark In-Process) |
@@ -202,6 +203,7 @@ When adding (`a`) or editing (`e`) a task, you can use shortcuts directly in the
     *   Also supports interval syntax: `rec:every 2 weeks`.
 *   `#tag`: Adds a **Tag** / Category.
     *   **Aliases:** If you have configured aliases (e.g., `groceries = ["home"]`), typing `#groceries` will automatically apply `#groceries` AND `#home`.
+    *   **Quick Jump:** Typing only a tag (e.g., `#urgent`) and pressing Enter will switch the view to that tag.
 
 ## Advanced Search
 The search bar (in both GUI and TUI) supports powerful filtering syntax:

@@ -1,3 +1,4 @@
+// File: src/gui/update/mod.rs
 pub mod common;
 pub mod network;
 pub mod settings;
@@ -72,7 +73,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::MinimizeWindow
         | Message::CloseWindow
         | Message::ResizeStart(_)
-        | Message::WindowResized(_) => view::handle(app, message),
+        | Message::WindowResized(_)
+        | Message::JumpToTag(_) => view::handle(app, message),
 
         Message::Refresh
         | Message::Loaded(_)

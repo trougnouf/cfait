@@ -170,7 +170,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             } else {
                 app.expanded_tasks.insert(uid.clone());
             }
-            // Highlight clicked task
             app.selected_uid = Some(uid);
             Task::none()
         }
@@ -224,6 +223,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::WindowResized(size) => {
             app.current_window_size = size;
+            Task::none()
+        }
+        Message::JumpToTag(tag) => {
+            app.sidebar_mode = SidebarMode::Categories;
+            app.selected_categories.clear();
+            app.selected_categories.insert(tag);
+            app.search_value.clear();
+            refresh_filtered_tasks(app);
             Task::none()
         }
         _ => Task::none(),

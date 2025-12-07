@@ -1,5 +1,4 @@
 // File: ./src/tui/handlers.rs
-// New file: Encapsulates Key Input and Event Handling
 use crate::model::Task;
 use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
@@ -46,53 +45,77 @@ pub async fn handle_key_event(
     action_tx: &Sender<Action>,
 ) -> Option<Action> {
     match state.mode {
-        InputMode::Creating => match key.code {
-            KeyCode::Enter => {
-                if !state.input_buffer.is_empty() {
-                    let summary = state.input_buffer.clone();
-                    let target_href = state
-                        .active_cal_href
-                        .clone()
-                        .or_else(|| state.calendars.first().map(|c| c.href.clone()));
-                    if let Some(href) = target_href {
-                        let mut task = Task::new(&summary, &state.tag_aliases);
-                        let new_uid = task.uid.clone();
-                        task.calendar_href = href.clone();
-
-                        if let Some(p_uid) = &state.creating_child_of {
-                            task.parent_uid = Some(p_uid.clone());
+        InputMode::Creating => {
+            match key.code {
+                KeyCode::Enter => {
+                    if !state.input_buffer.is_empty() {
+                        // SMART INPUT: Jump to Tag
+                        // If input starts with #, has no spaces, and not creating a child
+                        if state.input_buffer.starts_with('#')
+                            && !state.input_buffer.trim().contains(' ')
+                            && state.creating_child_of.is_none()
+                        {
+                            let tag = state
+                                .input_buffer
+                                .trim()
+                                .trim_start_matches('#')
+                                .to_string();
+                            if !tag.is_empty() {
+                                state.sidebar_mode = SidebarMode::Categories;
+                                state.selected_categories.clear();
+                                state.selected_categories.insert(tag);
+                                state.mode = InputMode::Normal;
+                                state.reset_input();
+                                state.refresh_filtered_view();
+                                return None;
+                            }
                         }
 
-                        if let Some(list) = state.store.calendars.get_mut(&href) {
-                            list.push(task.clone());
-                        }
-                        state.refresh_filtered_view();
+                        let summary = state.input_buffer.clone();
+                        let target_href = state
+                            .active_cal_href
+                            .clone()
+                            .or_else(|| state.calendars.first().map(|c| c.href.clone()));
+                        if let Some(href) = target_href {
+                            let mut task = Task::new(&summary, &state.tag_aliases);
+                            let new_uid = task.uid.clone();
+                            task.calendar_href = href.clone();
 
-                        if let Some(idx) = state.tasks.iter().position(|t| t.uid == new_uid) {
-                            state.list_state.select(Some(idx));
-                        }
+                            if let Some(p_uid) = &state.creating_child_of {
+                                task.parent_uid = Some(p_uid.clone());
+                            }
 
+                            if let Some(list) = state.store.calendars.get_mut(&href) {
+                                list.push(task.clone());
+                            }
+                            state.refresh_filtered_view();
+
+                            if let Some(idx) = state.tasks.iter().position(|t| t.uid == new_uid) {
+                                state.list_state.select(Some(idx));
+                            }
+
+                            state.mode = InputMode::Normal;
+                            state.reset_input();
+                            state.creating_child_of = None;
+                            return Some(Action::CreateTask(task));
+                        }
                         state.mode = InputMode::Normal;
                         state.reset_input();
                         state.creating_child_of = None;
-                        return Some(Action::CreateTask(task));
                     }
+                }
+                KeyCode::Esc => {
                     state.mode = InputMode::Normal;
                     state.reset_input();
                     state.creating_child_of = None;
                 }
+                KeyCode::Char(c) => state.enter_char(c),
+                KeyCode::Backspace => state.delete_char(),
+                KeyCode::Left => state.move_cursor_left(),
+                KeyCode::Right => state.move_cursor_right(),
+                _ => {}
             }
-            KeyCode::Esc => {
-                state.mode = InputMode::Normal;
-                state.reset_input();
-                state.creating_child_of = None;
-            }
-            KeyCode::Char(c) => state.enter_char(c),
-            KeyCode::Backspace => state.delete_char(),
-            KeyCode::Left => state.move_cursor_left(),
-            KeyCode::Right => state.move_cursor_right(),
-            _ => {}
-        },
+        }
         InputMode::Editing => match key.code {
             KeyCode::Enter => {
                 if let Some(idx) = state.editing_index
@@ -170,7 +193,27 @@ pub async fn handle_key_event(
             _ => {}
         },
         InputMode::Searching => match key.code {
-            KeyCode::Enter | KeyCode::Esc => {
+            KeyCode::Enter => {
+                // FEATURE: Smart Jump to Tag
+                if state.input_buffer.starts_with('#') && !state.input_buffer.trim().contains(' ') {
+                    let tag = state
+                        .input_buffer
+                        .trim()
+                        .trim_start_matches('#')
+                        .to_string();
+                    if !tag.is_empty() {
+                        state.sidebar_mode = SidebarMode::Categories;
+                        state.selected_categories.clear();
+                        state.selected_categories.insert(tag);
+                        state.input_buffer.clear();
+                        state.mode = InputMode::Normal;
+                        state.refresh_filtered_view();
+                        return None;
+                    }
+                }
+                state.mode = InputMode::Normal;
+            }
+            KeyCode::Esc => {
                 state.mode = InputMode::Normal;
             }
             KeyCode::Left => state.move_cursor_left(),

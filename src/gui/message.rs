@@ -1,3 +1,4 @@
+// File: src/gui/message.rs
 use crate::client::RustyClient;
 use crate::config::Config;
 use crate::gui::state::{ResizeDirection, SidebarMode};
@@ -81,6 +82,8 @@ pub enum Message {
     AddAlias,
     RemoveAlias(String),
     MoveTask(String, String),
+
+    JumpToTag(String),
 
     TaskMoved(Result<TodoTask, String>),
     ObSubmitOffline,
