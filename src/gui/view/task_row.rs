@@ -1,4 +1,4 @@
-// File: ./src/gui/view/task_row.rs
+// File: src/gui/view/task_row.rs
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
@@ -14,6 +14,9 @@ pub fn view_task_row<'a>(
 ) -> Element<'a, Message> {
     // 1. Check Blocked Status
     let is_blocked = app.store.is_blocked(task);
+
+    // Check if selected
+    let is_selected = app.selected_uid.as_ref() == Some(&task.uid);
 
     let color = if is_blocked {
         Color::from_rgb(0.5, 0.5, 0.5)
@@ -469,12 +472,37 @@ pub fn view_task_row<'a>(
         .align_y(iced::Alignment::Center);
 
     // --- CHANGED HERE: Increased right padding from 6.0 to 16.0 ---
-    let padded_row = container(row_main).padding(iced::Padding {
+    let mut padded_row = container(row_main).padding(iced::Padding {
         top: 2.0,
         right: 16.0,
         bottom: 2.0,
         left: 6.0,
     });
+
+    if is_selected {
+        padded_row = padded_row.style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            // Use warning color (typically yellow/orange) for a "happy" highlight
+            container::Style {
+                background: Some(
+                    Color {
+                        a: 0.05,
+                        ..palette.warning.base.color
+                    }
+                    .into(),
+                ),
+                border: iced::Border {
+                    color: Color {
+                        a: 0.5,
+                        ..palette.warning.base.color
+                    },
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            }
+        });
+    }
 
     // GENERATE ID
     let row_id = iced::widget::Id::from(task.uid.clone());

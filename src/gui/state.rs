@@ -51,6 +51,9 @@ pub struct GuiApp {
     pub match_all_categories: bool,
     pub yanked_uid: Option<String>,
 
+    // Track selected task for highlighting
+    pub selected_uid: Option<String>,
+
     // Preferences
     pub hide_completed: bool,
     pub hide_fully_completed_tags: bool,
@@ -109,6 +112,7 @@ impl Default for GuiApp {
             selected_categories: HashSet::new(),
             match_all_categories: false,
             yanked_uid: None,
+            selected_uid: None,
 
             hide_completed: false,
             hide_fully_completed_tags: true,

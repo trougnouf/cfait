@@ -1,3 +1,4 @@
+// File: src/gui/update/view.rs
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp, ResizeDirection, SidebarMode};
@@ -167,8 +168,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.expanded_tasks.contains(&uid) {
                 app.expanded_tasks.remove(&uid);
             } else {
-                app.expanded_tasks.insert(uid);
+                app.expanded_tasks.insert(uid.clone());
             }
+            // Highlight clicked task
+            app.selected_uid = Some(uid);
             Task::none()
         }
         Message::OpenHelp => {

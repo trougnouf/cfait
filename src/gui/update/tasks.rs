@@ -1,3 +1,4 @@
+// File: src/gui/update/tasks.rs
 use crate::cache::Cache;
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
@@ -19,7 +20,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::StartCreateChild(parent_uid) => {
-            app.creating_child_of = Some(parent_uid);
+            app.creating_child_of = Some(parent_uid.clone());
+            app.selected_uid = Some(parent_uid); // Highlight parent
             app.input_value.clear();
             Task::none()
         }
@@ -50,6 +52,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.input_value.clear();
                         app.description_value = iced::widget::text_editor::Content::new();
                         app.editing_uid = None;
+
+                        // Highlight edited task
+                        app.selected_uid = Some(task_copy.uid.clone());
+
                         refresh_filtered_tasks(app);
 
                         if let Some(client) = &app.client {
@@ -86,6 +92,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             .entry(target_href)
                             .or_default()
                             .push(new_task.clone());
+
+                        // Highlight new task
+                        app.selected_uid = Some(new_task.uid.clone());
+
                         refresh_filtered_tasks(app);
                         app.input_value.clear();
 
@@ -124,6 +134,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ToggleTask(index, _) => {
             if let Some(view_task) = app.tasks.get(index) {
                 let uid = view_task.uid.clone();
+                // Highlight toggled task
+                app.selected_uid = Some(uid.clone());
+
                 let cal_href = view_task.calendar_href.clone();
 
                 if let Some(cal_tasks) = app.store.calendars.get_mut(&cal_href)
@@ -157,6 +170,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.description_value =
                     iced::widget::text_editor::Content::with_text(&task.description);
                 app.editing_uid = Some(task.uid.clone());
+                // Highlight task being edited
+                app.selected_uid = Some(task.uid.clone());
             }
             Task::none()
         }
@@ -187,6 +202,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ChangePriority(index, delta) => {
             if let Some(view_task) = app.tasks.get(index) {
                 let uid = view_task.uid.clone();
+                // Highlight modified task
+                app.selected_uid = Some(uid.clone());
+
                 let cal_href = view_task.calendar_href.clone();
 
                 if let Some(tasks) = app.store.calendars.get_mut(&cal_href)
@@ -225,6 +243,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetTaskStatus(index, new_status) => {
             if let Some(view_task) = app.tasks.get(index) {
                 let uid = view_task.uid.clone();
+                // Highlight modified task
+                app.selected_uid = Some(uid.clone());
+
                 let cal_href = view_task.calendar_href.clone();
 
                 if let Some(cal_tasks) = app.store.calendars.get_mut(&cal_href)
@@ -244,7 +265,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::YankTask(uid) => {
-            app.yanked_uid = Some(uid);
+            app.yanked_uid = Some(uid.clone());
+            // Highlight yanked task
+            app.selected_uid = Some(uid);
             Task::none()
         }
         Message::ClearYank => {
@@ -274,6 +297,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     if task.uid != *parent_uid && task.parent_uid.as_ref() != Some(parent_uid) {
                         task.parent_uid = Some(parent_uid.clone());
                         let task_copy = task.clone();
+                        // Highlight modified child
+                        app.selected_uid = Some(target_uid);
                         refresh_filtered_tasks(app);
 
                         if let Some(client) = &app.client {
@@ -305,6 +330,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let task = &mut tasks[target_idx];
                 task.parent_uid = None;
                 let task_copy = task.clone();
+                // Highlight modified child
+                app.selected_uid = Some(child_uid);
                 refresh_filtered_tasks(app);
 
                 if let Some(client) = &app.client {
@@ -334,6 +361,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let task = &mut tasks[target_idx];
                 task.dependencies.retain(|d| *d != dep_uid);
                 let task_copy = task.clone();
+                // Highlight modified task
+                app.selected_uid = Some(task_uid);
                 refresh_filtered_tasks(app);
                 if let Some(client) = &app.client {
                     return Task::perform(
@@ -364,6 +393,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     if task.uid != *blocker_uid && !task.dependencies.contains(blocker_uid) {
                         task.dependencies.push(blocker_uid.clone());
                         let task_copy = task.clone();
+                        // Highlight modified task
+                        app.selected_uid = Some(target_uid);
                         refresh_filtered_tasks(app);
                         if let Some(client) = &app.client {
                             return Task::perform(
@@ -400,6 +431,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     .entry(target_href.clone())
                     .or_default()
                     .push(local_moved);
+
+                // Highlight moved task
+                app.selected_uid = Some(task.uid.clone());
+
                 refresh_filtered_tasks(app);
                 if let Some(client) = &app.client {
                     return Task::perform(
