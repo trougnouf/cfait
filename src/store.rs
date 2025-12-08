@@ -9,6 +9,8 @@ pub const UNCATEGORIZED_ID: &str = ":::uncategorized:::";
 #[derive(Debug, Clone, Default)]
 pub struct TaskStore {
     pub calendars: HashMap<String, Vec<Task>>,
+    /// Reverse index: Maps Task UID -> Calendar HREF for O(1) lookups
+    pub index: HashMap<String, String>,
 }
 
 pub struct FilterOptions<'a> {
@@ -30,23 +32,34 @@ impl TaskStore {
     }
 
     pub fn insert(&mut self, calendar_href: String, tasks: Vec<Task>) {
+        // Update Index
+        for task in &tasks {
+            self.index.insert(task.uid.clone(), calendar_href.clone());
+        }
         self.calendars.insert(calendar_href, tasks);
     }
 
     pub fn clear(&mut self) {
         self.calendars.clear();
+        self.index.clear();
     }
 
     // --- Core Logic Helpers ---
 
-    /// Helper: Locate a task (mutable) by UID across all calendars.
-    /// Returns (Mutable Task Reference, Calendar Href)
+    /// Helper: Locate a task (mutable) by UID using the O(1) index.
     pub fn get_task_mut(&mut self, uid: &str) -> Option<(&mut Task, String)> {
-        for (href, tasks) in &mut self.calendars {
-            if let Some(idx) = tasks.iter().position(|t| t.uid == uid) {
-                return Some((&mut tasks[idx], href.clone()));
-            }
+        // 1. Find Calendar HREF from Index
+        let href = self.index.get(uid)?.clone();
+
+        // 2. Retrieve Task from that Calendar
+        if let Some(tasks) = self.calendars.get_mut(&href)
+            && let Some(task) = tasks.iter_mut().find(|t| t.uid == uid)
+        {
+            return Some((task, href));
         }
+
+        // Index inconsistency (should not happen in normal flow, but safe to handle)
+        self.index.remove(uid);
         None
     }
 
@@ -100,23 +113,19 @@ impl TaskStore {
     }
 
     pub fn delete_task(&mut self, uid: &str) -> Option<Task> {
-        let mut found_cal = None;
-        let mut found_task = None;
+        let href = self.index.get(uid)?.clone();
 
-        for (href, tasks) in &mut self.calendars {
-            if let Some(idx) = tasks.iter().position(|t| t.uid == uid) {
-                found_task = Some(tasks.remove(idx));
-                found_cal = Some(href.clone());
-                break;
-            }
-        }
+        if let Some(tasks) = self.calendars.get_mut(&href)
+            && let Some(idx) = tasks.iter().position(|t| t.uid == uid)
+        {
+            let task = tasks.remove(idx);
+            // Clean Index
+            self.index.remove(uid);
 
-        if let (Some(task), Some(href)) = (found_task, found_cal) {
-            // Update Cache immediately
-            if let Some(tasks) = self.calendars.get(&href) {
-                let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
-                let _ = Cache::save(&href, tasks, token);
-            }
+            // Update Cache
+            let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
+            let _ = Cache::save(&href, tasks, token);
+
             return Some(task);
         }
         None
@@ -151,21 +160,24 @@ impl TaskStore {
     }
 
     pub fn move_task(&mut self, uid: &str, target_href: String) -> Option<Task> {
+        // Use internal delete to handle removal + index cleanup + cache save
         let task_opt = self.delete_task(uid);
 
         if let Some(mut task) = task_opt {
             if task.calendar_href == target_href {
-                self.calendars
-                    .entry(target_href)
-                    .or_default()
-                    .push(task.clone());
+                // Was already here, re-insert
+                self.insert(target_href, vec![task]); // Insert handles index update
                 return None;
             }
 
             task.calendar_href = target_href.clone();
+
+            // Insert into new (Updates Index automatically via insert helper logic if we used it, but let's be explicit)
             let target_list = self.calendars.entry(target_href.clone()).or_default();
             target_list.push(task.clone());
+            self.index.insert(task.uid.clone(), target_href.clone());
 
+            // Update Cache for target
             let (_, token) = Cache::load(&target_href).unwrap_or((vec![], None));
             let _ = Cache::save(&target_href, target_list, token);
 
@@ -351,10 +363,12 @@ impl TaskStore {
     }
 
     pub fn is_task_done(&self, uid: &str) -> Option<bool> {
-        for tasks in self.calendars.values() {
-            if let Some(t) = tasks.iter().find(|t| t.uid == uid) {
-                return Some(t.status.is_done());
-            }
+        // Optimization: Use index
+        if let Some(href) = self.index.get(uid)
+            && let Some(tasks) = self.calendars.get(href)
+            && let Some(t) = tasks.iter().find(|t| t.uid == uid)
+        {
+            return Some(t.status.is_done());
         }
         None
     }
@@ -378,10 +392,11 @@ impl TaskStore {
     }
 
     pub fn get_summary(&self, uid: &str) -> Option<String> {
-        for tasks in self.calendars.values() {
-            if let Some(t) = tasks.iter().find(|t| t.uid == uid) {
-                return Some(t.summary.clone());
-            }
+        if let Some(href) = self.index.get(uid)
+            && let Some(tasks) = self.calendars.get(href)
+            && let Some(t) = tasks.iter().find(|t| t.uid == uid)
+        {
+            return Some(t.summary.clone());
         }
         None
     }

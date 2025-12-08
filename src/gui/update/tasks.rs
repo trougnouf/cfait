@@ -25,6 +25,26 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SubmitTask => handle_submit(app),
+
+        // --- REGRESSION FIX: Re-added EditTaskStart and CancelEdit ---
+        Message::EditTaskStart(index) => {
+            if let Some(task) = app.tasks.get(index) {
+                app.input_value = task.to_smart_string();
+                app.description_value =
+                    iced::widget::text_editor::Content::with_text(&task.description);
+                app.editing_uid = Some(task.uid.clone());
+                app.selected_uid = Some(task.uid.clone());
+            }
+            Task::none()
+        }
+        Message::CancelEdit => {
+            app.input_value.clear();
+            app.description_value = iced::widget::text_editor::Content::new();
+            app.editing_uid = None;
+            app.creating_child_of = None;
+            Task::none()
+        }
+
         Message::ToggleTask(index, _) => {
             if let Some(view_task) = app.tasks.get(index) {
                 let uid = view_task.uid.clone();
