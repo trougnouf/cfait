@@ -28,11 +28,43 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         AppState::Onboarding | AppState::Settings => view_settings(app),
         AppState::Help => view_help(),
         AppState::Active => {
+            // --- LOGO POSITION LOGIC ---
+            // Estimate sidebar content height to decide where to place the logo.
+            const ITEM_HEIGHT_CAL: f32 = 44.0; // ~16 text + 20 padding + 8 spacing
+            const ITEM_HEIGHT_TAG: f32 = 34.0; // ~16 text + 10 spacing
+            const SIDEBAR_CHROME: f32 = 110.0; // Tabs + Footer + Padding
+            const LOGO_SPACE_REQUIRED: f32 = 140.0; // 100 size + 40 padding
+
+            let content_height = match app.sidebar_mode {
+                SidebarMode::Calendars => {
+                    app.calendars
+                        .iter()
+                        .filter(|c| !app.disabled_calendars.contains(&c.href))
+                        .count() as f32
+                        * ITEM_HEIGHT_CAL
+                }
+                SidebarMode::Categories => {
+                    app.store
+                        .get_all_categories(
+                            app.hide_completed,
+                            app.hide_fully_completed_tags,
+                            &app.selected_categories,
+                            &app.hidden_calendars,
+                        )
+                        .len() as f32
+                        * ITEM_HEIGHT_TAG
+                }
+            };
+
+            let available_height = app.current_window_size.height - SIDEBAR_CHROME;
+            // Only move logo if there is strictly enough space
+            let show_logo_in_sidebar = (available_height - content_height) > LOGO_SPACE_REQUIRED;
+
             // Main App Layout
             let content_layout = row![
-                view_sidebar(app),
+                view_sidebar(app, show_logo_in_sidebar),
                 iced::widget::rule::vertical(1),
-                container(view_main_content(app))
+                container(view_main_content(app, !show_logo_in_sidebar))
                     .width(Length::Fill)
                     .center_x(Length::Fill)
             ];
@@ -42,9 +74,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 .height(Length::Fill);
 
             // --- Resize Grips ---
-            // Edge thickness
             let t = 6.0;
-            // Corner size
             let c = 12.0;
 
             // Edges
@@ -115,7 +145,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
             stack![
                 main_container,
-                // Edges (aligned)
                 container(n_grip)
                     .width(Length::Fill)
                     .height(Length::Fill)
@@ -132,7 +161,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     .width(Length::Fill)
                     .height(Length::Fill)
                     .align_x(iced::alignment::Horizontal::Left),
-                // Corners (aligned on top of edges)
                 container(nw_grip)
                     .width(Length::Fill)
                     .height(Length::Fill)
@@ -159,13 +187,13 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
     }
 }
 
-fn view_sidebar(app: &GuiApp) -> Element<'_, Message> {
-    // Define a custom style for the active tab using Amber/Orange
+fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
+    // Custom style: Amber background, BLACK text
     let active_tab_style =
         |_theme: &Theme, status: iced::widget::button::Status| -> iced::widget::button::Style {
             let base = iced::widget::button::Style {
-                background: Some(Color::from_rgb(1.0, 0.6, 0.0).into()), // Amber
-                text_color: Color::BLACK,
+                background: Some(Color::from_rgb(1.0, 0.6, 0.0).into()),
+                text_color: Color::BLACK, // BLACK Text for readability
                 border: iced::Border {
                     radius: 4.0.into(),
                     ..Default::default()
@@ -175,14 +203,13 @@ fn view_sidebar(app: &GuiApp) -> Element<'_, Message> {
 
             match status {
                 iced::widget::button::Status::Hovered => iced::widget::button::Style {
-                    background: Some(Color::from_rgb(1.0, 0.7, 0.1).into()), // Lighter Amber on hover
+                    background: Some(Color::from_rgb(1.0, 0.7, 0.1).into()),
                     ..base
                 },
                 _ => base,
             }
         };
 
-    // 1. Tab Switcher
     let btn_cals = iced::widget::button(
         container(text("Calendars").size(14))
             .width(Length::Fill)
@@ -213,14 +240,11 @@ fn view_sidebar(app: &GuiApp) -> Element<'_, Message> {
 
     let tabs = row![btn_cals, btn_tags].spacing(5);
 
-    // 2. Content based on Tab
     let content = match app.sidebar_mode {
         SidebarMode::Calendars => view_sidebar_calendars(app),
         SidebarMode::Categories => view_sidebar_categories(app),
     };
 
-    // 3. Footer (Settings + Help)
-    // Constrained height to prevent expansion
     let footer = row![
         iced::widget::button(
             container(icon::icon(icon::SETTINGS_GEAR).size(20))
@@ -228,8 +252,8 @@ fn view_sidebar(app: &GuiApp) -> Element<'_, Message> {
                 .center_x(Length::Fill)
                 .center_y(Length::Fill)
         )
-        .padding(0) // Reduced padding inside button
-        .height(Length::Fixed(40.0)) // Explicit fixed height
+        .padding(0)
+        .height(Length::Fixed(40.0))
         .width(Length::Fill)
         .style(iced::widget::button::secondary)
         .on_press(Message::OpenSettings),
@@ -239,24 +263,42 @@ fn view_sidebar(app: &GuiApp) -> Element<'_, Message> {
                 .center_y(Length::Fill)
         )
         .padding(0)
-        .height(Length::Fixed(40.0)) // Explicit fixed height
-        .width(Length::Fixed(50.0)) // Square-ish
+        .height(Length::Fixed(40.0))
+        .width(Length::Fixed(50.0))
         .style(iced::widget::button::secondary)
         .on_press(Message::OpenHelp)
     ]
     .spacing(5);
 
-    let sidebar_inner = column![
+    // Sidebar structure
+    let mut sidebar_col = column![
         tabs,
         scrollable(content)
             .height(Length::Fill)
-            .id(app.sidebar_scrollable_id.clone()), // Assign the ID here!
-        footer
-    ]
-    .spacing(10)
-    .padding(10);
+            .id(app.sidebar_scrollable_id.clone())
+    ];
 
-    container(sidebar_inner)
+    if show_logo {
+        sidebar_col = sidebar_col.push(
+            container(
+                svg(svg::Handle::from_memory(icon::LOGO))
+                    .width(100)
+                    .height(100)
+                    .content_fit(iced::ContentFit::Contain),
+            )
+            .width(Length::Fill)
+            .center_x(Length::Fill)
+            .padding(iced::Padding {
+                top: 20.0,
+                bottom: 20.0,
+                ..Default::default()
+            }),
+        );
+    }
+
+    sidebar_col = sidebar_col.push(footer);
+
+    container(sidebar_col.spacing(10).padding(10))
         .width(220)
         .height(Length::Fill)
         .style(|theme: &Theme| {
@@ -269,7 +311,7 @@ fn view_sidebar(app: &GuiApp) -> Element<'_, Message> {
         .into()
 }
 
-fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
+fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     // --- 1. PREPARE HEADER DATA ---
     let title_text = if app.loading {
         "Loading...".to_string()
@@ -306,15 +348,18 @@ fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
 
     // --- 2. BUILD HEADER ROW ---
 
-    // Left Section (Title + Badges + Refresh)
-    let title_group = row![
-        svg(svg::Handle::from_memory(icon::LOGO))
-            .width(24)
-            .height(24),
-        text(title_text).size(20).font(iced::Font::DEFAULT)
-    ]
-    .spacing(10)
-    .align_y(iced::Alignment::Center);
+    let mut title_group = row![].spacing(10).align_y(iced::Alignment::Center);
+
+    // Conditionally show logo in header
+    if show_logo {
+        title_group = title_group.push(
+            svg(svg::Handle::from_memory(icon::LOGO))
+                .width(24)
+                .height(24),
+        );
+    }
+
+    title_group = title_group.push(text(title_text).size(20).font(iced::Font::DEFAULT));
 
     let mut left_section = row![title_group]
         .spacing(10)
@@ -342,18 +387,15 @@ fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
             .on_press(Message::Refresh),
     );
 
-    // Middle Section (Subtitle)
     let subtitle_text = text(subtitle)
         .size(14)
         .color(Color::from_rgb(0.6, 0.6, 0.6));
-
     let middle_container = container(subtitle_text)
         .width(Length::Fill)
         .height(Length::Shrink)
         .center_x(Length::Fill)
         .center_y(Length::Shrink);
 
-    // Right Section (Search + Window Controls)
     let search_input = iced::widget::text_input("Search...", &app.search_value)
         .on_input(Message::SearchChanged)
         .padding(5)
@@ -376,7 +418,6 @@ fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
         .spacing(10)
         .align_y(iced::Alignment::Center);
 
-    // Assembly
     let header_row = row![left_section, middle_container, right_section]
         .spacing(10)
         .padding(iced::Padding {
@@ -387,7 +428,6 @@ fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
         })
         .align_y(iced::Alignment::Center);
 
-    // Wrap the entire header in a MouseArea to enable dragging on any empty space (padding, spacers, text)
     let header_drag_area = MouseArea::new(header_row).on_press(Message::WindowDragged);
 
     // --- 3. EXPORT UI ---
@@ -398,7 +438,6 @@ fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
             .iter()
             .filter(|c| c.href != LOCAL_CALENDAR_HREF && !app.disabled_calendars.contains(&c.href))
             .collect();
-
         if !targets.is_empty() {
             let mut row = row![
                 text("Export to:")
@@ -407,7 +446,6 @@ fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
             ]
             .spacing(5)
             .align_y(iced::Alignment::Center);
-
             for cal in targets {
                 row = row.push(
                     iced::widget::button(text(&cal.name).size(12))
@@ -428,10 +466,8 @@ fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
 
     // --- 4. MAIN CONTENT ---
     let input_area = view_input_area(app);
-
     let mut main_col = column![header_drag_area, export_ui, input_area];
 
-    // FEATURE: Jump to Tag in search
     if app.search_value.starts_with('#') {
         let tag = app.search_value.trim_start_matches('#').trim().to_string();
         if !tag.is_empty() {
@@ -469,7 +505,6 @@ fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
                 .on_press(Message::DismissError)
         ]
         .align_y(iced::Alignment::Center);
-
         main_col = main_col.push(
             container(error_content)
                 .width(Length::Fill)
@@ -489,7 +524,6 @@ fn view_main_content(app: &GuiApp) -> Element<'_, Message> {
             .collect::<Vec<_>>(),
     )
     .spacing(1);
-
     main_col = main_col.push(
         scrollable(tasks_view)
             .height(Length::Fill)
@@ -525,7 +559,6 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .find(|c| Some(&c.href) == app.active_cal_href.as_ref())
             .map(|c| c.name.as_str())
             .unwrap_or("Default");
-
         format!(
             "Add task to {} (e.g. Buy cat food !1 @tomorrow #groceries ~30m)",
             target_name
@@ -544,15 +577,12 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .on_action(Message::DescriptionChanged)
             .padding(10)
             .height(Length::Fixed(100.0));
-
         let cancel_btn = iced::widget::button(text("Cancel").size(16))
             .style(iced::widget::button::secondary)
             .on_press(Message::CancelEdit);
-
         let save_btn = iced::widget::button(text("Save").size(16))
             .style(iced::widget::button::primary)
             .on_press(Message::SubmitTask);
-
         let top_bar = row![
             text("Editing")
                 .size(14)
@@ -563,7 +593,6 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         ]
         .align_y(iced::Alignment::Center)
         .spacing(10);
-
         let mut move_element: Element<'_, Message> = row![].into();
 
         if let Some(edit_uid) = &app.editing_uid
@@ -576,12 +605,10 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                     c.href != task.calendar_href && !app.disabled_calendars.contains(&c.href)
                 })
                 .collect();
-
             if !targets.is_empty() {
                 let label = text("Move to:")
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.6));
-
                 let mut btn_row = row![].spacing(5);
                 for cal in targets {
                     btn_row = btn_row.push(
@@ -591,14 +618,12 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                             .on_press(Message::MoveTask(task.uid.clone(), cal.href.clone())),
                     );
                 }
-
                 move_element = row![label, scrollable(btn_row).height(30)]
                     .spacing(10)
                     .align_y(iced::Alignment::Center)
                     .into();
             }
         }
-
         column![top_bar, input_title, input_desc, move_element]
             .spacing(10)
             .into()
