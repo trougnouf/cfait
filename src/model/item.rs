@@ -1,4 +1,4 @@
-// File: ./src/model/item.rs
+// File: src/model/item.rs
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -26,12 +26,11 @@ impl TaskStatus {
     }
 }
 
-// A struct to hold raw ICS properties we don't natively support yet
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RawProperty {
     pub key: String,
     pub value: String,
-    pub params: Vec<(String, String)>, // e.g. "CN" -> "John Doe"
+    pub params: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -52,12 +51,7 @@ pub struct Task {
     pub categories: Vec<String>,
     pub depth: usize,
     pub rrule: Option<String>,
-
-    // The bucket for everything else (Location, Attendees, etc.)
     pub unmapped_properties: Vec<RawProperty>,
-
-    // NEW FIELD: Store raw string representations of other components (Exceptions, etc.)
-    // OPTIMIZATION: Skip serialization if empty to reduce JSON cache size and I/O time.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub raw_components: Vec<String>,
 }
@@ -82,15 +76,54 @@ impl Task {
             depth: 0,
             rrule: None,
             unmapped_properties: Vec::new(),
-            raw_components: Vec::new(), // Initialize empty
+            raw_components: Vec::new(),
         };
-        // Use the parser module
         task.apply_smart_input(input, aliases);
         task
     }
 
+    // --- View Helpers ---
+
+    pub fn format_duration_short(&self) -> String {
+        if let Some(mins) = self.estimated_duration {
+            if mins >= 525600 {
+                format!("[~{}y]", mins / 525600)
+            } else if mins >= 43200 {
+                format!("[~{}mo]", mins / 43200)
+            } else if mins >= 10080 {
+                format!("[~{}w]", mins / 10080)
+            } else if mins >= 1440 {
+                format!("[~{}d]", mins / 1440)
+            } else if mins >= 60 {
+                format!("[~{}h]", mins / 60)
+            } else {
+                format!("[~{}m]", mins)
+            }
+        } else {
+            String::new()
+        }
+    }
+
+    pub fn checkbox_symbol(&self) -> &'static str {
+        match self.status {
+            TaskStatus::Completed => "[x]",
+            TaskStatus::Cancelled => "[-]",
+            TaskStatus::InProcess => "[>]",
+            TaskStatus::NeedsAction => "[ ]",
+        }
+    }
+
+    pub fn priority_color_idx(&self) -> u8 {
+        match self.priority {
+            1..=4 => 1, // High
+            5 => 2,     // Medium
+            _ => 0,     // Normal/Low
+        }
+    }
+
+    // --- Logic ---
+
     pub fn compare_with_cutoff(&self, other: &Self, cutoff: Option<DateTime<Utc>>) -> Ordering {
-        // 1. Sort by Status Priority
         fn status_prio(s: TaskStatus) -> u8 {
             match s {
                 TaskStatus::InProcess => 0,
@@ -106,7 +139,6 @@ impl Task {
             return s1.cmp(&s2);
         }
 
-        // 2. Future Start Date
         let now = Utc::now();
         let self_future = self.dtstart.map(|d| d > now).unwrap_or(false);
         let other_future = other.dtstart.map(|d| d > now).unwrap_or(false);
@@ -117,7 +149,6 @@ impl Task {
             _ => {}
         }
 
-        // 3. Cutoff Window
         let is_in_window = |t: &Task| -> bool {
             match (t.due, cutoff) {
                 (Some(d), Some(limit)) => d <= limit,
@@ -140,7 +171,6 @@ impl Task {
             (false, false) => {}
         }
 
-        // 4. Priority
         let p1 = if self.priority == 0 { 5 } else { self.priority };
         let p2 = if other.priority == 0 {
             5
@@ -211,16 +241,5 @@ impl Task {
                 Self::append_task_and_children(child, result, map, depth + 1);
             }
         }
-    }
-}
-
-impl Ord for Task {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.compare_with_cutoff(other, None)
-    }
-}
-impl PartialOrd for Task {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
     }
 }

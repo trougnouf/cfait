@@ -1,9 +1,8 @@
-// File: ./src/storage.rs
+// File: src/storage.rs
 use crate::model::Task;
+use crate::paths::AppPaths;
 use anyhow::Result;
-use directories::ProjectDirs;
 use fs2::FileExt;
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -15,22 +14,7 @@ pub struct LocalStorage;
 
 impl LocalStorage {
     pub fn get_path() -> Option<PathBuf> {
-        if let Ok(test_dir) = env::var("CFAIT_TEST_DIR") {
-            let path = PathBuf::from(test_dir);
-            if !path.exists() {
-                let _ = fs::create_dir_all(&path);
-            }
-            return Some(path.join("local.json"));
-        }
-
-        if let Some(proj) = ProjectDirs::from("com", "trougnouf", "cfait") {
-            let data_dir = proj.data_dir();
-            if !data_dir.exists() {
-                let _ = fs::create_dir_all(data_dir);
-            }
-            return Some(data_dir.join("local.json"));
-        }
-        None
+        AppPaths::get_local_task_path()
     }
 
     /// Helper to get a sidecar lock file path (e.g., "local.json.lock")
@@ -46,13 +30,12 @@ impl LocalStorage {
         lock_path
     }
 
-    /// execute a closure while holding an exclusive lock on the sidecar file.
+    /// Execute a closure while holding an exclusive lock on the sidecar file.
     pub fn with_lock<F, T>(file_path: &Path, f: F) -> Result<T>
     where
         F: FnOnce() -> Result<T>,
     {
         let lock_path = Self::get_lock_path(file_path);
-
         let file = fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -60,13 +43,9 @@ impl LocalStorage {
             .truncate(false)
             .open(&lock_path)?;
 
-        // Block until lock is acquired
         file.lock_exclusive()?;
-
         let result = f();
-
         file.unlock()?;
-
         result
     }
 

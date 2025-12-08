@@ -1,9 +1,9 @@
-// File: ./src/store.rs
-use crate::model::Task;
+// File: src/store.rs
+use crate::cache::Cache;
+use crate::model::{Task, TaskStatus};
 use chrono::{DateTime, Utc};
 use std::collections::{HashMap, HashSet};
 
-// Special ID for the "Uncategorized" pseudo-tag
 pub const UNCATEGORIZED_ID: &str = ":::uncategorized:::";
 
 #[derive(Debug, Clone, Default)]
@@ -37,10 +37,148 @@ impl TaskStore {
         self.calendars.clear();
     }
 
-    /// Returns a list of (Category Name, Active Task Count)
+    // --- Core Logic Helpers ---
+
+    /// Helper: Locate a task (mutable) by UID across all calendars.
+    /// Returns (Mutable Task Reference, Calendar Href)
+    pub fn get_task_mut(&mut self, uid: &str) -> Option<(&mut Task, String)> {
+        for (href, tasks) in &mut self.calendars {
+            if let Some(idx) = tasks.iter().position(|t| t.uid == uid) {
+                return Some((&mut tasks[idx], href.clone()));
+            }
+        }
+        None
+    }
+
+    /// Toggles task status (Completed/NeedsAction).
+    pub fn toggle_task(&mut self, uid: &str) -> Option<Task> {
+        if let Some((task, _)) = self.get_task_mut(uid) {
+            task.status = if task.status == TaskStatus::Completed {
+                TaskStatus::NeedsAction
+            } else {
+                TaskStatus::Completed
+            };
+            return Some(task.clone());
+        }
+        None
+    }
+
+    pub fn set_status(&mut self, uid: &str, status: TaskStatus) -> Option<Task> {
+        if let Some((task, _)) = self.get_task_mut(uid) {
+            if task.status == status {
+                task.status = TaskStatus::NeedsAction;
+            } else {
+                task.status = status;
+            }
+            return Some(task.clone());
+        }
+        None
+    }
+
+    pub fn change_priority(&mut self, uid: &str, delta: i8) -> Option<Task> {
+        if let Some((task, _)) = self.get_task_mut(uid) {
+            task.priority = if delta > 0 {
+                match task.priority {
+                    0 => 9,
+                    9 => 5,
+                    5 => 1,
+                    1 => 1,
+                    _ => 5,
+                }
+            } else {
+                match task.priority {
+                    1 => 5,
+                    5 => 9,
+                    9 => 0,
+                    0 => 0,
+                    _ => 0,
+                }
+            };
+            return Some(task.clone());
+        }
+        None
+    }
+
+    pub fn delete_task(&mut self, uid: &str) -> Option<Task> {
+        let mut found_cal = None;
+        let mut found_task = None;
+
+        for (href, tasks) in &mut self.calendars {
+            if let Some(idx) = tasks.iter().position(|t| t.uid == uid) {
+                found_task = Some(tasks.remove(idx));
+                found_cal = Some(href.clone());
+                break;
+            }
+        }
+
+        if let (Some(task), Some(href)) = (found_task, found_cal) {
+            // Update Cache immediately
+            if let Some(tasks) = self.calendars.get(&href) {
+                let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
+                let _ = Cache::save(&href, tasks, token);
+            }
+            return Some(task);
+        }
+        None
+    }
+
+    pub fn set_parent(&mut self, child_uid: &str, parent_uid: Option<String>) -> Option<Task> {
+        if let Some((task, _)) = self.get_task_mut(child_uid) {
+            task.parent_uid = parent_uid;
+            return Some(task.clone());
+        }
+        None
+    }
+
+    pub fn add_dependency(&mut self, task_uid: &str, dep_uid: String) -> Option<Task> {
+        if let Some((task, _)) = self.get_task_mut(task_uid)
+            && !task.dependencies.contains(&dep_uid)
+        {
+            task.dependencies.push(dep_uid);
+            return Some(task.clone());
+        }
+        None
+    }
+
+    pub fn remove_dependency(&mut self, task_uid: &str, dep_uid: &str) -> Option<Task> {
+        if let Some((task, _)) = self.get_task_mut(task_uid)
+            && let Some(pos) = task.dependencies.iter().position(|d| d == dep_uid)
+        {
+            task.dependencies.remove(pos);
+            return Some(task.clone());
+        }
+        None
+    }
+
+    pub fn move_task(&mut self, uid: &str, target_href: String) -> Option<Task> {
+        let task_opt = self.delete_task(uid);
+
+        if let Some(mut task) = task_opt {
+            if task.calendar_href == target_href {
+                self.calendars
+                    .entry(target_href)
+                    .or_default()
+                    .push(task.clone());
+                return None;
+            }
+
+            task.calendar_href = target_href.clone();
+            let target_list = self.calendars.entry(target_href.clone()).or_default();
+            target_list.push(task.clone());
+
+            let (_, token) = Cache::load(&target_href).unwrap_or((vec![], None));
+            let _ = Cache::save(&target_href, target_list, token);
+
+            return Some(task);
+        }
+        None
+    }
+
+    // --- Read/Filter Logic ---
+
     pub fn get_all_categories(
         &self,
-        _hide_completed: bool, // Param kept for API compat, but logic is improved below
+        _hide_completed: bool,
         hide_fully_completed_tags: bool,
         forced_includes: &HashSet<String>,
         hidden_calendars: &HashSet<String>,
@@ -75,13 +213,8 @@ impl TaskStore {
 
         let mut result = Vec::new();
 
-        // Process standard tags
         for tag in present_tags {
             let count = *active_counts.get(&tag).unwrap_or(&0);
-
-            // Logic:
-            // 1. If hide_fully_completed_tags is TRUE: Only show if count > 0 or it's selected.
-            // 2. If hide_fully_completed_tags is FALSE: Show it because it exists (even if count is 0).
             let should_show = if hide_fully_completed_tags {
                 count > 0 || forced_includes.contains(&tag)
             } else {
@@ -93,8 +226,6 @@ impl TaskStore {
             }
         }
 
-        // Process Uncategorized
-        // Same logic: If hiding completed tags, only show Uncategorized if it has active tasks or is selected.
         let show_uncategorized = if hide_fully_completed_tags {
             has_uncategorized_active || forced_includes.contains(UNCATEGORIZED_ID)
         } else {
@@ -103,8 +234,6 @@ impl TaskStore {
 
         if show_uncategorized {
             let count = if has_uncategorized_active {
-                // We need to actually count them if we haven't tracked exact numbers above
-                // To save a second loop, let's assume we want exact numbers:
                 self.count_uncategorized_active(hidden_calendars)
             } else {
                 0
@@ -135,14 +264,12 @@ impl TaskStore {
         let mut raw_tasks = Vec::new();
 
         if let Some(href) = options.active_cal_href {
-            // If explicit calendar selected, ignore hidden list (unless it matches)
             if !options.hidden_calendars.contains(href)
                 && let Some(tasks) = self.calendars.get(href)
             {
                 raw_tasks.extend(tasks.clone());
             }
         } else {
-            // "All Tasks" view: Skip hidden calendars
             for (href, tasks) in &self.calendars {
                 if !options.hidden_calendars.contains(href) {
                     raw_tasks.extend(tasks.clone());
@@ -153,18 +280,15 @@ impl TaskStore {
         let filtered: Vec<Task> = raw_tasks
             .into_iter()
             .filter(|t| {
-                // Pre-check for any status-related filter in the search term
                 let search_lower = options.search_term.to_lowercase();
                 let has_status_filter = search_lower.contains("is:done")
                     || search_lower.contains("is:active")
                     || search_lower.contains("is:ongoing");
 
-                // Apply global hide setting ONLY if there's no overriding status filter in the search
                 if !has_status_filter && t.status.is_done() && options.hide_completed_global {
                     return false;
                 }
 
-                // Duration Filter (UI Sliders)
                 match t.estimated_duration {
                     Some(mins) => {
                         if let Some(min) = options.min_duration
@@ -185,11 +309,9 @@ impl TaskStore {
                     }
                 }
 
-                // Category Filter
                 if !options.selected_categories.is_empty() {
                     let filter_uncategorized =
                         options.selected_categories.contains(UNCATEGORIZED_ID);
-
                     if options.match_all_categories {
                         for sel in options.selected_categories {
                             if sel == UNCATEGORIZED_ID {
@@ -218,11 +340,9 @@ impl TaskStore {
                     }
                 }
 
-                // Advanced Search Parsing (Delegated to Model)
                 if !options.search_term.is_empty() {
                     return t.matches_search_term(options.search_term);
                 }
-
                 true
             })
             .collect();
@@ -238,7 +358,7 @@ impl TaskStore {
         }
         None
     }
-    // Backward compat helper
+
     pub fn get_task_status(&self, uid: &str) -> Option<bool> {
         self.is_task_done(uid)
     }
@@ -248,7 +368,6 @@ impl TaskStore {
             return false;
         }
         for dep_uid in &task.dependencies {
-            // Blocked if the dependency exists and is NOT done
             if let Some(is_done) = self.is_task_done(dep_uid)
                 && !is_done
             {

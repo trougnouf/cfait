@@ -1,10 +1,10 @@
+// File: src/config.rs
+use crate::paths::AppPaths;
 use crate::storage::LocalStorage;
 use anyhow::Result;
-use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
 
 fn default_true() -> bool {
     true
@@ -36,19 +36,8 @@ pub struct Config {
 }
 
 impl Config {
-    fn get_path() -> Result<PathBuf> {
-        if let Some(proj_dirs) = ProjectDirs::from("com", "trougnouf", "cfait") {
-            let config_dir = proj_dirs.config_dir();
-            if !config_dir.exists() {
-                fs::create_dir_all(config_dir)?;
-            }
-            return Ok(config_dir.join("config.toml"));
-        }
-        Err(anyhow::anyhow!("Could not determine config path"))
-    }
-
     pub fn load() -> Result<Self> {
-        let path = Self::get_path()?;
+        let path = AppPaths::get_config_file_path()?;
         if path.exists() {
             let contents = fs::read_to_string(path)?;
             let config: Config = toml::from_str(&contents)?;
@@ -58,7 +47,7 @@ impl Config {
     }
 
     pub fn save(&self) -> Result<()> {
-        let path = Self::get_path()?;
+        let path = AppPaths::get_config_file_path()?;
         LocalStorage::with_lock(&path, || {
             let toml_str = toml::to_string_pretty(self)?;
             LocalStorage::atomic_write(&path, toml_str)?;
@@ -68,7 +57,7 @@ impl Config {
     }
 
     pub fn get_path_string() -> Result<String> {
-        let path = Self::get_path()?;
+        let path = AppPaths::get_config_file_path()?;
         Ok(path.to_string_lossy().to_string())
     }
 }

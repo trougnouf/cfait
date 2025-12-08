@@ -5,6 +5,7 @@ pub mod color_utils;
 pub mod config;
 pub mod journal;
 pub mod model;
+pub mod paths; // New module
 pub mod storage;
 pub mod store;
 
