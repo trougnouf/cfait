@@ -57,7 +57,8 @@ pub struct Task {
     pub unmapped_properties: Vec<RawProperty>,
 
     // NEW FIELD: Store raw string representations of other components (Exceptions, etc.)
-    #[serde(default)]
+    // OPTIMIZATION: Skip serialization if empty to reduce JSON cache size and I/O time.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub raw_components: Vec<String>,
 }
 

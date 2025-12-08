@@ -139,8 +139,7 @@ impl Task {
         calendar.push(todo);
         let mut ics = calendar.to_string();
 
-        // 1. Manual injection of CATEGORIES (Must happen before appending raw components)
-        // to ensure we are modifying the Master VTODO.
+        // 1. Manual injection of CATEGORIES
         if !self.categories.is_empty() {
             let escaped_cats: Vec<String> = self
                 .categories
@@ -151,18 +150,25 @@ impl Task {
 
             if let Some(idx) = ics.rfind("END:VTODO") {
                 let (start, end) = ics.split_at(idx);
-                ics = format!("{}{}\r\n{}", start, cat_line, end);
+                let mut buffer = String::with_capacity(ics.len() + cat_line.len() + 2);
+                buffer.push_str(start);
+                buffer.push_str(&cat_line);
+                buffer.push_str("\r\n");
+                buffer.push_str(end);
+                ics = buffer;
             }
         }
 
         // 2. Inject Raw Components (Exceptions, Timezones, etc.)
-        // We inject them just before the closing END:VCALENDAR
         if !self.raw_components.is_empty() {
             let trimmed = ics.trim_end();
             if let Some(idx) = trimmed.rfind("END:VCALENDAR") {
                 let (start, end) = trimmed.split_at(idx);
-                let mut buffer = String::from(start);
 
+                let extra_len: usize = self.raw_components.iter().map(|s| s.len() + 2).sum();
+                let mut buffer = String::with_capacity(trimmed.len() + extra_len);
+
+                buffer.push_str(start);
                 for raw in &self.raw_components {
                     buffer.push_str(raw);
                     if !raw.ends_with("\r\n") && !raw.ends_with('\n') {
@@ -185,15 +191,12 @@ impl Task {
     ) -> Result<Self, String> {
         let calendar: Calendar = raw_ics.parse().map_err(|e| format!("Parse: {}", e))?;
 
-        // Strategy: Iterate components to separate the "Master" VTODO from exceptions (RECURRENCE-ID).
-        // Any non-Master component (exceptions, events, venues) is preserved as a raw string.
         let mut master_todo: Option<&Todo> = None;
-        let mut raw_components: Vec<String> = Vec::new();
+        let mut raw_components: Vec<String> = Vec::with_capacity(calendar.components.len());
 
         for component in &calendar.components {
             match component {
                 CalendarComponent::Todo(t) => {
-                    // Check if it's an Exception (has RECURRENCE-ID)
                     let is_exception = t.properties().contains_key("RECURRENCE-ID");
 
                     if is_exception {
@@ -201,21 +204,17 @@ impl Task {
                     } else if master_todo.is_none() {
                         master_todo = Some(t);
                     } else {
-                        // We already have a master, treat subsequent non-exception todos as raw
-                        // (though valid iCal should only have one master VTODO)
                         raw_components.push(t.to_string());
                     }
                 }
                 CalendarComponent::Event(e) => raw_components.push(e.to_string()),
                 CalendarComponent::Venue(v) => raw_components.push(v.to_string()),
-                _ => {} // Future variants
+                _ => {}
             }
         }
 
         let todo = match master_todo {
             Some(t) => t,
-            // If no master found, maybe we shouldn't fail if we have raw components?
-            // But for a Task Manager, we need at least one Task entity.
             None => return Err("No Master VTODO found in ICS".to_string()),
         };
 
@@ -349,25 +348,36 @@ impl Task {
         categories.sort();
         categories.dedup();
 
+        // --- OPTIMIZED RELATION EXTRACTION ---
         let mut parent_uid = None;
         let mut dependencies = Vec::new();
 
-        let unfolded = raw_ics.replace("\r\n ", "").replace("\n ", "");
-        for line in unfolded.lines() {
-            if line.starts_with("RELATED-TO")
-                && let Some((key_part, value)) = line.split_once(':')
-            {
-                let value = value.trim().to_string();
-                let key_upper = key_part.to_uppercase();
+        let process_related =
+            |prop: &icalendar::Property, parent: &mut Option<String>, deps: &mut Vec<String>| {
+                let val = prop.value().trim().to_string();
+                // FIXED: .value() before .to_uppercase()
+                let reltype = prop
+                    .params()
+                    .get("RELTYPE")
+                    .map(|p| p.value().to_uppercase())
+                    .unwrap_or_default();
 
-                if key_upper.contains("RELTYPE=DEPENDS-ON") {
-                    if !dependencies.contains(&value) {
-                        dependencies.push(value);
+                if reltype == "DEPENDS-ON" {
+                    if !deps.contains(&val) {
+                        deps.push(val);
                     }
-                } else if !key_upper.contains("RELTYPE=") || key_upper.contains("RELTYPE=PARENT") {
-                    parent_uid = Some(value);
+                } else if reltype == "PARENT" || reltype.is_empty() {
+                    *parent = Some(val);
                 }
+            };
+
+        if let Some(props) = todo.multi_properties().get("RELATED-TO") {
+            for prop in props {
+                process_related(prop, &mut parent_uid, &mut dependencies);
             }
+        }
+        if let Some(prop) = todo.properties().get("RELATED-TO") {
+            process_related(prop, &mut parent_uid, &mut dependencies);
         }
 
         // --- CAPTURE UNMAPPED PROPERTIES ---
@@ -378,7 +388,9 @@ impl Task {
             for (k, param) in prop.params().iter() {
                 params.push((k.clone(), param.value().to_string()));
             }
-            params.sort();
+            if !params.is_empty() {
+                params.sort_unstable();
+            }
 
             RawProperty {
                 key: prop.key().to_string(),
@@ -400,7 +412,10 @@ impl Task {
             }
         }
 
-        unmapped_properties.sort_by(|a, b| a.key.cmp(&b.key).then(a.value.cmp(&b.value)));
+        if !unmapped_properties.is_empty() {
+            unmapped_properties
+                .sort_unstable_by(|a, b| a.key.cmp(&b.key).then(a.value.cmp(&b.value)));
+        }
 
         Ok(Task {
             uid,
@@ -420,7 +435,7 @@ impl Task {
             depth: 0,
             rrule,
             unmapped_properties,
-            raw_components, // <--- SAVED
+            raw_components,
         })
     }
 }
