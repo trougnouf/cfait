@@ -70,12 +70,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 valid_active = Some(current.clone());
             }
 
-            if valid_active.is_none() {
-                if let Some(net_active) = active {
-                    if !app.hidden_calendars.contains(&net_active) {
-                        valid_active = Some(net_active);
-                    }
-                }
+            if valid_active.is_none()
+                && let Some(net_active) = active
+                && !app.hidden_calendars.contains(&net_active)
+            {
+                valid_active = Some(net_active);
             }
 
             if valid_active.is_none() {

@@ -75,10 +75,10 @@ impl TaskStore {
     pub fn get_task_mut(&mut self, uid: &str) -> Option<(&mut Task, String)> {
         let href = self.index.get(uid)?.clone();
 
-        if let Some(tasks) = self.calendars.get_mut(&href) {
-            if let Some(task) = tasks.iter_mut().find(|t| t.uid == uid) {
-                return Some((task, href));
-            }
+        if let Some(tasks) = self.calendars.get_mut(&href)
+            && let Some(task) = tasks.iter_mut().find(|t| t.uid == uid)
+        {
+            return Some((task, href));
         }
 
         self.index.remove(uid);
@@ -136,14 +136,14 @@ impl TaskStore {
     pub fn delete_task(&mut self, uid: &str) -> Option<Task> {
         let href = self.index.get(uid)?.clone();
 
-        if let Some(tasks) = self.calendars.get_mut(&href) {
-            if let Some(idx) = tasks.iter().position(|t| t.uid == uid) {
-                let task = tasks.remove(idx);
-                self.index.remove(uid);
-                let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
-                let _ = Cache::save(&href, tasks, token);
-                return Some(task);
-            }
+        if let Some(tasks) = self.calendars.get_mut(&href)
+            && let Some(idx) = tasks.iter().position(|t| t.uid == uid)
+        {
+            let task = tasks.remove(idx);
+            self.index.remove(uid);
+            let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
+            let _ = Cache::save(&href, tasks, token);
+            return Some(task);
         }
         None
     }
