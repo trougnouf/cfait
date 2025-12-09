@@ -1,4 +1,4 @@
-// File: ./src/client/core.rs
+// File: src/client/core.rs
 
 use crate::cache::Cache;
 use crate::client::cert::NoVerifier;
@@ -24,7 +24,6 @@ use std::sync::Arc;
 use tower_http::auth::AddAuthorization;
 use uuid::Uuid;
 
-// Define CTag property (CalendarServer extension)
 pub const GET_CTAG: PropertyName = PropertyName::new("http://calendarserver.org/ns/", "getctag");
 
 type HttpsClient = AddAuthorization<
@@ -101,13 +100,11 @@ impl RustyClient {
     pub async fn discover_calendar(&self) -> Result<String, String> {
         if let Some(client) = &self.client {
             let base_path = client.base_url().path().to_string();
-            // 1. Try Base Path
             if let Ok(response) = client.request(ListResources::new(&base_path)).await
                 && response.resources.iter().any(|r| r.href.ends_with(".ics"))
             {
                 return Ok(base_path);
             }
-            // 2. Try Principal Discovery
             if let Ok(Some(principal)) = client.find_current_user_principal().await
                 && let Ok(response) = client.request(FindCalendarHomeSet::new(&principal)).await
                 && let Some(home_url) = response.home_sets.first()
@@ -142,7 +139,6 @@ impl RustyClient {
         )
         .map_err(|e| e.to_string())?;
 
-        // Try to empty journal first
         let _ = client.sync_journal().await;
 
         let (calendars, warning) = match client.get_calendars().await {
@@ -235,8 +231,6 @@ impl RustyClient {
 
     // --- TASK FETCHING ---
 
-    /// Internal fetching logic that DOES NOT trigger journal sync.
-    /// This prevents recursion loops during conflict resolution.
     async fn fetch_calendar_tasks_internal(
         &self,
         calendar_href: &str,
@@ -250,7 +244,6 @@ impl RustyClient {
         if let Some(client) = &self.client {
             let path_href = strip_host(calendar_href);
 
-            // 1. Check Sync Token / CTag
             let remote_token = if let Ok(resp) = client
                 .request(GetProperty::new(&path_href, &GET_CTAG))
                 .await
@@ -267,7 +260,6 @@ impl RustyClient {
                 None
             };
 
-            // Optimization: If tokens match, return cache immediately
             if let Some(r_tok) = &remote_token
                 && let Some(c_tok) = &cached_token
                 && r_tok == c_tok
@@ -275,7 +267,6 @@ impl RustyClient {
                 return Ok(cached_tasks);
             }
 
-            // 2. Fetch List of Resources
             let list_resp = client
                 .request(ListResources::new(&path_href))
                 .await
@@ -297,7 +288,6 @@ impl RustyClient {
                 server_hrefs.insert(resource.href.clone());
                 let remote_etag = resource.etag;
 
-                // Delta Sync Logic: Check ETags
                 if let Some(local_task) = cache_map.remove(&resource.href) {
                     if let Some(r_etag) = &remote_etag
                         && !r_etag.is_empty()
@@ -305,24 +295,19 @@ impl RustyClient {
                     {
                         final_tasks.push(local_task);
                     } else {
-                        // ETag mismatch -> Fetch body
                         to_fetch.push(strip_host(&resource.href));
                     }
                 } else {
-                    // New item -> Fetch body
                     to_fetch.push(strip_host(&resource.href));
                 }
             }
 
-            // Handle deleted items (present in cache but missing on server)
-            // But if it has no ETag/Href, it might be a pending creation in local cache (unlikely here if using pure cache)
             for (href, task) in cache_map {
                 if !server_hrefs.contains(&href) && (task.etag.is_empty() || task.href.is_empty()) {
                     final_tasks.push(task);
                 }
             }
 
-            // 3. MultiGet (Batch Fetch bodies)
             if !to_fetch.is_empty() {
                 let fetched_resp = client
                     .request(GetCalendarResources::new(&path_href).with_hrefs(to_fetch))
@@ -350,19 +335,15 @@ impl RustyClient {
         }
     }
 
-    /// Public API: Flushes journal first, then fetches tasks.
     pub async fn get_tasks(&self, calendar_href: &str) -> Result<Vec<Task>, String> {
-        // Sync first to ensure we don't overwrite local pending changes with stale server data
         let _ = self.sync_journal().await;
         self.fetch_calendar_tasks_internal(calendar_href).await
     }
 
-    /// Parallel fetch: Syncs journal ONCE, then fetches all calendars in parallel.
     pub async fn get_all_tasks(
         &self,
         calendars: &[CalendarListEntry],
     ) -> Result<Vec<(String, Vec<Task>)>, String> {
-        // Sync journal once for efficiency
         let _ = self.sync_journal().await;
 
         let hrefs: Vec<String> = calendars.iter().map(|c| c.href.clone()).collect();
@@ -376,7 +357,6 @@ impl RustyClient {
             }
         });
 
-        // Bounded concurrency
         let mut stream = stream::iter(futures).buffer_unordered(4);
         let mut final_results = Vec::new();
 
@@ -442,11 +422,8 @@ impl RustyClient {
         &self,
         task: &mut Task,
     ) -> Result<(Task, Option<Task>, Vec<String>), String> {
-        if task.status == TaskStatus::Completed {
-            task.status = TaskStatus::NeedsAction;
-        } else {
-            task.status = TaskStatus::Completed;
-        }
+        // --- FIX: Removed logic that flips status ---
+        // The UI/Store has already flipped the status. We just check if it IS completed now.
 
         let next_task = if task.status == TaskStatus::Completed {
             task.respawn()
@@ -466,7 +443,6 @@ impl RustyClient {
             return Ok((task.clone(), next_task, vec![]));
         }
 
-        // For server sync, we just queue actions.
         let mut logs = Vec::new();
         if let Some(mut next) = next_task.clone() {
             let l = self.create_task(&mut next).await?;
@@ -523,14 +499,13 @@ impl RustyClient {
         Ok(count)
     }
 
-    // --- JOURNAL SYNC & CONFLICT RESOLUTION ---
+    // --- JOURNAL SYNC ---
 
     pub async fn sync_journal(&self) -> Result<Vec<String>, String> {
         let client = self.client.as_ref().ok_or("Offline")?;
         let mut warnings = Vec::new();
 
         loop {
-            // 1. PEEK: Check head of journal without removing it yet
             let next_action = {
                 let j = Journal::load();
                 if j.queue.is_empty() {
@@ -543,7 +518,6 @@ impl RustyClient {
             let mut new_etag_to_propagate: Option<String> = None;
             let mut new_href_to_propagate: Option<(String, String)> = None;
 
-            // 2. PROCESS: Try to perform the action
             let result = match &next_action {
                 Action::Create(task) => {
                     let filename = format!("{}.ics", task.uid);
@@ -584,10 +558,8 @@ impl RustyClient {
                             }
                             Ok(())
                         }
-                        // Handle 412: Stale ETag
                         Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
                         | Err(WebDavError::PreconditionFailed(_)) => {
-                            // ATTEMPT 3-WAY MERGE
                             if let Some((resolution, msg)) =
                                 self.attempt_conflict_resolution(task).await
                             {
@@ -595,7 +567,6 @@ impl RustyClient {
                                 conflict_resolved_action = Some(resolution);
                                 Ok(())
                             } else {
-                                // Fallback: Create conflict copy
                                 let msg = format!(
                                     "Conflict (412) on task '{}'. Merge failed. Creating copy.",
                                     task.summary
@@ -612,16 +583,12 @@ impl RustyClient {
                             }
                         }
                         Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
-                            // If 404 on Update, it means it was deleted on server.
-                            // We re-create it (resurrect).
                             conflict_resolved_action = Some(Action::Create(task.clone()));
                             Ok(())
                         }
                         Err(e) => {
-                            // Catch-all for weird server behaviors that might mimic 412
                             let msg = format!("{:?}", e);
                             if msg.contains("412") || msg.contains("PreconditionFailed") {
-                                // Try merge here too if possible? Safe to just copy for now.
                                 let w = format!(
                                     "Conflict (412-Fallback) on task '{}'. Creating copy.",
                                     task.summary
@@ -674,21 +641,17 @@ impl RustyClient {
                 },
             };
 
-            // 3. COMMIT: Update Disk State in one atomic transaction
             match result {
                 Ok(_) => {
                     let commit_res = Journal::modify(|queue| {
-                        // A. Remove processed action (Head)
                         if !queue.is_empty() {
                             queue.remove(0);
                         }
 
-                        // B. Insert conflict resolution (Head)
                         if let Some(act) = conflict_resolved_action {
                             queue.insert(0, act);
                         }
 
-                        // C. Propagate ETag
                         if let Some(etag) = new_etag_to_propagate {
                             let target_uid = match &next_action {
                                 Action::Create(t) | Action::Update(t) => t.uid.clone(),
@@ -713,7 +676,6 @@ impl RustyClient {
                             }
                         }
 
-                        // D. Propagate HREF (Move)
                         if let Some((old_href, new_href)) = new_href_to_propagate {
                             let target_uid = match &next_action {
                                 Action::Move(t, _) => t.uid.clone(),
@@ -746,31 +708,22 @@ impl RustyClient {
                     }
                 }
                 Err(e) => {
-                    // FAILURE:
                     return Err(e);
                 }
             }
         }
     }
 
-    /// Attempts to fetch the current server state and perform a 3-way merge.
-    /// Returns Some(Action::Update(merged), warning_string) if successful.
-    /// Returns None if merge fails (hard conflict or network error).
     async fn attempt_conflict_resolution(&self, local_task: &Task) -> Option<(Action, String)> {
-        // 1. Load BASE from Cache
-        // We need what we *thought* the task was before we edited it.
         let (cached_tasks, _) = Cache::load(&local_task.calendar_href).ok()?;
         let base_task = cached_tasks.iter().find(|t| t.uid == local_task.uid)?;
 
-        // 2. Load SERVER (Live)
-        // CRITICAL: Use internal method to avoid recursion loops (sync_journal -> attempt -> get_tasks -> sync_journal)
         let server_tasks = self
             .fetch_calendar_tasks_internal(&local_task.calendar_href)
             .await
             .ok()?;
         let server_task = server_tasks.iter().find(|t| t.uid == local_task.uid)?;
 
-        // 3. Merge
         if let Some(merged) = three_way_merge(base_task, local_task, server_task) {
             let msg = format!(
                 "Conflict (412) on '{}' resolved via 3-way merge.",
@@ -819,32 +772,17 @@ impl RustyClient {
     }
 }
 
-// --- 3-WAY MERGE LOGIC ---
-
-/// Performs a 3-way merge.
-/// - Base: The state of the task before local edits (from Cache)
-/// - Local: The desired state (from Journal)
-/// - Server: The current state on the server (Live)
-///
-/// Returns `Some(merged_task)` if changes are non-conflicting.
-/// Returns `None` if both Local and Server changed the same field to different values.
 fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
-    let mut merged = server.clone(); // Start with Server state (preserves ETag, Href)
+    let mut merged = server.clone();
 
-    // Macro to check fields
-    // If Local changed it (vs Base) AND Server kept it (vs Base) -> Apply Local
-    // If Local changed it AND Server changed it -> Conflict (return None)
     macro_rules! merge_field {
         ($field:ident) => {
             if local.$field != base.$field {
                 if server.$field == base.$field {
-                    // Safe: Only local changed it
                     merged.$field = local.$field.clone();
                 } else if local.$field != server.$field {
-                    // Conflict: Both changed it to different values
                     return None;
                 }
-                // Else: Both changed it to the same value. merged.$field is already correct.
             }
         };
     }
@@ -857,20 +795,11 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
     merge_field!(dtstart);
     merge_field!(estimated_duration);
     merge_field!(rrule);
-
-    // For collections like categories/deps, we treat them as atomic fields for now.
-    // Ideally we would do set union, but partial edits to tags are rare enough.
     merge_field!(categories);
     merge_field!(dependencies);
     merge_field!(parent_uid);
     merge_field!(unmapped_properties);
-
-    // NEW: Handle raw components (Exceptions/Timezones)
     merge_field!(raw_components);
-
-    // Metadata is already from Server (via clone at start)
-    // merged.etag = server.etag.clone();
-    // merged.href = server.href.clone();
 
     Some(merged)
 }

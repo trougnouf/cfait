@@ -31,7 +31,6 @@ impl TaskStore {
         Self::default()
     }
 
-    /// Bulk insert (e.g. from network load). Rebuilds index for these tasks.
     pub fn insert(&mut self, calendar_href: String, tasks: Vec<Task>) {
         for task in &tasks {
             self.index.insert(task.uid.clone(), calendar_href.clone());
@@ -39,11 +38,31 @@ impl TaskStore {
         self.calendars.insert(calendar_href, tasks);
     }
 
-    /// Safe single insert that maintains the O(1) index.
     pub fn add_task(&mut self, task: Task) {
         let href = task.calendar_href.clone();
         self.index.insert(task.uid.clone(), href.clone());
         self.calendars.entry(href).or_default().push(task);
+    }
+
+    /// Updates an existing task or adds it if missing.
+    /// Maintains index and persists to cache.
+    pub fn update_or_add_task(&mut self, task: Task) {
+        let href = task.calendar_href.clone();
+
+        // Ensure index is up to date
+        self.index.insert(task.uid.clone(), href.clone());
+
+        let list = self.calendars.entry(href.clone()).or_default();
+
+        if let Some(idx) = list.iter().position(|t| t.uid == task.uid) {
+            list[idx] = task;
+        } else {
+            list.push(task);
+        }
+
+        // Persist
+        let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
+        let _ = Cache::save(&href, list, token);
     }
 
     pub fn clear(&mut self) {
@@ -54,17 +73,14 @@ impl TaskStore {
     // --- Core Logic Helpers ---
 
     pub fn get_task_mut(&mut self, uid: &str) -> Option<(&mut Task, String)> {
-        // 1. O(1) Lookup
         let href = self.index.get(uid)?.clone();
 
-        // 2. Retrieve
-        if let Some(tasks) = self.calendars.get_mut(&href)
-            && let Some(task) = tasks.iter_mut().find(|t| t.uid == uid)
-        {
-            return Some((task, href));
+        if let Some(tasks) = self.calendars.get_mut(&href) {
+            if let Some(task) = tasks.iter_mut().find(|t| t.uid == uid) {
+                return Some((task, href));
+            }
         }
 
-        // If we get here, the index is stale (should not happen). Clean it up.
         self.index.remove(uid);
         None
     }
@@ -120,19 +136,14 @@ impl TaskStore {
     pub fn delete_task(&mut self, uid: &str) -> Option<Task> {
         let href = self.index.get(uid)?.clone();
 
-        if let Some(tasks) = self.calendars.get_mut(&href)
-            && let Some(idx) = tasks.iter().position(|t| t.uid == uid)
-        {
-            let task = tasks.remove(idx);
-
-            // Remove from Index
-            self.index.remove(uid);
-
-            // Sync to Cache
-            let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
-            let _ = Cache::save(&href, tasks, token);
-
-            return Some(task);
+        if let Some(tasks) = self.calendars.get_mut(&href) {
+            if let Some(idx) = tasks.iter().position(|t| t.uid == uid) {
+                let task = tasks.remove(idx);
+                self.index.remove(uid);
+                let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
+                let _ = Cache::save(&href, tasks, token);
+                return Some(task);
+            }
         }
         None
     }
@@ -166,24 +177,17 @@ impl TaskStore {
     }
 
     pub fn move_task(&mut self, uid: &str, target_href: String) -> Option<Task> {
-        // delete_task handles removal from calendar, index, and cache
         let task_opt = self.delete_task(uid);
 
         if let Some(mut task) = task_opt {
             if task.calendar_href == target_href {
-                // Edge case: Move to same calendar. Re-add.
                 self.add_task(task);
                 return None;
             }
 
             task.calendar_href = target_href.clone();
-
-            // Add to new calendar (Updates Index automatically via add_task)
-            // But we need to save cache manually since add_task doesn't save to disk by default
-            // (to allow batch inserts).
             self.add_task(task.clone());
 
-            // Update Cache for target calendar
             if let Some(target_list) = self.calendars.get(&target_href) {
                 let (_, token) = Cache::load(&target_href).unwrap_or((vec![], None));
                 let _ = Cache::save(&target_href, target_list, token);
