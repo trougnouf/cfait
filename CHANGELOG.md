@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.3.0] - 2025-12-10
+
+### 🚀 Features
+
+- *(ux)* Unhide and activate default calendar on startup
+- *(core)* Implement hierarchical tag filtering and sidebar aggregation
+- *(gui)* Retroactively apply new aliases to existing tasks
+- *(core)* Support inline alias definition (#a=#b,#c) with retroactive application in TUI and GUI
+- *(core)* Implement tag inheritance for child tasks (GUI+TUI) and hide redundant tags in the GUI task list, fix GUI yank button
+- *(gui)* Add promote button for child tasks
+- *(workflow)* Auto-clear yanked state after linking (child/block) in GUI and TUI
+- *(ui)* Implement priority gradient
+- Fix alias expansion for sub-categories, hide expanded alias tags in list view
+
+### 🐛 Bug Fixes
+
+- Allow starting newly created tasks
+- *(store)* Ensure index update on recurring task creation and network sync
+
+### 🚜 Refactor
+
+- *(core)* Deduplicate task logic and centralize path resolution
+- *(gui&core)* Restore edit functionality and optimize store lookups
+
+### 🎨 Styling
+
+- Convert UI text and documentation from title case to normal case capitalization
+
+### ⚙️ Miscellaneous Tasks
+
+- Lint
 ## [0.2.9] - 2025-12-08
 
 ### 🚀 Features
@@ -24,6 +55,8 @@
 
 - Switch to iced 0.14.0 (dev->release)
 - *(forgejo)* Build once for different Linux releases
+- *(release)* Update readme and changelog for 0.2.9, add version / license to GUI help
+- Release cfait version 0.2.9
 ## [0.2.8] - 2025-12-08
 
 ### 🚀 Features

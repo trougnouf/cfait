@@ -66,6 +66,8 @@ pub fn apply_alias_retroactively(
     refresh_filtered_tasks(app);
 
     // Sync Phase
+    // This dispatches individual updates which go through the Journal.
+    // The Journal allows appending actions safely even if other instances are writing.
     if let Some(client) = &app.client {
         let mut commands = Vec::new();
         for t in modified_tasks {

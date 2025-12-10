@@ -225,9 +225,8 @@ impl TaskStore {
             return Vec::new();
         }
 
-        // 2. Modify
+        // 2. Modify (In Memory Only)
         let mut modified_tasks = Vec::new();
-        // We collect modified tasks to avoid borrowing issues while iterating
         for uid in uids_to_update {
             if let Some((task, _)) = self.get_task_mut(&uid) {
                 for target_tag in target_tags {
@@ -243,18 +242,11 @@ impl TaskStore {
             }
         }
 
-        // 3. Persist to Disk (Cache)
-        let mut modified_calendars = HashSet::new();
-        for t in &modified_tasks {
-            modified_calendars.insert(t.calendar_href.clone());
-        }
-
-        for cal_href in modified_calendars {
-            if let Some(tasks) = self.calendars.get(&cal_href) {
-                let (_, token) = Cache::load(&cal_href).unwrap_or((vec![], None));
-                let _ = Cache::save(&cal_href, tasks, token);
-            }
-        }
+        // REMOVED: 3. Persist to Disk (Cache)
+        // DANGER: This was causing data loss by overwriting the disk cache
+        // with potential stale in-memory data from this instance.
+        // Persistence is now handled by the caller dispatching UpdateTask actions
+        // which use the safe Journal/Sync mechanism.
 
         modified_tasks
     }
