@@ -495,12 +495,11 @@ pub fn view_task_row<'a>(
     let mut custom_border_color = default_border_color;
 
     // Find the calendar this task belongs to
-    if let Some(cal) = app.calendars.iter().find(|c| c.href == task.calendar_href) {
-        if let Some(hex) = &cal.color {
-            if let Some((r, g, b)) = color_utils::parse_hex_to_floats(hex) {
-                custom_border_color = Color::from_rgb(r, g, b);
-            }
-        }
+    if let Some(cal) = app.calendars.iter().find(|c| c.href == task.calendar_href)
+        && let Some(hex) = &cal.color
+        && let Some((r, g, b)) = color_utils::parse_hex_to_floats(hex)
+    {
+        custom_border_color = Color::from_rgb(r, g, b);
     }
 
     let status_btn = button(

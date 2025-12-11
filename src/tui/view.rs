@@ -251,13 +251,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             // Bracket Color logic
             let mut bracket_style = Style::default();
-            if let Some(cal) = state.calendars.iter().find(|c| c.href == t.calendar_href) {
-                if let Some(hex) = &cal.color
+            if let Some(cal) = state.calendars.iter().find(|c| c.href == t.calendar_href)
+                && let Some(hex) = &cal.color
                     && let Some((r, g, b)) = color_utils::parse_hex_to_u8(hex)
                 {
                     bracket_style = Style::default().fg(Color::Rgb(r, g, b));
                 }
-            }
 
             let full_symbol = t.checkbox_symbol(); // e.g. "[x]"
             let inner_char = &full_symbol[1..2]; // e.g. "x"
