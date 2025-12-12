@@ -69,6 +69,7 @@ pub struct MobileTask {
     pub is_blocked: bool,
     pub status_string: String,
     pub blocked_by_names: Vec<String>,
+    pub blocked_by_uids: Vec<String>,
 }
 
 #[derive(uniffi::Record)]
@@ -108,6 +109,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         .iter()
         .filter_map(|uid| store.get_summary(uid))
         .collect();
+
     MobileTask {
         uid: t.uid.clone(),
         summary: t.summary.clone(),
@@ -126,6 +128,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         is_blocked,
         status_string: status_str,
         blocked_by_names,
+        blocked_by_uids: t.dependencies.clone(),
     }
 }
 
@@ -136,6 +139,10 @@ pub struct CfaitMobile {
     client: Arc<Mutex<Option<RustyClient>>>,
     store: Arc<Mutex<TaskStore>>,
 }
+
+// ============================================================================
+// PUBLIC API (Exported to Kotlin/Swift)
+// ============================================================================
 
 #[uniffi::export(async_runtime = "tokio")]
 impl CfaitMobile {
@@ -188,6 +195,71 @@ impl CfaitMobile {
         c.save().map_err(MobileError::from)
     }
 
+    // --- Relationship Management ---
+
+    pub async fn add_dependency(
+        &self,
+        task_uid: String,
+        blocker_uid: String,
+    ) -> Result<(), MobileError> {
+        if task_uid == blocker_uid {
+            return Err(MobileError::from("Cannot depend on self"));
+        }
+        self.modify_task_and_sync(task_uid, |t| {
+            if !t.dependencies.contains(&blocker_uid) {
+                t.dependencies.push(blocker_uid.clone());
+            }
+        })
+        .await
+    }
+
+    pub async fn remove_dependency(
+        &self,
+        task_uid: String,
+        blocker_uid: String,
+    ) -> Result<(), MobileError> {
+        self.modify_task_and_sync(task_uid, |t| {
+            if let Some(pos) = t.dependencies.iter().position(|x| *x == blocker_uid) {
+                t.dependencies.remove(pos);
+            }
+        })
+        .await
+    }
+
+    pub async fn set_parent(
+        &self,
+        child_uid: String,
+        parent_uid: Option<String>,
+    ) -> Result<(), MobileError> {
+        if let Some(p) = &parent_uid {
+            if *p == child_uid {
+                return Err(MobileError::from("Cannot be child of self"));
+            }
+        }
+        self.modify_task_and_sync(child_uid, |t| {
+            t.parent_uid = parent_uid.clone();
+        })
+        .await
+    }
+
+    // --- Calendar Management ---
+
+    pub fn isolate_calendar(&self, href: String) -> Result<(), MobileError> {
+        let mut config = Config::load().map_err(MobileError::from)?;
+        let all_cals = self.get_calendars();
+        let mut new_hidden = vec![];
+        for cal in all_cals {
+            if cal.href != href {
+                new_hidden.push(cal.href.clone());
+            }
+        }
+        config.hidden_calendars = new_hidden;
+        config.default_calendar = Some(href);
+        config.save().map_err(MobileError::from)
+    }
+
+    // --- Existing Methods ---
+
     pub fn add_alias(&self, key: String, tags: Vec<String>) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
         c.tag_aliases.insert(key, tags);
@@ -210,21 +282,6 @@ impl CfaitMobile {
         } else if !config.hidden_calendars.contains(&href) {
             config.hidden_calendars.push(href);
         }
-        config.save().map_err(MobileError::from)
-    }
-    pub fn isolate_calendar(&self, href: String) -> Result<(), MobileError> {
-        let mut config = Config::load().map_err(MobileError::from)?;
-        let all_cals = self.get_calendars();
-
-        let mut new_hidden = vec![];
-        for cal in all_cals {
-            if cal.href != href {
-                new_hidden.push(cal.href.clone());
-            }
-        }
-        config.hidden_calendars = new_hidden;
-        config.default_calendar = Some(href);
-
         config.save().map_err(MobileError::from)
     }
     pub fn load_from_cache(&self) {
@@ -265,11 +322,12 @@ impl CfaitMobile {
         self.apply_connection(config).await
     }
 
+    // --- Getters ---
+
     pub fn get_calendars(&self) -> Vec<MobileCalendar> {
         let config = Config::load().unwrap_or_default();
         let disabled_set: HashSet<String> = config.disabled_calendars.iter().cloned().collect();
         let mut result = Vec::new();
-
         let local_href = LOCAL_CALENDAR_HREF.to_string();
         result.push(MobileCalendar {
             name: LOCAL_CALENDAR_NAME.to_string(),
@@ -279,7 +337,6 @@ impl CfaitMobile {
             is_local: true,
             is_disabled: false,
         });
-
         if let Ok(cals) = crate::cache::Cache::load_calendars() {
             for c in cals {
                 if c.href == LOCAL_CALENDAR_HREF {
@@ -304,7 +361,6 @@ impl CfaitMobile {
         let empty_includes = HashSet::new();
         let mut hidden_cals: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden_cals.extend(config.disabled_calendars);
-
         store
             .get_all_categories(
                 config.hide_completed,
@@ -332,16 +388,13 @@ impl CfaitMobile {
         if let Some(tag) = filter_tag {
             selected_categories.insert(tag);
         }
-
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
-
         let cutoff_date = if let Some(months) = config.sort_cutoff_months {
             Some(chrono::Utc::now() + chrono::Duration::days(months as i64 * 30))
         } else {
             None
         };
-
         let filtered = store.filter(FilterOptions {
             active_cal_href: None,
             hidden_calendars: &hidden,
@@ -359,6 +412,8 @@ impl CfaitMobile {
             .map(|t| task_to_mobile(&t, &store))
             .collect()
     }
+
+    // --- Task Actions ---
 
     pub async fn yank_task(&self, _uid: String) -> Result<(), MobileError> {
         Ok(())
@@ -388,6 +443,7 @@ impl CfaitMobile {
         self.store.lock().await.add_task(task);
         Ok(())
     }
+
     pub async fn change_priority(&self, uid: String, delta: i8) -> Result<(), MobileError> {
         self.modify_task_and_sync(uid, |t| {
             t.priority = if delta > 0 {
@@ -496,26 +552,22 @@ impl CfaitMobile {
     }
 }
 
+// ============================================================================
+// INTERNAL HELPERS (Not Exported to UniFFI)
+// ============================================================================
+
 impl CfaitMobile {
     async fn apply_connection(&self, config: Config) -> Result<String, MobileError> {
-        // 1. Initial Connect & Calendar Discovery
-        let (client, cals, _initial_tasks, _active, warning) =
-            RustyClient::connect_with_fallback(config)
-                .await
-                .map_err(MobileError::from)?;
-
+        let (client, cals, _, _, warning) = RustyClient::connect_with_fallback(config)
+            .await
+            .map_err(MobileError::from)?;
         *self.client.lock().await = Some(client.clone());
         let mut store = self.store.lock().await;
         store.clear();
-
-        // 2. Load Local Calendar
         if let Ok(local) = LocalStorage::load() {
             store.insert(LOCAL_CALENDAR_HREF.to_string(), local);
         }
 
-        // 3. Full Sync (Fetch ALL calendars)
-        // This ensures dependencies across calendars and background updates are caught.
-        // RustyClient::get_all_tasks handles concurrency and delta sync (CTag/ETag), so this is efficient.
         match client.get_all_tasks(&cals).await {
             Ok(results) => {
                 for (href, tasks) in results {
@@ -523,8 +575,6 @@ impl CfaitMobile {
                 }
             }
             Err(e) => {
-                // If fetch fails (e.g. partial offline), try to load what we can from cache
-                // and preserve the warning.
                 for cal in &cals {
                     if cal.href != LOCAL_CALENDAR_HREF && !store.calendars.contains_key(&cal.href) {
                         if let Ok((cached, _)) = crate::cache::Cache::load(&cal.href) {
@@ -537,7 +587,6 @@ impl CfaitMobile {
                 }
             }
         }
-
         Ok(warning.unwrap_or_else(|| "Connected".to_string()))
     }
 
