@@ -52,11 +52,11 @@ object NfIcons {
     val DELETE = get(0xf1f8)
     val CHECK = get(0xf00c)
     val CROSS = get(0xf00d)
-    val PLAY = get(0xf04b) // fa-play
+    val PLAY = get(0xf04b)
     val PAUSE = get(0xf04c)
     val REPEAT = get(0xf0b6)
-    val VISIBLE = get(0xea70) // cod-eye
-    val HIDDEN = get(0xeae7) // cod-eye-closed
+    val VISIBLE = get(0xea70)
+    val HIDDEN = get(0xeae7)
     val WRITE_TARGET = get(0xf0cfb)
     val MENU = get(0xf0c9)
     val ADD = get(0xf067)
@@ -146,7 +146,7 @@ fun CfaitNavHost(api: CfaitMobile) {
             }
         }
         composable("settings") {
-            SettingsScreen(api = api, onBack = { navController.popBackStack() })
+            SettingsScreen(api = api, onBack = { navController.popBackStack(); refreshLists() })
         }
     }
 }
@@ -216,23 +216,27 @@ fun HomeScreen(
         drawerContent = {
             ModalDrawerSheet {
                 Column(modifier = Modifier.fillMaxHeight().width(300.dp)) {
-                    TabRow(selectedTabIndex = sidebarTab) {
+                    PrimaryTabRow(selectedTabIndex = sidebarTab) {
                         Tab(selected = sidebarTab==0, onClick = { sidebarTab=0 }, text = { Text("Calendars") }, icon = { NfIcon(NfIcons.CALENDAR) })
                         Tab(selected = sidebarTab==1, onClick = { sidebarTab=1 }, text = { Text("Tags") }, icon = { NfIcon(NfIcons.TAG) })
                     }
                     LazyColumn {
                         if (sidebarTab == 0) {
-                            items(calendars) { cal ->
+                            items(calendars.filter { !it.isDisabled }) { cal ->
                                 val calColor = cal.color?.let { parseHexColor(it) } ?: Color.Gray
+                                val isDefault = cal.href == defaultCalHref
+                                val iconChar = if (isDefault) NfIcons.WRITE_TARGET else if (cal.isVisible) NfIcons.VISIBLE else NfIcons.HIDDEN
+                                val iconColor = if (isDefault) MaterialTheme.colorScheme.primary else if (cal.isVisible) calColor else Color.Gray
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth().clickable { api.setDefaultCalendar(cal.href); onDataChanged() }.padding(16.dp, 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     IconButton(onClick = { api.setCalendarVisibility(cal.href, !cal.isVisible); onDataChanged(); updateTaskList() }, modifier = Modifier.size(24.dp)) {
-                                        NfIcon(if (cal.isVisible) NfIcons.VISIBLE else NfIcons.HIDDEN, color = if (cal.isVisible) calColor else Color.Gray)
+                                        NfIcon(iconChar, color = iconColor)
                                     }
                                     Spacer(Modifier.width(12.dp))
-                                    Text(cal.name, fontWeight = if (cal.href == defaultCalHref) FontWeight.Bold else FontWeight.Normal, color = if (cal.href == defaultCalHref) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                                    Text(cal.name, fontWeight = if (isDefault) FontWeight.Bold else FontWeight.Normal, color = if (isDefault) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
                                 }
                             }
                         } else {
@@ -379,8 +383,7 @@ fun TaskCheckbox(task: MobileTask, calColor: Color, onClick: () -> Unit) {
         if (isDone) {
             NfIcon(NfIcons.CHECK, 12.sp, Color.White)
         } else if (status == "InProcess") {
-            // Add slight vertical offset to visually center the play triangle
-            Box(Modifier.offset(x = 1.dp, y = (-0.5).dp)) {
+            Box(Modifier.offset(y = (-2).dp)) {
                 NfIcon(NfIcons.PLAY, 10.sp, Color.White)
             }
         } else if (status == "Cancelled") {
@@ -389,6 +392,7 @@ fun TaskCheckbox(task: MobileTask, calColor: Color, onClick: () -> Unit) {
     }
 }
 
+// ... [TaskDetailScreen - Reuse from previous] ...
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalendar>, onBack: () -> Unit) {
@@ -448,7 +452,7 @@ fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalend
                         Text(name, fontSize = 14.sp)
                     }
                 }
-                Divider(Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
 
             OutlinedTextField(
@@ -462,6 +466,7 @@ fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalend
     }
 }
 
+// ... [SettingsScreen with Disabled Calendars Support] ...
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit) {
@@ -474,6 +479,9 @@ fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit) {
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var newAliasKey by remember { mutableStateOf("") }
     var newAliasTags by remember { mutableStateOf("") }
+    var allCalendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
+    var disabledSet by remember { mutableStateOf<Set<String>>(emptySet()) }
+
     val scope = rememberCoroutineScope()
 
     fun reload() {
@@ -483,9 +491,22 @@ fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit) {
         insecure = cfg.allowInsecure
         hideCompleted = cfg.hideCompleted
         aliases = cfg.tagAliases
+        allCalendars = api.getCalendars()
+        // Initialize disabledSet based on what getCalendars reports
+        disabledSet = allCalendars.filter { it.isDisabled }.map { it.href }.toSet()
     }
 
     LaunchedEffect(Unit) { reload() }
+
+    fun save() {
+        scope.launch { 
+            status = "Saving..."
+            try { 
+                api.saveConfig(url, user, pass, insecure, hideCompleted, disabledSet.toList())
+                status = api.connect(url, user, pass, insecure) 
+            } catch (e: Exception) { status = "Error: ${e.message}" } 
+        }
+    }
 
     Scaffold(topBar = { TopAppBar(title = { Text("Settings") }, navigationIcon = { IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) } }) }) { p ->
         LazyColumn(modifier = Modifier.padding(p).padding(16.dp)) {
@@ -498,9 +519,31 @@ fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit) {
                 OutlinedTextField(value = pass, onValueChange = { pass = it }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                 Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = insecure, onCheckedChange = { insecure = it }); Text("Allow Insecure SSL") }
                 Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = hideCompleted, onCheckedChange = { hideCompleted = it }); Text("Hide Completed Tasks") }
-                Button(onClick = { scope.launch { status = "Saving..."; try { api.saveConfig(url, user, pass, insecure, hideCompleted); status = api.connect(url, user, pass, insecure) } catch (e: Exception) { status = "Error: ${e.message}" } } }, modifier = Modifier.fillMaxWidth()) { Text("Save & Connect") }
+                
+                Button(onClick = { save() }, modifier = Modifier.fillMaxWidth()) { Text("Save & Connect") }
                 Text(status, color = if (status.startsWith("Error")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
-                Divider(Modifier.padding(vertical = 16.dp))
+                
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                Text("Manage Calendars", fontWeight = FontWeight.Bold)
+            }
+            // Calendar Management Section
+            items(allCalendars) { cal ->
+                // Checkbox state: Enabled = !Disabled
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = !disabledSet.contains(cal.href),
+                        onCheckedChange = { enabled ->
+                            val newSet = disabledSet.toMutableSet()
+                            if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
+                            disabledSet = newSet
+                        }
+                    )
+                    Text(cal.name)
+                }
+            }
+
+            item {
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text("Tag Aliases", fontWeight = FontWeight.Bold)
             }
             items(aliases.keys.toList()) { key ->

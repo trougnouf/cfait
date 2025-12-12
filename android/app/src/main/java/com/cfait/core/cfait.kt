@@ -735,7 +735,7 @@ internal object UniffiLib {
     ): Long
     external fun uniffi_cfait_fn_method_cfaitmobile_remove_alias(`ptr`: Long,`key`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
-    external fun uniffi_cfait_fn_method_cfaitmobile_save_config(`ptr`: Long,`url`: RustBuffer.ByValue,`user`: RustBuffer.ByValue,`pass`: RustBuffer.ByValue,`insecure`: Byte,`hideCompleted`: Byte,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cfait_fn_method_cfaitmobile_save_config(`ptr`: Long,`url`: RustBuffer.ByValue,`user`: RustBuffer.ByValue,`pass`: RustBuffer.ByValue,`insecure`: Byte,`hideCompleted`: Byte,`disabledCalendars`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_cfait_fn_method_cfaitmobile_set_calendar_visibility(`ptr`: Long,`href`: RustBuffer.ByValue,`visible`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
@@ -910,7 +910,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_alias() != 4330.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 17339.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 45650.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility() != 63556.toShort()) {
@@ -937,7 +937,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_update_task_smart() != 8105.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_yank_task() != 38697.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_yank_task() != 32103.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_constructor_cfaitmobile_new() != 17119.toShort()) {
@@ -1412,7 +1412,7 @@ public interface CfaitMobileInterface {
     
     fun `removeAlias`(`key`: kotlin.String)
     
-    fun `saveConfig`(`url`: kotlin.String, `user`: kotlin.String, `pass`: kotlin.String, `insecure`: kotlin.Boolean, `hideCompleted`: kotlin.Boolean)
+    fun `saveConfig`(`url`: kotlin.String, `user`: kotlin.String, `pass`: kotlin.String, `insecure`: kotlin.Boolean, `hideCompleted`: kotlin.Boolean, `disabledCalendars`: List<kotlin.String>)
     
     fun `setCalendarVisibility`(`href`: kotlin.String, `visible`: kotlin.Boolean)
     
@@ -1753,13 +1753,13 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
     
 
     
-    @Throws(MobileException::class)override fun `saveConfig`(`url`: kotlin.String, `user`: kotlin.String, `pass`: kotlin.String, `insecure`: kotlin.Boolean, `hideCompleted`: kotlin.Boolean)
+    @Throws(MobileException::class)override fun `saveConfig`(`url`: kotlin.String, `user`: kotlin.String, `pass`: kotlin.String, `insecure`: kotlin.Boolean, `hideCompleted`: kotlin.Boolean, `disabledCalendars`: List<kotlin.String>)
         = 
     callWithHandle {
     uniffiRustCallWithError(MobileException) { _status ->
     UniffiLib.uniffi_cfait_fn_method_cfaitmobile_save_config(
         it,
-        FfiConverterString.lower(`url`),FfiConverterString.lower(`user`),FfiConverterString.lower(`pass`),FfiConverterBoolean.lower(`insecure`),FfiConverterBoolean.lower(`hideCompleted`),_status)
+        FfiConverterString.lower(`url`),FfiConverterString.lower(`user`),FfiConverterString.lower(`pass`),FfiConverterBoolean.lower(`insecure`),FfiConverterBoolean.lower(`hideCompleted`),FfiConverterSequenceString.lower(`disabledCalendars`),_status)
 }
     }
     
@@ -1994,6 +1994,8 @@ data class MobileCalendar (
     var `isVisible`: kotlin.Boolean
     , 
     var `isLocal`: kotlin.Boolean
+    , 
+    var `isDisabled`: kotlin.Boolean
     
 ){
     
@@ -2013,6 +2015,7 @@ public object FfiConverterTypeMobileCalendar: FfiConverterRustBuffer<MobileCalen
             FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
     }
 
@@ -2021,7 +2024,8 @@ public object FfiConverterTypeMobileCalendar: FfiConverterRustBuffer<MobileCalen
             FfiConverterString.allocationSize(value.`href`) +
             FfiConverterOptionalString.allocationSize(value.`color`) +
             FfiConverterBoolean.allocationSize(value.`isVisible`) +
-            FfiConverterBoolean.allocationSize(value.`isLocal`)
+            FfiConverterBoolean.allocationSize(value.`isLocal`) +
+            FfiConverterBoolean.allocationSize(value.`isDisabled`)
     )
 
     override fun write(value: MobileCalendar, buf: ByteBuffer) {
@@ -2030,6 +2034,7 @@ public object FfiConverterTypeMobileCalendar: FfiConverterRustBuffer<MobileCalen
             FfiConverterOptionalString.write(value.`color`, buf)
             FfiConverterBoolean.write(value.`isVisible`, buf)
             FfiConverterBoolean.write(value.`isLocal`, buf)
+            FfiConverterBoolean.write(value.`isDisabled`, buf)
     }
 }
 
@@ -2047,6 +2052,8 @@ data class MobileConfig (
     var `hideCompleted`: kotlin.Boolean
     , 
     var `tagAliases`: Map<kotlin.String, List<kotlin.String>>
+    , 
+    var `disabledCalendars`: List<kotlin.String>
     
 ){
     
@@ -2067,6 +2074,7 @@ public object FfiConverterTypeMobileConfig: FfiConverterRustBuffer<MobileConfig>
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterMapStringSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
         )
     }
 
@@ -2076,7 +2084,8 @@ public object FfiConverterTypeMobileConfig: FfiConverterRustBuffer<MobileConfig>
             FfiConverterOptionalString.allocationSize(value.`defaultCalendar`) +
             FfiConverterBoolean.allocationSize(value.`allowInsecure`) +
             FfiConverterBoolean.allocationSize(value.`hideCompleted`) +
-            FfiConverterMapStringSequenceString.allocationSize(value.`tagAliases`)
+            FfiConverterMapStringSequenceString.allocationSize(value.`tagAliases`) +
+            FfiConverterSequenceString.allocationSize(value.`disabledCalendars`)
     )
 
     override fun write(value: MobileConfig, buf: ByteBuffer) {
@@ -2086,6 +2095,7 @@ public object FfiConverterTypeMobileConfig: FfiConverterRustBuffer<MobileConfig>
             FfiConverterBoolean.write(value.`allowInsecure`, buf)
             FfiConverterBoolean.write(value.`hideCompleted`, buf)
             FfiConverterMapStringSequenceString.write(value.`tagAliases`, buf)
+            FfiConverterSequenceString.write(value.`disabledCalendars`, buf)
     }
 }
 

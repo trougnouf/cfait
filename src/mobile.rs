@@ -69,7 +69,7 @@ pub struct MobileTask {
     pub depth: u32,
     pub is_blocked: bool,
     pub status_string: String,
-    pub blocked_by_names: Vec<String>, // Added this field
+    pub blocked_by_names: Vec<String>,
 }
 
 #[derive(uniffi::Record)]
@@ -79,6 +79,7 @@ pub struct MobileCalendar {
     pub color: Option<String>,
     pub is_visible: bool,
     pub is_local: bool,
+    pub is_disabled: bool, // NEW: Support disabled state
 }
 
 #[derive(uniffi::Record)]
@@ -96,21 +97,19 @@ pub struct MobileConfig {
     pub allow_insecure: bool,
     pub hide_completed: bool,
     pub tag_aliases: HashMap<String, Vec<String>>,
+    pub disabled_calendars: Vec<String>, // NEW: Support disabled state
 }
 
-// Helper to convert Task -> MobileTask with Store access
+// ... [task_to_mobile helper - NO CHANGES] ...
 fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
     let smart = t.to_smart_string();
     let status_str = format!("{:?}", t.status);
     let is_blocked = store.is_blocked(t);
-
-    // Resolve blocker names
     let blocked_by_names = t
         .dependencies
         .iter()
         .filter_map(|uid| store.get_summary(uid))
         .collect();
-
     MobileTask {
         uid: t.uid.clone(),
         summary: t.summary.clone(),
@@ -166,6 +165,7 @@ impl CfaitMobile {
             allow_insecure: c.allow_insecure_certs,
             hide_completed: c.hide_completed,
             tag_aliases: c.tag_aliases,
+            disabled_calendars: c.disabled_calendars,
         }
     }
 
@@ -176,6 +176,7 @@ impl CfaitMobile {
         pass: String,
         insecure: bool,
         hide_completed: bool,
+        disabled_calendars: Vec<String>, // NEW PARAMETER
     ) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
         c.url = url;
@@ -185,27 +186,26 @@ impl CfaitMobile {
         }
         c.allow_insecure_certs = insecure;
         c.hide_completed = hide_completed;
+        c.disabled_calendars = disabled_calendars;
         c.save().map_err(MobileError::from)
     }
 
+    // ... [add/remove alias, default_cal, visibility, load_from_cache, sync, connect... NO CHANGES] ...
     pub fn add_alias(&self, key: String, tags: Vec<String>) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
         c.tag_aliases.insert(key, tags);
         c.save().map_err(MobileError::from)
     }
-
     pub fn remove_alias(&self, key: String) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
         c.tag_aliases.remove(&key);
         c.save().map_err(MobileError::from)
     }
-
     pub fn set_default_calendar(&self, href: String) -> Result<(), MobileError> {
         let mut config = Config::load().map_err(MobileError::from)?;
         config.default_calendar = Some(href);
         config.save().map_err(MobileError::from)
     }
-
     pub fn set_calendar_visibility(&self, href: String, visible: bool) -> Result<(), MobileError> {
         let mut config = Config::load().map_err(MobileError::from)?;
         if visible {
@@ -215,7 +215,6 @@ impl CfaitMobile {
         }
         config.save().map_err(MobileError::from)
     }
-
     pub fn load_from_cache(&self) {
         let mut store = self.store.blocking_lock();
         store.clear();
@@ -233,12 +232,10 @@ impl CfaitMobile {
             }
         }
     }
-
     pub async fn sync(&self) -> Result<String, MobileError> {
         let config = Config::load().map_err(MobileError::from)?;
         self.apply_connection(config).await
     }
-
     pub async fn connect(
         &self,
         url: String,
@@ -258,7 +255,9 @@ impl CfaitMobile {
 
     pub fn get_calendars(&self) -> Vec<MobileCalendar> {
         let config = Config::load().unwrap_or_default();
+        let disabled_set: HashSet<String> = config.disabled_calendars.iter().cloned().collect();
         let mut result = Vec::new();
+
         let local_href = LOCAL_CALENDAR_HREF.to_string();
         result.push(MobileCalendar {
             name: LOCAL_CALENDAR_NAME.to_string(),
@@ -266,7 +265,9 @@ impl CfaitMobile {
             color: None,
             is_visible: !config.hidden_calendars.contains(&local_href),
             is_local: true,
+            is_disabled: false, // Local is never disabled in this logic
         });
+
         if let Ok(cals) = crate::cache::Cache::load_calendars() {
             for c in cals {
                 if c.href == LOCAL_CALENDAR_HREF {
@@ -278,6 +279,7 @@ impl CfaitMobile {
                     color: c.color,
                     is_visible: !config.hidden_calendars.contains(&c.href),
                     is_local: false,
+                    is_disabled: disabled_set.contains(&c.href),
                 });
             }
         }
@@ -288,7 +290,10 @@ impl CfaitMobile {
         let store = self.store.lock().await;
         let config = Config::load().unwrap_or_default();
         let empty_includes = HashSet::new();
-        let hidden_cals: HashSet<String> = config.hidden_calendars.into_iter().collect();
+        // Hide tags from disabled calendars implicitly via hidden_calendars union
+        let mut hidden_cals: HashSet<String> = config.hidden_calendars.into_iter().collect();
+        hidden_cals.extend(config.disabled_calendars);
+
         store
             .get_all_categories(
                 config.hide_completed,
@@ -312,13 +317,13 @@ impl CfaitMobile {
     ) -> Vec<MobileTask> {
         let store = self.store.lock().await;
         let config = Config::load().unwrap_or_default();
-
         let mut selected_categories = HashSet::new();
         if let Some(tag) = filter_tag {
             selected_categories.insert(tag);
         }
 
-        let hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
+        let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
+        hidden.extend(config.disabled_calendars); // IMPORTANT: Exclude disabled calendars from view
 
         let cutoff_date = if let Some(months) = config.sort_cutoff_months {
             Some(chrono::Utc::now() + chrono::Duration::days(months as i64 * 30))
@@ -338,12 +343,15 @@ impl CfaitMobile {
             max_duration: None,
             include_unset_duration: true,
         });
-
-        // Use helper to populate blocked_by_names
         filtered
             .into_iter()
             .map(|t| task_to_mobile(&t, &store))
             .collect()
+    }
+
+    // [Actions]
+    pub async fn yank_task(&self, _uid: String) -> Result<(), MobileError> {
+        Ok(())
     }
 
     pub async fn add_task_smart(&self, input: String) -> Result<(), MobileError> {
@@ -370,7 +378,6 @@ impl CfaitMobile {
         self.store.lock().await.add_task(task);
         Ok(())
     }
-
     pub async fn change_priority(&self, uid: String, delta: i8) -> Result<(), MobileError> {
         self.modify_task_and_sync(uid, |t| {
             t.priority = if delta > 0 {
@@ -393,7 +400,6 @@ impl CfaitMobile {
         })
         .await
     }
-
     pub async fn set_status_process(&self, uid: String) -> Result<(), MobileError> {
         self.modify_task_and_sync(uid, |t| {
             t.status = if t.status == crate::model::TaskStatus::InProcess {
@@ -404,7 +410,6 @@ impl CfaitMobile {
         })
         .await
     }
-
     pub async fn set_status_cancelled(&self, uid: String) -> Result<(), MobileError> {
         self.modify_task_and_sync(uid, |t| {
             t.status = if t.status == crate::model::TaskStatus::Cancelled {
@@ -415,11 +420,6 @@ impl CfaitMobile {
         })
         .await
     }
-
-    pub async fn yank_task(&self, uid: String) -> Result<(), MobileError> {
-        Ok(())
-    }
-
     pub async fn update_task_smart(
         &self,
         uid: String,
@@ -431,7 +431,6 @@ impl CfaitMobile {
         })
         .await
     }
-
     pub async fn update_task_description(
         &self,
         uid: String,
@@ -442,7 +441,6 @@ impl CfaitMobile {
         })
         .await
     }
-
     pub async fn toggle_task(&self, uid: String) -> Result<(), MobileError> {
         self.modify_task_and_sync(uid, |t| {
             if t.status.is_done() {
@@ -453,7 +451,6 @@ impl CfaitMobile {
         })
         .await
     }
-
     pub async fn move_task(&self, uid: String, new_cal_href: String) -> Result<(), MobileError> {
         let mut store = self.store.lock().await;
         let updated_task = store
@@ -470,7 +467,6 @@ impl CfaitMobile {
         }
         Ok(())
     }
-
     pub async fn delete_task(&self, uid: String) -> Result<(), MobileError> {
         let mut store = self.store.lock().await;
         let task = store
@@ -490,7 +486,6 @@ impl CfaitMobile {
     }
 }
 
-// --- INTERNAL HELPERS ---
 impl CfaitMobile {
     async fn apply_connection(&self, config: Config) -> Result<String, MobileError> {
         let (client, cals, tasks, active_href, warning) =
@@ -517,7 +512,6 @@ impl CfaitMobile {
         }
         Ok(warning.unwrap_or_else(|| "Connected".to_string()))
     }
-
     async fn modify_task_and_sync<F>(&self, uid: String, mut modifier: F) -> Result<(), MobileError>
     where
         F: FnMut(&mut Task),
