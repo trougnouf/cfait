@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,7 +21,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -28,6 +32,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.compose.NavHost
@@ -220,7 +225,10 @@ fun HomeScreen(
                         Tab(selected = sidebarTab==0, onClick = { sidebarTab=0 }, text = { Text("Calendars") }, icon = { NfIcon(NfIcons.CALENDAR) })
                         Tab(selected = sidebarTab==1, onClick = { sidebarTab=1 }, text = { Text("Tags") }, icon = { NfIcon(NfIcons.TAG) })
                     }
-                    LazyColumn {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(bottom = 24.dp)
+                    ) {
                         if (sidebarTab == 0) {
                             items(calendars.filter { !it.isDisabled }) { cal ->
                                 val calColor = cal.color?.let { parseHexColor(it) } ?: Color.Gray
@@ -241,19 +249,48 @@ fun HomeScreen(
                             }
                         } else {
                             item {
-                                NavigationDrawerItem(
-                                    label = { Text("All Tasks") }, selected = filterTag == null, 
-                                    onClick = { filterTag = null; scope.launch { drawerState.close() } }, icon = { NfIcon(NfIcons.TAG) }, modifier = Modifier.padding(12.dp)
+                                CompactTagRow(
+                                    name = "All Tasks",
+                                    count = null,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    isSelected = filterTag == null,
+                                    onClick = { filterTag = null; scope.launch { drawerState.close() } }
                                 )
                             }
                             items(tags) { tag ->
-                                val displayName = if (tag.isUncategorized) "Uncategorized" else "#${tag.name}"
-                                NavigationDrawerItem(
-                                    label = { Row { Text(displayName, Modifier.weight(1f)); Text("${tag.count}", color = Color.Gray) } },
-                                    selected = if (tag.isUncategorized) filterTag == ":::uncategorized:::" else filterTag == tag.name,
-                                    onClick = { filterTag = if (tag.isUncategorized) ":::uncategorized:::" else tag.name; scope.launch { drawerState.close() } },
-                                    icon = { NfIcon(NfIcons.TAG, color = if (tag.isUncategorized) Color.Gray else getTagColor(tag.name)) },
-                                    modifier = Modifier.padding(12.dp)
+                                val isUncat = tag.isUncategorized
+                                val displayName = if (isUncat) "Uncategorized" else "#${tag.name}"
+                                val isSel = if (isUncat) filterTag == ":::uncategorized:::" else filterTag == tag.name
+                                val color = if (isUncat) Color.Gray else getTagColor(tag.name)
+                                
+                                CompactTagRow(
+                                    name = displayName,
+                                    count = tag.count.toInt(),
+                                    color = color,
+                                    isSelected = isSel,
+                                    onClick = { 
+                                        filterTag = if (isUncat) ":::uncategorized:::" else tag.name
+                                        scope.launch { drawerState.close() } 
+                                    }
+                                )
+                            }
+                        }
+
+                        // Logo at the end of the scrollable list
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 150.dp) // Ensure it takes good space
+                                    .padding(vertical = 32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                    contentDescription = "Cfait Logo",
+                                    modifier = Modifier.size(120.dp),
+                                    // Removed ColorFilter to keep it colorful
+                                    contentScale = ContentScale.Fit
                                 )
                             }
                         }
@@ -270,9 +307,37 @@ fun HomeScreen(
                         navigationIcon = { IconButton(onClick = { isSearchActive = false; searchQuery = "" }) { NfIcon(NfIcons.BACK, 20.sp) } }
                     )
                 } else {
-                    val title = if (filterTag == null) "Cfait" else if (filterTag == ":::uncategorized:::") "Uncategorized" else "#$filterTag"
+                    val headerTitle: @Composable () -> Unit = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            
+                            val activeCalName = calendars.find { it.href == defaultCalHref }?.name ?: "Local"
+                            
+                            Text(
+                                text = activeCalName,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            
+                            if (tasks.isNotEmpty()) {
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "(${tasks.size})",
+                                    fontSize = 13.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+                    }
+
                     TopAppBar(
-                        title = { Text(title) },
+                        title = headerTitle,
                         navigationIcon = { IconButton(onClick = { scope.launch { drawerState.open() } }) { NfIcon(NfIcons.MENU, 20.sp) } },
                         actions = {
                             IconButton(onClick = { isSearchActive = true }) { NfIcon(NfIcons.SEARCH, 18.sp) }
@@ -298,6 +363,28 @@ fun HomeScreen(
                     TaskRow(task, calColor, isDark, { toggleTask(task.uid) }, { act -> onTaskAction(act, task) }, onTaskClick)
                 }
             }
+        }
+    }
+}
+
+// --- COMPACT TAG ROW ---
+@Composable
+fun CompactTagRow(name: String, count: Int?, color: Color, isSelected: Boolean, onClick: () -> Unit) {
+    val bg = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(36.dp) 
+            .background(bg, RoundedCornerShape(4.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        NfIcon(NfIcons.TAG, size = 14.sp, color = color)
+        Spacer(Modifier.width(12.dp))
+        Text(name, fontSize = 14.sp, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
+        if (count != null) {
+            Text("$count", fontSize = 12.sp, color = Color.Gray)
         }
     }
 }
@@ -466,7 +553,7 @@ fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalend
     }
 }
 
-// ... [SettingsScreen with Disabled Calendars Support] ...
+// ... [SettingsScreen - Reuse from previous] ...
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit) {
@@ -492,7 +579,6 @@ fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit) {
         hideCompleted = cfg.hideCompleted
         aliases = cfg.tagAliases
         allCalendars = api.getCalendars()
-        // Initialize disabledSet based on what getCalendars reports
         disabledSet = allCalendars.filter { it.isDisabled }.map { it.href }.toSet()
     }
 
@@ -526,9 +612,7 @@ fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit) {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text("Manage Calendars", fontWeight = FontWeight.Bold)
             }
-            // Calendar Management Section
             items(allCalendars) { cal ->
-                // Checkbox state: Enabled = !Disabled
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(
                         checked = !disabledSet.contains(cal.href),
@@ -570,26 +654,21 @@ fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit) {
 
 fun parseHexColor(hex: String): Color {
     return try {
-        // Truncate to 6 chars + # to ensure RRGGBB (Ignore Alpha)
         var clean = hex.removePrefix("#")
-        if (clean.length > 6) {
-            clean = clean.take(6)
-        }
+        if (clean.length > 6) { clean = clean.take(6) }
         val colorInt = android.graphics.Color.parseColor("#$clean")
         Color(colorInt)
-    } catch (e: Exception) {
-        Color.Gray
-    }
+    } catch (e: Exception) { Color.Gray }
 }
 
 fun getTaskTextColor(prio: Int, isDone: Boolean, isDark: Boolean): Color {
     if (isDone) return Color.Gray
     return when(prio) {
-        1 -> Color(0xFFFF4444) // Red
+        1 -> Color(0xFFFF4444)
         2 -> Color(0xFFFF6633)
         3 -> Color(0xFFFF8800)
         4 -> Color(0xFFFFBB33)
-        5 -> Color(0xFFFFD700) // Yellow
+        5 -> Color(0xFFFFD700)
         6 -> Color(0xFFD9D98C)
         7 -> Color(0xFFB3BFC6)
         8 -> Color(0xFFA699CC)
