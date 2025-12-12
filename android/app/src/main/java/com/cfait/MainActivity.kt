@@ -53,7 +53,6 @@ object NfIcons {
     val CHECK = get(0xf00c)
     val CROSS = get(0xf00d)
     val PLAY = get(0xf04b) // fa-play
-    val PLAY_FA = get(0xf04b)
     val PAUSE = get(0xf04c)
     val REPEAT = get(0xf0b6)
     val VISIBLE = get(0xea70) // cod-eye
@@ -178,7 +177,6 @@ fun HomeScreen(
     val clipboardManager = LocalClipboardManager.current
     val isDark = isSystemInDarkTheme()
 
-    // Map for looking up colors efficiently
     val calColorMap = remember(calendars) { 
         calendars.associate { it.href to (it.color?.let { hex -> parseHexColor(hex) } ?: Color.Gray) }
     }
@@ -230,7 +228,6 @@ fun HomeScreen(
                                     modifier = Modifier.fillMaxWidth().clickable { api.setDefaultCalendar(cal.href); onDataChanged() }.padding(16.dp, 12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Eye icon takes the calendar color if visible
                                     IconButton(onClick = { api.setCalendarVisibility(cal.href, !cal.isVisible); onDataChanged(); updateTaskList() }, modifier = Modifier.size(24.dp)) {
                                         NfIcon(if (cal.isVisible) NfIcons.VISIBLE else NfIcons.HIDDEN, color = if (cal.isVisible) calColor else Color.Gray)
                                     }
@@ -307,7 +304,6 @@ fun TaskRow(task: MobileTask, calColor: Color, isDark: Boolean, onToggle: () -> 
     val startPadding = (task.depth.toInt() * 12).dp 
     var expanded by remember { mutableStateOf(false) }
     
-    // Determine Text Color based on Priority
     val textColor = getTaskTextColor(task.priority.toInt(), task.isDone, isDark)
 
     Card(
@@ -333,7 +329,6 @@ fun TaskRow(task: MobileTask, calColor: Color, isDark: Boolean, onToggle: () -> 
                 
                 FlowRow(modifier = Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (task.isBlocked) NfIcon(NfIcons.BLOCK, 10.sp, MaterialTheme.colorScheme.error)
-                    // We don't need to show !1 tag if the text is already colored, but keeping it small is fine
                     if (!task.dueDateIso.isNullOrEmpty()) { NfIcon(NfIcons.CALENDAR, 10.sp, Color.Gray); Text(task.dueDateIso!!.take(10), fontSize = 10.sp, color = Color.Gray) }
                     if (task.isRecurring) NfIcon(NfIcons.REPEAT, 10.sp, Color.Gray)
                     
@@ -361,18 +356,16 @@ fun TaskRow(task: MobileTask, calColor: Color, isDark: Boolean, onToggle: () -> 
     }
 }
 
-// Updated Checkbox to match GUI styles
 @Composable
 fun TaskCheckbox(task: MobileTask, calColor: Color, onClick: () -> Unit) {
     val isDone = task.isDone
     val status = task.statusString
 
-    // Match GUI Colors
     val bgColor = when {
-        isDone -> Color(0xFF009900) // Completed (Green)
-        status == "InProcess" -> Color(0xFF99CC99) // In Process (Light Green)
-        status == "Cancelled" -> Color(0xFF4D3333) // Cancelled (Brown/Red)
-        else -> Color.Transparent // Needs Action
+        isDone -> Color(0xFF009900)
+        status == "InProcess" -> Color(0xFF99CC99)
+        status == "Cancelled" -> Color(0xFF4D3333)
+        else -> Color.Transparent
     }
 
     Box(
@@ -386,9 +379,10 @@ fun TaskCheckbox(task: MobileTask, calColor: Color, onClick: () -> Unit) {
         if (isDone) {
             NfIcon(NfIcons.CHECK, 12.sp, Color.White)
         } else if (status == "InProcess") {
-            // "Play" icon usually points right, GUI uses a specific char. 
-            // Using PLAY_FA from NerdFonts or standard Play
-            NfIcon(NfIcons.PLAY, 10.sp, Color.White)
+            // Add slight vertical offset to visually center the play triangle
+            Box(Modifier.offset(x = 1.dp, y = (-0.5).dp)) {
+                NfIcon(NfIcons.PLAY, 10.sp, Color.White)
+            }
         } else if (status == "Cancelled") {
             NfIcon(NfIcons.CROSS, 12.sp, Color.White)
         }
@@ -533,10 +527,16 @@ fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit) {
 
 fun parseHexColor(hex: String): Color {
     return try {
-        val clean = hex.removePrefix("#")
-        val colorInt = if (clean.length == 6) android.graphics.Color.parseColor("#$clean") else if (clean.length == 8) android.graphics.Color.parseColor("#$clean") else android.graphics.Color.GRAY
+        // Truncate to 6 chars + # to ensure RRGGBB (Ignore Alpha)
+        var clean = hex.removePrefix("#")
+        if (clean.length > 6) {
+            clean = clean.take(6)
+        }
+        val colorInt = android.graphics.Color.parseColor("#$clean")
         Color(colorInt)
-    } catch (e: Exception) { Color.Gray }
+    } catch (e: Exception) {
+        Color.Gray
+    }
 }
 
 fun getTaskTextColor(prio: Int, isDone: Boolean, isDark: Boolean): Color {
