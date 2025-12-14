@@ -129,17 +129,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // Clone first to avoid borrow conflicts when clearing later
             let parent_opt = app.yanked_uid.clone();
 
-            if let Some(parent_uid) = parent_opt {
-                if let Some(updated) = app.store.set_parent(&target_uid, Some(parent_uid.clone())) {
-                    app.selected_uid = Some(target_uid);
-                    app.yanked_uid = None; // Clear yank state
-                    refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
-                        return Task::perform(
-                            async_update_wrapper(client.clone(), updated),
-                            Message::SyncSaved,
-                        );
-                    }
+            if let Some(parent_uid) = parent_opt
+                && let Some(updated) = app.store.set_parent(&target_uid, Some(parent_uid.clone()))
+            {
+                app.selected_uid = Some(target_uid);
+                app.yanked_uid = None; // Clear yank state
+                refresh_filtered_tasks(app);
+                if let Some(client) = &app.client {
+                    return Task::perform(
+                        async_update_wrapper(client.clone(), updated),
+                        Message::SyncSaved,
+                    );
                 }
             }
             Task::none()
@@ -174,17 +174,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // Clone first to avoid borrow conflicts
             let blocker_opt = app.yanked_uid.clone();
 
-            if let Some(blocker_uid) = blocker_opt {
-                if let Some(updated) = app.store.add_dependency(&target_uid, blocker_uid.clone()) {
-                    app.selected_uid = Some(target_uid);
-                    app.yanked_uid = None; // Clear yank state
-                    refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
-                        return Task::perform(
-                            async_update_wrapper(client.clone(), updated),
-                            Message::SyncSaved,
-                        );
-                    }
+            if let Some(blocker_uid) = blocker_opt
+                && let Some(updated) = app.store.add_dependency(&target_uid, blocker_uid.clone())
+            {
+                app.selected_uid = Some(target_uid);
+                app.yanked_uid = None; // Clear yank state
+                refresh_filtered_tasks(app);
+                if let Some(client) = &app.client {
+                    return Task::perform(
+                        async_update_wrapper(client.clone(), updated),
+                        Message::SyncSaved,
+                    );
                 }
             }
             Task::none()

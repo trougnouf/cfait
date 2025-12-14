@@ -42,12 +42,13 @@ type HttpsClient = AddAuthorization<
 
 fn strip_host(href: &str) -> String {
     if let Ok(uri) = href.parse::<Uri>()
-        && (uri.scheme().is_some() || uri.authority().is_some()) {
-            return uri
-                .path_and_query()
-                .map(|pq| pq.as_str().to_string())
-                .unwrap_or_else(|| uri.path().to_string());
-        }
+        && (uri.scheme().is_some() || uri.authority().is_some())
+    {
+        return uri
+            .path_and_query()
+            .map(|pq| pq.as_str().to_string())
+            .unwrap_or_else(|| uri.path().to_string());
+    }
     href.to_string()
 }
 
@@ -116,16 +117,18 @@ impl RustyClient {
         if let Some(client) = &self.client {
             let base_path = client.base_url().path().to_string();
             if let Ok(response) = client.request(ListResources::new(&base_path)).await
-                && response.resources.iter().any(|r| r.href.ends_with(".ics")) {
-                    return Ok(base_path);
-                }
+                && response.resources.iter().any(|r| r.href.ends_with(".ics"))
+            {
+                return Ok(base_path);
+            }
             if let Ok(Some(principal)) = client.find_current_user_principal().await
                 && let Ok(response) = client.request(FindCalendarHomeSet::new(&principal)).await
-                    && let Some(home_url) = response.home_sets.first()
-                        && let Ok(cals_resp) = client.request(FindCalendars::new(home_url)).await
-                            && let Some(first) = cals_resp.calendars.first() {
-                                return Ok(first.href.clone());
-                            }
+                && let Some(home_url) = response.home_sets.first()
+                && let Ok(cals_resp) = client.request(FindCalendars::new(home_url)).await
+                && let Some(first) = cals_resp.calendars.first()
+            {
+                return Ok(first.href.clone());
+            }
             Ok(base_path)
         } else {
             Err("Offline".to_string())
@@ -175,14 +178,16 @@ impl RustyClient {
             && let Some(found) = calendars
                 .iter()
                 .find(|c| c.name == *def_cal || c.href == *def_cal)
-            {
-                active_href = Some(found.href.clone());
-            }
+        {
+            active_href = Some(found.href.clone());
+        }
 
-        if active_href.is_none() && warning.is_none()
-            && let Ok(href) = client.discover_calendar().await {
-                active_href = Some(href);
-            }
+        if active_href.is_none()
+            && warning.is_none()
+            && let Ok(href) = client.discover_calendar().await
+        {
+            active_href = Some(href);
+        }
 
         let tasks = if warning.is_none() {
             if let Some(ref h) = active_href {
@@ -281,10 +286,11 @@ impl RustyClient {
             };
 
             if let (Some(r_tok), Some(c_tok)) = (&remote_token, &cached_token)
-                && r_tok == c_tok {
-                    apply_journal_to_tasks(&mut cached_tasks, calendar_href);
-                    return Ok(cached_tasks);
-                }
+                && r_tok == c_tok
+            {
+                apply_journal_to_tasks(&mut cached_tasks, calendar_href);
+                return Ok(cached_tasks);
+            }
 
             let list_resp = client
                 .request(ListResources::new(&path_href))
@@ -342,9 +348,10 @@ impl RustyClient {
                             content.etag,
                             item.href,
                             calendar_href.to_string(),
-                        ) {
-                            final_tasks.push(task);
-                        }
+                        )
+                    {
+                        final_tasks.push(task);
+                    }
                 }
             }
 
@@ -527,9 +534,9 @@ impl RustyClient {
             && let Ok(resp) = client
                 .request(GetProperty::new(path, &names::GETETAG))
                 .await
-            {
-                return resp.value;
-            }
+        {
+            return resp.value;
+        }
         None
     }
 
@@ -694,14 +701,40 @@ impl RustyClient {
                 Ok(_) => {
                     if new_etag_to_propagate.is_none()
                         && let Some(path) = path_for_refresh
-                            && let Some(fetched) = self.fetch_etag(&path).await {
-                                new_etag_to_propagate = Some(fetched);
-                            }
+                        && let Some(fetched) = self.fetch_etag(&path).await
+                    {
+                        new_etag_to_propagate = Some(fetched);
+                    }
 
                     let commit_res = Journal::modify(|queue| {
-                        if !queue.is_empty() {
-                            queue.remove(0);
+                        // RACE CONDITION FIX:
+                        // Ensure the item at index 0 is actually the one we just processed.
+                        // If another process synced faster, index 0 might be a different task now.
+                        let should_remove = if let Some(head) = queue.first() {
+                            match (head, &next_action) {
+                                (Action::Create(a), Action::Create(b)) => a == b,
+                                (Action::Update(a), Action::Update(b)) => a == b,
+                                (Action::Delete(a), Action::Delete(b)) => a == b,
+                                (Action::Move(a_t, a_s), Action::Move(b_t, b_s)) => {
+                                    a_t == b_t && a_s == b_s
+                                }
+                                _ => false,
+                            }
+                        } else {
+                            // Queue is empty, nothing to remove
+                            false
+                        };
+
+                        if !should_remove {
+                            // The queue shifted under our feet (processed by another instance).
+                            // We do NOT remove index 0, as it is a different task.
+                            // We do NOT apply ETag propagations, as they belong to the task we processed,
+                            // which is already gone from the queue.
+                            return;
                         }
+
+                        // Remove the task we successfully processed
+                        queue.remove(0);
 
                         if let Some(act) = conflict_resolved_action {
                             queue.insert(0, act);
