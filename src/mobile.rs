@@ -1,4 +1,4 @@
-// File: src/mobile.rs
+// File: ./src/mobile.rs
 use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::config::Config;
@@ -159,6 +159,10 @@ impl CfaitMobile {
             client: Arc::new(Mutex::new(None)),
             store: Arc::new(Mutex::new(TaskStore::new())),
         }
+    }
+
+    pub fn has_unsynced_changes(&self) -> bool {
+        !crate::journal::Journal::load().is_empty()
     }
 
     pub fn get_config(&self) -> MobileConfig {
@@ -497,7 +501,7 @@ impl CfaitMobile {
         Ok(())
     }
 
-    pub async fn add_task_smart(&self, input: String) -> Result<(), MobileError> {
+    pub async fn add_task_smart(&self, input: String) -> Result<String, MobileError> {
         let aliases = Config::load().unwrap_or_default().tag_aliases;
         let mut task = Task::new(&input, &aliases);
         let config = Config::load().unwrap_or_default();
@@ -525,8 +529,8 @@ impl CfaitMobile {
                     .map_err(MobileError::from)?;
             }
         }
-        self.store.lock().await.add_task(task);
-        Ok(())
+        self.store.lock().await.add_task(task.clone());
+        Ok(task.uid)
     }
 
     pub async fn change_priority(&self, uid: String, delta: i8) -> Result<(), MobileError> {

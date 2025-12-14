@@ -1,4 +1,4 @@
-// File: src/model/adapter.rs
+// File: ./src/model/adapter.rs
 use crate::model::item::{RawProperty, Task, TaskStatus};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use icalendar::{Calendar, CalendarComponent, Component, Todo, TodoStatus};
@@ -26,6 +26,7 @@ const HANDLED_KEYS: &[&str] = &[
     "PRODID",
     "VERSION",
     "CALSCALE",
+    "RECURRENCE-ID", // <--- ADDED THIS to prevent corruption of exception tasks
 ];
 
 impl Task {
@@ -172,19 +173,20 @@ impl Task {
 
         // 2. Inject ALARMS
         if !self.raw_alarms.is_empty()
-            && let Some(idx) = ics.rfind("END:VTODO") {
-                let (start, end) = ics.split_at(idx);
-                let mut buffer = String::with_capacity(ics.len() + 500);
-                buffer.push_str(start);
-                for alarm in &self.raw_alarms {
-                    buffer.push_str(alarm);
-                    if !alarm.ends_with('\n') {
-                        buffer.push('\n');
-                    }
+            && let Some(idx) = ics.rfind("END:VTODO")
+        {
+            let (start, end) = ics.split_at(idx);
+            let mut buffer = String::with_capacity(ics.len() + 500);
+            buffer.push_str(start);
+            for alarm in &self.raw_alarms {
+                buffer.push_str(alarm);
+                if !alarm.ends_with('\n') {
+                    buffer.push('\n');
                 }
-                buffer.push_str(end);
-                ics = buffer;
             }
+            buffer.push_str(end);
+            ics = buffer;
+        }
 
         // 3. Inject Raw Components (Exceptions, Timezones, etc.)
         if !self.raw_components.is_empty() {

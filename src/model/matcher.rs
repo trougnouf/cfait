@@ -1,7 +1,7 @@
 // File: ./src/model/matcher.rs
 // Handles logic for checking if a task matches a search query
 use crate::model::item::{Task, TaskStatus};
-use chrono::Utc;
+use chrono::Local; // Changed from Utc
 
 impl Task {
     pub fn matches_search_term(&self, term: &str) -> bool {
@@ -148,7 +148,8 @@ impl Task {
                     ("=", val_str)
                 };
 
-                let now = Utc::now().date_naive();
+                // Use LOCAL time
+                let now = Local::now().date_naive();
                 // Reuse logic from 'parse_smart_date' conceptual equivalents or simple parsing
                 let target_date = if date_str == "today" {
                     Some(now)
@@ -212,8 +213,8 @@ impl Task {
                     continue;
                 };
 
-                // Parse Target Date
-                let now = Utc::now().date_naive();
+                // Parse Target Date using LOCAL time
+                let now = Local::now().date_naive();
                 let target_date = if val_str == "today" {
                     Some(now)
                 } else if val_str == "tomorrow" {

@@ -661,6 +661,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Short
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks(
     ): Short
+    external fun uniffi_cfait_checksum_method_cfaitmobile_has_unsynced_changes(
+    ): Short
     external fun uniffi_cfait_checksum_method_cfaitmobile_isolate_calendar(
     ): Short
     external fun uniffi_cfait_checksum_method_cfaitmobile_load_from_cache(
@@ -741,6 +743,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(`ptr`: Long,`filterTag`: RustBuffer.ByValue,`searchQuery`: RustBuffer.ByValue,
     ): Long
+    external fun uniffi_cfait_fn_method_cfaitmobile_has_unsynced_changes(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): Byte
     external fun uniffi_cfait_fn_method_cfaitmobile_isolate_calendar(`ptr`: Long,`href`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_cfait_fn_method_cfaitmobile_load_from_cache(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -900,7 +904,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_dependency() != 56080.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_task_smart() != 42651.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_task_smart() != 475.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_change_priority() != 52402.toShort()) {
@@ -922,6 +926,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 40875.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_unsynced_changes() != 28210.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_isolate_calendar() != 34103.toShort()) {
@@ -1427,7 +1434,7 @@ public interface CfaitMobileInterface {
     
     suspend fun `addDependency`(`taskUid`: kotlin.String, `blockerUid`: kotlin.String)
     
-    suspend fun `addTaskSmart`(`input`: kotlin.String)
+    suspend fun `addTaskSmart`(`input`: kotlin.String): kotlin.String
     
     suspend fun `changePriority`(`uid`: kotlin.String, `delta`: kotlin.Byte)
     
@@ -1442,6 +1449,8 @@ public interface CfaitMobileInterface {
     fun `getConfig`(): MobileConfig
     
     suspend fun `getViewTasks`(`filterTag`: kotlin.String?, `searchQuery`: kotlin.String): List<MobileTask>
+    
+    fun `hasUnsyncedChanges`(): kotlin.Boolean
     
     fun `isolateCalendar`(`href`: kotlin.String)
     
@@ -1631,7 +1640,7 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
     
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `addTaskSmart`(`input`: kotlin.String) {
+    override suspend fun `addTaskSmart`(`input`: kotlin.String) : kotlin.String {
         return uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_add_task_smart(
@@ -1639,12 +1648,11 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
                 FfiConverterString.lower(`input`),
             )
         },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
         // lift function
-        { Unit },
-        
+        { FfiConverterString.lift(it) },
         // Error FFI converter
         MobileException.ErrorHandler,
     )
@@ -1780,6 +1788,19 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         UniffiNullRustCallStatusErrorHandler,
     )
     }
+
+    override fun `hasUnsyncedChanges`(): kotlin.Boolean {
+            return FfiConverterBoolean.lift(
+    callWithHandle {
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_has_unsynced_changes(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
 
     
     @Throws(MobileException::class)override fun `isolateCalendar`(`href`: kotlin.String)

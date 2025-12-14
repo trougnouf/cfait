@@ -1,4 +1,4 @@
-// File: src/storage.rs
+// File: ./src/storage.rs
 use crate::model::Task;
 use crate::paths::AppPaths;
 use anyhow::Result;
@@ -73,10 +73,13 @@ impl LocalStorage {
         // Get the global map
         let map_mutex = ANDROID_FILE_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
 
+        // Canonicalize to avoid race conditions via symlinks or relative paths
+        let key = file_path.canonicalize().unwrap_or(file_path.to_path_buf());
+
         // Get or create the mutex specifically for this file path
         let file_mutex = {
             let mut map = map_mutex.lock().unwrap();
-            map.entry(file_path.to_path_buf())
+            map.entry(key)
                 .or_insert_with(|| Arc::new(Mutex::new(())))
                 .clone()
         };
