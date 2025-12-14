@@ -1,4 +1,4 @@
-// File: ./src/mobile.rs
+// File: src/mobile.rs
 use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::config::Config;
@@ -205,10 +205,8 @@ impl CfaitMobile {
         if task_uid == blocker_uid {
             return Err(MobileError::from("Cannot depend on self"));
         }
-        self.modify_task_and_sync(task_uid, |t| {
-            if !t.dependencies.contains(&blocker_uid) {
-                t.dependencies.push(blocker_uid.clone());
-            }
+        self.apply_store_mutation(task_uid, |store: &mut TaskStore, id: &str| {
+            store.add_dependency(id, blocker_uid)
         })
         .await
     }
@@ -218,10 +216,8 @@ impl CfaitMobile {
         task_uid: String,
         blocker_uid: String,
     ) -> Result<(), MobileError> {
-        self.modify_task_and_sync(task_uid, |t| {
-            if let Some(pos) = t.dependencies.iter().position(|x| *x == blocker_uid) {
-                t.dependencies.remove(pos);
-            }
+        self.apply_store_mutation(task_uid, |store: &mut TaskStore, id: &str| {
+            store.remove_dependency(id, &blocker_uid)
         })
         .await
     }
@@ -236,8 +232,8 @@ impl CfaitMobile {
                 return Err(MobileError::from("Cannot be child of self"));
             }
         }
-        self.modify_task_and_sync(child_uid, |t| {
-            t.parent_uid = parent_uid.clone();
+        self.apply_store_mutation(child_uid, |store: &mut TaskStore, id: &str| {
+            store.set_parent(id, parent_uid)
         })
         .await
     }
@@ -260,11 +256,30 @@ impl CfaitMobile {
 
     // --- Existing Methods ---
 
-    pub fn add_alias(&self, key: String, tags: Vec<String>) -> Result<(), MobileError> {
+    pub async fn add_alias(&self, key: String, tags: Vec<String>) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
-        c.tag_aliases.insert(key, tags);
-        c.save().map_err(MobileError::from)
+        c.tag_aliases.insert(key.clone(), tags.clone());
+        c.save().map_err(MobileError::from)?;
+
+        let mut store = self.store.lock().await;
+        let modified = store.apply_alias_retroactively(&key, &tags);
+        drop(store);
+
+        if !modified.is_empty() {
+            let client_guard = self.client.lock().await;
+            if let Some(client) = &*client_guard {
+                for mut t in modified {
+                    let _ = client.update_task(&mut t).await;
+                }
+            } else {
+                for t in modified {
+                    let _ = crate::journal::Journal::push(crate::journal::Action::Update(t));
+                }
+            }
+        }
+        Ok(())
     }
+
     pub fn remove_alias(&self, key: String) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
         c.tag_aliases.remove(&key);
@@ -284,23 +299,86 @@ impl CfaitMobile {
         }
         config.save().map_err(MobileError::from)
     }
+
     pub fn load_from_cache(&self) {
         let mut store = self.store.blocking_lock();
         store.clear();
-        if let Ok(local) = LocalStorage::load() {
+
+        let journal = crate::journal::Journal::load();
+
+        if let Ok(mut local) = LocalStorage::load() {
+            // Apply Journal to Local
+            for action in &journal.queue {
+                match action {
+                    crate::journal::Action::Create(t) | crate::journal::Action::Update(t) => {
+                        if t.calendar_href == LOCAL_CALENDAR_HREF {
+                            if let Some(pos) = local.iter().position(|x| x.uid == t.uid) {
+                                local[pos] = t.clone();
+                            } else {
+                                local.push(t.clone());
+                            }
+                        }
+                    }
+                    crate::journal::Action::Delete(t) => {
+                        if t.calendar_href == LOCAL_CALENDAR_HREF {
+                            local.retain(|x| x.uid != t.uid);
+                        }
+                    }
+                    crate::journal::Action::Move(t, new_href) => {
+                        if t.calendar_href == LOCAL_CALENDAR_HREF {
+                            local.retain(|x| x.uid != t.uid);
+                        } else if new_href == LOCAL_CALENDAR_HREF {
+                            let mut mt = t.clone();
+                            mt.calendar_href = new_href.clone();
+                            local.push(mt);
+                        }
+                    }
+                }
+            }
             store.insert(LOCAL_CALENDAR_HREF.to_string(), local);
         }
+
         if let Ok(cals) = Cache::load_calendars() {
             for cal in cals {
                 if cal.href == LOCAL_CALENDAR_HREF {
                     continue;
                 }
-                if let Ok((tasks, _)) = Cache::load(&cal.href) {
+                if let Ok((mut tasks, _)) = Cache::load(&cal.href) {
+                    // Apply Journal to Cache
+                    for action in &journal.queue {
+                        match action {
+                            crate::journal::Action::Create(t)
+                            | crate::journal::Action::Update(t) => {
+                                if t.calendar_href == cal.href {
+                                    if let Some(pos) = tasks.iter().position(|x| x.uid == t.uid) {
+                                        tasks[pos] = t.clone();
+                                    } else {
+                                        tasks.push(t.clone());
+                                    }
+                                }
+                            }
+                            crate::journal::Action::Delete(t) => {
+                                if t.calendar_href == cal.href {
+                                    tasks.retain(|x| x.uid != t.uid);
+                                }
+                            }
+                            crate::journal::Action::Move(t, new_href) => {
+                                if t.calendar_href == cal.href {
+                                    tasks.retain(|x| x.uid != t.uid);
+                                } else if new_href == &cal.href {
+                                    let mut mt = t.clone();
+                                    mt.calendar_href = new_href.clone();
+                                    tasks.push(mt);
+                                }
+                            }
+                        }
+                    }
                     store.insert(cal.href, tasks);
                 }
             }
         }
     }
+
     pub async fn sync(&self) -> Result<String, MobileError> {
         let config = Config::load().map_err(MobileError::from)?;
         self.apply_connection(config).await
@@ -422,13 +500,14 @@ impl CfaitMobile {
     pub async fn add_task_smart(&self, input: String) -> Result<(), MobileError> {
         let aliases = Config::load().unwrap_or_default().tag_aliases;
         let mut task = Task::new(&input, &aliases);
-        let guard = self.client.lock().await;
         let config = Config::load().unwrap_or_default();
         let target_href = config
             .default_calendar
             .clone()
             .unwrap_or(LOCAL_CALENDAR_HREF.to_string());
         task.calendar_href = target_href.clone();
+
+        let guard = self.client.lock().await;
         if let Some(client) = &*guard {
             client
                 .create_task(&mut task)
@@ -436,124 +515,197 @@ impl CfaitMobile {
                 .map(|_| ())
                 .map_err(MobileError::from)?;
         } else {
-            let mut all = LocalStorage::load().unwrap_or_default();
-            all.push(task.clone());
-            LocalStorage::save(&all).map_err(MobileError::from)?;
+            // Offline fallback
+            if task.calendar_href == LOCAL_CALENDAR_HREF {
+                let mut all = LocalStorage::load().unwrap_or_default();
+                all.push(task.clone());
+                LocalStorage::save(&all).map_err(MobileError::from)?;
+            } else {
+                crate::journal::Journal::push(crate::journal::Action::Create(task.clone()))
+                    .map_err(MobileError::from)?;
+            }
         }
         self.store.lock().await.add_task(task);
         Ok(())
     }
 
     pub async fn change_priority(&self, uid: String, delta: i8) -> Result<(), MobileError> {
-        self.modify_task_and_sync(uid, |t| {
-            t.priority = if delta > 0 {
-                match t.priority {
-                    0 => 9,
-                    9 => 5,
-                    5 => 1,
-                    1 => 1,
-                    _ => 5,
-                }
-            } else {
-                match t.priority {
-                    1 => 5,
-                    5 => 9,
-                    9 => 0,
-                    0 => 0,
-                    _ => 0,
-                }
-            };
+        self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| {
+            store.change_priority(id, delta)
         })
         .await
     }
+
     pub async fn set_status_process(&self, uid: String) -> Result<(), MobileError> {
-        self.modify_task_and_sync(uid, |t| {
-            t.status = if t.status == crate::model::TaskStatus::InProcess {
-                crate::model::TaskStatus::NeedsAction
-            } else {
-                crate::model::TaskStatus::InProcess
-            };
+        self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| {
+            store.set_status(id, crate::model::TaskStatus::InProcess)
         })
         .await
     }
+
     pub async fn set_status_cancelled(&self, uid: String) -> Result<(), MobileError> {
-        self.modify_task_and_sync(uid, |t| {
-            t.status = if t.status == crate::model::TaskStatus::Cancelled {
-                crate::model::TaskStatus::NeedsAction
-            } else {
-                crate::model::TaskStatus::Cancelled
-            };
+        self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| {
+            store.set_status(id, crate::model::TaskStatus::Cancelled)
         })
         .await
     }
+
     pub async fn update_task_smart(
         &self,
         uid: String,
         smart_input: String,
     ) -> Result<(), MobileError> {
         let aliases = Config::load().unwrap_or_default().tag_aliases;
-        self.modify_task_and_sync(uid, |t| {
-            t.apply_smart_input(&smart_input, &aliases);
+        self.apply_store_mutation(uid, |t: &mut TaskStore, id: &str| {
+            // Store has get_task_mut but we need to modify via closure that has access to Task.
+            // apply_store_mutation logic:
+            // 1. Lock store. 2. Get mutable task. 3. Run closure. 4. Return task clone.
+            // But apply_store_mutation takes (Store, ID).
+            // So we can implement logic here:
+            if let Some((task, _)) = t.get_task_mut(id) {
+                task.apply_smart_input(&smart_input, &aliases);
+                Some(task.clone())
+            } else {
+                None
+            }
         })
         .await
     }
+
     pub async fn update_task_description(
         &self,
         uid: String,
         description: String,
     ) -> Result<(), MobileError> {
-        self.modify_task_and_sync(uid, |t| {
-            t.description = description.clone();
-        })
-        .await
-    }
-    pub async fn toggle_task(&self, uid: String) -> Result<(), MobileError> {
-        self.modify_task_and_sync(uid, |t| {
-            if t.status.is_done() {
-                t.status = crate::model::TaskStatus::NeedsAction;
+        self.apply_store_mutation(uid, |t: &mut TaskStore, id: &str| {
+            if let Some((task, _)) = t.get_task_mut(id) {
+                task.description = description;
+                Some(task.clone())
             } else {
-                t.status = crate::model::TaskStatus::Completed;
+                None
             }
         })
         .await
     }
-    pub async fn move_task(&self, uid: String, new_cal_href: String) -> Result<(), MobileError> {
+
+    // Toggle Task: Handles Recurrence Spawn
+    pub async fn toggle_task(&self, uid: String) -> Result<(), MobileError> {
+        // 1. Logic via Store
         let mut store = self.store.lock().await;
+        let (task, _) = store
+            .get_task_mut(&uid)
+            .ok_or(MobileError::from("Task not found"))?;
+
+        if task.status.is_done() {
+            task.status = crate::model::TaskStatus::NeedsAction;
+        } else {
+            task.status = crate::model::TaskStatus::Completed;
+        }
+
+        let mut task_for_net = task.clone();
+        drop(store);
+
+        // 2. Client Operation
+        let client_guard = self.client.lock().await;
+
+        if let Some(client) = &*client_guard {
+            let (_, next_task_opt, _) = client
+                .toggle_task(&mut task_for_net)
+                .await
+                .map_err(MobileError::from)?;
+            if let Some(next_task) = next_task_opt {
+                let mut store = self.store.lock().await;
+                store.update_or_add_task(next_task);
+            }
+        } else {
+            // Offline
+            if task_for_net.calendar_href == LOCAL_CALENDAR_HREF {
+                let mut local = LocalStorage::load().unwrap_or_default();
+                if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
+                    local[idx] = task_for_net;
+                    LocalStorage::save(&local).map_err(MobileError::from)?;
+                }
+            } else {
+                crate::journal::Journal::push(crate::journal::Action::Update(task_for_net))
+                    .map_err(MobileError::from)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn move_task(&self, uid: String, new_cal_href: String) -> Result<(), MobileError> {
+        let client_guard = self.client.lock().await;
+        let mut store = self.store.lock().await;
+
+        // Use Store Logic to move in memory & disk (if local)
         let updated_task = store
             .move_task(&uid, new_cal_href.clone())
             .ok_or(MobileError::from("Task not found"))?;
-        let client_guard = self.client.lock().await;
+
+        drop(store);
+
         if let Some(client) = &*client_guard {
             client
                 .move_task(&updated_task, &new_cal_href)
                 .await
                 .map_err(MobileError::from)?;
         } else {
-            return Err(MobileError::from("Client offline"));
-        }
-        Ok(())
-    }
-    pub async fn delete_task(&self, uid: String) -> Result<(), MobileError> {
-        let mut store = self.store.lock().await;
-        let task = store
-            .delete_task(&uid)
-            .ok_or(MobileError::from("Task not found"))?;
-        let client_guard = self.client.lock().await;
-        if let Some(client) = &*client_guard {
-            client.delete_task(&task).await.map_err(MobileError::from)?;
-        } else if task.calendar_href == LOCAL_CALENDAR_HREF {
-            let mut local = LocalStorage::load().unwrap_or_default();
-            if let Some(pos) = local.iter().position(|t| t.uid == uid) {
-                local.remove(pos);
-                LocalStorage::save(&local).map_err(MobileError::from)?;
+            if new_cal_href != LOCAL_CALENDAR_HREF {
+                crate::journal::Journal::push(crate::journal::Action::Move(
+                    updated_task,
+                    new_cal_href,
+                ))
+                .map_err(MobileError::from)?;
             }
         }
         Ok(())
     }
+
+    pub async fn delete_task(&self, uid: String) -> Result<(), MobileError> {
+        let mut store = self.store.lock().await;
+        // Destructure tuple from store.delete_task
+        let (task, href) = store
+            .delete_task(&uid)
+            .ok_or(MobileError::from("Task not found"))?;
+        drop(store);
+
+        let client_guard = self.client.lock().await;
+        if let Some(client) = &*client_guard {
+            client.delete_task(&task).await.map_err(MobileError::from)?;
+        } else {
+            if href != LOCAL_CALENDAR_HREF {
+                crate::journal::Journal::push(crate::journal::Action::Delete(task))
+                    .map_err(MobileError::from)?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn migrate_local_to(
+        &self,
+        target_calendar_href: String,
+    ) -> Result<String, MobileError> {
+        let client_guard = self.client.lock().await;
+        let client = client_guard
+            .as_ref()
+            .ok_or(MobileError::from("Client not connected"))?;
+
+        let local_tasks = LocalStorage::load().map_err(|e| MobileError::from(e.to_string()))?;
+        if local_tasks.is_empty() {
+            return Ok("No local tasks to migrate.".to_string());
+        }
+
+        let count = client
+            .migrate_tasks(local_tasks, &target_calendar_href)
+            .await
+            .map_err(MobileError::from)?;
+
+        Ok(format!("Successfully migrated {} tasks.", count))
+    }
 }
 
 // ============================================================================
-// INTERNAL HELPERS (Not Exported to UniFFI)
+// INTERNAL HELPERS
 // ============================================================================
 
 impl CfaitMobile {
@@ -590,28 +742,35 @@ impl CfaitMobile {
         Ok(warning.unwrap_or_else(|| "Connected".to_string()))
     }
 
-    async fn modify_task_and_sync<F>(&self, uid: String, mut modifier: F) -> Result<(), MobileError>
+    // Helper to abstract Store mutation -> Client/Journal logic
+    async fn apply_store_mutation<F>(&self, uid: String, mutator: F) -> Result<(), MobileError>
     where
-        F: FnMut(&mut Task),
+        F: FnOnce(&mut TaskStore, &str) -> Option<Task>,
     {
         let mut store = self.store.lock().await;
-        let (task, _) = store
-            .get_task_mut(&uid)
-            .ok_or(MobileError::from("Task not found"))?;
-        modifier(task);
-        let task_copy = task.clone();
+        let updated_task = mutator(&mut *store, &uid)
+            .ok_or(MobileError::from("Task not found or mutation failed"))?;
+
+        let mut task_for_net = updated_task.clone();
         drop(store);
+
         let client_guard = self.client.lock().await;
+
         if let Some(client) = &*client_guard {
             client
-                .update_task(&mut task_copy.clone())
+                .update_task(&mut task_for_net)
                 .await
                 .map_err(MobileError::from)?;
-        } else if task_copy.calendar_href == LOCAL_CALENDAR_HREF {
-            let mut local = LocalStorage::load().unwrap_or_default();
-            if let Some(idx) = local.iter().position(|t| t.uid == uid) {
-                local[idx] = task_copy;
-                LocalStorage::save(&local).map_err(MobileError::from)?;
+        } else {
+            if task_for_net.calendar_href == LOCAL_CALENDAR_HREF {
+                let mut local = LocalStorage::load().unwrap_or_default();
+                if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
+                    local[idx] = task_for_net;
+                    LocalStorage::save(&local).map_err(MobileError::from)?;
+                }
+            } else {
+                crate::journal::Journal::push(crate::journal::Action::Update(task_for_net))
+                    .map_err(MobileError::from)?;
             }
         }
         Ok(())

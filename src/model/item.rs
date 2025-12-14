@@ -52,6 +52,13 @@ pub struct Task {
     pub depth: usize,
     pub rrule: Option<String>,
     pub unmapped_properties: Vec<RawProperty>,
+
+    // --- New Fields ---
+    #[serde(default)]
+    pub sequence: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub raw_alarms: Vec<String>,
+
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub raw_components: Vec<String>,
 }
@@ -76,6 +83,8 @@ impl Task {
             depth: 0,
             rrule: None,
             unmapped_properties: Vec::new(),
+            sequence: 0,
+            raw_alarms: Vec::new(),
             raw_components: Vec::new(),
         };
         task.apply_smart_input(input, aliases);
@@ -195,7 +204,7 @@ impl Task {
 
         tasks.sort_by(|a, b| a.compare_with_cutoff(b, cutoff));
 
-        for mut task in tasks {
+        for mut task in tasks.clone() {
             let is_orphan = match &task.parent_uid {
                 Some(p_uid) => !present_uids.contains(p_uid),
                 None => true,
@@ -213,9 +222,22 @@ impl Task {
         }
 
         let mut result = Vec::new();
+        let mut visited_uids = HashSet::new();
+
         for root in roots {
-            Self::append_task_and_children(&root, &mut result, &children_map, 0);
+            Self::append_task_and_children(&root, &mut result, &children_map, 0, &mut visited_uids);
         }
+
+        // CYCLE RECOVERY: Add tasks skipped due to circular dependencies
+        if result.len() < tasks.len() {
+            for mut task in tasks {
+                if !visited_uids.contains(&task.uid) {
+                    task.depth = 0;
+                    result.push(task);
+                }
+            }
+        }
+
         result
     }
 
@@ -224,13 +246,19 @@ impl Task {
         result: &mut Vec<Task>,
         map: &HashMap<String, Vec<Task>>,
         depth: usize,
+        visited: &mut HashSet<String>,
     ) {
+        if visited.contains(&task.uid) {
+            return;
+        }
+        visited.insert(task.uid.clone());
+
         let mut t = task.clone();
         t.depth = depth;
         result.push(t);
         if let Some(children) = map.get(&task.uid) {
             for child in children {
-                Self::append_task_and_children(child, result, map, depth + 1);
+                Self::append_task_and_children(child, result, map, depth + 1, visited);
             }
         }
     }

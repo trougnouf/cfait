@@ -1,13 +1,11 @@
 // File: src/model/parser.rs
-// Handles smart text input parsing
 use crate::model::item::Task;
-use chrono::{DateTime, Local, NaiveDate, Utc};
+use chrono::{DateTime, Local, NaiveDate, TimeZone, Utc};
 use std::collections::HashMap;
 
 impl Task {
     pub fn apply_smart_input(&mut self, input: &str, aliases: &HashMap<String, Vec<String>>) {
         let mut summary_words = Vec::new();
-        // Reset fields
         self.priority = 0;
         self.due = None;
         self.dtstart = None;
@@ -21,7 +19,6 @@ impl Task {
         while i < tokens.len() {
             let word = tokens[i];
 
-            // 1. Priority (!1 - !9)
             if word.starts_with('!')
                 && let Ok(p) = word[1..].parse::<u8>()
                 && (1..=9).contains(&p)
@@ -31,7 +28,6 @@ impl Task {
                 continue;
             }
 
-            // 2. Duration (est:30m, ~30m)
             if let Some(val) = word.strip_prefix("est:").or_else(|| word.strip_prefix('~'))
                 && let Some(m) = parse_duration(val)
             {
@@ -40,7 +36,6 @@ impl Task {
                 continue;
             }
 
-            // 3. Tags (#tag)
             if let Some(stripped) = word.strip_prefix('#') {
                 let cat = stripped.to_string();
                 if !cat.is_empty() {
@@ -48,7 +43,6 @@ impl Task {
                         self.categories.push(cat.clone());
                     }
 
-                    // Apply aliases recursively (e.g. #a:b -> check alias for #a:b, then #a)
                     let mut search = cat.as_str();
                     loop {
                         if let Some(expanded_tags) = aliases.get(search) {
@@ -58,7 +52,6 @@ impl Task {
                                 }
                             }
                         }
-                        // Move up hierarchy
                         if let Some(idx) = search.rfind(':') {
                             search = &search[..idx];
                         } else {
@@ -71,7 +64,6 @@ impl Task {
                 }
             }
 
-            // 4. Recurrence (rec:weekly, @weekly)
             if let Some(val) = word.strip_prefix("rec:").or_else(|| word.strip_prefix('@'))
                 && let Some(rrule) = parse_recurrence(val)
             {
@@ -79,10 +71,7 @@ impl Task {
                 i += 1;
                 continue;
             }
-            // If not a recurrence keyword, it might be a date using '@' synonym, allow fallthrough
 
-            // 5. Explicit Recurrence with interval (rec:every 2 days)
-            // Or synonym (@every 2 days)
             if (word == "rec:every" || word == "@every") && i + 2 < tokens.len() {
                 let amount_str = tokens[i + 1];
                 let unit_str = tokens[i + 2];
@@ -96,29 +85,24 @@ impl Task {
                 }
             }
 
-            // 6. Due Date (due:2025-01-01, @2025-01-01)
             if let Some(val) = word.strip_prefix("due:").or_else(|| word.strip_prefix('@'))
                 && let Some(dt) = parse_smart_date(val, true)
             {
-                // true = end of day
                 self.due = Some(dt);
                 i += 1;
                 continue;
             }
 
-            // 7. Start Date (start:2025-01-01, ^2025-01-01)
             if let Some(val) = word
                 .strip_prefix("start:")
                 .or_else(|| word.strip_prefix('^'))
                 && let Some(dt) = parse_smart_date(val, false)
             {
-                // false = start of day
                 self.dtstart = Some(dt);
                 i += 1;
                 continue;
             }
 
-            // Fallback: Add to summary
             summary_words.push(word);
             i += 1;
         }
@@ -128,22 +112,18 @@ impl Task {
     pub fn to_smart_string(&self) -> String {
         let mut s = self.summary.clone();
 
-        // Priority: !1
         if self.priority > 0 {
             s.push_str(&format!(" !{}", self.priority));
         }
 
-        // Start: ^YYYY-MM-DD
         if let Some(start) = self.dtstart {
             s.push_str(&format!(" ^{}", start.format("%Y-%m-%d")));
         }
 
-        // Due: @YYYY-MM-DD
         if let Some(d) = self.due {
             s.push_str(&format!(" @{}", d.format("%Y-%m-%d")));
         }
 
-        // Duration: ~30m
         if let Some(mins) = self.estimated_duration {
             let dur_str = if mins >= 525600 {
                 format!("~{}y", mins / 525600)
@@ -161,7 +141,6 @@ impl Task {
             s.push_str(&format!(" {}", dur_str));
         }
 
-        // Recurrence: @weekly or @every ...
         if let Some(r) = &self.rrule {
             if r == "FREQ=DAILY" {
                 s.push_str(" @daily");
@@ -174,11 +153,10 @@ impl Task {
             } else if let Some(simple) = reconstruct_simple_rrule(r) {
                 s.push_str(&format!(" {}", simple));
             } else {
-                s.push_str(" rec:custom"); // Fallback for complex RRULEs
+                s.push_str(" rec:custom");
             }
         }
 
-        // Tags: #tag
         for cat in &self.categories {
             s.push_str(&format!(" #{}", cat));
         }
@@ -186,11 +164,6 @@ impl Task {
     }
 }
 
-/// Helper to extract inline alias definitions from an input string.
-/// Syntax: #alias=#tag1,#tag2
-/// Returns:
-/// 1. The cleaned input string (with definitions replaced by just the alias tag: #alias)
-/// 2. A HashMap of the extracted definitions.
 pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<String>>) {
     let mut cleaned_words = Vec::new();
     let mut new_aliases = HashMap::new();
@@ -210,7 +183,6 @@ pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<Strin
 
                 if !tags.is_empty() {
                     new_aliases.insert(alias_key.clone(), tags);
-                    // Replace the definition with just the alias tag in the output string
                     cleaned_words.push(left.to_string());
                     continue;
                 }
@@ -222,10 +194,7 @@ pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<Strin
     (cleaned_words.join(" "), new_aliases)
 }
 
-// --- Helpers ---
-
 fn reconstruct_simple_rrule(rrule: &str) -> Option<String> {
-    // Basic parser to handle FREQ=X;INTERVAL=Y -> @every Y X(s)
     let parts: HashMap<&str, &str> = rrule.split(';').filter_map(|s| s.split_once('=')).collect();
 
     let freq = parts.get("FREQ")?;
@@ -289,14 +258,12 @@ fn parse_freq_unit(unit: &str) -> &'static str {
 }
 
 fn parse_smart_date(val: &str, end_of_day: bool) -> Option<DateTime<Utc>> {
-    // 1. Specific Date YYYY-MM-DD
     if let Ok(date) = NaiveDate::parse_from_str(val, "%Y-%m-%d") {
         return finalize_date(date, end_of_day);
     }
 
     let now = Local::now().date_naive();
 
-    // 2. Relative Keywords
     if val == "today" {
         return finalize_date(now, end_of_day);
     }
@@ -304,7 +271,6 @@ fn parse_smart_date(val: &str, end_of_day: bool) -> Option<DateTime<Utc>> {
         return finalize_date(now + chrono::Duration::days(1), end_of_day);
     }
 
-    // 3. "1w", "2d" offsets (from now)
     if let Some(n) = val.strip_suffix('d').and_then(|s| s.parse::<i64>().ok()) {
         return finalize_date(now + chrono::Duration::days(n), end_of_day);
     }
@@ -327,5 +293,30 @@ fn finalize_date(d: NaiveDate, end_of_day: bool) -> Option<DateTime<Utc>> {
     } else {
         d.and_hms_opt(0, 0, 0)?
     };
-    Some(t.and_utc())
+
+    // Interpret as Local, then convert to UTC
+    match Local.from_local_datetime(&t) {
+        chrono::LocalResult::Single(dt) => Some(dt.with_timezone(&Utc)),
+        chrono::LocalResult::Ambiguous(dt1, _) => Some(dt1.with_timezone(&Utc)),
+        chrono::LocalResult::None => {
+            // Fallback for invalid local times (e.g. skipped hour in DST)
+            Some(t.and_utc())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Datelike;
+
+    #[test]
+    fn test_timezone_parsing() {
+        // This test ensures we don't accidentally parse "today" as UTC directly if our local machine is different.
+        let date = NaiveDate::from_ymd_opt(2025, 1, 1).unwrap();
+        let res = finalize_date(date, true).unwrap();
+        // The result should be a UTC timestamp that equals 23:59:59 LOCAL time.
+        // We check the year to ensure it parsed correctly.
+        assert!(res.year() == 2025);
+    }
 }

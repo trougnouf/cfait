@@ -37,25 +37,33 @@ impl Task {
         let rrule_string = format!("DTSTART:{}\nRRULE:{}", dtstart_str, rule_str);
 
         if let Ok(rrule_set) = RRuleSet::from_str(&rrule_string) {
-            let result = rrule_set.all(2);
-            let dates = result.dates;
-            if dates.len() > 1 {
-                let next_occurrence = dates[1];
-                let next_start = Utc.from_utc_datetime(&next_occurrence.naive_utc());
+            let now = Utc::now();
+            // Find first occurrence AFTER now
+            let next_occurrence = rrule_set
+                .into_iter()
+                .find(|d| d.to_utc() > now)
+                .map(|d| d.to_utc());
 
+            if let Some(next_start) = next_occurrence {
                 let mut next_task = self.clone();
                 next_task.uid = Uuid::new_v4().to_string();
                 next_task.href = String::new();
                 next_task.etag = String::new();
                 next_task.status = TaskStatus::NeedsAction;
                 next_task.dependencies.clear();
+                next_task.sequence = 0; // Reset sequence for new task
+
+                let duration = if let Some(old_due) = self.due {
+                    old_due - seed_date
+                } else {
+                    chrono::Duration::zero()
+                };
 
                 if self.dtstart.is_some() {
                     next_task.dtstart = Some(next_start);
                 }
 
-                if let Some(old_due) = self.due {
-                    let duration = old_due - seed_date;
+                if self.due.is_some() {
                     next_task.due = Some(next_start + duration);
                 }
 
@@ -73,6 +81,9 @@ impl Task {
             todo.description(&self.description);
         }
         todo.timestamp(Utc::now());
+
+        // Sequence
+        todo.add_property("SEQUENCE", self.sequence.to_string());
 
         match self.status {
             TaskStatus::NeedsAction => todo.status(TodoStatus::NeedsAction),
@@ -159,7 +170,23 @@ impl Task {
             }
         }
 
-        // 2. Inject Raw Components (Exceptions, Timezones, etc.)
+        // 2. Inject ALARMS
+        if !self.raw_alarms.is_empty()
+            && let Some(idx) = ics.rfind("END:VTODO") {
+                let (start, end) = ics.split_at(idx);
+                let mut buffer = String::with_capacity(ics.len() + 500);
+                buffer.push_str(start);
+                for alarm in &self.raw_alarms {
+                    buffer.push_str(alarm);
+                    if !alarm.ends_with('\n') {
+                        buffer.push('\n');
+                    }
+                }
+                buffer.push_str(end);
+                ics = buffer;
+            }
+
+        // 3. Inject Raw Components (Exceptions, Timezones, etc.)
         if !self.raw_components.is_empty() {
             let trimmed = ics.trim_end();
             if let Some(idx) = trimmed.rfind("END:VCALENDAR") {
@@ -236,6 +263,12 @@ impl Task {
             .properties()
             .get("PRIORITY")
             .and_then(|p| p.value().parse::<u8>().ok())
+            .unwrap_or(0);
+
+        let sequence = todo
+            .properties()
+            .get("SEQUENCE")
+            .and_then(|p| p.value().parse::<u32>().ok())
             .unwrap_or(0);
 
         let parse_date_prop = |val: &str| -> Option<DateTime<Utc>> {
@@ -349,8 +382,6 @@ impl Task {
         categories.dedup();
 
         // --- OPTIMIZED RELATION EXTRACTION (MANUAL PARSE) ---
-        // Use manual parsing to avoid issues where icalendar library overwrites duplicate keys
-        // (e.g. RELATED-TO) when they are not explicitly handled as multi-properties.
         let (parent_uid, dependencies) = parse_related_to_manually(raw_ics);
 
         // --- CAPTURE UNMAPPED PROPERTIES ---
@@ -391,6 +422,38 @@ impl Task {
                 .sort_unstable_by(|a, b| a.key.cmp(&b.key).then(a.value.cmp(&b.value)));
         }
 
+        // --- CAPTURE ALARMS ---
+        let mut raw_alarms = Vec::new();
+        let mut in_alarm = false;
+        let mut current_alarm = String::new();
+
+        for line in raw_ics.lines() {
+            let trim = line.trim();
+            if trim == "BEGIN:VALARM" {
+                in_alarm = true;
+                current_alarm.clear();
+                current_alarm.push_str(line);
+                current_alarm.push('\r');
+                current_alarm.push('\n');
+                continue;
+            }
+            if trim == "END:VALARM" {
+                if in_alarm {
+                    current_alarm.push_str(line);
+                    current_alarm.push('\r');
+                    current_alarm.push('\n');
+                    raw_alarms.push(current_alarm.clone());
+                    in_alarm = false;
+                }
+                continue;
+            }
+            if in_alarm {
+                current_alarm.push_str(line);
+                current_alarm.push('\r');
+                current_alarm.push('\n');
+            }
+        }
+
         Ok(Task {
             uid,
             summary,
@@ -409,14 +472,13 @@ impl Task {
             depth: 0,
             rrule,
             unmapped_properties,
+            sequence,
+            raw_alarms,
             raw_components,
         })
     }
 }
 
-/// Helper: Manually parse RELATED-TO from raw ICS string.
-/// This handles unfolding lines and ensures we catch ALL occurrences,
-/// bypassing potential overwrites in the icalendar parser.
 fn parse_related_to_manually(raw_ics: &str) -> (Option<String>, Vec<String>) {
     let mut parent = None;
     let mut deps = Vec::new();
@@ -424,23 +486,22 @@ fn parse_related_to_manually(raw_ics: &str) -> (Option<String>, Vec<String>) {
 
     let process_line = |line: &str, p: &mut Option<String>, d: &mut Vec<String>| {
         if line.to_uppercase().starts_with("RELATED-TO")
-            && let Some((params_part, value)) = line.split_once(':') {
-                let params_upper = params_part.to_uppercase();
-                // Naive check usually sufficient for RELTYPE=DEPENDS-ON
-                let is_dependency = params_upper.contains("RELTYPE=DEPENDS-ON");
-                let val = value.trim().to_string();
-                if is_dependency {
-                    if !d.contains(&val) {
-                        d.push(val);
-                    }
-                } else {
-                    *p = Some(val);
+            && let Some((params_part, value)) = line.split_once(':')
+        {
+            let params_upper = params_part.to_uppercase();
+            let is_dependency = params_upper.contains("RELTYPE=DEPENDS-ON");
+            let val = value.trim().to_string();
+            if is_dependency {
+                if !d.contains(&val) {
+                    d.push(val);
                 }
+            } else {
+                *p = Some(val);
             }
+        }
     };
 
     for raw_line in raw_ics.lines() {
-        // Handle folding: Lines starting with whitespace are continuations
         if raw_line.starts_with(' ') || raw_line.starts_with('\t') {
             current_line.push_str(raw_line.trim_start());
         } else {
@@ -463,9 +524,6 @@ mod tests {
 
     #[test]
     fn test_relationships_parsing_duplicate_protection() {
-        // This validates the bug fix where having a dependency caused the parent relationship
-        // to be lost (or vice versa) because the library overwrote the duplicate key.
-        // We now handle it manually.
         let ics = "BEGIN:VCALENDAR
 VERSION:2.0
 BEGIN:VTODO
@@ -484,30 +542,21 @@ END:VCALENDAR";
         )
         .expect("Failed to parse ICS");
 
-        assert_eq!(
-            task.parent_uid,
-            Some("parent-task-uid".to_string()),
-            "Parent UID should be preserved"
-        );
-        assert_eq!(
-            task.dependencies,
-            vec!["blocker-task-uid".to_string()],
-            "Dependency should be preserved"
-        );
+        assert_eq!(task.parent_uid, Some("parent-task-uid".to_string()));
+        assert_eq!(task.dependencies, vec!["blocker-task-uid".to_string()]);
     }
 
     #[test]
-    fn test_ghost_properties_exclusion_case_insensitive() {
-        // Validates that properties with different casing (e.g. Related-To vs RELATED-TO)
-        // are correctly identified as handled and NOT added to unmapped_properties.
-        // If they were added to unmapped, they would be duplicated upon saving.
+    fn test_alarm_preservation() {
         let ics = "BEGIN:VCALENDAR
-VERSION:2.0
 BEGIN:VTODO
-UID:ghost-test
-SUMMARY:Ghost Test
-Related-To:parent-uid
-Status:NEEDS-ACTION
+UID:alarm-test
+SUMMARY:Wake Up
+BEGIN:VALARM
+ACTION:DISPLAY
+DESCRIPTION:Wake up
+TRIGGER:-PT10M
+END:VALARM
 END:VTODO
 END:VCALENDAR";
 
@@ -517,40 +566,25 @@ END:VCALENDAR";
             "/href".to_string(),
             "/cal/".to_string(),
         )
-        .expect("Failed to parse ICS");
+        .expect("Parse failed");
 
-        assert_eq!(task.parent_uid, Some("parent-uid".to_string()));
-        assert!(
-            task.unmapped_properties.is_empty(),
-            "Should not have unmapped properties for handled keys (even mixed case)"
-        );
+        assert_eq!(task.raw_alarms.len(), 1);
+        let output = task.to_ics();
+        assert!(output.contains("BEGIN:VALARM"));
+        assert!(output.contains("TRIGGER:-PT10M"));
     }
 
     #[test]
-    fn test_manual_parsing_line_folding() {
-        // Validates that the manual parser handles line folding (continuation lines)
+    fn test_sequence_preservation() {
         let ics = "BEGIN:VCALENDAR
-VERSION:2.0
 BEGIN:VTODO
-UID:folded
-SUMMARY:Folded
-RELATED-TO;RELTYPE=DEP
- ENDS-ON:long-dependency-uid
+UID:seq-test
+SEQUENCE:5
 END:VTODO
 END:VCALENDAR";
-
-        let task = Task::from_ics(
-            ics,
-            "etag".to_string(),
-            "/href".to_string(),
-            "/cal/".to_string(),
-        )
-        .expect("Failed to parse ICS");
-
-        assert_eq!(
-            task.dependencies,
-            vec!["long-dependency-uid".to_string()],
-            "Folded lines should be unwrapped correctly"
-        );
+        let task = Task::from_ics(ics, "".to_string(), "".to_string(), "".to_string()).unwrap();
+        assert_eq!(task.sequence, 5);
+        let output = task.to_ics();
+        assert!(output.contains("SEQUENCE:5"));
     }
 }

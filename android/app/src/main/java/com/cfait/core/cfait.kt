@@ -665,6 +665,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Short
     external fun uniffi_cfait_checksum_method_cfaitmobile_load_from_cache(
     ): Short
+    external fun uniffi_cfait_checksum_method_cfaitmobile_migrate_local_to(
+    ): Short
     external fun uniffi_cfait_checksum_method_cfaitmobile_move_task(
     ): Short
     external fun uniffi_cfait_checksum_method_cfaitmobile_remove_alias(
@@ -719,8 +721,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_cfait_fn_constructor_cfaitmobile_new(`androidFilesDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
-    external fun uniffi_cfait_fn_method_cfaitmobile_add_alias(`ptr`: Long,`key`: RustBuffer.ByValue,`tags`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
+    external fun uniffi_cfait_fn_method_cfaitmobile_add_alias(`ptr`: Long,`key`: RustBuffer.ByValue,`tags`: RustBuffer.ByValue,
+    ): Long
     external fun uniffi_cfait_fn_method_cfaitmobile_add_dependency(`ptr`: Long,`taskUid`: RustBuffer.ByValue,`blockerUid`: RustBuffer.ByValue,
     ): Long
     external fun uniffi_cfait_fn_method_cfaitmobile_add_task_smart(`ptr`: Long,`input`: RustBuffer.ByValue,
@@ -743,6 +745,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_cfait_fn_method_cfaitmobile_load_from_cache(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_cfait_fn_method_cfaitmobile_migrate_local_to(`ptr`: Long,`targetCalendarHref`: RustBuffer.ByValue,
+    ): Long
     external fun uniffi_cfait_fn_method_cfaitmobile_move_task(`ptr`: Long,`uid`: RustBuffer.ByValue,`newCalHref`: RustBuffer.ByValue,
     ): Long
     external fun uniffi_cfait_fn_method_cfaitmobile_remove_alias(`ptr`: Long,`key`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -890,7 +894,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_alias() != 28622.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_alias() != 47148.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_dependency() != 56080.toShort()) {
@@ -924,6 +928,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_load_from_cache() != 57452.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_migrate_local_to() != 62773.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_move_task() != 45551.toShort()) {
@@ -1416,7 +1423,7 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
 //
 public interface CfaitMobileInterface {
     
-    fun `addAlias`(`key`: kotlin.String, `tags`: List<kotlin.String>)
+    suspend fun `addAlias`(`key`: kotlin.String, `tags`: List<kotlin.String>)
     
     suspend fun `addDependency`(`taskUid`: kotlin.String, `blockerUid`: kotlin.String)
     
@@ -1439,6 +1446,8 @@ public interface CfaitMobileInterface {
     fun `isolateCalendar`(`href`: kotlin.String)
     
     fun `loadFromCache`()
+    
+    suspend fun `migrateLocalTo`(`targetCalendarHref`: kotlin.String): kotlin.String
     
     suspend fun `moveTask`(`uid`: kotlin.String, `newCalHref`: kotlin.String)
     
@@ -1576,17 +1585,26 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
     }
 
     
-    @Throws(MobileException::class)override fun `addAlias`(`key`: kotlin.String, `tags`: List<kotlin.String>)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(MobileException) { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_add_alias(
-        it,
-        FfiConverterString.lower(`key`),FfiConverterSequenceString.lower(`tags`),_status)
-}
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `addAlias`(`key`: kotlin.String, `tags`: List<kotlin.String>) {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_add_alias(
+                uniffiHandle,
+                FfiConverterString.lower(`key`),FfiConverterSequenceString.lower(`tags`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        
+        // Error FFI converter
+        MobileException.ErrorHandler,
+    )
     }
-    
-    
 
     
     @Throws(MobileException::class)
@@ -1787,6 +1805,27 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
     }
     
     
+
+    
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `migrateLocalTo`(`targetCalendarHref`: kotlin.String) : kotlin.String {
+        return uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_migrate_local_to(
+                uniffiHandle,
+                FfiConverterString.lower(`targetCalendarHref`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+        // lift function
+        { FfiConverterString.lift(it) },
+        // Error FFI converter
+        MobileException.ErrorHandler,
+    )
+    }
 
     
     @Throws(MobileException::class)

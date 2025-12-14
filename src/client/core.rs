@@ -42,13 +42,12 @@ type HttpsClient = AddAuthorization<
 
 fn strip_host(href: &str) -> String {
     if let Ok(uri) = href.parse::<Uri>()
-        && (uri.scheme().is_some() || uri.authority().is_some())
-    {
-        return uri
-            .path_and_query()
-            .map(|pq| pq.as_str().to_string())
-            .unwrap_or_else(|| uri.path().to_string());
-    }
+        && (uri.scheme().is_some() || uri.authority().is_some()) {
+            return uri
+                .path_and_query()
+                .map(|pq| pq.as_str().to_string())
+                .unwrap_or_else(|| uri.path().to_string());
+        }
     href.to_string()
 }
 
@@ -91,7 +90,7 @@ impl RustyClient {
             {
                 tls_config_builder
                     .with_platform_verifier()
-                    .map_err(|e| format!("Failed to init platform verifier: {}", e))? // Handle the Result
+                    .map_err(|e| format!("Failed to init platform verifier: {}", e))?
                     .with_no_client_auth()
             }
         };
@@ -117,18 +116,16 @@ impl RustyClient {
         if let Some(client) = &self.client {
             let base_path = client.base_url().path().to_string();
             if let Ok(response) = client.request(ListResources::new(&base_path)).await
-                && response.resources.iter().any(|r| r.href.ends_with(".ics"))
-            {
-                return Ok(base_path);
-            }
+                && response.resources.iter().any(|r| r.href.ends_with(".ics")) {
+                    return Ok(base_path);
+                }
             if let Ok(Some(principal)) = client.find_current_user_principal().await
                 && let Ok(response) = client.request(FindCalendarHomeSet::new(&principal)).await
-                && let Some(home_url) = response.home_sets.first()
-                && let Ok(cals_resp) = client.request(FindCalendars::new(home_url)).await
-                && let Some(first) = cals_resp.calendars.first()
-            {
-                return Ok(first.href.clone());
-            }
+                    && let Some(home_url) = response.home_sets.first()
+                        && let Ok(cals_resp) = client.request(FindCalendars::new(home_url)).await
+                            && let Some(first) = cals_resp.calendars.first() {
+                                return Ok(first.href.clone());
+                            }
             Ok(base_path)
         } else {
             Err("Offline".to_string())
@@ -178,16 +175,14 @@ impl RustyClient {
             && let Some(found) = calendars
                 .iter()
                 .find(|c| c.name == *def_cal || c.href == *def_cal)
-        {
-            active_href = Some(found.href.clone());
-        }
+            {
+                active_href = Some(found.href.clone());
+            }
 
-        if active_href.is_none()
-            && warning.is_none()
-            && let Ok(href) = client.discover_calendar().await
-        {
-            active_href = Some(href);
-        }
+        if active_href.is_none() && warning.is_none()
+            && let Ok(href) = client.discover_calendar().await {
+                active_href = Some(href);
+            }
 
         let tasks = if warning.is_none() {
             if let Some(ref h) = active_href {
@@ -196,7 +191,10 @@ impl RustyClient {
                 vec![]
             }
         } else if let Some(ref h) = active_href {
-            Cache::load(h).map(|res| res.0).unwrap_or_default()
+            let (mut t, _) = Cache::load(h).unwrap_or((vec![], None));
+            // Apply journal to offline cache load
+            apply_journal_to_tasks(&mut t, h);
+            t
         } else {
             vec![]
         };
@@ -233,7 +231,6 @@ impl RustyClient {
                     .and_then(|r| r.value)
                     .unwrap_or_else(|| col.href.clone());
 
-                // Fetch Color
                 let color = client
                     .request(GetProperty::new(&col.href, &APPLE_COLOR))
                     .await
@@ -243,7 +240,7 @@ impl RustyClient {
                 calendars.push(CalendarListEntry {
                     name,
                     href: col.href,
-                    color, // Store it
+                    color,
                 });
             }
             Ok(calendars)
@@ -259,10 +256,12 @@ impl RustyClient {
         calendar_href: &str,
     ) -> Result<Vec<Task>, String> {
         if calendar_href == LOCAL_CALENDAR_HREF {
-            return LocalStorage::load().map_err(|e| e.to_string());
+            let mut tasks = LocalStorage::load().map_err(|e| e.to_string())?;
+            apply_journal_to_tasks(&mut tasks, calendar_href);
+            return Ok(tasks);
         }
 
-        let (cached_tasks, cached_token) = Cache::load(calendar_href).unwrap_or((vec![], None));
+        let (mut cached_tasks, cached_token) = Cache::load(calendar_href).unwrap_or((vec![], None));
 
         if let Some(client) = &self.client {
             let path_href = strip_host(calendar_href);
@@ -270,25 +269,22 @@ impl RustyClient {
             let remote_token = if let Ok(resp) = client
                 .request(GetProperty::new(&path_href, &GET_CTAG))
                 .await
-                && let Some(val) = resp.value
             {
-                Some(val)
+                resp.value
             } else if let Ok(resp) = client
                 .request(GetProperty::new(&path_href, &names::SYNC_TOKEN))
                 .await
-                && let Some(val) = resp.value
             {
-                Some(val)
+                resp.value
             } else {
                 None
             };
 
-            if let Some(r_tok) = &remote_token
-                && let Some(c_tok) = &cached_token
-                && r_tok == c_tok
-            {
-                return Ok(cached_tasks);
-            }
+            if let (Some(r_tok), Some(c_tok)) = (&remote_token, &cached_token)
+                && r_tok == c_tok {
+                    apply_journal_to_tasks(&mut cached_tasks, calendar_href);
+                    return Ok(cached_tasks);
+                }
 
             let list_resp = client
                 .request(ListResources::new(&path_href))
@@ -312,11 +308,12 @@ impl RustyClient {
                 let remote_etag = resource.etag;
 
                 if let Some(local_task) = cache_map.remove(&resource.href) {
-                    if let Some(r_etag) = &remote_etag
-                        && !r_etag.is_empty()
-                        && *r_etag == local_task.etag
-                    {
-                        final_tasks.push(local_task);
+                    if let Some(r_etag) = &remote_etag {
+                        if !r_etag.is_empty() && *r_etag == local_task.etag {
+                            final_tasks.push(local_task);
+                        } else {
+                            to_fetch.push(strip_host(&resource.href));
+                        }
                     } else {
                         to_fetch.push(strip_host(&resource.href));
                     }
@@ -326,6 +323,7 @@ impl RustyClient {
             }
 
             for (href, task) in cache_map {
+                // Keep local tasks that haven't synced yet (empty etag/href)
                 if !server_hrefs.contains(&href) && (task.etag.is_empty() || task.href.is_empty()) {
                     final_tasks.push(task);
                 }
@@ -344,17 +342,18 @@ impl RustyClient {
                             content.etag,
                             item.href,
                             calendar_href.to_string(),
-                        )
-                    {
-                        final_tasks.push(task);
-                    }
+                        ) {
+                            final_tasks.push(task);
+                        }
                 }
             }
 
+            apply_journal_to_tasks(&mut final_tasks, calendar_href);
             let _ = Cache::save(calendar_href, &final_tasks, remote_token);
             Ok(final_tasks)
         } else {
-            Err("Offline".to_string())
+            apply_journal_to_tasks(&mut cached_tasks, calendar_href);
+            Ok(cached_tasks)
         }
     }
 
@@ -416,6 +415,8 @@ impl RustyClient {
     }
 
     pub async fn update_task(&self, task: &mut Task) -> Result<Vec<String>, String> {
+        task.sequence += 1;
+
         if task.calendar_href == LOCAL_CALENDAR_HREF {
             let mut all = LocalStorage::load().map_err(|e| e.to_string())?;
             if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
@@ -521,7 +522,6 @@ impl RustyClient {
 
     // --- JOURNAL SYNC ---
 
-    // NEW HELPER: Fetch ETag explicitly if missing in PUT response
     async fn fetch_etag(&self, path: &str) -> Option<String> {
         if let Some(client) = &self.client
             && let Ok(resp) = client
@@ -672,18 +672,26 @@ impl RustyClient {
                             format!("{}/{}", new_cal, filename)
                         };
                         new_href_to_propagate = Some((task.href.clone(), new_href.clone()));
-
-                        // Mark for refresh because MOVE does not return new ETag
                         path_for_refresh = Some(strip_host(&new_href));
                         Ok(())
                     }
-                    Err(e) => Err(e),
+                    Err(e) => {
+                        // FIX: Treat 404/403 as success (it's gone already)
+                        if e.contains("404") || e.contains("NotFound") || e.contains("403") {
+                            warnings.push(format!(
+                                "Move source missing for '{}', assuming success.",
+                                task.summary
+                            ));
+                            Ok(())
+                        } else {
+                            Err(e)
+                        }
+                    }
                 },
             };
 
             match result {
                 Ok(_) => {
-                    // --- FIX: Fetch ETag if needed ---
                     if new_etag_to_propagate.is_none()
                         && let Some(path) = path_for_refresh
                             && let Some(fetched) = self.fetch_etag(&path).await {
@@ -755,8 +763,23 @@ impl RustyClient {
                         return Err(e.to_string());
                     }
                 }
-                Err(e) => {
-                    return Err(e);
+                Err(msg) => {
+                    // FIX: Poison Pill Detection
+                    // Swallow 400/413 errors to unblock queue
+                    if msg.contains("400")
+                        || msg.contains("403")
+                        || msg.contains("413")
+                        || msg.contains("415")
+                    {
+                        warnings.push(format!("Fatal error on action: {}. Dropping.", msg));
+                        let _ = Journal::modify(|queue| {
+                            if !queue.is_empty() {
+                                queue.remove(0);
+                            }
+                        });
+                        continue;
+                    }
+                    return Err(msg);
                 }
             }
         }
@@ -795,15 +818,23 @@ impl RustyClient {
             .webdav_client
             .relative_uri(&source_path)
             .map_err(|e| format!("Invalid source URI: {}", e))?;
+
+        // FIX: Construct Absolute Destination URI
+        let base = client.webdav_client.base_url();
+        let scheme = base.scheme_str().unwrap_or("https");
+        let authority = base.authority().map(|a| a.as_str()).unwrap_or("");
         let dest_path = strip_host(&destination);
-        let dest_uri = client
-            .webdav_client
-            .relative_uri(&dest_path)
-            .map_err(|e| format!("Invalid dest URI: {}", e))?;
+        let clean_dest_path = if dest_path.starts_with('/') {
+            dest_path
+        } else {
+            format!("/{}", dest_path)
+        };
+        let absolute_destination = format!("{}://{}{}", scheme, authority, clean_dest_path);
+
         let req = Request::builder()
             .method("MOVE")
             .uri(source_uri)
-            .header("Destination", dest_uri.to_string())
+            .header("Destination", absolute_destination)
             .header("Overwrite", "F")
             .body(String::new())
             .map_err(|e| e.to_string())?;
@@ -818,6 +849,50 @@ impl RustyClient {
             Err(format!("MOVE failed: {}", parts.status))
         }
     }
+}
+
+// FIX: New apply_journal_to_tasks helper
+fn apply_journal_to_tasks(tasks: &mut Vec<Task>, calendar_href: &str) {
+    let journal = Journal::load();
+    if journal.is_empty() {
+        return;
+    }
+
+    let mut task_map: HashMap<String, Task> = tasks.drain(..).map(|t| (t.uid.clone(), t)).collect();
+
+    for action in journal.queue {
+        match action {
+            Action::Create(t) => {
+                if t.calendar_href == calendar_href {
+                    task_map.insert(t.uid.clone(), t);
+                }
+            }
+            Action::Update(t) => {
+                if t.calendar_href == calendar_href {
+                    if let Some(existing) = task_map.get_mut(&t.uid) {
+                        *existing = t;
+                    } else {
+                        task_map.insert(t.uid.clone(), t);
+                    }
+                }
+            }
+            Action::Delete(t) => {
+                if t.calendar_href == calendar_href {
+                    task_map.remove(&t.uid);
+                }
+            }
+            Action::Move(t, new_href) => {
+                if t.calendar_href == calendar_href {
+                    task_map.remove(&t.uid);
+                } else if new_href == calendar_href {
+                    let mut moved_task = t;
+                    moved_task.calendar_href = new_href;
+                    task_map.insert(moved_task.uid.clone(), moved_task);
+                }
+            }
+        }
+    }
+    *tasks = task_map.into_values().collect();
 }
 
 fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
@@ -843,11 +918,40 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
     merge_field!(dtstart);
     merge_field!(estimated_duration);
     merge_field!(rrule);
-    merge_field!(categories);
-    merge_field!(dependencies);
+
+    // FIX: Union Merge Categories
+    if local.categories != base.categories {
+        let mut new_cats = server.categories.clone();
+        for cat in &local.categories {
+            if !new_cats.contains(cat) {
+                new_cats.push(cat.clone());
+            }
+        }
+        new_cats.sort();
+        new_cats.dedup();
+        merged.categories = new_cats;
+    }
+
+    // FIX: Union Merge Unmapped Properties
+    if local.unmapped_properties != base.unmapped_properties {
+        for prop in &local.unmapped_properties {
+            if !merged.unmapped_properties.iter().any(|p| p.key == prop.key) {
+                merged.unmapped_properties.push(prop.clone());
+            }
+        }
+    }
+
     merge_field!(parent_uid);
-    merge_field!(unmapped_properties);
-    merge_field!(raw_components);
+    // Dependencies Union
+    if local.dependencies != base.dependencies {
+        let mut new_deps = server.dependencies.clone();
+        for dep in &local.dependencies {
+            if !new_deps.contains(dep) {
+                new_deps.push(dep.clone());
+            }
+        }
+        merged.dependencies = new_deps;
+    }
 
     Some(merged)
 }

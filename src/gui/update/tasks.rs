@@ -72,15 +72,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::DeleteTask(index) => {
-            if let Some(view_task) = app.tasks.get(index)
-                && let Some(deleted) = app.store.delete_task(&view_task.uid)
-            {
-                refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_delete_wrapper(client.clone(), deleted),
-                        Message::DeleteComplete,
-                    );
+            if let Some(view_task) = app.tasks.get(index) {
+                // Destructure the tuple (task, origin_href)
+                if let Some((deleted_task, _)) = app.store.delete_task(&view_task.uid) {
+                    refresh_filtered_tasks(app);
+                    if let Some(client) = &app.client {
+                        return Task::perform(
+                            async_delete_wrapper(client.clone(), deleted_task),
+                            Message::DeleteComplete,
+                        );
+                    }
                 }
             }
             Task::none()
@@ -128,17 +129,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // Clone first to avoid borrow conflicts when clearing later
             let parent_opt = app.yanked_uid.clone();
 
-            if let Some(parent_uid) = parent_opt
-                && let Some(updated) = app.store.set_parent(&target_uid, Some(parent_uid.clone()))
-            {
-                app.selected_uid = Some(target_uid);
-                app.yanked_uid = None; // Clear yank state
-                refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
-                    );
+            if let Some(parent_uid) = parent_opt {
+                if let Some(updated) = app.store.set_parent(&target_uid, Some(parent_uid.clone())) {
+                    app.selected_uid = Some(target_uid);
+                    app.yanked_uid = None; // Clear yank state
+                    refresh_filtered_tasks(app);
+                    if let Some(client) = &app.client {
+                        return Task::perform(
+                            async_update_wrapper(client.clone(), updated),
+                            Message::SyncSaved,
+                        );
+                    }
                 }
             }
             Task::none()
@@ -173,17 +174,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // Clone first to avoid borrow conflicts
             let blocker_opt = app.yanked_uid.clone();
 
-            if let Some(blocker_uid) = blocker_opt
-                && let Some(updated) = app.store.add_dependency(&target_uid, blocker_uid.clone())
-            {
-                app.selected_uid = Some(target_uid);
-                app.yanked_uid = None; // Clear yank state
-                refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
-                    );
+            if let Some(blocker_uid) = blocker_opt {
+                if let Some(updated) = app.store.add_dependency(&target_uid, blocker_uid.clone()) {
+                    app.selected_uid = Some(target_uid);
+                    app.yanked_uid = None; // Clear yank state
+                    refresh_filtered_tasks(app);
+                    if let Some(client) = &app.client {
+                        return Task::perform(
+                            async_update_wrapper(client.clone(), updated),
+                            Message::SyncSaved,
+                        );
+                    }
                 }
             }
             Task::none()

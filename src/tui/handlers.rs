@@ -23,12 +23,12 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
                     .calendars
                     .iter()
                     .find(|c| c.name == *def || c.href == *def)
-            {
-                if state.hidden_calendars.contains(&found.href) {
-                    state.hidden_calendars.remove(&found.href);
+                {
+                    if state.hidden_calendars.contains(&found.href) {
+                        state.hidden_calendars.remove(&found.href);
+                    }
+                    state.active_cal_href = Some(found.href.clone());
                 }
-                state.active_cal_href = Some(found.href.clone());
-            }
 
             if state.active_cal_href.is_none() {
                 state.active_cal_href = Some(LOCAL_CALENDAR_HREF.to_string());
@@ -155,15 +155,14 @@ pub async fn handle_key_event(
                     .and_then(|idx| state.tasks.get(idx).map(|t| t.uid.clone()));
 
                 if let Some(uid) = target_uid
-                    && let Some((t, _)) = state.store.get_task_mut(&uid)
-                {
-                    t.apply_smart_input(&clean_input, &state.tag_aliases);
-                    let clone = t.clone();
-                    state.refresh_filtered_view();
-                    state.mode = InputMode::Normal;
-                    state.reset_input();
-                    return Some(Action::UpdateTask(clone));
-                }
+                    && let Some((t, _)) = state.store.get_task_mut(&uid) {
+                        t.apply_smart_input(&clean_input, &state.tag_aliases);
+                        let clone = t.clone();
+                        state.refresh_filtered_view();
+                        state.mode = InputMode::Normal;
+                        state.reset_input();
+                        return Some(Action::UpdateTask(clone));
+                    }
                 state.mode = InputMode::Normal;
             }
             KeyCode::Esc => {
@@ -190,15 +189,14 @@ pub async fn handle_key_event(
                         .and_then(|idx| state.tasks.get(idx).map(|t| t.uid.clone()));
 
                     if let Some(uid) = target_uid
-                        && let Some((t, _)) = state.store.get_task_mut(&uid)
-                    {
-                        t.description = state.input_buffer.clone();
-                        let clone = t.clone();
-                        state.refresh_filtered_view();
-                        state.mode = InputMode::Normal;
-                        state.reset_input();
-                        return Some(Action::UpdateTask(clone));
-                    }
+                        && let Some((t, _)) = state.store.get_task_mut(&uid) {
+                            t.description = state.input_buffer.clone();
+                            let clone = t.clone();
+                            state.refresh_filtered_view();
+                            state.mode = InputMode::Normal;
+                            state.reset_input();
+                            return Some(Action::UpdateTask(clone));
+                        }
                     state.mode = InputMode::Normal;
                     state.reset_input();
                 }
@@ -213,6 +211,47 @@ pub async fn handle_key_event(
             KeyCode::Right => state.move_cursor_right(),
             _ => {}
         },
+        InputMode::Searching => match key.code {
+            KeyCode::Enter => {
+                // Check for Tag Jump syntax (#tag without spaces)
+                if state.input_buffer.starts_with('#') && !state.input_buffer.contains(' ') {
+                    let tag = state.input_buffer.trim_start_matches('#').to_string();
+                    state.sidebar_mode = SidebarMode::Categories;
+                    state.selected_categories.clear();
+                    state.selected_categories.insert(tag);
+                    state.reset_input();
+                }
+
+                // Commit search: Go to Normal mode to interact with results
+                // bug? this goes back to full list
+                state.mode = InputMode::Normal;
+                state.refresh_filtered_view();
+            }
+            KeyCode::Esc => {
+                // Cancel search: Clear input and go to Normal
+                state.mode = InputMode::Normal;
+                state.reset_input();
+                state.refresh_filtered_view();
+            }
+            KeyCode::Char(c) => {
+                state.enter_char(c);
+                state.refresh_filtered_view();
+            }
+            KeyCode::Backspace => {
+                state.delete_char();
+                state.refresh_filtered_view();
+            }
+            KeyCode::Left => state.move_cursor_left(),
+            KeyCode::Right => state.move_cursor_right(),
+
+            // Allow navigation while searching
+            KeyCode::Down => state.next(),
+            KeyCode::Up => state.previous(),
+            KeyCode::PageDown => state.jump_forward(10),
+            KeyCode::PageUp => state.jump_backward(10),
+
+            _ => {}
+        },
         InputMode::Normal => match key.code {
             KeyCode::Char('?') => state.show_full_help = !state.show_full_help,
             KeyCode::Char('q') => return Some(Action::Quit),
@@ -221,11 +260,10 @@ pub async fn handle_key_event(
             KeyCode::Char(' ') => {
                 if state.active_focus == Focus::Main {
                     if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                        && let Some(updated) = state.store.toggle_task(&uid)
-                    {
-                        state.refresh_filtered_view();
-                        return Some(Action::ToggleTask(updated));
-                    }
+                        && let Some(updated) = state.store.toggle_task(&uid) {
+                            state.refresh_filtered_view();
+                            return Some(Action::ToggleTask(updated));
+                        }
                 } else if state.active_focus == Focus::Sidebar
                     && state.sidebar_mode == SidebarMode::Calendars
                 {
@@ -237,63 +275,56 @@ pub async fn handle_key_event(
                     };
 
                     if let Some(href) = target_cal
-                        && state.active_cal_href.as_ref() != Some(&href)
-                    {
-                        if state.hidden_calendars.contains(&href) {
-                            state.hidden_calendars.remove(&href);
-                            let _ = action_tx.send(Action::ToggleCalendarVisibility(href)).await;
-                        } else {
-                            state.hidden_calendars.insert(href);
+                        && state.active_cal_href.as_ref() != Some(&href) {
+                            if state.hidden_calendars.contains(&href) {
+                                state.hidden_calendars.remove(&href);
+                                let _ =
+                                    action_tx.send(Action::ToggleCalendarVisibility(href)).await;
+                            } else {
+                                state.hidden_calendars.insert(href);
+                            }
+                            state.refresh_filtered_view();
                         }
-                        state.refresh_filtered_view();
-                    }
                 }
             }
             KeyCode::Char('s') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some(updated) = state.store.set_status(&uid, TaskStatus::InProcess)
-                {
-                    state.refresh_filtered_view();
-                    return Some(Action::MarkInProcess(updated));
-                }
+                    && let Some(updated) = state.store.set_status(&uid, TaskStatus::InProcess) {
+                        state.refresh_filtered_view();
+                        return Some(Action::MarkInProcess(updated));
+                    }
             }
             KeyCode::Char('x') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some(updated) = state.store.set_status(&uid, TaskStatus::Cancelled)
-                {
-                    state.refresh_filtered_view();
-                    return Some(Action::MarkCancelled(updated));
-                }
+                    && let Some(updated) = state.store.set_status(&uid, TaskStatus::Cancelled) {
+                        state.refresh_filtered_view();
+                        return Some(Action::MarkCancelled(updated));
+                    }
             }
             KeyCode::Char('+') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some(updated) = state.store.change_priority(&uid, 1)
-                {
-                    state.refresh_filtered_view();
-                    return Some(Action::UpdateTask(updated));
-                }
+                    && let Some(updated) = state.store.change_priority(&uid, 1) {
+                        state.refresh_filtered_view();
+                        return Some(Action::UpdateTask(updated));
+                    }
             }
             KeyCode::Char('-') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some(updated) = state.store.change_priority(&uid, -1)
-                {
-                    state.refresh_filtered_view();
-                    return Some(Action::UpdateTask(updated));
-                }
+                    && let Some(updated) = state.store.change_priority(&uid, -1) {
+                        state.refresh_filtered_view();
+                        return Some(Action::UpdateTask(updated));
+                    }
             }
             KeyCode::Char('d') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some(deleted) = state.store.delete_task(&uid)
-                {
-                    state.refresh_filtered_view();
-                    return Some(Action::DeleteTask(deleted));
-                }
+                    && let Some((deleted, _)) = state.store.delete_task(&uid) {
+                        state.refresh_filtered_view();
+                        return Some(Action::DeleteTask(deleted));
+                    }
             }
             KeyCode::Char('c') => {
-                let data = if let Some(parent_uid) = &state.yanked_uid
-                    && let Some(view_task) = state.get_selected_task()
-                {
-                    Some((view_task.uid.clone(), parent_uid.clone()))
+                let data = if let Some(parent_uid) = &state.yanked_uid {
+                    state.get_selected_task().map(|view_task| (view_task.uid.clone(), parent_uid.clone()))
                 } else {
                     None
                 };
@@ -312,24 +343,23 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('C') => {
                 if state.active_focus == Focus::Main
-                    && let Some(task) = state.get_selected_task()
-                {
-                    let uid = task.uid.clone();
-                    let summary = task.summary.clone();
+                    && let Some(task) = state.get_selected_task() {
+                        let uid = task.uid.clone();
+                        let summary = task.summary.clone();
 
-                    // --- Auto-fill tags from parent ---
-                    let mut initial_input = String::new();
-                    for cat in &task.categories {
-                        initial_input.push_str(&format!("#{} ", cat));
+                        // --- Auto-fill tags from parent ---
+                        let mut initial_input = String::new();
+                        for cat in &task.categories {
+                            initial_input.push_str(&format!("#{} ", cat));
+                        }
+
+                        state.input_buffer = initial_input;
+                        state.cursor_position = state.input_buffer.len();
+
+                        state.mode = InputMode::Creating;
+                        state.creating_child_of = Some(uid);
+                        state.message = format!("New Child of '{}'...", summary);
                     }
-
-                    state.input_buffer = initial_input;
-                    state.cursor_position = state.input_buffer.len();
-
-                    state.mode = InputMode::Creating;
-                    state.creating_child_of = Some(uid);
-                    state.message = format!("New Child of '{}'...", summary);
-                }
             }
             KeyCode::Char('y') => {
                 if let Some(t) = state.get_selected_task() {
@@ -340,10 +370,8 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('b') => {
-                let data = if let Some(yanked) = &state.yanked_uid
-                    && let Some(current) = state.get_selected_task()
-                {
-                    Some((current.uid.clone(), yanked.clone()))
+                let data = if let Some(yanked) = &state.yanked_uid {
+                    state.get_selected_task().map(|current| (current.uid.clone(), yanked.clone()))
                 } else {
                     None
                 };
@@ -362,28 +390,27 @@ pub async fn handle_key_event(
             KeyCode::Char('.') | KeyCode::Char('>') => {
                 if state.active_focus == Focus::Main
                     && let Some(idx) = state.list_state.selected()
-                    && idx > 0
-                    && idx < state.tasks.len()
-                {
-                    let parent_uid = state.tasks[idx - 1].uid.clone();
-                    let current_uid = state.tasks[idx].uid.clone();
-                    if let Some(updated) = state.store.set_parent(&current_uid, Some(parent_uid)) {
-                        state.refresh_filtered_view();
-                        return Some(Action::UpdateTask(updated));
-                    }
-                }
+                        && idx > 0 && idx < state.tasks.len() {
+                            let parent_uid = state.tasks[idx - 1].uid.clone();
+                            let current_uid = state.tasks[idx].uid.clone();
+                            if let Some(updated) =
+                                state.store.set_parent(&current_uid, Some(parent_uid))
+                            {
+                                state.refresh_filtered_view();
+                                return Some(Action::UpdateTask(updated));
+                            }
+                        }
             }
             KeyCode::Char(',') | KeyCode::Char('<') => {
                 if state.active_focus == Focus::Main
                     && let Some(view_task) = state.get_selected_task()
-                    && view_task.parent_uid.is_some()
-                {
-                    let uid = view_task.uid.clone();
-                    if let Some(updated) = state.store.set_parent(&uid, None) {
-                        state.refresh_filtered_view();
-                        return Some(Action::UpdateTask(updated));
-                    }
-                }
+                        && view_task.parent_uid.is_some() {
+                            let uid = view_task.uid.clone();
+                            if let Some(updated) = state.store.set_parent(&uid, None) {
+                                state.refresh_filtered_view();
+                                return Some(Action::UpdateTask(updated));
+                            }
+                        }
             }
             KeyCode::Char('X') => {
                 if state.active_cal_href.as_deref() == Some(LOCAL_CALENDAR_HREF) {
@@ -532,16 +559,15 @@ pub async fn handle_key_event(
                                 &state.hidden_calendars,
                             );
                             if let Some(idx) = state.cal_state.selected()
-                                && let Some((c, _)) = cats.get(idx)
-                            {
-                                let c_clone = c.clone();
-                                if state.selected_categories.contains(&c_clone) {
-                                    state.selected_categories.remove(&c_clone);
-                                } else {
-                                    state.selected_categories.insert(c_clone);
+                                && let Some((c, _)) = cats.get(idx) {
+                                    let c_clone = c.clone();
+                                    if state.selected_categories.contains(&c_clone) {
+                                        state.selected_categories.remove(&c_clone);
+                                    } else {
+                                        state.selected_categories.insert(c_clone);
+                                    }
+                                    state.refresh_filtered_view();
                                 }
-                                state.refresh_filtered_view();
-                            }
                         }
                     }
                 }
@@ -565,13 +591,12 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('E') => {
                 if state.active_focus == Focus::Main
-                    && let Some(t) = state.get_selected_task()
-                {
-                    state.input_buffer = t.description.clone();
-                    state.cursor_position = state.input_buffer.len();
-                    state.editing_index = state.list_state.selected();
-                    state.mode = InputMode::EditingDescription;
-                }
+                    && let Some(t) = state.get_selected_task() {
+                        state.input_buffer = t.description.clone();
+                        state.cursor_position = state.input_buffer.len();
+                        state.editing_index = state.list_state.selected();
+                        state.mode = InputMode::EditingDescription;
+                    }
             }
             _ => {}
         },
@@ -583,23 +608,23 @@ pub async fn handle_key_event(
             KeyCode::Down | KeyCode::Char('j') => state.next_move_target(),
             KeyCode::Up | KeyCode::Char('k') => state.previous_move_target(),
             KeyCode::Enter => {
-                let data = if let Some(task) = state.get_selected_task()
-                    && let Some(idx) = state.move_selection_state.selected()
-                    && let Some(target_cal) = state.move_targets.get(idx)
-                {
-                    Some((task.uid.clone(), target_cal.href.clone()))
+                let data = if let Some(task) = state.get_selected_task() {
+                    if let Some(idx) = state.move_selection_state.selected() {
+                        state.move_targets.get(idx).map(|target_cal| (task.uid.clone(), target_cal.href.clone()))
+                    } else {
+                        None
+                    }
                 } else {
                     None
                 };
 
                 if let Some((uid, target_href)) = data
-                    && let Some(updated) = state.store.move_task(&uid, target_href.clone())
-                {
-                    state.refresh_filtered_view();
-                    state.message = "Moving task...".to_string();
-                    state.mode = InputMode::Normal;
-                    return Some(Action::MoveTask(updated, target_href));
-                }
+                    && let Some(updated) = state.store.move_task(&uid, target_href.clone()) {
+                        state.refresh_filtered_view();
+                        state.message = "Moving task...".to_string();
+                        state.mode = InputMode::Normal;
+                        return Some(Action::MoveTask(updated, target_href));
+                    }
                 state.mode = InputMode::Normal;
             }
             _ => {}
@@ -613,16 +638,14 @@ pub async fn handle_key_event(
             KeyCode::Up | KeyCode::Char('k') => state.previous_export_target(),
             KeyCode::Enter => {
                 if let Some(idx) = state.export_selection_state.selected()
-                    && let Some(target) = state.export_targets.get(idx)
-                {
-                    let href = target.href.clone();
-                    state.mode = InputMode::Normal;
-                    return Some(Action::MigrateLocal(href));
-                }
+                    && let Some(target) = state.export_targets.get(idx) {
+                        let href = target.href.clone();
+                        state.mode = InputMode::Normal;
+                        return Some(Action::MigrateLocal(href));
+                    }
             }
             _ => {}
         },
-        _ => {}
     }
     None
 }
