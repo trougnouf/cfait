@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/ui/Shared.kt
+// File: ./android/app/src/main/java/com/cfait/ui/Shared.kt
 package com.cfait.ui
 
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +40,7 @@ object NfIcons {
     val UNLINK = get(0xf127)       // 
     val INFO = get(0xf129)          // 
     val UNSYNCED = get(0xf0c2)      //  (Cloud)
+    val EXPORT = get(0xeac3)        //  (Cloud Upload)
     
     // YANK ACTION ICONS
     val BLOCKED = get(0xf479)      // nf-oct-blocked

@@ -22,6 +22,7 @@
 - *(android)* Align UI styling with desktop (calendar colors, state backgrounds, priority text) and fix icon alignment
 - *(android)* Streamline task creation and editing workflow
 - *(android)* Add an arrow_right / isolate button next to each calendar
+- *(gui)* Refine task row layout for title and tags
 
 ### 🐛 Bug Fixes
 
@@ -36,6 +37,7 @@
 - *(client)* Prevent data loss by verifying journal queue head identity before removal
 - *(mobile)* Resolve lifecycle, timezone, and data safety issues
 - *(Android)* Fix build
+- *(core)* Resolve persistent ghost tasks by forcing sync on empty ETags
 
 ### 🚜 Refactor
 
@@ -47,10 +49,12 @@
 
 - Convert UI text and documentation from title case to normal case capitalization
 - *(android)* Modify header with active calendar info, compact tag list layout, and add sidebar footer logo
+- *(gui)* Highlight task on hover, display details on click
 
 ### 🧪 Testing
 
 - *(model)* Add unit tests for ICS relation parsing and case-insensitivity
+- *(sync)* Add sync safety and concurrency tests
 
 ### ⚙️ Miscellaneous Tasks
 

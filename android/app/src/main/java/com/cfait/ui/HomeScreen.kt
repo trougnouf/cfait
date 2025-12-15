@@ -1,6 +1,7 @@
-// File: android/app/src/main/java/com/cfait/ui/HomeScreen.kt
+// File: ./android/app/src/main/java/com/cfait/ui/HomeScreen.kt
 package com.cfait.ui
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -8,6 +9,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -17,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -40,7 +43,7 @@ fun HomeScreen(
     tags: List<MobileTag>,
     defaultCalHref: String?,
     isLoading: Boolean,
-    hasUnsynced: Boolean, // <-- ADDED THIS PARAMETER
+    hasUnsynced: Boolean,
     onGlobalRefresh: () -> Unit,
     onSettings: () -> Unit,
     onTaskClick: (String) -> Unit,
@@ -50,17 +53,24 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     var sidebarTab by remember { mutableIntStateOf(0) }
     
+    // List State for auto-scrolling
+    val listState = rememberLazyListState()
+    
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var filterTag by remember { mutableStateOf<String?>(null) }
     var isSearchActive by remember { mutableStateOf(false) }
     var newTaskText by remember { mutableStateOf("") }
     
+    // Export / Migration State
+    var showExportDialog by remember { mutableStateOf(false) }
+    
     // Yank State
     var yankedUid by remember { mutableStateOf<String?>(null) }
     val yankedTask = remember(tasks, yankedUid) { tasks.find { it.uid == yankedUid } }
     
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
 
     val calColorMap = remember(calendars) { 
@@ -71,14 +81,51 @@ fun HomeScreen(
         scope.launch { drawerState.close() }
     }
 
+    // Helper to fetch tasks and return them (synchronously wait for async result)
+    suspend fun fetchTasks(): List<MobileTask> {
+        return try { api.getViewTasks(filterTag, searchQuery) } catch (_: Exception) { emptyList() }
+    }
+
     fun updateTaskList() {
-        scope.launch { try { tasks = api.getViewTasks(filterTag, searchQuery) } catch (_: Exception) { } }
+        scope.launch { tasks = fetchTasks() }
     }
 
     LaunchedEffect(searchQuery, filterTag, isLoading, calendars, tags) { updateTaskList() }
 
     fun toggleTask(uid: String) = scope.launch { try { api.toggleTask(uid); updateTaskList(); onDataChanged() } catch (_: Exception){} }
-    fun addTask(txt: String) = scope.launch { try { api.addTaskSmart(txt); updateTaskList(); onDataChanged() } catch (_: Exception){} }
+    
+    fun addTask(txt: String) {
+        val text = txt.trim()
+        if (text.startsWith("#") && !text.contains(" ")) {
+            // Feature: Tag Jump
+            val tag = text.removePrefix("#")
+            filterTag = tag
+            sidebarTab = 1 // Switch sidebar to Tags
+            newTaskText = ""
+            scope.launch { 
+                tasks = fetchTasks() 
+            }
+        } else {
+            // Feature: Create & Scroll
+            scope.launch {
+                try {
+                    val newUid = api.addTaskSmart(text)
+                    newTaskText = ""
+                    onDataChanged() 
+                    
+                    // Fetch updated list
+                    val newTasks = fetchTasks()
+                    tasks = newTasks
+                    
+                    // Auto-scroll
+                    val index = newTasks.indexOfFirst { it.uid == newUid }
+                    if (index >= 0) {
+                        listState.animateScrollToItem(index)
+                    }
+                } catch (_: Exception){}
+            }
+        }
+    }
     
     fun onTaskAction(action: String, task: MobileTask) {
         scope.launch {
@@ -112,6 +159,42 @@ fun HomeScreen(
         }
     }
 
+    // --- MIGRATION DIALOG ---
+    val remoteCals = remember(calendars) { calendars.filter { !it.isLocal && !it.isDisabled } }
+    if (showExportDialog) {
+        AlertDialog(
+            onDismissRequest = { showExportDialog = false },
+            title = { Text("Export Local Tasks") },
+            text = {
+                Column {
+                    Text("Select a destination calendar:", fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    LazyColumn {
+                        items(remoteCals) { cal ->
+                            ListItem(
+                                headlineContent = { Text(cal.name) },
+                                leadingContent = { NfIcon(NfIcons.CALENDAR, 16.sp) },
+                                modifier = Modifier
+                                    .clickable {
+                                        scope.launch {
+                                            try {
+                                                val msg = api.migrateLocalTo(cal.href)
+                                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                                showExportDialog = false
+                                                onGlobalRefresh()
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showExportDialog = false }) { Text("Cancel") } }
+        )
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -126,11 +209,26 @@ fun HomeScreen(
                         contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
                         if (sidebarTab == 0) {
+                            // Feature: Show All Toggle
+                            item {
+                                TextButton(
+                                    onClick = { 
+                                        calendars.forEach { api.setCalendarVisibility(it.href, true) }
+                                        onDataChanged()
+                                        updateTaskList()
+                                    },
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+                                ) {
+                                    Text("Show All Calendars")
+                                }
+                                HorizontalDivider()
+                            }
+
                             items(calendars.filter { !it.isDisabled }) { cal ->
                                 val calColor = cal.color?.let { parseHexColor(it) } ?: Color.Gray
                                 val isDefault = cal.href == defaultCalHref
                                 val iconChar = if (isDefault) NfIcons.WRITE_TARGET else if (cal.isVisible) NfIcons.VISIBLE else NfIcons.HIDDEN
-                                val iconColor = if (isDefault) MaterialTheme.colorScheme.primary else if (cal.isVisible) calColor else Color.Gray
+                                val iconColor = if (isDefault || cal.isVisible) calColor else Color.Gray
 
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -145,7 +243,7 @@ fun HomeScreen(
                                             onDataChanged()
                                         },
                                         modifier = Modifier.weight(1f),
-                                        colors = ButtonDefaults.textButtonColors(contentColor = if (isDefault) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+                                        colors = ButtonDefaults.textButtonColors(contentColor = if (isDefault) calColor else MaterialTheme.colorScheme.onSurface)
                                     ) {
                                         Text(
                                             cal.name,
@@ -302,14 +400,13 @@ fun HomeScreen(
                             OutlinedTextField(
                                 value = newTaskText,
                                 onValueChange = { newTaskText = it },
-                                placeholder = { Text("!1 @tomorrow Buy milk") },
+                                placeholder = { Text("!1 @tomorrow Buy cat food") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
                                 keyboardActions = KeyboardActions(onSend = {
                                     if (newTaskText.isNotBlank()) {
                                         addTask(newTaskText)
-                                        newTaskText = ""
                                     }
                                 })
                             )
@@ -318,18 +415,40 @@ fun HomeScreen(
                 }
             }
         ) { padding ->
-            LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(bottom = 80.dp)) {
-                items(tasks, key = { it.uid }) { task ->
-                    val calColor = calColorMap[task.calendarHref] ?: Color.Gray
-                    TaskRow(
-                        task = task, 
-                        calColor = calColor, 
-                        isDark = isDark, 
-                        onToggle = { toggleTask(task.uid) }, 
-                        onAction = { act -> onTaskAction(act, task) }, 
-                        onClick = onTaskClick,
-                        yankedUid = yankedUid
-                    )
+            Column(Modifier.padding(padding).fillMaxSize()) {
+                
+                // Feature: Migration Tools
+                val activeIsLocal = calendars.find { it.href == defaultCalHref }?.isLocal == true
+                if (activeIsLocal && remoteCals.isNotEmpty()) {
+                    FilledTonalButton(
+                        onClick = { showExportDialog = true },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer, contentColor = MaterialTheme.colorScheme.onTertiaryContainer),
+                        contentPadding = PaddingValues(vertical = 8.dp)
+                    ) {
+                        NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Export Local Tasks to Server")
+                    }
+                }
+
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    state = listState,
+                    contentPadding = PaddingValues(bottom = 80.dp)
+                ) {
+                    items(tasks, key = { it.uid }) { task ->
+                        val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+                        TaskRow(
+                            task = task, 
+                            calColor = calColor, 
+                            isDark = isDark, 
+                            onToggle = { toggleTask(task.uid) }, 
+                            onAction = { act -> onTaskAction(act, task) }, 
+                            onClick = onTaskClick,
+                            yankedUid = yankedUid
+                        )
+                    }
                 }
             }
         }
