@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use super::tooltip_style;
-use iced::widget::{Space, button, column, container, row, scrollable, text, tooltip};
+use iced::widget::{Space, button, column, container, responsive, row, scrollable, text, tooltip};
 pub use iced::widget::{rich_text, span};
 use iced::{Border, Color, Element, Length, Theme};
 
@@ -118,133 +118,6 @@ pub fn view_task_row<'a>(
                 ..base
             },
         }
-    };
-
-    // --- Build Tags Logic ---
-    let build_tags = || -> Element<'a, Message> {
-        let mut tags_row: iced::widget::Row<'_, Message> = row![].spacing(3);
-
-        if is_blocked {
-            tags_row = tags_row.push(
-                container(text("[Blocked]").size(12).color(Color::WHITE))
-                    .style(|_| container::Style {
-                        background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
-                        border: iced::Border {
-                            radius: 4.0.into(),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    })
-                    .padding(3),
-            );
-        }
-
-        // --- FIXED: Consolidated hiding logic ---
-        // 1. Calculate tags to hide because they are inherited from the parent task.
-        let mut tags_to_hide: HashSet<String> = if show_indent && let Some(p_uid) = &task.parent_uid
-        {
-            let mut p_cats = HashSet::new();
-            if let Some(href) = app.store.index.get(p_uid)
-                && let Some(list) = app.store.calendars.get(href)
-                && let Some(p) = list.iter().find(|t| t.uid == *p_uid)
-            {
-                p_cats = p.categories.iter().cloned().collect();
-            }
-            p_cats
-        } else {
-            HashSet::new()
-        };
-
-        // 2. Add tags to hide because they are implied by an alias.
-        for cat in &task.categories {
-            let mut search = cat.as_str();
-            loop {
-                if let Some(targets) = app.tag_aliases.get(search) {
-                    for t in targets {
-                        tags_to_hide.insert(t.clone());
-                    }
-                }
-                if let Some(idx) = search.rfind(':') {
-                    search = &search[..idx];
-                } else {
-                    break;
-                }
-            }
-        }
-
-        for cat in &task.categories {
-            // Hide if parent has same tag OR if it is an expanded alias
-            if tags_to_hide.contains(cat) {
-                continue;
-            }
-            // --- END FIX ---
-
-            let (r, g, b) = color_utils::generate_color(cat);
-            let bg_color = Color::from_rgb(r, g, b);
-            let text_color = if color_utils::is_dark(r, g, b) {
-                Color::WHITE
-            } else {
-                Color::BLACK
-            };
-            tags_row = tags_row.push(
-                button(text(format!("#{}", cat)).size(12).color(text_color))
-                    .style(move |_theme, status| {
-                        let base = button::Style {
-                            background: Some(bg_color.into()),
-                            text_color,
-                            border: iced::Border {
-                                radius: 4.0.into(),
-                                ..Default::default()
-                            },
-                            ..button::Style::default()
-                        };
-                        match status {
-                            button::Status::Hovered | button::Status::Pressed => button::Style {
-                                border: iced::Border {
-                                    color: Color::BLACK.scale_alpha(0.2),
-                                    width: 1.0,
-                                    radius: 4.0.into(),
-                                },
-                                ..base
-                            },
-                            _ => base,
-                        }
-                    })
-                    .padding(3)
-                    .on_press(Message::JumpToTag(cat.clone())),
-            );
-        }
-        if let Some(mins) = task.estimated_duration {
-            let label = if mins >= 525600 {
-                format!("{}y", mins / 525600)
-            } else if mins >= 43200 {
-                format!("{}mo", mins / 43200)
-            } else if mins >= 10080 {
-                format!("{}w", mins / 10080)
-            } else if mins >= 1440 {
-                format!("{}d", mins / 1440)
-            } else if mins >= 60 {
-                format!("{}h", mins / 60)
-            } else {
-                format!("{}m", mins)
-            };
-            tags_row = tags_row.push(
-                container(text(label).size(10).color(Color::WHITE))
-                    .style(|_| container::Style {
-                        background: Some(Color::from_rgb(0.5, 0.5, 0.5).into()),
-                        border: iced::Border {
-                            radius: 4.0.into(),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    })
-                    .padding(3),
-            );
-        }
-        if task.rrule.is_some() {
-            tags_row = tags_row.push(container(icon::icon(icon::REPEAT).size(14)).padding(0));
-        }
-        tags_row.into()
     };
 
     let date_text: Element<'a, Message> = match task.due {
@@ -547,55 +420,200 @@ pub fn view_task_row<'a>(
         }
     });
 
-    let title_chars = task.summary.chars().count();
-    let est_tags_len = task.categories.len() * 4
-        + if task.estimated_duration.is_some() {
-            3
-        } else {
-            0
-        }
-        + if task.rrule.is_some() { 1 } else { 0 }
-        + if is_blocked { 9 } else { 0 };
-    let place_inline = (title_chars + est_tags_len) <= 60;
     let has_metadata = !task.categories.is_empty()
         || task.rrule.is_some()
         || is_blocked
         || task.estimated_duration.is_some();
 
-    let title_row = if place_inline {
-        row![
-            text(&task.summary)
-                .size(20)
-                .color(color)
-                .width(Length::Fill),
-            if has_metadata {
-                build_tags()
-            } else {
-                Space::new().width(Length::Fixed(0.0)).into()
+    let main_text_col = responsive(move |size| {
+        let available_width = size.width;
+        let mut tags_width = 0.0;
+
+        let mut tags_to_hide: HashSet<String> = if show_indent && let Some(p_uid) = &task.parent_uid
+        {
+            let mut p_cats = HashSet::new();
+            if let Some(href) = app.store.index.get(p_uid)
+                && let Some(list) = app.store.calendars.get(href)
+                && let Some(p) = list.iter().find(|t| t.uid == *p_uid)
+            {
+                p_cats = p.categories.iter().cloned().collect();
             }
-        ]
-        .spacing(6)
-        .align_y(iced::Alignment::Center)
-    } else {
-        row![
-            text(&task.summary)
-                .size(20)
-                .color(color)
-                .width(Length::Fill)
-        ]
-        .spacing(6)
-        .align_y(iced::Alignment::Center)
-    };
-    let main_text_col = column![
-        title_row,
-        if !place_inline && has_metadata {
-            row![Space::new().width(Length::Fill), build_tags()]
+            p_cats
         } else {
-            row![]
+            HashSet::new()
+        };
+
+        for cat in &task.categories {
+            let mut search = cat.as_str();
+            loop {
+                if let Some(targets) = app.tag_aliases.get(search) {
+                    for t in targets {
+                        tags_to_hide.insert(t.clone());
+                    }
+                }
+                if let Some(idx) = search.rfind(':') {
+                    search = &search[..idx];
+                } else {
+                    break;
+                }
+            }
         }
-    ]
+
+        if has_metadata {
+            if is_blocked {
+                tags_width += 65.0;
+            }
+            for cat in &task.categories {
+                if !tags_to_hide.contains(cat) {
+                    // Approximate width: (chars + 1) * 7px + padding/spacing
+                    tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
+                }
+            }
+            if task.estimated_duration.is_some() {
+                tags_width += 50.0;
+            }
+            if task.rrule.is_some() {
+                tags_width += 30.0;
+            }
+        }
+
+        let build_tags = || -> Element<'a, Message> {
+            let mut tags_row: iced::widget::Row<'_, Message> = row![].spacing(3);
+
+            if is_blocked {
+                tags_row = tags_row.push(
+                    container(text("[Blocked]").size(12).color(Color::WHITE))
+                        .style(|_| container::Style {
+                            background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
+                            border: iced::Border {
+                                radius: 4.0.into(),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        })
+                        .padding(3),
+                );
+            }
+
+            for cat in &task.categories {
+                if tags_to_hide.contains(cat) {
+                    continue;
+                }
+                let (r, g, b) = color_utils::generate_color(cat);
+                let bg_color = Color::from_rgb(r, g, b);
+                let text_color = if color_utils::is_dark(r, g, b) {
+                    Color::WHITE
+                } else {
+                    Color::BLACK
+                };
+                tags_row = tags_row.push(
+                    button(text(format!("#{}", cat)).size(12).color(text_color))
+                        .style(move |_theme, status| {
+                            let base = button::Style {
+                                background: Some(bg_color.into()),
+                                text_color,
+                                border: iced::Border {
+                                    radius: 4.0.into(),
+                                    ..Default::default()
+                                },
+                                ..button::Style::default()
+                            };
+                            match status {
+                                button::Status::Hovered | button::Status::Pressed => {
+                                    button::Style {
+                                        border: iced::Border {
+                                            color: Color::BLACK.scale_alpha(0.2),
+                                            width: 1.0,
+                                            radius: 4.0.into(),
+                                        },
+                                        ..base
+                                    }
+                                }
+                                _ => base,
+                            }
+                        })
+                        .padding(3)
+                        .on_press(Message::JumpToTag(cat.clone())),
+                );
+            }
+            if let Some(mins) = task.estimated_duration {
+                let label = if mins >= 525600 {
+                    format!("{}y", mins / 525600)
+                } else if mins >= 43200 {
+                    format!("{}mo", mins / 43200)
+                } else if mins >= 10080 {
+                    format!("{}w", mins / 10080)
+                } else if mins >= 1440 {
+                    format!("{}d", mins / 1440)
+                } else if mins >= 60 {
+                    format!("{}h", mins / 60)
+                } else {
+                    format!("{}m", mins)
+                };
+                tags_row = tags_row.push(
+                    container(text(label).size(10).color(Color::WHITE))
+                        .style(|_| container::Style {
+                            background: Some(Color::from_rgb(0.5, 0.5, 0.5).into()),
+                            border: iced::Border {
+                                radius: 4.0.into(),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        })
+                        .padding(3),
+                );
+            }
+            if task.rrule.is_some() {
+                tags_row = tags_row.push(container(icon::icon(icon::REPEAT).size(14)).padding(0));
+            }
+            tags_row.into()
+        };
+
+        // Estimates for layout decision
+        let title_width_est = task.summary.len() as f32 * 10.0;
+        let required_title_space = title_width_est.min(90.0);
+        let padding_safety = 5.0;
+
+        let place_inline = if !has_metadata {
+            true
+        } else {
+            (available_width - tags_width - padding_safety) > required_title_space
+        };
+
+        if place_inline {
+            row![
+                text(&task.summary)
+                    .size(20)
+                    .color(color)
+                    .width(Length::Fill),
+                if has_metadata {
+                    build_tags()
+                } else {
+                    Space::new().width(Length::Fixed(0.0)).into()
+                }
+            ]
+            .spacing(6)
+            .align_y(iced::Alignment::Center)
+            .into()
+        } else {
+            column![
+                text(&task.summary)
+                    .size(20)
+                    .color(color)
+                    .width(Length::Fill),
+                if has_metadata {
+                    row![Space::new().width(Length::Fill), build_tags()]
+                } else {
+                    row![]
+                }
+            ]
+            .spacing(2)
+            .into()
+        }
+    })
     .width(Length::Fill)
-    .spacing(1);
+    .height(Length::Shrink);
+
     let row_main = row![indent, status_btn, main_text_col, date_text, actions]
         .spacing(10)
         .align_y(iced::Alignment::Center);

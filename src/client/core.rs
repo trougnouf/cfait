@@ -413,11 +413,10 @@ impl RustyClient {
                 if !server_hrefs.contains(&href) {
                     let is_unsynced = task.etag.is_empty() || task.href.is_empty();
 
-                    if is_unsynced {
-                        if pending_creations.contains(&task.uid) {
+                    if is_unsynced
+                        && pending_creations.contains(&task.uid) {
                             final_tasks.push(task);
                         }
-                    }
                     // Else: It was synced (has ETag) but server doesn't have it -> Deleted. implicitly dropped.
                 }
             }
