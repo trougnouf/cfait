@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use super::tooltip_style;
-use iced::widget::{Space, button, column, container, responsive, row, scrollable, text, tooltip};
+use iced::widget::{Space, button, column, container, responsive, row, text, tooltip};
 pub use iced::widget::{rich_text, span};
 use iced::{Border, Color, Element, Length, Theme};
 
@@ -569,8 +569,9 @@ pub fn view_task_row<'a>(
             tags_row.into()
         };
 
-        // Estimates for layout decision
+        // Estimate title width (font size 20, roughly 10-11px per char average)
         let title_width_est = task.summary.len() as f32 * 10.0;
+
         let required_title_space = title_width_est.min(90.0);
         let padding_safety = 5.0;
 
@@ -618,39 +619,70 @@ pub fn view_task_row<'a>(
         .spacing(10)
         .align_y(iced::Alignment::Center);
 
-    let mut padded_row = container(row_main).padding(iced::Padding {
-        top: 2.0,
-        right: 16.0,
-        bottom: 2.0,
-        left: 6.0,
-    });
-    if is_selected {
-        padded_row = padded_row.style(|theme: &Theme| {
+    let task_button = button(row_main)
+        .on_press(Message::ToggleDetails(task.uid.clone()))
+        .padding(iced::Padding {
+            top: 2.0,
+            right: 16.0,
+            bottom: 2.0,
+            left: 6.0,
+        })
+        .style(move |theme: &Theme, status: button::Status| {
             let palette = theme.extended_palette();
-            container::Style {
-                background: Some(
-                    Color {
-                        a: 0.05,
-                        ..palette.warning.base.color
-                    }
-                    .into(),
-                ),
-                border: iced::Border {
-                    color: Color {
-                        a: 0.5,
-                        ..palette.warning.base.color
+
+            if is_selected {
+                return button::Style {
+                    background: Some(
+                        Color {
+                            a: 0.05,
+                            ..palette.warning.base.color
+                        }
+                        .into(),
+                    ),
+                    border: Border {
+                        color: Color {
+                            a: 0.5,
+                            ..palette.warning.base.color
+                        },
+                        width: 1.0,
+                        radius: 4.0.into(),
                     },
-                    width: 1.0,
-                    radius: 4.0.into(),
+                    ..button::Style::default()
+                };
+            }
+
+            match status {
+                button::Status::Hovered => button::Style {
+                    background: Some(
+                        Color {
+                            a: 0.03,
+                            ..palette.background.base.text
+                        }
+                        .into(),
+                    ),
+                    ..button::Style::default()
                 },
-                ..Default::default()
+                button::Status::Pressed => button::Style {
+                    background: Some(
+                        Color {
+                            a: 0.05,
+                            ..palette.background.base.text
+                        }
+                        .into(),
+                    ),
+                    ..button::Style::default()
+                },
+                _ => button::Style::default(),
             }
         });
-    }
 
     let row_id = iced::widget::Id::from(task.uid.clone());
 
-    if is_expanded {
+    let has_valid_parent = task.parent_uid.as_ref().is_some_and(|uid| !uid.is_empty());
+    let has_content_to_show =
+        !task.description.is_empty() || has_valid_parent || !task.dependencies.is_empty();
+
+    if is_expanded && has_content_to_show {
         let mut details_col = column![].spacing(5);
         if !task.description.is_empty() {
             details_col = details_col.push(
@@ -659,7 +691,10 @@ pub fn view_task_row<'a>(
                     .color(Color::from_rgb(0.7, 0.7, 0.7)),
             );
         }
-        if let Some(p_uid) = &task.parent_uid {
+
+        if has_valid_parent {
+            // Safe to unwrap because has_valid_parent checked for Some and !empty
+            let p_uid = task.parent_uid.as_ref().unwrap();
             let p_name = app
                 .store
                 .get_summary(p_uid)
@@ -686,6 +721,7 @@ pub fn view_task_row<'a>(
             .align_y(iced::Alignment::Center);
             details_col = details_col.push(row);
         }
+
         if !task.dependencies.is_empty() {
             details_col = details_col.push(
                 text("[Blocked By]:")
@@ -721,40 +757,16 @@ pub fn view_task_row<'a>(
                 details_col = details_col.push(dep_row);
             }
         }
-        if app.calendars.len() > 1 {
-            let current_cal_href = task.calendar_href.clone();
-            let targets: Vec<_> = app
-                .calendars
-                .iter()
-                .filter(|c| c.href != current_cal_href && !app.disabled_calendars.contains(&c.href))
-                .collect();
-            let move_label = text("Move to:")
-                .size(12)
-                .color(Color::from_rgb(0.5, 0.5, 0.5));
-            let mut move_row = row![].spacing(5).align_y(iced::Alignment::Center);
-            for cal in targets {
-                move_row = move_row.push(
-                    button(text(&cal.name).size(10))
-                        .style(button::secondary)
-                        .padding(3)
-                        .on_press(Message::MoveTask(task.uid.clone(), cal.href.clone())),
-                );
-            }
-            details_col = details_col.push(
-                row![move_label, scrollable(move_row).height(Length::Fixed(30.0))]
-                    .spacing(10)
-                    .align_y(iced::Alignment::Center),
-            );
-        }
+
         let desc_row = row![
             Space::new().width(Length::Fixed(indent_size as f32 + 30.0)),
             details_col
         ];
-        container(column![padded_row, desc_row].spacing(5))
+        container(column![task_button, desc_row].spacing(5))
             .padding(5)
             .id(row_id)
             .into()
     } else {
-        padded_row.id(row_id).into()
+        container(task_button).id(row_id).into()
     }
 }
