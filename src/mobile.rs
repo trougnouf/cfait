@@ -780,3 +780,104 @@ impl CfaitMobile {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+    use tokio::runtime::Runtime;
+
+    #[test]
+    fn test_android_concurrency_stress() {
+        // This test simulates the UI reading data while a background sync is aggressively updating it.
+        // It validates the Mutex<TaskStore> within CfaitMobile.
+
+        let rt = Runtime::new().unwrap();
+        let temp_dir = std::env::temp_dir().join("cfait_mobile_stress");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let path_str = temp_dir.to_string_lossy().to_string();
+
+        let api = Arc::new(CfaitMobile::new(path_str));
+
+        // Populate initial state
+        rt.block_on(async {
+            api.add_task_smart("Initial Task !1".to_string())
+                .await
+                .unwrap();
+        });
+
+        let api_write = api.clone();
+        let write_handle = rt.spawn(async move {
+            for i in 0..50 {
+                // Simulate network latency or processing time
+                tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+
+                let _ = api_write.add_task_smart(format!("Stress Task {}", i)).await;
+
+                // Simulate toggling tasks randomly
+                let tasks = api_write.getViewTasks(None, "".to_string()).await;
+                if let Some(t) = tasks.first() {
+                    let _ = api_write.toggle_task(t.uid.clone()).await;
+                }
+            }
+        });
+
+        let api_read = api.clone();
+        let read_handle = rt.spawn(async move {
+            for _ in 0..50 {
+                // UI Refresh simulation
+                let tasks = api_read.getViewTasks(None, "".to_string()).await;
+
+                // Safety Check: We should never see a half-written state or crash
+                // The Vector itself is safe, but we verify we can read consistently.
+                for t in tasks {
+                    assert!(!t.uid.is_empty());
+                }
+
+                // Simulate loading config concurrently
+                let _ = api_read.get_config();
+            }
+        });
+
+        rt.block_on(async {
+            let _ = tokio::join!(write_handle, read_handle);
+        });
+
+        // Final Consistency Check
+        rt.block_on(async {
+            let tasks = api.getViewTasks(None, "".to_string()).await;
+            // 1 initial + 50 created = 51 total tasks expected
+            assert_eq!(
+                tasks.len(),
+                51,
+                "Data loss detected during concurrent Mobile access"
+            );
+        });
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn test_mobile_unsynced_state_flag() {
+        // Ensures the UI gets the correct "Cloud" icon state
+        let temp_dir = std::env::temp_dir().join("cfait_mobile_unsynced");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let api = CfaitMobile::new(temp_dir.to_string_lossy().to_string());
+
+        // 1. Initially empty
+        assert!(!api.has_unsynced_changes());
+
+        // 2. Add task (offline, so it goes to journal)
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            api.add_task_smart("Offline Task".to_string())
+                .await
+                .unwrap();
+        });
+
+        // 3. Should now be unsynced
+        assert!(api.has_unsynced_changes());
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+}

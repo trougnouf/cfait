@@ -590,3 +590,44 @@ END:VCALENDAR";
         assert!(output.contains("SEQUENCE:5"));
     }
 }
+
+#[cfg(test)]
+mod data_safety_tests {
+    use super::*;
+
+    #[test]
+    fn test_parsing_preserves_foreign_properties() {
+        // Scenario: User uses another client (e.g. Thunderbird) that adds X-MOZ-ALARM
+        // We must not delete this data when we save the task back.
+
+        let ics = "BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Mozilla.org/NONSGML Mozilla Calendar V1.1//EN
+BEGIN:VTODO
+UID:foreign-prop-test
+SUMMARY:Test
+X-FOREIGN-PROPERTY:some-important-data
+X-COMPLEX-PROP;PARAM=VALUE:data
+END:VTODO
+END:VCALENDAR";
+
+        let task = Task::from_ics(ics, "".to_string(), "".to_string(), "".to_string()).unwrap();
+
+        // Verify we captured them
+        assert!(
+            task.unmapped_properties
+                .iter()
+                .any(|p| p.key == "X-FOREIGN-PROPERTY")
+        );
+        assert!(
+            task.unmapped_properties
+                .iter()
+                .any(|p| p.key == "X-COMPLEX-PROP")
+        );
+
+        // Verify we write them back
+        let output = task.to_ics();
+        assert!(output.contains("X-FOREIGN-PROPERTY:some-important-data"));
+        assert!(output.contains("X-COMPLEX-PROP;PARAM=VALUE:data"));
+    }
+}

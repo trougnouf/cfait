@@ -6,10 +6,12 @@ use mockito::Server;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::sync::Mutex;
+// --- CHANGE HERE ---
+use tokio::sync::Mutex;
 
 // Global lock to prevent tests from clobbering the shared ENV var
-static TEST_MUTEX: Mutex<()> = Mutex::new(());
+// --- CHANGE HERE ---
+static TEST_MUTEX: Mutex<()> = Mutex::const_new(());
 
 fn setup_env(suffix: &str) -> std::path::PathBuf {
     let temp_dir =
@@ -40,7 +42,8 @@ fn teardown(path: std::path::PathBuf) {
 #[tokio::test]
 async fn test_sync_delete_404_is_success() {
     // 0. Acquire Lock to run exclusively
-    let _guard = TEST_MUTEX.lock().unwrap();
+    // --- CHANGE HERE ---
+    let _guard = TEST_MUTEX.lock().await;
 
     let temp_dir = setup_env("404");
 
@@ -81,7 +84,8 @@ async fn test_sync_delete_404_is_success() {
 #[tokio::test]
 async fn test_sync_500_keeps_item_in_queue() {
     // 0. Acquire Lock to run exclusively
-    let _guard = TEST_MUTEX.lock().unwrap();
+    // --- CHANGE HERE ---
+    let _guard = TEST_MUTEX.lock().await;
 
     let temp_dir = setup_env("500");
 

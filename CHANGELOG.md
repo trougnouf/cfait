@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.0] - 2025-12-10
+## [0.3.0] - 2025-12-15
 
 ### 🚀 Features
 
@@ -13,24 +13,50 @@
 - *(workflow)* Auto-clear yanked state after linking (child/block) in GUI and TUI
 - *(ui)* Implement priority gradient
 - Fix alias expansion for sub-categories, hide expanded alias tags in list view
+- *(ui)* Display CalDAV calendar colors in TUI and GUI
+- *(android)* Implement native Android client using Jetpack Compose and UniFFI
+- *(android)* Polish UI with NerdFonts, add calendar selection, and automate asset copying
+- *(android)* Implement sidebar tabs (Calendars/Tags), advanced search, and task hierarchy
+- *(android)* Optimize startup with optimistic caching, fix tag layout, add back navigation, and implement task action menu
+- *(android)* Compact UI layout, custom state checkbox with (currently wrong) calendar colors, blocked-by details, and expanded action menu
+- *(android)* Align UI styling with desktop (calendar colors, state backgrounds, priority text) and fix icon alignment
+- *(android)* Streamline task creation and editing workflow
+- *(android)* Add an arrow_right / isolate button next to each calendar
 
 ### 🐛 Bug Fixes
 
 - Allow starting newly created tasks
 - *(store)* Ensure index update on recurring task creation and network sync
+- *(core)* Prevent data loss by routing alias updates through journal instead of direct cache overwrite
+- *(core)* Fail loudly on corrupted local storage instead of overwriting with empty state
+- *(android)* Align play icon, implement disabled calendars in settings, and resolve kotlin deprecation warnings
+- *(core)* Prevent data loss by correcting relation parsing and sync ETag propagation
+- *(android)* Implement full sync on connect/refresh
+- *(core)* Fix Android locking, sync consistency, and model logic
+- *(client)* Prevent data loss by verifying journal queue head identity before removal
+- *(mobile)* Resolve lifecycle, timezone, and data safety issues
+- *(Android)* Fix build
 
 ### 🚜 Refactor
 
 - *(core)* Deduplicate task logic and centralize path resolution
 - *(gui&core)* Restore edit functionality and optimize store lookups
+- *(android)* Split UI into submodules and implement task relationships
 
 ### 🎨 Styling
 
 - Convert UI text and documentation from title case to normal case capitalization
+- *(android)* Modify header with active calendar info, compact tag list layout, and add sidebar footer logo
+
+### 🧪 Testing
+
+- *(model)* Add unit tests for ICS relation parsing and case-insensitivity
 
 ### ⚙️ Miscellaneous Tasks
 
 - Lint
+- Lint
+- *(android)* Update versions
 ## [0.2.9] - 2025-12-08
 
 ### 🚀 Features

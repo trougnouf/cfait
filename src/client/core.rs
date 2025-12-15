@@ -1,5 +1,4 @@
 // File: src/client/core.rs
-
 use crate::cache::Cache;
 use crate::client::cert::NoVerifier;
 use crate::config::Config;
@@ -259,10 +258,13 @@ impl RustyClient {
     async fn fetch_calendar_tasks_internal(
         &self,
         calendar_href: &str,
+        apply_journal: bool,
     ) -> Result<Vec<Task>, String> {
         if calendar_href == LOCAL_CALENDAR_HREF {
             let mut tasks = LocalStorage::load().map_err(|e| e.to_string())?;
-            apply_journal_to_tasks(&mut tasks, calendar_href);
+            if apply_journal {
+                apply_journal_to_tasks(&mut tasks, calendar_href);
+            }
             return Ok(tasks);
         }
 
@@ -270,6 +272,40 @@ impl RustyClient {
 
         if let Some(client) = &self.client {
             let path_href = strip_host(calendar_href);
+
+            // --- GHOST TASK FIX START ---
+            // Before processing server resources, identify UIDs that are pending deletion in the Journal.
+            // If the server returns these, we must IGNORE them, otherwise we resurrect them.
+            // Note: This logic depends on journal state. If apply_journal=false, strictly speaking
+            // we should perhaps see the ghost task. However, for conflict resolution, seeing a task
+            // that we deleted locally might be confusing.
+            // Given apply_journal=false is used for finding SERVER state to merge against,
+            // if the server has it, we should probably return it so 3-way merge sees it exists on server.
+            // But if we deleted it, the journal has Action::Delete.
+            // If we filter it out here, 3-way merge thinks it's gone on server? No, this function returns
+            // what we THINK the server has.
+            // If apply_journal=false, we want RAW server state.
+            // So we should only apply ghost filtering if apply_journal=true.
+
+            let pending_deletions: HashSet<String> = if apply_journal {
+                let journal = Journal::load();
+                journal
+                    .queue
+                    .iter()
+                    .filter_map(|action| match action {
+                        Action::Delete(t) if t.calendar_href == calendar_href => {
+                            Some(t.uid.clone())
+                        }
+                        Action::Move(t, _) if t.calendar_href == calendar_href => {
+                            Some(t.uid.clone())
+                        }
+                        _ => None,
+                    })
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+            // --- GHOST TASK FIX END ---
 
             let remote_token = if let Ok(resp) = client
                 .request(GetProperty::new(&path_href, &GET_CTAG))
@@ -288,7 +324,9 @@ impl RustyClient {
             if let (Some(r_tok), Some(c_tok)) = (&remote_token, &cached_token)
                 && r_tok == c_tok
             {
-                apply_journal_to_tasks(&mut cached_tasks, calendar_href);
+                if apply_journal {
+                    apply_journal_to_tasks(&mut cached_tasks, calendar_href);
+                }
                 return Ok(cached_tasks);
             }
 
@@ -310,6 +348,23 @@ impl RustyClient {
                 if !resource.href.ends_with(".ics") {
                     continue;
                 }
+
+                // GHOST TASK FIX: Check if this resource corresponds to a task pending deletion
+                let is_pending_delete = if apply_journal {
+                    if let Some(local_task) = cache_map.get(&resource.href) {
+                        pending_deletions.contains(&local_task.uid)
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                if is_pending_delete {
+                    cache_map.remove(&resource.href);
+                    continue;
+                }
+
                 server_hrefs.insert(resource.href.clone());
                 let remote_etag = resource.etag;
 
@@ -350,23 +405,31 @@ impl RustyClient {
                             calendar_href.to_string(),
                         )
                     {
+                        if apply_journal && pending_deletions.contains(&task.uid) {
+                            continue;
+                        }
                         final_tasks.push(task);
                     }
                 }
             }
 
-            apply_journal_to_tasks(&mut final_tasks, calendar_href);
+            if apply_journal {
+                apply_journal_to_tasks(&mut final_tasks, calendar_href);
+            }
             let _ = Cache::save(calendar_href, &final_tasks, remote_token);
             Ok(final_tasks)
         } else {
-            apply_journal_to_tasks(&mut cached_tasks, calendar_href);
+            if apply_journal {
+                apply_journal_to_tasks(&mut cached_tasks, calendar_href);
+            }
             Ok(cached_tasks)
         }
     }
 
     pub async fn get_tasks(&self, calendar_href: &str) -> Result<Vec<Task>, String> {
         let _ = self.sync_journal().await;
-        self.fetch_calendar_tasks_internal(calendar_href).await
+        self.fetch_calendar_tasks_internal(calendar_href, true)
+            .await
     }
 
     pub async fn get_all_tasks(
@@ -381,7 +444,7 @@ impl RustyClient {
             async move {
                 (
                     href.clone(),
-                    client.fetch_calendar_tasks_internal(&href).await,
+                    client.fetch_calendar_tasks_internal(&href, true).await,
                 )
             }
         });
@@ -822,8 +885,9 @@ impl RustyClient {
         let (cached_tasks, _) = Cache::load(&local_task.calendar_href).ok()?;
         let base_task = cached_tasks.iter().find(|t| t.uid == local_task.uid)?;
 
+        // Fetch raw server tasks (apply_journal = false) to see actual conflict state
         let server_tasks = self
-            .fetch_calendar_tasks_internal(&local_task.calendar_href)
+            .fetch_calendar_tasks_internal(&local_task.calendar_href, false)
             .await
             .ok()?;
         let server_task = server_tasks.iter().find(|t| t.uid == local_task.uid)?;
@@ -987,4 +1051,93 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
     }
 
     Some(merged)
+}
+
+#[cfg(test)]
+mod merge_tests {
+    use super::*;
+    use crate::model::TaskStatus;
+
+    fn make_task(uid: &str, summary: &str, status: TaskStatus) -> Task {
+        let mut t = Task::new(summary, &HashMap::new());
+        t.uid = uid.to_string();
+        t.status = status;
+        t
+    }
+
+    #[test]
+    fn test_3way_merge_clean_update() {
+        // Base: Original
+        let base = make_task("1", "Buy Milk", TaskStatus::NeedsAction);
+
+        // Local: Changed Status to Done
+        let mut local = base.clone();
+        local.status = TaskStatus::Completed;
+
+        // Server: Changed Title (Someone fixed a typo)
+        let mut server = base.clone();
+        server.summary = "Buy Oat Milk".to_string();
+
+        // Merge
+        let merged = three_way_merge(&base, &local, &server);
+
+        assert!(
+            merged.is_some(),
+            "Merge should succeed for non-overlapping fields"
+        );
+        let m = merged.unwrap();
+
+        assert_eq!(
+            m.status,
+            TaskStatus::Completed,
+            "Local status change should be preserved"
+        );
+        assert_eq!(
+            m.summary, "Buy Oat Milk",
+            "Server title change should be preserved"
+        );
+    }
+
+    #[test]
+    fn test_3way_merge_conflict_returns_none() {
+        // Base
+        let base = make_task("1", "Buy Milk", TaskStatus::NeedsAction);
+
+        // Local: Changed Title
+        let mut local = base.clone();
+        local.summary = "Buy 2% Milk".to_string();
+
+        // Server: Changed Title to something else
+        let mut server = base.clone();
+        server.summary = "Buy Soy Milk".to_string();
+
+        // Merge
+        let merged = three_way_merge(&base, &local, &server);
+
+        assert!(
+            merged.is_none(),
+            "Merge should fail (return None) on conflicting field modification"
+        );
+    }
+
+    #[test]
+    fn test_3way_merge_categories_union() {
+        // Tests that we don't lose tags added by other clients
+        let mut base = make_task("1", "Task", TaskStatus::NeedsAction);
+        base.categories = vec!["work".to_string()];
+
+        let mut local = base.clone();
+        local.categories = vec!["work".to_string(), "urgent".to_string()];
+
+        let mut server = base.clone();
+        server.categories = vec!["work".to_string(), "home".to_string()]; // Another client added 'home'
+
+        let merged = three_way_merge(&base, &local, &server).expect("Merge should succeed");
+
+        // Should contain work, urgent, AND home
+        assert!(merged.categories.contains(&"work".to_string()));
+        assert!(merged.categories.contains(&"urgent".to_string()));
+        assert!(merged.categories.contains(&"home".to_string()));
+        assert_eq!(merged.categories.len(), 3);
+    }
 }
