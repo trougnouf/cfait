@@ -2,6 +2,7 @@
 package com.cfait.ui
 
 import android.widget.Toast
+import android.content.ClipData // FIXED: Correct Android Import
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -18,8 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +48,7 @@ fun HomeScreen(
     hasUnsynced: Boolean,
     onGlobalRefresh: () -> Unit,
     onSettings: () -> Unit,
+    // onHelp removed
     onTaskClick: (String) -> Unit,
     onDataChanged: () -> Unit
 ) {
@@ -53,7 +56,6 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     var sidebarTab by remember { mutableIntStateOf(0) }
     
-    // List State for auto-scrolling
     val listState = rememberLazyListState()
     
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
@@ -62,14 +64,12 @@ fun HomeScreen(
     var isSearchActive by remember { mutableStateOf(false) }
     var newTaskText by remember { mutableStateOf("") }
     
-    // Export / Migration State
     var showExportDialog by remember { mutableStateOf(false) }
     
-    // Yank State
     var yankedUid by remember { mutableStateOf<String?>(null) }
     val yankedTask = remember(tasks, yankedUid) { tasks.find { it.uid == yankedUid } }
     
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
 
@@ -81,7 +81,6 @@ fun HomeScreen(
         scope.launch { drawerState.close() }
     }
 
-    // Helper to fetch tasks and return them (synchronously wait for async result)
     suspend fun fetchTasks(): List<MobileTask> {
         return try { api.getViewTasks(filterTag, searchQuery) } catch (_: Exception) { emptyList() }
     }
@@ -97,27 +96,23 @@ fun HomeScreen(
     fun addTask(txt: String) {
         val text = txt.trim()
         if (text.startsWith("#") && !text.contains(" ")) {
-            // Feature: Tag Jump
             val tag = text.removePrefix("#")
             filterTag = tag
-            sidebarTab = 1 // Switch sidebar to Tags
+            sidebarTab = 1
             newTaskText = ""
             scope.launch { 
                 tasks = fetchTasks() 
             }
         } else {
-            // Feature: Create & Scroll
             scope.launch {
                 try {
                     val newUid = api.addTaskSmart(text)
                     newTaskText = ""
                     onDataChanged() 
                     
-                    // Fetch updated list
                     val newTasks = fetchTasks()
                     tasks = newTasks
                     
-                    // Auto-scroll
                     val index = newTasks.indexOfFirst { it.uid == newUid }
                     if (index >= 0) {
                         listState.animateScrollToItem(index)
@@ -138,7 +133,9 @@ fun HomeScreen(
                     "prio_down" -> api.changePriority(task.uid, -1)
                     "yank" -> {
                         yankedUid = task.uid
-                        clipboardManager.setText(AnnotatedString(task.uid))
+                        // FIXED: Use Android ClipData
+                        val clipData = ClipData.newPlainText("task_uid", task.uid)
+                        clipboard.setClipEntry(ClipEntry(clipData))
                     }
                     "block" -> {
                         if (yankedUid != null) {
@@ -159,12 +156,11 @@ fun HomeScreen(
         }
     }
 
-    // --- MIGRATION DIALOG ---
     val remoteCals = remember(calendars) { calendars.filter { !it.isLocal && !it.isDisabled } }
     if (showExportDialog) {
         AlertDialog(
             onDismissRequest = { showExportDialog = false },
-            title = { Text("Export Local Tasks") },
+            title = { Text("Export local tasks") },
             text = {
                 Column {
                     Text("Select a destination calendar:", fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
@@ -209,7 +205,6 @@ fun HomeScreen(
                         contentPadding = PaddingValues(bottom = 24.dp)
                     ) {
                         if (sidebarTab == 0) {
-                            // Feature: Show All Toggle
                             item {
                                 TextButton(
                                     onClick = { 
@@ -219,7 +214,7 @@ fun HomeScreen(
                                     },
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                                 ) {
-                                    Text("Show All Calendars")
+                                    Text("Show all calendars")
                                 }
                                 HorizontalDivider()
                             }
@@ -417,7 +412,6 @@ fun HomeScreen(
         ) { padding ->
             Column(Modifier.padding(padding).fillMaxSize()) {
                 
-                // Feature: Migration Tools
                 val activeIsLocal = calendars.find { it.href == defaultCalHref }?.isLocal == true
                 if (activeIsLocal && remoteCals.isNotEmpty()) {
                     FilledTonalButton(
@@ -428,7 +422,7 @@ fun HomeScreen(
                     ) {
                         NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
                         Spacer(Modifier.width(8.dp))
-                        Text("Export Local Tasks to Server")
+                        Text("Export local tasks to server")
                     }
                 }
 

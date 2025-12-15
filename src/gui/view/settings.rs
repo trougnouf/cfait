@@ -42,14 +42,14 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             column![
                 std::convert::Into::<Element<'_, Message>>::into(
                     checkbox(app.hide_completed)
-                        .label("Hide Completed Tasks (Everywhere)")
+                        .label("Hide completed tasks (everywhere)")
                         .on_toggle(Message::ToggleHideCompleted),
                 ),
                 // Conditional checkbox: only visible when 'Hide Completed Tasks (Everywhere)' is off
                 if !app.hide_completed {
                     std::convert::Into::<Element<'_, Message>>::into(
                         checkbox(app.hide_fully_completed_tags)
-                            .label("Hide Tags containing ONLY completed tasks")
+                            .label("Hide tags containing only completed tasks")
                             .on_toggle(Message::ToggleHideFullyCompletedTags),
                     )
                 } else {
@@ -199,7 +199,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         .on_press(Message::ObSubmit),
     );
     let insecure_check = checkbox(app.ob_insecure)
-        .label("Allow Insecure SSL (e.g. self-signed)")
+        .label("Allow insecure SSL (e.g. self-signed)")
         .on_toggle(Message::ObInsecureToggled)
         .size(16)
         .text_size(14);

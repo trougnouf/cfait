@@ -247,7 +247,7 @@ impl Task {
             None => return Err("No Master VTODO found in ICS".to_string()),
         };
 
-        let summary = todo.get_summary().unwrap_or("No Title").to_string();
+        let summary = todo.get_summary().unwrap_or("No title").to_string();
         let description = todo.get_description().unwrap_or("").to_string();
         let uid = todo.get_uid().unwrap_or_default().to_string();
 

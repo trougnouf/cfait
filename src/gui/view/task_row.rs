@@ -254,13 +254,13 @@ pub fn view_task_row<'a>(
                 (
                     icon::PAUSE,
                     crate::model::TaskStatus::NeedsAction,
-                    "Pause Task",
+                    "Pause task",
                 )
             } else {
                 (
                     icon::PLAY,
                     crate::model::TaskStatus::InProcess,
-                    "Start Task",
+                    "Start task",
                 )
             };
         let status_toggle_btn = button(icon::icon(action_icon).size(14))
@@ -698,7 +698,7 @@ pub fn view_task_row<'a>(
             let p_name = app
                 .store
                 .get_summary(p_uid)
-                .unwrap_or_else(|| "Unknown Parent".to_string());
+                .unwrap_or_else(|| "Unknown parent".to_string());
             let remove_parent_btn = button(icon::icon(icon::CROSS).size(10))
                 .style(button::danger)
                 .padding(2)
@@ -732,7 +732,7 @@ pub fn view_task_row<'a>(
                 let name = app
                     .store
                     .get_summary(dep_uid)
-                    .unwrap_or_else(|| "Unknown Task".to_string());
+                    .unwrap_or_else(|| "Unknown task".to_string());
                 let is_done = app.store.is_task_done(dep_uid).unwrap_or(false);
                 let check = if is_done { "[x]" } else { "[ ]" };
                 let remove_dep_btn = button(icon::icon(icon::CROSS).size(10))

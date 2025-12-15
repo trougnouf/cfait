@@ -387,7 +387,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 let name = state
                     .store
                     .get_summary(dep_uid)
-                    .unwrap_or_else(|| "Unknown Task".to_string());
+                    .unwrap_or_else(|| "Unknown task".to_string());
                 let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
                 let check = if is_done { "[x]" } else { "[ ]" };
                 full_details.push_str(&format!(" {} {}\n", check, name));

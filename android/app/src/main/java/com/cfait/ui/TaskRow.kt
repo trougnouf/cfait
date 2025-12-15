@@ -82,11 +82,11 @@ fun TaskRow(
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     DropdownMenuItem(text = { Text("Edit") }, onClick = { expanded = false; onClick(task.uid) }, leadingIcon = { NfIcon(NfIcons.EDIT, 16.sp) })
                     DropdownMenuItem(text = { Text(if (task.statusString == "InProcess") "Pause" else "Start") }, onClick = { expanded = false; onAction("playpause") }, leadingIcon = { NfIcon(if (task.statusString == "InProcess") NfIcons.PAUSE else NfIcons.PLAY, 16.sp) })
-                    DropdownMenuItem(text = { Text("Increase Prio") }, onClick = { expanded = false; onAction("prio_up") }, leadingIcon = { NfIcon(NfIcons.PRIORITY_UP, 16.sp) })
-                    DropdownMenuItem(text = { Text("Decrease Prio") }, onClick = { expanded = false; onAction("prio_down") }, leadingIcon = { NfIcon(NfIcons.PRIORITY_DOWN, 16.sp) })
+                    DropdownMenuItem(text = { Text("Increase prio") }, onClick = { expanded = false; onAction("prio_up") }, leadingIcon = { NfIcon(NfIcons.PRIORITY_UP, 16.sp) })
+                    DropdownMenuItem(text = { Text("Decrease prio") }, onClick = { expanded = false; onAction("prio_down") }, leadingIcon = { NfIcon(NfIcons.PRIORITY_DOWN, 16.sp) })
                     
                     if (yankedUid == null) {
-                        DropdownMenuItem(text = { Text("Yank (Link)") }, onClick = { expanded = false; onAction("yank") }, leadingIcon = { NfIcon(NfIcons.LINK, 16.sp) })
+                        DropdownMenuItem(text = { Text("Yank (link)") }, onClick = { expanded = false; onAction("yank") }, leadingIcon = { NfIcon(NfIcons.LINK, 16.sp) })
                     }
 
                     if (task.statusString != "Cancelled") {

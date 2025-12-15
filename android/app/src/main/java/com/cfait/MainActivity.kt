@@ -17,13 +17,13 @@ import com.cfait.core.MobileTag
 import com.cfait.ui.HomeScreen
 import com.cfait.ui.SettingsScreen
 import com.cfait.ui.TaskDetailScreen
+import com.cfait.ui.HelpScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Use the singleton instance from Application to persist across rotations
         val app = application as CfaitApplication
         val api = app.api
 
@@ -49,7 +49,6 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
     fun refreshLists() {
         scope.launch {
             try {
-                // Load form memory/cache immediately
                 calendars = api.getCalendars()
                 tags = api.getAllTags()
                 defaultCalHref = api.getConfig().defaultCalendar
@@ -59,18 +58,13 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
     }
 
     fun fastStart() {
-        // Initial UI load from memory
         refreshLists()
-        
-        // Trigger network sync
         scope.launch {
             isLoading = true
             try { 
                 api.sync()
                 refreshLists()
-            } catch (e: Exception) { 
-                // Error handling can be passed down via state if needed
-            }
+            } catch (e: Exception) { }
             isLoading = false
         }
     }
@@ -104,7 +98,14 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
             }
         }
         composable("settings") {
-            SettingsScreen(api = api, onBack = { navController.popBackStack(); refreshLists() })
+            SettingsScreen(
+                api = api, 
+                onBack = { navController.popBackStack(); refreshLists() },
+                onHelp = { navController.navigate("help") }
+            )
+        }
+        composable("help") {
+            HelpScreen(onBack = { navController.popBackStack() })
         }
     }
 }

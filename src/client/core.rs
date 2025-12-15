@@ -167,7 +167,7 @@ impl RustyClient {
                 }
                 (
                     Cache::load_calendars().unwrap_or_default(),
-                    Some("Offline Mode".to_string()),
+                    Some("Offline mode".to_string()),
                 )
             }
         };

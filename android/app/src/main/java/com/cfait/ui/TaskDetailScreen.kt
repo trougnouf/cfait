@@ -45,7 +45,7 @@ fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalend
     if (showMoveDialog) {
         AlertDialog(
             onDismissRequest = { showMoveDialog = false },
-            title = { Text("Move to Calendar") },
+            title = { Text("Move to calendar") },
             text = {
                 LazyColumn {
                     items(calendars) { cal ->
@@ -62,7 +62,7 @@ fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalend
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Edit Task") },
+                title = { Text("Edit task") },
                 navigationIcon = { IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) } },
                 actions = {
                     TextButton(onClick = { showMoveDialog = true }) { Text("Move") }
@@ -82,11 +82,11 @@ fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalend
         }
     ) { p ->
         Column(modifier = Modifier.padding(p).padding(16.dp)) {
-            OutlinedTextField(value = smartInput, onValueChange = { smartInput = it }, label = { Text("Task (Smart Syntax)") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(value = smartInput, onValueChange = { smartInput = it }, label = { Text("Task (smart syntax)") }, modifier = Modifier.fillMaxWidth())
             Text("Use !1, @date, #tag, ~duration", style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color.Gray, modifier = Modifier.padding(start = 4.dp, bottom = 16.dp))
             
             if (task!!.blockedByNames.isNotEmpty()) {
-                Text("Blocked By:", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("Blocked by:", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 
                 val blockedPairs = task!!.blockedByNames.zip(task!!.blockedByUids)
                 

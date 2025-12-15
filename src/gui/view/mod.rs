@@ -347,7 +347,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         "Loading...".to_string()
     } else if app.active_cal_href.is_none() {
         if app.selected_categories.is_empty() {
-            "All Tasks".to_string()
+            "All tasks".to_string()
         } else {
             "Tasks".to_string()
         }
@@ -585,7 +585,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .store
             .get_summary(parent_uid)
             .unwrap_or("Parent".to_string());
-        format!("New Child of '{}'...", parent_name)
+        format!("New child of '{}'...", parent_name)
     } else {
         let target_name = app
             .calendars

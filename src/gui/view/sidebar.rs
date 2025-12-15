@@ -32,7 +32,7 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     };
 
     let toggle_all = toggler(are_all_visible)
-        .label("Show All")
+        .label("Show all")
         .text_size(12)
         .text_alignment(iced::alignment::Horizontal::Left)
         .spacing(10)
@@ -326,7 +326,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         .spacing(5)
         .align_y(iced::Alignment::Center),
         checkbox(app.filter_include_unset_duration)
-            .label("Include Unset")
+            .label("Include unset")
             .text_size(12)
             .size(16)
             .on_toggle(Message::ToggleIncludeUnsetDuration)

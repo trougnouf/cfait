@@ -41,6 +41,7 @@ object NfIcons {
     val INFO = get(0xf129)          // 
     val UNSYNCED = get(0xf0c2)      //  (Cloud)
     val EXPORT = get(0xeac3)        //  (Cloud Upload)
+    val HELP = get(0xf0625)         // 󰘥 (Help Rhombus / Circle)
     
     // YANK ACTION ICONS
     val BLOCKED = get(0xf479)      // nf-oct-blocked

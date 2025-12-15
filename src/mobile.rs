@@ -870,7 +870,7 @@ mod tests {
         // 2. Add task (offline, so it goes to journal)
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
-            api.add_task_smart("Offline Task".to_string())
+            api.add_task_smart("Offline task".to_string())
                 .await
                 .unwrap();
         });
