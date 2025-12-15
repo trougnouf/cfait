@@ -39,6 +39,7 @@ object NfIcons {
     val LINK = get(0xf0c1)         // 
     val UNLINK = get(0xf127)       // 
     val INFO = get(0xf129)          // 
+    val UNSYNCED = get(0xf0c2)      //  (Cloud)
     
     // YANK ACTION ICONS
     val BLOCKED = get(0xf479)      // nf-oct-blocked

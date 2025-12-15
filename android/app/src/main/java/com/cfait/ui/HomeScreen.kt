@@ -40,6 +40,7 @@ fun HomeScreen(
     tags: List<MobileTag>,
     defaultCalHref: String?,
     isLoading: Boolean,
+    hasUnsynced: Boolean, // <-- ADDED THIS PARAMETER
     onGlobalRefresh: () -> Unit,
     onSettings: () -> Unit,
     onTaskClick: (String) -> Unit,
@@ -256,7 +257,14 @@ fun HomeScreen(
                         navigationIcon = { IconButton(onClick = { scope.launch { drawerState.open() } }) { NfIcon(NfIcons.MENU, 20.sp) } },
                         actions = {
                             IconButton(onClick = { isSearchActive = true }) { NfIcon(NfIcons.SEARCH, 18.sp) }
-                            if (isLoading) CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp) else IconButton(onClick = onGlobalRefresh) { NfIcon(NfIcons.REFRESH, 18.sp) }
+                            if (isLoading) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            } else {
+                                if (hasUnsynced) {
+                                    NfIcon(NfIcons.UNSYNCED, 18.sp, color = MaterialTheme.colorScheme.primary)
+                                }
+                                IconButton(onClick = onGlobalRefresh) { NfIcon(NfIcons.REFRESH, 18.sp) }
+                            }
                             IconButton(onClick = onSettings) { NfIcon(NfIcons.SETTINGS, 20.sp) }
                         }
                     )
