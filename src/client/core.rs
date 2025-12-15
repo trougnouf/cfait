@@ -274,36 +274,40 @@ impl RustyClient {
             let path_href = strip_host(calendar_href);
 
             // --- GHOST TASK FIX START ---
-            // Before processing server resources, identify UIDs that are pending deletion in the Journal.
-            // If the server returns these, we must IGNORE them, otherwise we resurrect them.
-            // Note: This logic depends on journal state. If apply_journal=false, strictly speaking
-            // we should perhaps see the ghost task. However, for conflict resolution, seeing a task
-            // that we deleted locally might be confusing.
-            // Given apply_journal=false is used for finding SERVER state to merge against,
-            // if the server has it, we should probably return it so 3-way merge sees it exists on server.
-            // But if we deleted it, the journal has Action::Delete.
-            // If we filter it out here, 3-way merge thinks it's gone on server? No, this function returns
-            // what we THINK the server has.
-            // If apply_journal=false, we want RAW server state.
-            // So we should only apply ghost filtering if apply_journal=true.
-
-            let pending_deletions: HashSet<String> = if apply_journal {
+            // Identify pending actions to guide cache reconciliation.
+            // pending_deletions: Tasks we deleted locally; ignore server copies.
+            // pending_creations: Tasks we created locally; preserve them even if server doesn't have them yet.
+            let (pending_deletions, pending_creations) = if apply_journal {
                 let journal = Journal::load();
-                journal
-                    .queue
-                    .iter()
-                    .filter_map(|action| match action {
+                let mut dels = HashSet::new();
+                let mut creates = HashSet::new();
+
+                for action in journal.queue {
+                    match action {
                         Action::Delete(t) if t.calendar_href == calendar_href => {
-                            Some(t.uid.clone())
+                            dels.insert(t.uid);
                         }
                         Action::Move(t, _) if t.calendar_href == calendar_href => {
-                            Some(t.uid.clone())
+                            dels.insert(t.uid);
                         }
-                        _ => None,
-                    })
-                    .collect()
+                        Action::Create(t) if t.calendar_href == calendar_href => {
+                            creates.insert(t.uid);
+                        }
+                        // Treat Updates to unsynced tasks as Creations (to preserve them)
+                        Action::Update(t)
+                            if t.calendar_href == calendar_href && t.etag.is_empty() =>
+                        {
+                            creates.insert(t.uid);
+                        }
+                        Action::Move(t, ref target) if target == calendar_href => {
+                            creates.insert(t.uid);
+                        }
+                        _ => {}
+                    }
+                }
+                (dels, creates)
             } else {
-                HashSet::new()
+                (HashSet::new(), HashSet::new())
             };
             // --- GHOST TASK FIX END ---
 
@@ -321,7 +325,16 @@ impl RustyClient {
                 None
             };
 
-            if let (Some(r_tok), Some(c_tok)) = (&remote_token, &cached_token)
+            // FIX START: Detect potential ghosts (Href set but Etag empty).
+            // If present, we MUST NOT skip sync, even if tokens match.
+            // This forces the code to fall through to PROPFIND, which will fail to find the task
+            // on the server, triggering the pruning logic below.
+            let has_ghosts = cached_tasks
+                .iter()
+                .any(|t| t.etag.is_empty() && !t.href.is_empty());
+
+            if !has_ghosts
+                && let (Some(r_tok), Some(c_tok)) = (&remote_token, &cached_token)
                 && r_tok == c_tok
             {
                 if apply_journal {
@@ -329,15 +342,17 @@ impl RustyClient {
                 }
                 return Ok(cached_tasks);
             }
+            // FIX END
 
             let list_resp = client
                 .request(ListResources::new(&path_href))
                 .await
                 .map_err(|e| format!("PROPFIND: {:?}", e))?;
 
+            // Normalize keys to avoid mismatch between full URL vs path
             let mut cache_map: HashMap<String, Task> = HashMap::new();
             for t in cached_tasks {
-                cache_map.insert(t.href.clone(), t);
+                cache_map.insert(strip_host(&t.href), t);
             }
 
             let mut final_tasks = Vec::new();
@@ -349,9 +364,12 @@ impl RustyClient {
                     continue;
                 }
 
+                // Normalize resource href
+                let res_href_stripped = strip_host(&resource.href);
+
                 // GHOST TASK FIX: Check if this resource corresponds to a task pending deletion
                 let is_pending_delete = if apply_journal {
-                    if let Some(local_task) = cache_map.get(&resource.href) {
+                    if let Some(local_task) = cache_map.get(&res_href_stripped) {
                         pending_deletions.contains(&local_task.uid)
                     } else {
                         false
@@ -361,32 +379,46 @@ impl RustyClient {
                 };
 
                 if is_pending_delete {
-                    cache_map.remove(&resource.href);
+                    cache_map.remove(&res_href_stripped);
                     continue;
                 }
 
-                server_hrefs.insert(resource.href.clone());
+                server_hrefs.insert(res_href_stripped.clone());
                 let remote_etag = resource.etag;
 
-                if let Some(local_task) = cache_map.remove(&resource.href) {
+                if let Some(local_task) = cache_map.remove(&res_href_stripped) {
                     if let Some(r_etag) = &remote_etag {
                         if !r_etag.is_empty() && *r_etag == local_task.etag {
                             final_tasks.push(local_task);
                         } else {
-                            to_fetch.push(strip_host(&resource.href));
+                            to_fetch.push(res_href_stripped);
                         }
                     } else {
-                        to_fetch.push(strip_host(&resource.href));
+                        to_fetch.push(res_href_stripped);
                     }
                 } else {
-                    to_fetch.push(strip_host(&resource.href));
+                    to_fetch.push(res_href_stripped);
                 }
             }
 
             for (href, task) in cache_map {
-                // Keep local tasks that haven't synced yet (empty etag/href)
-                if !server_hrefs.contains(&href) && (task.etag.is_empty() || task.href.is_empty()) {
-                    final_tasks.push(task);
+                // GHOST TASK FIX:
+                // If a task is not on the server (!server_hrefs.contains), we decide whether to keep it.
+                // 1. If it has a valid ETag/Href, it was previously synced. Server missing = Deleted remotely. DROP.
+                // 2. If it has NO ETag/Href, it is "local-only".
+                //    - If it is in the Journal (pending_creations), we MUST keep it (waiting to sync).
+                //    - If it is NOT in the Journal, it is a ghost/zombie (failed sync remnant). DROP.
+
+                // Note: cache_map keys are already stripped/normalized here
+                if !server_hrefs.contains(&href) {
+                    let is_unsynced = task.etag.is_empty() || task.href.is_empty();
+
+                    if is_unsynced {
+                        if pending_creations.contains(&task.uid) {
+                            final_tasks.push(task);
+                        }
+                    }
+                    // Else: It was synced (has ETag) but server doesn't have it -> Deleted. implicitly dropped.
                 }
             }
 
@@ -427,7 +459,10 @@ impl RustyClient {
     }
 
     pub async fn get_tasks(&self, calendar_href: &str) -> Result<Vec<Task>, String> {
-        let _ = self.sync_journal().await;
+        // Don't let a sync error prevent the task fetch.
+        // The user should still be able to see their tasks even if one
+        // pending item fails to sync. Warnings are handled by sync_journal itself.
+        let _ = self.sync_journal().await.ok();
         self.fetch_calendar_tasks_internal(calendar_href, true)
             .await
     }
@@ -948,7 +983,6 @@ impl RustyClient {
     }
 }
 
-// FIX: New apply_journal_to_tasks helper
 fn apply_journal_to_tasks(tasks: &mut Vec<Task>, calendar_href: &str) {
     let journal = Journal::load();
     if journal.is_empty() {
@@ -1016,7 +1050,7 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
     merge_field!(estimated_duration);
     merge_field!(rrule);
 
-    // FIX: Union Merge Categories
+    // Union Merge Categories
     if local.categories != base.categories {
         let mut new_cats = server.categories.clone();
         for cat in &local.categories {
@@ -1029,7 +1063,7 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
         merged.categories = new_cats;
     }
 
-    // FIX: Union Merge Unmapped Properties
+    // Union Merge Unmapped Properties
     if local.unmapped_properties != base.unmapped_properties {
         for prop in &local.unmapped_properties {
             if !merged.unmapped_properties.iter().any(|p| p.key == prop.key) {
