@@ -23,6 +23,8 @@
 - *(android)* Streamline task creation and editing workflow
 - *(android)* Add an arrow_right / isolate button next to each calendar
 - *(gui)* Refine task row layout for title and tags
+- *(android)* Auto-scroll to newly created task, tag jumping, migration tool, write calendar color
+- *(android)* Add help screen (under settings)
 
 ### 🐛 Bug Fixes
 

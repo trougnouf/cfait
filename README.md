@@ -1,9 +1,9 @@
 # Cfait
 > Take control of your TODO list
 
-**Cfait** is a powerful, simple, elegant and fast CalDAV tasks manager, written in Rust.
+**Cfait** is a powerful, elegant and fast CalDAV tasks manager, written in Rust.
 
-It features both an efficient **TUI (Terminal UI)** and a modern **GUI (Graphical UI)** for desktop integration.
+It features a modern **GUI (Graphical UI)**, an efficient **TUI (Terminal UI)**, and a native **Android** client.
 
 ![logo](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_icon_v2.svg)
 > The icon
@@ -17,61 +17,56 @@ It features both an efficient **TUI (Terminal UI)** and a modern **GUI (Graphica
 
 ## Features
 
-*   **Dual interface:** run it in your terminal (`cfait`) or as a windowed app (`cfait-gui`).
-*   **Smart input:** add tasks naturally: `Buy cat food !1 @tomorrow ~15m` sets priority, due date, and duration automatically.
-*   **GTD workflow:** mark tasks as **in process** (`>`), **cancelled** (`x`), or **done**.
-*   **Duration estimation:** estimate time (`~2h`) and filter tasks by duration (`~<30m`).
-*   **Syncs everywhere:** fully compatible with standard CalDAV servers (Radicale, Nextcloud, iCloud, etc.).
-*   **Tag support:** organize tasks using tags and sub-tags (e.g., `#gaming:coop` is automatically included in `#gaming`).
-*   **Tag aliases:** define shortcuts (e.g., `#groceries`) that automatically expand into multiple tags (e.g., `#groceries`, `#shopping`, `#home`).
-*   **Dependencies:** link tasks using RFC 9253 (blocked by) logic.
-*   **Hierarchy support:** create sub-tasks directly from parents and organize nested lists easily.
-*   **Multiple calendars:** seamlessly switch between "Work", "Personal", and other lists, or move tasks between them.
-*   **Offline & local first:** optimistic UI updates mean you never wait for the server. Possibility to use the app immediately without a server; a persistent "Local" calendar stores its tasks on disk.
-*   **Easy migration:** when ready, export all tasks from the Local calendar to a CalDAV server with a single click (or keypress).
-*   **Sane sorting:** tasks are sorted by due date, then undated tasks are ordered by priority.
+*   **Triple interface:** TUI (Terminal), GUI (Windowed), and Native Android.
+*   **Smart input:** Add tasks naturally: `Buy cat food !1 @tomorrow ~15m` sets priority, due date, and duration automatically.
+*   **GTD workflow:** Mark tasks as **in process** (`>`), **cancelled** (`x`), or **done**.
+*   **Duration estimation:** Estimate time (`~2h`) and filter tasks by duration (`~<30m`).
+*   **Syncs everywhere:** Fully compatible with standard CalDAV servers (Radicale, Nextcloud, iCloud, etc.).
+*   **Tag support:** Organize tasks using tags (`#gardening`) and sub-tags (`#gaming:coop` is automatically included in `#gaming`).
+*   **Inline Aliases:** Define shortcuts on the fly; typing `#groceries=#home,#shopping` applies the alias immediately and saves it for future use.
+*   **Dependencies:** Link tasks using RFC 9253 logic (Blocked-by / Child-of).
+*   **Hierarchy support:** Create sub-tasks directly from parents, promote children, and organize nested lists.
+*   **Multiple calendars:** Seamlessly switch between "Work", "Personal", and other lists, or move tasks between them.
+*   **Offline & local first:** Optimistic UI updates mean you never wait for the server. A persistent "Local" calendar allows offline use with a 1-click migration tool to push tasks to a CalDAV server later.
+*   **Sane sorting:** Tasks are sorted by Status > Start Date > Due Date > Priority.
 
 
 ## Installation
 
-### A. Pre-built packages
+### A. Pre-built packages (Recommended for Linux/Windows)
 
-Binaries are built on different environments to ensure maximum compatibility.
-*   **Codeberg releases** (recommended):** built on Arch Linux. Includes native Arch packages, cross-compiled Windows binaries, and Linux binaries.
-*   **GitHub releases:** built on Ubuntu 24.04 and Windows.
+The build pipeline generates binaries for Linux and Windows automatically.
 
-If a binary from one source doesn't work for you, try the other.
+*   **Linux (Universal / Debian / Ubuntu):**
+    *   **Compatibility:** Binaries are built on **Ubuntu 24.04**. They require **glibc 2.39** or newer.
+    *   **Supported Distros:** Ubuntu 24.04+, Linux Mint 22+, Fedora 40+, Debian 13 (Trixie), Arch Linux.
+    *   **Older Distros:** If you are on Debian 12 (Bookworm) or Ubuntu 22.04, please [build from source](#c-from-cratesio-via-cargo).
+    *   **Download:** Get the `.deb`, `.tar.gz`, or (zipped) `.exe` from [**Codeberg Releases**](https://codeberg.org/trougnouf/cfait/releases).
 
 *   **Arch Linux:**
-    *   Option 1 (AUR): build from source using your favorite helper:
-        ```bash
-        yay -S cfait      # Stable release
-        # or
-        yay -S cfait-git  # Latest git version
-        ```
-    *   Option 2 (Pre-built): download the native `.pkg.tar.zst` from the [**Codeberg releases**](https://codeberg.org/trougnouf/cfait/releases) and install it:
-        ```bash
-        sudo pacman -U cfait-*.pkg.tar.zst
-        ```
-
-*   **Debian-based Linux (including Ubuntu, Mint, ...):**
-    *   Download the `.deb` file from [**Codeberg**](https://codeberg.org/trougnouf/cfait/releases) (built on Arch) or (if you encounter library errors, e.g. `glibc`) from [**GitHub**](https://github.com/trougnouf/cfait/releases) (built on Ubuntu 24.04).
-    *   Install:
-        ```bash
-        sudo dpkg -i cfait_*.deb
-        ```
+    ```bash
+    yay -S cfait      # Stable release
+    # or
+    yay -S cfait-git  # Latest git version
+    ```
 
 *   **Windows:**
-    *   Download the `.zip` archive from [**Codeberg**](https://codeberg.org/trougnouf/cfait/releases) (cross-compiled via MinGW) or [**GitHub**](https://github.com/trougnouf/cfait/releases) (native build).
-    *   Extract it and run `cfait.exe` (TUI) or `cfait-gui.exe` (GUI).
+    *   Download the `.zip` archive from [**Codeberg Releases**](https://codeberg.org/trougnouf/cfait/releases).
+    *   Extract and run `cfait-gui.exe` (or `cfait.exe` for the terminal).
 
-*   **Other Linux:**
-    *   Download the generic `cfait-linux-*.tar.gz` archive from either release page.
-    *   Extract and place the binaries in your `$PATH`.
+### B. macOS
 
-### B. From crates.io (via Cargo)
+We do not provide pre-built `.dmg` or `.app` bundles, but Cfait runs natively on macOS (Apple Silicon & Intel). Please install via Cargo:
 
-If you have Rust installed, you can install Cfait directly from crates.io.
+```bash
+# Install Rust (if not installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Install Cfait
+cargo install cfait --features gui
+```
+
+### C. From crates.io (via Cargo)
 
 ```bash
 # Install both TUI and GUI
@@ -81,9 +76,7 @@ cargo install cfait --features gui
 cargo install cfait
 ```
 
-### C. From source (e.g. for development)
-
-If you want to contribute to Cfait, clone the repository and build it locally:
+### D. From source (Development)
 
 ```bash
 git clone https://codeberg.org/trougnouf/cfait.git
@@ -96,28 +89,17 @@ cargo run
 cargo run --bin gui --no-default-features --features gui
 ```
 
-
-### Run
-```bash
-# Run TUI
-cfait
-
-# Run GUI
-cfait-gui
-```
-
 ## Configuration
 
-The GUI includes a configuration dialog which writes to the config file below.
+The GUI includes a configuration dialog. The TUI has an onboarding screen to set credentials.
 
-The TUI has on onboarding dialog but it is only used to populate the `url`, `username`, and `password` fields.
-
-Create a config file at:
+The config file is located at:
 *   **Linux:** `~/.config/cfait/config.toml`
-*   **Mac:** `~/Library/Application Support/com.cfait.cfait/config.toml`
+*   **macOS:** `~/Library/Application Support/com.cfait.cfait/config.toml`
+*   **Windows:** `%APPDATA%\cfait\config.toml`
 
 ```toml
-url = "https://localhost:5232/trougnouf/"
+url = "https://localhost:5232/user/"
 username = "myuser"
 password = "mypassword"
 
@@ -125,19 +107,12 @@ password = "mypassword"
 # Default: false
 allow_insecure_certs = true 
 
-default_calendar = "Personal" # Optional: Auto-selects this list on startup
+default_calendar = "todo"
 
-# Optional: Disable calendars you don't want to see (e.g., those without VTASKS capability).
-# Use the full calendar href, not the display name.
-#disabled_calendars = [
-#    "/trougnouf/1355814b-9f29-792d-6dba-f6c671304517/",
-#    "/trougnouf/36df9c8c-98e8-a920-7866-7b9d39bd8a24/",
-#]
-
-# Hide completed tasks in all views
+# Hide completed tasks globally?
 hide_completed = false
-# Hide tags from the sidebar if they contain NO active tasks
-# When true, tags that have only completed tasks will be hidden from the Tags view
+
+# Hide tags in the sidebar if they only contain completed tasks?
 hide_fully_completed_tags = true
 
 # Sorting: Tasks due more than X months away are sorted by priority only (not date)
@@ -146,8 +121,7 @@ sort_cutoff_months = 6
 
 # Tag Aliases: Automatically expand one tag into multiple
 [tag_aliases]
-groceries = ["shopping", "home"]  # Typing #groceries will add #groceries, #shopping and #home
-cfait = ["dev", "rust"]           # Typing #cfait will add #cfait, #dev and #rust
+groceries = ["shopping", "home"]
 ```
 
 ## TUI Keybindings
@@ -188,65 +162,24 @@ cfait = ["dev", "rust"]           # Typing #cfait will add #cfait, #dev and #rus
 | | `m` | Toggle tag match mode (AND / OR) |
 
 ## Input Syntax
-When adding (`a`) or editing (`e`) a task, you can use shortcuts directly in the text:
+When adding (`a`) or editing (`e`) a task:
 
-*   `!1` to `!9`: Sets **priority** (1 is high, 9 is low).
-*   `due:DATE` or `@DATE`: Sets **due date**.
-    *   Formats: `2025-12-31`, `today`, `tomorrow`, `1w` (1 week), `2d` (2 days).
-*   `start:DATE` or `^DATE`: Sets **start date**.
-    *   Tasks with a future start date are pushed to the bottom of the list ("Scheduled").
-*   `est:DURATION` or `~DURATION`: Sets **estimated duration** (e.g., `~30m`, `~1h`).
-    *   Also supports `~30min`.
-*   `rec:RECURRENCE`: Sets **recurrence** (e.g., `rec:weekly`, `rec:daily`).
-    *   Also supports interval syntax: `rec:every 2 weeks`.
-*   `#tag`: Adds a **tag** / category.
-    *   **Sub-tags:** Use colons to create hierarchy: `#project:backend`. Selecting `#project` will also show `#project:backend` tasks.
-    *   **Aliases:** Define aliases inline with `#alias=#tag1,#tag2`. Future uses of `#alias` will expand automatically, and the definition applies retroactively to existing tasks.
-    *   **Quick jump:** Typing only a tag (e.g., `#urgent`) and pressing Enter will switch the view to that tag.
+*   `!1` to `!9`: **Priority** (1 is high, 9 is low).
+*   `@DATE` or `due:DATE`: **Due date** (`2025-12-31`, `today`, `tomorrow`, `1w`, `2d`, 3mo, 4y).
+*   `^DATE` or `start:DATE`: **Start date**. Pushes to bottom until date.
+*   `~DURATION` or `est:DURATION`: **Estimate** (`~30m`, `~1h`, `~4d`).
+*   `rec:INTERVAL` or `@every X`: **Recurrence** (`@daily`, `@weekly`, `@monthly`, `@yearly`, or `@every 2 weeks`, ...).
+*   `#tag`: **Tag**. Supports hierarchy (`#project:backend`).
+    *   **Define Alias:** `#alias=#tag1,#tag2` (e.g., `#shop=#home,#buy`).
 
 ## Advanced Search
-The search bar (in both GUI and TUI) supports powerful filtering syntax:
+The search bar supports specific filters:
 
-*   `text`: Matches title or description.
-*   `#tag`: Filters by tag (e.g. `#work`).
-*   `~<30m`: Duration less than 30 mins.
-*   `~>=1h`: Duration greater or equal to 1 hour.
+*   `#tag`: Filter by tag.
+*   `is:done` / `is:active` / `is:ongoing`: Filter by status.
+*   `~<30m`: Duration less than 30 mins (using `>`, `>=`, `<`, `<=` operators and `m`, `h`, `d`, `mo`, `y`).
 *   `!<3`: Priority higher than 3 (1 or 2).
-*   `!>=5`: Priority 5 or lower.
-*   `@<2025-01-01`: Due before specific date.
-*   `@<1w`: Due within 1 week from today.
-*   `@>=2d`: Due at least 2 days from today.
-*   `is:done`: Show only completed/cancelled tasks.
-*   `is:ongoing`: Show only ongoing (started) tasks.
-*   `is:active`: Show only active (not completed/cancelled) tasks.
-
-**Example:** `~<20m !<4 #gardening` finds quick, high-priority, gardening tasks.
-
-## Sorting
-Tasks are sorted by:
-1.  **Status**: In process > Needs action > Completed.
-2.  **Scheduling**: Tasks with a **start date** in the future are pushed to the bottom.
-3.  **Due date**: Overdue and upcoming tasks appear first.
-4.  **Priority**: Higher priority (`!1`) first.
-
-## License
-GPL3
-
-## Mirrors
-
-Commits are pushed to the following repositories. The automated build pipelines differ slightly:
-
-*   **[Codeberg](https://codeberg.org/trougnouf/cfait)**
-    *   **CI:** runs lint and tests on every commit.
-    *   **Environment:** builds run on **Arch Linux**.
-    *   **Artifacts:** native Arch package (`.pkg.tar.zst`), cross-compiled Windows build (MinGW), cross-packaged Debian build, PKGBUILD.
-    *   **Deployment:** automatically pushes updates to the [AUR](https://aur.archlinux.org/packages/cfait).
-
-*   **[GitHub](https://github.com/trougnouf/cfait)**
-    *   **CI:** runs tests on release.
-    *   **Environment:** builds run on **Ubuntu 24.04** and **Windows Server**.
-    *   **Artifacts:** native Debian/Ubuntu package, native Windows build, PKGBUILD.
-*   **[GitLab](https://gitlab.com/trougnouf/cfait)**
+*   `@<today`: Overdue tasks, `@<1w`: due within 1 week, `@>=2d`: due at least 2 days from now.
 
 ## Android Development
 
@@ -258,16 +191,18 @@ Cfait uses a native Android UI (Jetpack Compose) backed by the shared Rust core 
     ```bash
     rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
     ```
-3.  **Tools**:
+3.  **Cargo NDK**:
     ```bash
     cargo install cargo-ndk
     ```
 
 ### Building & Running
-1.  **Compile the Rust Library:**
-    Note: You must set `ANDROID_NDK_HOME` to your NDK installation path (e.g., inside `~/Android/Sdk/ndk/...` or `/opt/android-ndk`).
+1.  **Compile Rust Library:**
+    Set `ANDROID_NDK_HOME` to your NDK path (e.g., inside `~/Android/Sdk/ndk/...`).
     ```bash
     export ANDROID_NDK_HOME=/path/to/your/ndk
+    
+    # Build the shared libraries (.so) and place them in the Android project
     cargo ndk -t aarch64-linux-android -t x86_64-linux-android -o ./android/app/src/main/jniLibs build --release --lib
     ```
 
@@ -281,3 +216,13 @@ Cfait uses a native Android UI (Jetpack Compose) backed by the shared Rust core 
     ```
 
 3.  **Run:** Open the `android` folder in Android Studio and click **Run**.
+
+## Mirrors
+
+*   **[Codeberg](https://codeberg.org/trougnouf/cfait)** (Primary with Linux Builds and cross-compiled Windows builds)
+*   **[GitHub](https://github.com/trougnouf/cfait)** (Mirror with Linux and native Windows builds)
+*   **[GitLab](https://gitlab.com/trougnouf/cfait)** (Mirror)
+
+## License
+GPL3
+```
