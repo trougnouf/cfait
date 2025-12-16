@@ -1,4 +1,4 @@
-// File: src/client/core.rs
+// File: ./src/client/core.rs
 use crate::cache::Cache;
 use crate::client::cert::NoVerifier;
 use crate::config::Config;
@@ -413,10 +413,9 @@ impl RustyClient {
                 if !server_hrefs.contains(&href) {
                     let is_unsynced = task.etag.is_empty() || task.href.is_empty();
 
-                    if is_unsynced
-                        && pending_creations.contains(&task.uid) {
-                            final_tasks.push(task);
-                        }
+                    if is_unsynced && pending_creations.contains(&task.uid) {
+                        final_tasks.push(task);
+                    }
                     // Else: It was synced (has ETag) but server doesn't have it -> Deleted. implicitly dropped.
                 }
             }
@@ -550,33 +549,38 @@ impl RustyClient {
         &self,
         task: &mut Task,
     ) -> Result<(Task, Option<Task>, Vec<String>), String> {
-        let next_task = if task.status == TaskStatus::Completed {
-            task.respawn()
-        } else {
-            None
-        };
+        // INTEROP FIX: Recurrence Strategy
+        // Previously, we spawned a new task (clone) and marked the old one completed.
+        // This caused triplication issues with Tasks.org which expects the task to "Recycle" (move dates forward).
+        //
+        // New Logic: If completing a recurring task, advance its dates and keep it Open.
 
+        if task.status == TaskStatus::Completed && task.rrule.is_some() {
+            if task.advance_recurrence() {
+                // Task is now updated (dates moved, status reset to NeedsAction)
+                // We do NOT spawn a new task.
+            } else {
+                // Recurrence finished or failed, leave as Completed.
+            }
+        }
+
+        // Handle Local Calendar
         if task.calendar_href == LOCAL_CALENDAR_HREF {
             let mut all = LocalStorage::load().map_err(|e| e.to_string())?;
             if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
                 all[idx] = task.clone();
             }
-            if let Some(new_t) = &next_task {
-                all.push(new_t.clone());
-            }
+            // Note: We no longer push a 'new' task for recurrence, as we recycled 'task'
             LocalStorage::save(&all).map_err(|e| e.to_string())?;
-            return Ok((task.clone(), next_task, vec![]));
+            return Ok((task.clone(), None, vec![]));
         }
 
-        let mut logs = Vec::new();
-        if let Some(mut next) = next_task.clone() {
-            let l = self.create_task(&mut next).await?;
-            logs.extend(l);
-        }
-        let l = self.update_task(task).await?;
-        logs.extend(l);
+        // Handle Network Calendar
+        // We only update the existing task (which might have been recycled)
+        // We no longer call create_task() for recurrence.
+        let logs = self.update_task(task).await?;
 
-        Ok((task.clone(), next_task, logs))
+        Ok((task.clone(), None, logs))
     }
 
     pub async fn move_task(
@@ -894,7 +898,7 @@ impl RustyClient {
                     }
                 }
                 Err(msg) => {
-                    // FIX: Poison Pill Detection
+                    // Poison Pill Detection
                     // Swallow 400/413 errors to unblock queue
                     if msg.contains("400")
                         || msg.contains("403")
@@ -950,7 +954,7 @@ impl RustyClient {
             .relative_uri(&source_path)
             .map_err(|e| format!("Invalid source URI: {}", e))?;
 
-        // FIX: Construct Absolute Destination URI
+        // Construct Absolute Destination URI
         let base = client.webdav_client.base_url();
         let scheme = base.scheme_str().unwrap_or("https");
         let authority = base.authority().map(|a| a.as_str()).unwrap_or("");

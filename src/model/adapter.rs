@@ -1,4 +1,4 @@
-// File: ./src/model/adapter.rs
+// File: src/model/adapter.rs
 use crate::model::item::{RawProperty, Task, TaskStatus};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use icalendar::{Calendar, CalendarComponent, Component, Todo, TodoStatus};
@@ -26,7 +26,7 @@ const HANDLED_KEYS: &[&str] = &[
     "PRODID",
     "VERSION",
     "CALSCALE",
-    "RECURRENCE-ID", // <--- ADDED THIS to prevent corruption of exception tasks
+    "RECURRENCE-ID", // <--- prevents corruption of exception tasks
 ];
 
 impl Task {
@@ -72,6 +72,58 @@ impl Task {
             }
         }
         None
+    }
+
+    /// Advances the task to the next recurrence date in-place.
+    /// Returns true if successfully advanced, false if recurrence ended or invalid.
+    pub fn advance_recurrence(&mut self) -> bool {
+        let rule_str = match self.rrule.as_ref() {
+            Some(r) => r,
+            None => return false,
+        };
+
+        // Use dtstart or due as the seed for recurrence calculation
+        let seed_date = self.dtstart.or(self.due);
+        if seed_date.is_none() {
+            return false;
+        }
+        let seed_date = seed_date.unwrap();
+
+        let dtstart_str = seed_date.format("%Y%m%dT%H%M%SZ").to_string();
+        let rrule_string = format!("DTSTART:{}\nRRULE:{}", dtstart_str, rule_str);
+
+        if let Ok(rrule_set) = RRuleSet::from_str(&rrule_string) {
+            // FIX: Calculate next occurrence relative to the current task date (strict recurrence),
+            // not relative to 'now'. This prevents skipping occurrences if completing late,
+            // and ensures 'catch-up' behavior.
+            let threshold = seed_date;
+
+            let next_occurrence = rrule_set
+                .into_iter()
+                .find(|d| d.to_utc() > threshold)
+                .map(|d| d.to_utc());
+
+            if let Some(next_start) = next_occurrence {
+                let duration = if let Some(old_due) = self.due {
+                    old_due - seed_date
+                } else {
+                    chrono::Duration::zero()
+                };
+
+                if self.dtstart.is_some() {
+                    self.dtstart = Some(next_start);
+                }
+
+                if self.due.is_some() {
+                    self.due = Some(next_start + duration);
+                }
+
+                // Reset status to Open/NeedsAction implies recycling the task
+                self.status = TaskStatus::NeedsAction;
+                return true;
+            }
+        }
+        false
     }
 
     pub fn to_ics(&self) -> String {
