@@ -1,9 +1,11 @@
 // File: android/app/src/main/java/com/cfait/ui/TaskRow.kt
 package com.cfait.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -17,7 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cfait.core.MobileTask
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun TaskRow(
     task: MobileTask, 
@@ -33,14 +35,27 @@ fun TaskRow(
     
     val textColor = getTaskTextColor(task.priority.toInt(), task.isDone, isDark)
 
+    // Highlight color when menu is open - subtle amber
+    val highlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
+    val containerColor = if (expanded) {
+        highlightColor
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth()
-            .padding(start = 12.dp + startPadding, end = 12.dp, top = 2.dp, bottom = 2.dp)
-            .clickable { onClick(task.uid) },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            // Reduced vertical padding (top/bottom 2.dp -> 1.dp)
+            .padding(start = 12.dp + startPadding, end = 12.dp, top = 1.dp, bottom = 1.dp)
+            .combinedClickable(
+                onClick = { onClick(task.uid) },
+                onLongClick = { expanded = true }
+            ),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Reduced vertical padding inside row (6.dp -> 4.dp)
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             
             TaskCheckbox(task, calColor, onToggle)
             

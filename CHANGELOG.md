@@ -27,6 +27,7 @@
 - *(android)* Add help screen (under settings)
 - *(tui)* Add auto-jump on create, fix search focus, wrap long titles, reduce sidebar/list ratio
 - *(gui)* Improve search UX, task row layout, and add auto-scroll
+- *(gui)* Add keyboard shortcuts for focusing input fields ("/" to search, "a" for smart input)
 
 ### 🐛 Bug Fixes
 
@@ -48,6 +49,11 @@
 - *(core)* Deduplicate task logic and centralize path resolution
 - *(gui&core)* Restore edit functionality and optimize store lookups
 - *(android)* Split UI into submodules and implement task relationships
+
+### 📚 Documentation
+
+- Add support options and improve help
+- Improve TUI help
 
 ### 🎨 Styling
 
