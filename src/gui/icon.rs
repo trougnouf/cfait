@@ -48,6 +48,8 @@ pub const ELEVATOR_UP: char = '\u{f12c1}'; // nf-md-elevator_up
 // New Icons
 pub const SETTINGS_GEAR: char = '\u{e690}'; // nf-seti-settings
 pub const HELP_RHOMBUS: char = '\u{f0625}'; // nf-md-help_circle_outline
+pub const SEARCH_STOP: char = '\u{eb4e}'; // nf-cod-search_stop
+pub const SEARCH: char = '\u{ea6d}'; // nf-cod-search
 
 // Window Controls
 pub const WINDOW_MINIMIZE: char = '\u{f2d1}'; // nf-fa-window_minimize

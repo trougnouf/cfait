@@ -382,8 +382,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     spans.push(Span::styled(line_text.clone(), base_style));
 
                     if i == lines.len() - 1 {
-                        let line_used =
-                            (if i == 0 { prefix_len } else { prefix_len }) + line_text.len();
+                        let line_used = prefix_len + line_text.len();
                         if line_used + 1 + tags_len <= list_inner_width {
                             let pad = list_inner_width.saturating_sub(line_used + tags_len);
                             spans.push(Span::raw(" ".repeat(pad)));

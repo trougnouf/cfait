@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.0] - 2025-12-15
+## [0.3.0] - 2025-12-16
 
 ### 🚀 Features
 
@@ -25,6 +25,7 @@
 - *(gui)* Refine task row layout for title and tags
 - *(android)* Auto-scroll to newly created task, tag jumping, migration tool, write calendar color
 - *(android)* Add help screen (under settings)
+- *(tui)* Add auto-jump on create, fix search focus, wrap long titles, reduce sidebar/list ratio
 
 ### 🐛 Bug Fixes
 
@@ -63,6 +64,8 @@
 - Lint
 - Lint
 - *(android)* Update versions
+- Switch deb/generic-linux build from Arch to to Ubuntu 24.04 (glibc 2.39), update documentation
+- Update licenses
 ## [0.2.9] - 2025-12-08
 
 ### 🚀 Features

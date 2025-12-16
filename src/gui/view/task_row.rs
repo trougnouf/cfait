@@ -1,5 +1,4 @@
 // File: src/gui/view/task_row.rs
-
 use crate::color_utils;
 use crate::gui::icon;
 use crate::gui::message::Message;
@@ -12,6 +11,13 @@ use super::tooltip_style;
 use iced::widget::{Space, button, column, container, responsive, row, text, tooltip};
 pub use iced::widget::{rich_text, span};
 use iced::{Border, Color, Element, Length, Theme};
+
+// Imports needed for NoPointer and general widget logic
+use iced::advanced::Renderer as AdvancedRenderer;
+use iced::advanced::widget::{self, Tree, Widget};
+use iced::advanced::{Clipboard, Layout, Shell, layout, renderer};
+use iced::mouse;
+use iced::{Event, Rectangle, Size, Vector};
 
 pub fn view_task_row<'a>(
     app: &'a GuiApp,
@@ -132,20 +138,31 @@ pub fn view_task_row<'a>(
     };
 
     let has_desc = !task.description.is_empty();
+    let has_valid_parent = task.parent_uid.as_ref().is_some_and(|uid| !uid.is_empty());
     let has_deps = !task.dependencies.is_empty();
+
+    // Determine if we should show the hand cursor (has content details)
+    let has_content_to_show = has_desc || has_valid_parent || has_deps;
+
     let is_expanded = app.expanded_tasks.contains(&task.uid);
 
-    let mut actions = row![].spacing(3);
+    let mut actions = row![].spacing(3).align_y(iced::Alignment::Center);
 
     if has_desc || has_deps {
-        let info_btn = button(icon::icon(icon::INFO).size(12))
+        let info_icon = icon::icon(icon::INFO)
+            .size(12)
+            .line_height(1.0)
+            .align_y(iced::alignment::Vertical::Center);
+
+        let info_btn = button(info_icon)
             .style(if is_expanded {
                 button::primary
             } else {
                 action_style
             })
-            .padding(4)
-            .width(Length::Fixed(25.0))
+            // Reduced padding and switched width to Shrink for tighter layout
+            .padding(2)
+            .width(Length::Shrink)
             .on_press(Message::ToggleDetails(task.uid.clone()));
         // Apply tooltip_style
         actions = actions.push(
@@ -158,7 +175,8 @@ pub fn view_task_row<'a>(
             .delay(Duration::from_millis(700)),
         );
     } else {
-        actions = actions.push(Space::new().width(Length::Fixed(25.0)));
+        // Reduced spacer size to match visual footprint of smaller button
+        actions = actions.push(Space::new().width(Length::Fixed(16.0)));
     }
 
     if let Some(yanked) = &app.yanked_uid {
@@ -678,11 +696,8 @@ pub fn view_task_row<'a>(
 
     let row_id = iced::widget::Id::from(task.uid.clone());
 
-    let has_valid_parent = task.parent_uid.as_ref().is_some_and(|uid| !uid.is_empty());
-    let has_content_to_show =
-        !task.description.is_empty() || has_valid_parent || !task.dependencies.is_empty();
-
-    if is_expanded && has_content_to_show {
+    // Prepare container content
+    let container_content: Element<'a, Message> = if is_expanded && has_content_to_show {
         let mut details_col = column![].spacing(5);
         if !task.description.is_empty() {
             details_col = details_col.push(
@@ -693,7 +708,6 @@ pub fn view_task_row<'a>(
         }
 
         if has_valid_parent {
-            // Safe to unwrap because has_valid_parent checked for Some and !empty
             let p_uid = task.parent_uid.as_ref().unwrap();
             let p_name = app
                 .store
@@ -703,7 +717,6 @@ pub fn view_task_row<'a>(
                 .style(button::danger)
                 .padding(2)
                 .on_press(Message::RemoveParent(task.uid.clone()));
-            // Apply tooltip_style
             let row = row![
                 text("Parent:")
                     .size(12)
@@ -739,7 +752,6 @@ pub fn view_task_row<'a>(
                     .style(button::danger)
                     .padding(2)
                     .on_press(Message::RemoveDependency(task.uid.clone(), dep_uid.clone()));
-                // Apply tooltip_style
                 let dep_row = row![
                     text(format!("{} {}", check, name))
                         .size(12)
@@ -762,11 +774,149 @@ pub fn view_task_row<'a>(
             Space::new().width(Length::Fixed(indent_size as f32 + 30.0)),
             details_col
         ];
-        container(column![task_button, desc_row].spacing(5))
-            .padding(5)
-            .id(row_id)
-            .into()
+        column![task_button, desc_row].spacing(5).into()
     } else {
-        container(task_button).id(row_id).into()
+        // If there is no content to show, wrap the button in NoPointer to disable hand cursor
+        // while preserving click behavior from the button itself (which handles press).
+        if !has_content_to_show {
+            NoPointer {
+                content: task_button.into(),
+            }
+            .into()
+        } else {
+            task_button.into()
+        }
+    };
+
+    container(container_content)
+        .padding(if is_expanded && has_content_to_show {
+            5
+        } else {
+            0
+        })
+        .id(row_id)
+        .into()
+}
+
+// Wrapper widget to suppress pointer cursor on hover
+struct NoPointer<'a, Message, Theme, Renderer> {
+    content: Element<'a, Message, Theme, Renderer>,
+}
+
+impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
+    for NoPointer<'a, Message, Theme, Renderer>
+where
+    Renderer: AdvancedRenderer,
+{
+    fn size(&self) -> Size<Length> {
+        self.content.as_widget().size()
+    }
+
+    fn layout(
+        &mut self,
+        tree: &mut widget::Tree,
+        renderer: &Renderer,
+        limits: &layout::Limits,
+    ) -> layout::Node {
+        self.content.as_widget_mut().layout(tree, renderer, limits)
+    }
+
+    fn draw(
+        &self,
+        tree: &widget::Tree,
+        renderer: &mut Renderer,
+        theme: &Theme,
+        style: &renderer::Style,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        viewport: &Rectangle,
+    ) {
+        self.content
+            .as_widget()
+            .draw(tree, renderer, theme, style, layout, cursor, viewport)
+    }
+
+    fn children(&self) -> Vec<widget::Tree> {
+        self.content.as_widget().children()
+    }
+
+    fn diff(&self, tree: &mut widget::Tree) {
+        self.content.as_widget().diff(tree)
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut widget::Tree,
+        layout: Layout<'_>,
+        renderer: &Renderer,
+        operation: &mut dyn widget::Operation,
+    ) {
+        self.content
+            .as_widget_mut()
+            .operate(tree, layout, renderer, operation)
+    }
+
+    fn update(
+        &mut self,
+        tree: &mut widget::Tree,
+        event: &Event,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        renderer: &Renderer,
+        clipboard: &mut dyn Clipboard,
+        shell: &mut Shell<'_, Message>,
+        viewport: &Rectangle,
+    ) {
+        self.content.as_widget_mut().update(
+            tree, event, layout, cursor, renderer, clipboard, shell, viewport,
+        )
+    }
+
+    fn mouse_interaction(
+        &self,
+        _tree: &widget::Tree,
+        layout: Layout<'_>,
+        cursor: mouse::Cursor,
+        _viewport: &Rectangle,
+        _renderer: &Renderer,
+    ) -> mouse::Interaction {
+        if cursor.is_over(layout.bounds()) {
+            mouse::Interaction::Idle
+        } else {
+            mouse::Interaction::None
+        }
+    }
+
+    fn overlay<'b>(
+        &'b mut self,
+        tree: &'b mut widget::Tree,
+        layout: Layout<'b>,
+        renderer: &Renderer,
+        viewport: &Rectangle,
+        translation: Vector,
+    ) -> Option<iced::advanced::overlay::Element<'b, Message, Theme, Renderer>> {
+        self.content
+            .as_widget_mut()
+            .overlay(tree, layout, renderer, viewport, translation)
+    }
+
+    fn tag(&self) -> widget::tree::Tag {
+        self.content.as_widget().tag()
+    }
+
+    fn state(&self) -> widget::tree::State {
+        self.content.as_widget().state()
+    }
+}
+
+impl<'a, Message, Theme, Renderer> From<NoPointer<'a, Message, Theme, Renderer>>
+    for Element<'a, Message, Theme, Renderer>
+where
+    Message: 'a,
+    Theme: 'a,
+    Renderer: AdvancedRenderer + 'a,
+{
+    fn from(widget: NoPointer<'a, Message, Theme, Renderer>) -> Self {
+        Element::new(widget)
     }
 }

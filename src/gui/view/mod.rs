@@ -53,7 +53,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         AppState::Onboarding | AppState::Settings => view_settings(app),
         AppState::Help => view_help(),
         AppState::Active => {
-            // ... [Layout logic: No Change] ...
             const ITEM_HEIGHT_CAL: f32 = 44.0;
             const ITEM_HEIGHT_TAG: f32 = 34.0;
             const SIDEBAR_CHROME: f32 = 110.0;
@@ -91,7 +90,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     .center_x(Length::Fill)
             ];
 
-            // ... [Resize Grips and Stack: No Change] ...
             let main_container = container(content_layout)
                 .width(Length::Fill)
                 .height(Length::Fill);
@@ -433,10 +431,39 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         .center_y(Length::Shrink);
 
     let search_input = iced::widget::text_input("Search...", &app.search_value)
+        .id("header_search_input") // Stable ID prevents focus loss
         .on_input(Message::SearchChanged)
         .padding(5)
         .size(14)
         .width(Length::Fixed(180.0));
+
+    // --- SEARCH BAR LOGIC ---
+    let mut search_row = row![].align_y(iced::Alignment::Center).spacing(5);
+
+    let is_search_empty = app.search_value.is_empty();
+
+    let (search_icon_char, icon_color, on_press) = if is_search_empty {
+        (icon::SEARCH, Color::from_rgb(0.4, 0.4, 0.4), None) // Gray, no action
+    } else {
+        (
+            icon::SEARCH_STOP,
+            Color::WHITE,
+            Some(Message::SearchChanged(String::new())),
+        ) // White, Clear action
+    };
+
+    let mut clear_btn =
+        iced::widget::button(icon::icon(search_icon_char).size(14).color(icon_color))
+            .style(iced::widget::button::text)
+            .padding(4);
+
+    if let Some(msg) = on_press {
+        clear_btn = clear_btn.on_press(msg);
+    }
+
+    search_row = search_row.push(clear_btn);
+    search_row = search_row.push(search_input);
+    // --------------------------------
 
     let window_controls = row![
         iced::widget::button(icon::icon(icon::WINDOW_MINIMIZE).size(14))
@@ -450,7 +477,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     ]
     .spacing(0);
 
-    let right_section = row![search_input, window_controls]
+    let right_section = row![search_row, window_controls]
         .spacing(10)
         .align_y(iced::Alignment::Center);
 
@@ -558,13 +585,15 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             .collect::<Vec<_>>(),
     )
     .spacing(1);
+
     main_col = main_col.push(
         scrollable(tasks_view)
             .height(Length::Fill)
             .id(app.scrollable_id.clone())
             .direction(Direction::Vertical(
                 Scrollbar::new().width(10).scroller_width(10).margin(0),
-            )),
+            ))
+            .auto_scroll(true),
     );
 
     container(main_col)
