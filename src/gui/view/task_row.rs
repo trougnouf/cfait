@@ -582,7 +582,10 @@ pub fn view_task_row<'a>(
                 );
             }
             if task.rrule.is_some() {
-                tags_row = tags_row.push(container(icon::icon(icon::REPEAT).size(14)).padding(0));
+                let recurrence_icon = icon::icon(icon::REPEAT)
+                    .size(14)
+                    .color(Color::from_rgb(0.5, 0.5, 0.5));
+                tags_row = tags_row.push(container(recurrence_icon).padding(0));
             }
             tags_row.into()
         };
