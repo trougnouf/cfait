@@ -53,7 +53,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(
-                " +/-:Priority  </>:Indent  y:Yank  b:Block  c:Child  C:NewChild #alias=#t1,#t2",
+                " +/-:Priority  </>:Indent  y:Yank { b:Block  c:Child }  C:NewChild #alias=#t1,#t2",
             ),
         ]),
         Line::from(vec![
@@ -537,8 +537,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             .title(" Status "),
                     );
                 let help_str = match state.active_focus {
-                    Focus::Sidebar => "Ret:Select Space:Vis *:All Tab:Tasks".to_string(),
-                    Focus::Main => "a:Add e:Edit Spc:Done d:Del /:Find".to_string(),
+                    Focus::Sidebar => "?:Help q:Quit Tab:Tasks ↵:Select Spc:Show/Hide *:All →:Iso",
+                    Focus::Main => {
+                        "?:Help q:Quit Tab:Side a:Add e:Edit E:Details Spc:Done d:Del /:Find"
+                    }
                 };
                 let help = Paragraph::new(help_str).alignment(Alignment::Right).block(
                     Block::default()
@@ -548,7 +550,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                    .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
                     .split(footer_area);
                 f.render_widget(status, chunks[0]);
                 f.render_widget(help, chunks[1]);

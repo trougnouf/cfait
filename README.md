@@ -8,11 +8,11 @@ It features a modern **GUI (Graphical UI)**, an efficient **TUI (Terminal UI)**,
 ![logo](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_icon_v2.svg)
 > The icon
 
-![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.2.9_screenshot_(GUI).png)
-> The Graphical Interface in v0.2.9 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small>
+![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.0_screenshot_(GUI).png)
+> The Graphical Interface in v0.3.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small>
 
-![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.2.9_screenshot_(TUI).png)
-> The Terminal Interface in v0.2.9 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small>
+![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.0_screenshot_(TUI).png)
+> The Terminal Interface in v0.3.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small>
 
 
 ## Features
@@ -202,7 +202,7 @@ Android will be made available on F-Droid and the Play store starting with v0.3.
 
 ### Building & Running
 1.  **Compile Rust Library:**
-    Set `ANDROID_NDK_HOME` to your NDK path (e.g., inside `~/Android/Sdk/ndk/...`).
+    Set `ANDROID_NDK_HOME` and `ANDROID_NDK_ROOT` to your NDK path (e.g., inside `/opt/android-ndk`).
     ```bash
     export ANDROID_NDK_HOME=/path/to/your/ndk
     
@@ -223,7 +223,7 @@ Android will be made available on F-Droid and the Play store starting with v0.3.
 
 ## Support
 
-If you enjoy using Cfait, consider supporting development:
+If you enjoy using Cfait, consider supporting the developper:
 
 *   💳 **Liberapay:** [https://liberapay.com/trougnouf](https://liberapay.com/trougnouf)
 *   🏦 **Bank (SEPA):** `BE77 9731 6116 6342`
