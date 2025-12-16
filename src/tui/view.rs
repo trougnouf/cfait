@@ -93,7 +93,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
     let h_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
+        .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
         .split(v_chunks[0]);
 
     let main_chunks = Layout::default()
@@ -253,10 +253,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let mut bracket_style = Style::default();
             if let Some(cal) = state.calendars.iter().find(|c| c.href == t.calendar_href)
                 && let Some(hex) = &cal.color
-                    && let Some((r, g, b)) = color_utils::parse_hex_to_u8(hex)
-                {
-                    bracket_style = Style::default().fg(Color::Rgb(r, g, b));
-                }
+                && let Some((r, g, b)) = color_utils::parse_hex_to_u8(hex)
+            {
+                bracket_style = Style::default().fg(Color::Rgb(r, g, b));
+            }
 
             let full_symbol = t.checkbox_symbol(); // e.g. "[x]"
             let inner_char = &full_symbol[1..2]; // e.g. "x"
@@ -297,48 +297,114 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 .filter(|c| !hidden_tags.contains(*c))
                 .collect();
 
-            // Layout Calculation
-            let tags_str_len: usize = visible_cats.iter().map(|c| c.len() + 2).sum();
+            // Construct parts
+            let prefix_indent = Span::raw(indent);
+            let prefix_bracket_l = Span::styled("[", bracket_style);
+            let prefix_inner = Span::styled(inner_char, base_style);
+            let prefix_bracket_r = Span::styled("]", bracket_style);
+            let prefix_blocked = Span::raw(if is_blocked { " [B] " } else { " " });
 
-            // Manually calc length because we are building spans manually
-            let raw_text = format!(
-                "[{}] {}{}{}{}{}",
-                inner_char,
-                if is_blocked { "[B] " } else { " " },
-                t.summary,
-                dur_str,
-                due_str,
-                recur_str
-            );
+            // Base length of all non-text prefixes
+            let prefix_len = prefix_indent.content.len() + 1 + 1 + 1 + prefix_blocked.content.len();
 
-            // "  " indent + brackets + inner + etc
-            let total_len = indent.len() + raw_text.len() + tags_str_len;
-            let padding_len = list_inner_width.saturating_sub(total_len);
-            let padding = " ".repeat(padding_len);
+            let title_content = format!("{}{}{}{}", t.summary, dur_str, due_str, recur_str);
+            let title_len = title_content.len();
 
-            // Construct spans for colorful brackets
-            let mut spans = vec![
-                Span::raw(indent),
-                Span::styled("[", bracket_style),
-                Span::styled(inner_char, base_style),
-                Span::styled("]", bracket_style),
-                Span::raw(if is_blocked { " [B] " } else { " " }),
-                Span::styled(
-                    format!("{}{}{}{}", t.summary, dur_str, due_str, recur_str),
-                    base_style,
-                ),
-                Span::raw(padding),
-            ];
-
+            // Build Tags Spans
+            let mut tags_spans = Vec::new();
+            let mut tags_len = 0;
             for cat in visible_cats {
                 let (r, g, b) = color_utils::generate_color(cat);
                 let color = Color::Rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8);
-                spans.push(Span::styled(
-                    format!(" #{}", cat),
-                    Style::default().fg(color),
-                ));
+                let s = format!(" #{}", cat);
+                tags_len += s.len();
+                tags_spans.push(Span::styled(s, Style::default().fg(color)));
             }
-            ListItem::new(Line::from(spans))
+
+            // Wrapping Logic
+            if prefix_len + title_len + 1 + tags_len <= list_inner_width {
+                let used = prefix_len + title_len + tags_len;
+                let pad = list_inner_width.saturating_sub(used);
+                let mut spans = vec![
+                    prefix_indent,
+                    prefix_bracket_l,
+                    prefix_inner,
+                    prefix_bracket_r,
+                    prefix_blocked,
+                    Span::styled(title_content, base_style),
+                ];
+                spans.push(Span::raw(" ".repeat(pad)));
+                spans.extend(tags_spans);
+                ListItem::new(Line::from(spans))
+            } else {
+                // Multi-line needed
+                let available_width = list_inner_width.saturating_sub(prefix_len);
+                let mut lines = Vec::new();
+
+                if !title_content.is_empty() {
+                    let words = title_content.split_whitespace();
+                    let mut current_line = String::new();
+
+                    for word in words {
+                        if !current_line.is_empty()
+                            && current_line.len() + word.len() + 1 > available_width
+                        {
+                            lines.push(current_line);
+                            current_line = String::new();
+                        }
+                        if !current_line.is_empty() {
+                            current_line.push(' ');
+                        }
+                        current_line.push_str(word);
+                    }
+                    if !current_line.is_empty() {
+                        lines.push(current_line);
+                    }
+                }
+
+                if lines.is_empty() {
+                    lines.push(String::new());
+                }
+
+                let mut final_lines = Vec::new();
+                for (i, line_text) in lines.iter().enumerate() {
+                    let mut spans = Vec::new();
+                    if i == 0 {
+                        spans.push(prefix_indent.clone());
+                        spans.push(prefix_bracket_l.clone());
+                        spans.push(prefix_inner.clone());
+                        spans.push(prefix_bracket_r.clone());
+                        spans.push(prefix_blocked.clone());
+                    } else {
+                        spans.push(Span::raw(" ".repeat(prefix_len)));
+                    }
+
+                    spans.push(Span::styled(line_text.clone(), base_style));
+
+                    if i == lines.len() - 1 {
+                        let line_used =
+                            (if i == 0 { prefix_len } else { prefix_len }) + line_text.len();
+                        if line_used + 1 + tags_len <= list_inner_width {
+                            let pad = list_inner_width.saturating_sub(line_used + tags_len);
+                            spans.push(Span::raw(" ".repeat(pad)));
+                            spans.extend(tags_spans.clone());
+                            final_lines.push(Line::from(spans));
+                        } else {
+                            final_lines.push(Line::from(spans));
+                            if !tags_spans.is_empty() {
+                                let mut tag_row = Vec::new();
+                                let pad = list_inner_width.saturating_sub(tags_len);
+                                tag_row.push(Span::raw(" ".repeat(pad)));
+                                tag_row.extend(tags_spans.clone());
+                                final_lines.push(Line::from(tag_row));
+                            }
+                        }
+                    } else {
+                        final_lines.push(Line::from(spans));
+                    }
+                }
+                ListItem::new(final_lines)
+            }
         })
         .collect();
 
@@ -349,6 +415,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     };
     if state.unsynced_changes {
         title.push_str(" [UNSYNCED] ");
+    }
+    if !state.active_search_query.is_empty() {
+        title.push_str(&format!("[Search: '{}']", state.active_search_query));
     }
 
     let main_style = if state.active_focus == Focus::Main {

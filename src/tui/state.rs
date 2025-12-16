@@ -1,4 +1,4 @@
-// File: ./src/tui/state.rs
+// File: src/tui/state.rs
 use crate::model::{CalendarListEntry, Task};
 use crate::store::{FilterOptions, TaskStore};
 use crate::tui::action::SidebarMode;
@@ -49,6 +49,7 @@ pub struct AppState {
 
     // Input Buffers
     pub input_buffer: String,
+    pub active_search_query: String, // Holds the committed search term
     pub cursor_position: usize,
     pub editing_index: Option<usize>,
     pub move_selection_state: ListState,
@@ -100,6 +101,7 @@ impl AppState {
             sort_cutoff_months: Some(6),
 
             input_buffer: String::new(),
+            active_search_query: String::new(),
             cursor_position: 0,
             editing_index: None,
             move_selection_state: ListState::default(),
@@ -129,7 +131,7 @@ impl AppState {
         let search_term = if self.mode == InputMode::Searching {
             &self.input_buffer
         } else {
-            ""
+            &self.active_search_query
         };
 
         let cutoff_date = if let Some(months) = self.sort_cutoff_months {
