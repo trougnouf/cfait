@@ -65,7 +65,11 @@ impl GuiApp {
                 Theme::custom(
                     "Rusty Dark",
                     iced::theme::Palette {
+                        // Custom Background (211e1e)
                         background: iced::Color::from_rgb8(0x21, 0x1e, 0x1e),
+                        // Custom Primary (Amber/Orange - matches sidebar highlight)
+                        primary: iced::Color::from_rgb(1.0, 0.6, 0.0),
+                        // Keep the rest of the dark theme defaults
                         ..dark_palette
                     },
                 )
