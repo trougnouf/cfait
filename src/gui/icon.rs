@@ -1,4 +1,4 @@
-// File: src/gui/icon.rs
+// File: ./src/gui/icon.rs
 use iced::Font;
 use iced::widget::{Text, text};
 
@@ -58,3 +58,11 @@ pub const WINDOW_MINIMIZE: char = '\u{f2d1}'; // nf-fa-window_minimize
 pub const CONTENT_SAVE_EDIT: char = '\u{f0cfb}'; // nf-md-content_save_edit
 pub const EYE: char = '\u{ea70}'; // nf-cod-eye
 pub const EYE_CLOSED: char = '\u{eae7}'; // nf-cod-eye_closed
+
+// --- SUPPORT / DONATION ICONS ---
+pub const HEART_HAND: char = '\u{ed9b}'; // nf-fa-hand_holding_heart
+pub const CREDIT_CARD: char = '\u{f09d}'; // nf-fa-credit_card
+pub const BANK: char = '\u{f0a27}'; // nf-md-bank_transfer
+pub const BITCOIN: char = '\u{f10f}'; // nf-fa-bitcoin
+pub const LITECOIN: char = '\u{f0a61}'; // nf-md-litecoin
+pub const ETHEREUM: char = '\u{ed58}'; // nf-fa-ethereum

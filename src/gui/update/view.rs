@@ -252,7 +252,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let total = all_cats.len();
                 if total > 1 {
                     let y_offset = index as f32 / (total - 1) as f32;
-                    // FIX: Use operation::snap_to instead of scrollable::snap_to
                     return iced::widget::operation::snap_to(
                         app.sidebar_scrollable_id.clone(),
                         iced::widget::scrollable::RelativeOffset {
@@ -263,6 +262,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
             }
 
+            Task::none()
+        }
+        Message::OpenUrl(url) => {
+            #[cfg(not(target_os = "android"))]
+            std::thread::spawn(move || {
+                #[cfg(target_os = "linux")]
+                let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+                #[cfg(target_os = "windows")]
+                let _ = std::process::Command::new("explorer").arg(url).spawn();
+                #[cfg(target_os = "macos")]
+                let _ = std::process::Command::new("open").arg(url).spawn();
+            });
             Task::none()
         }
         _ => Task::none(),

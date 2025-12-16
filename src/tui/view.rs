@@ -53,7 +53,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(
-                " +/-:Priority  </>:Indent  y:Yank  b:Block(w/Yank)  c:Child(w/Yank)  C:NewChild",
+                " +/-:Priority  </>:Indent  y:Yank  b:Block  c:Child  C:NewChild #alias=#t1,#t2",
             ),
         ]),
         Line::from(vec![
@@ -73,7 +73,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(
-                " Enter:Select/Toggle  Space:Toggle Visibility  *:Show/Clear All  Right:Focus(Solo)",
+                " Enter:Select/Toggle  Space:Toggle Visibility  *:Show/Clear All  Right:Focus",
             ),
         ]),
     ];

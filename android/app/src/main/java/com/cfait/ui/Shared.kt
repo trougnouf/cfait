@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/ui/Shared.kt
+// File: android/app/src/main/java/com/cfait/ui/Shared.kt
 package com.cfait.ui
 
 import androidx.compose.material3.MaterialTheme
@@ -47,11 +47,20 @@ object NfIcons {
     val BLOCKED = get(0xf479)      // nf-oct-blocked
     val CHILD = get(0xf0a89)       // nf-md-account_child
     
+    // DONATION ICONS
+    val HEART_HAND = get(0xed9b)
+    val CREDIT_CARD = get(0xf09d)
+    val BANK = get(0xf0a27)
+    val BITCOIN = get(0xf10f)
+    val LITECOIN = get(0xf0a61)
+    val ETHEREUM = get(0xed58)
+    
     // Android-specific or common alternates not in gui/icon.rs
     val SEARCH = get(0xf002)        // 
     val MENU = get(0xf0c9)          // 
     val DOTS_CIRCLE = get(0xf1978)   // custom icon for menu
     val COPY = get(0xf0c5)           // for yank
+    val EXTERNAL_LINK = get(0xf08e) // nf-fa-external_link
 }
 
 @Composable

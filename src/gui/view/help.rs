@@ -1,6 +1,6 @@
-// File: src/gui/view/help.rs
+// File: ./src/gui/view/help.rs
 use crate::gui::message::Message;
-use iced::widget::{button, column, container, row, scrollable, text, Space};
+use iced::widget::{button, column, container, row, scrollable, text, text_input, Space};
 use iced::{Color, Element, Length, Theme};
 
 // --- STYLE CONSTANTS ---
@@ -12,7 +12,7 @@ const COL_CARD_BG: Color = Color::from_rgb(0.15, 0.15, 0.17); // Slightly lighte
 pub fn view_help() -> Element<'static, Message> {
     let title = row![
         crate::gui::icon::icon(crate::gui::icon::HELP_RHOMBUS).size(28).style(|_: &Theme| text::Style { color: Some(COL_ACCENT) }),
-        text("Syntax guide").size(28).style(|_: &Theme| text::Style { color: Some(Color::WHITE) })
+        text("Help & About").size(28).style(|_: &Theme| text::Style { color: Some(Color::WHITE) })
     ]
     .spacing(15)
     .align_y(iced::Alignment::Center);
@@ -27,7 +27,7 @@ pub fn view_help() -> Element<'static, Message> {
             vec![
                 entry("!1", "Priority High (1) to Low (9)", "!1, !5, !9"),
                 entry("#tag", "Add category. Use ':' for sub-tags.", "#work, #dev:backend"),
-                entry("#a=#b,#c", "Define/update alias inline.", "#groceries=#home,#shopping"),
+                entry("#a=#b,#c", "Define alias inline (Retroactive).", "#groceries=#home,#shopping"),
                 entry("~30m", "Estimated Duration (m/h/d/w).", "~30m, ~1.5h, ~2d"),
             ]
         ),
@@ -38,7 +38,7 @@ pub fn view_help() -> Element<'static, Message> {
             crate::gui::icon::CALENDAR,
             vec![
                 entry("@date", "Due Date. Deadline for the task.", "@tomorrow, @2025-12-31"),
-                entry("^date", "Start Date. Hides/sorts lower until date.", "^next week, ^2025-01-01"),
+                entry("^date", "Start Date (Defer until).", "^next week, ^2025-01-01"),
                 entry("Offsets", "Add time from today.", "1d (1 day), 2w (2 weeks), 3mo (3 months), 4y (4 years)"),
                 entry("Keywords", "Relative dates supported.", "today, tomorrow, next week, next year"),
 
@@ -72,11 +72,14 @@ pub fn view_help() -> Element<'static, Message> {
             ]
         ),
 
+        // 5. SUPPORT
+        support_card(),
+
         // FOOTER
         container(
             column![
                 button(
-                    text("Close help")
+                    text("Close")
                         .size(16)
                         .width(Length::Fill)
                         .align_x(iced::alignment::Horizontal::Center)
@@ -88,7 +91,12 @@ pub fn view_help() -> Element<'static, Message> {
                 
                 text(format!("Cfait v{} \u{2022} GPL3 \u{2022} Trougnouf (Benoit Brummer)", env!("CARGO_PKG_VERSION")))
                      .size(12)
-                     .style(|_: &Theme| text::Style { color: Some(COL_MUTED) })
+                     .style(|_: &Theme| text::Style { color: Some(COL_MUTED) }),
+                
+                button(text("https://codeberg.org/trougnouf/cfait").size(12).style(|_: &Theme| text::Style { color: Some(COL_ACCENT) }))
+                    .padding(0)
+                    .style(iced::widget::button::text)
+                    .on_press(Message::OpenUrl("https://codeberg.org/trougnouf/cfait".to_string()))
             ]
             .spacing(15)
             .align_x(iced::Alignment::Center)
@@ -130,11 +138,12 @@ fn help_card(title: &'static str, icon_char: char, items: Vec<HelpEntry>) -> Ele
     .spacing(10)
     .align_y(iced::Alignment::Center);
 
-    let mut rows = column![header, iced::widget::rule::horizontal(1).style(|_: &Theme| iced::widget::rule::Style { 
-        color: Color::from_rgb(0.3, 0.3, 0.3),
-        radius: 0.0.into(),
-        fill_mode: iced::widget::rule::FillMode::Full,
-        snap: true,
+    let mut rows = column![header, iced::widget::rule::horizontal(1).style(|theme: &Theme| {
+        let base = iced::widget::rule::default(theme);
+        iced::widget::rule::Style { 
+            color: Color::from_rgb(0.3, 0.3, 0.3),
+            ..base
+        }
     })].spacing(12);
 
     for item in items {
@@ -155,13 +164,13 @@ fn help_card(title: &'static str, icon_char: char, items: Vec<HelpEntry>) -> Ele
 
         let content = column![
             row![
-                syntax_pill.width(Length::Fixed(110.0)),
+                syntax_pill.width(Length::Fixed(120.0)),
                 text::<Theme, iced::Renderer>(item.desc).size(14).width(Length::Fill).style(|_: &Theme| text::Style { color: Some(Color::WHITE) }),
             ].spacing(10).align_y(iced::Alignment::Center),
             
             if !item.example.is_empty() {
                 Element::new(row![
-                    Space::new().width(Length::Fixed(110.0)),
+                    Space::new().width(Length::Fixed(120.0)),
                     text::<Theme, iced::Renderer>(format!("e.g.: {}", item.example))
                         .size(12)
                         .style(|_: &Theme| text::Style { color: Some(COL_MUTED) })
@@ -173,6 +182,73 @@ fn help_card(title: &'static str, icon_char: char, items: Vec<HelpEntry>) -> Ele
 
         rows = rows.push(content);
     }
+
+    container(rows)
+        .padding(15)
+        .style(|_: &Theme| container::Style {
+            background: Some(COL_CARD_BG.into()),
+            border: iced::Border {
+                radius: 8.0.into(),
+                width: 1.0,
+                color: Color::from_rgb(0.25, 0.25, 0.28),
+            },
+            ..Default::default()
+        })
+        .width(Length::Fill)
+        .into()
+}
+
+fn support_card() -> Element<'static, Message> {
+    use crate::gui::icon::*;
+    
+    let header = row![
+        icon(HEART_HAND).size(20).style(|_: &Theme| text::Style { color: Some(Color::from_rgb(1.0, 0.4, 0.4)) }),
+        text("Support Development").size(18).style(|_: &Theme| text::Style { color: Some(Color::WHITE) })
+    ]
+    .spacing(10)
+    .align_y(iced::Alignment::Center);
+
+    // Explicitly type arguments as &'static str to satisfy Element<'static> requirements
+    // and avoid lifetime inference errors when creating the Row.
+    let copy_row = |icon_char: char, label: &'static str, val: &'static str| {
+        row![
+            icon(icon_char).size(16).width(Length::Fixed(24.0)).style(|_: &Theme| text::Style { color: Some(COL_MUTED) }),
+            text(label).size(14).width(Length::Fixed(100.0)).style(|_: &Theme| text::Style { color: Some(COL_MUTED) }),
+            text_input(val, val).size(14).padding(5).width(Length::Fill) 
+        ]
+        .spacing(5)
+        .align_y(iced::Alignment::Center)
+    };
+
+    let link_row = |icon_char: char, label: &'static str, url: &'static str| {
+        row![
+            icon(icon_char).size(16).width(Length::Fixed(24.0)).style(|_: &Theme| text::Style { color: Some(COL_MUTED) }),
+            text(label).size(14).width(Length::Fixed(100.0)).style(|_: &Theme| text::Style { color: Some(COL_MUTED) }),
+            button(text(url).size(14).style(|_: &Theme| text::Style { color: Some(COL_ACCENT) }))
+                .padding(5)
+                .width(Length::Fill)
+                .style(iced::widget::button::text)
+                .on_press(Message::OpenUrl(url.to_string()))
+        ]
+        .spacing(5)
+        .align_y(iced::Alignment::Center)
+    };
+
+    let rows = column![
+        header, 
+        iced::widget::rule::horizontal(1).style(|theme: &Theme| {
+            let base = iced::widget::rule::default(theme);
+            iced::widget::rule::Style { 
+                color: Color::from_rgb(0.3, 0.3, 0.3),
+                ..base
+            }
+        }),
+        link_row(CREDIT_CARD, "Liberapay", "https://liberapay.com/trougnouf"),
+        copy_row(BANK, "Bank (SEPA)", "BE77 9731 6116 6342"),
+        copy_row(BITCOIN, "Bitcoin", "bc1qpecezwmlnzxcqye6nfwv5hn075f7vjf0w3g6gr"),
+        copy_row(LITECOIN, "Litecoin", "ltc1q3xjajxhgmvsth0hwtaz085pr3qml7z8ytjnmkd"),
+        copy_row(ETHEREUM, "Ethereum", "0x0A5281F3B6f609aeb9D71D7ED7acbEc5d00687CB"),
+    ].spacing(12);
 
     container(rows)
         .padding(15)

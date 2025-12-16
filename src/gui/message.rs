@@ -108,4 +108,7 @@ pub enum Message {
 
     // Resize
     ResizeStart(ResizeDirection),
+
+    // Open URL
+    OpenUrl(String),
 }

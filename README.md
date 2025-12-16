@@ -37,11 +37,11 @@ It features a modern **GUI (Graphical UI)**, an efficient **TUI (Terminal UI)**,
 
 The build pipeline generates binaries for Linux and Windows automatically.
 
-*   **Linux (Universal / Debian / Ubuntu):**
+*   **Linux (Generic / Debian / Ubuntu):**
     *   **Compatibility:** Binaries are built on **Ubuntu 24.04**. They require **glibc 2.39** or newer.
     *   **Supported Distros:** Ubuntu 24.04+, Linux Mint 22+, Fedora 40+, Debian 13 (Trixie), Arch Linux.
     *   **Older Distros:** If you are on Debian 12 (Bookworm) or Ubuntu 22.04, please [build from source](#c-from-cratesio-via-cargo).
-    *   **Download:** Get the `.deb`, `.tar.gz`, or (zipped) `.exe` from [**Codeberg Releases**](https://codeberg.org/trougnouf/cfait/releases).
+    *   **Download:** Get the `.deb` or `.tar.gz` from [**Codeberg Releases**](https://codeberg.org/trougnouf/cfait/releases).
 
 *   **Arch Linux:**
     ```bash
@@ -53,6 +53,8 @@ The build pipeline generates binaries for Linux and Windows automatically.
 *   **Windows:**
     *   Download the `.zip` archive from [**Codeberg Releases**](https://codeberg.org/trougnouf/cfait/releases).
     *   Extract and run `cfait-gui.exe` (or `cfait.exe` for the terminal).
+
+*  **Android** releases will be available on F-Droid and the Play Store starting with v0.3.0
 
 ### B. macOS
 
@@ -218,6 +220,16 @@ Android will be made available on F-Droid and the Play store starting with v0.3.
     ```
 
 3.  **Run:** Open the `android` folder in Android Studio and click **Run**.
+
+## Support
+
+If you enjoy using Cfait, consider supporting development:
+
+*   💳 **Liberapay:** [https://liberapay.com/trougnouf](https://liberapay.com/trougnouf)
+*   🏦 **Bank (SEPA):** `BE77 9731 6116 6342`
+*   ₿ **Bitcoin:** `bc1qpecezwmlnzxcqye6nfwv5hn075f7vjf0w3g6gr`
+*   Ł **Litecoin:** `ltc1q3xjajxhgmvsth0hwtaz085pr3qml7z8ytjnmkd`
+*   Ξ **Ethereum:** `0x0A5281F3B6f609aeb9D71D7ED7acbEc5d00687CB`
 
 ## Mirrors
 
