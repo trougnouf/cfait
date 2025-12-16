@@ -50,6 +50,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::MigrateLocalTo(_) => tasks::handle(app, message),
 
         Message::TabPressed(_)
+        | Message::FocusInput
+        | Message::FocusSearch
         | Message::DismissError
         | Message::ToggleAllCalendars(_)
         | Message::ToggleCalendarVisibility(_, _)

@@ -14,7 +14,7 @@ use iced::{Border, Color, Element, Length, Theme};
 
 // Imports needed for NoPointer and general widget logic
 use iced::advanced::Renderer as AdvancedRenderer;
-use iced::advanced::widget::{self, Tree, Widget};
+use iced::advanced::widget::{self, Widget};
 use iced::advanced::{Clipboard, Layout, Shell, layout, renderer};
 use iced::mouse;
 use iced::{Event, Rectangle, Size, Vector};

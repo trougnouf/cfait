@@ -185,6 +185,8 @@ The search bar supports specific filters:
 
 Cfait uses a native Android UI (Jetpack Compose) backed by the shared Rust core via [UniFFI](https://github.com/mozilla/uniffi-rs).
 
+Android will be made available on F-Droid and the Play store starting with v0.3.0.
+
 ### Prerequisites
 1.  **Android Studio** (with NDK installed).
 2.  **Rust Targets**:
@@ -225,4 +227,3 @@ Cfait uses a native Android UI (Jetpack Compose) backed by the shared Rust core 
 
 ## License
 GPL3
-```

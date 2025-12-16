@@ -19,6 +19,27 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
         }));
     }
 
+    if app.state == AppState::Active {
+        subs.push(event::listen_with(|evt, status, _window| {
+            if status == event::Status::Captured {
+                return None;
+            }
+            if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = evt {
+                if !modifiers.is_empty() {
+                    return None;
+                }
+
+                match key.as_ref() {
+                    keyboard::Key::Character("a") => Some(Message::FocusInput),
+                    keyboard::Key::Character("/") => Some(Message::FocusSearch),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }));
+    }
+
     // Track window metrics (Size)
     subs.push(event::listen_with(|evt, _status, _window_id| match evt {
         iced::Event::Window(window::Event::Resized(size)) => Some(Message::WindowResized(size)),

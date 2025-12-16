@@ -96,6 +96,10 @@ pub enum Message {
 
     TabPressed(bool),
 
+    // Shortcuts
+    FocusInput,
+    FocusSearch,
+
     // Window Controls
     WindowDragged,
     MinimizeWindow,

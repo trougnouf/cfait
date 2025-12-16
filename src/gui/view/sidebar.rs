@@ -11,7 +11,7 @@ use iced::{Color, Element, Length, Theme};
 use std::time::Duration; // Import from super (mod.rs)
 
 pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
-    // ... [setup: No Change] ...
+    // ... [setup] ...
     let are_all_visible = app
         .calendars
         .iter()
@@ -163,7 +163,7 @@ fn format_mins(m: u32) -> String {
 }
 
 pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
-    // ... [setup: No Change] ...
+    // ... [setup] ...
     let all_cats = app.store.get_all_categories(
         app.hide_completed,
         app.hide_fully_completed_tags,
@@ -225,7 +225,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
             ..Default::default()
         });
 
-    // ... [List: No Change] ...
+    // ... [List] ...
     let tags_list: Element<'_, Message> = if all_cats.is_empty() {
         column![
             header,
@@ -274,7 +274,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         column![header, list].spacing(10).into()
     };
 
-    // ... [Filters: No Change] ...
+    // ... [Filters] ...
     let mut dur_set = std::collections::HashSet::new();
     for tasks in app.store.calendars.values() {
         for t in tasks {

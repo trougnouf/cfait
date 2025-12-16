@@ -15,6 +15,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 operation::focus_next()
             }
         }
+        Message::FocusInput => {
+            // Use generic widget focus operation from operation module
+            operation::focus("main_input")
+        }
+        Message::FocusSearch => {
+            // Use generic widget focus operation from operation module
+            operation::focus("header_search_input")
+        }
         Message::DismissError => {
             app.error_msg = None;
             Task::none()

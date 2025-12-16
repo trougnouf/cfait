@@ -53,6 +53,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         AppState::Onboarding | AppState::Settings => view_settings(app),
         AppState::Help => view_help(),
         AppState::Active => {
+            // ... [Layout logic] ...
             const ITEM_HEIGHT_CAL: f32 = 44.0;
             const ITEM_HEIGHT_TAG: f32 = 34.0;
             const SIDEBAR_CHROME: f32 = 110.0;
@@ -90,6 +91,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     .center_x(Length::Fill)
             ];
 
+            // ... [Resize Grips and Stack] ...
             let main_container = container(content_layout)
                 .width(Length::Fill)
                 .height(Length::Fill);
@@ -437,7 +439,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         .size(14)
         .width(Length::Fixed(180.0));
 
-    // --- SEARCH BAR LOGIC ---
+    // --- UPDATED SEARCH BAR LOGIC ---
     let mut search_row = row![].align_y(iced::Alignment::Center).spacing(5);
 
     let is_search_empty = app.search_value.is_empty();
@@ -586,6 +588,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     )
     .spacing(1);
 
+    // --- UPDATED SCROLLABLE WITH AUTO-SCROLL ---
     main_col = main_col.push(
         scrollable(tasks_view)
             .height(Length::Fill)
@@ -629,6 +632,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
     };
 
     let input_title = iced::widget::text_input(&input_placeholder, &app.input_value)
+        .id("main_input")
         .on_input(Message::InputChanged)
         .on_submit(Message::SubmitTask)
         .padding(10)

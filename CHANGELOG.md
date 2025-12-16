@@ -26,6 +26,7 @@
 - *(android)* Auto-scroll to newly created task, tag jumping, migration tool, write calendar color
 - *(android)* Add help screen (under settings)
 - *(tui)* Add auto-jump on create, fix search focus, wrap long titles, reduce sidebar/list ratio
+- *(gui)* Improve search UX, task row layout, and add auto-scroll
 
 ### 🐛 Bug Fixes
 
