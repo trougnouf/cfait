@@ -60,6 +60,7 @@
 - Convert UI text and documentation from title case to normal case capitalization
 - *(android)* Modify header with active calendar info, compact tag list layout, and add sidebar footer logo
 - *(gui)* Highlight task on hover, display details on click
+- *(android)* Reduce space between tasks, highlight current task, allow long press for more actions
 
 ### 🧪 Testing
 
