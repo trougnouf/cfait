@@ -45,6 +45,7 @@ pub fn save_config(app: &GuiApp) {
         disabled_calendars: app.disabled_calendars.iter().cloned().collect(),
         tag_aliases: app.tag_aliases.clone(),
         sort_cutoff_months: app.sort_cutoff_months,
+        theme: app.current_theme,
     }
     .save();
 }

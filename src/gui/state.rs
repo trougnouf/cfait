@@ -1,5 +1,6 @@
 // File: src/gui/state.rs
 use crate::client::RustyClient;
+use crate::config::AppTheme;
 use crate::model::{CalendarListEntry, Task as TodoTask};
 use crate::store::TaskStore;
 use iced::widget::text_editor;
@@ -58,6 +59,7 @@ pub struct GuiApp {
     pub hide_completed: bool,
     pub hide_fully_completed_tags: bool,
     pub sort_cutoff_months: Option<u32>,
+    pub current_theme: AppTheme,
 
     // Filter State
     pub filter_min_duration: Option<u32>,
@@ -119,6 +121,7 @@ impl Default for GuiApp {
             hide_fully_completed_tags: true,
             sort_cutoff_months: Some(6),
             ob_sort_months_input: "6".to_string(),
+            current_theme: AppTheme::default(),
 
             filter_min_duration: None,
             filter_max_duration: None,

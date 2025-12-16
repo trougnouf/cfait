@@ -4,6 +4,7 @@ use crate::storage::LocalStorage;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 use std::fs;
 
 fn default_true() -> bool {
@@ -11,6 +12,26 @@ fn default_true() -> bool {
 }
 fn default_cutoff() -> Option<u32> {
     Some(6)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum AppTheme {
+    #[default]
+    Dark,
+    RustyDark,
+}
+
+impl fmt::Display for AppTheme {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AppTheme::Dark => write!(f, "Default Dark"),
+            AppTheme::RustyDark => write!(f, "Rusty Dark"),
+        }
+    }
+}
+
+impl AppTheme {
+    pub const ALL: [AppTheme; 2] = [AppTheme::Dark, AppTheme::RustyDark];
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -33,6 +54,8 @@ pub struct Config {
     pub sort_cutoff_months: Option<u32>,
     #[serde(default)]
     pub tag_aliases: HashMap<String, Vec<String>>,
+    #[serde(default)]
+    pub theme: AppTheme,
 }
 
 // --- ADDED THIS IMPLEMENTATION ---
@@ -51,6 +74,7 @@ impl Default for Config {
             hide_fully_completed_tags: true,
             sort_cutoff_months: Some(6),
             tag_aliases: HashMap::new(),
+            theme: AppTheme::default(),
         }
     }
 }

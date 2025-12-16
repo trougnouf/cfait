@@ -22,6 +22,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.tag_aliases = config.tag_aliases.clone();
             app.hide_completed = config.hide_completed;
             app.hide_fully_completed_tags = config.hide_fully_completed_tags;
+            app.current_theme = config.theme;
 
             app.ob_url = config.url.clone();
             app.ob_user = config.username.clone();
@@ -103,6 +104,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_insecure = val;
             Task::none()
         }
+        Message::ThemeChanged(theme) => {
+            app.current_theme = theme;
+            save_config(app);
+            Task::none()
+        }
         Message::ObSubmit => {
             if app.ob_sort_months_input.trim().is_empty() {
                 app.sort_cutoff_months = None;
@@ -110,6 +116,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.sort_cutoff_months = Some(n);
             }
 
+            // The explicit struct is here to preserve settings
+            // that may have been changed in the UI before the first save.
             let mut config_to_save = Config::load().unwrap_or_else(|_| Config {
                 url: String::new(),
                 username: String::new(),
@@ -122,6 +130,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 hide_fully_completed_tags: app.hide_fully_completed_tags,
                 tag_aliases: app.tag_aliases.clone(),
                 sort_cutoff_months: Some(6),
+                theme: app.current_theme, // Make sure to include the new theme field
             });
 
             config_to_save.url = app.ob_url.clone();
@@ -135,6 +144,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             config_to_save.hide_fully_completed_tags = app.hide_fully_completed_tags;
             config_to_save.tag_aliases = app.tag_aliases.clone();
             config_to_save.sort_cutoff_months = app.sort_cutoff_months;
+            config_to_save.theme = app.current_theme; // Also update it here
 
             let _ = config_to_save.save();
 
@@ -155,6 +165,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.hidden_calendars = cfg.hidden_calendars.into_iter().collect();
                 app.tag_aliases = cfg.tag_aliases;
                 app.sort_cutoff_months = cfg.sort_cutoff_months;
+                app.current_theme = cfg.theme;
                 app.ob_sort_months_input = match cfg.sort_cutoff_months {
                     Some(m) => m.to_string(),
                     None => "".to_string(),
@@ -184,6 +195,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 hide_fully_completed_tags: app.hide_fully_completed_tags,
                 tag_aliases: app.tag_aliases.clone(),
                 sort_cutoff_months: app.sort_cutoff_months,
+                theme: app.current_theme,
             };
 
             let _ = config_to_save.save();

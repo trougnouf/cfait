@@ -1,6 +1,6 @@
 // File: src/gui/message.rs
 use crate::client::RustyClient;
-use crate::config::Config;
+use crate::config::{AppTheme, Config};
 use crate::gui::state::{ResizeDirection, SidebarMode};
 use crate::model::{CalendarListEntry, Task as TodoTask};
 use iced::widget::text_editor;
@@ -48,6 +48,7 @@ pub enum Message {
     ToggleDetails(String),
     ConfigLoaded(Result<Config, String>),
     ObSortMonthsChanged(String),
+    ThemeChanged(AppTheme),
 
     Loaded(LoadedResult),
     Refresh,

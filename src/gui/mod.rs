@@ -1,3 +1,4 @@
+// File: src/gui/mod.rs
 pub mod async_ops;
 pub mod icon;
 pub mod message;
@@ -6,7 +7,7 @@ pub mod subscription;
 pub mod update;
 pub mod view;
 
-use crate::config::Config;
+use crate::config::{AppTheme, Config};
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
 use iced::{Element, Subscription, Task, Theme, font, window};
@@ -57,7 +58,19 @@ impl GuiApp {
     }
 
     fn theme(&self) -> Theme {
-        Theme::Dark
+        match self.current_theme {
+            AppTheme::Dark => Theme::Dark,
+            AppTheme::RustyDark => {
+                let dark_palette = iced::Theme::Dark.palette();
+                Theme::custom(
+                    "Rusty Dark",
+                    iced::theme::Palette {
+                        background: iced::Color::from_rgb8(0x21, 0x1e, 0x1e),
+                        ..dark_palette
+                    },
+                )
+            }
+        }
     }
 
     fn subscription(&self) -> Subscription<Message> {

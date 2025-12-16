@@ -1,7 +1,7 @@
 # Cfait
 > Take control of your TODO list
 
-**Cfait** is a powerful, elegant and fast CalDAV tasks manager, written in Rust.
+**Cfait** is a powerful, elegant and fast CalDAV task manager, written in Rust.
 
 It features a modern **GUI (Graphical UI)**, an efficient **TUI (Terminal UI)**, and a native **Android** client.
 
@@ -24,7 +24,7 @@ It features a modern **GUI (Graphical UI)**, an efficient **TUI (Terminal UI)**,
 *   **Smart input:** Add tasks naturally: `Buy cat food !1 @tomorrow ~15m` sets priority, due date, and duration automatically.
 *   **GTD workflow:** Mark tasks as **in process** (`>`), **cancelled** (`x`), or **done**.
 *   **Duration estimation:** Estimate time (`~2h`) and filter tasks by duration (`~<30m`).
-*   **Syncs everywhere:** Fully compatible with standard CalDAV servers (Radicale, Nextcloud, iCloud, etc.).
+*   **Syncs everywhere:** Fully compatible with standard CalDAV servers (Radicale, Xandikos, Nextcloud, iCloud, etc.).
 *   **Tag support:** Organize tasks using tags (`#gardening`) and sub-tags (`#gaming:coop` is automatically included in `#gaming`).
 *   **Inline Aliases:** Define shortcuts on the fly; typing `#groceries=#home,#shopping` applies the alias immediately and saves it for future use.
 *   **Dependencies:** Link tasks using RFC 9253 logic (Blocked-by / Child-of).

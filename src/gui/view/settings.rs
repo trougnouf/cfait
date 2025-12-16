@@ -1,3 +1,5 @@
+// File: src/gui/view/settings.rs
+use crate::config::AppTheme;
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
@@ -40,6 +42,16 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     let prefs: Element<'_, Message> = if is_settings {
         std::convert::Into::<Element<'_, Message>>::into(container(
             column![
+                row![
+                    text("Theme:"),
+                    iced::widget::pick_list(
+                        &AppTheme::ALL[..],
+                        Some(app.current_theme),
+                        Message::ThemeChanged
+                    )
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
                 std::convert::Into::<Element<'_, Message>>::into(
                     checkbox(app.hide_completed)
                         .label("Hide completed tasks (everywhere)")
