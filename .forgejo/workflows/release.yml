@@ -41,10 +41,10 @@ jobs:
             CLEAN_VERSION="$RAW_VERSION"
           fi
           
-          # 1. Source Tarball (Needed for AUR hash)
+          # Source Tarball
           git archive --format=tar.gz --prefix="cfait-${CLEAN_VERSION}/" -o "dist/cfait-source-${RAW_VERSION}.tar.gz" HEAD
           
-          # 2. Linux Binary Tarball
+          # Linux Binary Tarball
           mkdir "cfait-linux-${CLEAN_VERSION}"
           cp target/release/cfait "cfait-linux-${CLEAN_VERSION}/"
           cp target/release/gui "cfait-linux-${CLEAN_VERSION}/cfait-gui"
@@ -53,21 +53,18 @@ jobs:
           cp assets/cfait.svg "cfait-linux-${CLEAN_VERSION}/"
           tar -czvf "dist/cfait-linux-${RAW_VERSION}.tar.gz" "cfait-linux-${CLEAN_VERSION}"
 
-      # Pass Linux artifacts to the Arch job
+      # Upload to runner storage (v3 for Forgejo compatibility)
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v3
         with:
           name: linux-artifacts
           path: dist/*
 
-# --- JOB 3: ANDROID BUILD (Ubuntu) ---
+  # --- JOB 2: ANDROID BUILD (Ubuntu 24.04) ---
   build-android:
-    # This job now depends on build-linux and build-windows-and-publish
-    # so it can upload the AAB to the same release.
-    needs: build-windows-and-publish
     runs-on: self-hosted-ubuntu
     container:
-      image: local/ubuntu-builder # Rebuild this image with the Android SDK
+      image: local/ubuntu-builder
       volumes:
         - cargo-registry:/usr/local/cargo/registry
         - gradle-cache:/root/.gradle
@@ -78,12 +75,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1. Decode Keystore Secret
       - name: Restore Keystore
         if: startsWith(github.ref, 'refs/tags/')
         run: echo "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" | base64 --decode > cfait-release.keystore
 
-      # 2. Build Rust Libraries (.so)
       - name: Build Rust JNI Libs
         run: |
           cargo ndk \
@@ -93,11 +88,9 @@ jobs:
             -o ./android/app/src/main/jniLibs \
             build --release --lib
 
-# 3. Build Signed Android App Bundle (AAB)
-      - name: Build Android App Bundle
+      - name: Build Signed Android App Bundle
         if: startsWith(github.ref, 'refs/tags/')
         env:
-          # USE ABSOLUTE PATH HERE
           KEYSTORE_FILE: "${{ github.workspace }}/cfait-release.keystore"
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -107,30 +100,26 @@ jobs:
           chmod +x gradlew
           ./gradlew bundleRelease --no-daemon
 
-      # 4. Upload AAB to Codeberg Releases
-      # This reuses the 'tea' tool from your previous job
-      - name: Upload AAB to Codeberg
+      - name: Prepare Artifact
         if: startsWith(github.ref, 'refs/tags/')
-        env:
-          TEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
-          # Find the generated AAB file and rename it
-          AAB_FILE=$(find android/app/build/outputs/bundle/release -name '*.aab' -print -quit)
-          if [ -z "$AAB_FILE" ]; then
-            echo "Error: AAB file not found!"
-            exit 1
-          fi
-          
           RAW_VERSION="${{ github.ref_name }}"
-          mv "$AAB_FILE" "cfait-android-${RAW_VERSION}.aab"
+          # Move and rename the AAB to a clean location for upload
+          mkdir -p dist-android
+          find android/app/build/outputs/bundle/release -name '*.aab' -exec cp {} "dist-android/cfait-android-${RAW_VERSION}.aab" \;
 
-          # Login and upload
-          tea login add --name codeberg --url ${{ github.server_url }} --token ${{ secrets.RELEASE_TOKEN }}
-          tea release assets create --repo ${{ github.repository }} ${{ github.ref_name }} "cfait-android-${RAW_VERSION}.aab"
+      # Upload to runner storage (v3)
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v3
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: android-artifacts
+          path: dist-android/*
 
-  # --- JOB 2: WINDOWS BUILD & PUBLISH (Arch) ---
+  # --- JOB 3: WINDOWS BUILD & PUBLISH (Arch) ---
+  # This job waits for Linux and Android, then bundles everything and releases.
   build-windows-and-publish:
-    needs: build-linux
+    needs: [build-linux, build-android]
     runs-on: self-hosted-arch
     container:
       image: local/arch-builder
@@ -143,21 +132,28 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1. Download artifacts from Ubuntu job
+      # 1. Download Linux Artifacts
       - name: Download Linux Artifacts
         uses: actions/download-artifact@v3
         with:
           name: linux-artifacts
           path: dist
 
-      # 2. Compile Windows (On Arch)
+      # 2. Download Android Artifacts
+      - name: Download Android Artifacts
+        uses: actions/download-artifact@v3
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: android-artifacts
+          path: dist
+
+      # 3. Build Windows Binaries (On Arch)
       - name: Build Windows Binaries
         run: |
-          # Ensure target is installed (Dockerfile should have it, but safe to check)
           rustup target add x86_64-pc-windows-gnu
           cargo build --release --target x86_64-pc-windows-gnu --features gui
 
-      # 3. Package Windows
+      # 4. Package Windows
       - name: Create Windows Archive
         run: |
           if [ "${{ github.ref_type }}" = "tag" ]; then
@@ -171,17 +167,14 @@ jobs:
           cp target/x86_64-pc-windows-gnu/release/gui.exe windows-staging/cfait-gui.exe
           cp README.md LICENSE windows-staging/
           
-          # Zip into the dist folder we created during download
           (cd windows-staging && zip -r "../dist/cfait-windows-$RAW_VERSION.zip" .)
 
-      # 4. Generate Changelog
+      # 5. Generate Changelog
       - name: Generate Changelog
         run: |
           git-cliff --config cliff.toml --verbose --latest --strip header --output dist/CHANGELOG_RELEASE.md
 
-      # 5. Handle AUR (Requires makepkg from Arch)
-    
-      # 5. Handle AUR (Requires makepkg from Arch)
+      # 6. Handle AUR
       - name: Prepare AUR Files
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -190,7 +183,7 @@ jobs:
           
           cd dist
           
-          # Calculate Hash
+          # Verify Linux source tarball exists
           if [ ! -f "cfait-source-${RAW_VERSION}.tar.gz" ]; then
             echo "Error: Source tarball not found"
             exit 1
@@ -198,25 +191,18 @@ jobs:
           
           HASH=$(sha256sum "cfait-source-${RAW_VERSION}.tar.gz" | awk '{print $1}')
           
-          # Copy PKGBUILD
           cp ../packaging/arch/PKGBUILD .
           
-          # Update Version, Hash, Source
           sed -i "s/pkgver=.*/pkgver=${CLEAN_VER}/" PKGBUILD
           sed -i "s/'SKIP'/'$HASH'/" PKGBUILD
           NEW_SOURCE_URL="https://codeberg.org/trougnouf/cfait/releases/download/${RAW_VERSION}/cfait-source-${RAW_VERSION}.tar.gz"
           sed -i "s|source=.*|source=(\"cfait-source-${RAW_VERSION}.tar.gz::${NEW_SOURCE_URL}\")|" PKGBUILD
           
-          # --- FIX IS HERE ---
-          # Give 'builder' ownership of the directory so it can write .SRCINFO
+          # Fix ownership so builder user can write .SRCINFO
           chown -R builder:builder .
-          
-          # Generate .SRCINFO as builder
           su builder -c "makepkg --printsrcinfo > .SRCINFO"
 
-  
-
-      # 6. Upload Everything
+      # 7. Upload Everything (Atomic Release)
       - name: Upload to Codeberg Releases
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -231,10 +217,12 @@ jobs:
             --tag "${{ github.ref_name }}" \
             --note-file dist/CHANGELOG_RELEASE.md
 
-          echo "Uploading assets..."
+          echo "Uploading all assets..."
           cd dist
           for file in *; do
-            if [ "$file" != "CHANGELOG_RELEASE.md" ] && [ "$file" != "PKGBUILD" ] && [ "$file" != ".SRCINFO" ]; then
+            # Upload everything in dist except metadata files
+            if [ "$file" != "CHANGELOG_RELEASE.md" ] && [ "$file" != "PKGBUILD" ] && [ "$file" != ".SRCINFO" ] && [ -f "$file" ]; then
+              echo "Uploading $file..."
               tea release assets create --repo ${{ github.repository }} ${{ github.ref_name }} "$file"
             fi
           done
@@ -242,7 +230,7 @@ jobs:
           # Upload PKGBUILD separately
           tea release assets create --repo ${{ github.repository }} ${{ github.ref_name }} PKGBUILD
 
-      # 7. Push to AUR
+      # 8. Push to AUR
       - name: Push to AUR
         if: startsWith(github.ref, 'refs/tags/')
         env:
