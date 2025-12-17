@@ -93,11 +93,12 @@ jobs:
             -o ./android/app/src/main/jniLibs \
             build --release --lib
 
-      # 3. Build Signed Android App Bundle (AAB)
+# 3. Build Signed Android App Bundle (AAB)
       - name: Build Android App Bundle
         if: startsWith(github.ref, 'refs/tags/')
         env:
-          KEYSTORE_FILE: "../cfait-release.keystore" 
+          # USE ABSOLUTE PATH HERE
+          KEYSTORE_FILE: "${{ github.workspace }}/cfait-release.keystore"
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
