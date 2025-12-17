@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.1] - 2025-12-17
+
+### 🐛 Bug Fixes
+
+- *(android)* Prevent crash on "Show all calendars" toggle on first run by handling missing config file
+- *(android)* Prevent sync conflicts by writing post-sync ETag/sequence back to store
 ## [0.3.0] - 2025-12-17
 
 ### 🚀 Features
@@ -44,6 +50,11 @@
 - *(Android)* Fix build
 - *(core)* Resolve persistent ghost tasks by forcing sync on empty ETags
 - *(core)* Recycle recurring tasks on completion to prevent duplication
+- *(ci)* Downgrade artifact actions to v3 for forgejo compatibility
+- *(ci)* Grant builder user permissions for AUR generation
+- *(android)* Correct kotlin dsl syntax for signing config
+- *(android)* Add R8 rules for JNA/UniFFI
+- *(ci)* Use absolute path for keystore to fix signing
 
 ### 🚜 Refactor
 
@@ -83,6 +94,10 @@
 - Switch deb/generic-linux build from Arch to to Ubuntu 24.04 (glibc 2.39), update documentation
 - Update licenses
 - Fastlane stuff for Android release
+- *(release)* Add signed Android build pipeline and prepare for v0.3.0
+- Release cfait version 0.3.0
+- *(refactor)* Centralize release logic in arch container and build in parallel
+- *(android)* Update gradle to 9.2, build apk in next release
 ## [0.2.9] - 2025-12-08
 
 ### 🚀 Features
