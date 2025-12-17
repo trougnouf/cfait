@@ -179,6 +179,8 @@ jobs:
           git-cliff --config cliff.toml --verbose --latest --strip header --output dist/CHANGELOG_RELEASE.md
 
       # 5. Handle AUR (Requires makepkg from Arch)
+    
+      # 5. Handle AUR (Requires makepkg from Arch)
       - name: Prepare AUR Files
         if: startsWith(github.ref, 'refs/tags/')
         run: |
@@ -187,8 +189,7 @@ jobs:
           
           cd dist
           
-          # Calculate Hash of the source tarball (generated in Ubuntu step)
-          # We check the file exists first to be safe
+          # Calculate Hash
           if [ ! -f "cfait-source-${RAW_VERSION}.tar.gz" ]; then
             echo "Error: Source tarball not found"
             exit 1
@@ -196,24 +197,23 @@ jobs:
           
           HASH=$(sha256sum "cfait-source-${RAW_VERSION}.tar.gz" | awk '{print $1}')
           
-          # Copy PKGBUILD from repo
+          # Copy PKGBUILD
           cp ../packaging/arch/PKGBUILD .
           
-          # Update Version and Hash
+          # Update Version, Hash, Source
           sed -i "s/pkgver=.*/pkgver=${CLEAN_VER}/" PKGBUILD
           sed -i "s/'SKIP'/'$HASH'/" PKGBUILD
-          
-          # Update Source URL
           NEW_SOURCE_URL="https://codeberg.org/trougnouf/cfait/releases/download/${RAW_VERSION}/cfait-source-${RAW_VERSION}.tar.gz"
           sed -i "s|source=.*|source=(\"cfait-source-${RAW_VERSION}.tar.gz::${NEW_SOURCE_URL}\")|" PKGBUILD
           
-          # Generate .SRCINFO
-          # Must run as 'builder' user
-          chown builder:builder PKGBUILD
-          # We need to spoof the tarball location for makepkg to find it to verify validity if needed,
-          # though --printsrcinfo usually doesn't check file presence, strictly speaking.
-          # If makepkg complains about missing source, we link it.
+          # --- FIX IS HERE ---
+          # Give 'builder' ownership of the directory so it can write .SRCINFO
+          chown -R builder:builder .
+          
+          # Generate .SRCINFO as builder
           su builder -c "makepkg --printsrcinfo > .SRCINFO"
+
+  
 
       # 6. Upload Everything
       - name: Upload to Codeberg Releases
