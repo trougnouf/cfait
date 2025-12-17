@@ -395,7 +395,7 @@ fun HomeScreen(
                             OutlinedTextField(
                                 value = newTaskText,
                                 onValueChange = { newTaskText = it },
-                                placeholder = { Text("!1 @tomorrow Buy cat food") },
+                                placeholder = { Text("!1 @tomorrow Buy cat food #groceries") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),

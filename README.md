@@ -1,223 +1,162 @@
+
+
 ![Cfait -- Take control of your TODO list](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_featureGraphic_(hardcoded_text).svg)
 
+<p align="center">
+  <strong>Cfait is a powerful, fast and elegant CalDAV task manager.
+</strong>
+</p>
 
-**Cfait** is a powerful, elegant and fast CalDAV task manager, written in Rust.
-
-It features a modern **GUI (Graphical UI)**, an efficient **TUI (Terminal UI)**, and a native **Android** client.
+<p align="center">
+  <a href="https://codeberg.org/trougnouf/cfait/releases"><img src="https://codeberg.org/trougnouf/cfait/badges/release.svg" alt="Releases"></a>
+  <a href="https://f-droid.org/packages/com.cfait/"><img src="https://img.shields.io/f-droid/v/com.cfait.svg" alt="F-Droid"></a>
+  <a href="https://codeberg.org/trougnouf/cfait/actions"><img src="https://codeberg.org/trougnouf/cfait/badges/workflows/test.yml/badge.svg" alt="Test status"></a>
+  <a href="https://codeberg.org/trougnouf/cfait/src/branch/main/LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-gray.svg" alt="License"></a>
+</p>
 
 ---
+
+**Cfait** is a task manager for people who want speed, efficiency, and ownership of their data.
+
+It connects to any standard **CalDAV** server (Radicale, Xandikos, Nextcloud, iCloud, etc.) so your tasks aren't locked inside a proprietary walled garden. It's written in **Rust**, meaning it starts instantly and handles large lists without stuttering.
+
+You can use it comfortably from the command line (TUI), on your desktop (GUI), or on the go with the native Android app. It's built "offline-first," so you can keep working without an internet connection and Cfait will sync your changes the next time you go online.
+
+## ✨ Features
+
+*   **Smart Input:** Type your tasks naturally. `Buy cookies @tomorrow !1` is parsed instantly into a high-priority task due tomorrow.
+*   **Hierarchical Tags:** Organize deeply with tags like `#dev:cfait` or `#cooking:cookies`.
+*   **Dependencies:** Block tasks until others are done. You can create parent/child tasks or loose dependencies (`y` to yank, `b` to block).
+*   **Recurrence:** Powerful repetition rules for habits and recurrent tasks.
+*   **Inline Aliases:** Define shortcuts on the fly; typing `#groceries=#home,#shopping` applies the alias immediately and saves it for future use.
+*   **Cross-Platform:** Runs on Linux, Windows, and Android. (Probably on MacOS too.)
+
+## 📸 Screenshots
 
 | Desktop (GUI & TUI) | Mobile (Android) |
 | :---: | :---: |
 | ![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.0_screenshot_(GUI).png)<br>The Graphical Interface in v0.3.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small><br><br>![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.0_screenshot_(TUI).png)<br>The Terminal Interface in v0.3.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small> | ![Cfait Android Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.0_screenshot_(Android).png)<br>The Android client in v0.3.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(Android)))</small> |
 
+## 🚀 Installation
 
-## Features
+### Linux
+*   **Arch Linux (AUR):** `yay -S cfait` (or `cfait-git`)
+*   **Debian/Ubuntu/Mint:** Download the `.deb` file from the [releases page](https://codeberg.org/trougnouf/cfait/releases). (Req. Ubuntu 24.04+ / Mint 22+ / Debian 13+)
+*   **Generic:** Download the pre-compiled `.tar.gz` binary tarball from the [releases page](https://codeberg.org/trougnouf/cfait/releases). (Req. `glibc 2.39`, e.g. Fedora 40+)
 
-*   **Triple interface:** TUI (Terminal), GUI (Windowed), and Native Android.
-*   **Smart input:** Add tasks naturally: `Buy cat food !1 @tomorrow ~15m` sets priority, due date, and duration automatically.
-*   **GTD workflow:** Mark tasks as **in process** (`>`), **cancelled** (`x`), or **done**.
-*   **Duration estimation:** Estimate time (`~2h`) and filter tasks by duration (`~<30m`).
-*   **Syncs everywhere:** Fully compatible with standard CalDAV servers (Radicale, Xandikos, Nextcloud, iCloud, etc.).
-*   **Tag support:** Organize tasks using tags (`#gardening`) and sub-tags (`#gaming:coop` is automatically included in `#gaming`).
-*   **Inline Aliases:** Define shortcuts on the fly; typing `#groceries=#home,#shopping` applies the alias immediately and saves it for future use.
-*   **Dependencies:** Link tasks using RFC 9253 logic (Blocked-by / Child-of).
-*   **Hierarchy support:** Create sub-tasks directly from parents, promote children, and organize nested lists.
-*   **Multiple calendars:** Seamlessly switch between "Work", "Personal", and other lists, or move tasks between them.
-*   **Offline & local first:** Optimistic UI updates mean you never wait for the server. A persistent "Local" calendar allows offline use with a 1-click migration tool to push tasks to a CalDAV server later.
-*   **Sane sorting:** Tasks are sorted by Status > Start Date > Due Date > Priority.
+### Android
+*   **F-Droid:** Available in the official repository.
+*   **Google Play:** Currently in testing. More testers are needed for inclusion in the Play Store, please contact me.
+*   **APK:** Download the latest universal APK from the [releases page](https://codeberg.org/trougnouf/cfait/releases).
 
+### Windows
+*   Download the `.zip` archive from the [releases page](https://codeberg.org/trougnouf/cfait/releases). Contains both `cfait.exe` (TUI) and `cfait-gui.exe` (GUI).
 
-## Installation
-
-### A. Pre-built packages (Recommended for Linux/Windows)
-
-The build pipeline generates binaries for Linux and Windows automatically.
-
-*   **Linux (Generic / Debian / Ubuntu):**
-    *   **Compatibility:** Binaries are built on **Ubuntu 24.04**. They require **glibc 2.39** or newer.
-    *   **Supported Distros:** Ubuntu 24.04+, Linux Mint 22+, Fedora 40+, Debian 13+ (Trixie), Arch Linux.
-    *   **Older Distros:** If you are on Debian 12 (Bookworm) or Ubuntu 22.04, please [build from source](#c-from-cratesio-via-cargo).
-    *   **Download:** Get the `.deb` or `.tar.gz` from [**Codeberg Releases**](https://codeberg.org/trougnouf/cfait/releases).
-
-*   **Arch Linux:**
-    ```bash
-    yay -S cfait      # Stable release
-    # or
-    yay -S cfait-git  # Latest git version
-    ```
-
-*   **Windows:**
-    *   Download the `.zip` archive from [**Codeberg Releases**](https://codeberg.org/trougnouf/cfait/releases).
-    *   Extract and run `cfait-gui.exe` (or `cfait.exe` for the terminal).
-
-*  **Android** releases will be available on F-Droid and the Play Store starting with v0.3.0
-
-### B. macOS
-
-We do not provide pre-built `.dmg` or `.app` bundles, but Cfait runs natively on macOS (Apple Silicon & Intel). Please install via Cargo:
-
+### From Source (Rust)
+Requires standard system libraries (openssl, alsa, fontconfig, x11, xkbcommon).
 ```bash
-# Install Rust (if not installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Install Cfait
-cargo install cfait --features gui
-```
-
-### C. From crates.io (via Cargo)
-
-```bash
-# Install both TUI and GUI
-cargo install cfait --features gui
-
-# Or, install only the TUI
+# Install TUI only
 cargo install cfait
+
+# Install GUI
+cargo install cfait --features gui --bin gui
 ```
+Replace `cfait` with `.` to build locally.
 
-### D. From source (Development)
 
-```bash
-git clone https://codeberg.org/trougnouf/cfait.git
-cd cfait
+## ⌨️ Smart Input Syntax
 
-# Run the TUI
-cargo run
+You don't need to click through menus to set dates or priorities. Just type them.
 
-# Run the GUI
-cargo run --bin gui --no-default-features --features gui
-```
+### Basics
+| Property | Short | Long | Description |
+| :--- | :--- | :--- | :--- |
+| **Priority** | `!1` | - | 1 is highest (critical), 9 is lowest. 5 is normal. |
+| **Due Date** | `@` | `due:` | When the task must be finished. |
+| **Start Date** | `^` | `start:` | When you plan to start (hides from "active" views until then). |
+| **Recurrence** | `@` | `rec:` | How often the task repeats. |
+| **Duration** | `~` | `est:` | Estimated time to complete. |
+| **Tag** | `#` | - | Categories. Use `:` for hierarchy (e.g. `#work:admin`). |
 
-## Configuration
+### Date & Time Formats
+You can use absolute ISO dates or natural language relative offsets.
+*   **Keywords:** `today`, `tomorrow`
+*   **Offsets:** `1d` (days), `1w` (weeks), `1mo` (months), `1y` (years).
+    *   `@2d` = Due in 2 days.
+    *   `^1w` = Start in 1 week.
 
-The GUI includes a configuration dialog. The TUI has an onboarding screen to set credentials.
+### Recurrence
+Recurrence rules determine when the next task is created after you complete the current one.
+*   **Presets:** `@daily`, `@weekly`, `@monthly`, `@yearly`.
+*   **Custom:** `@every X unit`.
+    *   `@every 3 days`
+    *   `@every 2 weeks`
 
-The config file is located at:
-*   **Linux:** `~/.config/cfait/config.toml`
-*   **macOS:** `~/Library/Application Support/com.cfait.cfait/config.toml`
-*   **Windows:** `%APPDATA%\cfait\config.toml`
+### Duration Units
+Supported units for `~` duration estimates: `m` (minutes), `h` (hours), `d` (days), `w` (weeks), `mo` (months), `y` (years).
+*   `~15m` (15 minutes)
+*   `~1.5h` (1 hour 30 minutes)
 
-```toml
-url = "https://localhost:5232/user/"
-username = "myuser"
-password = "mypassword"
+### Examples
+> `"Buy cookies !1 @tomorrow #groceries"`
+>
+> `"Team meeting @daily ~1h #work"`
+>
+> `"Update server certificates @2025-12-31 ^2025-12-01 @every 2 years"` (Due Dec 31, start working on it 1 month prior)
 
-# Security: Allow self-signed certificates
-# Default: false
-allow_insecure_certs = true 
 
-default_calendar = "todo"
 
-# Hide completed tasks globally?
-hide_completed = false
+## 🔍 Search & Filtering
 
-# Hide tags in the sidebar if they only contain completed tasks?
-hide_fully_completed_tags = true
+The search bar isn't just for text. You can use operators (`<`, `>`, `<=`, `>=`) to filter your list precisely.
 
-# Sorting: Tasks due more than X months away are sorted by priority only (not date)
-# Default: 6
-sort_cutoff_months = 6
+*   **Status:**
+    *   `is:done` / `is:active` / `is:ongoing`
+*   **Priority (`!`):**
+    *   `!<2` (Priority 1 only - Critical)
+    *   `!>=5` (Normal or lower priority)
+*   **Dates (`@` / `^`):**
+    *   `@<today` (Overdue tasks)
+    *   `@>tomorrow` (Due after tomorrow)
+    *   `@<=2d` (Due within the next 2 days)
+*   **Duration (`~`):**
+    *   `~<30m` (Quick tasks, less than 30 mins)
+    *   `~>2h` (Long tasks)
+*   **Tags:**
+    *   `#gardening` (Contains this tag)
 
-# Tag Aliases: Automatically expand one tag into multiple
-[tag_aliases]
-groceries = ["shopping", "home"]
-```
+You can combine them: `!<4 ~<1h #gardening` (high priority gardening task that takes less than an hour).
 
-## TUI Keybindings
+## 🎮 TUI Keybindings
 
-| Context | Key | Action |
-| :--- | :--- | :--- |
-| **Global** | `Tab` | Switch focus (Tasks ↔ Sidebar) |
-| | `q` | Quit |
-**Sidebar (Cals)** | `Enter` | **Set target** (Add to view) |
-| | `Right` | **Focus** (Set target + Hide others) |
-  | | `Space` | **Toggle visibility** (Show/Hide layer) |
-| | `*` | **Toggle all** (Show all / Hide others) |
-| **Sidebar (Tags)** | `Enter` | Toggle tag filter |
-| | `m` | Toggle tag match mode (AND / OR) |
-| | `*` | **Clear all tags** (Show all tasks) |
-| **Task List** | `j` / `k` | Move down / up |
-| | `Space` | **Toggle** completion |
-| | `s` | **Start / Pause** (Mark in-process) |
-| | `x` | **Cancel** task |
-| | `a` | **Add** task (Type name, press Enter) |
-| | `C` | **Create child** (Create new task linked as child of current, Shift+c) |
-| | `e` | **Edit** task title |
-| | `E` | **Edit** task description (Shift+e) |
-| | `d` | **Delete** task |
-| | `M` | **Move** task to another calendar (Shift+m) |
-| | `y` | **Yank** (Copy ID for linking) |
-| | `b` | **Block** (Mark current task as blocked by Yanked task) |
-| | `c` | **Child** (Mark current task as child of Yanked task) |
-| | `r` | **Refresh** (Force sync) |
-| | `X` | **Export** (Migrate all tasks from Local to remote, Shift+x) |
-| | `H` | Toggle **hide completed** tasks |
-| | `/` | **Search** / Filter tasks |
-| | `+` / `-` | Increase / Decrease **priority** |
-| | `>` / `<` | **Indent** / **Outdent** (Visual sub-tasks depth) |
-| **Sidebar** | `Enter` | Select calendar / Toggle tag |
-| | `1` | Switch to **Calendars** view |
-| | `2` | Switch to **Tags** view |
-| | `m` | Toggle tag match mode (AND / OR) |
+If you are using the Terminal interface, here are the essentials (*Press `?` inside the app for the full interactive help menu.*).
 
-## Input Syntax
-When adding (`a`) or editing (`e`) a task:
+**Navigation & Views**
+*   `Tab`: Switch focus (Tasks ↔ Sidebar)
+*   `j` / `k`: Move selection Down / Up
+*   `1` / `2`: Switch Sidebar View (Calendars / Tags)
+*   `/`: Search tasks
 
-*   `!1` to `!9`: **Priority** (1 is high, 9 is low).
-*   `@DATE` or `due:DATE`: **Due date** (`2025-12-31`, `today`, `tomorrow`, `1w`, `2d`, 3mo, 4y).
-*   `^DATE` or `start:DATE`: **Start date**. Pushes to bottom until date.
-*   `~DURATION` or `est:DURATION`: **Estimate** (`~30m`, `~1h`, `~4d`).
-*   `rec:INTERVAL` or `@every X`: **Recurrence** (`@daily`, `@weekly`, `@monthly`, `@yearly`, or `@every 2 weeks`, ...).
-*   `#tag`: **Tag**. Supports hierarchy (`#project:backend`).
-    *   **Define Alias:** `#alias=#tag1,#tag2` (e.g., `#shop=#home,#buy`).
+**Task Management**
+*   `a`: **Add** task
+*   `e` / `E`: **Edit** title / **Edit** description
+*   `Space`: Toggle **Done** status
+*   `s` / `x`: Mark **Started** / **Cancelled**
+*   `d`: **Delete** task
 
-## Advanced Search
-The search bar supports specific filters:
+**Organization & Hierarchy**
+*   `y`: **Yank** task ID (Copy)
+*   `b`: Mark selection as **Blocked** by yanked task
+*   `c`: Make selection a **Child** of yanked task
+*   `>` / `<`: Indent / Outdent (visual depth)
+*   `+` / `-`: Adjust Priority
 
-*   `#tag`: Filter by tag.
-*   `is:done` / `is:active` / `is:ongoing`: Filter by status.
-*   `~<30m`: Duration less than 30 mins (using `>`, `>=`, `<`, `<=` operators and `m`, `h`, `d`, `mo`, `y`).
-*   `!<3`: Priority higher than 3 (1 or 2).
-*   `@<today`: Overdue tasks, `@<1w`: due within 1 week, `@>=2d`: due at least 2 days from now.
+**Sidebar Actions**
+*   `Enter`: Toggle filter / Select calendar
+*   `Space`: Toggle visibility (show/hide layer)
+*   `*`: Isolate (hide all others)
 
-## Android Development
-
-Cfait uses a native Android UI (Jetpack Compose) backed by the shared Rust core via [UniFFI](https://github.com/mozilla/uniffi-rs).
-
-Android will be made available on F-Droid and the Play store starting with v0.3.0.
-
-### Prerequisites
-1.  **Android Studio** (with NDK installed).
-2.  **Rust Targets**:
-    ```bash
-    rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
-    ```
-3.  **Cargo NDK**:
-    ```bash
-    cargo install cargo-ndk
-    ```
-
-### Building & Running
-1.  **Compile Rust Library:**
-    Set `ANDROID_NDK_HOME` and `ANDROID_NDK_ROOT` to your NDK path (e.g. `/opt/android-ndk`).
-    ```bash
-    export ANDROID_NDK_HOME=/path/to/your/ndk
-    export ANDROID_NDK_ROOT=/path/to/your/ndk
-    
-    # Build the shared libraries (.so) and place them in the Android project
-    cargo ndk -t aarch64-linux-android -t x86_64-linux-android -o ./android/app/src/main/jniLibs build --release --lib
-    ```
-
-2.  **Generate Kotlin Bindings:**
-    ```bash
-    cargo run --bin uniffi-bindgen generate \
-      --library target/aarch64-linux-android/release/libcfait.so \
-      --language kotlin \
-      --out-dir ./android/app/src/main/java \
-      --config uniffi.toml
-    ```
-
-3.  **Run:** Open the `android` folder in Android Studio and click **Run**.
+The GUI also supports `/` for search and `a` for adding tasks.
 
 ## Support
 
