@@ -245,7 +245,8 @@ impl CfaitMobile {
     // --- Calendar Management ---
 
     pub fn isolate_calendar(&self, href: String) -> Result<(), MobileError> {
-        let mut config = Config::load().map_err(MobileError::from)?;
+        // FIX: Use unwrap_or_default() to safely handle missing config file
+        let mut config = Config::load().unwrap_or_default();
         let all_cals = self.get_calendars();
         let mut new_hidden = vec![];
         for cal in all_cals {
@@ -289,13 +290,17 @@ impl CfaitMobile {
         c.tag_aliases.remove(&key);
         c.save().map_err(MobileError::from)
     }
+
     pub fn set_default_calendar(&self, href: String) -> Result<(), MobileError> {
-        let mut config = Config::load().map_err(MobileError::from)?;
+        // FIX: Use unwrap_or_default()
+        let mut config = Config::load().unwrap_or_default();
         config.default_calendar = Some(href);
         config.save().map_err(MobileError::from)
     }
+
     pub fn set_calendar_visibility(&self, href: String, visible: bool) -> Result<(), MobileError> {
-        let mut config = Config::load().map_err(MobileError::from)?;
+        // FIX: Use unwrap_or_default() to prevent crash when config file is missing
+        let mut config = Config::load().unwrap_or_default();
         if visible {
             config.hidden_calendars.retain(|h| h != &href);
         } else if !config.hidden_calendars.contains(&href) {
@@ -384,9 +389,12 @@ impl CfaitMobile {
     }
 
     pub async fn sync(&self) -> Result<String, MobileError> {
+        // Sync still requires a valid config to connect to a server, so mapping error is correct here.
+        // If config is missing, we can't sync anyway.
         let config = Config::load().map_err(MobileError::from)?;
         self.apply_connection(config).await
     }
+
     pub async fn connect(
         &self,
         url: String,
@@ -561,11 +569,6 @@ impl CfaitMobile {
     ) -> Result<(), MobileError> {
         let aliases = Config::load().unwrap_or_default().tag_aliases;
         self.apply_store_mutation(uid, |t: &mut TaskStore, id: &str| {
-            // Store has get_task_mut but we need to modify via closure that has access to Task.
-            // apply_store_mutation logic:
-            // 1. Lock store. 2. Get mutable task. 3. Run closure. 4. Return task clone.
-            // But apply_store_mutation takes (Store, ID).
-            // So we can implement logic here:
             if let Some((task, _)) = t.get_task_mut(id) {
                 task.apply_smart_input(&smart_input, &aliases);
                 Some(task.clone())
@@ -815,7 +818,7 @@ mod tests {
                 let _ = api_write.add_task_smart(format!("Stress Task {}", i)).await;
 
                 // Simulate toggling tasks randomly
-                let tasks = api_write.getViewTasks(None, "".to_string()).await;
+                let tasks = api_write.get_view_tasks(None, "".to_string()).await;
                 if let Some(t) = tasks.first() {
                     let _ = api_write.toggle_task(t.uid.clone()).await;
                 }
@@ -826,7 +829,7 @@ mod tests {
         let read_handle = rt.spawn(async move {
             for _ in 0..50 {
                 // UI Refresh simulation
-                let tasks = api_read.getViewTasks(None, "".to_string()).await;
+                let tasks = api_read.get_view_tasks(None, "".to_string()).await;
 
                 // Safety Check: We should never see a half-written state or crash
                 // The Vector itself is safe, but we verify we can read consistently.
@@ -845,7 +848,7 @@ mod tests {
 
         // Final Consistency Check
         rt.block_on(async {
-            let tasks = api.getViewTasks(None, "".to_string()).await;
+            let tasks = api.get_view_tasks(None, "".to_string()).await;
             // 1 initial + 50 created = 51 total tasks expected
             assert_eq!(
                 tasks.len(),
