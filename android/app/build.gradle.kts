@@ -46,21 +46,20 @@ android {
     namespace = "com.cfait"
     compileSdk = 36
 
-    signingConfigs {
+signingConfigs {
         create("release") {
             // Read from environment variables set by the CI
-            val storeFile = System.getenv("KEYSTORE_FILE")
-            val storePassword = System.getenv("KEYSTORE_PASSWORD")
-            val keyAlias = System.getenv("KEY_ALIAS")
-            val keyPassword = System.getenv("KEY_PASSWORD")
+            val envStoreFile = System.getenv("KEYSTORE_FILE")
+            val envStorePassword = System.getenv("KEYSTORE_PASSWORD")
+            val envKeyAlias = System.getenv("KEY_ALIAS")
+            val envKeyPassword = System.getenv("KEY_PASSWORD")
             
-            if (storeFile != null && File(storeFile).exists()) {
-                storeFile(File(storeFile))
-                storePassword(storePassword)
-                keyAlias(keyAlias)
-                keyPassword(keyPassword)
+            if (envStoreFile != null && File(envStoreFile).exists()) {
+                storeFile = File(envStoreFile)      // Use = assignment
+                storePassword = envStorePassword    // Use = assignment
+                keyAlias = envKeyAlias              // Use = assignment
+                keyPassword = envKeyPassword        // Use = assignment
             } else {
-                // Allows local `assembleRelease` to run without signing (for testing)
                 println("Signing config not found. Building unsigned release artifact.")
             }
         }
