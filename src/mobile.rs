@@ -768,6 +768,8 @@ impl CfaitMobile {
                 .update_task(&mut task_for_net)
                 .await
                 .map_err(MobileError::from)?;
+            let mut store = self.store.lock().await;
+            store.update_or_add_task(task_for_net);
         } else {
             if task_for_net.calendar_href == LOCAL_CALENDAR_HREF {
                 let mut local = LocalStorage::load().unwrap_or_default();
