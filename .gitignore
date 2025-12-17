@@ -23,3 +23,11 @@ android/app/src/main/res/font/
 *.iml
 *.hprof
 .DS_Store
+
+# Binary Releases (just in case they end up in root)
+*.apk
+*.aab
+
+# Local secrets directory (seen in your tree)
+secrets/
+*.keystore

@@ -114,8 +114,8 @@ fun HelpScreen(onBack: () -> Unit) {
                             trailingIcon = { NfIcon(NfIcons.EXTERNAL_LINK, 14.sp, Color.Gray) }
                         ) { openUrl("https://liberapay.com/trougnouf") }
                         DonationRow(NfIcons.BANK, "Bank (SEPA)", "BE77 9731 6116 6342") { copy("BE77 9731 6116 6342") }
-                        DonationRow(NfIcons.BITCOIN, "Bitcoin", "bc1qpecezwmlnzxcqye6nfwv5hn075f7vjf0w3g6gr") { copy("bc1qpecezwmlnzxcqye6nfwv5hn075f7vjf0w3g6gr") }
-                        DonationRow(NfIcons.LITECOIN, "Litecoin", "ltc1q3xjajxhgmvsth0hwtaz085pr3qml7z8ytjnmkd") { copy("ltc1q3xjajxhgmvsth0hwtaz085pr3qml7z8ytjnmkd") }
+                        DonationRow(NfIcons.BITCOIN, "Bitcoin", "bc1qc3z9ctv34v0ufxwpmq875r89umnt6ggeclp979") { copy("bc1qc3z9ctv34v0ufxwpmq875r89umnt6ggeclp979") }
+                        DonationRow(NfIcons.LITECOIN, "Litecoin", "ltc1qv0xcmeuve080j7ad2cj2sd9d22kgqmlxfxvhmg") { copy("ltc1qv0xcmeuve080j7ad2cj2sd9d22kgqmlxfxvhmg") }
                         DonationRow(NfIcons.ETHEREUM, "Ethereum", "0x0A5281F3B6f609aeb9D71D7ED7acbEc5d00687CB") { copy("0x0A5281F3B6f609aeb9D71D7ED7acbEc5d00687CB") }
                     }
                 }

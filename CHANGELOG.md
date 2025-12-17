@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.0] - 2025-12-16
+## [0.3.0] - 2025-12-17
 
 ### 🚀 Features
 
@@ -43,6 +43,7 @@
 - *(mobile)* Resolve lifecycle, timezone, and data safety issues
 - *(Android)* Fix build
 - *(core)* Resolve persistent ghost tasks by forcing sync on empty ETags
+- *(core)* Recycle recurring tasks on completion to prevent duplication
 
 ### 🚜 Refactor
 
@@ -54,6 +55,7 @@
 
 - Add support options and improve help
 - Improve TUI help
+- Add Android screenshot
 
 ### 🎨 Styling
 
@@ -61,6 +63,12 @@
 - *(android)* Modify header with active calendar info, compact tag list layout, and add sidebar footer logo
 - *(gui)* Highlight task on hover, display details on click
 - *(android)* Reduce space between tasks, highlight current task, allow long press for more actions
+- *(android)* Dark background icon
+- *(gui)* Make recurrence_icon gray
+- *(gui)* Implement theme switcher with custom 'Rusty Dark' option
+- *(gui)* Rusty Dark: make selector yellow-amber instead of default blue
+- FeatureGraphic v1
+- FeatureGraphic v2
 
 ### 🧪 Testing
 
@@ -74,6 +82,7 @@
 - *(android)* Update versions
 - Switch deb/generic-linux build from Arch to to Ubuntu 24.04 (glibc 2.39), update documentation
 - Update licenses
+- Fastlane stuff for Android release
 ## [0.2.9] - 2025-12-08
 
 ### 🚀 Features

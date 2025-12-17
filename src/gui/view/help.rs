@@ -245,8 +245,8 @@ fn support_card() -> Element<'static, Message> {
         }),
         link_row(CREDIT_CARD, "Liberapay", "https://liberapay.com/trougnouf"),
         copy_row(BANK, "Bank (SEPA)", "BE77 9731 6116 6342"),
-        copy_row(BITCOIN, "Bitcoin", "bc1qpecezwmlnzxcqye6nfwv5hn075f7vjf0w3g6gr"),
-        copy_row(LITECOIN, "Litecoin", "ltc1q3xjajxhgmvsth0hwtaz085pr3qml7z8ytjnmkd"),
+        copy_row(BITCOIN, "Bitcoin", "bc1qc3z9ctv34v0ufxwpmq875r89umnt6ggeclp979"),
+        copy_row(LITECOIN, "Litecoin", "ltc1qv0xcmeuve080j7ad2cj2sd9d22kgqmlxfxvhmg"),
         copy_row(ETHEREUM, "Ethereum", "0x0A5281F3B6f609aeb9D71D7ED7acbEc5d00687CB"),
     ].spacing(12);
 

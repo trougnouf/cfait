@@ -1,20 +1,13 @@
-# Cfait
-> Take control of your TODO list
+![Cfait -- Take control of your TODO list](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_featureGraphic_(hardcoded_text).svg)
 
 **Cfait** is a powerful, elegant and fast CalDAV task manager, written in Rust.
 
 It features a modern **GUI (Graphical UI)**, an efficient **TUI (Terminal UI)**, and a native **Android** client.
 
-![featurethingy](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_featureGraphic_(hardcoded_text).svg)
 
-![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.0_screenshot_(GUI).png)
-> The Graphical Interface in v0.3.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small>
-
-![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.0_screenshot_(TUI).png)
-> The Terminal Interface in v0.3.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small>
-
-![Cfait Android Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.0_screenshot_(Android).png)
-> The Android client in v0.3.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(Android)))</small>
+| Desktop (GUI & TUI) | Mobile (Android) |
+| :---: | :---: |
+| ![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.0_screenshot_(GUI).png)<br>The Graphical Interface in v0.3.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small><br><br>![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.0_screenshot_(TUI).png)<br>The Terminal Interface in v0.3.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small> | ![Cfait Android Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.0_screenshot_(Android).png)<br>The Android client in v0.3.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(Android)))</small> |
 
 
 ## Features
@@ -229,8 +222,8 @@ If you enjoy using Cfait, consider supporting the developper:
 
 *   💳 **Liberapay:** [https://liberapay.com/trougnouf](https://liberapay.com/trougnouf)
 *   🏦 **Bank (SEPA):** `BE77 9731 6116 6342`
-*   ₿ **Bitcoin:** `bc1qpecezwmlnzxcqye6nfwv5hn075f7vjf0w3g6gr`
-*   Ł **Litecoin:** `ltc1q3xjajxhgmvsth0hwtaz085pr3qml7z8ytjnmkd`
+*   ₿ **Bitcoin:** `bc1qc3z9ctv34v0ufxwpmq875r89umnt6ggeclp979`
+*   Ł **Litecoin:** `ltc1qv0xcmeuve080j7ad2cj2sd9d22kgqmlxfxvhmg`
 *   Ξ **Ethereum:** `0x0A5281F3B6f609aeb9D71D7ED7acbEc5d00687CB`
 
 ## Mirrors
@@ -238,6 +231,10 @@ If you enjoy using Cfait, consider supporting the developper:
 *   **[Codeberg](https://codeberg.org/trougnouf/cfait)** (Primary with Linux Builds and cross-compiled Windows builds)
 *   **[GitHub](https://github.com/trougnouf/cfait)** (Mirror with Linux and native Windows builds)
 *   **[GitLab](https://gitlab.com/trougnouf/cfait)** (Mirror)
+
+## Privacy Policy
+
+Cfait does not collect data; data is stored on your device or your CalDAV server.
 
 ## License
 GPL3

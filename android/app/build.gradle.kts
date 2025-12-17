@@ -41,11 +41,31 @@ val appVersionName = getCargoVersion()
 val appVersionCode = getVersionCode(appVersionName)
 
 println("Cfait Android Build: v$appVersionName (Code: $appVersionCode)")
-// --------------------------------------------
 
 android {
     namespace = "com.cfait"
     compileSdk = 36
+
+    signingConfigs {
+        create("release") {
+            // Read from environment variables set by the CI
+            val storeFile = System.getenv("KEYSTORE_FILE")
+            val storePassword = System.getenv("KEYSTORE_PASSWORD")
+            val keyAlias = System.getenv("KEY_ALIAS")
+            val keyPassword = System.getenv("KEY_PASSWORD")
+            
+            if (storeFile != null && File(storeFile).exists()) {
+                storeFile(File(storeFile))
+                storePassword(storePassword)
+                keyAlias(keyAlias)
+                keyPassword(keyPassword)
+            } else {
+                // Allows local `assembleRelease` to run without signing (for testing)
+                println("Signing config not found. Building unsigned release artifact.")
+            }
+        }
+    }
+    // ------------------------------------
 
     defaultConfig {
         applicationId = "com.cfait"
@@ -61,6 +81,16 @@ android {
         }
     }
 
+    buildTypes {
+        release {
+            isMinifyEnabled = true // Recommended for release
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Tell the 'release' build to use your new signing config
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+    // ---------------------------------
+    
     buildFeatures {
         compose = true
         buildConfig = true
