@@ -199,9 +199,10 @@ Android will be made available on F-Droid and the Play store starting with v0.3.
 
 ### Building & Running
 1.  **Compile Rust Library:**
-    Set `ANDROID_NDK_HOME` and `ANDROID_NDK_ROOT` to your NDK path (e.g., inside `/opt/android-ndk`).
+    Set `ANDROID_NDK_HOME` and `ANDROID_NDK_ROOT` to your NDK path (e.g. `/opt/android-ndk`).
     ```bash
     export ANDROID_NDK_HOME=/path/to/your/ndk
+    export ANDROID_NDK_ROOT=/path/to/your/ndk
     
     # Build the shared libraries (.so) and place them in the Android project
     cargo ndk -t aarch64-linux-android -t x86_64-linux-android -o ./android/app/src/main/jniLibs build --release --lib
@@ -236,7 +237,7 @@ If you enjoy using Cfait, consider supporting the developper:
 
 ## Privacy Policy
 
-Cfait does not collect data; data is stored on your device or your CalDAV server.
+Cfait does not collect data; data is stored on your device and on your CalDAV server.
 
 ## License
 GPL3
