@@ -1,9 +1,11 @@
 ![Cfait -- Take control of your TODO list](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_featureGraphic_(hardcoded_text).svg)
 
+
 **Cfait** is a powerful, elegant and fast CalDAV task manager, written in Rust.
 
 It features a modern **GUI (Graphical UI)**, an efficient **TUI (Terminal UI)**, and a native **Android** client.
 
+---
 
 | Desktop (GUI & TUI) | Mobile (Android) |
 | :---: | :---: |
@@ -34,7 +36,7 @@ The build pipeline generates binaries for Linux and Windows automatically.
 
 *   **Linux (Generic / Debian / Ubuntu):**
     *   **Compatibility:** Binaries are built on **Ubuntu 24.04**. They require **glibc 2.39** or newer.
-    *   **Supported Distros:** Ubuntu 24.04+, Linux Mint 22+, Fedora 40+, Debian 13 (Trixie), Arch Linux.
+    *   **Supported Distros:** Ubuntu 24.04+, Linux Mint 22+, Fedora 40+, Debian 13+ (Trixie), Arch Linux.
     *   **Older Distros:** If you are on Debian 12 (Bookworm) or Ubuntu 22.04, please [build from source](#c-from-cratesio-via-cargo).
     *   **Download:** Get the `.deb` or `.tar.gz` from [**Codeberg Releases**](https://codeberg.org/trougnouf/cfait/releases).
 
@@ -228,7 +230,7 @@ If you enjoy using Cfait, consider supporting the developper:
 
 ## Mirrors
 
-*   **[Codeberg](https://codeberg.org/trougnouf/cfait)** (Primary with Linux Builds and cross-compiled Windows builds)
+*   **[Codeberg](https://codeberg.org/trougnouf/cfait)** (Primary with Linux, Android, and cross-compiled Windows builds)
 *   **[GitHub](https://github.com/trougnouf/cfait)** (Mirror with Linux and native Windows builds)
 *   **[GitLab](https://gitlab.com/trougnouf/cfait)** (Mirror)
 
