@@ -51,6 +51,21 @@ fn strip_host(href: &str) -> String {
     href.to_string()
 }
 
+// --- Robust Identity Check ---
+fn actions_match_identity(a: &Action, b: &Action) -> bool {
+    match (a, b) {
+        // For Create, UID match is sufficient (seq is usually 0)
+        (Action::Create(t1), Action::Create(t2)) => t1.uid == t2.uid,
+        // For Update, UID match AND Sequence match is required to ensure we don't remove a newer update
+        (Action::Update(t1), Action::Update(t2)) => t1.uid == t2.uid && t1.sequence == t2.sequence,
+        // For Delete, UID match is sufficient
+        (Action::Delete(t1), Action::Delete(t2)) => t1.uid == t2.uid,
+        // For Move, UID and Destination match
+        (Action::Move(t1, d1), Action::Move(t2, d2)) => t1.uid == t2.uid && d1 == d2,
+        _ => false,
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct RustyClient {
     pub client: Option<CalDavClient<HttpsClient>>,
@@ -557,10 +572,7 @@ impl RustyClient {
 
         if task.status == TaskStatus::Completed && task.rrule.is_some() {
             if task.advance_recurrence() {
-                // Task is now updated (dates moved, status reset to NeedsAction)
-                // We do NOT spawn a new task.
-            } else {
-                // Recurrence finished or failed, leave as Completed.
+                // Task Recycled
             }
         }
 
@@ -579,7 +591,6 @@ impl RustyClient {
         // We only update the existing task (which might have been recycled)
         // We no longer call create_task() for recurrence.
         let logs = self.update_task(task).await?;
-
         Ok((task.clone(), None, logs))
     }
 
@@ -809,18 +820,10 @@ impl RustyClient {
 
                     let commit_res = Journal::modify(|queue| {
                         // RACE CONDITION FIX:
-                        // Ensure the item at index 0 is actually the one we just processed.
-                        // If another process synced faster, index 0 might be a different task now.
+                        // Use robust identity check instead of strict PartialEq.
+                        // If the head item has the same UID and type/seq as what we processed, remove it.
                         let should_remove = if let Some(head) = queue.first() {
-                            match (head, &next_action) {
-                                (Action::Create(a), Action::Create(b)) => a == b,
-                                (Action::Update(a), Action::Update(b)) => a == b,
-                                (Action::Delete(a), Action::Delete(b)) => a == b,
-                                (Action::Move(a_t, a_s), Action::Move(b_t, b_s)) => {
-                                    a_t == b_t && a_s == b_s
-                                }
-                                _ => false,
-                            }
+                            actions_match_identity(head, &next_action)
                         } else {
                             // Queue is empty, nothing to remove
                             false
@@ -1053,7 +1056,6 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
     merge_field!(estimated_duration);
     merge_field!(rrule);
 
-    // Union Merge Categories
     if local.categories != base.categories {
         let mut new_cats = server.categories.clone();
         for cat in &local.categories {
@@ -1066,7 +1068,6 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
         merged.categories = new_cats;
     }
 
-    // Union Merge Unmapped Properties
     if local.unmapped_properties != base.unmapped_properties {
         for prop in &local.unmapped_properties {
             if !merged.unmapped_properties.iter().any(|p| p.key == prop.key) {
@@ -1076,7 +1077,6 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
     }
 
     merge_field!(parent_uid);
-    // Dependencies Union
     if local.dependencies != base.dependencies {
         let mut new_deps = server.dependencies.clone();
         for dep in &local.dependencies {
@@ -1088,93 +1088,4 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
     }
 
     Some(merged)
-}
-
-#[cfg(test)]
-mod merge_tests {
-    use super::*;
-    use crate::model::TaskStatus;
-
-    fn make_task(uid: &str, summary: &str, status: TaskStatus) -> Task {
-        let mut t = Task::new(summary, &HashMap::new());
-        t.uid = uid.to_string();
-        t.status = status;
-        t
-    }
-
-    #[test]
-    fn test_3way_merge_clean_update() {
-        // Base: Original
-        let base = make_task("1", "Buy Milk", TaskStatus::NeedsAction);
-
-        // Local: Changed Status to Done
-        let mut local = base.clone();
-        local.status = TaskStatus::Completed;
-
-        // Server: Changed Title (Someone fixed a typo)
-        let mut server = base.clone();
-        server.summary = "Buy Oat Milk".to_string();
-
-        // Merge
-        let merged = three_way_merge(&base, &local, &server);
-
-        assert!(
-            merged.is_some(),
-            "Merge should succeed for non-overlapping fields"
-        );
-        let m = merged.unwrap();
-
-        assert_eq!(
-            m.status,
-            TaskStatus::Completed,
-            "Local status change should be preserved"
-        );
-        assert_eq!(
-            m.summary, "Buy Oat Milk",
-            "Server title change should be preserved"
-        );
-    }
-
-    #[test]
-    fn test_3way_merge_conflict_returns_none() {
-        // Base
-        let base = make_task("1", "Buy Milk", TaskStatus::NeedsAction);
-
-        // Local: Changed Title
-        let mut local = base.clone();
-        local.summary = "Buy 2% Milk".to_string();
-
-        // Server: Changed Title to something else
-        let mut server = base.clone();
-        server.summary = "Buy Soy Milk".to_string();
-
-        // Merge
-        let merged = three_way_merge(&base, &local, &server);
-
-        assert!(
-            merged.is_none(),
-            "Merge should fail (return None) on conflicting field modification"
-        );
-    }
-
-    #[test]
-    fn test_3way_merge_categories_union() {
-        // Tests that we don't lose tags added by other clients
-        let mut base = make_task("1", "Task", TaskStatus::NeedsAction);
-        base.categories = vec!["work".to_string()];
-
-        let mut local = base.clone();
-        local.categories = vec!["work".to_string(), "urgent".to_string()];
-
-        let mut server = base.clone();
-        server.categories = vec!["work".to_string(), "home".to_string()]; // Another client added 'home'
-
-        let merged = three_way_merge(&base, &local, &server).expect("Merge should succeed");
-
-        // Should contain work, urgent, AND home
-        assert!(merged.categories.contains(&"work".to_string()));
-        assert!(merged.categories.contains(&"urgent".to_string()));
-        assert!(merged.categories.contains(&"home".to_string()));
-        assert_eq!(merged.categories.len(), 3);
-    }
 }

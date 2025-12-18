@@ -2,7 +2,7 @@
 package com.cfait.ui
 
 import android.widget.Toast
-import android.content.ClipData // FIXED: Correct Android Import
+import android.content.ClipData
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -23,7 +23,6 @@ import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -46,9 +45,9 @@ fun HomeScreen(
     defaultCalHref: String?,
     isLoading: Boolean,
     hasUnsynced: Boolean,
+    autoScrollUid: String? = null,
     onGlobalRefresh: () -> Unit,
     onSettings: () -> Unit,
-    // onHelp removed
     onTaskClick: (String) -> Unit,
     onDataChanged: () -> Unit
 ) {
@@ -90,6 +89,16 @@ fun HomeScreen(
     }
 
     LaunchedEffect(searchQuery, filterTag, isLoading, calendars, tags) { updateTaskList() }
+
+    // Logic to scroll when autoScrollUid changes OR when tasks update and we have a pending scroll target
+    LaunchedEffect(autoScrollUid, tasks) {
+        if (autoScrollUid != null) {
+            val index = tasks.indexOfFirst { it.uid == autoScrollUid }
+            if (index >= 0) {
+                listState.animateScrollToItem(index)
+            }
+        }
+    }
 
     fun toggleTask(uid: String) = scope.launch { try { api.toggleTask(uid); updateTaskList(); onDataChanged() } catch (_: Exception){} }
     
@@ -133,7 +142,6 @@ fun HomeScreen(
                     "prio_down" -> api.changePriority(task.uid, -1)
                     "yank" -> {
                         yankedUid = task.uid
-                        // FIXED: Use Android ClipData
                         val clipData = ClipData.newPlainText("task_uid", task.uid)
                         clipboard.setClipEntry(ClipEntry(clipData))
                     }

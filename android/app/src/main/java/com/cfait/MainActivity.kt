@@ -2,16 +2,18 @@
 package com.cfait
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.compose.runtime.*
 import com.cfait.core.MobileCalendar
 import com.cfait.core.MobileTag
 import com.cfait.ui.HomeScreen
@@ -43,7 +45,11 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
     var defaultCalHref by remember { mutableStateOf<String?>(null) }
     var hasUnsynced by remember { mutableStateOf(false) }
     
+    // State to trigger scrolling in HomeScreen
+    var autoScrollUid by remember { mutableStateOf<String?>(null) }
+    
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var isLoading by remember { mutableStateOf(false) }
     
     fun refreshLists() {
@@ -69,6 +75,20 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
         }
     }
 
+    // This runs in the NavHost scope, so it survives screen transitions
+    fun saveTaskInBackground(uid: String, smart: String, desc: String) {
+        scope.launch {
+            try {
+                api.updateTaskSmart(uid, smart)
+                api.updateTaskDescription(uid, desc)
+                refreshLists()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Background sync failed: ${e.message}", Toast.LENGTH_LONG).show()
+                refreshLists()
+            }
+        }
+    }
+
     LaunchedEffect(Unit) { fastStart() }
 
     NavHost(navController, startDestination = "home") {
@@ -80,6 +100,7 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                 defaultCalHref = defaultCalHref,
                 isLoading = isLoading,
                 hasUnsynced = hasUnsynced,
+                autoScrollUid = autoScrollUid, // Pass the UID
                 onGlobalRefresh = { fastStart() },
                 onSettings = { navController.navigate("settings") },
                 onTaskClick = { uid -> navController.navigate("detail/$uid") },
@@ -93,7 +114,14 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                     api = api,
                     uid = uid,
                     calendars = calendars,
-                    onBack = { navController.popBackStack(); refreshLists() }
+                    onBack = { navController.popBackStack(); refreshLists() },
+                    onSave = { smart, desc -> 
+                        saveTaskInBackground(uid, smart, desc)
+                        // Trigger scroll on return
+                        autoScrollUid = uid
+                        navController.popBackStack()
+                        refreshLists()
+                    }
                 )
             }
         }

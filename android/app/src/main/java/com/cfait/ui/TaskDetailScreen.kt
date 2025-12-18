@@ -1,7 +1,6 @@
 // File: ./android/app/src/main/java/com/cfait/ui/TaskDetailScreen.kt
 package com.cfait.ui
 
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,7 +9,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -18,19 +16,22 @@ import androidx.compose.ui.unit.sp
 import com.cfait.core.CfaitMobile
 import com.cfait.core.MobileCalendar
 import com.cfait.core.MobileTask
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalendar>, onBack: () -> Unit) {
+fun TaskDetailScreen(
+    api: CfaitMobile, 
+    uid: String, 
+    calendars: List<MobileCalendar>, 
+    onBack: () -> Unit,
+    onSave: (String, String) -> Unit
+) {
     var task by remember { mutableStateOf<MobileTask?>(null) }
     val scope = rememberCoroutineScope()
     var smartInput by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var showMoveDialog by remember { mutableStateOf(false) }
-    var isSaving by remember { mutableStateOf(false) } // Add loading state
-    val context = LocalContext.current
 
     fun reload() {
         scope.launch {
@@ -69,30 +70,13 @@ fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalend
                 actions = {
                     TextButton(onClick = { showMoveDialog = true }) { Text("Move") }
                     TextButton(
-                        enabled = !isSaving, // Disable while saving
                         onClick = {
-                            isSaving = true
-                            scope.launch {
-                                try {
-                                    api.updateTaskSmart(uid, smartInput)
-                                    api.updateTaskDescription(uid, description)
-                                    onBack() // Navigate back on success
-                                } catch (e: CancellationException) {
-                                    // Ignore cancellation (e.g. user pressed back button manually while saving)
-                                    throw e
-                                } catch (e: Exception) {
-                                    isSaving = false
-                                    Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_LONG).show()
-                                }
-                            }
+                            // Optimistic Save:
+                            // We delegate the actual async work to the parent (MainActivity)
+                            // so we can leave this screen immediately without killing the save process.
+                            onSave(smartInput, description)
                         }
-                    ) { 
-                        if (isSaving) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        } else {
-                            Text("Save") 
-                        }
-                    }
+                    ) { Text("Save") }
                 }
             )
         }
@@ -120,7 +104,7 @@ fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalend
                     ) {
                         NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
                         Spacer(Modifier.width(8.dp))
-                        NfIcon(NfIcons.BLOCKED, 12.sp, androidx.compose.ui.graphics.Color.Gray) 
+                        NfIcon(NfIcons.BLOCKED, 12.sp, androidx.compose.ui.graphics.Color.Gray)
                         Spacer(Modifier.width(4.dp))
                         Text(name, fontSize = 14.sp)
                     }
