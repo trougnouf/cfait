@@ -85,7 +85,6 @@ jobs:
             -t aarch64-linux-android \
             -t armv7-linux-androideabi \
             -t x86_64-linux-android \
-            -t i686-linux-android \
             -o ./android/app/src/main/jniLibs \
             build --release --lib --features mobile
 
