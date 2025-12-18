@@ -96,7 +96,7 @@ path = "src/bin/uniffi-bindgen.rs"
 required-features = ["mobile"]
 
 [profile.release]
-strip = false        # Automatically strip symbols from the binary.
+strip = true        # Removes symbols/debuginfo deterministically.
 lto = true          # Link Time Optimization (removes dead code across crates).
 codegen-units = 1   # Slower compile, but smaller binary.
 

@@ -58,7 +58,6 @@ signingConfigs {
             }
         }
     }
-    // ------------------------------------
 
     defaultConfig {
         applicationId = "com.cfait"
@@ -80,9 +79,16 @@ signingConfigs {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Tell the 'release' build to use your new signing config
             signingConfig = signingConfigs.getByName("release")
+            vcsInfo.include = false  // Disable VCS Info (AGP 8.3+) which embeds git commit hashes/paths
         }
     }
-    // ---------------------------------
+    // Prevent Gradle from stripping or modifying the Rust .so files
+    packaging {
+        jniLibs {
+            // We strip in Cargo.toml, so tell Gradle to leave them alone to avoid timestamp changes
+            keepDebugSymbols += "**/*.so"
+        }
+    }
     
     buildFeatures {
         compose = true
@@ -92,6 +98,12 @@ signingConfigs {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
+    }
+}
+
+tasks.withType<com.android.build.gradle.internal.tasks.factory.GlobalTaskCreationAction>().configureEach {
+    if (name.contains("ArtProfile")) {
+        enabled = false
     }
 }
 

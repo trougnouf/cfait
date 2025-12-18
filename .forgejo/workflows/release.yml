@@ -59,7 +59,6 @@ jobs:
         with:
           name: linux-artifacts
           path: dist/*
-
   # --- JOB 2: ANDROID BUILD (Ubuntu 24.04) ---
   build-android:
     runs-on: self-hosted-ubuntu
@@ -68,6 +67,12 @@ jobs:
       volumes:
         - cargo-registry:/usr/local/cargo/registry
         - gradle-cache:/root/.gradle
+    env:
+      # Remap source paths to a static /c path so debug info matches F-Droid
+      # Disable build-id to prevent hash differences based on memory layout
+      RUSTFLAGS: "--remap-path-prefix ${{ github.workspace }}=/c -C link-arg=-Wl,--build-id=none"
+      # Ensure consistent timestamps for build artifacts
+      SOURCE_DATE_EPOCH: ${{ github.event.repository.updated_at }}
 
     steps:
       - name: Checkout
@@ -88,7 +93,7 @@ jobs:
             -o ./android/app/src/main/jniLibs \
             build --release --lib --features mobile
 
-      - name: Build Signed Android App Bundle
+      - name: Build Android Artifacts (AAB & APK)
         if: startsWith(github.ref, 'refs/tags/')
         env:
           KEYSTORE_FILE: "${{ github.workspace }}/cfait-release.keystore"
@@ -98,47 +103,22 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
+          
+          echo "Building AAB for Google Play..."
           ./gradlew bundleRelease --no-daemon
-
-      # 4. Convert AAB to Universal APK using bundletool
-      - name: Generate Universal APK from AAB
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          KEYSTORE_FILE: "${{ github.workspace }}/cfait-release.keystore"
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          # Download bundletool
-          wget -q https://github.com/google/bundletool/releases/download/1.16.0/bundletool-all-1.16.0.jar
           
-          # Find the AAB file
-          AAB_FILE=$(find android/app/build/outputs/bundle/release -name '*.aab' -print -quit)
-          
-          # Run bundletool to create an APK set (.apks) containing a universal APK
-          java -jar bundletool-all-1.16.0.jar build-apks \
-            --bundle="$AAB_FILE" \
-            --output=cfait.apks \
-            --mode=universal \
-            --ks="$KEYSTORE_FILE" \
-            --ks-pass=pass:$KEYSTORE_PASSWORD \
-            --ks-key-alias=$KEY_ALIAS \
-            --key-pass=pass:$KEY_PASSWORD
+          echo "Building APK for F-Droid & direct download..."
+          ./gradlew assembleRelease --no-daemon
 
-          # Extract the universal APK from the .apks archive
-          unzip cfait.apks -d apks/
-          mv apks/universal.apk "cfait-android-${{ github.ref_name }}.apk"
-
-      # 5. Upload Artifacts
       - name: Prepare Artifacts for Upload
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           RAW_VERSION="${{ github.ref_name }}"
           mkdir -p dist-android
-          # Move the AAB
+          # Find and move the AAB from the bundleRelease output
           find android/app/build/outputs/bundle/release -name '*.aab' -exec cp {} "dist-android/cfait-android-${RAW_VERSION}.aab" \;
-          # Move the new APK
-          mv "cfait-android-${RAW_VERSION}.apk" dist-android/
+          # Find and move the APK from the assembleRelease output
+          find android/app/build/outputs/apk/release -name '*.apk' -exec cp {} "dist-android/cfait-android-${RAW_VERSION}.apk" \;
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v3
@@ -146,7 +126,7 @@ jobs:
         with:
           name: android-artifacts
           path: dist-android/*
-
+  
   # --- JOB 3: WINDOWS BUILD & PUBLISH (Arch) ---
   # This job waits for Linux and Android, then bundles everything and releases.
   build-windows-and-publish:
