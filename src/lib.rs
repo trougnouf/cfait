@@ -16,8 +16,8 @@ pub mod tui;
 pub mod gui;
 
 // --- ANDROID SUPPORT ---
-#[cfg(target_os = "android")]
+#[cfg(feature = "mobile")]
 pub mod mobile;
 
-#[cfg(target_os = "android")]
+#[cfg(feature = "mobile")]
 uniffi::setup_scaffolding!();

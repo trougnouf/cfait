@@ -50,8 +50,8 @@ futures = "0.3"
 fs2 = "0.4"
 
 # --- ANDROID / INTEROP ---
-uniffi = { version = "0.30", features = ["tokio", "build", "cli"] }
-uniffi_bindgen = "0.30" 
+uniffi = { version = "0.30", features = ["tokio", "build", "cli"], optional = true }
+uniffi_bindgen = { version = "0.30",  optional = true }
 
 
 # --- TUI ONLY (Optional) ---
@@ -77,6 +77,7 @@ uuid = { version = "1.18", features = ["v4"] }
 default = ["tui"]
 tui = ["dep:ratatui", "dep:crossterm"]
 gui = ["dep:iced"]
+mobile = ["dep:uniffi", "dep:uniffi_bindgen"]
 
 [[bin]]
 name = "cfait"
@@ -88,10 +89,11 @@ name = "gui"
 path = "src/bin/gui.rs"
 required-features = ["gui"]
 
-# New binary for generating bindings
+# Generate Android bindings
 [[bin]]
 name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
+required-features = ["mobile"]
 
 [profile.release]
 strip = false        # Automatically strip symbols from the binary.

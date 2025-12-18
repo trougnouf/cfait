@@ -87,7 +87,7 @@ jobs:
             -t x86_64-linux-android \
             -t i686-linux-android \
             -o ./android/app/src/main/jniLibs \
-            build --release --lib
+            build --release --lib --features mobile
 
       - name: Build Signed Android App Bundle
         if: startsWith(github.ref, 'refs/tags/')
