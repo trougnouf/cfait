@@ -1,11 +1,25 @@
 # Changelog
 
+## [0.3.2] - 2025-12-18
+
+### 📚 Documentation
+
+- Update README
+
+### ⚙️ Miscellaneous Tasks
+
+- *(android)* Generate static Android version number for F-Droid release
 ## [0.3.1] - 2025-12-17
 
 ### 🐛 Bug Fixes
 
 - *(android)* Prevent crash on "Show all calendars" toggle on first run by handling missing config file
 - *(android)* Prevent sync conflicts by writing post-sync ETag/sequence back to store
+
+### ⚙️ Miscellaneous Tasks
+
+- Prepare for 0.3.1
+- Release cfait version 0.3.1
 ## [0.3.0] - 2025-12-17
 
 ### 🚀 Features

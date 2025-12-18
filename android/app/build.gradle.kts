@@ -7,38 +7,32 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// --- HELPER: Read version from Cargo.toml ---
-fun getCargoVersion(): String {
+// --- HELPER: Read version info from Cargo.toml ---
+fun getCargoVersionInfo(): Pair<String, Int> {
     val cargoFile = File(project.rootDir.parentFile, "Cargo.toml")
-    if (!cargoFile.exists()) {
-        println("Cargo.toml not found at $cargoFile, defaulting to 0.0.1")
-        return "0.0.1"
-    }
+    var version = "0.0.1"
+    var code = 1
 
-    cargoFile.useLines { lines ->
-        for (line in lines) {
-            val trimmed = line.trim()
-            if (trimmed.startsWith("version") && trimmed.contains("=")) {
-                val versionValue = trimmed.split("=")[1].trim().replace("\"", "")
-                return versionValue
+    if (cargoFile.exists()) {
+        cargoFile.useLines { lines ->
+            for (line in lines) {
+                val trimmed = line.trim()
+                // Parse Version String
+                if (trimmed.startsWith("version") && trimmed.contains("=")) {
+                    version = trimmed.split("=")[1].trim().replace("\"", "")
+                }
+                // Parse Version Code (New logic)
+                if (trimmed.startsWith("version_code") && trimmed.contains("=")) {
+                    val codeStr = trimmed.split("=")[1].trim()
+                    code = codeStr.toIntOrNull() ?: 1
+                }
             }
         }
     }
-    
-    println("Version not found in Cargo.toml, defaulting to 0.0.1")
-    return "0.0.1"
+    return Pair(version, code)
 }
 
-fun getVersionCode(versionName: String): Int {
-    val parts = versionName.split(".").map { it.toIntOrNull() ?: 0 }
-    if (parts.size >= 3) {
-        return parts[0] * 10000 + parts[1] * 100 + parts[2]
-    }
-    return 1
-}
-
-val appVersionName = getCargoVersion()
-val appVersionCode = getVersionCode(appVersionName)
+val (appVersionName, appVersionCode) = getCargoVersionInfo()
 
 println("Cfait Android Build: v$appVersionName (Code: $appVersionCode)")
 
@@ -55,10 +49,10 @@ signingConfigs {
             val envKeyPassword = System.getenv("KEY_PASSWORD")
             
             if (envStoreFile != null && File(envStoreFile).exists()) {
-                storeFile = File(envStoreFile)      // Use = assignment
-                storePassword = envStorePassword    // Use = assignment
-                keyAlias = envKeyAlias              // Use = assignment
-                keyPassword = envKeyPassword        // Use = assignment
+                storeFile = File(envStoreFile)
+                storePassword = envStorePassword
+                keyAlias = envKeyAlias
+                keyPassword = envKeyPassword
             } else {
                 println("Signing config not found. Building unsigned release artifact.")
             }

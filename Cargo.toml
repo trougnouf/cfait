@@ -119,3 +119,11 @@ assets = [
 file = "packaging/arch/PKGBUILD"
 search = "pkgver=[0-9\\.]+"
 replace = "pkgver={{version}}"
+
+[package.metadata.release]
+# Run this script before committing the release
+pre-release-hook = ["python3", "scripts/sync_version_code.py"]
+
+[package.metadata.android]
+# This must match (Major * 10000 + Minor * 100 + Patch)
+version_code = 301
