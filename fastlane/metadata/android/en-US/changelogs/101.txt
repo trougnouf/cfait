@@ -1,0 +1,20 @@
+### 💼 Other
+
+- Initial commit (working TUI with create/add/complete/delete, sorted by date+priorities
+- Add multiple calendars support (from the same server)
+- Add README
+- Rename to rustache
+- Add edit support
+- Support moving cursor
+- Prep for GUI
+- Basic GUI (single-calendar)
+- Update README
+
+### 🎨 UI/UX Improvements
+
+- [TUI] add scrolling
+- [GUI] multi-calendar support
+- [GUI] sub-tasks support
+- [TUI] sub-tasks support
+- [GUI] search function
+- [GUI] show date. Bump to version 0.1.1

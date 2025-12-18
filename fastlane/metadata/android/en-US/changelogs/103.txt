@@ -1,0 +1,5 @@
+### 💼 Other
+
+- Add recurrence support, recurrence symbol, and expand relative dates
+- Add unit tests to model.rs
+- Add caching (fast inter-calendar switching)

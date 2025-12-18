@@ -1,0 +1,20 @@
+### 💼 Other
+
+- Initial implementation of ongoing & canceled tasks (Need custom checkboxes)
+- Custom checkmark icons (V,>,X)
+- Implement GTD workflow and advanced search parser
+- Lint
+- Lint
+- More linting and update screenshots for next release
+
+### 🎨 UI/UX Improvements
+
+- [TUI] Show [E]dit description in help bar
+- [TUI] Refresh on error and add refresh key
+- [GUI] add remove dependency button(s) in the task description
+
+### ⚙️ Miscellaneous Tasks
+
+- Automate changelog with git-cliff
+- *(release)* Update changelog for v"${TAG}"
+- Release cfait version 0.2.0

@@ -1,0 +1,13 @@
+### 🐛 Bug Fixes
+
+- *(sync)* Handle 412 Precondition Failed by refreshing ETag and retrying
+
+### 🎨 Styling
+
+- [GUI] align tags with titles
+
+### ⚙️ Miscellaneous Tasks
+
+- Lint
+- Update changelog
+- Release cfait version 0.2.2

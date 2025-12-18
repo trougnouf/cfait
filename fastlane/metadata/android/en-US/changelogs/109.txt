@@ -1,0 +1,18 @@
+### 💼 Other
+
+- Update funding sources in FUNDING.yml
+- Mention sorting
+- Preparing for crate release
+- Preparing for crate release
+- Default to True
+- Set cutoff date s.t. timed tasks are not always on top (default: 6-months). Add scroll wheel in GUI settings.
+- Tags were saved with comma / not fully compatible w/ other clients
+- Change hide_completed_in_tags setting to hide_fully_completed_tags (i.e. hide the tags, not the tasks within)
+
+### 🎨 UI/UX Improvements
+
+- [GUI] remove "<" and ">" buttons (replaced w/ Link functionality)
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cfait version 0.1.9

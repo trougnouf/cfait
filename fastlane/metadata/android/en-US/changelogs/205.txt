@@ -1,0 +1,21 @@
+### 🚀 Features
+
+- *(workflow)* Streamline child task creation from parent in GUI and TUI
+- *(tui)* Add toggleable, dynamic, and comprehensive help screen
+- *(ui)* Implement auto-jump to new tasks (TUI & GUI) and better scrollable logic
+- *(GUI)* Tab between fields in the settings window
+
+### 🚜 Refactor
+
+- Split model, client, and gui view into granular submodules
+- Modularize TUI logic into network actor and event handlers
+- *(core)* Decouple search matching logic from store to model domain
+
+### 🎨 Styling
+
+- *(GUI)* Allow main content area to expand with window width
+
+### ⚙️ Miscellaneous Tasks
+
+- *(release)* Update changelog and screenshots for v0.2.5
+- Release cfait version 0.2.5

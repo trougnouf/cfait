@@ -1,0 +1,19 @@
+### 💼 Other
+
+- Rename GUI window
+- Mention categories
+- Attempt Windows build (in next release)
+- Groundwork to support RFC 9253 (DEPENDS-ON) in model
+- Support RFC 9253 (DEPENDS-ON) in both TUI and GUI, and improve children dependency handling
+- Add options=('!lto') to Arch PKGBUILD (fix issues when lto is enabled in makepkg.conf)
+- Support aliases (set in the config file and/or in the GUI settings)
+- Add subtitle
+- Manually allow multiple RELATED-TO fields (not supported by icalendar library)
+- Add unit tests
+- Release 0.1.7
+
+### 🎨 UI/UX Improvements
+
+- [TUI] add space after [ ]
+- [TUI] support RFC 9253 (DEPENDS-ON)
+- [GUI] set window name in Linux only (fix Windows build?)

@@ -1,0 +1,22 @@
+### 💼 Other
+
+- Rm warning
+- Add icon, replace milk w/ cat food
+- [README] add screenshots
+- [README] add screenshots
+- [README] use raw Wikimedia Commons URL for screenshots; gitlab does not support redirects
+- Add cfait-git Arch PKGBUILD
+- Uncomment icon
+- Fix missing icon in opened application
+- Refactor GUI, add support for #categories
+- Refactor TUI
+- Add unit tests
+- Fix hide completed tasks in tab view, fix GUI save settings
+- Fix bug where completed tags remained selected but invisible / hiding all tasks. Add uncategorized tag
+- Fix TUI build error on CI, update screenshots
+
+### 🎨 UI/UX Improvements
+
+- [GUI] add Tags (categories) view (pulling from all calendars), add settings to hide completed tasks
+- [TUI] Browse by category/tags, restore cache
+- [GUI] fix cutoff tags AND/OR text

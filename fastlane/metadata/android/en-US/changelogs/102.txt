@@ -1,0 +1,9 @@
+### 💼 Other
+
+- Allow viewing + editing description in GUI + TUI
+- Bump version up to 0.1.2
+
+### 🎨 UI/UX Improvements
+
+- [GUI] Add priority / subtask / edit / delete buttons
+- [GUI] show tasks description

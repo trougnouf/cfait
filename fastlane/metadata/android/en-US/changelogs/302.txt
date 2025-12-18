@@ -1,0 +1,7 @@
+### 📚 Documentation
+
+- Update README
+
+### ⚙️ Miscellaneous Tasks
+
+- *(android)* Generate static Android version number for F-Droid release

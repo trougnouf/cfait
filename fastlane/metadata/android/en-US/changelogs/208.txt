@@ -1,0 +1,27 @@
+### 🚀 Features
+
+- *(ui)* Implement smart tag navigation, search result jumping, and implicit tag matching
+- *(sync)* Implement safe 3-way merge for 412 conflicts to reduce duplicate tasks
+- *(core)* Safe unmapped property handling
+- *(gui)* Implement optimistic cache loading for instant startup
+
+### 🐛 Bug Fixes
+
+- *(gui)* Reset child creation mode when unlinking/canceling the parent reference
+- *(tui)* Use default color for default text for white bg terminals compatibility
+- *(core)* Optimize unmapped property parsing and ensure backward compatibility
+
+### 📚 Documentation
+
+- *(readme)* Mentian Mint
+
+### 🎨 Styling
+
+- *(gui)* "select" active task
+
+### ⚙️ Miscellaneous Tasks
+
+- Lint
+- Update CHANGELOG
+- Lint
+- Release cfait version 0.2.8

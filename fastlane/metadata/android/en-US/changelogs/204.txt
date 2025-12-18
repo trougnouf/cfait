@@ -1,0 +1,20 @@
+### 🚀 Features
+
+- *(core)* Implement robust file locking with fs2, atomic journal processing, and isolated tests to prevent data corruption
+- *(ui)* Enable multiline task descriptions in GUI and TUI (Alt+Enter), fix visual corruption in TUI, and propagate sync errors
+
+### 📚 Documentation
+
+- Move main mirror from github to codeberg
+
+### ⚙️ Miscellaneous Tasks
+
+- Add Codeberg Actions for testing and release builds
+- Add Rust toolchain to Codeberg
+- Lint
+- Use lld linker to fix OOM errors and install clippy component
+- Reduce memory usage by not compiling cargo-deb, 2-threads
+- Self-hosted runner
+- *(release)* Add cmake and nasm to fix windows cross-compilation and fix shell script syntax
+- *(release)* Update changelog for v0.2.4
+- Release cfait version 0.2.4

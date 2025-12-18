@@ -1,0 +1,9 @@
+### 🐛 Bug Fixes
+
+- *(android)* Prevent crash on "Show all calendars" toggle on first run by handling missing config file
+- *(android)* Prevent sync conflicts by writing post-sync ETag/sequence back to store
+
+### ⚙️ Miscellaneous Tasks
+
+- Prepare for 0.3.1
+- Release cfait version 0.3.1

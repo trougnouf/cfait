@@ -1,0 +1,11 @@
+### 💼 Other
+
+- Fix github release
+- Optimize binary size
+- Add onboarding prompt
+- Rename fairouille->cfait, automate Arch Linux PKGBUILD
+- Add .deb release
+
+### 🎨 UI/UX Improvements
+
+- [TUI] respond to --help

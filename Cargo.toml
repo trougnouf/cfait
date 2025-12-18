@@ -122,7 +122,11 @@ replace = "pkgver={{version}}"
 
 [package.metadata.release]
 # Run this script before committing the release
-pre-release-hook = ["python3", "scripts/sync_version_code.py"]
+pre-release-hook = ["python3", "scripts/prepare_release.py"]
+# Ensure the new Fastlane file is added to the git commit
+# We explicitly enable signing and verify that untracked files (the new changelog) get picked up
+sign-commit = true
+sign-tag = true
 
 [package.metadata.android]
 # This must match (Major * 10000 + Minor * 100 + Patch)

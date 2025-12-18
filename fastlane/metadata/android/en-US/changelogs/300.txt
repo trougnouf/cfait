@@ -1,0 +1,90 @@
+### 🚀 Features
+
+- *(ux)* Unhide and activate default calendar on startup
+- *(core)* Implement hierarchical tag filtering and sidebar aggregation
+- *(gui)* Retroactively apply new aliases to existing tasks
+- *(core)* Support inline alias definition (#a=#b,#c) with retroactive application in TUI and GUI
+- *(core)* Implement tag inheritance for child tasks (GUI+TUI) and hide redundant tags in the GUI task list, fix GUI yank button
+- *(gui)* Add promote button for child tasks
+- *(workflow)* Auto-clear yanked state after linking (child/block) in GUI and TUI
+- *(ui)* Implement priority gradient
+- Fix alias expansion for sub-categories, hide expanded alias tags in list view
+- *(ui)* Display CalDAV calendar colors in TUI and GUI
+- *(android)* Implement native Android client using Jetpack Compose and UniFFI
+- *(android)* Polish UI with NerdFonts, add calendar selection, and automate asset copying
+- *(android)* Implement sidebar tabs (Calendars/Tags), advanced search, and task hierarchy
+- *(android)* Optimize startup with optimistic caching, fix tag layout, add back navigation, and implement task action menu
+- *(android)* Compact UI layout, custom state checkbox with (currently wrong) calendar colors, blocked-by details, and expanded action menu
+- *(android)* Align UI styling with desktop (calendar colors, state backgrounds, priority text) and fix icon alignment
+- *(android)* Streamline task creation and editing workflow
+- *(android)* Add an arrow_right / isolate button next to each calendar
+- *(gui)* Refine task row layout for title and tags
+- *(android)* Auto-scroll to newly created task, tag jumping, migration tool, write calendar color
+- *(android)* Add help screen (under settings)
+- *(tui)* Add auto-jump on create, fix search focus, wrap long titles, reduce sidebar/list ratio
+- *(gui)* Improve search UX, task row layout, and add auto-scroll
+- *(gui)* Add keyboard shortcuts for focusing input fields ("/" to search, "a" for smart input)
+
+### 🐛 Bug Fixes
+
+- Allow starting newly created tasks
+- *(store)* Ensure index update on recurring task creation and network sync
+- *(core)* Prevent data loss by routing alias updates through journal instead of direct cache overwrite
+- *(core)* Fail loudly on corrupted local storage instead of overwriting with empty state
+- *(android)* Align play icon, implement disabled calendars in settings, and resolve kotlin deprecation warnings
+- *(core)* Prevent data loss by correcting relation parsing and sync ETag propagation
+- *(android)* Implement full sync on connect/refresh
+- *(core)* Fix Android locking, sync consistency, and model logic
+- *(client)* Prevent data loss by verifying journal queue head identity before removal
+- *(mobile)* Resolve lifecycle, timezone, and data safety issues
+- *(Android)* Fix build
+- *(core)* Resolve persistent ghost tasks by forcing sync on empty ETags
+- *(core)* Recycle recurring tasks on completion to prevent duplication
+- *(ci)* Downgrade artifact actions to v3 for forgejo compatibility
+- *(ci)* Grant builder user permissions for AUR generation
+- *(android)* Correct kotlin dsl syntax for signing config
+- *(android)* Add R8 rules for JNA/UniFFI
+- *(ci)* Use absolute path for keystore to fix signing
+
+### 🚜 Refactor
+
+- *(core)* Deduplicate task logic and centralize path resolution
+- *(gui&core)* Restore edit functionality and optimize store lookups
+- *(android)* Split UI into submodules and implement task relationships
+
+### 📚 Documentation
+
+- Add support options and improve help
+- Improve TUI help
+- Add Android screenshot
+
+### 🎨 Styling
+
+- Convert UI text and documentation from title case to normal case capitalization
+- *(android)* Modify header with active calendar info, compact tag list layout, and add sidebar footer logo
+- *(gui)* Highlight task on hover, display details on click
+- *(android)* Reduce space between tasks, highlight current task, allow long press for more actions
+- *(android)* Dark background icon
+- *(gui)* Make recurrence_icon gray
+- *(gui)* Implement theme switcher with custom 'Rusty Dark' option
+- *(gui)* Rusty Dark: make selector yellow-amber instead of default blue
+- FeatureGraphic v1
+- FeatureGraphic v2
+
+### 🧪 Testing
+
+- *(model)* Add unit tests for ICS relation parsing and case-insensitivity
+- *(sync)* Add sync safety and concurrency tests
+
+### ⚙️ Miscellaneous Tasks
+
+- Lint
+- Lint
+- *(android)* Update versions
+- Switch deb/generic-linux build from Arch to to Ubuntu 24.04 (glibc 2.39), update documentation
+- Update licenses
+- Fastlane stuff for Android release
+- *(release)* Add signed Android build pipeline and prepare for v0.3.0
+- Release cfait version 0.3.0
+- *(refactor)* Centralize release logic in arch container and build in parallel
+- *(android)* Update gradle to 9.2, build apk in next release

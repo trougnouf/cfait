@@ -1,0 +1,6 @@
+### 💼 Other
+
+- Add license file, bump version
+- Add Arch Linux PKGBUILD
+- Rustache -> ferouille
+- Rustache -> ferouille
