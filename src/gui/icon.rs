@@ -1,4 +1,4 @@
-// File: ./src/gui/icon.rs
+// File: src/gui/icon.rs
 use iced::Font;
 use iced::widget::{Text, text};
 
@@ -26,7 +26,8 @@ pub const CROSS: char = '\u{f00d}'; // 
 pub const EDIT: char = '\u{f040}'; // 
 pub const PLAY: char = '\u{eb2c}'; // nf-cod-play
 pub const PLAY_FA: char = '\u{f04b}'; // nf-fa-play
-pub const PAUSE: char = '\u{f04c}'; // 
+pub const PAUSE: char = '\u{f04c}'; //  (Added)
+pub const DEBUG_STOP: char = '\u{ead7}'; // nf-cod-debug_stop (Added)
 pub const STOP: char = '\u{f04d}'; // 
 pub const LOCK: char = '\u{f023}'; // 
 pub const LINK: char = '\u{f0c1}'; // 

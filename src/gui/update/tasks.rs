@@ -116,6 +116,47 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        // --- NEW START / PAUSE / STOP HANDLERS ---
+        Message::StartTask(uid) => {
+            if let Some(updated) = app.store.set_status_in_process(&uid) {
+                app.selected_uid = Some(uid.clone());
+                refresh_filtered_tasks(app);
+                if let Some(client) = &app.client {
+                    return Task::perform(
+                        async_update_wrapper(client.clone(), updated),
+                        Message::SyncSaved,
+                    );
+                }
+            }
+            Task::none()
+        }
+        Message::PauseTask(uid) => {
+            if let Some(updated) = app.store.pause_task(&uid) {
+                app.selected_uid = Some(uid.clone());
+                refresh_filtered_tasks(app);
+                if let Some(client) = &app.client {
+                    return Task::perform(
+                        async_update_wrapper(client.clone(), updated),
+                        Message::SyncSaved,
+                    );
+                }
+            }
+            Task::none()
+        }
+        Message::StopTask(uid) => {
+            if let Some(updated) = app.store.stop_task(&uid) {
+                app.selected_uid = Some(uid.clone());
+                refresh_filtered_tasks(app);
+                if let Some(client) = &app.client {
+                    return Task::perform(
+                        async_update_wrapper(client.clone(), updated),
+                        Message::SyncSaved,
+                    );
+                }
+            }
+            Task::none()
+        }
+        // -----------------------------------------
         // --- YANK / LINKING Handlers ---
         Message::YankTask(uid) => {
             app.yanked_uid = Some(uid);

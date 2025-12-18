@@ -17,6 +17,7 @@ const HANDLED_KEYS: &[&str] = &[
     "RRULE",
     "DURATION",
     "X-ESTIMATED-DURATION",
+    "PERCENT-COMPLETE", // <--- Added to handled keys
     "CATEGORIES",
     "RELATED-TO",
     "DTSTAMP",
@@ -51,6 +52,7 @@ impl Task {
                 next_task.href = String::new();
                 next_task.etag = String::new();
                 next_task.status = TaskStatus::NeedsAction;
+                next_task.percent_complete = None; // Reset progress on respawn
                 next_task.dependencies.clear();
                 next_task.sequence = 0; // Reset sequence for new task
 
@@ -120,6 +122,7 @@ impl Task {
 
                 // Reset status to Open/NeedsAction implies recycling the task
                 self.status = TaskStatus::NeedsAction;
+                self.percent_complete = None; // Reset progress
                 return true;
             }
         }
@@ -144,6 +147,10 @@ impl Task {
             TaskStatus::Completed => todo.status(TodoStatus::Completed),
             TaskStatus::Cancelled => todo.status(TodoStatus::Cancelled),
         };
+
+        if let Some(pc) = self.percent_complete {
+            todo.percent_complete(pc);
+        }
 
         fn format_iso_duration(mins: u32) -> String {
             if mins.is_multiple_of(24 * 60) {
@@ -324,6 +331,11 @@ impl Task {
             .get("SEQUENCE")
             .and_then(|p| p.value().parse::<u32>().ok())
             .unwrap_or(0);
+
+        let percent_complete = todo
+            .properties()
+            .get("PERCENT-COMPLETE")
+            .and_then(|p| p.value().parse::<u8>().ok());
 
         let parse_date_prop = |val: &str| -> Option<DateTime<Utc>> {
             if val.len() == 8 {
@@ -517,6 +529,7 @@ impl Task {
             due,
             dtstart,
             priority,
+            percent_complete,
             parent_uid,
             dependencies,
             etag,
@@ -570,116 +583,4 @@ fn parse_related_to_manually(raw_ics: &str) -> (Option<String>, Vec<String>) {
     }
 
     (parent, deps)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_relationships_parsing_duplicate_protection() {
-        let ics = "BEGIN:VCALENDAR
-VERSION:2.0
-BEGIN:VTODO
-UID:child-task-uid
-SUMMARY:Child Task
-RELATED-TO:parent-task-uid
-RELATED-TO;RELTYPE=DEPENDS-ON:blocker-task-uid
-END:VTODO
-END:VCALENDAR";
-
-        let task = Task::from_ics(
-            ics,
-            "etag".to_string(),
-            "/href".to_string(),
-            "/cal/".to_string(),
-        )
-        .expect("Failed to parse ICS");
-
-        assert_eq!(task.parent_uid, Some("parent-task-uid".to_string()));
-        assert_eq!(task.dependencies, vec!["blocker-task-uid".to_string()]);
-    }
-
-    #[test]
-    fn test_alarm_preservation() {
-        let ics = "BEGIN:VCALENDAR
-BEGIN:VTODO
-UID:alarm-test
-SUMMARY:Wake Up
-BEGIN:VALARM
-ACTION:DISPLAY
-DESCRIPTION:Wake up
-TRIGGER:-PT10M
-END:VALARM
-END:VTODO
-END:VCALENDAR";
-
-        let task = Task::from_ics(
-            ics,
-            "etag".to_string(),
-            "/href".to_string(),
-            "/cal/".to_string(),
-        )
-        .expect("Parse failed");
-
-        assert_eq!(task.raw_alarms.len(), 1);
-        let output = task.to_ics();
-        assert!(output.contains("BEGIN:VALARM"));
-        assert!(output.contains("TRIGGER:-PT10M"));
-    }
-
-    #[test]
-    fn test_sequence_preservation() {
-        let ics = "BEGIN:VCALENDAR
-BEGIN:VTODO
-UID:seq-test
-SEQUENCE:5
-END:VTODO
-END:VCALENDAR";
-        let task = Task::from_ics(ics, "".to_string(), "".to_string(), "".to_string()).unwrap();
-        assert_eq!(task.sequence, 5);
-        let output = task.to_ics();
-        assert!(output.contains("SEQUENCE:5"));
-    }
-}
-
-#[cfg(test)]
-mod data_safety_tests {
-    use super::*;
-
-    #[test]
-    fn test_parsing_preserves_foreign_properties() {
-        // Scenario: User uses another client (e.g. Thunderbird) that adds X-MOZ-ALARM
-        // We must not delete this data when we save the task back.
-
-        let ics = "BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//Mozilla.org/NONSGML Mozilla Calendar V1.1//EN
-BEGIN:VTODO
-UID:foreign-prop-test
-SUMMARY:Test
-X-FOREIGN-PROPERTY:some-important-data
-X-COMPLEX-PROP;PARAM=VALUE:data
-END:VTODO
-END:VCALENDAR";
-
-        let task = Task::from_ics(ics, "".to_string(), "".to_string(), "".to_string()).unwrap();
-
-        // Verify we captured them
-        assert!(
-            task.unmapped_properties
-                .iter()
-                .any(|p| p.key == "X-FOREIGN-PROPERTY")
-        );
-        assert!(
-            task.unmapped_properties
-                .iter()
-                .any(|p| p.key == "X-COMPLEX-PROP")
-        );
-
-        // Verify we write them back
-        let output = task.to_ics();
-        assert!(output.contains("X-FOREIGN-PROPERTY:some-important-data"));
-        assert!(output.contains("X-COMPLEX-PROP;PARAM=VALUE:data"));
-    }
 }

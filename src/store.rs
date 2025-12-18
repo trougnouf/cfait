@@ -81,9 +81,10 @@ impl TaskStore {
         let href = self.index.get(uid)?.clone();
 
         if let Some(tasks) = self.calendars.get_mut(&href)
-            && let Some(task) = tasks.iter_mut().find(|t| t.uid == uid) {
-                return Some((task, href));
-            }
+            && let Some(task) = tasks.iter_mut().find(|t| t.uid == uid)
+        {
+            return Some((task, href));
+        }
 
         self.index.remove(uid);
         None
@@ -113,6 +114,42 @@ impl TaskStore {
         None
     }
 
+    // --- PAUSE / STOP / START HELPERS ---
+
+    pub fn set_status_in_process(&mut self, uid: &str) -> Option<Task> {
+        if let Some((task, _)) = self.get_task_mut(uid) {
+            task.status = TaskStatus::InProcess;
+            // Optionally ensure percent_complete is > 0 to imply started, but not strictly required
+            return Some(task.clone());
+        }
+        None
+    }
+
+    pub fn pause_task(&mut self, uid: &str) -> Option<Task> {
+        if let Some((task, _)) = self.get_task_mut(uid) {
+            task.status = TaskStatus::NeedsAction;
+            // To be "Paused", percent must be > 0.
+            // If it's currently 0 or missing, set it to 50% as a default "in progress" marker.
+            let current = task.percent_complete.unwrap_or(0);
+            if current == 0 {
+                task.percent_complete = Some(50);
+            }
+            return Some(task.clone());
+        }
+        None
+    }
+
+    pub fn stop_task(&mut self, uid: &str) -> Option<Task> {
+        if let Some((task, _)) = self.get_task_mut(uid) {
+            task.status = TaskStatus::NeedsAction;
+            task.percent_complete = None; // Explicitly clear progress to un-pause
+            return Some(task.clone());
+        }
+        None
+    }
+
+    // ------------------------------------
+
     pub fn change_priority(&mut self, uid: &str, delta: i8) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
             task.priority = if delta > 0 {
@@ -141,19 +178,20 @@ impl TaskStore {
         let href = self.index.get(uid)?.clone();
 
         if let Some(tasks) = self.calendars.get_mut(&href)
-            && let Some(idx) = tasks.iter().position(|t| t.uid == uid) {
-                let task = tasks.remove(idx);
-                self.index.remove(uid);
+            && let Some(idx) = tasks.iter().position(|t| t.uid == uid)
+        {
+            let task = tasks.remove(idx);
+            self.index.remove(uid);
 
-                // Persist the change to the correct storage (cache or local)
-                if href == crate::storage::LOCAL_CALENDAR_HREF {
-                    let _ = LocalStorage::save(tasks);
-                } else {
-                    let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
-                    let _ = Cache::save(&href, tasks, token);
-                }
-                return Some((task, href));
+            // Persist the change to the correct storage (cache or local)
+            if href == crate::storage::LOCAL_CALENDAR_HREF {
+                let _ = LocalStorage::save(tasks);
+            } else {
+                let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
+                let _ = Cache::save(&href, tasks, token);
             }
+            return Some((task, href));
+        }
         None
     }
 
@@ -167,19 +205,21 @@ impl TaskStore {
 
     pub fn add_dependency(&mut self, task_uid: &str, dep_uid: String) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(task_uid)
-            && !task.dependencies.contains(&dep_uid) {
-                task.dependencies.push(dep_uid);
-                return Some(task.clone());
-            }
+            && !task.dependencies.contains(&dep_uid)
+        {
+            task.dependencies.push(dep_uid);
+            return Some(task.clone());
+        }
         None
     }
 
     pub fn remove_dependency(&mut self, task_uid: &str, dep_uid: &str) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(task_uid)
-            && let Some(pos) = task.dependencies.iter().position(|d| d == dep_uid) {
-                task.dependencies.remove(pos);
-                return Some(task.clone());
-            }
+            && let Some(pos) = task.dependencies.iter().position(|d| d == dep_uid)
+        {
+            task.dependencies.remove(pos);
+            return Some(task.clone());
+        }
         None
     }
 
@@ -358,9 +398,10 @@ impl TaskStore {
 
         if let Some(href) = options.active_cal_href {
             if !options.hidden_calendars.contains(href)
-                && let Some(tasks) = self.calendars.get(href) {
-                    raw_tasks.extend(tasks.clone());
-                }
+                && let Some(tasks) = self.calendars.get(href)
+            {
+                raw_tasks.extend(tasks.clone());
+            }
         } else {
             for (href, tasks) in &self.calendars {
                 if !options.hidden_calendars.contains(href) {
@@ -383,13 +424,15 @@ impl TaskStore {
 
                 if let Some(mins) = t.estimated_duration {
                     if let Some(min) = options.min_duration
-                        && mins < min {
-                            return false;
-                        }
+                        && mins < min
+                    {
+                        return false;
+                    }
                     if let Some(max) = options.max_duration
-                        && mins > max {
-                            return false;
-                        }
+                        && mins > max
+                    {
+                        return false;
+                    }
                 } else if !options.include_unset_duration {
                     return false;
                 }
@@ -465,9 +508,10 @@ impl TaskStore {
     pub fn is_task_done(&self, uid: &str) -> Option<bool> {
         if let Some(href) = self.index.get(uid)
             && let Some(tasks) = self.calendars.get(href)
-                && let Some(t) = tasks.iter().find(|t| t.uid == uid) {
-                    return Some(t.status.is_done());
-                }
+            && let Some(t) = tasks.iter().find(|t| t.uid == uid)
+        {
+            return Some(t.status.is_done());
+        }
         None
     }
 
@@ -481,9 +525,10 @@ impl TaskStore {
         }
         for dep_uid in &task.dependencies {
             if let Some(is_done) = self.is_task_done(dep_uid)
-                && !is_done {
-                    return true;
-                }
+                && !is_done
+            {
+                return true;
+            }
         }
         false
     }
@@ -491,9 +536,10 @@ impl TaskStore {
     pub fn get_summary(&self, uid: &str) -> Option<String> {
         if let Some(href) = self.index.get(uid)
             && let Some(tasks) = self.calendars.get(href)
-                && let Some(t) = tasks.iter().find(|t| t.uid == uid) {
-                    return Some(t.summary.clone());
-                }
+            && let Some(t) = tasks.iter().find(|t| t.uid == uid)
+        {
+            return Some(t.summary.clone());
+        }
         None
     }
 }

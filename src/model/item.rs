@@ -43,6 +43,7 @@ pub struct Task {
     pub due: Option<DateTime<Utc>>,
     pub dtstart: Option<DateTime<Utc>>,
     pub priority: u8,
+    pub percent_complete: Option<u8>,
     pub parent_uid: Option<String>,
     pub dependencies: Vec<String>,
     pub etag: String,
@@ -53,12 +54,10 @@ pub struct Task {
     pub rrule: Option<String>,
     pub unmapped_properties: Vec<RawProperty>,
 
-    // --- New Fields ---
     #[serde(default)]
     pub sequence: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub raw_alarms: Vec<String>,
-
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub raw_components: Vec<String>,
 }
@@ -74,6 +73,7 @@ impl Task {
             due: None,
             dtstart: None,
             priority: 0,
+            percent_complete: None,
             parent_uid: None,
             dependencies: Vec::new(),
             etag: String::new(),
@@ -90,8 +90,6 @@ impl Task {
         task.apply_smart_input(input, aliases);
         task
     }
-
-    // --- View Helpers ---
 
     pub fn format_duration_short(&self) -> String {
         if let Some(mins) = self.estimated_duration {
@@ -113,43 +111,56 @@ impl Task {
         }
     }
 
+    pub fn is_paused(&self) -> bool {
+        self.status == TaskStatus::NeedsAction
+            && self.percent_complete.unwrap_or(0) > 0
+            && self.percent_complete.unwrap_or(0) < 100
+    }
+
     pub fn checkbox_symbol(&self) -> &'static str {
+        if self.is_paused() {
+            return "[‖]";
+        }
         match self.status {
-            TaskStatus::Completed => "[x]",
-            TaskStatus::Cancelled => "[-]",
-            TaskStatus::InProcess => "[>]",
+            TaskStatus::Completed => "[✔]",
+            TaskStatus::Cancelled => "[✘]",
+            TaskStatus::InProcess => "[▶]",
             TaskStatus::NeedsAction => "[ ]",
         }
     }
 
-    // --- Logic ---
-
     pub fn compare_with_cutoff(&self, other: &Self, cutoff: Option<DateTime<Utc>>) -> Ordering {
-        fn status_prio(s: TaskStatus) -> u8 {
-            match s {
-                TaskStatus::InProcess => 0,
-                TaskStatus::NeedsAction => 1,
-                TaskStatus::Completed => 2,
-                TaskStatus::Cancelled => 3,
-            }
+        // 1. ACTIVE (InProcess) always floats to the very top
+        let s1_active = self.status == TaskStatus::InProcess;
+        let s2_active = other.status == TaskStatus::InProcess;
+        if s1_active && !s2_active {
+            return Ordering::Less;
+        }
+        if !s1_active && s2_active {
+            return Ordering::Greater;
         }
 
-        let s1 = status_prio(self.status);
-        let s2 = status_prio(other.status);
-        if s1 != s2 {
-            return s1.cmp(&s2);
+        // 2. DONE (Completed/Cancelled) always floats to the very bottom
+        let s1_done = self.status.is_done();
+        let s2_done = other.status.is_done();
+        if !s1_done && s2_done {
+            return Ordering::Less;
+        }
+        if s1_done && !s2_done {
+            return Ordering::Greater;
         }
 
+        // 3. START DATE Logic (Future tasks pushed down)
         let now = Utc::now();
         let self_future = self.dtstart.map(|d| d > now).unwrap_or(false);
         let other_future = other.dtstart.map(|d| d > now).unwrap_or(false);
-
         match (self_future, other_future) {
             (true, false) => return Ordering::Greater,
             (false, true) => return Ordering::Less,
             _ => {}
         }
 
+        // 4. CUTOFF Logic (Group by "In View" vs "Outside View")
         let is_in_window = |t: &Task| -> bool {
             match (t.due, cutoff) {
                 (Some(d), Some(limit)) => d <= limit,
@@ -157,41 +168,46 @@ impl Task {
                 (None, _) => false,
             }
         };
-
         let self_in = is_in_window(self);
         let other_in = is_in_window(other);
-
         match (self_in, other_in) {
-            (true, true) => {
-                if self.due != other.due {
-                    return self.due.cmp(&other.due);
-                }
-            }
             (true, false) => return Ordering::Less,
             (false, true) => return Ordering::Greater,
-            (false, false) => {}
+            _ => {}
         }
 
+        // 5. PRIORITY (1=High/Less ... 9=Low/Greater. 0=Normal/5)
         let p1 = if self.priority == 0 { 5 } else { self.priority };
         let p2 = if other.priority == 0 {
             5
         } else {
             other.priority
         };
-
         if p1 != p2 {
             return p1.cmp(&p2);
         }
 
+        // 6. DUE DATE
         match (self.due, other.due) {
             (Some(d1), Some(d2)) => {
                 if d1 != d2 {
                     return d1.cmp(&d2);
                 }
             }
-            (Some(_), None) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Less, // Has date > No date
             (None, Some(_)) => return Ordering::Greater,
-            _ => {}
+            (None, None) => {}
+        }
+
+        // 7. PAUSED vs FRESH (Tie-breaker)
+        // Paused floats above Unstarted ONLY if priority and date are identical
+        let p1_paused = self.is_paused();
+        let p2_paused = other.is_paused();
+        if p1_paused && !p2_paused {
+            return Ordering::Less;
+        }
+        if !p1_paused && p2_paused {
+            return Ordering::Greater;
         }
 
         self.summary.cmp(&other.summary)
@@ -228,7 +244,6 @@ impl Task {
             Self::append_task_and_children(&root, &mut result, &children_map, 0, &mut visited_uids);
         }
 
-        // CYCLE RECOVERY: Add tasks skipped due to circular dependencies
         if result.len() < tasks.len() {
             for mut task in tasks {
                 if !visited_uids.contains(&task.uid) {

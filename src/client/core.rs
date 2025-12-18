@@ -1,4 +1,4 @@
-// File: ./src/client/core.rs
+// File: src/client/core.rs
 use crate::cache::Cache;
 use crate::client::cert::NoVerifier;
 use crate::config::Config;
@@ -54,13 +54,9 @@ fn strip_host(href: &str) -> String {
 // --- Robust Identity Check ---
 fn actions_match_identity(a: &Action, b: &Action) -> bool {
     match (a, b) {
-        // For Create, UID match is sufficient (seq is usually 0)
         (Action::Create(t1), Action::Create(t2)) => t1.uid == t2.uid,
-        // For Update, UID match AND Sequence match is required to ensure we don't remove a newer update
         (Action::Update(t1), Action::Update(t2)) => t1.uid == t2.uid && t1.sequence == t2.sequence,
-        // For Delete, UID match is sufficient
         (Action::Delete(t1), Action::Delete(t2)) => t1.uid == t2.uid,
-        // For Move, UID and Destination match
         (Action::Move(t1, d1), Action::Move(t2, d2)) => t1.uid == t2.uid && d1 == d2,
         _ => false,
     }
@@ -124,8 +120,6 @@ impl RustyClient {
             client: Some(caldav),
         })
     }
-
-    // --- DISCOVERY & CONNECTION ---
 
     pub async fn discover_calendar(&self) -> Result<String, String> {
         if let Some(client) = &self.client {
@@ -211,7 +205,6 @@ impl RustyClient {
             }
         } else if let Some(ref h) = active_href {
             let (mut t, _) = Cache::load(h).unwrap_or((vec![], None));
-            // Apply journal to offline cache load
             apply_journal_to_tasks(&mut t, h);
             t
         } else {
@@ -268,8 +261,6 @@ impl RustyClient {
         }
     }
 
-    // --- TASK FETCHING ---
-
     async fn fetch_calendar_tasks_internal(
         &self,
         calendar_href: &str,
@@ -288,10 +279,6 @@ impl RustyClient {
         if let Some(client) = &self.client {
             let path_href = strip_host(calendar_href);
 
-            // --- GHOST TASK FIX START ---
-            // Identify pending actions to guide cache reconciliation.
-            // pending_deletions: Tasks we deleted locally; ignore server copies.
-            // pending_creations: Tasks we created locally; preserve them even if server doesn't have them yet.
             let (pending_deletions, pending_creations) = if apply_journal {
                 let journal = Journal::load();
                 let mut dels = HashSet::new();
@@ -308,7 +295,6 @@ impl RustyClient {
                         Action::Create(t) if t.calendar_href == calendar_href => {
                             creates.insert(t.uid);
                         }
-                        // Treat Updates to unsynced tasks as Creations (to preserve them)
                         Action::Update(t)
                             if t.calendar_href == calendar_href && t.etag.is_empty() =>
                         {
@@ -324,7 +310,6 @@ impl RustyClient {
             } else {
                 (HashSet::new(), HashSet::new())
             };
-            // --- GHOST TASK FIX END ---
 
             let remote_token = if let Ok(resp) = client
                 .request(GetProperty::new(&path_href, &GET_CTAG))
@@ -340,10 +325,6 @@ impl RustyClient {
                 None
             };
 
-            // FIX START: Detect potential ghosts (Href set but Etag empty).
-            // If present, we MUST NOT skip sync, even if tokens match.
-            // This forces the code to fall through to PROPFIND, which will fail to find the task
-            // on the server, triggering the pruning logic below.
             let has_ghosts = cached_tasks
                 .iter()
                 .any(|t| t.etag.is_empty() && !t.href.is_empty());
@@ -357,14 +338,12 @@ impl RustyClient {
                 }
                 return Ok(cached_tasks);
             }
-            // FIX END
 
             let list_resp = client
                 .request(ListResources::new(&path_href))
                 .await
                 .map_err(|e| format!("PROPFIND: {:?}", e))?;
 
-            // Normalize keys to avoid mismatch between full URL vs path
             let mut cache_map: HashMap<String, Task> = HashMap::new();
             for t in cached_tasks {
                 cache_map.insert(strip_host(&t.href), t);
@@ -379,10 +358,8 @@ impl RustyClient {
                     continue;
                 }
 
-                // Normalize resource href
                 let res_href_stripped = strip_host(&resource.href);
 
-                // GHOST TASK FIX: Check if this resource corresponds to a task pending deletion
                 let is_pending_delete = if apply_journal {
                     if let Some(local_task) = cache_map.get(&res_href_stripped) {
                         pending_deletions.contains(&local_task.uid)
@@ -417,21 +394,12 @@ impl RustyClient {
             }
 
             for (href, task) in cache_map {
-                // GHOST TASK FIX:
-                // If a task is not on the server (!server_hrefs.contains), we decide whether to keep it.
-                // 1. If it has a valid ETag/Href, it was previously synced. Server missing = Deleted remotely. DROP.
-                // 2. If it has NO ETag/Href, it is "local-only".
-                //    - If it is in the Journal (pending_creations), we MUST keep it (waiting to sync).
-                //    - If it is NOT in the Journal, it is a ghost/zombie (failed sync remnant). DROP.
-
-                // Note: cache_map keys are already stripped/normalized here
                 if !server_hrefs.contains(&href) {
                     let is_unsynced = task.etag.is_empty() || task.href.is_empty();
 
                     if is_unsynced && pending_creations.contains(&task.uid) {
                         final_tasks.push(task);
                     }
-                    // Else: It was synced (has ETag) but server doesn't have it -> Deleted. implicitly dropped.
                 }
             }
 
@@ -472,9 +440,6 @@ impl RustyClient {
     }
 
     pub async fn get_tasks(&self, calendar_href: &str) -> Result<Vec<Task>, String> {
-        // Don't let a sync error prevent the task fetch.
-        // The user should still be able to see their tasks even if one
-        // pending item fails to sync. Warnings are handled by sync_journal itself.
         let _ = self.sync_journal().await.ok();
         self.fetch_calendar_tasks_internal(calendar_href, true)
             .await
@@ -508,8 +473,6 @@ impl RustyClient {
 
         Ok(final_results)
     }
-
-    // --- TASK OPERATIONS ---
 
     pub async fn create_task(&self, task: &mut Task) -> Result<Vec<String>, String> {
         if task.calendar_href == LOCAL_CALENDAR_HREF {
@@ -564,32 +527,22 @@ impl RustyClient {
         &self,
         task: &mut Task,
     ) -> Result<(Task, Option<Task>, Vec<String>), String> {
-        // INTEROP FIX: Recurrence Strategy
-        // Previously, we spawned a new task (clone) and marked the old one completed.
-        // This caused triplication issues with Tasks.org which expects the task to "Recycle" (move dates forward).
-        //
-        // New Logic: If completing a recurring task, advance its dates and keep it Open.
-
-        if task.status == TaskStatus::Completed && task.rrule.is_some() {
-            if task.advance_recurrence() {
-                // Task Recycled
-            }
+        // --- START MERGE ---
+        if task.status == TaskStatus::Completed && task.rrule.is_some() && task.advance_recurrence()
+        {
+            // Task Recycled
         }
+        // --- END MERGE ---
 
-        // Handle Local Calendar
         if task.calendar_href == LOCAL_CALENDAR_HREF {
             let mut all = LocalStorage::load().map_err(|e| e.to_string())?;
             if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
                 all[idx] = task.clone();
             }
-            // Note: We no longer push a 'new' task for recurrence, as we recycled 'task'
             LocalStorage::save(&all).map_err(|e| e.to_string())?;
             return Ok((task.clone(), None, vec![]));
         }
 
-        // Handle Network Calendar
-        // We only update the existing task (which might have been recycled)
-        // We no longer call create_task() for recurrence.
         let logs = self.update_task(task).await?;
         Ok((task.clone(), None, logs))
     }
@@ -638,8 +591,6 @@ impl RustyClient {
         }
         Ok(count)
     }
-
-    // --- JOURNAL SYNC ---
 
     async fn fetch_etag(&self, path: &str) -> Option<String> {
         if let Some(client) = &self.client
@@ -795,7 +746,6 @@ impl RustyClient {
                         Ok(())
                     }
                     Err(e) => {
-                        // FIX: Treat 404/403 as success (it's gone already)
                         if e.contains("404") || e.contains("NotFound") || e.contains("403") {
                             warnings.push(format!(
                                 "Move source missing for '{}', assuming success.",
@@ -819,25 +769,16 @@ impl RustyClient {
                     }
 
                     let commit_res = Journal::modify(|queue| {
-                        // RACE CONDITION FIX:
-                        // Use robust identity check instead of strict PartialEq.
-                        // If the head item has the same UID and type/seq as what we processed, remove it.
                         let should_remove = if let Some(head) = queue.first() {
                             actions_match_identity(head, &next_action)
                         } else {
-                            // Queue is empty, nothing to remove
                             false
                         };
 
                         if !should_remove {
-                            // The queue shifted under our feet (processed by another instance).
-                            // We do NOT remove index 0, as it is a different task.
-                            // We do NOT apply ETag propagations, as they belong to the task we processed,
-                            // which is already gone from the queue.
                             return;
                         }
 
-                        // Remove the task we successfully processed
                         queue.remove(0);
 
                         if let Some(act) = conflict_resolved_action {
@@ -901,8 +842,6 @@ impl RustyClient {
                     }
                 }
                 Err(msg) => {
-                    // Poison Pill Detection
-                    // Swallow 400/413 errors to unblock queue
                     if msg.contains("400")
                         || msg.contains("403")
                         || msg.contains("413")
@@ -926,7 +865,6 @@ impl RustyClient {
         let (cached_tasks, _) = Cache::load(&local_task.calendar_href).ok()?;
         let base_task = cached_tasks.iter().find(|t| t.uid == local_task.uid)?;
 
-        // Fetch raw server tasks (apply_journal = false) to see actual conflict state
         let server_tasks = self
             .fetch_calendar_tasks_internal(&local_task.calendar_href, false)
             .await
@@ -957,7 +895,6 @@ impl RustyClient {
             .relative_uri(&source_path)
             .map_err(|e| format!("Invalid source URI: {}", e))?;
 
-        // Construct Absolute Destination URI
         let base = client.webdav_client.base_url();
         let scheme = base.scheme_str().unwrap_or("https");
         let authority = base.authority().map(|a| a.as_str()).unwrap_or("");
@@ -1055,6 +992,7 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
     merge_field!(dtstart);
     merge_field!(estimated_duration);
     merge_field!(rrule);
+    merge_field!(percent_complete);
 
     if local.categories != base.categories {
         let mut new_cats = server.categories.clone();

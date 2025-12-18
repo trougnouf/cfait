@@ -312,12 +312,31 @@ pub async fn handle_key_event(
                     }
                 }
             }
+            // START / PAUSE / RESUME logic
             KeyCode::Char('s') => {
+                if let Some(task) = state.get_selected_task() {
+                    let uid = task.uid.clone();
+                    let updated_opt = if task.status == TaskStatus::InProcess {
+                        // Currently Running -> Pause
+                        state.store.pause_task(&uid)
+                    } else {
+                        // Currently Paused or Stopped -> Start/Resume
+                        state.store.set_status_in_process(&uid)
+                    };
+
+                    if let Some(updated) = updated_opt {
+                        state.refresh_filtered_view();
+                        return Some(Action::UpdateTask(updated));
+                    }
+                }
+            }
+            // STOP logic (Shift+S)
+            KeyCode::Char('S') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some(updated) = state.store.set_status(&uid, TaskStatus::InProcess)
+                    && let Some(updated) = state.store.stop_task(&uid)
                 {
                     state.refresh_filtered_view();
-                    return Some(Action::MarkInProcess(updated));
+                    return Some(Action::UpdateTask(updated));
                 }
             }
             KeyCode::Char('x') => {

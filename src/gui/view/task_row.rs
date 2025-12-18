@@ -267,24 +267,36 @@ pub fn view_task_row<'a>(
     if task.status != crate::model::TaskStatus::Completed
         && task.status != crate::model::TaskStatus::Cancelled
     {
-        let (action_icon, msg_status, tooltip_text) =
+        // 1. Play / Pause / Resume Button
+        let (action_icon, next_action_msg, tooltip_text) =
             if task.status == crate::model::TaskStatus::InProcess {
+                // It is running -> Show Pause
                 (
                     icon::PAUSE,
-                    crate::model::TaskStatus::NeedsAction,
+                    Message::PauseTask(task.uid.clone()),
                     "Pause task",
                 )
-            } else {
+            } else if task.is_paused() {
+                // It is Paused -> Show Resume
                 (
                     icon::PLAY,
-                    crate::model::TaskStatus::InProcess,
+                    Message::StartTask(task.uid.clone()),
+                    "Resume task",
+                )
+            } else {
+                // It is Stopped/New -> Show Start
+                (
+                    icon::PLAY,
+                    Message::StartTask(task.uid.clone()),
                     "Start task",
                 )
             };
+
         let status_toggle_btn = button(icon::icon(action_icon).size(14))
             .style(action_style)
             .padding(4)
-            .on_press(Message::SetTaskStatus(index, msg_status));
+            .on_press(next_action_msg);
+
         actions = actions.push(
             tooltip(
                 status_toggle_btn,
@@ -294,6 +306,24 @@ pub fn view_task_row<'a>(
             .style(tooltip_style)
             .delay(Duration::from_millis(700)),
         );
+
+        // 2. Stop Button (Show if Running OR Paused)
+        if task.status == crate::model::TaskStatus::InProcess || task.is_paused() {
+            let stop_btn = button(icon::icon(icon::DEBUG_STOP).size(14))
+                .style(action_style)
+                .padding(4)
+                .on_press(Message::StopTask(task.uid.clone()));
+
+            actions = actions.push(
+                tooltip(
+                    stop_btn,
+                    text("Stop (Reset)").size(12),
+                    tooltip::Position::Top,
+                )
+                .style(tooltip_style)
+                .delay(Duration::from_millis(700)),
+            );
+        }
     }
 
     let plus_btn = button(icon::icon(icon::PLUS).size(14))
@@ -361,24 +391,32 @@ pub fn view_task_row<'a>(
         );
     }
 
-    let (icon_char, bg_color, default_border_color) = match task.status {
-        crate::model::TaskStatus::InProcess => (
-            icon::PLAY_FA,
-            Color::from_rgb(0.6, 0.8, 0.6),
-            Color::from_rgb(0.4, 0.5, 0.4),
-        ),
-        crate::model::TaskStatus::Cancelled => (
-            icon::CROSS,
-            Color::from_rgb(0.3, 0.2, 0.2),
-            Color::from_rgb(0.5, 0.4, 0.4),
-        ),
-        crate::model::TaskStatus::Completed => (
-            icon::CHECK,
-            Color::from_rgb(0.0, 0.6, 0.0),
-            Color::from_rgb(0.0, 0.8, 0.0),
-        ),
-        crate::model::TaskStatus::NeedsAction => {
-            (' ', Color::TRANSPARENT, Color::from_rgb(0.5, 0.5, 0.5))
+    let (icon_char, bg_color, default_border_color) = if task.is_paused() {
+        (
+            icon::PAUSE,
+            Color::from_rgb(0.9, 0.7, 0.2), // Amber
+            Color::from_rgb(0.6, 0.5, 0.2),
+        )
+    } else {
+        match task.status {
+            crate::model::TaskStatus::InProcess => (
+                icon::PLAY_FA,
+                Color::from_rgb(0.6, 0.8, 0.6),
+                Color::from_rgb(0.4, 0.5, 0.4),
+            ),
+            crate::model::TaskStatus::Cancelled => (
+                icon::CROSS,
+                Color::from_rgb(0.3, 0.2, 0.2),
+                Color::from_rgb(0.5, 0.4, 0.4),
+            ),
+            crate::model::TaskStatus::Completed => (
+                icon::CHECK,
+                Color::from_rgb(0.0, 0.6, 0.0),
+                Color::from_rgb(0.0, 0.8, 0.0),
+            ),
+            crate::model::TaskStatus::NeedsAction => {
+                (' ', Color::TRANSPARENT, Color::from_rgb(0.5, 0.5, 0.5))
+            }
         }
     };
 

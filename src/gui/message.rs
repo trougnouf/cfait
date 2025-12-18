@@ -42,6 +42,11 @@ pub enum Message {
     CancelEdit,
     ChangePriority(usize, i8),
     SetTaskStatus(usize, crate::model::TaskStatus),
+    // --- NEW MESSAGES ---
+    StartTask(String),
+    PauseTask(String),
+    StopTask(String),
+    // --------------------
     SetMinDuration(Option<u32>),
     SetMaxDuration(Option<u32>),
     ToggleIncludeUnsetDuration(bool),

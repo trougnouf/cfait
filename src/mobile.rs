@@ -1,4 +1,4 @@
-// File: ./src/mobile.rs
+// File: src/mobile.rs
 use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::config::Config;
@@ -70,6 +70,8 @@ pub struct MobileTask {
     pub status_string: String,
     pub blocked_by_names: Vec<String>,
     pub blocked_by_uids: Vec<String>,
+    // New field to expose paused state nicely
+    pub is_paused: bool,
 }
 
 #[derive(uniffi::Record)]
@@ -129,6 +131,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         status_string: status_str,
         blocked_by_names,
         blocked_by_uids: t.dependencies.clone(),
+        is_paused: t.is_paused(),
     }
 }
 
@@ -245,7 +248,6 @@ impl CfaitMobile {
     // --- Calendar Management ---
 
     pub fn isolate_calendar(&self, href: String) -> Result<(), MobileError> {
-        // FIX: Use unwrap_or_default() to safely handle missing config file
         let mut config = Config::load().unwrap_or_default();
         let all_cals = self.get_calendars();
         let mut new_hidden = vec![];
@@ -292,14 +294,12 @@ impl CfaitMobile {
     }
 
     pub fn set_default_calendar(&self, href: String) -> Result<(), MobileError> {
-        // FIX: Use unwrap_or_default()
         let mut config = Config::load().unwrap_or_default();
         config.default_calendar = Some(href);
         config.save().map_err(MobileError::from)
     }
 
     pub fn set_calendar_visibility(&self, href: String, visible: bool) -> Result<(), MobileError> {
-        // FIX: Use unwrap_or_default() to prevent crash when config file is missing
         let mut config = Config::load().unwrap_or_default();
         if visible {
             config.hidden_calendars.retain(|h| h != &href);
@@ -389,8 +389,6 @@ impl CfaitMobile {
     }
 
     pub async fn sync(&self) -> Result<String, MobileError> {
-        // Sync still requires a valid config to connect to a server, so mapping error is correct here.
-        // If config is missing, we can't sync anyway.
         let config = Config::load().map_err(MobileError::from)?;
         self.apply_connection(config).await
     }
@@ -560,6 +558,27 @@ impl CfaitMobile {
         .await
     }
 
+    // --- NEW: Specific Mobile Actions for Pause/Stop ---
+
+    pub async fn pause_task(&self, uid: String) -> Result<(), MobileError> {
+        self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| store.pause_task(id))
+            .await
+    }
+
+    pub async fn stop_task(&self, uid: String) -> Result<(), MobileError> {
+        self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| store.stop_task(id))
+            .await
+    }
+
+    pub async fn start_task(&self, uid: String) -> Result<(), MobileError> {
+        self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| {
+            store.set_status_in_process(id)
+        })
+        .await
+    }
+
+    // ---------------------------------------------------
+
     pub async fn update_task_smart(
         &self,
         uid: String,
@@ -593,7 +612,6 @@ impl CfaitMobile {
         .await
     }
 
-    // Toggle Task: Handles Recurrence Spawn
     pub async fn toggle_task(&self, uid: String) -> Result<(), MobileError> {
         // 1. Logic via Store
         let mut store = self.store.lock().await;
@@ -642,7 +660,6 @@ impl CfaitMobile {
         let client_guard = self.client.lock().await;
         let mut store = self.store.lock().await;
 
-        // Use Store Logic to move in memory & disk (if local)
         let updated_task = store
             .move_task(&uid, new_cal_href.clone())
             .ok_or(MobileError::from("Task not found"))?;
@@ -663,7 +680,6 @@ impl CfaitMobile {
 
     pub async fn delete_task(&self, uid: String) -> Result<(), MobileError> {
         let mut store = self.store.lock().await;
-        // Destructure tuple from store.delete_task
         let (task, href) = store
             .delete_task(&uid)
             .ok_or(MobileError::from("Task not found"))?;

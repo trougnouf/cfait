@@ -1,5 +1,4 @@
-// File: ./src/gui/update/mod.rs
-
+// File: src/gui/update/mod.rs
 pub mod common;
 pub mod network;
 pub mod settings;
@@ -49,7 +48,11 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::RemoveDependency(_, _)
         | Message::AddDependency(_)
         | Message::MoveTask(_, _)
-        | Message::MigrateLocalTo(_) => tasks::handle(app, message),
+        | Message::MigrateLocalTo(_) 
+        // --- ADDED THESE LINES ---
+        | Message::StartTask(_)
+        | Message::PauseTask(_)
+        | Message::StopTask(_) => tasks::handle(app, message),
 
         Message::TabPressed(_)
         | Message::FocusInput

@@ -258,8 +258,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 bracket_style = Style::default().fg(Color::Rgb(r, g, b));
             }
 
-            let full_symbol = t.checkbox_symbol(); // e.g. "[x]"
-            let inner_char = &full_symbol[1..2]; // e.g. "x"
+            let full_symbol = t.checkbox_symbol();
+            // FIX: Safely trim the outer brackets instead of slicing bytes
+            let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
 
             let due_str = t
                 .due

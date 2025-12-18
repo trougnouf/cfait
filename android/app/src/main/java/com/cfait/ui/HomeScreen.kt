@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/ui/HomeScreen.kt
+// File: android/app/src/main/java/com/cfait/ui/HomeScreen.kt
 package com.cfait.ui
 
 import android.widget.Toast
@@ -90,7 +90,6 @@ fun HomeScreen(
 
     LaunchedEffect(searchQuery, filterTag, isLoading, calendars, tags) { updateTaskList() }
 
-    // Logic to scroll when autoScrollUid changes OR when tasks update and we have a pending scroll target
     LaunchedEffect(autoScrollUid, tasks) {
         if (autoScrollUid != null) {
             val index = tasks.indexOfFirst { it.uid == autoScrollUid }
@@ -100,7 +99,27 @@ fun HomeScreen(
         }
     }
 
-    fun toggleTask(uid: String) = scope.launch { try { api.toggleTask(uid); updateTaskList(); onDataChanged() } catch (_: Exception){} }
+    fun toggleTask(task: MobileTask) {
+        // 1. Optimistic UI Update
+        val newIsDone = !task.isDone
+        val newStatus = if (newIsDone) "Completed" else "NeedsAction"
+        
+        val updatedList = tasks.map { 
+            if (it.uid == task.uid) it.copy(isDone = newIsDone, statusString = newStatus, isPaused = false) else it 
+        }
+        tasks = updatedList
+
+        // 2. Async Backend Call
+        scope.launch { 
+            try { 
+                api.toggleTask(task.uid)
+                updateTaskList()
+                onDataChanged() 
+            } catch (_: Exception) {
+                updateTaskList()
+            } 
+        } 
+    }
     
     fun addTask(txt: String) {
         val text = txt.trim()
@@ -132,12 +151,55 @@ fun HomeScreen(
     }
     
     fun onTaskAction(action: String, task: MobileTask) {
+        // 1. Optimistic UI Update
+        val updatedList = tasks.map { t ->
+            if (t.uid == task.uid) {
+                when(action) {
+                    "delete" -> null // Filtered out later
+                    "cancel" -> t.copy(statusString = "Cancelled", isDone = false)
+                    "playpause" -> {
+                        if (t.statusString == "InProcess") {
+                            // Pausing
+                            t.copy(statusString = "NeedsAction", isPaused = true)
+                        } else {
+                            // Starting / Resuming
+                            t.copy(statusString = "InProcess", isPaused = false)
+                        }
+                    }
+                    "stop" -> t.copy(statusString = "NeedsAction", isPaused = false)
+                    "prio_up" -> {
+                        var p = t.priority.toInt()
+                        if (p == 0) p = 5 // Treat 'Normal' as 5
+                        if (p > 1) p -= 1
+                        t.copy(priority = p.toUByte())
+                    }
+                    "prio_down" -> {
+                        var p = t.priority.toInt()
+                        if (p == 0) p = 5
+                        if (p < 9) p += 1
+                        t.copy(priority = p.toUByte())
+                    }
+                    else -> t
+                }
+            } else t
+        }.filterNotNull()
+        
+        tasks = updatedList
+
+        // 2. Async Backend Call
         scope.launch {
             try {
                 when(action) {
                     "delete" -> api.deleteTask(task.uid)
                     "cancel" -> api.setStatusCancelled(task.uid)
-                    "playpause" -> api.setStatusProcess(task.uid)
+                    "playpause" -> {
+                        if (task.statusString == "InProcess") {
+                            api.pauseTask(task.uid)
+                        } else {
+                            api.startTask(task.uid)
+                        }
+                    }
+                    "stop" -> api.stopTask(task.uid)
                     "prio_up" -> api.changePriority(task.uid, 1)
                     "prio_down" -> api.changePriority(task.uid, -1)
                     "yank" -> {
@@ -160,7 +222,9 @@ fun HomeScreen(
                 }
                 updateTaskList()
                 onDataChanged()
-            } catch(_: Exception) {}
+            } catch(_: Exception) {
+                updateTaskList() // Revert on failure
+            }
         }
     }
 
@@ -445,7 +509,7 @@ fun HomeScreen(
                             task = task, 
                             calColor = calColor, 
                             isDark = isDark, 
-                            onToggle = { toggleTask(task.uid) }, 
+                            onToggle = { toggleTask(task) }, 
                             onAction = { act -> onTaskAction(act, task) }, 
                             onClick = onTaskClick,
                             yankedUid = yankedUid

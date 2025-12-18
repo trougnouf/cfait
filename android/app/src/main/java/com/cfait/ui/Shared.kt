@@ -61,6 +61,8 @@ object NfIcons {
     val DOTS_CIRCLE = get(0xf1978)   // custom icon for menu
     val COPY = get(0xf0c5)           // for yank
     val EXTERNAL_LINK = get(0xf08e) // nf-fa-external_link
+    val DEBUG_STOP = get(0xead7) // nf-cod-debug_stop
+
 }
 
 @Composable

@@ -22,17 +22,17 @@ import com.cfait.core.MobileTask
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun TaskRow(
-    task: MobileTask, 
-    calColor: Color, 
-    isDark: Boolean, 
-    onToggle: () -> Unit, 
-    onAction: (String) -> Unit, 
+    task: MobileTask,
+    calColor: Color,
+    isDark: Boolean,
+    onToggle: () -> Unit,
+    onAction: (String) -> Unit,
     onClick: (String) -> Unit,
     yankedUid: String?
 ) {
-    val startPadding = (task.depth.toInt() * 12).dp 
+    val startPadding = (task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
-    
+
     val textColor = getTaskTextColor(task.priority.toInt(), task.isDone, isDark)
 
     // Highlight color when menu is open - subtle amber
@@ -45,7 +45,6 @@ fun TaskRow(
 
     Card(
         modifier = Modifier.fillMaxWidth()
-            // Reduced vertical padding (top/bottom 2.dp -> 1.dp)
             .padding(start = 12.dp + startPadding, end = 12.dp, top = 1.dp, bottom = 1.dp)
             .combinedClickable(
                 onClick = { onClick(task.uid) },
@@ -54,35 +53,33 @@ fun TaskRow(
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
-        // Reduced vertical padding inside row (6.dp -> 4.dp)
         Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            
+
             TaskCheckbox(task, calColor, onToggle)
-            
+
             Spacer(Modifier.width(8.dp))
 
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = task.summary, 
+                    text = task.summary,
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor,
-                    fontWeight = if(task.priority > 0.toUByte()) FontWeight.Medium else FontWeight.Normal,
+                    fontWeight = if (task.priority > 0.toUByte()) FontWeight.Medium else FontWeight.Normal,
                     textDecoration = if (task.isDone) TextDecoration.LineThrough else null,
                     lineHeight = 18.sp
                 )
-                
+
                 FlowRow(modifier = Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (task.isBlocked) NfIcon(NfIcons.BLOCKED, 10.sp, MaterialTheme.colorScheme.error)
                     if (!task.dueDateIso.isNullOrEmpty()) { NfIcon(NfIcons.CALENDAR, 10.sp, Color.Gray); Text(task.dueDateIso!!.take(10), fontSize = 10.sp, color = Color.Gray) }
                     if (task.isRecurring) NfIcon(NfIcons.REPEAT, 10.sp, Color.Gray)
-                    
+
                     task.categories.forEach { tag ->
                         Text("#$tag", fontSize = 10.sp, color = getTagColor(tag), modifier = Modifier.padding(end = 2.dp))
                     }
                 }
             }
-            
-            // Yank Actions
+
             if (yankedUid != null && yankedUid != task.uid) {
                 IconButton(onClick = { onAction("block") }, modifier = Modifier.size(32.dp)) {
                     NfIcon(NfIcons.BLOCKED, 18.sp, MaterialTheme.colorScheme.secondary)
@@ -96,10 +93,27 @@ fun TaskRow(
                 IconButton(onClick = { expanded = true }, modifier = Modifier.size(24.dp)) { NfIcon(NfIcons.DOTS_CIRCLE, 16.sp) }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     DropdownMenuItem(text = { Text("Edit") }, onClick = { expanded = false; onClick(task.uid) }, leadingIcon = { NfIcon(NfIcons.EDIT, 16.sp) })
-                    DropdownMenuItem(text = { Text(if (task.statusString == "InProcess") "Pause" else "Start") }, onClick = { expanded = false; onAction("playpause") }, leadingIcon = { NfIcon(if (task.statusString == "InProcess") NfIcons.PAUSE else NfIcons.PLAY, 16.sp) })
+                    
+                    DropdownMenuItem(
+                        text = { Text(if (task.statusString == "InProcess") "Pause" else if (task.isPaused) "Resume" else "Start") },
+                        onClick = { expanded = false; onAction("playpause") },
+                        leadingIcon = { NfIcon(if (task.statusString == "InProcess") NfIcons.PAUSE else NfIcons.PLAY, 16.sp) }
+                    )
+
+                    // Add STOP button if active or paused
+                    if (task.statusString == "InProcess" || task.isPaused) {
+                        DropdownMenuItem(
+                            text = { Text("Stop (Reset)") },
+                            onClick = { expanded = false; onAction("stop") },
+                            leadingIcon = { NfIcon(NfIcons.DEBUG_STOP, 16.sp) }
+                        )
+                    }
+
+                    // --- THIS IS WHERE THE ERROR WAS ---
+                    // The "Increase prio" item was incorrectly placed on the same line as the if block's closing brace.
                     DropdownMenuItem(text = { Text("Increase prio") }, onClick = { expanded = false; onAction("prio_up") }, leadingIcon = { NfIcon(NfIcons.PRIORITY_UP, 16.sp) })
                     DropdownMenuItem(text = { Text("Decrease prio") }, onClick = { expanded = false; onAction("prio_down") }, leadingIcon = { NfIcon(NfIcons.PRIORITY_DOWN, 16.sp) })
-                    
+
                     if (yankedUid == null) {
                         DropdownMenuItem(text = { Text("Yank (link)") }, onClick = { expanded = false; onAction("yank") }, leadingIcon = { NfIcon(NfIcons.LINK, 16.sp) })
                     }
@@ -118,10 +132,12 @@ fun TaskRow(
 fun TaskCheckbox(task: MobileTask, calColor: Color, onClick: () -> Unit) {
     val isDone = task.isDone
     val status = task.statusString
+    val isPaused = task.isPaused
 
     val bgColor = when {
         isDone -> Color(0xFF009900)
         status == "InProcess" -> Color(0xFF99CC99)
+        isPaused -> Color(0xFFFFD54F) // Amber for Paused
         status == "Cancelled" -> Color(0xFF4D3333)
         else -> Color.Transparent
     }
@@ -140,6 +156,8 @@ fun TaskCheckbox(task: MobileTask, calColor: Color, onClick: () -> Unit) {
             Box(Modifier.offset(y = (-2).dp)) {
                 NfIcon(NfIcons.PLAY, 10.sp, Color.White)
             }
+        } else if (isPaused) {
+            NfIcon(NfIcons.PAUSE, 10.sp, Color.Black) // Pause Icon
         } else if (status == "Cancelled") {
             NfIcon(NfIcons.CROSS, 12.sp, Color.White)
         }
@@ -152,7 +170,7 @@ fun CompactTagRow(name: String, count: Int?, color: Color, isSelected: Boolean, 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(36.dp) 
+            .height(36.dp)
             .background(bg, RoundedCornerShape(4.dp))
             .clickable { onClick() }
             .padding(horizontal = 12.dp),
