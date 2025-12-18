@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/ui/TaskDetailScreen.kt
+// File: ./android/app/src/main/java/com/cfait/ui/TaskDetailScreen.kt
 package com.cfait.ui
 
 import android.widget.Toast
@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import com.cfait.core.CfaitMobile
 import com.cfait.core.MobileCalendar
 import com.cfait.core.MobileTask
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -28,6 +29,7 @@ fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalend
     var smartInput by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var showMoveDialog by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) } // Add loading state
     val context = LocalContext.current
 
     fun reload() {
@@ -66,17 +68,31 @@ fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalend
                 navigationIcon = { IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) } },
                 actions = {
                     TextButton(onClick = { showMoveDialog = true }) { Text("Move") }
-                    TextButton(onClick = {
-                        scope.launch {
-                            try {
-                                api.updateTaskSmart(uid, smartInput)
-                                api.updateTaskDescription(uid, description)
-                                onBack() // Navigate back on success
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_LONG).show()
+                    TextButton(
+                        enabled = !isSaving, // Disable while saving
+                        onClick = {
+                            isSaving = true
+                            scope.launch {
+                                try {
+                                    api.updateTaskSmart(uid, smartInput)
+                                    api.updateTaskDescription(uid, description)
+                                    onBack() // Navigate back on success
+                                } catch (e: CancellationException) {
+                                    // Ignore cancellation (e.g. user pressed back button manually while saving)
+                                    throw e
+                                } catch (e: Exception) {
+                                    isSaving = false
+                                    Toast.makeText(context, "Failed to save: ${e.message}", Toast.LENGTH_LONG).show()
+                                }
                             }
                         }
-                    }) { Text("Save") }
+                    ) { 
+                        if (isSaving) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("Save") 
+                        }
+                    }
                 }
             )
         }
@@ -104,7 +120,7 @@ fun TaskDetailScreen(api: CfaitMobile, uid: String, calendars: List<MobileCalend
                     ) {
                         NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
                         Spacer(Modifier.width(8.dp))
-                        NfIcon(NfIcons.BLOCKED, 12.sp, androidx.compose.ui.graphics.Color.Gray) // CORRECTED: BLOCK -> BLOCKED
+                        NfIcon(NfIcons.BLOCKED, 12.sp, androidx.compose.ui.graphics.Color.Gray) 
                         Spacer(Modifier.width(4.dp))
                         Text(name, fontSize = 14.sp)
                     }
