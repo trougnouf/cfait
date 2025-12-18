@@ -101,7 +101,8 @@ signingConfigs {
     }
 }
 
-tasks.withType<com.android.build.gradle.internal.tasks.factory.GlobalTaskCreationAction>().configureEach {
+// Disable ArtProfile (Baseline Profiles) generation
+tasks.whenTaskAdded {
     if (name.contains("ArtProfile")) {
         enabled = false
     }
