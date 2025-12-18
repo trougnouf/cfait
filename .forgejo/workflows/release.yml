@@ -81,9 +81,6 @@ jobs:
       - name: Set Reproducible Timestamp
         run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> $GITHUB_ENV
 
-      - name: Set Rust Toolchain for Android Build
-        run: rustup override set 1.92.0
-
       - name: Restore Keystore
         if: startsWith(github.ref, 'refs/tags/')
         run: echo "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" | base64 --decode > cfait-release.keystore
