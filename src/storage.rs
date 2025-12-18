@@ -150,7 +150,6 @@ mod tests {
         let _ = fs::remove_dir_all(temp_dir);
     }
 
-    // ... (locking test remains the same)
     #[test]
     fn test_locking_concurrency() {
         let temp_dir = std::env::temp_dir().join("cfait_test_lock");

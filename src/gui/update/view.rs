@@ -264,15 +264,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             Task::none()
         }
-        Message::OpenUrl(url) => {
+        Message::OpenUrl(_url) => {
             #[cfg(not(target_os = "android"))]
             std::thread::spawn(move || {
                 #[cfg(target_os = "linux")]
-                let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+                let _ = std::process::Command::new("xdg-open").arg(_url).spawn(); // <-- Use '_url' here
                 #[cfg(target_os = "windows")]
-                let _ = std::process::Command::new("explorer").arg(url).spawn();
+                let _ = std::process::Command::new("explorer").arg(_url).spawn(); // <-- and here
                 #[cfg(target_os = "macos")]
-                let _ = std::process::Command::new("open").arg(url).spawn();
+                let _ = std::process::Command::new("open").arg(_url).spawn(); // <-- and here
             });
             Task::none()
         }

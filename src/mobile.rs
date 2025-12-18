@@ -231,10 +231,10 @@ impl CfaitMobile {
         child_uid: String,
         parent_uid: Option<String>,
     ) -> Result<(), MobileError> {
-        if let Some(p) = &parent_uid {
-            if *p == child_uid {
-                return Err(MobileError::from("Cannot be child of self"));
-            }
+        if let Some(p) = &parent_uid
+            && *p == child_uid
+        {
+            return Err(MobileError::from("Cannot be child of self"));
         }
         self.apply_store_mutation(child_uid, |store: &mut TaskStore, id: &str| {
             store.set_parent(id, parent_uid)
@@ -480,11 +480,9 @@ impl CfaitMobile {
         }
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
-        let cutoff_date = if let Some(months) = config.sort_cutoff_months {
-            Some(chrono::Utc::now() + chrono::Duration::days(months as i64 * 30))
-        } else {
-            None
-        };
+        let cutoff_date = config
+            .sort_cutoff_months
+            .map(|months| chrono::Utc::now() + chrono::Duration::days(months as i64 * 30));
         let filtered = store.filter(FilterOptions {
             active_cal_href: None,
             hidden_calendars: &hidden,
@@ -656,14 +654,9 @@ impl CfaitMobile {
                 .move_task(&updated_task, &new_cal_href)
                 .await
                 .map_err(MobileError::from)?;
-        } else {
-            if new_cal_href != LOCAL_CALENDAR_HREF {
-                crate::journal::Journal::push(crate::journal::Action::Move(
-                    updated_task,
-                    new_cal_href,
-                ))
+        } else if new_cal_href != LOCAL_CALENDAR_HREF {
+            crate::journal::Journal::push(crate::journal::Action::Move(updated_task, new_cal_href))
                 .map_err(MobileError::from)?;
-            }
         }
         Ok(())
     }
@@ -679,11 +672,9 @@ impl CfaitMobile {
         let client_guard = self.client.lock().await;
         if let Some(client) = &*client_guard {
             client.delete_task(&task).await.map_err(MobileError::from)?;
-        } else {
-            if href != LOCAL_CALENDAR_HREF {
-                crate::journal::Journal::push(crate::journal::Action::Delete(task))
-                    .map_err(MobileError::from)?;
-            }
+        } else if href != LOCAL_CALENDAR_HREF {
+            crate::journal::Journal::push(crate::journal::Action::Delete(task))
+                .map_err(MobileError::from)?;
         }
         Ok(())
     }
@@ -735,10 +726,11 @@ impl CfaitMobile {
             }
             Err(e) => {
                 for cal in &cals {
-                    if cal.href != LOCAL_CALENDAR_HREF && !store.calendars.contains_key(&cal.href) {
-                        if let Ok((cached, _)) = crate::cache::Cache::load(&cal.href) {
-                            store.insert(cal.href.clone(), cached);
-                        }
+                    if cal.href != LOCAL_CALENDAR_HREF
+                        && !store.calendars.contains_key(&cal.href)
+                        && let Ok((cached, _)) = crate::cache::Cache::load(&cal.href)
+                    {
+                        store.insert(cal.href.clone(), cached);
                     }
                 }
                 if warning.is_none() {
@@ -755,7 +747,7 @@ impl CfaitMobile {
         F: FnOnce(&mut TaskStore, &str) -> Option<Task>,
     {
         let mut store = self.store.lock().await;
-        let updated_task = mutator(&mut *store, &uid)
+        let updated_task = mutator(&mut store, &uid)
             .ok_or(MobileError::from("Task not found or mutation failed"))?;
 
         let mut task_for_net = updated_task.clone();
@@ -770,18 +762,17 @@ impl CfaitMobile {
                 .map_err(MobileError::from)?;
             let mut store = self.store.lock().await;
             store.update_or_add_task(task_for_net);
-        } else {
-            if task_for_net.calendar_href == LOCAL_CALENDAR_HREF {
-                let mut local = LocalStorage::load().unwrap_or_default();
-                if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
-                    local[idx] = task_for_net;
-                    LocalStorage::save(&local).map_err(MobileError::from)?;
-                }
-            } else {
-                crate::journal::Journal::push(crate::journal::Action::Update(task_for_net))
-                    .map_err(MobileError::from)?;
+        } else if task_for_net.calendar_href == LOCAL_CALENDAR_HREF {
+            let mut local = LocalStorage::load().unwrap_or_default();
+            if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
+                local[idx] = task_for_net;
+                LocalStorage::save(&local).map_err(MobileError::from)?;
             }
+        } else {
+            crate::journal::Journal::push(crate::journal::Action::Update(task_for_net))
+                .map_err(MobileError::from)?;
         }
+
         Ok(())
     }
 }
@@ -789,22 +780,20 @@ impl CfaitMobile {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::env;
+    use std::fs;
     use std::sync::Arc;
     use tokio::runtime::Runtime;
 
     #[test]
     fn test_android_concurrency_stress() {
-        // This test simulates the UI reading data while a background sync is aggressively updating it.
-        // It validates the Mutex<TaskStore> within CfaitMobile.
-
         let rt = Runtime::new().unwrap();
-        let temp_dir = std::env::temp_dir().join("cfait_mobile_stress");
-        let _ = std::fs::create_dir_all(&temp_dir);
+        let temp_dir = env::temp_dir().join("cfait_mobile_stress");
+        let _ = fs::create_dir_all(&temp_dir);
         let path_str = temp_dir.to_string_lossy().to_string();
 
         let api = Arc::new(CfaitMobile::new(path_str));
 
-        // Populate initial state
         rt.block_on(async {
             api.add_task_smart("Initial Task !1".to_string())
                 .await
@@ -814,12 +803,8 @@ mod tests {
         let api_write = api.clone();
         let write_handle = rt.spawn(async move {
             for i in 0..50 {
-                // Simulate network latency or processing time
                 tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
-
                 let _ = api_write.add_task_smart(format!("Stress Task {}", i)).await;
-
-                // Simulate toggling tasks randomly
                 let tasks = api_write.get_view_tasks(None, "".to_string()).await;
                 if let Some(t) = tasks.first() {
                     let _ = api_write.toggle_task(t.uid.clone()).await;
@@ -830,16 +815,10 @@ mod tests {
         let api_read = api.clone();
         let read_handle = rt.spawn(async move {
             for _ in 0..50 {
-                // UI Refresh simulation
                 let tasks = api_read.get_view_tasks(None, "".to_string()).await;
-
-                // Safety Check: We should never see a half-written state or crash
-                // The Vector itself is safe, but we verify we can read consistently.
                 for t in tasks {
                     assert!(!t.uid.is_empty());
                 }
-
-                // Simulate loading config concurrently
                 let _ = api_read.get_config();
             }
         });
@@ -848,10 +827,8 @@ mod tests {
             let _ = tokio::join!(write_handle, read_handle);
         });
 
-        // Final Consistency Check
         rt.block_on(async {
             let tasks = api.get_view_tasks(None, "".to_string()).await;
-            // 1 initial + 50 created = 51 total tasks expected
             assert_eq!(
                 tasks.len(),
                 51,
@@ -859,30 +836,41 @@ mod tests {
             );
         });
 
-        let _ = std::fs::remove_dir_all(temp_dir);
+        let _ = fs::remove_dir_all(temp_dir);
     }
 
     #[test]
     fn test_mobile_unsynced_state_flag() {
-        // Ensures the UI gets the correct "Cloud" icon state
-        let temp_dir = std::env::temp_dir().join("cfait_mobile_unsynced");
-        let _ = std::fs::create_dir_all(&temp_dir);
+        let temp_dir = env::temp_dir().join(format!("cfait_test_unsynced_{}", std::process::id()));
+        let _ = fs::create_dir_all(&temp_dir);
+
+        let config_dir = temp_dir.join("config");
+        fs::create_dir_all(&config_dir).unwrap();
+
+        fs::write(
+            config_dir.join("config.toml"),
+            r#"
+            url = "http://mock.server"
+            username = "user"
+            password = "password"
+            default_calendar = "http://mock.server/remote-cal/"
+            "#,
+        )
+        .unwrap();
+
         let api = CfaitMobile::new(temp_dir.to_string_lossy().to_string());
 
-        // 1. Initially empty
         assert!(!api.has_unsynced_changes());
 
-        // 2. Add task (offline, so it goes to journal)
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
-            api.add_task_smart("Offline task".to_string())
+            api.add_task_smart("Offline task for a remote calendar".to_string())
                 .await
                 .unwrap();
         });
 
-        // 3. Should now be unsynced
         assert!(api.has_unsynced_changes());
 
-        let _ = std::fs::remove_dir_all(temp_dir);
+        let _ = fs::remove_dir_all(temp_dir);
     }
 }
