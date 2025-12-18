@@ -39,16 +39,16 @@ println("Cfait Android Build: v$appVersionName (Code: $appVersionCode)")
 android {
     namespace = "com.cfait"
     compileSdk = 36
-    ndkVersion = "27.3.13750724" 
+    ndkVersion = "27.3.13750724"
 
-signingConfigs {
+    signingConfigs {
         create("release") {
             // Read from environment variables set by the CI
             val envStoreFile = System.getenv("KEYSTORE_FILE")
             val envStorePassword = System.getenv("KEYSTORE_PASSWORD")
             val envKeyAlias = System.getenv("KEY_ALIAS")
             val envKeyPassword = System.getenv("KEY_PASSWORD")
-            
+
             if (envStoreFile != null && File(envStoreFile).exists()) {
                 storeFile = File(envStoreFile)
                 storePassword = envStorePassword
@@ -80,7 +80,7 @@ signingConfigs {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             // Tell the 'release' build to use your new signing config
             signingConfig = signingConfigs.getByName("release")
-            vcsInfo.include = false  // Disable VCS Info (AGP 8.3+) which embeds git commit hashes/paths
+            vcsInfo.include = false // Disable VCS Info (AGP 8.3+) which embeds git commit hashes/paths
         }
     }
     // Prevent Gradle from stripping or modifying the Rust .so files
@@ -90,12 +90,17 @@ signingConfigs {
             keepDebugSymbols += "**/*.so"
         }
     }
-    
+
+    // Disable the "Dependency metadata" signing block that F-Droid flags as an error.
+    dependenciesInfo {
+        includeInApk = false
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
     }
-    
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -126,7 +131,7 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.9.6")
-    
+
     // Required for UniFFI
     implementation("net.java.dev.jna:jna:5.18.1@aar")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
