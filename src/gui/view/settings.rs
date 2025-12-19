@@ -9,17 +9,36 @@ use iced::{Color, Element, Length};
 
 pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     let is_settings = matches!(app.state, AppState::Settings);
-    let title = text(if is_settings {
+
+    // --- Header with Back Button ---
+    let title_text = text(if is_settings {
         "Settings"
     } else {
         "Welcome to Cfait"
     })
     .size(40);
+
+    let title_row: Element<_> = if is_settings {
+        row![
+            button(icon::icon(icon::ARROW_LEFT).size(24))
+                .style(button::text)
+                .on_press(Message::CancelSettings), // Functions as Back
+            title_text
+        ]
+        .spacing(20)
+        .align_y(iced::Alignment::Center)
+        .into()
+    } else {
+        row![title_text].into()
+    };
+
     let error = if let Some(e) = &app.error_msg {
         text(e).color(Color::from_rgb(1.0, 0.0, 0.0))
     } else {
         text("")
     };
+
+    // --- Components ---
 
     let cal_names: Vec<String> = app.calendars.iter().map(|c| c.name.clone()).collect();
     let picker: Element<_> = if !cal_names.is_empty() && is_settings {
@@ -54,10 +73,9 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .align_y(iced::Alignment::Center),
                 std::convert::Into::<Element<'_, Message>>::into(
                     checkbox(app.hide_completed)
-                        .label("Hide completed tasks (everywhere)")
+                        .label("Hide completed and canceled tasks") // RENAMED
                         .on_toggle(Message::ToggleHideCompleted),
                 ),
-                // Conditional checkbox: only visible when 'Hide Completed Tasks (Everywhere)' is off
                 if !app.hide_completed {
                     std::convert::Into::<Element<'_, Message>>::into(
                         checkbox(app.hide_fully_completed_tags)
@@ -65,7 +83,6 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                             .on_toggle(Message::ToggleHideFullyCompletedTags),
                     )
                 } else {
-                    // Placeholder to keep spacing
                     std::convert::Into::<Element<'_, Message>>::into(Space::new().width(0))
                 },
             ]
@@ -92,11 +109,8 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         Space::new().width(0).into()
     };
 
-    // Alias Section
     let aliases_ui: Element<_> = if is_settings {
         let mut list_col = column![text("Tag aliases").size(20)].spacing(10);
-
-        // Existing Aliases List
         for (key, vals) in &app.tag_aliases {
             let val_str = vals.join(", ");
             let row_item = row![
@@ -112,8 +126,6 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             .align_y(iced::Alignment::Center);
             list_col = list_col.push(row_item);
         }
-
-        // Add New Alias Form
         let input_row = row![
             text_input("Alias (#cfait)", &app.alias_input_key)
                 .on_input(Message::AliasKeyInput)
@@ -126,7 +138,6 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             button("Add").padding(5).on_press(Message::AddAlias)
         ]
         .spacing(10);
-
         let area =
             container(column![list_col, iced::widget::rule::horizontal(1), input_row].spacing(15))
                 .padding(10)
@@ -138,7 +149,6 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     },
                     ..Default::default()
                 });
-
         area.into()
     } else {
         Space::new().width(0).into()
@@ -146,22 +156,16 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
 
     let cal_mgmt_ui: Element<_> = if is_settings && !app.calendars.is_empty() {
         let mut col = column![text("Manage calendars").size(20)].spacing(10);
-
         for cal in &app.calendars {
-            // Logic inverted: Checkbox checked = Enabled (!Disabled)
             let is_enabled = !app.disabled_calendars.contains(&cal.href);
-
             let row_content = row![
                 checkbox(is_enabled)
                     .label(&cal.name)
-                    // When toggled, we send !v because the msg is "ToggleDisabled"
                     .on_toggle(move |v| Message::ToggleCalendarDisabled(cal.href.clone(), !v))
                     .width(Length::Fill)
             ];
-
             col = col.push(row_content.spacing(10).align_y(iced::Alignment::Center));
         }
-
         container(col)
             .padding(10)
             .style(|_| container::Style {
@@ -177,75 +181,82 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         Space::new().width(0).into()
     };
 
-    // Initialize the buttons row before using it
-    let mut buttons = row![].spacing(10);
+    // Connection Button (Moved inside form)
+    let save_connect_btn = button(if is_settings {
+        "Save & Connect"
+    } else {
+        "Connect"
+    })
+    .padding(10)
+    .width(Length::Fill)
+    .on_press(Message::ObSubmit);
 
-    if !is_settings {
-        // Onboarding screen
-        buttons = buttons.push(
-            button("Use offline mode")
-                .padding(10)
-                .style(button::secondary)
-                .on_press(Message::ObSubmitOffline),
-        );
-    }
-
-    if is_settings {
-        // Settings screen
-        buttons = buttons.push(
-            button("Cancel")
-                .padding(10)
-                .style(button::secondary)
-                .on_press(Message::CancelSettings),
-        );
-    }
-
-    // This button appears on both screens
-    buttons = buttons.push(
-        button(if is_settings {
-            "Save & Connect"
-        } else {
-            "Connect"
-        })
-        .padding(10)
-        .on_press(Message::ObSubmit),
-    );
     let insecure_check = checkbox(app.ob_insecure)
         .label("Allow insecure SSL (e.g. self-signed)")
         .on_toggle(Message::ObInsecureToggled)
         .size(16)
         .text_size(14);
 
+    // --- FIX IS HERE ---
+    let offline_button_or_space: Element<_> = if !is_settings {
+        button("Use offline mode")
+            .padding(10)
+            .style(button::secondary)
+            .on_press(Message::ObSubmitOffline)
+            .into()
+    } else {
+        Space::new().height(0).into()
+    };
+
+    // --- FORM LAYOUT ---
     let form = column![
-        text("CalDAV server URL:"),
-        text_input("https://...", &app.ob_url)
-            .on_input(Message::ObUrlChanged)
-            .padding(10),
-        text("Username:"),
-        text_input("User", &app.ob_user)
-            .on_input(Message::ObUserChanged)
-            .padding(10),
-        text("Password:"),
-        text_input("Password", &app.ob_pass)
-            .on_input(Message::ObPassChanged)
-            .secure(true)
-            .padding(10),
-        insecure_check,
+        // 1. Connection Section
+        container(
+            column![
+                text("Server Connection").size(20),
+                text("CalDAV server URL:"),
+                text_input("https://...", &app.ob_url)
+                    .on_input(Message::ObUrlChanged)
+                    .padding(10),
+                text("Username:"),
+                text_input("User", &app.ob_user)
+                    .on_input(Message::ObUserChanged)
+                    .padding(10),
+                text("Password:"),
+                text_input("Password", &app.ob_pass)
+                    .on_input(Message::ObPassChanged)
+                    .secure(true)
+                    .padding(10),
+                insecure_check,
+                save_connect_btn // <--- Moved Here
+            ]
+            .spacing(15)
+        )
+        .padding(10)
+        .style(|_| container::Style {
+            border: iced::Border {
+                radius: 6.0.into(),
+                width: 1.0,
+                color: Color::from_rgba(0.5, 0.5, 0.5, 0.2)
+            },
+            ..Default::default()
+        }),
+        // 2. Preferences
         picker,
         prefs,
         sorting_ui,
         aliases_ui,
         cal_mgmt_ui,
-        buttons
+        // 3. Bottom Actions (Offline Mode for onboarding)
+        offline_button_or_space,
     ]
-    .spacing(15)
+    .spacing(20)
     .max_width(500);
 
-    let content = column![title, error, form]
+    let content = column![title_row, error, form]
         .spacing(20)
         .align_x(iced::Alignment::Center);
 
-    // Wrap in scrollable so buttons are accessible on small screens
     container(scrollable(
         container(content)
             .width(Length::Fill)

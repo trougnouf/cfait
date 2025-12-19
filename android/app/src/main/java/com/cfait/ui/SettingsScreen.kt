@@ -1,15 +1,17 @@
-// File: ./android/app/src/main/java/com/cfait/ui/SettingsScreen.kt
+// File: android/app/src/main/java/com/cfait/ui/SettingsScreen.kt
 package com.cfait.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,12 +21,17 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit, onHelp: () -> Unit) {
+fun SettingsScreen(
+    api: CfaitMobile,
+    onBack: () -> Unit,
+    onHelp: () -> Unit,
+) {
     var url by remember { mutableStateOf("") }
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
     var insecure by remember { mutableStateOf(false) }
     var hideCompleted by remember { mutableStateOf(false) }
+    var sortMonths by remember { mutableStateOf("6") } // New state
     var status by remember { mutableStateOf("") }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var newAliasKey by remember { mutableStateOf("") }
@@ -40,6 +47,7 @@ fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit, onHelp: () -> Unit) {
         user = cfg.username
         insecure = cfg.allowInsecure
         hideCompleted = cfg.hideCompleted
+        sortMonths = cfg.sortCutoffMonths?.toString() ?: ""
         aliases = cfg.tagAliases
         allCalendars = api.getCalendars()
         disabledSet = allCalendars.filter { it.isDisabled }.map { it.href }.toSet()
@@ -47,34 +55,134 @@ fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit, onHelp: () -> Unit) {
 
     LaunchedEffect(Unit) { reload() }
 
-    fun save() {
-        scope.launch { 
+    // Helper to save everything currently in state to disk
+    fun saveToDisk() {
+        val sortInt = sortMonths.trim().toUIntOrNull()
+        api.saveConfig(url, user, pass, insecure, hideCompleted, disabledSet.toList(), sortInt)
+    }
+
+    // Connect Button Action
+    fun saveAndConnect() {
+        scope.launch {
             status = "Connecting..."
-            try { 
-                api.saveConfig(url, user, pass, insecure, hideCompleted, disabledSet.toList())
-                status = api.connect(url, user, pass, insecure) 
+            try {
+                saveToDisk()
+                status = api.connect(url, user, pass, insecure)
                 reload()
-            } catch (e: Exception) { status = "Error: ${e.message}" } 
+            } catch (e: Exception) {
+                status = "Error: ${e.message}"
+            }
         }
     }
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Settings") }, navigationIcon = { IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) } }) }) { p ->
+    // Navigation Back Action (Saves first)
+    fun handleBack() {
+        scope.launch {
+            saveToDisk()
+            onBack()
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings") },
+                navigationIcon = {
+                    IconButton(onClick = { handleBack() }) {
+                        NfIcon(NfIcons.BACK, 20.sp)
+                    }
+                },
+                actions = {
+                    // Moved Help here as requested
+                    IconButton(onClick = onHelp) {
+                        NfIcon(NfIcons.HELP, 24.sp)
+                    }
+                },
+            )
+        },
+    ) { p ->
         LazyColumn(modifier = Modifier.padding(p).padding(16.dp)) {
+            // --- SERVER SETTINGS ---
             item {
-                Text("Connection", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
-                OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("CalDAV URL") }, modifier = Modifier.fillMaxWidth())
+                Text(
+                    "Server Connection",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("CalDAV URL") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = user,
+                    onValueChange = { user = it },
+                    label = { Text("Username") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = pass, onValueChange = { pass = it }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = insecure, onCheckedChange = { insecure = it }); Text("Allow insecure SSL") }
-                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = hideCompleted, onCheckedChange = { hideCompleted = it }); Text("Hide completed tasks") }
-                
-                Button(onClick = { save() }, modifier = Modifier.fillMaxWidth()) { Text("Save & connect") }
-                Text(status, color = if (status.startsWith("Error")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
-                
+                OutlinedTextField(value = pass, onValueChange = {
+                    pass = it
+                }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = insecure, onCheckedChange = { insecure = it })
+                    Text("Allow insecure SSL")
+                }
+
+                Button(onClick = { saveAndConnect() }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Text("Save & Connect")
+                }
+                if (status.isNotEmpty()) {
+                    Text(
+                        status,
+                        color = if (status.startsWith("Error")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
-                Text("Manage calendars", fontWeight = FontWeight.Bold)
+            }
+
+            // --- PREFERENCES ---
+            item {
+                Text(
+                    "Preferences",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = hideCompleted, onCheckedChange = {
+                        hideCompleted = it
+                        // Immediate save for toggles feels better
+                        saveToDisk()
+                    })
+                    // Rename as requested
+                    Text("Hide completed and canceled tasks")
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                    Text("Sorting priority cutoff (months):", modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = sortMonths,
+                        onValueChange = { sortMonths = it },
+                        modifier = Modifier.width(80.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                    )
+                }
+                Text("Tasks due within this range are shown first.", fontSize = 12.sp, color = androidx.compose.ui.graphics.Color.Gray)
+
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+            }
+
+            // --- CALENDARS ---
+            item {
+                Text("Manage calendars", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
             }
             items(allCalendars) { cal ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -84,12 +192,14 @@ fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit, onHelp: () -> Unit) {
                             val newSet = disabledSet.toMutableSet()
                             if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
                             disabledSet = newSet
-                        }
+                            saveToDisk() // Immediate save
+                        },
                     )
                     Text(cal.name)
                 }
             }
 
+            // --- ALIASES ---
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text("Tag aliases", fontWeight = FontWeight.Bold)
@@ -99,27 +209,42 @@ fun SettingsScreen(api: CfaitMobile, onBack: () -> Unit, onHelp: () -> Unit) {
                     Text("#$key", fontWeight = FontWeight.Bold, modifier = Modifier.width(80.dp))
                     Text("→", modifier = Modifier.padding(horizontal = 8.dp))
                     Text(aliases[key]?.joinToString(", ") ?: "", modifier = Modifier.weight(1f))
-                    IconButton(onClick = { scope.launch { api.removeAlias(key); reload() } }) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.error) }
+                    IconButton(onClick = {
+                        scope.launch {
+                            api.removeAlias(key)
+                            reload()
+                        }
+                    }) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.error) }
                 }
             }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                    OutlinedTextField(value = newAliasKey, onValueChange = { newAliasKey = it }, label = { Text("Alias") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = newAliasKey,
+                        onValueChange = { newAliasKey = it },
+                        label = { Text("Alias") },
+                        modifier = Modifier.weight(1f),
+                    )
                     Spacer(Modifier.width(8.dp))
-                    OutlinedTextField(value = newAliasTags, onValueChange = { newAliasTags = it }, label = { Text("Tags (comma)") }, modifier = Modifier.weight(1f))
-                    IconButton(onClick = { if (newAliasKey.isNotBlank() && newAliasTags.isNotBlank()) { val tags = newAliasTags.split(",").map { it.trim().trimStart('#') }.filter { it.isNotEmpty() }; scope.launch { api.addAlias(newAliasKey.trimStart('#'), tags); newAliasKey=""; newAliasTags=""; reload() } } }) { NfIcon(NfIcons.ADD) }
+                    OutlinedTextField(value = newAliasTags, onValueChange = {
+                        newAliasTags = it
+                    }, label = { Text("Tags (comma)") }, modifier = Modifier.weight(1f))
+                    IconButton(onClick = {
+                        if (newAliasKey.isNotBlank() &&
+                            newAliasTags.isNotBlank()
+                        ) {
+                            val tags = newAliasTags.split(",").map { it.trim().trimStart('#') }.filter { it.isNotEmpty() }
+                            scope.launch {
+                                api.addAlias(newAliasKey.trimStart('#'), tags)
+                                newAliasKey =
+                                    ""
+                                newAliasTags = ""
+                                reload()
+                            }
+                        }
+                    }) { NfIcon(NfIcons.ADD) }
                 }
-            }
-
-            // ADDED HELP SECTION AT THE BOTTOM
-            item {
-                HorizontalDivider(Modifier.padding(vertical = 16.dp))
-                ListItem(
-                    headlineContent = { Text("Syntax guide / help / about") },
-                    leadingContent = { NfIcon(NfIcons.HELP, 24.sp, MaterialTheme.colorScheme.primary) },
-                    modifier = Modifier.clickable { onHelp() }
-                )
-                Spacer(Modifier.height(32.dp)) // Extra padding at bottom
+                Spacer(Modifier.height(32.dp))
             }
         }
     }

@@ -119,8 +119,8 @@ impl Default for GuiApp {
 
             hide_completed: false,
             hide_fully_completed_tags: true,
-            sort_cutoff_months: Some(6),
-            ob_sort_months_input: "6".to_string(),
+            sort_cutoff_months: Some(2),
+            ob_sort_months_input: "2".to_string(),
             current_theme: AppTheme::default(),
 
             filter_min_duration: None,

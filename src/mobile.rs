@@ -97,6 +97,7 @@ pub struct MobileConfig {
     pub hide_completed: bool,
     pub tag_aliases: HashMap<String, Vec<String>>,
     pub disabled_calendars: Vec<String>,
+    pub sort_cutoff_months: Option<u32>,
 }
 
 fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
@@ -172,9 +173,11 @@ impl CfaitMobile {
             hide_completed: c.hide_completed,
             tag_aliases: c.tag_aliases,
             disabled_calendars: c.disabled_calendars,
+            sort_cutoff_months: c.sort_cutoff_months,
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn save_config(
         &self,
         url: String,
@@ -183,6 +186,7 @@ impl CfaitMobile {
         insecure: bool,
         hide_completed: bool,
         disabled_calendars: Vec<String>,
+        sort_cutoff_months: Option<u32>,
     ) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
         c.url = url;
@@ -193,6 +197,7 @@ impl CfaitMobile {
         c.allow_insecure_certs = insecure;
         c.hide_completed = hide_completed;
         c.disabled_calendars = disabled_calendars;
+        c.sort_cutoff_months = sort_cutoff_months;
         c.save().map_err(MobileError::from)
     }
 

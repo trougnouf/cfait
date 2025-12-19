@@ -11,7 +11,7 @@ fn default_true() -> bool {
     true
 }
 fn default_cutoff() -> Option<u32> {
-    Some(6)
+    Some(2)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]

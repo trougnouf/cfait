@@ -37,6 +37,7 @@ pub const CHILD_ARROW: char = '\u{f149}'; // 
 pub const INFO: char = '\u{f129}'; // 
 pub const REPEAT: char = '\u{f0b6}'; // 
 pub const ARROW_RIGHT: char = '\u{f061}'; // 
+pub const ARROW_LEFT: char = '\u{f060}'; // 
 pub const CHECK_SQUARE: char = '\u{f14a}'; // 
 pub const SQUARE: char = '\u{f096}'; // 
 pub const EXPORT: char = '\u{f56e}'; // 

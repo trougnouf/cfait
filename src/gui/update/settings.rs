@@ -98,6 +98,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::ObDefaultCalChanged(v) => {
             app.ob_default_cal = Some(v);
+            save_config(app);
             Task::none()
         }
         Message::ObInsecureToggled(val) => {
@@ -129,7 +130,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 hide_completed: app.hide_completed,
                 hide_fully_completed_tags: app.hide_fully_completed_tags,
                 tag_aliases: app.tag_aliases.clone(),
-                sort_cutoff_months: Some(6),
+                sort_cutoff_months: Some(2),
                 theme: app.current_theme, // Make sure to include the new theme field
             });
 
@@ -175,6 +176,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::CancelSettings => {
+            // Save local settings before returning to Active state
+            save_config(app);
             app.state = AppState::Active;
             Task::none()
         }
@@ -246,7 +249,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::ObSortMonthsChanged(val) => {
             if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
-                app.ob_sort_months_input = val;
+                app.ob_sort_months_input = val.clone();
+
+                // Apply and save immediately
+                if val.trim().is_empty() {
+                    app.sort_cutoff_months = None;
+                } else if let Ok(n) = val.trim().parse::<u32>() {
+                    app.sort_cutoff_months = Some(n);
+                }
+                save_config(app);
+                refresh_filtered_tasks(app);
             }
             Task::none()
         }

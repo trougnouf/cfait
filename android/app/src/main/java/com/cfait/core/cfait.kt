@@ -935,6 +935,7 @@ internal object UniffiLib {
         `insecure`: Byte,
         `hideCompleted`: Byte,
         `disabledCalendars`: RustBuffer.ByValue,
+        `sortCutoffMonths`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
@@ -1269,7 +1270,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_dependency() != 53808.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 45650.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 52825.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility() != 63556.toShort()) {
@@ -1830,6 +1831,7 @@ public interface CfaitMobileInterface {
         `insecure`: kotlin.Boolean,
         `hideCompleted`: kotlin.Boolean,
         `disabledCalendars`: List<kotlin.String>,
+        `sortCutoffMonths`: kotlin.UInt?,
     )
 
     fun `setCalendarVisibility`(
@@ -2307,6 +2309,7 @@ open class CfaitMobile :
         `insecure`: kotlin.Boolean,
         `hideCompleted`: kotlin.Boolean,
         `disabledCalendars`: List<kotlin.String>,
+        `sortCutoffMonths`: kotlin.UInt?,
     ) = callWithHandle {
         uniffiRustCallWithError(MobileException) { _status ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_save_config(
@@ -2317,6 +2320,7 @@ open class CfaitMobile :
                 FfiConverterBoolean.lower(`insecure`),
                 FfiConverterBoolean.lower(`hideCompleted`),
                 FfiConverterSequenceString.lower(`disabledCalendars`),
+                FfiConverterOptionalUInt.lower(`sortCutoffMonths`),
                 _status,
             )
         }
@@ -2629,6 +2633,7 @@ data class MobileConfig(
     var `hideCompleted`: kotlin.Boolean,
     var `tagAliases`: Map<kotlin.String, List<kotlin.String>>,
     var `disabledCalendars`: List<kotlin.String>,
+    var `sortCutoffMonths`: kotlin.UInt?,
 ) {
     companion object
 }
@@ -2646,6 +2651,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterBoolean.read(buf),
             FfiConverterMapStringSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
+            FfiConverterOptionalUInt.read(buf),
         )
 
     override fun allocationSize(value: MobileConfig) =
@@ -2656,7 +2662,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterBoolean.allocationSize(value.`allowInsecure`) +
                 FfiConverterBoolean.allocationSize(value.`hideCompleted`) +
                 FfiConverterMapStringSequenceString.allocationSize(value.`tagAliases`) +
-                FfiConverterSequenceString.allocationSize(value.`disabledCalendars`)
+                FfiConverterSequenceString.allocationSize(value.`disabledCalendars`) +
+                FfiConverterOptionalUInt.allocationSize(value.`sortCutoffMonths`)
         )
 
     override fun write(
@@ -2670,6 +2677,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterBoolean.write(value.`hideCompleted`, buf)
         FfiConverterMapStringSequenceString.write(value.`tagAliases`, buf)
         FfiConverterSequenceString.write(value.`disabledCalendars`, buf)
+        FfiConverterOptionalUInt.write(value.`sortCutoffMonths`, buf)
     }
 }
 
