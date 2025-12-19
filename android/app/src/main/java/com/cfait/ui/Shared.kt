@@ -100,3 +100,15 @@ fun getTaskTextColor(prio: Int, isDone: Boolean, isDark: Boolean): Color {
         else -> if (isDark) Color.White else Color.Black
     }
 }
+
+fun formatDuration(minutes: UInt): String {
+    val m = minutes.toInt()
+    return when {
+        m >= 525600 -> "~${m / 525600}y"
+        m >= 43200 -> "~${m / 43200}mo"
+        m >= 10080 -> "~${m / 10080}w"
+        m >= 1440 -> "~${m / 1440}d"
+        m >= 60 -> "~${m / 60}h"
+        else -> "~${m}m"
+    }
+}

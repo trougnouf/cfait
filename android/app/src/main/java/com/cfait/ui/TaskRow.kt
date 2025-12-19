@@ -72,6 +72,11 @@ fun TaskRow(
                 FlowRow(modifier = Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (task.isBlocked) NfIcon(NfIcons.BLOCKED, 10.sp, MaterialTheme.colorScheme.error)
                     if (!task.dueDateIso.isNullOrEmpty()) { NfIcon(NfIcons.CALENDAR, 10.sp, Color.Gray); Text(task.dueDateIso!!.take(10), fontSize = 10.sp, color = Color.Gray) }
+                    
+                    if (task.durationMins != null) {
+                        Text(formatDuration(task.durationMins!!), fontSize = 10.sp, color = Color.Gray)
+                    }
+
                     if (task.isRecurring) NfIcon(NfIcons.REPEAT, 10.sp, Color.Gray)
 
                     task.categories.forEach { tag ->
