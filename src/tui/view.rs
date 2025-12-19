@@ -96,9 +96,62 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
         .split(v_chunks[0]);
 
+    // --- 1. MOVED UP: Prepare Details Text ---
+    // We generate the string early so we can calculate its required height
+    let mut full_details = String::new();
+    if let Some(task) = state.get_selected_task() {
+        if !task.description.is_empty() {
+            full_details.push_str(&task.description);
+            full_details.push_str("\n\n");
+        }
+        if !task.dependencies.is_empty() {
+            full_details.push_str("[Blocked By]:\n");
+            for dep_uid in &task.dependencies {
+                let name = state
+                    .store
+                    .get_summary(dep_uid)
+                    .unwrap_or_else(|| "Unknown task".to_string());
+                let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
+                let check = if is_done { "[x]" } else { "[ ]" };
+                full_details.push_str(&format!(" {} {}\n", check, name));
+            }
+        }
+    }
+    if full_details.is_empty() {
+        full_details = "No details.".to_string();
+    }
+
+    // --- 2. NEW: Calculate Dynamic Height ---
+    let details_width = h_chunks[1].width.saturating_sub(2); // subtract borders
+    let mut required_lines: u16 = 0;
+
+    if details_width > 0 {
+        for line in full_details.lines() {
+            let line_len = line.chars().count() as u16;
+            if line_len == 0 {
+                required_lines += 1;
+            } else {
+                // Ceiling division to account for wrapping
+                required_lines += line_len.div_ceil(details_width);
+            }
+        }
+    }
+
+    // Add 2 for top/bottom borders
+    let calculated_height = required_lines + 2;
+
+    // Safety clamp: Min 3 lines, Max 50% of screen
+    let available_height = v_chunks[0].height;
+    let max_details_height = available_height / 2;
+    let final_details_height = calculated_height.clamp(3, max_details_height);
+
+    // --- 3. UPDATED: Dynamic Layout ---
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+        .constraints([
+            Constraint::Min(0),                       // Task list takes remaining space
+            Constraint::Length(final_details_height), // Details takes only what it needs
+        ])
         .split(h_chunks[1]);
 
     // --- Sidebar ---
@@ -306,7 +359,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let prefix_blocked = Span::raw(if is_blocked { " [B] " } else { " " });
 
             // Base length of all non-text prefixes
-            let prefix_len = prefix_indent.content.len() + 1 + inner_char.chars().count() + 1 + prefix_blocked.content.len();
+            let prefix_len = prefix_indent.content.len()
+                + 1
+                + inner_char.chars().count()
+                + 1
+                + prefix_blocked.content.len();
 
             let title_content = format!("{}{}{}{}", t.summary, dur_str, due_str, recur_str);
             let title_len = title_content.len();
@@ -444,29 +501,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     f.render_stateful_widget(task_list, main_chunks[0], &mut state.list_state);
 
     // Details
-    let mut full_details = String::new();
-    if let Some(task) = state.get_selected_task() {
-        if !task.description.is_empty() {
-            full_details.push_str(&task.description);
-            full_details.push_str("\n\n");
-        }
-        if !task.dependencies.is_empty() {
-            full_details.push_str("[Blocked By]:\n");
-            for dep_uid in &task.dependencies {
-                let name = state
-                    .store
-                    .get_summary(dep_uid)
-                    .unwrap_or_else(|| "Unknown task".to_string());
-                let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
-                let check = if is_done { "[x]" } else { "[ ]" };
-                full_details.push_str(&format!(" {} {}\n", check, name));
-            }
-        }
-    }
-    if full_details.is_empty() {
-        full_details = "No details.".to_string();
-    }
-
     let details = Paragraph::new(full_details)
         .wrap(Wrap { trim: true })
         .block(Block::default().borders(Borders::ALL).title(" Details "));
