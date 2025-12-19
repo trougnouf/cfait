@@ -16,8 +16,8 @@ fn default_cutoff() -> Option<u32> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum AppTheme {
-    #[default]
     Dark,
+    #[default]
     RustyDark,
 }
 
@@ -58,7 +58,6 @@ pub struct Config {
     pub theme: AppTheme,
 }
 
-// --- ADDED THIS IMPLEMENTATION ---
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -81,7 +80,6 @@ impl Default for Config {
 // --------------------------------
 
 impl Config {
-    // ... keep existing implementation ...
     pub fn load() -> Result<Self> {
         let path = AppPaths::get_config_file_path()?;
         if path.exists() {

@@ -1,6 +1,32 @@
 # Changelog
 
+## [0.3.2] - 2025-12-19
+
+### 🚀 Features
+
+- *(android)* Add loading state to task save (visual feedback) and handle coroutine cancellation
+- *(workflow)* Implement pause/stop states
+- *(android)* Implement optimistic UI updates for instant task creation and modification
+- *(android)* If no calendars are setup (Local-only) then default sideview to Tags rather than Calendars
+
+### 🐛 Bug Fixes
+
+- Resolve infinite sync loop and implement optimistic save with auto-scroll to task in Android
+- *(tui)* Fix double flipping logic
+
+### 📚 Documentation
+
+- Update README & TUI help w/ start/stop/pause shortcuts
+
+### ⚙️ Miscellaneous Tasks
+
+- *(fdroid)* Simplify screenshot names
 ## [0.3.2] - 2025-12-18
+
+### 🐛 Bug Fixes
+
+- Don't include uniffi/mobile for TUI/GUI desktop builds
+- *(android)* Replace target_os = "android" with feature = "mobile"
 
 ### 📚 Documentation
 
@@ -9,6 +35,15 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(android)* Generate static Android version number for F-Droid release
+- Release cfait version 0.3.2
+- Auto-generate changelogs (fastlane and CHANGELOG.md), backfill previous ones
+- Add Cargo.lock
+- *(android)* Rm i686-linux-android
+- *(fdroid)* Work on Reproducible Builds
+- *(fdroid)* Pin rust version for F-Droid build
+- *(fdroid)* Work on reproducible build (locked ndkVersion, RUSTFLAGS)
+- *(fdroid)* Strip dependenciesInfo
+- *(fdroid)* Set Android rust toolchain in rust_toolchain.toml
 ## [0.3.1] - 2025-12-17
 
 ### 🐛 Bug Fixes
