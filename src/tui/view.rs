@@ -43,7 +43,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         ]),
         Line::from(vec![
             Span::styled("       ", Style::default()), // Indent alignment
-            Span::raw("s:Start/Pause  x:Cancel  M:Move  r:Sync  X:Export(Local)"),
+            Span::raw("s:Start/Pause  S:Stop  x:Cancel  M:Move  r:Sync  X:Export"),
         ]),
         Line::from(vec![
             Span::styled(
@@ -306,7 +306,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let prefix_blocked = Span::raw(if is_blocked { " [B] " } else { " " });
 
             // Base length of all non-text prefixes
-            let prefix_len = prefix_indent.content.len() + 1 + 1 + 1 + prefix_blocked.content.len();
+            let prefix_len = prefix_indent.content.len() + 1 + inner_char.chars().count() + 1 + prefix_blocked.content.len();
 
             let title_content = format!("{}{}{}{}", t.summary, dur_str, due_str, recur_str);
             let title_len = title_content.len();

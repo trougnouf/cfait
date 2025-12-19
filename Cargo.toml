@@ -31,7 +31,7 @@ name = "cfait"
 # --- COMMON (Core Logic) ---
 chrono = { version = "0.4", features = ["serde"] }
 icalendar = "0.17"
-uuid = { version = "1.18", features = ["v4"] }
+uuid = { version = "1.19", features = ["v4"] }
 tokio = { version = "1", features = ["full"] }
 libdav = "0.10"
 http = "1.4"
@@ -70,7 +70,7 @@ log = "0.4"
 [dev-dependencies]
 mockito = "1.7" # For mocking the HTTP server
 tokio = { version = "1", features = ["full"] }
-uuid = { version = "1.18", features = ["v4"] }
+uuid = { version = "1.19", features = ["v4"] }
 # Required to run the bindgen binary
 
 [features]

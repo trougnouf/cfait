@@ -1,5 +1,3 @@
-
-
 ![Cfait -- Take control of your TODO list](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_featureGraphic_(hardcoded_text).svg)
 
 <p align="center">
@@ -141,7 +139,9 @@ If you are using the Terminal interface, here are the essentials (*Press `?` ins
 *   `a`: **Add** task
 *   `e` / `E`: **Edit** title / **Edit** description
 *   `Space`: Toggle **Done** status
-*   `s` / `x`: Mark **Started** / **Cancelled**
+*   `s`: Toggle **Start / Pause**
+*   `S`: **Stop** (Reset to Needs Action)
+*   `x`: **Cancel** task
 *   `d`: **Delete** task
 
 **Organization & Hierarchy**
