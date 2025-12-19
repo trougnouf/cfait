@@ -54,7 +54,18 @@ fun HomeScreen(
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var sidebarTab by remember { mutableIntStateOf(0) }
-    
+
+    // If only Local calendar exists, default to Tags view once calendars are loaded
+    var hasSetDefaultTab by remember { mutableStateOf(false) }
+    LaunchedEffect(calendars) {
+        if (!hasSetDefaultTab && calendars.isNotEmpty()) {
+            val hasRemote = calendars.any { !it.isLocal }
+            if (!hasRemote) {
+                sidebarTab = 1 // Switch to Tags tab
+            }
+            hasSetDefaultTab = true
+        }
+    }
     val listState = rememberLazyListState()
     
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
