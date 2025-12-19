@@ -8,6 +8,7 @@
 - *(workflow)* Implement pause/stop states
 - *(android)* Implement optimistic UI updates for instant task creation and modification
 - *(android)* If no calendars are setup (Local-only) then default sideview to Tags rather than Calendars
+- *(android)* Show task duration
 
 ### 🐛 Bug Fixes
 
@@ -17,6 +18,12 @@
 ### 📚 Documentation
 
 - Update README & TUI help w/ start/stop/pause shortcuts
+- Update screenshots to upcoming v0.3.3
+
+### 🎨 Styling
+
+- *(gui)* Make RustyDark the default theme
+- *(tui)* Dynamic details height
 
 ### ⚙️ Miscellaneous Tasks
 
