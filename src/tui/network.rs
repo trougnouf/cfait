@@ -208,11 +208,6 @@ pub async fn run_network_actor(
             }
             Action::ToggleTask(mut task) => {
                 let href = task.calendar_href.clone();
-                if task.status == crate::model::TaskStatus::Completed {
-                    task.status = crate::model::TaskStatus::NeedsAction;
-                } else {
-                    task.status = crate::model::TaskStatus::Completed;
-                }
 
                 match client.toggle_task(&mut task).await {
                     Ok((_, _, msgs)) => {
@@ -289,46 +284,32 @@ pub async fn run_network_actor(
                     }
                 }
             }
-            Action::MarkInProcess(mut task) => {
-                if task.status == crate::model::TaskStatus::InProcess {
-                    task.status = crate::model::TaskStatus::NeedsAction;
-                } else {
-                    task.status = crate::model::TaskStatus::InProcess;
+            Action::MarkInProcess(mut task) => match client.update_task(&mut task).await {
+                Ok(msgs) => {
+                    let s = if msgs.is_empty() {
+                        "Saved.".to_string()
+                    } else {
+                        msgs.join("; ")
+                    };
+                    let _ = event_tx.send(AppEvent::Status(s)).await;
                 }
-                match client.update_task(&mut task).await {
-                    Ok(msgs) => {
-                        let s = if msgs.is_empty() {
-                            "Saved.".to_string()
-                        } else {
-                            msgs.join("; ")
-                        };
-                        let _ = event_tx.send(AppEvent::Status(s)).await;
-                    }
-                    Err(e) => {
-                        let _ = event_tx.send(AppEvent::Error(e)).await;
-                    }
+                Err(e) => {
+                    let _ = event_tx.send(AppEvent::Error(e)).await;
                 }
-            }
-            Action::MarkCancelled(mut task) => {
-                if task.status == crate::model::TaskStatus::Cancelled {
-                    task.status = crate::model::TaskStatus::NeedsAction;
-                } else {
-                    task.status = crate::model::TaskStatus::Cancelled;
+            },
+            Action::MarkCancelled(mut task) => match client.update_task(&mut task).await {
+                Ok(msgs) => {
+                    let s = if msgs.is_empty() {
+                        "Saved.".to_string()
+                    } else {
+                        msgs.join("; ")
+                    };
+                    let _ = event_tx.send(AppEvent::Status(s)).await;
                 }
-                match client.update_task(&mut task).await {
-                    Ok(msgs) => {
-                        let s = if msgs.is_empty() {
-                            "Saved.".to_string()
-                        } else {
-                            msgs.join("; ")
-                        };
-                        let _ = event_tx.send(AppEvent::Status(s)).await;
-                    }
-                    Err(e) => {
-                        let _ = event_tx.send(AppEvent::Error(e)).await;
-                    }
+                Err(e) => {
+                    let _ = event_tx.send(AppEvent::Error(e)).await;
                 }
-            }
+            },
             Action::MoveTask(task, new_href) => {
                 let old_href = task.calendar_href.clone();
                 match client.move_task(&task, &new_href).await {

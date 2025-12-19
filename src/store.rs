@@ -92,11 +92,15 @@ impl TaskStore {
 
     pub fn toggle_task(&mut self, uid: &str) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
-            task.status = if task.status == TaskStatus::Completed {
-                TaskStatus::NeedsAction
+            if task.status == TaskStatus::Completed {
+                // Unchecking: Back to NeedsAction, Clear Progress
+                task.status = TaskStatus::NeedsAction;
+                task.percent_complete = None;
             } else {
-                TaskStatus::Completed
-            };
+                // Checking: Completed, 100% Progress
+                task.status = TaskStatus::Completed;
+                task.percent_complete = Some(100);
+            }
             return Some(task.clone());
         }
         None

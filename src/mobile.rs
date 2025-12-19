@@ -635,8 +635,10 @@ impl CfaitMobile {
 
         if task.status.is_done() {
             task.status = crate::model::TaskStatus::NeedsAction;
+            task.percent_complete = None; // <--- FIX: Reset progress
         } else {
             task.status = crate::model::TaskStatus::Completed;
+            task.percent_complete = Some(100); // <--- FIX: Ensure 100%
         }
 
         let mut task_for_net = task.clone();
