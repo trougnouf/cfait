@@ -1,6 +1,6 @@
 <b>Take control of your TODO list.</b>
 <br><br>
-Cfait is a powerful, elegant, and open-source CalDAV task manager. Designed for speed and stability using Rust, it puts you in control of your data with a local-first approach that syncs seamlessly across your devices.
+Cfait is a powerful, fast and elegant, cross-platform and open-source CalDAV task manager. Designed for speed and stability using Rust, it puts you in control of your data with a local-first approach that syncs seamlessly across your devices.
 <br><br>
 <b>Why Cfait?</b>
 <ul>

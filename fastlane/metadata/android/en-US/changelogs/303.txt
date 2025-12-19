@@ -1,0 +1,29 @@
+## [0.3.3] - 2025-12-19
+
+### 🚀 Features
+
+- *(android)* Add loading state to task save (visual feedback) and handle coroutine cancellation
+- *(workflow)* Implement pause/stop states
+- *(android)* Implement optimistic UI updates for instant task creation and modification
+- *(android)* If no calendars are setup (Local-only) then default sideview to Tags rather than Calendars
+- *(android)* Show task duration
+
+### 🐛 Bug Fixes
+
+- Resolve infinite sync loop and implement optimistic save with auto-scroll to task in Android
+- *(tui)* Fix double flipping logic
+
+### 📚 Documentation
+
+- Update README & TUI help w/ start/stop/pause shortcuts
+- Update screenshots to upcoming v0.3.3
+
+### 🎨 Styling
+
+- *(gui)* Make RustyDark the default theme
+- *(tui)* Dynamic details height
+
+### ⚙️ Miscellaneous Tasks
+
+- *(fdroid)* Simplify screenshot names
+- Prepare for release v0.3.3

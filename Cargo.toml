@@ -2,7 +2,7 @@
 name = "cfait"
 version = "0.3.2"
 edition = "2024"
-description = "A simple, elegant and fast CalDAV task manager (TUI & GUI)"
+description = "A powerful, fast and elegant CalDAV task manager (TUI & GUI)"
 license = "GPL-3.0"
 default-run = "cfait" # Default to TUI when running 'cargo run'
 repository = "https://codeberg.org/trougnouf/cfait"
@@ -125,11 +125,8 @@ replace = "pkgver={{version}}"
 [package.metadata.release]
 # Run this script before committing the release
 pre-release-hook = ["python3", "scripts/prepare_release.py"]
-# Ensure the new Fastlane file is added to the git commit
-# We explicitly enable signing and verify that untracked files (the new changelog) get picked up
-sign-commit = true
-sign-tag = true
+# Ensure the Fastlane stuff is added to the git commit
 
 [package.metadata.android]
 # This must match (Major * 10000 + Minor * 100 + Patch)
-version_code = 302
+version_code = 303

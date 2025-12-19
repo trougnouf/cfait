@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.2] - 2025-12-19
+## [0.3.3] - 2025-12-19
 
 ### 🚀 Features
 
@@ -28,6 +28,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - *(fdroid)* Simplify screenshot names
+- Prepare for release v0.3.3
 ## [0.3.2] - 2025-12-18
 
 ### 🐛 Bug Fixes
