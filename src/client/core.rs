@@ -643,6 +643,19 @@ impl RustyClient {
                             }
                             Ok(())
                         }
+                        Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
+                        | Err(WebDavError::PreconditionFailed(_)) => {
+                            // The resource already exists on the server.
+                            // This usually happens if a previous sync attempt succeeded
+                            // but the client timed out before receiving confirmation.
+                            // We treat this as success to unblock the journal queue.
+                            warnings.push(format!(
+                                "Creation conflict: Task '{}' already exists on server. Mark as synced.",
+                                task.summary
+                            ));
+                            path_for_refresh = Some(path.clone());
+                            Ok(())
+                        }
                         Err(e) => Err(format!("{:?}", e)),
                     }
                 }
