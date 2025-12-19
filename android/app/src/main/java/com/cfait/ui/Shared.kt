@@ -15,69 +15,73 @@ val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
 
 object NfIcons {
     fun get(code: Int): String = String(Character.toChars(code))
-    
-    // Aligned with src/gui/icon.rs
-    val CALENDAR = get(0xf073)     // 
-    val TAG = get(0xf02b)          // 
-    val SETTINGS = get(0xe690)     // nf-seti-settings (using SETTINGS_GEAR)
-    val REFRESH = get(0xf0450)     // nf-md-refresh
-    val DELETE = get(0xf1f8)       //  (TRASH)
-    val CHECK = get(0xf00c)        // 
-    val CROSS = get(0xf00d)        // 
-    val PLAY = get(0xeb2c)         // nf-cod-play
-    val PAUSE = get(0xf04c)        // 
-    val REPEAT = get(0xf0b6)       // 
-    val VISIBLE = get(0xea70)      // nf-cod-eye (EYE)
-    val HIDDEN = get(0xeae7)       // nf-cod-eye_closed (EYE_CLOSED)
+
+    val CALENDAR = get(0xf073) // 
+    val TAG = get(0xf02b) // 
+    val SETTINGS = get(0xe690) // nf-seti-settings
+    val REFRESH = get(0xf0450) // nf-md-refresh
+    val SYNC_ALERT = get(0xf04e7) // nf-md-sync_alert (Exclamation arrow)
+    val SYNC_OFF = get(0xf04e8) // nf-md-sync_off (Slash through arrows)  <-- ADDED
+    val DELETE = get(0xf1f8) // 
+    val CHECK = get(0xf00c) // 
+    val CROSS = get(0xf00d) // 
+    val PLAY = get(0xeb2c) // nf-cod-play
+    val PAUSE = get(0xf04c) // 
+    val REPEAT = get(0xf0b6) // 
+    val VISIBLE = get(0xea70) // nf-cod-eye
+    val HIDDEN = get(0xeae7) // nf-cod-eye_closed
     val WRITE_TARGET = get(0xf0cfb) // nf-md-content_save_edit
-    val ADD = get(0xf067)          // a plus sign, good enough for 'send'
-    val BACK = get(0xf060)         //  (arrow-left)
+    val ADD = get(0xf067) // +
+    val BACK = get(0xf060) // 
     val PRIORITY_UP = get(0xf0603) // nf-md-priority_high
     val PRIORITY_DOWN = get(0xf0604) // nf-md-priority_low
-    val EDIT = get(0xf040)         // 
-    val ARROW_RIGHT = get(0xf061)  // 
-    val LINK = get(0xf0c1)         // 
-    val UNLINK = get(0xf127)       // 
-    val INFO = get(0xf129)          // 
-    val UNSYNCED = get(0xf0c2)      //  (Cloud)
-    val EXPORT = get(0xeac3)        //  (Cloud Upload)
-    val HELP = get(0xf0625)         // 󰘥 (Help Rhombus / Circle)
-    
-    // YANK ACTION ICONS
-    val BLOCKED = get(0xf479)      // nf-oct-blocked
-    val CHILD = get(0xf0a89)       // nf-md-account_child
-    
-    // DONATION ICONS
+    val EDIT = get(0xf040) // 
+    val ARROW_RIGHT = get(0xf061) // 
+    val LINK = get(0xf0c1) // 
+    val UNLINK = get(0xf127) // 
+    val INFO = get(0xf129) // 
+    val UNSYNCED = get(0xf0c2) // 
+    val EXPORT = get(0xeac3) // 
+    val HELP = get(0xf0625) // 󰘥
+
+    val BLOCKED = get(0xf479) // nf-oct-blocked
+    val CHILD = get(0xf0a89) // nf-md-account_child
+
     val HEART_HAND = get(0xed9b)
     val CREDIT_CARD = get(0xf09d)
     val BANK = get(0xf0a27)
     val BITCOIN = get(0xf10f)
     val LITECOIN = get(0xf0a61)
     val ETHEREUM = get(0xed58)
-    
-    // Android-specific or common alternates not in gui/icon.rs
-    val SEARCH = get(0xf002)        // 
-    val MENU = get(0xf0c9)          // 
-    val DOTS_CIRCLE = get(0xf1978)   // custom icon for menu
-    val COPY = get(0xf0c5)           // for yank
-    val EXTERNAL_LINK = get(0xf08e) // nf-fa-external_link
-    val DEBUG_STOP = get(0xead7) // nf-cod-debug_stop
 
+    val SEARCH = get(0xf002) // 
+    val MENU = get(0xf0c9) // 
+    val DOTS_CIRCLE = get(0xf1978)
+    val COPY = get(0xf0c5)
+    val EXTERNAL_LINK = get(0xf08e)
+    val DEBUG_STOP = get(0xead7)
 }
 
 @Composable
-fun NfIcon(text: String, size: TextUnit = 24.sp, color: Color = MaterialTheme.colorScheme.onSurface) {
+fun NfIcon(
+    text: String,
+    size: TextUnit = 24.sp,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+) {
     Text(text = text, fontFamily = NerdFont, fontSize = size, color = color)
 }
 
-fun parseHexColor(hex: String): Color {
-    return try {
+fun parseHexColor(hex: String): Color =
+    try {
         var clean = hex.removePrefix("#")
-        if (clean.length > 6) { clean = clean.take(6) }
+        if (clean.length > 6) {
+            clean = clean.take(6)
+        }
         val colorInt = android.graphics.Color.parseColor("#$clean")
         Color(colorInt)
-    } catch (e: Exception) { Color.Gray }
-}
+    } catch (e: Exception) {
+        Color.Gray
+    }
 
 fun getTagColor(tag: String): Color {
     val hash = tag.hashCode()
@@ -85,9 +89,13 @@ fun getTagColor(tag: String): Color {
     return Color.hsv(h, 0.6f, 0.5f)
 }
 
-fun getTaskTextColor(prio: Int, isDone: Boolean, isDark: Boolean): Color {
+fun getTaskTextColor(
+    prio: Int,
+    isDone: Boolean,
+    isDark: Boolean,
+): Color {
     if (isDone) return Color.Gray
-    return when(prio) {
+    return when (prio) {
         1 -> Color(0xFFFF4444)
         2 -> Color(0xFFFF6633)
         3 -> Color(0xFFFF8800)

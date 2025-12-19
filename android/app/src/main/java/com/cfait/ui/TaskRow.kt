@@ -28,7 +28,7 @@ fun TaskRow(
     onToggle: () -> Unit,
     onAction: (String) -> Unit,
     onClick: (String) -> Unit,
-    yankedUid: String?
+    yankedUid: String?,
 ) {
     val startPadding = (task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
@@ -37,24 +37,26 @@ fun TaskRow(
 
     // Highlight color when menu is open - subtle amber
     val highlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
-    val containerColor = if (expanded) {
-        highlightColor
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
+    val containerColor =
+        if (expanded) {
+            highlightColor
+        } else {
+            MaterialTheme.colorScheme.surface
+        }
 
     Card(
-        modifier = Modifier.fillMaxWidth()
-            .padding(start = 12.dp + startPadding, end = 12.dp, top = 1.dp, bottom = 1.dp)
-            .combinedClickable(
-                onClick = { onClick(task.uid) },
-                onLongClick = { expanded = true }
-            ),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp + startPadding, end = 12.dp, top = 1.dp, bottom = 1.dp)
+                .combinedClickable(
+                    onClick = { onClick(task.uid) },
+                    onLongClick = { expanded = true },
+                ),
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-
             TaskCheckbox(task, calColor, onToggle)
 
             Spacer(Modifier.width(8.dp))
@@ -66,13 +68,20 @@ fun TaskRow(
                     color = textColor,
                     fontWeight = if (task.priority > 0.toUByte()) FontWeight.Medium else FontWeight.Normal,
                     textDecoration = if (task.isDone) TextDecoration.LineThrough else null,
-                    lineHeight = 18.sp
+                    lineHeight = 18.sp,
                 )
 
-                FlowRow(modifier = Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                FlowRow(
+                    modifier = Modifier.padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     if (task.isBlocked) NfIcon(NfIcons.BLOCKED, 10.sp, MaterialTheme.colorScheme.error)
-                    if (!task.dueDateIso.isNullOrEmpty()) { NfIcon(NfIcons.CALENDAR, 10.sp, Color.Gray); Text(task.dueDateIso!!.take(10), fontSize = 10.sp, color = Color.Gray) }
-                    
+                    if (!task.dueDateIso.isNullOrEmpty()) {
+                        NfIcon(NfIcons.CALENDAR, 10.sp, Color.Gray)
+                        Text(task.dueDateIso!!.take(10), fontSize = 10.sp, color = Color.Gray)
+                    }
+
                     if (task.durationMins != null) {
                         Text(formatDuration(task.durationMins!!), fontSize = 10.sp, color = Color.Gray)
                     }
@@ -97,36 +106,70 @@ fun TaskRow(
             Box {
                 IconButton(onClick = { expanded = true }, modifier = Modifier.size(24.dp)) { NfIcon(NfIcons.DOTS_CIRCLE, 16.sp) }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    DropdownMenuItem(text = { Text("Edit") }, onClick = { expanded = false; onClick(task.uid) }, leadingIcon = { NfIcon(NfIcons.EDIT, 16.sp) })
-                    
+                    DropdownMenuItem(text = { Text("Edit") }, onClick = {
+                        expanded = false
+                        onClick(task.uid)
+                    }, leadingIcon = { NfIcon(NfIcons.EDIT, 16.sp) })
+
                     DropdownMenuItem(
-                        text = { Text(if (task.statusString == "InProcess") "Pause" else if (task.isPaused) "Resume" else "Start") },
-                        onClick = { expanded = false; onAction("playpause") },
-                        leadingIcon = { NfIcon(if (task.statusString == "InProcess") NfIcons.PAUSE else NfIcons.PLAY, 16.sp) }
+                        text = {
+                            Text(
+                                if (task.statusString == "InProcess") {
+                                    "Pause"
+                                } else if (task.isPaused) {
+                                    "Resume"
+                                } else {
+                                    "Start"
+                                },
+                            )
+                        },
+                        onClick = {
+                            expanded = false
+                            onAction("playpause")
+                        },
+                        leadingIcon = { NfIcon(if (task.statusString == "InProcess") NfIcons.PAUSE else NfIcons.PLAY, 16.sp) },
                     )
 
                     // Add STOP button if active or paused
                     if (task.statusString == "InProcess" || task.isPaused) {
                         DropdownMenuItem(
                             text = { Text("Stop (Reset)") },
-                            onClick = { expanded = false; onAction("stop") },
-                            leadingIcon = { NfIcon(NfIcons.DEBUG_STOP, 16.sp) }
+                            onClick = {
+                                expanded = false
+                                onAction("stop")
+                            },
+                            leadingIcon = { NfIcon(NfIcons.DEBUG_STOP, 16.sp) },
                         )
                     }
 
                     // --- THIS IS WHERE THE ERROR WAS ---
                     // The "Increase prio" item was incorrectly placed on the same line as the if block's closing brace.
-                    DropdownMenuItem(text = { Text("Increase prio") }, onClick = { expanded = false; onAction("prio_up") }, leadingIcon = { NfIcon(NfIcons.PRIORITY_UP, 16.sp) })
-                    DropdownMenuItem(text = { Text("Decrease prio") }, onClick = { expanded = false; onAction("prio_down") }, leadingIcon = { NfIcon(NfIcons.PRIORITY_DOWN, 16.sp) })
+                    DropdownMenuItem(text = { Text("Increase prio") }, onClick = {
+                        expanded = false
+                        onAction("prio_up")
+                    }, leadingIcon = { NfIcon(NfIcons.PRIORITY_UP, 16.sp) })
+                    DropdownMenuItem(text = { Text("Decrease prio") }, onClick = {
+                        expanded = false
+                        onAction("prio_down")
+                    }, leadingIcon = { NfIcon(NfIcons.PRIORITY_DOWN, 16.sp) })
 
                     if (yankedUid == null) {
-                        DropdownMenuItem(text = { Text("Yank (link)") }, onClick = { expanded = false; onAction("yank") }, leadingIcon = { NfIcon(NfIcons.LINK, 16.sp) })
+                        DropdownMenuItem(text = { Text("Yank (link)") }, onClick = {
+                            expanded = false
+                            onAction("yank")
+                        }, leadingIcon = { NfIcon(NfIcons.LINK, 16.sp) })
                     }
 
                     if (task.statusString != "Cancelled") {
-                        DropdownMenuItem(text = { Text("Cancel") }, onClick = { expanded = false; onAction("cancel") }, leadingIcon = { NfIcon(NfIcons.CROSS, 16.sp) })
+                        DropdownMenuItem(text = { Text("Cancel") }, onClick = {
+                            expanded = false
+                            onAction("cancel")
+                        }, leadingIcon = { NfIcon(NfIcons.CROSS, 16.sp) })
                     }
-                    DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, onClick = { expanded = false; onAction("delete") }, leadingIcon = { NfIcon(NfIcons.DELETE, 16.sp, MaterialTheme.colorScheme.error) })
+                    DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, onClick = {
+                        expanded = false
+                        onAction("delete")
+                    }, leadingIcon = { NfIcon(NfIcons.DELETE, 16.sp, MaterialTheme.colorScheme.error) })
                 }
             }
         }
@@ -134,26 +177,37 @@ fun TaskRow(
 }
 
 @Composable
-fun TaskCheckbox(task: MobileTask, calColor: Color, onClick: () -> Unit) {
+fun TaskCheckbox(
+    task: MobileTask,
+    calColor: Color,
+    onClick: () -> Unit,
+) {
     val isDone = task.isDone
     val status = task.statusString
     val isPaused = task.isPaused
 
-    val bgColor = when {
-        isDone -> Color(0xFF009900)
-        status == "InProcess" -> Color(0xFF99CC99)
-        isPaused -> Color(0xFFFFD54F) // Amber for Paused
-        status == "Cancelled" -> Color(0xFF4D3333)
-        else -> Color.Transparent
-    }
+    val bgColor =
+        when {
+            isDone -> Color(0xFF009900)
+
+            status == "InProcess" -> Color(0xFF99CC99)
+
+            isPaused -> Color(0xFFFFD54F)
+
+            // Amber for Paused
+            status == "Cancelled" -> Color(0xFF4D3333)
+
+            else -> Color.Transparent
+        }
 
     Box(
-        modifier = Modifier
-            .size(20.dp)
-            .background(bgColor, RoundedCornerShape(4.dp))
-            .border(1.5.dp, calColor, RoundedCornerShape(4.dp))
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
+        modifier =
+            Modifier
+                .size(20.dp)
+                .background(bgColor, RoundedCornerShape(4.dp))
+                .border(1.5.dp, calColor, RoundedCornerShape(4.dp))
+                .clickable { onClick() },
+        contentAlignment = Alignment.Center,
     ) {
         if (isDone) {
             NfIcon(NfIcons.CHECK, 12.sp, Color.White)
@@ -170,16 +224,23 @@ fun TaskCheckbox(task: MobileTask, calColor: Color, onClick: () -> Unit) {
 }
 
 @Composable
-fun CompactTagRow(name: String, count: Int?, color: Color, isSelected: Boolean, onClick: () -> Unit) {
+fun CompactTagRow(
+    name: String,
+    count: Int?,
+    color: Color,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+) {
     val bg = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(36.dp)
-            .background(bg, RoundedCornerShape(4.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .height(36.dp)
+                .background(bg, RoundedCornerShape(4.dp))
+                .clickable { onClick() }
+                .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         NfIcon(NfIcons.TAG, size = 14.sp, color = color)
         Spacer(Modifier.width(12.dp))

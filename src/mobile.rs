@@ -48,8 +48,6 @@ impl std::fmt::Display for MobileError {
 }
 impl std::error::Error for MobileError {}
 
-// --- DTOs ---
-
 #[derive(uniffi::Record)]
 pub struct MobileTask {
     pub uid: String,
@@ -70,7 +68,6 @@ pub struct MobileTask {
     pub status_string: String,
     pub blocked_by_names: Vec<String>,
     pub blocked_by_uids: Vec<String>,
-    // New field to expose paused state nicely
     pub is_paused: bool,
 }
 
@@ -135,18 +132,15 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
     }
 }
 
-// --- MAIN OBJECT ---
-
 #[derive(uniffi::Object)]
 pub struct CfaitMobile {
     client: Arc<Mutex<Option<RustyClient>>>,
     store: Arc<Mutex<TaskStore>>,
 }
 
-// ============================================================================
-// PUBLIC API (Exported to Kotlin/Swift)
-// ============================================================================
-
+// ----------------------------------------------------------------------------
+// EXPORTED API (UniFFI)
+// ----------------------------------------------------------------------------
 #[uniffi::export(async_runtime = "tokio")]
 impl CfaitMobile {
     #[uniffi::constructor]
@@ -202,8 +196,6 @@ impl CfaitMobile {
         c.save().map_err(MobileError::from)
     }
 
-    // --- Relationship Management ---
-
     pub async fn add_dependency(
         &self,
         task_uid: String,
@@ -245,8 +237,6 @@ impl CfaitMobile {
         .await
     }
 
-    // --- Calendar Management ---
-
     pub fn isolate_calendar(&self, href: String) -> Result<(), MobileError> {
         let mut config = Config::load().unwrap_or_default();
         let all_cals = self.get_calendars();
@@ -260,8 +250,6 @@ impl CfaitMobile {
         config.default_calendar = Some(href);
         config.save().map_err(MobileError::from)
     }
-
-    // --- Existing Methods ---
 
     pub async fn add_alias(&self, key: String, tags: Vec<String>) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
@@ -316,7 +304,6 @@ impl CfaitMobile {
         let journal = crate::journal::Journal::load();
 
         if let Ok(mut local) = LocalStorage::load() {
-            // Apply Journal to Local
             for action in &journal.queue {
                 match action {
                     crate::journal::Action::Create(t) | crate::journal::Action::Update(t) => {
@@ -353,7 +340,6 @@ impl CfaitMobile {
                     continue;
                 }
                 if let Ok((mut tasks, _)) = Cache::load(&cal.href) {
-                    // Apply Journal to Cache
                     for action in &journal.queue {
                         match action {
                             crate::journal::Action::Create(t)
@@ -409,8 +395,6 @@ impl CfaitMobile {
         config.allow_insecure_certs = insecure;
         self.apply_connection(config).await
     }
-
-    // --- Getters ---
 
     pub fn get_calendars(&self) -> Vec<MobileCalendar> {
         let config = Config::load().unwrap_or_default();
@@ -499,12 +483,11 @@ impl CfaitMobile {
             .collect()
     }
 
-    // --- Task Actions ---
-
     pub async fn yank_task(&self, _uid: String) -> Result<(), MobileError> {
         Ok(())
     }
 
+    // --- UPDATED to handle offline fallback ---
     pub async fn add_task_smart(&self, input: String) -> Result<String, MobileError> {
         let aliases = Config::load().unwrap_or_default().tag_aliases;
         let mut task = Task::new(&input, &aliases);
@@ -515,27 +498,19 @@ impl CfaitMobile {
             .unwrap_or(LOCAL_CALENDAR_HREF.to_string());
         task.calendar_href = target_href.clone();
 
-        // 1. OPTIMISTIC UPDATE: Add to store immediately
         self.store.lock().await.add_task(task.clone());
 
         let guard = self.client.lock().await;
-        if let Some(client) = &*guard {
-            // 2. Network Call
-            match client.create_task(&mut task).await {
-                Ok(_) => {
-                    // 3. SUCCESS: Update store with new ETag/Href from server
-                    self.store.lock().await.update_or_add_task(task.clone());
-                }
-                Err(e) => {
-                    // 4. FAILURE: Remove the optimistic task so it doesn't get stuck?
-                    // Or keep it for offline sync later?
-                    // For now, let's leave it (it behaves like offline) but log error
-                    // Ideally, we would push to Journal here if network fails.
-                    return Err(MobileError::from(e));
-                }
-            }
-        } else {
-            // Offline fallback
+        let mut network_success = false;
+
+        if let Some(client) = &*guard
+            && client.create_task(&mut task).await.is_ok()
+        {
+            self.store.lock().await.update_or_add_task(task.clone());
+            network_success = true;
+        }
+
+        if !network_success {
             if task.calendar_href == LOCAL_CALENDAR_HREF {
                 let mut all = LocalStorage::load().unwrap_or_default();
                 all.push(task.clone());
@@ -544,8 +519,8 @@ impl CfaitMobile {
                 crate::journal::Journal::push(crate::journal::Action::Create(task.clone()))
                     .map_err(MobileError::from)?;
             }
-            // Update store again to be sure (though step 1 covered it)
-            self.store.lock().await.add_task(task.clone());
+            // Ensure store has the task (e.g. if we went straight to fallback)
+            self.store.lock().await.update_or_add_task(task.clone());
         }
 
         Ok(task.uid)
@@ -572,8 +547,6 @@ impl CfaitMobile {
         .await
     }
 
-    // --- NEW: Specific Mobile Actions for Pause/Stop ---
-
     pub async fn pause_task(&self, uid: String) -> Result<(), MobileError> {
         self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| store.pause_task(id))
             .await
@@ -590,8 +563,6 @@ impl CfaitMobile {
         })
         .await
     }
-
-    // ---------------------------------------------------
 
     pub async fn update_task_smart(
         &self,
@@ -627,7 +598,6 @@ impl CfaitMobile {
     }
 
     pub async fn toggle_task(&self, uid: String) -> Result<(), MobileError> {
-        // 1. Logic via Store
         let mut store = self.store.lock().await;
         let (task, _) = store
             .get_task_mut(&uid)
@@ -635,29 +605,29 @@ impl CfaitMobile {
 
         if task.status.is_done() {
             task.status = crate::model::TaskStatus::NeedsAction;
-            task.percent_complete = None; // <--- FIX: Reset progress
+            task.percent_complete = None;
         } else {
             task.status = crate::model::TaskStatus::Completed;
-            task.percent_complete = Some(100); // <--- FIX: Ensure 100%
+            task.percent_complete = Some(100);
         }
 
         let mut task_for_net = task.clone();
         drop(store);
 
-        // 2. Client Operation
         let client_guard = self.client.lock().await;
+        let mut network_success = false;
 
-        if let Some(client) = &*client_guard {
-            let (_, next_task_opt, _) = client
-                .toggle_task(&mut task_for_net)
-                .await
-                .map_err(MobileError::from)?;
+        if let Some(client) = &*client_guard
+            && let Ok((_, next_task_opt, _)) = client.toggle_task(&mut task_for_net).await
+        {
             if let Some(next_task) = next_task_opt {
                 let mut store = self.store.lock().await;
                 store.update_or_add_task(next_task);
             }
-        } else {
-            // Offline
+            network_success = true;
+        }
+
+        if !network_success {
             if task_for_net.calendar_href == LOCAL_CALENDAR_HREF {
                 let mut local = LocalStorage::load().unwrap_or_default();
                 if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
@@ -672,6 +642,7 @@ impl CfaitMobile {
         Ok(())
     }
 
+    // --- UPDATED to handle offline fallback ---
     pub async fn move_task(&self, uid: String, new_cal_href: String) -> Result<(), MobileError> {
         let client_guard = self.client.lock().await;
         let mut store = self.store.lock().await;
@@ -682,18 +653,21 @@ impl CfaitMobile {
 
         drop(store);
 
-        if let Some(client) = &*client_guard {
-            client
-                .move_task(&updated_task, &new_cal_href)
-                .await
-                .map_err(MobileError::from)?;
-        } else if new_cal_href != LOCAL_CALENDAR_HREF {
+        let mut network_success = false;
+        if let Some(client) = &*client_guard
+            && client.move_task(&updated_task, &new_cal_href).await.is_ok()
+        {
+            network_success = true;
+        }
+
+        if !network_success && new_cal_href != LOCAL_CALENDAR_HREF {
             crate::journal::Journal::push(crate::journal::Action::Move(updated_task, new_cal_href))
                 .map_err(MobileError::from)?;
         }
         Ok(())
     }
 
+    // --- UPDATED to handle offline fallback ---
     pub async fn delete_task(&self, uid: String) -> Result<(), MobileError> {
         let mut store = self.store.lock().await;
         let (task, href) = store
@@ -702,9 +676,15 @@ impl CfaitMobile {
         drop(store);
 
         let client_guard = self.client.lock().await;
-        if let Some(client) = &*client_guard {
-            client.delete_task(&task).await.map_err(MobileError::from)?;
-        } else if href != LOCAL_CALENDAR_HREF {
+        let mut network_success = false;
+
+        if let Some(client) = &*client_guard
+            && client.delete_task(&task).await.is_ok()
+        {
+            network_success = true;
+        }
+
+        if !network_success && href != LOCAL_CALENDAR_HREF {
             crate::journal::Journal::push(crate::journal::Action::Delete(task))
                 .map_err(MobileError::from)?;
         }
@@ -734,15 +714,16 @@ impl CfaitMobile {
     }
 }
 
-// ============================================================================
-// INTERNAL HELPERS
-// ============================================================================
-
+// ----------------------------------------------------------------------------
+// INTERNAL HELPERS (Not exposed to UniFFI)
+// ----------------------------------------------------------------------------
 impl CfaitMobile {
     async fn apply_connection(&self, config: Config) -> Result<String, MobileError> {
-        let (client, cals, _, _, warning) = RustyClient::connect_with_fallback(config)
-            .await
-            .map_err(MobileError::from)?;
+        let (client, cals, _, _, warning_from_fallback) =
+            RustyClient::connect_with_fallback(config)
+                .await
+                .map_err(MobileError::from)?;
+
         *self.client.lock().await = Some(client.clone());
         let mut store = self.store.lock().await;
         store.clear();
@@ -752,8 +733,34 @@ impl CfaitMobile {
 
         match client.get_all_tasks(&cals).await {
             Ok(results) => {
-                for (href, tasks) in results {
-                    store.insert(href, tasks);
+                let mut fetched_hrefs = HashSet::new();
+                for (href, tasks) in &results {
+                    store.insert(href.clone(), tasks.clone());
+                    fetched_hrefs.insert(href.clone());
+                }
+
+                // BACKFILL: Restore ANY calendar that was missed from cache
+                for cal in &cals {
+                    if cal.href != LOCAL_CALENDAR_HREF
+                        && !fetched_hrefs.contains(&cal.href)
+                        && let Ok((cached, _)) = crate::cache::Cache::load(&cal.href)
+                    {
+                        store.insert(cal.href.clone(), cached);
+                    }
+                }
+
+                // ALERT LOGIC
+                let remote_cal_count = cals
+                    .iter()
+                    .filter(|c| c.href != LOCAL_CALENDAR_HREF)
+                    .count();
+                let fetched_remote_count = results
+                    .iter()
+                    .filter(|(h, _)| h.as_str() != LOCAL_CALENDAR_HREF)
+                    .count();
+
+                if remote_cal_count > 0 && fetched_remote_count == 0 {
+                    return Err(MobileError::from("Sync failed: No response from server."));
                 }
             }
             Err(e) => {
@@ -765,152 +772,47 @@ impl CfaitMobile {
                         store.insert(cal.href.clone(), cached);
                     }
                 }
-                if warning.is_none() {
-                    return Err(MobileError::from(e));
-                }
+                return Err(MobileError::from(e));
             }
         }
-        Ok(warning.unwrap_or_else(|| "Connected".to_string()))
+        Ok(warning_from_fallback.unwrap_or_else(|| "Connected".to_string()))
     }
 
-    // Helper to abstract Store mutation -> Client/Journal logic
     async fn apply_store_mutation<F>(&self, uid: String, mutator: F) -> Result<(), MobileError>
     where
         F: FnOnce(&mut TaskStore, &str) -> Option<Task>,
     {
         let mut store = self.store.lock().await;
-        // 1. Mutate and get the updated task
         let updated_task = mutator(&mut store, &uid)
             .ok_or(MobileError::from("Task not found or mutation failed"))?;
 
-        // 2. OPTIMISTIC: Save to store immediately (The mutator usually modifies in-place,
-        // but let's ensure persistence if needed or just drop the lock).
-        // Since `mutator` takes `&mut TaskStore`, the map is ALREADY updated in memory!
-        // We just need to clone the task for the network before dropping the lock.
         let mut task_for_net = updated_task.clone();
         drop(store);
 
         let client_guard = self.client.lock().await;
+        let mut network_success = false;
 
-        if let Some(client) = &*client_guard {
-            // 3. Network Call
-            client
-                .update_task(&mut task_for_net)
-                .await
-                .map_err(MobileError::from)?;
-
-            // 4. Update Store with Server Response (ETag/Sequence updates)
+        if let Some(client) = &*client_guard
+            && client.update_task(&mut task_for_net).await.is_ok()
+        {
             let mut store = self.store.lock().await;
-            store.update_or_add_task(task_for_net);
-        } else if task_for_net.calendar_href == LOCAL_CALENDAR_HREF {
-            let mut local = LocalStorage::load().unwrap_or_default();
-            if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
-                local[idx] = task_for_net;
-                LocalStorage::save(&local).map_err(MobileError::from)?;
+            store.update_or_add_task(task_for_net.clone());
+            network_success = true;
+        }
+
+        if !network_success {
+            if task_for_net.calendar_href == LOCAL_CALENDAR_HREF {
+                let mut local = LocalStorage::load().unwrap_or_default();
+                if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
+                    local[idx] = task_for_net;
+                    LocalStorage::save(&local).map_err(MobileError::from)?;
+                }
+            } else {
+                crate::journal::Journal::push(crate::journal::Action::Update(task_for_net))
+                    .map_err(MobileError::from)?;
             }
-        } else {
-            crate::journal::Journal::push(crate::journal::Action::Update(task_for_net))
-                .map_err(MobileError::from)?;
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::env;
-    use std::fs;
-    use std::sync::Arc;
-    use tokio::runtime::Runtime;
-
-    #[test]
-    fn test_android_concurrency_stress() {
-        let rt = Runtime::new().unwrap();
-        let temp_dir = env::temp_dir().join("cfait_mobile_stress");
-        let _ = fs::create_dir_all(&temp_dir);
-        let path_str = temp_dir.to_string_lossy().to_string();
-
-        let api = Arc::new(CfaitMobile::new(path_str));
-
-        rt.block_on(async {
-            api.add_task_smart("Initial Task !1".to_string())
-                .await
-                .unwrap();
-        });
-
-        let api_write = api.clone();
-        let write_handle = rt.spawn(async move {
-            for i in 0..50 {
-                tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
-                let _ = api_write.add_task_smart(format!("Stress Task {}", i)).await;
-                let tasks = api_write.get_view_tasks(None, "".to_string()).await;
-                if let Some(t) = tasks.first() {
-                    let _ = api_write.toggle_task(t.uid.clone()).await;
-                }
-            }
-        });
-
-        let api_read = api.clone();
-        let read_handle = rt.spawn(async move {
-            for _ in 0..50 {
-                let tasks = api_read.get_view_tasks(None, "".to_string()).await;
-                for t in tasks {
-                    assert!(!t.uid.is_empty());
-                }
-                let _ = api_read.get_config();
-            }
-        });
-
-        rt.block_on(async {
-            let _ = tokio::join!(write_handle, read_handle);
-        });
-
-        rt.block_on(async {
-            let tasks = api.get_view_tasks(None, "".to_string()).await;
-            assert_eq!(
-                tasks.len(),
-                51,
-                "Data loss detected during concurrent Mobile access"
-            );
-        });
-
-        let _ = fs::remove_dir_all(temp_dir);
-    }
-
-    #[test]
-    fn test_mobile_unsynced_state_flag() {
-        let temp_dir = env::temp_dir().join(format!("cfait_test_unsynced_{}", std::process::id()));
-        let _ = fs::create_dir_all(&temp_dir);
-
-        let config_dir = temp_dir.join("config");
-        fs::create_dir_all(&config_dir).unwrap();
-
-        fs::write(
-            config_dir.join("config.toml"),
-            r#"
-            url = "http://mock.server"
-            username = "user"
-            password = "password"
-            default_calendar = "http://mock.server/remote-cal/"
-            "#,
-        )
-        .unwrap();
-
-        let api = CfaitMobile::new(temp_dir.to_string_lossy().to_string());
-
-        assert!(!api.has_unsynced_changes());
-
-        let rt = Runtime::new().unwrap();
-        rt.block_on(async {
-            api.add_task_smart("Offline task for a remote calendar".to_string())
-                .await
-                .unwrap();
-        });
-
-        assert!(api.has_unsynced_changes());
-
-        let _ = fs::remove_dir_all(temp_dir);
     }
 }

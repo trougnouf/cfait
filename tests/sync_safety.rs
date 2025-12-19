@@ -1,4 +1,4 @@
-// File: ./tests/sync_safety.rs
+// File: tests/sync_safety.rs
 use cfait::client::RustyClient;
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
@@ -19,6 +19,12 @@ fn setup_safety_env(suffix: &str) -> std::path::PathBuf {
     if let Some(p) = Journal::get_path() {
         if p.exists() {
             let _ = fs::remove_file(p);
+        }
+    }
+    if let Ok(cache_dir) = cfait::paths::AppPaths::get_cache_dir() {
+        if cache_dir.exists() {
+            let _ = fs::remove_dir_all(&cache_dir);
+            let _ = fs::create_dir_all(&cache_dir);
         }
     }
     temp_dir
@@ -85,14 +91,12 @@ async fn test_safety_conflict_copy_on_hard_412() {
     let url = server.url();
     let task_path = "/cal/conflict.ics";
 
-    // 1. Mock 412 on Update
     let mock_412 = server
         .mock("PUT", task_path)
         .with_status(412)
         .create_async()
         .await;
 
-    // 2. Mock PROPFIND (Listing)
     let _mock_get = server
         .mock("PROPFIND", "/cal/")
         .match_header("depth", "1")
@@ -114,17 +118,10 @@ async fn test_safety_conflict_copy_on_hard_412() {
         .create_async()
         .await;
 
-    // FORCE CONFLICT:
-    // Base (in cache): "Base Description"
-    // Local (in journal): "Local Change"
-    // Server (mocked below): "Server Change"
-    // Result: Merge Conflict -> Fallback to Copy -> Success.
-
     let server_ics = format!(
         "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:conflict\nSUMMARY:Local Version\nDESCRIPTION:Server Change\nEND:VTODO\nEND:VCALENDAR"
     );
 
-    // 3. Mock REPORT (Fetch content)
     let _mock_fetch_item = server
         .mock("REPORT", "/cal/")
         .with_status(207)
@@ -148,7 +145,6 @@ async fn test_safety_conflict_copy_on_hard_412() {
         .create_async()
         .await;
 
-    // 4. Mock PUT (Create Conflict Copy)
     let mock_create_copy = server
         .mock("PUT", mockito::Matcher::Regex(r"/cal/.*\.ics".to_string()))
         .match_body(mockito::Matcher::Regex(r"Conflict Copy".to_string()))
@@ -158,13 +154,12 @@ async fn test_safety_conflict_copy_on_hard_412() {
 
     let client = RustyClient::new(&url, "u", "p", true).unwrap();
 
-    // SETUP BASE (What we thought we had)
     let mut base_task = Task::new("Local Version", &HashMap::new());
     base_task.uid = "conflict".to_string();
     base_task.href = format!("{}{}", url, task_path);
     base_task.calendar_href = format!("{}/cal/", url);
     base_task.etag = "\"old-etag\"".to_string();
-    base_task.description = "Base Description".to_string(); // Key for conflict
+    base_task.description = "Base Description".to_string();
 
     cfait::cache::Cache::save(
         &base_task.calendar_href,
@@ -173,12 +168,10 @@ async fn test_safety_conflict_copy_on_hard_412() {
     )
     .unwrap();
 
-    // SETUP LOCAL (What we changed)
     let mut local_task = base_task.clone();
-    local_task.description = "Local Change".to_string(); // Conflict: Local changed it
+    local_task.description = "Local Change".to_string();
     Journal::push(Action::Update(local_task)).unwrap();
 
-    // Use a timeout to prevent infinite hang if logic is wrong
     let res = tokio::time::timeout(std::time::Duration::from_secs(5), client.sync_journal()).await;
 
     assert!(
