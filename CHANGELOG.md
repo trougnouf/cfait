@@ -4,6 +4,20 @@
 
 ### 🚀 Features
 
+- *(android)* Improve offline remote calendar handling, show current state of connexion
+- *(ux)* Refactor settings for instant save, adjust layout, and enhance Android options
+
+### 🐛 Bug Fixes
+
+- *(sync)* Resolve journal deadlock by handling 412 conflict on task creation
+
+### ⚙️ Miscellaneous Tasks
+
+- *(skip)* Fix overeager app store inclusion in README
+## [0.3.3] - 2025-12-19
+
+### 🚀 Features
+
 - *(android)* Add loading state to task save (visual feedback) and handle coroutine cancellation
 - *(workflow)* Implement pause/stop states
 - *(android)* Implement optimistic UI updates for instant task creation and modification
@@ -30,6 +44,7 @@
 - *(fdroid)* Simplify screenshot names
 - Prepare for release v0.3.3
 - Disable signed commit
+- Release cfait version 0.3.3
 ## [0.3.2] - 2025-12-18
 
 ### 🐛 Bug Fixes
