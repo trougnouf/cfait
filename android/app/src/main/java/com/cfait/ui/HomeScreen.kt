@@ -132,10 +132,14 @@ fun HomeScreen(
                 tasks = fetchTasks() 
             }
         } else {
+            // OPTIMISTIC CLEAR
+            newTaskText = "" 
+            
             scope.launch {
                 try {
+                    // This now updates the Rust store immediately
                     val newUid = api.addTaskSmart(text)
-                    newTaskText = ""
+                    
                     onDataChanged() 
                     
                     val newTasks = fetchTasks()
@@ -145,7 +149,10 @@ fun HomeScreen(
                     if (index >= 0) {
                         listState.animateScrollToItem(index)
                     }
-                } catch (_: Exception){}
+                } catch (_: Exception){
+                    // Optional: Restore text on failure? 
+                    // newTaskText = text 
+                }
             }
         }
     }

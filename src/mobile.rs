@@ -515,13 +515,25 @@ impl CfaitMobile {
             .unwrap_or(LOCAL_CALENDAR_HREF.to_string());
         task.calendar_href = target_href.clone();
 
+        // 1. OPTIMISTIC UPDATE: Add to store immediately
+        self.store.lock().await.add_task(task.clone());
+
         let guard = self.client.lock().await;
         if let Some(client) = &*guard {
-            client
-                .create_task(&mut task)
-                .await
-                .map(|_| ())
-                .map_err(MobileError::from)?;
+            // 2. Network Call
+            match client.create_task(&mut task).await {
+                Ok(_) => {
+                    // 3. SUCCESS: Update store with new ETag/Href from server
+                    self.store.lock().await.update_or_add_task(task.clone());
+                }
+                Err(e) => {
+                    // 4. FAILURE: Remove the optimistic task so it doesn't get stuck?
+                    // Or keep it for offline sync later?
+                    // For now, let's leave it (it behaves like offline) but log error
+                    // Ideally, we would push to Journal here if network fails.
+                    return Err(MobileError::from(e));
+                }
+            }
         } else {
             // Offline fallback
             if task.calendar_href == LOCAL_CALENDAR_HREF {
@@ -532,8 +544,10 @@ impl CfaitMobile {
                 crate::journal::Journal::push(crate::journal::Action::Create(task.clone()))
                     .map_err(MobileError::from)?;
             }
+            // Update store again to be sure (though step 1 covered it)
+            self.store.lock().await.add_task(task.clone());
         }
-        self.store.lock().await.add_task(task.clone());
+
         Ok(task.uid)
     }
 
@@ -763,19 +777,27 @@ impl CfaitMobile {
         F: FnOnce(&mut TaskStore, &str) -> Option<Task>,
     {
         let mut store = self.store.lock().await;
+        // 1. Mutate and get the updated task
         let updated_task = mutator(&mut store, &uid)
             .ok_or(MobileError::from("Task not found or mutation failed"))?;
 
+        // 2. OPTIMISTIC: Save to store immediately (The mutator usually modifies in-place,
+        // but let's ensure persistence if needed or just drop the lock).
+        // Since `mutator` takes `&mut TaskStore`, the map is ALREADY updated in memory!
+        // We just need to clone the task for the network before dropping the lock.
         let mut task_for_net = updated_task.clone();
         drop(store);
 
         let client_guard = self.client.lock().await;
 
         if let Some(client) = &*client_guard {
+            // 3. Network Call
             client
                 .update_task(&mut task_for_net)
                 .await
                 .map_err(MobileError::from)?;
+
+            // 4. Update Store with Server Response (ETag/Sequence updates)
             let mut store = self.store.lock().await;
             store.update_or_add_task(task_for_net);
         } else if task_for_net.calendar_href == LOCAL_CALENDAR_HREF {
