@@ -43,8 +43,8 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 *   **Generic:** Download the pre-compiled `.tar.gz` binary tarball from the [releases page](https://codeberg.org/trougnouf/cfait/releases). (Req. `glibc 2.39`, e.g. Fedora 40+)
 
 ### Android
-*   **F-Droid:** Available in the official repository.
-*   **Google Play:** Currently in testing. More testers are needed for inclusion in the Play Store, please contact me.
+*   **F-Droid:** Coming soon. ([Submitted](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/30686) in the official repository.)
+*   **Google Play:** Submitted, currently in testing. More testers are needed for inclusion in the Play Store, please <a href='mailto:trougnouf@gmail.com'>contact me</a>.
 *   **APK:** Download the latest universal APK from the [releases page](https://codeberg.org/trougnouf/cfait/releases).
 
 ### Windows

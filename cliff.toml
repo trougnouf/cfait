@@ -61,6 +61,7 @@ commit_parsers = [
     # This will catch them and put them in a dedicated group.
     { message = "^\\[(GUI|TUI)\\]", group = "<!-- 5 -->🎨 UI/UX Improvements" },
     
+    { message = "^chore\\(skip\\)", skip = true },
     # Skip automated release commits.
     { message = "^chore\\(release\\): prepare for", skip = true },
     { message = "^chore: Release", skip = true },
