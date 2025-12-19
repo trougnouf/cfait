@@ -27,3 +27,4 @@
 
 - *(fdroid)* Simplify screenshot names
 - Prepare for release v0.3.3
+- Disable signed commit
