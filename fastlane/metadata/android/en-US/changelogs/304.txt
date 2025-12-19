@@ -1,0 +1,15 @@
+## [0.3.4] - 2025-12-19
+
+### 🚀 Features
+
+- *(android)* Improve offline remote calendar handling, show current state of connexion
+- *(ux)* Refactor settings for instant save, adjust layout, and enhance Android options
+
+### 🐛 Bug Fixes
+
+- *(sync)* Resolve journal deadlock by handling 412 conflict on task creation
+
+### ⚙️ Miscellaneous Tasks
+
+- *(skip)* Fix overeager app store inclusion in README
+- *(release)* Prepare for v0.3.4
