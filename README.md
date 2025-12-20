@@ -68,7 +68,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 
 <a name="android"></a>
 ### 📱 Android
-*   **F-Droid:** Coming soon. ([Submitted](https://gitlab.com/fdroid/fdroiddata/-/merge_requests/30686) in the official repository.)
+*   **<a href="https://f-droid.org/packages/com.cfait/">F-Droid</a>**
 *   **Google Play:** Submitted, currently in testing. <span style="color:red;">More testers are needed for inclusion in the Play Store, please <a href='mailto:trougnouf@gmail.com'>contact me</a></span>.
 *   **APK:** Download the latest universal APK from the [releases page](https://codeberg.org/trougnouf/cfait/releases).
 
@@ -224,3 +224,5 @@ Cfait works with any standard CalDAV server. If you don't have one yet, here are
 **Free & Managed**
 *   **[Infomaniak](https://www.infomaniak.com/):** A Swiss provider with a free tier that includes a CalDAV account.
     *   *How to connect:* After signing up, go to [config.infomaniak.com](https://config.infomaniak.com/). Click **"On this device"** followed by **"My Calendars"** to reveal your specific Server URL and Login username. (Use your infomaniak password.)
+
+You can also use the `Local` calendar entirely offline (and there is the possibility to migrate to and synchronize with a CalDAV server at a later time).
