@@ -14,7 +14,7 @@ impl Highlighter for SmartInputHighlighter {
     type Iterator<'a> = std::vec::IntoIter<(Range<usize>, Self::Highlight)>;
 
     fn new(_settings: &Self::Settings) -> Self {
-        Self::default()
+        Self
     }
 
     fn update(&mut self, _settings: &Self::Settings) {

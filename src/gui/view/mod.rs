@@ -615,9 +615,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .id("main_input")
         .placeholder(&app.current_placeholder)
         .on_action(Message::InputChanged)
-        .highlight_with::<self::syntax::SmartInputHighlighter>((), |highlight, _theme| {
-            highlight.clone()
-        })
+        .highlight_with::<self::syntax::SmartInputHighlighter>((), |highlight, _theme| *highlight)
         .padding(10)
         .height(Length::Fixed(45.0))
         .font(iced::Font::DEFAULT);
