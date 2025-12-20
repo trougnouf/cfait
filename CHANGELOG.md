@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.5] - 2025-12-20
+
+### 🚀 Features
+
+- *(ui)* Decorate @^special statements and #tags in real time in the input bar
+- *(android)* Press once to search
+
+### 🐛 Bug Fixes
+
+- *(android)* Default sortMonths = 2 months
+- *(android)* Decorate only valid special statements in the smart bar
+
+### 📚 Documentation
+
+- Add suggested CalDAV providers, TOC to the README
 ## [0.3.4] - 2025-12-19
 
 ### 🚀 Features
@@ -15,6 +30,7 @@
 
 - *(skip)* Fix overeager app store inclusion in README
 - *(release)* Prepare for v0.3.4
+- Release cfait version 0.3.4
 ## [0.3.3] - 2025-12-19
 
 ### 🚀 Features

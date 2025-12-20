@@ -1,0 +1,15 @@
+## [0.3.5] - 2025-12-20
+
+### 🚀 Features
+
+- *(ui)* Decorate @^special statements and #tags in real time in the input bar
+- *(android)* Press once to search
+
+### 🐛 Bug Fixes
+
+- *(android)* Default sortMonths = 2 months
+- *(android)* Decorate only valid special statements in the smart bar
+
+### 📚 Documentation
+
+- Add suggested CalDAV providers, TOC to the README
