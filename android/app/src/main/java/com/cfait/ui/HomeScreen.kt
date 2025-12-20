@@ -1,4 +1,3 @@
-// File: ./android/app/src/main/java/com/cfait/ui/HomeScreen.kt
 package com.cfait.ui
 
 import android.content.ClipData
@@ -17,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ClipEntry
@@ -90,6 +91,7 @@ fun HomeScreen(
     var searchQuery by remember { mutableStateOf("") }
     var filterTag by remember { mutableStateOf<String?>(null) }
     var isSearchActive by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
     var newTaskText by remember { mutableStateOf("") }
 
     var showExportDialog by remember { mutableStateOf(false) }
@@ -487,6 +489,9 @@ fun HomeScreen(
         Scaffold(
             topBar = {
                 if (isSearchActive) {
+                    LaunchedEffect(Unit) {
+                        searchFocusRequester.requestFocus()
+                    }
                     TopAppBar(
                         title = {
                             TextField(
@@ -501,7 +506,10 @@ fun HomeScreen(
                                         focusedIndicatorColor = Color.Transparent,
                                         unfocusedIndicatorColor = Color.Transparent,
                                     ),
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .focusRequester(searchFocusRequester),
                             )
                         },
                         navigationIcon = {
