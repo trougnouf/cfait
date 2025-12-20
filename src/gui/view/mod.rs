@@ -3,6 +3,7 @@ use std::time::Duration;
 pub mod help;
 pub mod settings;
 pub mod sidebar;
+pub mod syntax;
 pub mod task_row;
 
 use crate::gui::icon;
@@ -16,7 +17,7 @@ use crate::storage::LOCAL_CALENDAR_HREF;
 
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{
-    MouseArea, Space, column, container, row, scrollable, stack, svg, text, tooltip,
+    MouseArea, Space, column, container, row, scrollable, stack, svg, text, text_editor, tooltip,
 };
 use iced::{Color, Element, Length, Theme, mouse};
 
@@ -610,36 +611,19 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 }
 
 fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
-    let input_placeholder = if app.editing_uid.is_some() {
-        "Edit Title...".to_string()
-    } else if let Some(parent_uid) = &app.creating_child_of {
-        let parent_name = app
-            .store
-            .get_summary(parent_uid)
-            .unwrap_or("Parent".to_string());
-        format!("New child of '{}'...", parent_name)
-    } else {
-        let target_name = app
-            .calendars
-            .iter()
-            .find(|c| Some(&c.href) == app.active_cal_href.as_ref())
-            .map(|c| c.name.as_str())
-            .unwrap_or("Default");
-        format!(
-            "Add task to {} (e.g. Buy cat food !1 @tomorrow #groceries ~30m)",
-            target_name
-        )
-    };
-
-    let input_title = iced::widget::text_input(&input_placeholder, &app.input_value)
+    let input_title = text_editor(&app.input_value)
         .id("main_input")
-        .on_input(Message::InputChanged)
-        .on_submit(Message::SubmitTask)
+        .placeholder(&app.current_placeholder)
+        .on_action(Message::InputChanged)
+        .highlight_with::<self::syntax::SmartInputHighlighter>((), |highlight, _theme| {
+            highlight.clone()
+        })
         .padding(10)
-        .size(20);
+        .height(Length::Fixed(45.0))
+        .font(iced::Font::DEFAULT);
 
     let inner_content: Element<'_, Message> = if app.editing_uid.is_some() {
-        let input_desc = iced::widget::text_editor(&app.description_value)
+        let input_desc = text_editor(&app.description_value)
             .placeholder("Notes...")
             .on_action(Message::DescriptionChanged)
             .padding(10)

@@ -67,13 +67,16 @@ pub struct GuiApp {
     pub filter_include_unset_duration: bool,
 
     // Inputs - Main
-    pub input_value: String,
+    pub input_value: text_editor::Content,
     pub description_value: text_editor::Content,
     pub search_value: String,
     pub editing_uid: Option<String>,
     pub creating_child_of: Option<String>,
     pub expanded_tasks: HashSet<String>,
     pub unsynced_changes: bool,
+
+    // Computed State (Persisted for view borrowing)
+    pub current_placeholder: String,
 
     // Inputs - Settings (Aliases)
     pub alias_input_key: String,
@@ -127,13 +130,15 @@ impl Default for GuiApp {
             filter_max_duration: None,
             filter_include_unset_duration: true,
 
-            input_value: String::new(),
+            input_value: text_editor::Content::new(),
             description_value: text_editor::Content::new(),
             search_value: String::new(),
             editing_uid: None,
             creating_child_of: None,
             expanded_tasks: HashSet::new(),
             unsynced_changes: false,
+
+            current_placeholder: "Add a task...".to_string(),
 
             alias_input_key: String::new(),
             alias_input_values: String::new(),

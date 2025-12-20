@@ -10,7 +10,7 @@ use crate::gui::state::GuiApp;
 use iced::Task;
 
 pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
-    match message {
+    let task = match message {
         Message::FontLoaded(_) => Task::none(),
         Message::DeleteComplete(_) => Task::none(),
 
@@ -48,8 +48,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::RemoveDependency(_, _)
         | Message::AddDependency(_)
         | Message::MoveTask(_, _)
-        | Message::MigrateLocalTo(_) 
-        // --- ADDED THESE LINES ---
+        | Message::MigrateLocalTo(_)
         | Message::StartTask(_)
         | Message::PauseTask(_)
         | Message::StopTask(_) => tasks::handle(app, message),
@@ -92,5 +91,31 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SyncToggleComplete(_)
         | Message::TaskMoved(_)
         | Message::MigrationComplete(_) => network::handle(app, message),
-    }
+    };
+
+    update_placeholder(app);
+    task
+}
+
+fn update_placeholder(app: &mut GuiApp) {
+    app.current_placeholder = if app.editing_uid.is_some() {
+        "Edit Title...".to_string()
+    } else if let Some(parent_uid) = &app.creating_child_of {
+        let parent_name = app
+            .store
+            .get_summary(parent_uid)
+            .unwrap_or("Parent".to_string());
+        format!("New child of '{}'...", parent_name)
+    } else {
+        let target_name = app
+            .calendars
+            .iter()
+            .find(|c| Some(&c.href) == app.active_cal_href.as_ref())
+            .map(|c| c.name.as_str())
+            .unwrap_or("Default");
+        format!(
+            "Add task to {} (e.g. Buy cat food !1 @tomorrow #groceries ~30m)",
+            target_name
+        )
+    };
 }

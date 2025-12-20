@@ -30,7 +30,7 @@ pub enum Message {
     CancelSettings,
     OpenHelp,
     CloseHelp,
-    InputChanged(String),
+    InputChanged(text_editor::Action),
 
     DescriptionChanged(text_editor::Action),
 

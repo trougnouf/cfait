@@ -5,11 +5,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.cfait.R
+import java.util.regex.Pattern
 
 val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
 
@@ -21,7 +28,7 @@ object NfIcons {
     val SETTINGS = get(0xe690) // nf-seti-settings
     val REFRESH = get(0xf0450) // nf-md-refresh
     val SYNC_ALERT = get(0xf04e7) // nf-md-sync_alert (Exclamation arrow)
-    val SYNC_OFF = get(0xf04e8) // nf-md-sync_off (Slash through arrows)  <-- ADDED
+    val SYNC_OFF = get(0xf04e8) // nf-md-sync_off (Slash through arrows)
     val DELETE = get(0xf1f8) // 
     val CHECK = get(0xf00c) // 
     val CROSS = get(0xf00d) // 
@@ -118,5 +125,99 @@ fun formatDuration(minutes: UInt): String {
         m >= 1440 -> "~${m / 1440}d"
         m >= 60 -> "~${m / 60}h"
         else -> "~${m}m"
+    }
+}
+
+class SmartSyntaxTransformation(
+    val isDark: Boolean,
+) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val raw = text.text
+        val builder = AnnotatedString.Builder(raw)
+
+        // Tokenize by splitting on whitespace but preserving indices
+        // We will do a manual pass similar to Rust implementation
+        val pattern = Pattern.compile("\\s+")
+        val matcher = pattern.matcher(raw)
+
+        val words = mutableListOf<Triple<Int, Int, String>>()
+        var lastEnd = 0
+
+        while (matcher.find()) {
+            val start = matcher.start()
+            if (start > lastEnd) {
+                words.add(Triple(lastEnd, start, raw.substring(lastEnd, start)))
+            }
+            lastEnd = matcher.end()
+        }
+        if (lastEnd < raw.length) {
+            words.add(Triple(lastEnd, raw.length, raw.substring(lastEnd)))
+        }
+
+        var i = 0
+        while (i < words.size) {
+            val (start, end, word) = words[i]
+            var matched = false
+
+            // 1. Priority
+            if (word.startsWith("!") && word.length > 1 && word.substring(1).all { it.isDigit() }) {
+                builder.addStyle(SpanStyle(color = Color(0xFFFF4444), fontWeight = FontWeight.Bold), start, end)
+                matched = true
+            }
+            // 2. Duration
+            else if ((word.startsWith("~") || word.startsWith("est:")) && word.length > 1) {
+                builder.addStyle(SpanStyle(color = Color.Gray), start, end)
+                matched = true
+            }
+            // 3. Tags
+            else if (word.startsWith("#")) {
+                val tagName = word.removePrefix("#")
+                builder.addStyle(SpanStyle(color = getTagColor(tagName), fontWeight = FontWeight.Bold), start, end)
+                matched = true
+            }
+            // 4. Recurrence: @every X Y
+            else if ((word == "@every" || word == "rec:every") && i + 2 < words.size) {
+                val (_, _, amount) = words[i + 1]
+                val (_, unitEnd, unit) = words[i + 2]
+                // Simple heuristic check
+                if (amount.toIntOrNull() != null) {
+                    builder.addStyle(SpanStyle(color = Color(0xFF64B5F6)), start, unitEnd)
+                    i += 3
+                    continue
+                }
+            }
+
+            // 5. Recurrence: @daily etc
+            if (!matched && (word.startsWith("@") || word.startsWith("rec:"))) {
+                if (word.contains("daily") || word.contains("weekly") || word.contains("monthly") || word.contains("yearly")) {
+                    builder.addStyle(SpanStyle(color = Color(0xFF64B5F6)), start, end)
+                    matched = true
+                }
+            }
+
+            // 6. Dates Multi-word: @next week
+            if (!matched && (word == "@next" || word == "^next" || word == "due:next" || word == "start:next") && i + 1 < words.size) {
+                val (_, nextEnd, nextVal) = words[i + 1]
+                val isStart = word.startsWith("^") || word.startsWith("start:")
+                val color = if (isStart) Color(0xFF00BCD4) else Color(0xFF2196F3)
+
+                builder.addStyle(SpanStyle(color = color), start, nextEnd)
+                i += 2
+                continue
+            }
+
+            // 7. Dates Single-word
+            if (!matched) {
+                if (word.startsWith("^") || word.startsWith("start:")) {
+                    builder.addStyle(SpanStyle(color = Color(0xFF00BCD4)), start, end)
+                } else if (word.startsWith("@") || word.startsWith("due:")) {
+                    builder.addStyle(SpanStyle(color = Color(0xFF2196F3)), start, end)
+                }
+            }
+
+            i++
+        }
+
+        return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
     }
 }

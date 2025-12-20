@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/ui/HomeScreen.kt
+// File: ./android/app/src/main/java/com/cfait/ui/HomeScreen.kt
 package com.cfait.ui
 
 import android.content.ClipData
@@ -609,6 +609,7 @@ fun HomeScreen(
                                 placeholder = { Text("!1 @tomorrow Buy cat food #groceries") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
+                                visualTransformation = remember(isDark) { SmartSyntaxTransformation(isDark) },
                                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
                                 keyboardActions = KeyboardActions(onSend = { if (newTaskText.isNotBlank()) addTask(newTaskText) }),
                             )

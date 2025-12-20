@@ -1,5 +1,6 @@
 // File: src/tui/view.rs
 use crate::color_utils;
+use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::store::UNCATEGORIZED_ID;
 use crate::tui::action::SidebarMode;
 use crate::tui::state::{AppState, Focus, InputMode};
@@ -515,7 +516,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         | InputMode::Editing
         | InputMode::Searching
         | InputMode::EditingDescription => {
-            // ... Input Mode Rendering logic ...
             let (mut title_str, prefix, color) = match state.mode {
                 InputMode::Searching => (" Search ".to_string(), "/ ", Color::Green),
                 InputMode::Editing => (" Edit Title ".to_string(), "> ", Color::Magenta),
@@ -542,11 +542,47 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 title_str.push_str(" [Enter to jump to tag] ");
             }
 
-            let input_text = format!("{}{}", prefix, state.input_buffer);
+            let prefix_span = Span::styled(prefix, Style::default().fg(color));
+
+            let mut input_spans = vec![prefix_span];
+
+            if state.mode == InputMode::EditingDescription {
+                input_spans.push(Span::raw(&state.input_buffer));
+            } else {
+                let tokens = tokenize_smart_input(&state.input_buffer);
+
+                for token in tokens {
+                    let text = &state.input_buffer[token.start..token.end];
+                    let style = match token.kind {
+                        SyntaxType::Priority => {
+                            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                        }
+                        SyntaxType::DueDate => Style::default().fg(Color::Blue),
+                        SyntaxType::StartDate => Style::default().fg(Color::Cyan),
+                        SyntaxType::Recurrence => Style::default().fg(Color::LightBlue),
+                        SyntaxType::Duration => Style::default().fg(Color::DarkGray),
+                        SyntaxType::Tag => {
+                            let tag_name = text.trim_start_matches('#');
+                            let (r, g, b) = color_utils::generate_color(tag_name);
+                            Style::default().fg(Color::Rgb(
+                                (r * 255.0) as u8,
+                                (g * 255.0) as u8,
+                                (b * 255.0) as u8,
+                            ))
+                        }
+                        SyntaxType::Text => Style::default().fg(color),
+                    };
+                    input_spans.push(Span::styled(text, style));
+                }
+            }
+
+            let input_text = Line::from(input_spans);
+
             let input = Paragraph::new(input_text)
-                .style(Style::default().fg(color))
+                .style(Style::default())
                 .block(Block::default().borders(Borders::ALL).title(title_str))
                 .wrap(Wrap { trim: false });
+
             f.render_widget(input, footer_area);
 
             // Cursor rendering

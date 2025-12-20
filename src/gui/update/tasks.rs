@@ -1,4 +1,4 @@
-// File: src/gui/update/tasks.rs
+// File: ./src/gui/update/tasks.rs
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{GuiApp, SidebarMode};
@@ -7,11 +7,21 @@ use crate::model::{Task as TodoTask, extract_inline_aliases};
 use iced::Task;
 use iced::widget::operation;
 use iced::widget::scrollable::RelativeOffset;
+use iced::widget::text_editor;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
-        Message::InputChanged(value) => {
-            app.input_value = value;
+        Message::InputChanged(action) => {
+            let previous_text = app.input_value.text();
+            app.input_value.perform(action);
+            let current_text = app.input_value.text();
+
+            // Check if 'Enter' was pressed, which text_editor registers as inserting a newline.
+            // This avoids triggering on paste.
+            if current_text.len() == previous_text.len() + 1 && current_text.ends_with('\n') {
+                return handle_submit(app);
+            }
+
             Task::none()
         }
         Message::DescriptionChanged(action) => {
@@ -32,24 +42,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
             }
 
-            app.input_value = initial_input;
+            app.input_value = text_editor::Content::with_text(&initial_input);
             Task::none()
         }
         Message::SubmitTask => handle_submit(app),
 
         Message::EditTaskStart(index) => {
             if let Some(task) = app.tasks.get(index) {
-                app.input_value = task.to_smart_string();
-                app.description_value =
-                    iced::widget::text_editor::Content::with_text(&task.description);
+                app.input_value = text_editor::Content::with_text(&task.to_smart_string());
+                app.description_value = text_editor::Content::with_text(&task.description);
                 app.editing_uid = Some(task.uid.clone());
                 app.selected_uid = Some(task.uid.clone());
             }
             Task::none()
         }
         Message::CancelEdit => {
-            app.input_value.clear();
-            app.description_value = iced::widget::text_editor::Content::new();
+            app.input_value = text_editor::Content::new();
+            app.description_value = text_editor::Content::new();
             app.editing_uid = None;
             app.creating_child_of = None;
             Task::none()
@@ -265,12 +274,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 }
 
 fn handle_submit(app: &mut GuiApp) -> Task<Message> {
-    if app.input_value.is_empty() {
+    let raw_text = app.input_value.text();
+    let text_to_submit = raw_text.trim().to_string(); // Handles the newline
+
+    if text_to_submit.is_empty() {
+        app.input_value = text_editor::Content::new();
         return Task::none();
     }
 
     // --- Parse inline alias definitions (#key=tag1,tag2) ---
-    let (clean_input, new_aliases) = extract_inline_aliases(&app.input_value);
+    let (clean_input, new_aliases) = extract_inline_aliases(&text_to_submit);
 
     let mut retroactive_sync_batch = Vec::new();
 
@@ -293,7 +306,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
     {
         // If we just parsed aliases (e.g. #a=#b), clean_input might be "#a".
         // In that case, we treat it as a definition, not a jump request.
-        let was_alias_definition = app.input_value.contains('=');
+        let was_alias_definition = text_to_submit.contains('=');
 
         if !was_alias_definition {
             let tag = clean_input.trim().trim_start_matches('#').to_string();
@@ -301,7 +314,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 app.sidebar_mode = SidebarMode::Categories;
                 app.selected_categories.clear();
                 app.selected_categories.insert(tag);
-                app.input_value.clear();
+                app.input_value = text_editor::Content::new();
                 refresh_filtered_tasks(app);
 
                 if !retroactive_sync_batch.is_empty() {
@@ -311,7 +324,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             }
         } else {
             // It was a definition. Just clear input and run pending syncs.
-            app.input_value.clear();
+            app.input_value = text_editor::Content::new();
             refresh_filtered_tasks(app);
             if !retroactive_sync_batch.is_empty() {
                 return Task::batch(retroactive_sync_batch);
@@ -326,8 +339,8 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             task.description = app.description_value.text();
             let task_copy = task.clone();
 
-            app.input_value.clear();
-            app.description_value = iced::widget::text_editor::Content::new();
+            app.input_value = text_editor::Content::new();
+            app.description_value = text_editor::Content::new();
             app.editing_uid = None;
             app.selected_uid = Some(task_copy.uid.clone());
 
@@ -362,7 +375,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
             app.selected_uid = Some(new_task.uid.clone());
             refresh_filtered_tasks(app);
-            app.input_value.clear();
+            app.input_value = text_editor::Content::new();
 
             let len = app.tasks.len().max(1) as f32;
             let idx = app
