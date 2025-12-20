@@ -31,7 +31,7 @@ fun SettingsScreen(
     var pass by remember { mutableStateOf("") }
     var insecure by remember { mutableStateOf(false) }
     var hideCompleted by remember { mutableStateOf(false) }
-    var sortMonths by remember { mutableStateOf("6") } // New state
+    var sortMonths by remember { mutableStateOf("2") } // New state
     var status by remember { mutableStateOf("") }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var newAliasKey by remember { mutableStateOf("") }

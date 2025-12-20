@@ -142,8 +142,6 @@ fun TaskRow(
                         )
                     }
 
-                    // --- THIS IS WHERE THE ERROR WAS ---
-                    // The "Increase prio" item was incorrectly placed on the same line as the if block's closing brace.
                     DropdownMenuItem(text = { Text("Increase prio") }, onClick = {
                         expanded = false
                         onAction("prio_up")
