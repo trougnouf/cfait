@@ -39,10 +39,9 @@ pub fn view_help() -> Element<'static, Message> {
             vec![
                 entry("@date", "Due Date. Deadline for the task.", "@tomorrow, @2025-12-31"),
                 entry("^date", "Start Date (Defer until).", "^next week, ^2025-01-01"),
-                entry("Offsets", "Add time from today.", "1d (1 day), 2w (2 weeks), 3mo (3 months), 4y (4 years)"),
+                entry("Offsets", "Add time from today.", "1d (1 day), 2w (2 weeks), 3mo (3 months)"),
+                entry("@in ...", "Natural language offsets.", "@in 3 days, ^in 2 weeks"),
                 entry("Keywords", "Relative dates supported.", "today, tomorrow, next week, next year"),
-
-
             ]
         ),
 

@@ -1,4 +1,4 @@
-// File: src/model/parser.rs
+// File: ./src/model/parser.rs
 use crate::model::item::Task;
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
 use std::collections::HashMap;
@@ -115,7 +115,7 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
             }
         }
 
-        // 6. Dates Multi-word (@next week, ^next month)
+        // 6. Dates Multi-word (@next week, ^next month, @in 2 weeks)
         if matched_token.is_none()
             && (word.starts_with('@')
                 || word.starts_with('^')
@@ -130,6 +130,7 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                 word.trim_start_matches("due:").trim_start_matches('@')
             };
 
+            // @next week
             if clean_word == "next" && word_idx + 1 < words.len() {
                 let (_, next_end, next_val) = words[word_idx + 1];
                 if is_date_unit(next_val) {
@@ -144,6 +145,25 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                         end: next_end,
                     });
                     word_idx += 2;
+                }
+            }
+            // @in 2 weeks
+            else if clean_word == "in" && word_idx + 2 < words.len() {
+                let (_, _, amount_str) = words[word_idx + 1];
+                let (_, unit_end, unit_str) = words[word_idx + 2];
+
+                if parse_english_number(amount_str).is_some() && is_date_duration_unit(unit_str) {
+                    let kind = if is_start {
+                        SyntaxType::StartDate
+                    } else {
+                        SyntaxType::DueDate
+                    };
+                    matched_token = Some(SyntaxToken {
+                        kind,
+                        start,
+                        end: unit_end,
+                    });
+                    word_idx += 3;
                 }
             }
         }
@@ -215,6 +235,24 @@ fn is_date_unit(s: &str) -> bool {
             | "friday"
             | "saturday"
             | "sunday"
+    )
+}
+
+fn is_date_duration_unit(s: &str) -> bool {
+    let s = s.to_lowercase();
+    matches!(
+        s.as_str(),
+        "d" | "day"
+            | "days"
+            | "w"
+            | "week"
+            | "weeks"
+            | "mo"
+            | "month"
+            | "months"
+            | "y"
+            | "year"
+            | "years"
     )
 }
 
@@ -300,21 +338,48 @@ impl Task {
                 continue;
             }
 
-            // --- Multi-word Dates (@next week) ---
-            if (word == "@next" || word == "due:next" || word == "^next" || word == "start:next")
-                && i + 1 < tokens.len()
+            // --- Multi-word Dates (@next week, @in 2 weeks) ---
+            if (word.starts_with('@')
+                || word.starts_with('^')
+                || word.starts_with("due:")
+                || word.starts_with("start:"))
+                && (i + 1 < tokens.len())
             {
-                let next_unit = tokens[i + 1];
-                let is_start = word.starts_with('^') || word.starts_with("start:");
+                let prefix_char = word.chars().next().unwrap_or(' ');
+                let is_start = prefix_char == '^' || word.starts_with("start:");
+                let clean_word = if is_start {
+                    word.trim_start_matches("start:").trim_start_matches('^')
+                } else {
+                    word.trim_start_matches("due:").trim_start_matches('@')
+                };
 
-                if let Some(dt) = parse_next_date(next_unit, !is_start) {
-                    if is_start {
-                        self.dtstart = Some(dt);
-                    } else {
-                        self.due = Some(dt);
+                // @next week
+                if clean_word == "next" {
+                    let next_unit = tokens[i + 1];
+                    if let Some(dt) = parse_next_date(next_unit, !is_start) {
+                        if is_start {
+                            self.dtstart = Some(dt);
+                        } else {
+                            self.due = Some(dt);
+                        }
+                        i += 2;
+                        continue;
                     }
-                    i += 2;
-                    continue;
+                }
+                // @in 2 weeks
+                else if clean_word == "in" && i + 2 < tokens.len() {
+                    let amount_str = tokens[i + 1];
+                    let unit_str = tokens[i + 2];
+                    if let Some(amount) = parse_english_number(amount_str)
+                        && let Some(dt) = parse_in_date(amount, unit_str, !is_start) {
+                            if is_start {
+                                self.dtstart = Some(dt);
+                            } else {
+                                self.due = Some(dt);
+                            }
+                            i += 3;
+                            continue;
+                        }
                 }
             }
 
@@ -536,6 +601,37 @@ fn parse_next_date(unit: &str, end_of_day: bool) -> Option<DateTime<Utc>> {
         "saturday" => next_weekday(now, chrono::Weekday::Sat, end_of_day),
         "sunday" => next_weekday(now, chrono::Weekday::Sun, end_of_day),
         _ => None,
+    }
+}
+
+// Logic for "@in X units"
+fn parse_in_date(amount: u32, unit: &str, end_of_day: bool) -> Option<DateTime<Utc>> {
+    let now = Local::now().date_naive();
+    let days = match unit.to_lowercase().as_str() {
+        "d" | "day" | "days" => amount as i64,
+        "w" | "week" | "weeks" => amount as i64 * 7,
+        "mo" | "month" | "months" => amount as i64 * 30,
+        "y" | "year" | "years" => amount as i64 * 365,
+        _ => return None,
+    };
+    finalize_date(now + Duration::days(days), end_of_day)
+}
+
+fn parse_english_number(s: &str) -> Option<u32> {
+    match s.to_lowercase().as_str() {
+        "one" | "1" => Some(1),
+        "two" | "2" => Some(2),
+        "three" | "3" => Some(3),
+        "four" | "4" => Some(4),
+        "five" | "5" => Some(5),
+        "six" | "6" => Some(6),
+        "seven" | "7" => Some(7),
+        "eight" | "8" => Some(8),
+        "nine" | "9" => Some(9),
+        "ten" | "10" => Some(10),
+        "eleven" | "11" => Some(11),
+        "twelve" | "12" => Some(12),
+        _ => s.parse::<u32>().ok(),
     }
 }
 

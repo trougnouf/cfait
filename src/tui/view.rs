@@ -1,4 +1,4 @@
-// File: src/tui/view.rs
+// File: ./src/tui/view.rs
 use crate::color_utils;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::store::UNCATEGORIZED_ID;
@@ -97,8 +97,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
         .split(v_chunks[0]);
 
-    // --- 1. MOVED UP: Prepare Details Text ---
-    // We generate the string early so we can calculate its required height
+    // --- 1. Prepare Details Text ---
     let mut full_details = String::new();
     if let Some(task) = state.get_selected_task() {
         if !task.description.is_empty() {
@@ -122,7 +121,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         full_details = "No details.".to_string();
     }
 
-    // --- 2. NEW: Calculate Dynamic Height ---
+    // --- 2. Calculate Dynamic Height ---
     let details_width = h_chunks[1].width.saturating_sub(2); // subtract borders
     let mut required_lines: u16 = 0;
 
@@ -138,15 +137,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
     }
 
-    // Add 2 for top/bottom borders
     let calculated_height = required_lines + 2;
-
-    // Safety clamp: Min 3 lines, Max 50% of screen
     let available_height = v_chunks[0].height;
     let max_details_height = available_height / 2;
     let final_details_height = calculated_height.clamp(3, max_details_height);
 
-    // --- 3. UPDATED: Dynamic Layout ---
+    // --- 3. Dynamic Layout ---
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -280,25 +276,17 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let base_style = if is_blocked {
                 Style::default().fg(Color::DarkGray)
             } else {
+                // TUI Priority Colors (Approximate matches to GUI)
                 match t.priority {
-                    // 1: Critical -> Red
                     1 => Style::default().fg(Color::Red),
-                    // 2: Urgent -> Orange-Red
-                    2 => Style::default().fg(Color::Rgb(255, 69, 0)),
-                    // 3: High -> Dark Orange
-                    3 => Style::default().fg(Color::Rgb(255, 140, 0)),
-                    // 4: Med-High -> Amber/Gold
-                    4 => Style::default().fg(Color::Rgb(255, 190, 0)),
-                    // 5: Normal -> Yellow
-                    5 => Style::default().fg(Color::Yellow),
-                    // 6: Med-Low -> Pale Goldenrod / Khaki
-                    6 => Style::default().fg(Color::Rgb(240, 230, 140)),
-                    // 7: Low -> Light Steel Blue
-                    7 => Style::default().fg(Color::Rgb(176, 196, 222)),
-                    // 8: Very Low -> Medium Purple / Slate
-                    8 => Style::default().fg(Color::Rgb(147, 112, 219)),
-                    // 9: Lowest -> Muted Lavender / Grey-Purple
-                    9 => Style::default().fg(Color::Rgb(170, 150, 180)),
+                    2 => Style::default().fg(Color::LightRed), // Orange-Red approx
+                    3 => Style::default().fg(Color::Rgb(255, 140, 0)), // Dark Orange
+                    4 => Style::default().fg(Color::Yellow),   // Amber/Gold -> Yellow
+                    5 => Style::default().fg(Color::LightYellow), // Pale Yellow
+                    6 => Style::default().fg(Color::Rgb(240, 230, 140)), // Pale Khaki
+                    7 => Style::default().fg(Color::LightBlue), // Light Steel Blue
+                    8 => Style::default().fg(Color::Rgb(147, 112, 219)), // Slate / Purple
+                    9 => Style::default().fg(Color::DarkGray), // Greyish
                     _ => Style::default(),
                 }
             };
@@ -313,7 +301,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             }
 
             let full_symbol = t.checkbox_symbol();
-            // FIX: Safely trim the outer brackets instead of slicing bytes
             let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
 
             let due_str = t
@@ -555,11 +542,21 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     let text = &state.input_buffer[token.start..token.end];
                     let style = match token.kind {
                         SyntaxType::Priority => {
-                            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                            // Extract priority from text for TUI coloring
+                            let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
+                            // Simple mapping since TUI Color has fixed enum variants
+                            match p {
+                                1 => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                                2..=4 => Style::default().fg(Color::LightRed),
+                                5 => Style::default().fg(Color::Yellow),
+                                6..=8 => Style::default().fg(Color::LightBlue),
+                                9 => Style::default().fg(Color::DarkGray),
+                                _ => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                            }
                         }
                         SyntaxType::DueDate => Style::default().fg(Color::Blue),
-                        SyntaxType::StartDate => Style::default().fg(Color::Cyan),
-                        SyntaxType::Recurrence => Style::default().fg(Color::LightBlue),
+                        SyntaxType::StartDate => Style::default().fg(Color::Green),
+                        SyntaxType::Recurrence => Style::default().fg(Color::Magenta),
                         SyntaxType::Duration => Style::default().fg(Color::DarkGray),
                         SyntaxType::Tag => {
                             let tag_name = text.trim_start_matches('#');

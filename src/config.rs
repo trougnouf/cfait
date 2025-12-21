@@ -71,7 +71,7 @@ impl Default for Config {
             hide_completed: false,
             // Match the serde defaults
             hide_fully_completed_tags: true,
-            sort_cutoff_months: Some(6),
+            sort_cutoff_months: Some(2),
             tag_aliases: HashMap::new(),
             theme: AppTheme::default(),
         }

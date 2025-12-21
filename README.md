@@ -109,6 +109,7 @@ You can use absolute ISO dates or natural language relative offsets.
 *   **Offsets:** `1d` (days), `1w` (weeks), `1mo` (months), `1y` (years).
     *   `@2d` = Due in 2 days.
     *   `^1w` = Start in 1 week.
+*   **Natural:** `@in 2 weeks`, `^in 3 days`
 
 ### Recurrence
 Recurrence rules determine when the next task is created after you complete the current one.

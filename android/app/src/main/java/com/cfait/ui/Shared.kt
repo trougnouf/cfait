@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/ui/Shared.kt
+// File: ./android/app/src/main/java/com/cfait/ui/Shared.kt
 package com.cfait.ui
 
 import androidx.compose.material3.MaterialTheme
@@ -142,6 +142,14 @@ class SmartSyntaxTransformation(
         }
     }
 
+    private fun isValidDurationUnit(s: String): Boolean {
+        val lower = s.lowercase()
+        return lower == "d" || lower == "day" || lower == "days" ||
+               lower == "w" || lower == "week" || lower == "weeks" ||
+               lower == "mo" || lower == "month" || lower == "months" ||
+               lower == "y" || lower == "year" || lower == "years"
+    }
+
     private fun isValidSmartDate(s: String): Boolean {
         val lower = s.lowercase()
         if (lower == "today" || lower == "tomorrow") return true
@@ -168,6 +176,16 @@ class SmartSyntaxTransformation(
         val lower = s.lowercase()
         return lower.startsWith("day") || lower.startsWith("week") || lower.startsWith("month") || lower.startsWith("year")
     }
+
+    // --- COLORS ---
+    // DueDate -> Blue
+    private val COLOR_DUE = Color(0xFF42A5F5) 
+    // StartDate -> Green
+    private val COLOR_START = Color(0xFF66BB6A)
+    // Recurrence -> Purple/Magenta
+    private val COLOR_RECUR = Color(0xFFAB47BC)
+    // Duration -> Grey
+    private val COLOR_DURATION = Color(0xFF9E9E9E)
 
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
@@ -199,7 +217,8 @@ class SmartSyntaxTransformation(
             if (word.startsWith("!") && word.length > 1) {
                 val p = word.substring(1).toIntOrNull()
                 if (p != null && p in 1..9) {
-                    builder.addStyle(SpanStyle(color = Color(0xFFFF4444), fontWeight = FontWeight.Bold), start, end)
+                    val color = getTaskTextColor(p, false, isDark)
+                    builder.addStyle(SpanStyle(color = color, fontWeight = FontWeight.Bold), start, end)
                     matched = true
                 }
             }
@@ -207,7 +226,7 @@ class SmartSyntaxTransformation(
             else if ((word.startsWith("~") || word.startsWith("est:")) && word.length > 1) {
                 val valStr = if (word.startsWith("~")) word.substring(1) else word.substring(4)
                 if (isValidDuration(valStr)) {
-                    builder.addStyle(SpanStyle(color = Color.Gray), start, end)
+                    builder.addStyle(SpanStyle(color = COLOR_DURATION), start, end)
                     matched = true
                 }
             }
@@ -224,7 +243,7 @@ class SmartSyntaxTransformation(
                 val (_, _, amount) = words[i + 1]
                 val (_, unitEnd, unit) = words[i + 2]
                 if (amount.toIntOrNull() != null && isValidFreqUnit(unit)) {
-                    builder.addStyle(SpanStyle(color = Color(0xFF64B5F6)), start, unitEnd)
+                    builder.addStyle(SpanStyle(color = COLOR_RECUR), start, unitEnd)
                     i += 3
                     continue
                 }
@@ -234,21 +253,47 @@ class SmartSyntaxTransformation(
             if (!matched && (word.startsWith("@") || word.startsWith("rec:"))) {
                 val valStr = if (word.startsWith("@")) word.substring(1) else word.substring(4)
                 if (isValidRecurrence(valStr)) {
-                    builder.addStyle(SpanStyle(color = Color(0xFF64B5F6)), start, end)
+                    builder.addStyle(SpanStyle(color = COLOR_RECUR), start, end)
                     matched = true
                 }
             }
 
-            // 6. Dates Multi-word: @next week
-            if (!matched && (word == "@next" || word == "^next" || word == "due:next" || word == "start:next") && i + 1 < words.size) {
-                val (_, nextEnd, nextVal) = words[i + 1]
-                val isStart = word.startsWith("^") || word.startsWith("start:")
+            // 6. Dates Multi-word: @next week, @in 2 weeks
+            if (!matched && (word.startsWith("@") || word.startsWith("^") || word.startsWith("due:") || word.startsWith("start:"))) {
+                val prefixChar = word.firstOrNull() ?: ' '
+                val isStart = prefixChar == '^' || word.startsWith("start:")
+                val cleanWord = if (isStart) {
+                    word.removePrefix("start:").removePrefix("^")
+                } else {
+                    word.removePrefix("due:").removePrefix("@")
+                }
 
-                if (isValidDateUnit(nextVal)) {
-                    val color = if (isStart) Color(0xFF00BCD4) else Color(0xFF2196F3)
-                    builder.addStyle(SpanStyle(color = color), start, nextEnd)
-                    i += 2
-                    continue
+                // @next week
+                if (cleanWord == "next" && i + 1 < words.size) {
+                    val (_, nextEnd, nextVal) = words[i + 1]
+                    if (isValidDateUnit(nextVal)) {
+                        val color = if (isStart) COLOR_START else COLOR_DUE
+                        builder.addStyle(SpanStyle(color = color), start, nextEnd)
+                        i += 2
+                        continue
+                    }
+                }
+                // @in 2 weeks
+                else if (cleanWord == "in" && i + 2 < words.size) {
+                    val (_, _, amountStr) = words[i+1]
+                    val (_, unitEnd, unitStr) = words[i+2]
+                    
+                    // Simple number check or english check could be added here, sticking to digits for transform visualization
+                    // Actually, let's just check if it looks like a number
+                    val isNum = amountStr.toIntOrNull() != null || 
+                                listOf("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten").contains(amountStr.lowercase())
+                    
+                    if (isNum && isValidDurationUnit(unitStr)) {
+                        val color = if (isStart) COLOR_START else COLOR_DUE
+                        builder.addStyle(SpanStyle(color = color), start, unitEnd)
+                        i += 3
+                        continue
+                    }
                 }
             }
 
@@ -257,12 +302,12 @@ class SmartSyntaxTransformation(
                 if (word.startsWith("^") || word.startsWith("start:")) {
                     val valStr = if (word.startsWith("^")) word.substring(1) else word.substring(6)
                     if (isValidSmartDate(valStr)) {
-                        builder.addStyle(SpanStyle(color = Color(0xFF00BCD4)), start, end)
+                        builder.addStyle(SpanStyle(color = COLOR_START), start, end)
                     }
                 } else if (word.startsWith("@") || word.startsWith("due:")) {
                     val valStr = if (word.startsWith("@")) word.substring(1) else word.substring(4)
                     if (isValidSmartDate(valStr)) {
-                        builder.addStyle(SpanStyle(color = Color(0xFF2196F3)), start, end)
+                        builder.addStyle(SpanStyle(color = COLOR_DUE), start, end)
                     }
                 }
             }

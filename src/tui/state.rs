@@ -98,7 +98,7 @@ impl AppState {
             match_all_categories: false,
             hide_completed: false,
             hide_fully_completed_tags: false,
-            sort_cutoff_months: Some(6),
+            sort_cutoff_months: Some(2),
 
             input_buffer: String::new(),
             active_search_query: String::new(),

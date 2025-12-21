@@ -76,6 +76,7 @@ fun HelpScreen(onBack: () -> Unit) {
                     HelpItem("@date", "Due date. Deadline.", "@tomorrow, @2025-12-31"),
                     HelpItem("^date", "Start date. Hides until date.", "^next week, ^2025-01-01"),
                     HelpItem("Offsets", "Add time from today.", "1d, 2w, 3mo, 4y"),
+                    HelpItem("@in", "Natural relative offset.", "@in 3 days, ^in 2 weeks"),
                     HelpItem("Keywords", "Relative dates supported.", "today, tomorrow, next week")
                 ))
             }

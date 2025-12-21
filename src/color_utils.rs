@@ -1,4 +1,4 @@
-// File: src/color_utils.rs
+// File: ./src/color_utils.rs
 use std::hash::{Hash, Hasher};
 
 /// Generates a deterministic color tuple (r, g, b) in [0.0, 1.0] range based on the input string.
@@ -78,4 +78,21 @@ pub fn parse_hex_to_u8(hex: &str) -> Option<(u8, u8, u8)> {
     let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
 
     Some((r, g, b))
+}
+
+/// Returns the RGB color tuple for a given priority level.
+/// 1 = Critical (Red) -> 9 = Lowest (Greyish)
+pub fn get_priority_rgb(priority: u8) -> (f32, f32, f32) {
+    match priority {
+        1 => (1.0, 0.2, 0.2),    // Red
+        2 => (1.0, 0.4, 0.2),    // Orange-Red
+        3 => (1.0, 0.6, 0.2),    // Orange
+        4 => (1.0, 0.8, 0.2),    // Amber
+        5 => (1.0, 1.0, 0.2),    // Yellow
+        6 => (0.85, 0.85, 0.55), // Pale Khaki
+        7 => (0.7, 0.75, 0.85),  // Light Steel Blue
+        8 => (0.65, 0.6, 0.8),   // Slate / Muted Purple
+        9 => (0.6, 0.55, 0.65),  // Greyish Lavender
+        _ => (1.0, 1.0, 1.0),    // White
+    }
 }

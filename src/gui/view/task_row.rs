@@ -1,4 +1,4 @@
-// File: src/gui/view/task_row.rs
+// File: ./src/gui/view/task_row.rs
 use crate::color_utils;
 use crate::gui::icon;
 use crate::gui::message::Message;
@@ -26,33 +26,14 @@ pub fn view_task_row<'a>(
 ) -> Element<'a, Message> {
     let is_blocked = app.store.is_blocked(task);
     let is_selected = app.selected_uid.as_ref() == Some(&task.uid);
+
     let color = if is_blocked {
         Color::from_rgb(0.5, 0.5, 0.5)
     } else {
-        // Priority Gradient: Red (Hot) -> Yellow (Normal) -> Purple/Slate (Cold)
-        match task.priority {
-            // 1: Red
-            1 => Color::from_rgb(1.0, 0.2, 0.2),
-            // 2: Orange-Red
-            2 => Color::from_rgb(1.0, 0.4, 0.2),
-            // 3: Orange
-            3 => Color::from_rgb(1.0, 0.6, 0.2),
-            // 4: Amber
-            4 => Color::from_rgb(1.0, 0.8, 0.2),
-            // 5: Yellow
-            5 => Color::from_rgb(1.0, 1.0, 0.2),
-            // 6: Pale Khaki (Desaturating)
-            6 => Color::from_rgb(0.85, 0.85, 0.55),
-            // 7: Light Steel Blue (Cooling)
-            7 => Color::from_rgb(0.7, 0.75, 0.85),
-            // 8: Slate / Muted Purple
-            8 => Color::from_rgb(0.65, 0.6, 0.8),
-            // 9: Greyish Lavender
-            9 => Color::from_rgb(0.6, 0.55, 0.65),
-            // 0: White
-            _ => Color::WHITE,
-        }
+        let (r, g, b) = color_utils::get_priority_rgb(task.priority);
+        Color::from_rgb(r, g, b)
     };
+
     let show_indent = app.active_cal_href.is_some() && app.search_value.is_empty();
     let indent_size = if show_indent { task.depth * 12 } else { 0 };
     let indent = Space::new().width(Length::Fixed(indent_size as f32));
@@ -816,17 +797,13 @@ pub fn view_task_row<'a>(
             details_col
         ];
         column![task_button, desc_row].spacing(5).into()
-    } else {
-        // If there is no content to show, wrap the button in NoPointer to disable hand cursor
-        // while preserving click behavior from the button itself (which handles press).
-        if !has_content_to_show {
-            NoPointer {
-                content: task_button.into(),
-            }
-            .into()
-        } else {
-            task_button.into()
+    } else if !has_content_to_show {
+        NoPointer {
+            content: task_button.into(),
         }
+        .into()
+    } else {
+        task_button.into()
     };
 
     container(container_content)
