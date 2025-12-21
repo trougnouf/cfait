@@ -95,7 +95,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     handle_offline_delete(app, deleted_task);
                 }
             }
-
             Task::none()
         }
         Message::ChangePriority(index, delta) => {
@@ -259,6 +258,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::MoveTask(task_uid, target_href) => {
+            // **FIX**: Capture the original task state *before* moving it.
+            let original_task = app
+                .store
+                .calendars
+                .values()
+                .flatten()
+                .find(|t| t.uid == task_uid)
+                .cloned();
+
             if let Some(updated) = app.store.move_task(&task_uid, target_href.clone()) {
                 app.selected_uid = Some(task_uid);
                 refresh_filtered_tasks(app);
@@ -267,8 +275,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         async_move_wrapper(client.clone(), updated, target_href),
                         Message::TaskMoved,
                     );
-                } else {
-                    handle_offline_move(app, updated, target_href);
+                } else if let Some(old_task) = original_task {
+                    // Correctly journal the MOVE action using the original task snapshot.
+                    app.unsynced_changes = true;
+                    let _ = Journal::push(Action::Move(old_task, target_href));
                 }
             }
             Task::none()
@@ -320,71 +330,6 @@ fn handle_offline_delete(app: &mut GuiApp, task: TodoTask) {
         }
     } else {
         let _ = Journal::push(Action::Delete(task));
-    }
-}
-
-fn handle_offline_move(app: &mut GuiApp, task: TodoTask, _target_href: String) {
-    app.unsynced_changes = true;
-
-    // For local, we just save the state of both affected calendars (source and dest).
-    // app.store.move_task() has already updated the in-memory lists for both.
-
-    // 1. Save Local if involved
-    if let Some(local_list) = app.store.calendars.get(LOCAL_CALENDAR_HREF) {
-        let _ = LocalStorage::save(local_list);
-    }
-
-    // 2. If it involved a remote calendar, queue the move action
-    // Note: If both source and dest are local (impossible currently as there is only 1 local cal), no journal.
-    // If we moved Local -> Remote or Remote -> Remote or Remote -> Local:
-    if task.calendar_href != LOCAL_CALENDAR_HREF {
-        // Note: The task passed to this function is the UPDATED task (new href).
-        // Journal::Move needs (task_with_old_href, new_cal_href).
-        // However, `app.store.move_task` returns the task *after* modification.
-        // Recovering the "old" state here is tricky without the original task.
-        // BUT: RustyClient::move_task logic handles this by taking the Task struct and the Target String.
-        // Wait, Journal::Action::Move stores (Task, String).
-        // The `Task` inside Action::Move should technically be the snapshot *before* the move for strict correctness
-        // so the server can find it at the old URL?
-        // Actually, `RustyClient::sync_journal` uses `task.href` as the source.
-        // The task returned by `app.store.move_task` has the NEW calendar_href but NO href (empty).
-        // This makes `handle_offline_move` tricky here because we lost the `old_href`.
-
-        // CORRECTION: `app.store.move_task` returns `Some(task)` where `task` has the NEW calendar_href.
-        // It does NOT return the old task.
-        // In `handle_submit` / `MoveTask` above, we don't have the old task snapshot easily available
-        // unless we cloned it before calling `store.move_task`.
-
-        // HOWEVER: For `MoveTask` message, we call `app.store.move_task`.
-        // If we look at `store.rs`: `move_task` returns `Some(task)` (the NEW one).
-        // It deletes the old one.
-
-        // FIX: For robust offline moves, we should probably just treat it as
-        // "Delete from Old" + "Create in New" if we can't easily queue a native Move.
-        // OR, we assume the user won't do complex moves while offline.
-
-        // Given the complexity of reconstructing the Move action without the old HREF,
-        // and that `Action::Move` requires a Task with the OLD href to function:
-        // We will fallback to "Create" in the new location.
-        // The "Delete" in the old location was handled by `app.store.delete_task` inside `move_task`?
-        // No, `store.move_task` calls `delete_task` internally.
-        // But `store.delete_task` does NOT push to Journal automatically (it returns the deleted task).
-
-        // Actually `store.move_task` calls `delete_task`, which updates the store index.
-        // If we are offline, we need to record the deletion of the old and creation of the new.
-
-        // Since we don't have the old task here easily to queue a Delete/Move properly:
-        // We will rely on the fact that `app.store` is updated.
-        // If the source was remote, we might desync if we don't queue the delete.
-
-        // STRATEGY ADJUSTMENT FOR MOVE:
-        // Since `MoveTask` is rarely used offline and difficult to reconstruct here:
-        // We will queue a `Create` for the new task.
-        // We accept that the old task might remain on the server until a full refresh happens
-        // (ghosts might reappear if not properly deleted).
-        // Ideally, we'd refactor `store.move_task` to return both, but that's out of scope.
-
-        let _ = Journal::push(Action::Create(task));
     }
 }
 
