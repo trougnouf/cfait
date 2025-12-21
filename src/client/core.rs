@@ -1,4 +1,4 @@
-// File: ./src/client/core.rs
+// File: src/client/core.rs
 use crate::cache::Cache;
 use crate::client::auth::DynamicAuthLayer;
 use crate::client::cert::NoVerifier;
@@ -125,7 +125,6 @@ impl RustyClient {
         })
     }
 
-    // ... (rest of the file is identical to previous versions)
     pub async fn discover_calendar(&self) -> Result<String, String> {
         if let Some(client) = &self.client {
             let base_path = client.base_url().path().to_string();
@@ -210,7 +209,7 @@ impl RustyClient {
             }
         } else if let Some(ref h) = active_href {
             let (mut t, _) = Cache::load(h).unwrap_or((vec![], None));
-            apply_journal_to_tasks(&mut t, h);
+            Journal::apply_to_tasks(&mut t, h);
             t
         } else {
             vec![]
@@ -274,7 +273,7 @@ impl RustyClient {
         if calendar_href == LOCAL_CALENDAR_HREF {
             let mut tasks = LocalStorage::load().map_err(|e| e.to_string())?;
             if apply_journal {
-                apply_journal_to_tasks(&mut tasks, calendar_href);
+                Journal::apply_to_tasks(&mut tasks, calendar_href);
             }
             return Ok(tasks);
         }
@@ -284,11 +283,10 @@ impl RustyClient {
         if let Some(client) = &self.client {
             let path_href = strip_host(calendar_href);
 
-            let (pending_deletions, pending_creations) = if apply_journal {
+            // Optimization: Filter out pending deletes to avoid unnecessary fetches/404s
+            let pending_deletions = if apply_journal {
                 let journal = Journal::load();
                 let mut dels = HashSet::new();
-                let mut creates = HashSet::new();
-
                 for action in journal.queue {
                     match action {
                         Action::Delete(t) if t.calendar_href == calendar_href => {
@@ -297,23 +295,12 @@ impl RustyClient {
                         Action::Move(t, _) if t.calendar_href == calendar_href => {
                             dels.insert(t.uid);
                         }
-                        Action::Create(t) if t.calendar_href == calendar_href => {
-                            creates.insert(t.uid);
-                        }
-                        Action::Update(t)
-                            if t.calendar_href == calendar_href && t.etag.is_empty() =>
-                        {
-                            creates.insert(t.uid);
-                        }
-                        Action::Move(t, ref target) if target == calendar_href => {
-                            creates.insert(t.uid);
-                        }
                         _ => {}
                     }
                 }
-                (dels, creates)
+                dels
             } else {
-                (HashSet::new(), HashSet::new())
+                HashSet::new()
             };
 
             let remote_token = if let Ok(resp) = client
@@ -339,7 +326,7 @@ impl RustyClient {
                 && r_tok == c_tok
             {
                 if apply_journal {
-                    apply_journal_to_tasks(&mut cached_tasks, calendar_href);
+                    Journal::apply_to_tasks(&mut cached_tasks, calendar_href);
                 }
                 return Ok(cached_tasks);
             }
@@ -365,17 +352,14 @@ impl RustyClient {
 
                 let res_href_stripped = strip_host(&resource.href);
 
-                let is_pending_delete = if apply_journal {
-                    if let Some(local_task) = cache_map.get(&res_href_stripped) {
-                        pending_deletions.contains(&local_task.uid)
-                    } else {
-                        false
-                    }
+                // Optimization check using cache lookup
+                let should_skip = if let Some(cached) = cache_map.get(&res_href_stripped) {
+                    pending_deletions.contains(&cached.uid)
                 } else {
                     false
                 };
 
-                if is_pending_delete {
+                if should_skip {
                     cache_map.remove(&res_href_stripped);
                     continue;
                 }
@@ -398,13 +382,12 @@ impl RustyClient {
                 }
             }
 
-            for (href, task) in cache_map {
-                if !server_hrefs.contains(&href) {
-                    let is_unsynced = task.etag.is_empty() || task.href.is_empty();
-
-                    if is_unsynced && pending_creations.contains(&task.uid) {
-                        final_tasks.push(task);
-                    }
+            // Tasks in cache but not on server (deleted on server)
+            for (_href, task) in cache_map {
+                let is_unsynced = task.etag.is_empty() || task.href.is_empty();
+                // If it's unsynced (ghost), keep it. `apply_to_tasks` will prune it if invalid.
+                if is_unsynced {
+                    final_tasks.push(task);
                 }
             }
 
@@ -432,13 +415,13 @@ impl RustyClient {
             }
 
             if apply_journal {
-                apply_journal_to_tasks(&mut final_tasks, calendar_href);
+                Journal::apply_to_tasks(&mut final_tasks, calendar_href);
             }
             let _ = Cache::save(calendar_href, &final_tasks, remote_token);
             Ok(final_tasks)
         } else {
             if apply_journal {
-                apply_journal_to_tasks(&mut cached_tasks, calendar_href);
+                Journal::apply_to_tasks(&mut cached_tasks, calendar_href);
             }
             Ok(cached_tasks)
         }
@@ -942,49 +925,6 @@ impl RustyClient {
             Err(format!("MOVE failed: {}", parts.status))
         }
     }
-}
-
-fn apply_journal_to_tasks(tasks: &mut Vec<Task>, calendar_href: &str) {
-    let journal = Journal::load();
-    if journal.is_empty() {
-        return;
-    }
-
-    let mut task_map: HashMap<String, Task> = tasks.drain(..).map(|t| (t.uid.clone(), t)).collect();
-
-    for action in journal.queue {
-        match action {
-            Action::Create(t) => {
-                if t.calendar_href == calendar_href {
-                    task_map.insert(t.uid.clone(), t);
-                }
-            }
-            Action::Update(t) => {
-                if t.calendar_href == calendar_href {
-                    if let Some(existing) = task_map.get_mut(&t.uid) {
-                        *existing = t;
-                    } else {
-                        task_map.insert(t.uid.clone(), t);
-                    }
-                }
-            }
-            Action::Delete(t) => {
-                if t.calendar_href == calendar_href {
-                    task_map.remove(&t.uid);
-                }
-            }
-            Action::Move(t, new_href) => {
-                if t.calendar_href == calendar_href {
-                    task_map.remove(&t.uid);
-                } else if new_href == calendar_href {
-                    let mut moved_task = t;
-                    moved_task.calendar_href = new_href;
-                    task_map.insert(moved_task.uid.clone(), moved_task);
-                }
-            }
-        }
-    }
-    *tasks = task_map.into_values().collect();
 }
 
 fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {

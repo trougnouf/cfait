@@ -1,4 +1,4 @@
-// File: ./src/mobile.rs
+// File: src/mobile.rs
 use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::config::Config;
@@ -306,73 +306,22 @@ impl CfaitMobile {
         let mut store = self.store.blocking_lock();
         store.clear();
 
-        let journal = crate::journal::Journal::load();
-
+        // Load Local Tasks
         if let Ok(mut local) = LocalStorage::load() {
-            for action in &journal.queue {
-                match action {
-                    crate::journal::Action::Create(t) | crate::journal::Action::Update(t) => {
-                        if t.calendar_href == LOCAL_CALENDAR_HREF {
-                            if let Some(pos) = local.iter().position(|x| x.uid == t.uid) {
-                                local[pos] = t.clone();
-                            } else {
-                                local.push(t.clone());
-                            }
-                        }
-                    }
-                    crate::journal::Action::Delete(t) => {
-                        if t.calendar_href == LOCAL_CALENDAR_HREF {
-                            local.retain(|x| x.uid != t.uid);
-                        }
-                    }
-                    crate::journal::Action::Move(t, new_href) => {
-                        if t.calendar_href == LOCAL_CALENDAR_HREF {
-                            local.retain(|x| x.uid != t.uid);
-                        } else if new_href == LOCAL_CALENDAR_HREF {
-                            let mut mt = t.clone();
-                            mt.calendar_href = new_href.clone();
-                            local.push(mt);
-                        }
-                    }
-                }
-            }
+            // Apply offline edits
+            crate::journal::Journal::apply_to_tasks(&mut local, LOCAL_CALENDAR_HREF);
             store.insert(LOCAL_CALENDAR_HREF.to_string(), local);
         }
 
+        // Load Remote Caches
         if let Ok(cals) = Cache::load_calendars() {
             for cal in cals {
                 if cal.href == LOCAL_CALENDAR_HREF {
                     continue;
                 }
                 if let Ok((mut tasks, _)) = Cache::load(&cal.href) {
-                    for action in &journal.queue {
-                        match action {
-                            crate::journal::Action::Create(t)
-                            | crate::journal::Action::Update(t) => {
-                                if t.calendar_href == cal.href {
-                                    if let Some(pos) = tasks.iter().position(|x| x.uid == t.uid) {
-                                        tasks[pos] = t.clone();
-                                    } else {
-                                        tasks.push(t.clone());
-                                    }
-                                }
-                            }
-                            crate::journal::Action::Delete(t) => {
-                                if t.calendar_href == cal.href {
-                                    tasks.retain(|x| x.uid != t.uid);
-                                }
-                            }
-                            crate::journal::Action::Move(t, new_href) => {
-                                if t.calendar_href == cal.href {
-                                    tasks.retain(|x| x.uid != t.uid);
-                                } else if new_href == &cal.href {
-                                    let mut mt = t.clone();
-                                    mt.calendar_href = new_href.clone();
-                                    tasks.push(mt);
-                                }
-                            }
-                        }
-                    }
+                    // Apply offline edits (DRY: Using shared logic now)
+                    crate::journal::Journal::apply_to_tasks(&mut tasks, &cal.href);
                     store.insert(cal.href, tasks);
                 }
             }
@@ -647,7 +596,6 @@ impl CfaitMobile {
         Ok(())
     }
 
-    // --- UPDATED to handle offline fallback ---
     pub async fn move_task(&self, uid: String, new_cal_href: String) -> Result<(), MobileError> {
         let client_guard = self.client.lock().await;
         let mut store = self.store.lock().await;
@@ -672,7 +620,6 @@ impl CfaitMobile {
         Ok(())
     }
 
-    // --- UPDATED to handle offline fallback ---
     pub async fn delete_task(&self, uid: String) -> Result<(), MobileError> {
         let mut store = self.store.lock().await;
         let (task, href) = store
@@ -730,38 +677,45 @@ impl CfaitMobile {
                 .map_err(MobileError::from)?;
 
         *self.client.lock().await = Some(client.clone());
+
+        // Fetch without lock
+        let fetch_result = client.get_all_tasks(&cals).await;
+
         let mut store = self.store.lock().await;
         store.clear();
-        if let Ok(local) = LocalStorage::load() {
+
+        if let Ok(mut local) = LocalStorage::load() {
+            crate::journal::Journal::apply_to_tasks(&mut local, LOCAL_CALENDAR_HREF);
             store.insert(LOCAL_CALENDAR_HREF.to_string(), local);
         }
 
-        match client.get_all_tasks(&cals).await {
+        match fetch_result {
             Ok(results) => {
                 let mut fetched_hrefs = HashSet::new();
-                for (href, tasks) in &results {
-                    store.insert(href.clone(), tasks.clone());
-                    fetched_hrefs.insert(href.clone());
+                for (href, mut tasks) in results {
+                    crate::journal::Journal::apply_to_tasks(&mut tasks, &href);
+                    store.insert(href.clone(), tasks);
+                    fetched_hrefs.insert(href);
                 }
 
-                // BACKFILL: Restore ANY calendar that was missed from cache
+                // Backfill from cache for missed calendars
                 for cal in &cals {
                     if cal.href != LOCAL_CALENDAR_HREF
                         && !fetched_hrefs.contains(&cal.href)
-                        && let Ok((cached, _)) = crate::cache::Cache::load(&cal.href)
+                        && let Ok((mut cached, _)) = crate::cache::Cache::load(&cal.href)
                     {
+                        crate::journal::Journal::apply_to_tasks(&mut cached, &cal.href);
                         store.insert(cal.href.clone(), cached);
                     }
                 }
 
-                // ALERT LOGIC
                 let remote_cal_count = cals
                     .iter()
                     .filter(|c| c.href != LOCAL_CALENDAR_HREF)
                     .count();
-                let fetched_remote_count = results
+                let fetched_remote_count = fetched_hrefs
                     .iter()
-                    .filter(|(h, _)| h.as_str() != LOCAL_CALENDAR_HREF)
+                    .filter(|h| h.as_str() != LOCAL_CALENDAR_HREF)
                     .count();
 
                 if remote_cal_count > 0 && fetched_remote_count == 0 {
@@ -769,11 +723,13 @@ impl CfaitMobile {
                 }
             }
             Err(e) => {
+                // Fallback to cache entirely
                 for cal in &cals {
                     if cal.href != LOCAL_CALENDAR_HREF
                         && !store.calendars.contains_key(&cal.href)
-                        && let Ok((cached, _)) = crate::cache::Cache::load(&cal.href)
+                        && let Ok((mut cached, _)) = crate::cache::Cache::load(&cal.href)
                     {
+                        crate::journal::Journal::apply_to_tasks(&mut cached, &cal.href);
                         store.insert(cal.href.clone(), cached);
                     }
                 }

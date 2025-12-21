@@ -6,6 +6,8 @@ use crate::gui::state::GuiApp;
 use crate::store::FilterOptions;
 use chrono::{Duration, Utc};
 use iced::Task;
+use iced::widget::operation;
+use iced::widget::scrollable::RelativeOffset;
 
 pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     let cal_filter = None;
@@ -50,14 +52,11 @@ pub fn save_config(app: &GuiApp) {
     .save();
 }
 
-/// Helper: Find all tasks with a specific alias tag and ensure they have all target tags.
-/// Returns an Iced Task batch if network operations are needed.
 pub fn apply_alias_retroactively(
     app: &mut GuiApp,
     alias_key: &str,
     target_tags: &[String],
 ) -> Option<Task<Message>> {
-    // Use the shared logic in TaskStore
     let modified_tasks = app.store.apply_alias_retroactively(alias_key, target_tags);
 
     if modified_tasks.is_empty() {
@@ -66,9 +65,6 @@ pub fn apply_alias_retroactively(
 
     refresh_filtered_tasks(app);
 
-    // Sync Phase
-    // This dispatches individual updates which go through the Journal.
-    // The Journal allows appending actions safely even if other instances are writing.
     if let Some(client) = &app.client {
         let mut commands = Vec::new();
         for t in modified_tasks {
@@ -81,4 +77,22 @@ pub fn apply_alias_retroactively(
     }
 
     None
+}
+
+/// Helper: Generates a command to scroll the main list to the currently selected task.
+pub fn scroll_to_selected(app: &GuiApp) -> Task<Message> {
+    if let Some(uid) = &app.selected_uid
+        && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+    {
+        let len = app.tasks.len().max(1) as f32;
+        return operation::snap_to(
+            app.scrollable_id.clone(),
+            RelativeOffset {
+                x: 0.0,
+                y: idx as f32 / len,
+            },
+        );
+    }
+
+    Task::none()
 }

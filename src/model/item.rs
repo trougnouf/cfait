@@ -130,87 +130,56 @@ impl Task {
     }
 
     pub fn compare_with_cutoff(&self, other: &Self, cutoff: Option<DateTime<Utc>>) -> Ordering {
-        // 1. ACTIVE (InProcess) always floats to the very top
+        // Helper booleans for sorting
         let s1_active = self.status == TaskStatus::InProcess;
         let s2_active = other.status == TaskStatus::InProcess;
-        if s1_active && !s2_active {
-            return Ordering::Less;
-        }
-        if !s1_active && s2_active {
-            return Ordering::Greater;
-        }
-
-        // 2. DONE (Completed/Cancelled) always floats to the very bottom
         let s1_done = self.status.is_done();
         let s2_done = other.status.is_done();
-        if !s1_done && s2_done {
-            return Ordering::Less;
-        }
-        if s1_done && !s2_done {
-            return Ordering::Greater;
-        }
-
-        // 3. START DATE Logic (Future tasks pushed down)
         let now = Utc::now();
-        let self_future = self.dtstart.map(|d| d > now).unwrap_or(false);
-        let other_future = other.dtstart.map(|d| d > now).unwrap_or(false);
-        match (self_future, other_future) {
-            (true, false) => return Ordering::Greater,
-            (false, true) => return Ordering::Less,
-            _ => {}
-        }
+        let s1_future = self.dtstart.map(|d| d > now).unwrap_or(false);
+        let s2_future = other.dtstart.map(|d| d > now).unwrap_or(false);
 
-        // 4. CUTOFF Logic (Group by "In View" vs "Outside View")
         let is_in_window = |t: &Task| -> bool {
             match (t.due, cutoff) {
                 (Some(d), Some(limit)) => d <= limit,
                 (Some(_), None) => true,
-                (None, _) => false,
+                (None, _) => false, // No due date = bottom of list if sorting by date
             }
         };
-        let self_in = is_in_window(self);
-        let other_in = is_in_window(other);
-        match (self_in, other_in) {
-            (true, false) => return Ordering::Less,
-            (false, true) => return Ordering::Greater,
-            _ => {}
-        }
+        let s1_in = is_in_window(self);
+        let s2_in = is_in_window(other);
 
-        // 5. PRIORITY (1=High/Less ... 9=Low/Greater. 0=Normal/5)
+        // Priority Normalization (0 becomes 5)
         let p1 = if self.priority == 0 { 5 } else { self.priority };
         let p2 = if other.priority == 0 {
             5
         } else {
             other.priority
         };
-        if p1 != p2 {
-            return p1.cmp(&p2);
-        }
 
-        // 6. DUE DATE
-        match (self.due, other.due) {
-            (Some(d1), Some(d2)) => {
-                if d1 != d2 {
-                    return d1.cmp(&d2);
-                }
-            }
-            (Some(_), None) => return Ordering::Less, // Has date > No date
-            (None, Some(_)) => return Ordering::Greater,
-            (None, None) => {}
-        }
-
-        // 7. PAUSED vs FRESH (Tie-breaker)
-        // Paused floats above Unstarted ONLY if priority and date are identical
-        let p1_paused = self.is_paused();
-        let p2_paused = other.is_paused();
-        if p1_paused && !p2_paused {
-            return Ordering::Less;
-        }
-        if !p1_paused && p2_paused {
-            return Ordering::Greater;
-        }
-
-        self.summary.cmp(&other.summary)
+        // 1. ACTIVE (InProcess) always floats to top
+        s2_active
+            .cmp(&s1_active)
+            // 2. DONE (Completed/Cancelled) always sinks to bottom
+            .then(s1_done.cmp(&s2_done))
+            // 3. START DATE (Future tasks pushed down)
+            .then(s1_future.cmp(&s2_future))
+            // 4. CUTOFF (In View vs Out of View)
+            .then(s2_in.cmp(&s1_in))
+            // 5. PRIORITY (1 is highest/smallest)
+            .then(p1.cmp(&p2))
+            // 6. DUE DATE (Earlier is better)
+            // Note: We handle Option comparison manually to ensure HasDate < NoDate
+            .then_with(|| match (self.due, other.due) {
+                (Some(d1), Some(d2)) => d1.cmp(&d2),
+                (Some(_), None) => Ordering::Less,
+                (None, Some(_)) => Ordering::Greater,
+                (None, None) => Ordering::Equal,
+            })
+            // 7. PAUSED vs FRESH (Paused floats up)
+            .then(other.is_paused().cmp(&self.is_paused()))
+            // 8. ALPHABETICAL fallback
+            .then(self.summary.cmp(&other.summary))
     }
 
     pub fn organize_hierarchy(mut tasks: Vec<Task>, cutoff: Option<DateTime<Utc>>) -> Vec<Task> {
@@ -244,6 +213,7 @@ impl Task {
             Self::append_task_and_children(&root, &mut result, &children_map, 0, &mut visited_uids);
         }
 
+        // Add any remaining tasks that might have been part of a cycle or missed
         if result.len() < tasks.len() {
             for mut task in tasks {
                 if !visited_uids.contains(&task.uid) {

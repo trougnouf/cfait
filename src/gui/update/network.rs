@@ -4,7 +4,7 @@ use crate::config::Config;
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
-use crate::gui::update::common::{refresh_filtered_tasks, save_config};
+use crate::gui::update::common::{refresh_filtered_tasks, save_config, scroll_to_selected};
 use crate::journal::Journal;
 use crate::model::CalendarListEntry;
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME};
@@ -23,7 +23,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::Loaded(Ok((client, mut cals, tasks, mut active, warning))) => {
+        Message::Loaded(Ok((client, mut cals, mut tasks, mut active, warning))) => {
             app.client = Some(client.clone());
 
             if let Some(w) = warning {
@@ -45,19 +45,26 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             app.calendars = cals.clone();
+
+            // Clear store to rebuild from fresh network/cache state
             app.store.clear();
 
-            if let Ok(local_t) = crate::gui::async_ops::get_runtime()
+            // 1. Load Local
+            if let Ok(mut local_t) = crate::gui::async_ops::get_runtime()
                 .block_on(async { client.get_tasks(LOCAL_CALENDAR_HREF).await })
             {
+                // Apply Journal (replays Creates/Updates/Deletes correctly)
+                Journal::apply_to_tasks(&mut local_t, LOCAL_CALENDAR_HREF);
                 app.store.insert(LOCAL_CALENDAR_HREF.to_string(), local_t);
             }
 
+            // 2. Load Caches
             for cal in &app.calendars {
                 if cal.href == LOCAL_CALENDAR_HREF {
                     continue;
                 }
-                if let Ok((cached_tasks, _)) = Cache::load(&cal.href) {
+                if let Ok((mut cached_tasks, _)) = Cache::load(&cal.href) {
+                    Journal::apply_to_tasks(&mut cached_tasks, &cal.href);
                     app.store.insert(cal.href.clone(), cached_tasks);
                 }
             }
@@ -84,10 +91,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             active = valid_active;
             app.active_cal_href = active.clone();
 
+            // 3. Load Fresh Network Data (Active Calendar)
             if let Some(href) = &active
                 && href != LOCAL_CALENDAR_HREF
                 && app.error_msg.is_none()
             {
+                Journal::apply_to_tasks(&mut tasks, href);
                 app.store.insert(href.clone(), tasks);
             }
 
@@ -106,11 +115,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             app.loading = false;
 
+            let scroll_cmd = scroll_to_selected(app);
+
             if app.error_msg.is_none() {
                 app.loading = true;
-                Task::perform(async_fetch_all_wrapper(client, cals), Message::RefreshedAll)
+                Task::batch(vec![
+                    Task::perform(async_fetch_all_wrapper(client, cals), Message::RefreshedAll),
+                    scroll_cmd,
+                ])
             } else {
-                Task::none()
+                scroll_cmd
             }
         }
         Message::Loaded(Err(e)) => {
@@ -120,25 +134,30 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::RefreshedAll(Ok(results)) => {
-            for (href, tasks) in results {
-                app.store.insert(href.clone(), tasks.clone());
+            for (href, mut tasks) in results {
+                Journal::apply_to_tasks(&mut tasks, &href);
+                app.store.insert(href.clone(), tasks);
             }
+
             refresh_filtered_tasks(app);
             app.loading = false;
-            Task::none()
+
+            scroll_to_selected(app)
         }
         Message::RefreshedAll(Err(e)) => {
             app.error_msg = Some(format!("Sync warning: {}", e));
             app.loading = false;
             Task::none()
         }
-        Message::TasksRefreshed(Ok((href, tasks))) => {
+        Message::TasksRefreshed(Ok((href, mut tasks))) => {
             app.error_msg = None;
-            app.store.insert(href.clone(), tasks.clone());
+            Journal::apply_to_tasks(&mut tasks, &href);
+            app.store.insert(href.clone(), tasks);
 
             if app.active_cal_href.as_deref() == Some(&href) {
                 refresh_filtered_tasks(app);
                 app.loading = false;
+                return scroll_to_selected(app);
             }
             Task::none()
         }
@@ -148,7 +167,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SyncSaved(Ok(updated)) => {
-            // Fix: Use update_or_add_task to ensure index is updated
             app.store.update_or_add_task(updated);
 
             app.unsynced_changes = !Journal::load().is_empty();
@@ -164,7 +182,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::SyncToggleComplete(boxed_res) => match *boxed_res {
             Ok((updated, created_opt)) => {
-                // Fix: Use update_or_add_task
                 app.store.update_or_add_task(updated);
 
                 if let Some(created) = created_opt {
