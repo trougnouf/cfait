@@ -1,3 +1,4 @@
+// File: ./android/app/src/main/java/com/cfait/ui/HomeScreen.kt
 package com.cfait.ui
 
 import android.content.ClipData
@@ -14,6 +15,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -54,7 +56,9 @@ fun HomeScreen(
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    var sidebarTab by remember { mutableIntStateOf(0) }
+    
+    // CHANGED: Use rememberSaveable so tab selection survives navigation
+    var sidebarTab by rememberSaveable { mutableIntStateOf(0) }
 
     // Sync State Tracking
     var isManualSyncing by remember { mutableStateOf(false) }
@@ -75,7 +79,9 @@ fun HomeScreen(
         }
     }
 
-    var hasSetDefaultTab by remember { mutableStateOf(false) }
+    // CHANGED: Use rememberSaveable so we don't reset the tab logic on back navigation
+    var hasSetDefaultTab by rememberSaveable { mutableStateOf(false) }
+    
     LaunchedEffect(calendars) {
         if (!hasSetDefaultTab && calendars.isNotEmpty()) {
             val hasRemote = calendars.any { !it.isLocal }
@@ -88,9 +94,12 @@ fun HomeScreen(
     val listState = rememberLazyListState()
 
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
-    var searchQuery by remember { mutableStateOf("") }
-    var filterTag by remember { mutableStateOf<String?>(null) }
-    var isSearchActive by remember { mutableStateOf(false) }
+    
+    // CHANGED: Use rememberSaveable for search/filter state
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var filterTag by rememberSaveable { mutableStateOf<String?>(null) }
+    var isSearchActive by rememberSaveable { mutableStateOf(false) }
+    
     val searchFocusRequester = remember { FocusRequester() }
     var newTaskText by remember { mutableStateOf("") }
 
