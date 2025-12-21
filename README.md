@@ -16,7 +16,7 @@
 
 **Cfait** is a task manager for people who want speed, efficiency, and ownership of their data.
 
-It connects to any standard **CalDAV** server (Radicale, Xandikos, Nextcloud, iCloud, etc.) so your tasks aren't locked inside a proprietary walled garden. It's written in **Rust**, meaning it starts instantly and handles large lists without stuttering.
+It connects to any standard **CalDAV** server (Radicale, Xandikos, Baikal, Nextcloud, iCloud, etc.) so your tasks aren't locked inside a proprietary walled garden. It's written in **Rust**, meaning it starts instantly and handles large lists without stuttering.
 
 You can use it comfortably from the command line (TUI), on your desktop (GUI), or on the go with the native Android app. It's built "offline-first," so you can keep working without an internet connection and Cfait will sync your changes the next time you go online.
 
