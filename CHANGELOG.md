@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.7] - 2025-12-21
+
+### 🚀 Features
+
+- *(ui)* Refine smart input syntax highlighting (different color per type), add (optional) "in" date keyword, set default cutoff to 2 months
+
+### 🐛 Bug Fixes
+
+- *(sync)* Correctly journal offline task moves to prevent duplication
+- *(android)* Preserve tag filter and sidebar state on back navigation using rememberSaveable
+
+### 🚜 Refactor
+
+- *(core)* Centralize journal application logic, improve sort consistency, and fix sync race conditions
+
+### 📚 Documentation
+
+- Mention Baikal in README since it has been explicitly tested
 ## [0.3.6] - 2025-12-21
 
 ### 🚀 Features
@@ -13,6 +31,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Lint
+- Release cfait version 0.3.6
 ## [0.3.5] - 2025-12-20
 
 ### 🚀 Features
