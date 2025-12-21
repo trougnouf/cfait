@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.6] - 2025-12-21
+
+### 🚀 Features
+
+- *(client)* Add Digest authentication and fix Android SSL
+
+### 📚 Documentation
+
+- *(android)* Published on F-Droid
+
+### ⚙️ Miscellaneous Tasks
+
+- Lint
 ## [0.3.5] - 2025-12-20
 
 ### 🚀 Features
@@ -15,6 +28,10 @@
 ### 📚 Documentation
 
 - Add suggested CalDAV providers, TOC to the README
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cfait version 0.3.5
 ## [0.3.4] - 2025-12-19
 
 ### 🚀 Features
@@ -58,6 +75,13 @@
 
 ### ⚙️ Miscellaneous Tasks
 
+- Add Cargo.lock
+- *(android)* Rm i686-linux-android
+- *(fdroid)* Work on Reproducible Builds
+- *(fdroid)* Pin rust version for F-Droid build
+- *(fdroid)* Work on reproducible build (locked ndkVersion, RUSTFLAGS)
+- *(fdroid)* Strip dependenciesInfo
+- *(fdroid)* Set Android rust toolchain in rust_toolchain.toml
 - *(fdroid)* Simplify screenshot names
 - Prepare for release v0.3.3
 - Disable signed commit
@@ -78,13 +102,6 @@
 - *(android)* Generate static Android version number for F-Droid release
 - Release cfait version 0.3.2
 - Auto-generate changelogs (fastlane and CHANGELOG.md), backfill previous ones
-- Add Cargo.lock
-- *(android)* Rm i686-linux-android
-- *(fdroid)* Work on Reproducible Builds
-- *(fdroid)* Pin rust version for F-Droid build
-- *(fdroid)* Work on reproducible build (locked ndkVersion, RUSTFLAGS)
-- *(fdroid)* Strip dependenciesInfo
-- *(fdroid)* Set Android rust toolchain in rust_toolchain.toml
 ## [0.3.1] - 2025-12-17
 
 ### 🐛 Bug Fixes

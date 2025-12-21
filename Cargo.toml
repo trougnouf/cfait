@@ -1,6 +1,6 @@
 [package]
 name = "cfait"
-version = "0.3.5"
+version = "0.3.6"
 edition = "2024"
 description = "A powerful, fast and elegant CalDAV task manager (TUI & GUI)"
 license = "GPL-3.0"
@@ -137,4 +137,4 @@ pre-release-hook = ["python3", "scripts/prepare_release.py"]
 
 [package.metadata.android]
 # This must match (Major * 10000 + Minor * 100 + Patch)
-version_code = 305
+version_code = 306

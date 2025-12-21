@@ -1,0 +1,13 @@
+## [0.3.6] - 2025-12-21
+
+### 🚀 Features
+
+- *(client)* Add Digest authentication and fix Android SSL
+
+### 📚 Documentation
+
+- *(android)* Published on F-Droid
+
+### ⚙️ Miscellaneous Tasks
+
+- Lint
