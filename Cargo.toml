@@ -49,6 +49,13 @@ rustls-native-certs = "0.8"
 futures = "0.3"
 fs2 = "0.4"
 
+# --- AUTH FIX DEPS ---
+digest_auth = "0.3"
+base64 = "0.22"
+tower = { version = "0.5", features = ["util"] }
+tower-service = "0.3" # Explicitly add tower-service for the trait
+tower-layer = "0.3"   # And tower-layer for the Layer trait
+
 # --- ANDROID / INTEROP ---
 uniffi = { version = "0.30", features = ["tokio", "build", "cli"], optional = true }
 uniffi_bindgen = { version = "0.30",  optional = true }
@@ -63,7 +70,8 @@ iced = { version = "0.14.0", features = ["tokio", "svg", "advanced"], optional =
 
 # --- ANDROID SPECIFIC ---
 [target.'cfg(target_os = "android")'.dependencies]
-rustls-platform-verifier = "0.6"
+# Use webpki-roots instead of platform-verifier to avoid JNI/Context complexity
+webpki-roots = "1.0"
 android_logger = "0.15"
 log = "0.4"
 
@@ -105,7 +113,7 @@ maintainer = "Benoit Brummer (Trougnouf) <trougnouf@gmail.com>"
 copyright = "2025, Benoit Brummer (Trougnouf)"
 license-file = ["LICENSE", "4"]
 extended-description = """
-Cfait is a powerful yet simple tasks / TODO CalDAV client featuring both a TUI and a GUI.
+Cfait is a powerful yet simple tasks / TODO CalDAV client. (TUI and GUI)
 """
 depends = "$auto"
 section = "utils"

@@ -1,12 +1,12 @@
-// File: src/client/core.rs
+// File: ./src/client/core.rs
 use crate::cache::Cache;
+use crate::client::auth::DynamicAuthLayer;
 use crate::client::cert::NoVerifier;
 use crate::config::Config;
 use crate::journal::{Action, Journal};
 use crate::model::{CalendarListEntry, Task, TaskStatus};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalStorage};
 
-// Libdav imports
 use libdav::caldav::{FindCalendarHomeSet, FindCalendars, GetCalendarResources};
 use libdav::dav::{Delete, GetProperty, ListResources, PutResource};
 use libdav::dav::{WebDavClient, WebDavError};
@@ -19,20 +19,21 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tower_http::auth::AddAuthorization;
+use tower_layer::Layer;
 use uuid::Uuid;
 
 #[cfg(not(target_os = "android"))]
 use rustls_native_certs;
 
-#[cfg(target_os = "android")]
-use rustls_platform_verifier::BuilderVerifierExt;
+// FIX: No platform verifier import needed
 
 pub const GET_CTAG: PropertyName = PropertyName::new("http://calendarserver.org/ns/", "getctag");
 pub const APPLE_COLOR: PropertyName =
     PropertyName::new("http://apple.com/ns/ical/", "calendar-color");
 
-type HttpsClient = AddAuthorization<
+use crate::client::auth::DynamicAuthService;
+
+type HttpsClient = DynamicAuthService<
     Client<
         hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
         String,
@@ -51,7 +52,6 @@ fn strip_host(href: &str) -> String {
     href.to_string()
 }
 
-// --- Robust Identity Check ---
 fn actions_match_identity(a: &Action, b: &Action) -> bool {
     match (a, b) {
         (Action::Create(t1), Action::Create(t2)) => t1.uid == t2.uid,
@@ -99,9 +99,12 @@ impl RustyClient {
 
             #[cfg(target_os = "android")]
             {
+                // FIX: Use bundled Mozilla roots via webpki-roots.
+                // This does not require JNI initialization or Context passing.
+                let mut root_store = rustls::RootCertStore::empty();
+                root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
                 tls_config_builder
-                    .with_platform_verifier()
-                    .map_err(|e| format!("Failed to init platform verifier: {}", e))?
+                    .with_root_certificates(root_store)
                     .with_no_client_auth()
             }
         };
@@ -113,7 +116,8 @@ impl RustyClient {
             .build();
 
         let http_client = Client::builder(TokioExecutor::new()).build(https_connector);
-        let auth_client = AddAuthorization::basic(http_client.clone(), user, pass);
+        let auth_client =
+            DynamicAuthLayer::new(user.to_string(), pass.to_string()).layer(http_client);
         let webdav = WebDavClient::new(uri, auth_client.clone());
         let caldav = CalDavClient::new(webdav);
         Ok(Self {
@@ -121,6 +125,7 @@ impl RustyClient {
         })
     }
 
+    // ... (rest of the file is identical to previous versions)
     pub async fn discover_calendar(&self) -> Result<String, String> {
         if let Some(client) = &self.client {
             let base_path = client.base_url().path().to_string();

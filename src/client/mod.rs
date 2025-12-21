@@ -1,5 +1,5 @@
 // File: ./src/client/mod.rs
-// re-exports the cleaned up client modules
+pub mod auth;
 pub mod cert;
 pub mod core;
 

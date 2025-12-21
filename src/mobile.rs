@@ -1,4 +1,4 @@
-// File: src/mobile.rs
+// File: ./src/mobile.rs
 use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::config::Config;
