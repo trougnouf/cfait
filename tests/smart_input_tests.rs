@@ -114,3 +114,31 @@ fn test_geo_and_description() {
     assert_eq!(task.geo, Some("50.12,4.32".to_string()));
     assert_eq!(task.description, "View from top");
 }
+
+#[test]
+fn test_alias_subtag_expansion() {
+    let mut aliases = HashMap::new();
+    // Alias: #cfait -> #dev
+    aliases.insert("cfait".to_string(), vec!["#dev".to_string()]);
+
+    // Input: #cfait:gui (Sub-tag of alias key)
+    let task = Task::new("Task #cfait:gui", &aliases);
+
+    // Expectation:
+    // 1. #cfait:gui should remain (User input)
+    // 2. #dev should be added (Alias match on parent 'cfait')
+    assert!(task.categories.contains(&"cfait:gui".to_string()));
+    assert!(task.categories.contains(&"dev".to_string()));
+}
+
+#[test]
+fn test_alias_preserves_sigils() {
+    let mut aliases = HashMap::new();
+    // Alias: #home -> @@"123 Main St"
+    aliases.insert("home".to_string(), vec!["@@\"123 Main St\"".to_string()]);
+
+    let task = Task::new("Go #home", &aliases);
+
+    assert_eq!(task.location, Some("123 Main St".to_string()));
+    assert!(task.categories.contains(&"home".to_string()));
+}

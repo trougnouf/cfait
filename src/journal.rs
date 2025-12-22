@@ -87,32 +87,32 @@ impl Journal {
             };
 
             let mut merged = false;
-            if let Some(&idx) = uid_map.get(&uid) {
-                if let Some(prev) = &compacted[idx] {
-                    match (prev, &action) {
-                        (Action::Create(_), Action::Update(t)) => {
-                            // Upgrade the Create to include the updates
-                            compacted[idx] = Some(Action::Create(t.clone()));
-                            merged = true;
-                        }
-                        (Action::Update(_), Action::Update(t)) => {
-                            // Replace old update with new update (Last write wins)
-                            compacted[idx] = Some(Action::Update(t.clone()));
-                            merged = true;
-                        }
-                        (Action::Create(_), Action::Delete(_)) => {
-                            // Created then Deleted -> Cancel out entirely
-                            compacted[idx] = None;
-                            uid_map.remove(&uid);
-                            merged = true;
-                        }
-                        (Action::Update(_), Action::Delete(t)) => {
-                            // Updated then Deleted -> Just Delete
-                            compacted[idx] = Some(Action::Delete(t.clone()));
-                            merged = true;
-                        }
-                        _ => {}
+            if let Some(&idx) = uid_map.get(&uid)
+                && let Some(prev) = &compacted[idx]
+            {
+                match (prev, &action) {
+                    (Action::Create(_), Action::Update(t)) => {
+                        // Upgrade the Create to include the updates
+                        compacted[idx] = Some(Action::Create(t.clone()));
+                        merged = true;
                     }
+                    (Action::Update(_), Action::Update(t)) => {
+                        // Replace old update with new update (Last write wins)
+                        compacted[idx] = Some(Action::Update(t.clone()));
+                        merged = true;
+                    }
+                    (Action::Create(_), Action::Delete(_)) => {
+                        // Created then Deleted -> Cancel out entirely
+                        compacted[idx] = None;
+                        uid_map.remove(&uid);
+                        merged = true;
+                    }
+                    (Action::Update(_), Action::Delete(t)) => {
+                        // Updated then Deleted -> Just Delete
+                        compacted[idx] = Some(Action::Delete(t.clone()));
+                        merged = true;
+                    }
+                    _ => {}
                 }
             }
 

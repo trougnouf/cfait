@@ -77,7 +77,7 @@ fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
     parts
 }
 
-fn strip_quotes(s: &str) -> String {
+pub fn strip_quotes(s: &str) -> String {
     let s = s.trim();
     if s.len() >= 2
         && ((s.starts_with('"') && s.ends_with('"')) || (s.starts_with('{') && s.ends_with('}')))

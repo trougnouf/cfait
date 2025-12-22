@@ -1,4 +1,3 @@
-// File: src/gui/view/settings.rs
 use crate::config::AppTheme;
 use crate::gui::icon;
 use crate::gui::message::Message;
@@ -131,7 +130,8 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .on_input(Message::AliasKeyInput)
                 .padding(5)
                 .width(Length::FillPortion(1)),
-            text_input("Tags (dev, rust)", &app.alias_input_values)
+            // FIX: Updated placeholder to show new capabilities
+            text_input("#tag,@@loc,!3", &app.alias_input_values)
                 .on_input(Message::AliasValueInput)
                 .padding(5)
                 .width(Length::FillPortion(2)),

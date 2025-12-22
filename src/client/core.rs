@@ -19,6 +19,8 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+// FIX: Added mem for take()
+use std::mem;
 use tower_layer::Layer;
 use uuid::Uuid;
 
@@ -263,6 +265,39 @@ impl RustyClient {
         } else {
             Ok(vec![])
         }
+    }
+
+    /// Fetches a single task from the server by its HREF.
+    /// This is significantly faster than fetching the whole calendar for conflict resolution.
+    async fn fetch_remote_task(&self, task_href: &str) -> Option<Task> {
+        if let Some(client) = &self.client {
+            let path_href = strip_host(task_href);
+            // We need the parent collection path for context, assume standard structure
+            let parent_path = if let Some(idx) = path_href.rfind('/') {
+                &path_href[..=idx]
+            } else {
+                "/"
+            };
+
+            // Use Multiget to fetch just this one resource
+            let req = GetCalendarResources::new(parent_path).with_hrefs(vec![path_href.clone()]);
+
+            if let Ok(resp) = client.request(req).await
+                && let Some(item) = resp.resources.into_iter().next()
+                && let Ok(content) = item.content
+            {
+                // We don't have the exact calendar_href here easily, but we can guess it's the parent.
+                // For conflict resolution, the UID/Summary/etc are what matter.
+                return Task::from_ics(
+                    &content.data,
+                    content.etag,
+                    item.href,
+                    parent_path.to_string(),
+                )
+                .ok();
+            }
+        }
+        None
     }
 
     async fn fetch_calendar_tasks_internal(
@@ -592,14 +627,16 @@ impl RustyClient {
     }
 
     pub async fn sync_journal(&self) -> Result<Vec<String>, String> {
-        // Compact journal to merge redundant updates before syncing ---
+        // --- FIX: Compact journal to merge redundant updates before syncing ---
         let _ = Journal::modify(|queue| {
             let mut tmp_j = Journal {
-                queue: queue.drain(..).collect(),
+                queue: mem::take(queue),
             };
             tmp_j.compact();
             *queue = tmp_j.queue;
         });
+        // ----------------------------------------------------------------------
+
         let client = self.client.as_ref().ok_or("Offline")?;
         let mut warnings = Vec::new();
 
@@ -874,13 +911,9 @@ impl RustyClient {
         let (cached_tasks, _) = Cache::load(&local_task.calendar_href).ok()?;
         let base_task = cached_tasks.iter().find(|t| t.uid == local_task.uid)?;
 
-        let server_tasks = self
-            .fetch_calendar_tasks_internal(&local_task.calendar_href, false)
-            .await
-            .ok()?;
-        let server_task = server_tasks.iter().find(|t| t.uid == local_task.uid)?;
+        let server_task = self.fetch_remote_task(&local_task.href).await?;
 
-        if let Some(merged) = three_way_merge(base_task, local_task, server_task) {
+        if let Some(merged) = three_way_merge(base_task, local_task, &server_task) {
             let msg = format!(
                 "Conflict (412) on '{}' resolved via 3-way merge.",
                 local_task.summary

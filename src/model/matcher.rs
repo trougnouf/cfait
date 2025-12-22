@@ -1,4 +1,3 @@
-// File: ./src/model/matcher.rs
 // Handles logic for checking if a task matches a search query
 use crate::model::item::{Task, TaskStatus};
 use chrono::Local; // Changed from Utc
@@ -13,6 +12,22 @@ impl Task {
         let parts: Vec<&str> = term_lower.split_whitespace().collect();
 
         for part in parts {
+            // --- Location Filter ---
+            if let Some(loc_query) = part
+                .strip_prefix("@@")
+                .or_else(|| part.strip_prefix("loc:"))
+            {
+                if let Some(t_loc) = &self.location {
+                    if !t_loc.to_lowercase().contains(loc_query) {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+                continue;
+            }
+            // -----------------------------------------------
+
             // 1. Duration Filter (~30m, ~<1h, ~>2h)
             if part.starts_with('~') {
                 let (op, val_str) = if let Some(stripped) = part.strip_prefix("~<=") {

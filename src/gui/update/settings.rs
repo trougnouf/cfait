@@ -1,4 +1,3 @@
-// File: src/gui/update/settings.rs
 use crate::cache::Cache;
 use crate::config::Config;
 use crate::gui::async_ops::*;
@@ -216,7 +215,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let tags: Vec<String> = app
                     .alias_input_values
                     .split(',')
-                    .map(|s| s.trim().trim_start_matches('#').to_string())
+                    // FIX: Removed .trim_start_matches('#') to preserve #tags, @@locs, etc.
+                    .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty())
                     .collect();
 
@@ -233,7 +233,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             app.tag_aliases.insert(key.clone(), tags.clone());
                             app.alias_input_key.clear();
                             app.alias_input_values.clear();
-                            app.error_msg = None; // Clear previous errors
+                            app.error_msg = None;
                             save_config(app);
 
                             if let Some(task) = apply_alias_retroactively(app, &key, &tags) {

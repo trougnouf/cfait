@@ -1,4 +1,3 @@
-// File: android/app/src/main/java/com/cfait/ui/SettingsScreen.kt
 package com.cfait.ui
 
 import androidx.compose.foundation.clickable
@@ -206,7 +205,8 @@ fun SettingsScreen(
                     }, label = { Text("Tags (comma)") }, modifier = Modifier.weight(1f))
                     IconButton(onClick = {
                         if (newAliasKey.isNotBlank() && newAliasTags.isNotBlank()) {
-                            val tags = newAliasTags.split(",").map { it.trim().trimStart('#') }.filter { it.isNotEmpty() }
+                            // FIX: Removed .trimStart('#')
+                            val tags = newAliasTags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
                             scope.launch {
                                 // --- ERROR HANDLING ADDED ---
                                 try {

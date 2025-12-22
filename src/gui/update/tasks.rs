@@ -14,15 +14,11 @@ use iced::widget::text_editor;
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::InputChanged(action) => {
-            let previous_text = app.input_value.text();
-            app.input_value.perform(action);
-            let current_text = app.input_value.text();
-
-            // Check if 'Enter' was pressed (ends with newline).
-            if current_text.len() == previous_text.len() + 1 && current_text.ends_with('\n') {
+            // FIX: Check for Edit::Enter variant
+            if let text_editor::Action::Edit(text_editor::Edit::Enter) = action {
                 return handle_submit(app);
             }
-
+            app.input_value.perform(action);
             Task::none()
         }
         Message::DescriptionChanged(action) => {

@@ -252,22 +252,49 @@ impl TaskStore {
         None
     }
 
-    // --- NEW SHARED LOGIC ---
-
-    /// Finds all tasks tagged with `alias_key` that are missing one or more of `target_tags`.
-    /// Updates them in the store and returns copies of the modified tasks for network syncing.
+    // --- FIX: Intelligent Alias Application ---
     pub fn apply_alias_retroactively(
         &mut self,
         alias_key: &str,
-        target_tags: &[String],
+        raw_values: &[String],
     ) -> Vec<Task> {
         let mut uids_to_update = Vec::new();
+        let alias_prefix = format!("{}:", alias_key);
 
-        // 1. Identify
+        // 1. Identify tasks that match the alias (or are sub-tags of it)
         for tasks in self.calendars.values() {
             for task in tasks {
-                if task.categories.contains(&alias_key.to_string()) {
-                    let needs_update = target_tags.iter().any(|t| !task.categories.contains(t));
+                let has_alias_or_child = task
+                    .categories
+                    .iter()
+                    .any(|cat| cat == alias_key || cat.starts_with(&alias_prefix));
+
+                if has_alias_or_child {
+                    // Check if we actually need to change anything to avoid spurious updates
+                    let mut needs_update = false;
+                    for val in raw_values {
+                        // Check logic mirrors the update logic below
+                        if let Some(tag) = val.strip_prefix('#') {
+                            let clean = crate::model::parser::strip_quotes(tag);
+                            if !task.categories.contains(&clean) {
+                                needs_update = true;
+                                break;
+                            }
+                        } else if let Some(loc) = val.strip_prefix("@@") {
+                            let clean = crate::model::parser::strip_quotes(loc);
+                            if task.location.as_ref() != Some(&clean) {
+                                needs_update = true;
+                                break;
+                            }
+                        } else if let Some(prio) = val.strip_prefix('!')
+                            && let Ok(p) = prio.parse::<u8>()
+                            && task.priority != p
+                        {
+                            needs_update = true;
+                            break;
+                        }
+                    }
+
                     if needs_update {
                         uids_to_update.push(task.uid.clone());
                     }
@@ -279,19 +306,41 @@ impl TaskStore {
             return Vec::new();
         }
 
-        // 2. Modify (In Memory Only)
+        // 2. Modify
         let mut modified_tasks = Vec::new();
         for uid in uids_to_update {
             if let Some((task, _)) = self.get_task_mut(&uid) {
-                for target_tag in target_tags {
-                    if !task.categories.contains(target_tag) {
-                        task.categories.push(target_tag.clone());
+                for val in raw_values {
+                    if let Some(tag) = val.strip_prefix('#') {
+                        // FIX: Strip quotes and hash before storing
+                        let clean = crate::model::parser::strip_quotes(tag);
+                        if !task.categories.contains(&clean) {
+                            task.categories.push(clean);
+                        }
+                    } else if let Some(loc) = val.strip_prefix("@@") {
+                        task.location = Some(crate::model::parser::strip_quotes(loc));
+                    } else if let Some(loc) = val.strip_prefix("loc:") {
+                        task.location = Some(crate::model::parser::strip_quotes(loc));
+                    } else if let Some(prio) = val.strip_prefix('!') {
+                        if let Ok(p) = prio.parse::<u8>() {
+                            task.priority = p;
+                        }
+                    } else if let Some(url) = val.strip_prefix("url:") {
+                        task.url = Some(crate::model::parser::strip_quotes(url));
+                    } else if let Some(geo) = val.strip_prefix("geo:") {
+                        task.geo = Some(crate::model::parser::strip_quotes(geo));
+                    } else if let Some(_d) = val.strip_prefix('~') {
+                        // Basic duration handling for aliases if needed
+                    } else {
+                        // Fallback: If no sigil, treat as tag to be safe (legacy support)
+                        if !task.categories.contains(val) {
+                            task.categories.push(val.clone());
+                        }
                     }
                 }
+
                 task.categories.sort();
                 task.categories.dedup();
-
-                // Track for return
                 modified_tasks.push(task.clone());
             }
         }
