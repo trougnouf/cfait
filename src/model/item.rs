@@ -1,4 +1,3 @@
-// File: src/model/item.rs
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -52,6 +51,12 @@ pub struct Task {
     pub categories: Vec<String>,
     pub depth: usize,
     pub rrule: Option<String>,
+
+    // --- NEW FIELDS ---
+    pub location: Option<String>,
+    pub url: Option<String>,
+    pub geo: Option<String>, // Stored internally as "lat,long"
+    // ------------------
     pub unmapped_properties: Vec<RawProperty>,
 
     #[serde(default)]
@@ -82,11 +87,16 @@ impl Task {
             categories: Vec::new(),
             depth: 0,
             rrule: None,
+            location: None,
+            url: None,
+            geo: None,
             unmapped_properties: Vec::new(),
             sequence: 0,
             raw_alarms: Vec::new(),
             raw_components: Vec::new(),
         };
+        // The apply_smart_input implementation now lives exclusively in the parser module.
+        // It's part of the `impl Task` block there.
         task.apply_smart_input(input, aliases);
         task
     }

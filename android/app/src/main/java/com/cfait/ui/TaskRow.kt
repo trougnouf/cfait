@@ -32,17 +32,9 @@ fun TaskRow(
 ) {
     val startPadding = (task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
-
     val textColor = getTaskTextColor(task.priority.toInt(), task.isDone, isDark)
-
-    // Highlight color when menu is open - subtle amber
     val highlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
-    val containerColor =
-        if (expanded) {
-            highlightColor
-        } else {
-            MaterialTheme.colorScheme.surface
-        }
+    val containerColor = if (expanded) highlightColor else MaterialTheme.colorScheme.surface
 
     Card(
         modifier =
@@ -58,9 +50,7 @@ fun TaskRow(
     ) {
         Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             TaskCheckbox(task, calColor, onToggle)
-
             Spacer(Modifier.width(8.dp))
-
             Column(Modifier.weight(1f)) {
                 Text(
                     text = task.summary,
@@ -71,6 +61,7 @@ fun TaskRow(
                     lineHeight = 18.sp,
                 )
 
+                // Render Metadata
                 FlowRow(
                     modifier = Modifier.padding(top = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -81,12 +72,25 @@ fun TaskRow(
                         NfIcon(NfIcons.CALENDAR, 10.sp, Color.Gray)
                         Text(task.dueDateIso!!.take(10), fontSize = 10.sp, color = Color.Gray)
                     }
-
                     if (task.durationMins != null) {
                         Text(formatDuration(task.durationMins!!), fontSize = 10.sp, color = Color.Gray)
                     }
-
                     if (task.isRecurring) NfIcon(NfIcons.REPEAT, 10.sp, Color.Gray)
+
+                    // --- NEW FIELDS ---
+                    if (task.location != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Using a subtle amber color for @@
+                            Text("@@", fontSize = 10.sp, color = Color(0xFFFFB300), fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.width(2.dp))
+                            Text(task.location!!, fontSize = 10.sp, color = Color.Gray)
+                        }
+                    }
+                    if (task.url != null) {
+                        // URL Icon
+                        NfIcon(NfIcons.URL, 10.sp, Color(0xFF4FC3F7))
+                    }
+                    // ------------------
 
                     task.categories.forEach { tag ->
                         Text("#$tag", fontSize = 10.sp, color = getTagColor(tag), modifier = Modifier.padding(end = 2.dp))
@@ -110,7 +114,6 @@ fun TaskRow(
                         expanded = false
                         onClick(task.uid)
                     }, leadingIcon = { NfIcon(NfIcons.EDIT, 16.sp) })
-
                     DropdownMenuItem(
                         text = {
                             Text(
@@ -129,19 +132,12 @@ fun TaskRow(
                         },
                         leadingIcon = { NfIcon(if (task.statusString == "InProcess") NfIcons.PAUSE else NfIcons.PLAY, 16.sp) },
                     )
-
-                    // Add STOP button if active or paused
                     if (task.statusString == "InProcess" || task.isPaused) {
-                        DropdownMenuItem(
-                            text = { Text("Stop (Reset)") },
-                            onClick = {
-                                expanded = false
-                                onAction("stop")
-                            },
-                            leadingIcon = { NfIcon(NfIcons.DEBUG_STOP, 16.sp) },
-                        )
+                        DropdownMenuItem(text = { Text("Stop (Reset)") }, onClick = {
+                            expanded = false
+                            onAction("stop")
+                        }, leadingIcon = { NfIcon(NfIcons.DEBUG_STOP, 16.sp) })
                     }
-
                     DropdownMenuItem(text = { Text("Increase prio") }, onClick = {
                         expanded = false
                         onAction("prio_up")
@@ -150,14 +146,12 @@ fun TaskRow(
                         expanded = false
                         onAction("prio_down")
                     }, leadingIcon = { NfIcon(NfIcons.PRIORITY_DOWN, 16.sp) })
-
                     if (yankedUid == null) {
                         DropdownMenuItem(text = { Text("Yank (link)") }, onClick = {
                             expanded = false
                             onAction("yank")
                         }, leadingIcon = { NfIcon(NfIcons.LINK, 16.sp) })
                     }
-
                     if (task.statusString != "Cancelled") {
                         DropdownMenuItem(text = { Text("Cancel") }, onClick = {
                             expanded = false
@@ -183,38 +177,32 @@ fun TaskCheckbox(
     val isDone = task.isDone
     val status = task.statusString
     val isPaused = task.isPaused
-
     val bgColor =
         when {
             isDone -> Color(0xFF009900)
-
             status == "InProcess" -> Color(0xFF99CC99)
-
             isPaused -> Color(0xFFFFD54F)
-
-            // Amber for Paused
             status == "Cancelled" -> Color(0xFF4D3333)
-
             else -> Color.Transparent
         }
-
     Box(
         modifier =
             Modifier
-                .size(20.dp)
-                .background(bgColor, RoundedCornerShape(4.dp))
+                .size(
+                    20.dp,
+                ).background(bgColor, RoundedCornerShape(4.dp))
                 .border(1.5.dp, calColor, RoundedCornerShape(4.dp))
-                .clickable { onClick() },
+                .clickable {
+                    onClick()
+                },
         contentAlignment = Alignment.Center,
     ) {
         if (isDone) {
             NfIcon(NfIcons.CHECK, 12.sp, Color.White)
         } else if (status == "InProcess") {
-            Box(Modifier.offset(y = (-2).dp)) {
-                NfIcon(NfIcons.PLAY, 10.sp, Color.White)
-            }
+            Box(Modifier.offset(y = (-2).dp)) { NfIcon(NfIcons.PLAY, 10.sp, Color.White) }
         } else if (isPaused) {
-            NfIcon(NfIcons.PAUSE, 10.sp, Color.Black) // Pause Icon
+            NfIcon(NfIcons.PAUSE, 10.sp, Color.Black)
         } else if (status == "Cancelled") {
             NfIcon(NfIcons.CROSS, 12.sp, Color.White)
         }
@@ -236,15 +224,14 @@ fun CompactTagRow(
                 .fillMaxWidth()
                 .height(36.dp)
                 .background(bg, RoundedCornerShape(4.dp))
-                .clickable { onClick() }
-                .padding(horizontal = 12.dp),
+                .clickable {
+                    onClick()
+                }.padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         NfIcon(NfIcons.TAG, size = 14.sp, color = color)
         Spacer(Modifier.width(12.dp))
         Text(name, fontSize = 14.sp, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
-        if (count != null) {
-            Text("$count", fontSize = 12.sp, color = Color.Gray)
-        }
+        if (count != null) Text("$count", fontSize = 12.sp, color = Color.Gray)
     }
 }

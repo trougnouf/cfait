@@ -1,4 +1,3 @@
-// File: src/gui/view/mod.rs
 use std::time::Duration;
 pub mod help;
 pub mod settings;
@@ -17,9 +16,13 @@ use crate::storage::LOCAL_CALENDAR_HREF;
 
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{
-    MouseArea, Space, column, container, row, scrollable, stack, svg, text, text_editor, tooltip,
+    MouseArea, Space, button, column, container, row, scrollable, stack, svg, text, text_editor,
+    tooltip,
 };
 use iced::{Color, Element, Length, Theme, mouse};
+
+/// Shared semantic color for Locations (Gray)
+pub const COLOR_LOCATION: Color = Color::from_rgb(0.5, 0.55, 0.45);
 
 /// Shared style for tooltips with slight transparency
 pub fn tooltip_style(theme: &Theme) -> container::Style {
@@ -57,6 +60,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             // ... [Layout logic] ...
             const ITEM_HEIGHT_CAL: f32 = 44.0;
             const ITEM_HEIGHT_TAG: f32 = 34.0;
+            const ITEM_HEIGHT_LOC: f32 = 34.0;
             const SIDEBAR_CHROME: f32 = 110.0;
             const LOGO_SPACE_REQUIRED: f32 = 140.0;
 
@@ -78,6 +82,12 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                         )
                         .len() as f32
                         * ITEM_HEIGHT_TAG
+                }
+                SidebarMode::Locations => {
+                    app.store
+                        .get_all_locations(app.hide_completed, &app.hidden_calendars)
+                        .len() as f32
+                        * ITEM_HEIGHT_LOC
                 }
             };
 
@@ -209,9 +219,9 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 }
 
 fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
-    let active_tab_style =
-        |_theme: &Theme, status: iced::widget::button::Status| -> iced::widget::button::Style {
-            let base = iced::widget::button::Style {
+    let active_style =
+        |_theme: &Theme, _status: iced::widget::button::Status| -> iced::widget::button::Style {
+            iced::widget::button::Style {
                 background: Some(Color::from_rgb(1.0, 0.6, 0.0).into()),
                 text_color: Color::BLACK,
                 border: iced::Border {
@@ -219,50 +229,47 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
                     ..Default::default()
                 },
                 ..iced::widget::button::Style::default()
-            };
-
-            match status {
-                iced::widget::button::Status::Hovered => iced::widget::button::Style {
-                    background: Some(Color::from_rgb(1.0, 0.7, 0.1).into()),
-                    ..base
-                },
-                _ => base,
             }
         };
 
-    let btn_cals = iced::widget::button(
-        container(text("Calendars").size(14))
+    // Icons for tabs
+    let btn_cals =
+        button(container(icon::icon(icon::CALENDARS_HEADER).size(18)).center_x(Length::Fill))
+            .padding(8)
             .width(Length::Fill)
-            .center_x(Length::Fill),
-    )
-    .padding(5)
-    .width(Length::Fill)
-    .style(if app.sidebar_mode == SidebarMode::Calendars {
-        active_tab_style
-    } else {
-        iced::widget::button::secondary
-    })
-    .on_press(Message::SidebarModeChanged(SidebarMode::Calendars));
+            .style(if app.sidebar_mode == SidebarMode::Calendars {
+                active_style
+            } else {
+                button::text
+            })
+            .on_press(Message::SidebarModeChanged(SidebarMode::Calendars));
 
-    let btn_tags = iced::widget::button(
-        container(text("Tags").size(14))
-            .width(Length::Fill)
-            .center_x(Length::Fill),
-    )
-    .padding(5)
-    .width(Length::Fill)
-    .style(if app.sidebar_mode == SidebarMode::Categories {
-        active_tab_style
-    } else {
-        iced::widget::button::secondary
-    })
-    .on_press(Message::SidebarModeChanged(SidebarMode::Categories));
+    let btn_tags = button(container(icon::icon(icon::TAGS_HEADER).size(18)).center_x(Length::Fill))
+        .padding(8)
+        .width(Length::Fill)
+        .style(if app.sidebar_mode == SidebarMode::Categories {
+            active_style
+        } else {
+            button::text
+        })
+        .on_press(Message::SidebarModeChanged(SidebarMode::Categories));
 
-    let tabs = row![btn_cals, btn_tags].spacing(5);
+    let btn_locs = button(container(icon::icon(icon::LOCATION).size(18)).center_x(Length::Fill))
+        .padding(8)
+        .width(Length::Fill)
+        .style(if app.sidebar_mode == SidebarMode::Locations {
+            active_style
+        } else {
+            button::text
+        })
+        .on_press(Message::SidebarModeChanged(SidebarMode::Locations));
+
+    let tabs = row![btn_cals, btn_tags, btn_locs].spacing(2);
 
     let content = match app.sidebar_mode {
         SidebarMode::Calendars => view_sidebar_calendars(app),
         SidebarMode::Categories => view_sidebar_categories(app),
+        SidebarMode::Locations => crate::gui::view::sidebar::view_sidebar_locations(app),
     };
 
     let settings_btn = iced::widget::button(

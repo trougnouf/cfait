@@ -1,4 +1,3 @@
-// File: src/gui/update/mod.rs
 pub mod common;
 pub mod network;
 pub mod settings;
@@ -62,7 +61,9 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::IsolateCalendar(_)
         | Message::SidebarModeChanged(_)
         | Message::CategoryToggled(_)
+        | Message::LocationToggled(_)
         | Message::ClearAllTags
+        | Message::ClearAllLocations // <--- ADDED
         | Message::CategoryMatchModeChanged(_)
         | Message::ToggleHideCompleted(_)
         | Message::ToggleHideFullyCompletedTags(_)
@@ -81,6 +82,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ResizeStart(_)
         | Message::WindowResized(_)
         | Message::JumpToTag(_)
+        | Message::JumpToLocation(_) // <--- ADDED
         | Message::OpenUrl(_) => view::handle(app, message),
 
         Message::Refresh

@@ -1,4 +1,3 @@
-// File: src/gui/message.rs
 use crate::client::RustyClient;
 use crate::config::{AppTheme, Config};
 use crate::gui::state::{ResizeDirection, SidebarMode};
@@ -68,7 +67,9 @@ pub enum Message {
     SelectCalendar(String),
     IsolateCalendar(String),
     CategoryToggled(String),
+    LocationToggled(String),
     ClearAllTags,
+    ClearAllLocations, // <--- NEW
     CategoryMatchModeChanged(bool),
     RefreshedAll(Result<Vec<(String, Vec<TodoTask>)>, String>),
 
@@ -90,6 +91,7 @@ pub enum Message {
     MoveTask(String, String),
 
     JumpToTag(String),
+    JumpToLocation(String), // <--- NEW
 
     TaskMoved(Result<TodoTask, String>),
     ObSubmitOffline,

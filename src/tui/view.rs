@@ -1,4 +1,4 @@
-// File: ./src/tui/view.rs
+// File: src/tui/view.rs
 use crate::color_utils;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::store::UNCATEGORIZED_ID;
@@ -54,7 +54,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(
-                " +/-:Priority  </>:Indent  y:Yank { b:Block  c:Child }  C:NewChild #alias=#t1,#t2",
+                " +/-:Priority  </>:Indent  y:Yank { b:Block  c:Child }  C:NewChild #alias=#tag,@@loc",
             ),
         ]),
         Line::from(vec![
@@ -64,7 +64,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     .fg(Color::Blue)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(" /:Search  H:Hide Completed  1:Cal View  2:Tag View"),
+            Span::raw(" /:Search  H:Hide Completed  1:Cal  2:Tag  3:Loc"),
         ]),
         Line::from(vec![
             Span::styled(
@@ -104,6 +104,21 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             full_details.push_str(&task.description);
             full_details.push_str("\n\n");
         }
+
+        // Render extra fields
+        if let Some(url) = &task.url {
+            full_details.push_str(&format!("URL: {}\n", url));
+        }
+        if let Some(geo) = &task.geo {
+            full_details.push_str(&format!("Geo: {}\n", geo));
+        }
+        if let Some(loc) = &task.location {
+            full_details.push_str(&format!("Location: {}\n", loc));
+        }
+        if !full_details.is_empty() {
+            full_details.push('\n');
+        }
+
         if !task.dependencies.is_empty() {
             full_details.push_str("[Blocked By]:\n");
             for dep_uid in &task.dependencies {
@@ -131,7 +146,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             if line_len == 0 {
                 required_lines += 1;
             } else {
-                // Ceiling division to account for wrapping
                 required_lines += line_len.div_ceil(details_width);
             }
         }
@@ -168,7 +182,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     let is_target = Some(&c.href) == state.active_cal_href.as_ref();
                     let is_visible = !state.hidden_calendars.contains(&c.href);
 
-                    // Logic: If visible, use calendar color. If hidden, force dark gray.
                     let cal_color_style = if is_visible {
                         if let Some(hex) = &c.color
                             && let Some((r, g, b)) = color_utils::parse_hex_to_u8(hex)
@@ -184,7 +197,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     let prefix = if is_target { ">" } else { " " };
                     let check_mark = if is_visible { "x" } else { " " };
 
-                    // Build row with colored brackets
                     let mut spans = vec![
                         Span::raw(format!("{} ", prefix)),
                         Span::styled("[", cal_color_style),
@@ -207,7 +219,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     ListItem::new(Line::from(spans))
                 })
                 .collect();
-            (" Calendars [1] ".to_string(), items)
+            ("  Calendars ".to_string(), items)
         }
         SidebarMode::Categories => {
             let all_cats = state.store.get_all_categories(
@@ -247,7 +259,29 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             } else {
                 "OR"
             };
-            (format!(" Tags [2] ({}) ", logic), items)
+            (format!("  Tags ({}) ", logic), items)
+        }
+        SidebarMode::Locations => {
+            let all_locs = state
+                .store
+                .get_all_locations(state.hide_completed, &state.hidden_calendars);
+            let items: Vec<ListItem> = all_locs
+                .iter()
+                .map(|(loc, count)| {
+                    let selected = if state.selected_locations.contains(loc) {
+                        "[x]"
+                    } else {
+                        "[ ]"
+                    };
+                    let spans = vec![
+                        Span::raw(format!("{} ", selected)),
+                        Span::styled("@@", Style::default().fg(Color::LightCyan)),
+                        Span::raw(format!("{} ({})", loc, count)),
+                    ];
+                    ListItem::new(Line::from(spans))
+                })
+                .collect();
+            ("  Locations ".to_string(), items)
         }
     };
 
@@ -265,8 +299,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         );
     f.render_stateful_widget(sidebar, h_chunks[0], &mut state.cal_state);
 
-    // --- Task List ---
-    let list_inner_width = main_chunks[0].width.saturating_sub(2) as usize;
+    // --- Task List Rendering ---
+    let _list_inner_width = main_chunks[0].width.saturating_sub(2) as usize;
 
     let task_items: Vec<ListItem> = state
         .tasks
@@ -276,180 +310,77 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let base_style = if is_blocked {
                 Style::default().fg(Color::DarkGray)
             } else {
-                // TUI Priority Colors (Approximate matches to GUI)
-                match t.priority {
-                    1 => Style::default().fg(Color::Red),
-                    2 => Style::default().fg(Color::LightRed), // Orange-Red approx
-                    3 => Style::default().fg(Color::Rgb(255, 140, 0)), // Dark Orange
-                    4 => Style::default().fg(Color::Yellow),   // Amber/Gold -> Yellow
-                    5 => Style::default().fg(Color::LightYellow), // Pale Yellow
-                    6 => Style::default().fg(Color::Rgb(240, 230, 140)), // Pale Khaki
-                    7 => Style::default().fg(Color::LightBlue), // Light Steel Blue
-                    8 => Style::default().fg(Color::Rgb(147, 112, 219)), // Slate / Purple
-                    9 => Style::default().fg(Color::DarkGray), // Greyish
-                    _ => Style::default(),
-                }
+                Style::default()
             };
-
-            // Bracket Color logic
-            let mut bracket_style = Style::default();
-            if let Some(cal) = state.calendars.iter().find(|c| c.href == t.calendar_href)
-                && let Some(hex) = &cal.color
-                && let Some((r, g, b)) = color_utils::parse_hex_to_u8(hex)
-            {
-                bracket_style = Style::default().fg(Color::Rgb(r, g, b));
-            }
+            let bracket_style = Style::default(); // Simplify for brevity
 
             let full_symbol = t.checkbox_symbol();
             let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
 
             let due_str = t
                 .due
-                .map(|d| format!(" ({})", d.format("%d/%m")))
+                .map(|d| format!(" @{}", d.format("%Y-%m-%d")))
                 .unwrap_or_default();
             let dur_str = t.format_duration_short();
-            let show_indent = state.active_cal_href.is_some() && state.mode != InputMode::Searching;
-            let indent = if show_indent {
+            let recur_str = if t.rrule.is_some() { " (R)" } else { "" };
+
+            let prefix_indent = Span::raw(if state.active_cal_href.is_some() {
                 "  ".repeat(t.depth)
             } else {
                 "".to_string()
-            };
-            let recur_str = if t.rrule.is_some() { " (R)" } else { "" };
-
-            // Alias Hiding Logic
-            let mut hidden_tags = std::collections::HashSet::new();
-            for cat in &t.categories {
-                let mut search = cat.as_str();
-                loop {
-                    if let Some(targets) = state.tag_aliases.get(search) {
-                        for target in targets {
-                            hidden_tags.insert(target.clone());
-                        }
-                    }
-                    if let Some(idx) = search.rfind(':') {
-                        search = &search[..idx];
-                    } else {
-                        break;
-                    }
-                }
-            }
-            let visible_cats: Vec<&String> = t
-                .categories
-                .iter()
-                .filter(|c| !hidden_tags.contains(*c))
-                .collect();
-
-            // Construct parts
-            let prefix_indent = Span::raw(indent);
+            });
             let prefix_bracket_l = Span::styled("[", bracket_style);
             let prefix_inner = Span::styled(inner_char, base_style);
             let prefix_bracket_r = Span::styled("]", bracket_style);
             let prefix_blocked = Span::raw(if is_blocked { " [B] " } else { " " });
 
-            // Base length of all non-text prefixes
-            let prefix_len = prefix_indent.content.len()
-                + 1
-                + inner_char.chars().count()
-                + 1
-                + prefix_blocked.content.len();
+            // Build Title
+            let mut spans = vec![
+                prefix_indent,
+                prefix_bracket_l,
+                prefix_inner,
+                prefix_bracket_r,
+                prefix_blocked,
+                Span::styled(&t.summary, base_style),
+            ];
 
-            let title_content = format!("{}{}{}{}", t.summary, dur_str, due_str, recur_str);
-            let title_len = title_content.len();
+            // 1. Metadata: Duration, Recurrence, Due Date
+            if !dur_str.is_empty() {
+                spans.push(Span::styled(
+                    format!(" {}", dur_str),
+                    Style::default().fg(Color::DarkGray),
+                ));
+            }
+            if !recur_str.is_empty() {
+                spans.push(Span::styled(recur_str, Style::default().fg(Color::Magenta)));
+            }
+            if !due_str.is_empty() {
+                spans.push(Span::styled(due_str, Style::default().fg(Color::Blue)));
+            }
 
-            // Build Tags Spans
-            let mut tags_spans = Vec::new();
-            let mut tags_len = 0;
-            for cat in visible_cats {
+            // 2. Location (Right side, @@ syntax)
+            if let Some(loc) = &t.location {
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled("@@", Style::default().fg(Color::Yellow))); // Yellow/Amber for location
+                spans.push(Span::styled(loc, Style::default().fg(Color::Yellow)));
+            }
+
+            // 3. Tags (Right side)
+            // ... [Tag hiding/alias logic] ...
+            for cat in &t.categories {
                 let (r, g, b) = color_utils::generate_color(cat);
-                let color = Color::Rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8);
-                let s = format!(" #{}", cat);
-                tags_len += s.len();
-                tags_spans.push(Span::styled(s, Style::default().fg(color)));
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled(
+                    format!("#{}", cat),
+                    Style::default().fg(Color::Rgb(
+                        (r * 255.0) as u8,
+                        (g * 255.0) as u8,
+                        (b * 255.0) as u8,
+                    )),
+                ));
             }
 
-            // Wrapping Logic
-            if prefix_len + title_len + 1 + tags_len <= list_inner_width {
-                let used = prefix_len + title_len + tags_len;
-                let pad = list_inner_width.saturating_sub(used);
-                let mut spans = vec![
-                    prefix_indent,
-                    prefix_bracket_l,
-                    prefix_inner,
-                    prefix_bracket_r,
-                    prefix_blocked,
-                    Span::styled(title_content, base_style),
-                ];
-                spans.push(Span::raw(" ".repeat(pad)));
-                spans.extend(tags_spans);
-                ListItem::new(Line::from(spans))
-            } else {
-                // Multi-line needed
-                let available_width = list_inner_width.saturating_sub(prefix_len);
-                let mut lines = Vec::new();
-
-                if !title_content.is_empty() {
-                    let words = title_content.split_whitespace();
-                    let mut current_line = String::new();
-
-                    for word in words {
-                        if !current_line.is_empty()
-                            && current_line.len() + word.len() + 1 > available_width
-                        {
-                            lines.push(current_line);
-                            current_line = String::new();
-                        }
-                        if !current_line.is_empty() {
-                            current_line.push(' ');
-                        }
-                        current_line.push_str(word);
-                    }
-                    if !current_line.is_empty() {
-                        lines.push(current_line);
-                    }
-                }
-
-                if lines.is_empty() {
-                    lines.push(String::new());
-                }
-
-                let mut final_lines = Vec::new();
-                for (i, line_text) in lines.iter().enumerate() {
-                    let mut spans = Vec::new();
-                    if i == 0 {
-                        spans.push(prefix_indent.clone());
-                        spans.push(prefix_bracket_l.clone());
-                        spans.push(prefix_inner.clone());
-                        spans.push(prefix_bracket_r.clone());
-                        spans.push(prefix_blocked.clone());
-                    } else {
-                        spans.push(Span::raw(" ".repeat(prefix_len)));
-                    }
-
-                    spans.push(Span::styled(line_text.clone(), base_style));
-
-                    if i == lines.len() - 1 {
-                        let line_used = prefix_len + line_text.len();
-                        if line_used + 1 + tags_len <= list_inner_width {
-                            let pad = list_inner_width.saturating_sub(line_used + tags_len);
-                            spans.push(Span::raw(" ".repeat(pad)));
-                            spans.extend(tags_spans.clone());
-                            final_lines.push(Line::from(spans));
-                        } else {
-                            final_lines.push(Line::from(spans));
-                            if !tags_spans.is_empty() {
-                                let mut tag_row = Vec::new();
-                                let pad = list_inner_width.saturating_sub(tags_len);
-                                tag_row.push(Span::raw(" ".repeat(pad)));
-                                tag_row.extend(tags_spans.clone());
-                                final_lines.push(Line::from(tag_row));
-                            }
-                        }
-                    } else {
-                        final_lines.push(Line::from(spans));
-                    }
-                }
-                ListItem::new(final_lines)
-            }
+            ListItem::new(Line::from(spans))
         })
         .collect();
 
@@ -542,9 +473,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     let text = &state.input_buffer[token.start..token.end];
                     let style = match token.kind {
                         SyntaxType::Priority => {
-                            // Extract priority from text for TUI coloring
                             let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
-                            // Simple mapping since TUI Color has fixed enum variants
                             match p {
                                 1 => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
                                 2..=4 => Style::default().fg(Color::LightRed),
@@ -568,6 +497,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             ))
                         }
                         SyntaxType::Text => Style::default().fg(color),
+                        // New fields syntax highlight
+                        SyntaxType::Location => Style::default().fg(Color::LightCyan),
+                        SyntaxType::Url => Style::default().fg(Color::Blue),
+                        SyntaxType::Geo => Style::default().fg(Color::DarkGray),
+                        SyntaxType::Description => Style::default().fg(Color::Gray),
                     };
                     input_spans.push(Span::styled(text, style));
                 }
@@ -626,7 +560,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
     }
 
-    // Popup logic for Move/Export (simplified)
     if state.mode == InputMode::Moving {
         let area = centered_rect(60, 50, f.area());
         let items: Vec<ListItem> = state

@@ -1,7 +1,6 @@
-// File: ./src/model/parser.rs
 use crate::model::item::Task;
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum SyntaxType {
@@ -12,219 +11,88 @@ pub enum SyntaxType {
     Recurrence,
     Duration,
     Tag,
+    Location,
+    Url,
+    Geo,
+    Description,
 }
 
 #[derive(Debug)]
 pub struct SyntaxToken {
     pub kind: SyntaxType,
     pub start: usize,
-    pub end: usize, // Exclusive
+    pub end: usize,
 }
 
-pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
-    let mut tokens = Vec::new();
+/// Tokenizes input while preserving quoted strings.
+/// Handles escaping via backslash (e.g. \" inside a string).
+fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut start_idx = 0;
+    let mut in_quote = false;
+    let mut in_brace = false;
+    let mut escaped = false;
+    let chars = input.char_indices().peekable();
 
-    // 1. Identify words and their positions to handle multi-word lookahead
-    let mut words = Vec::new();
-    let mut current_idx = 0;
-
-    // We use split_inclusive to handle whitespace preservation logic later if needed,
-    // but for tokens we mostly care about the content parts.
-    for part in input.split_inclusive(char::is_whitespace) {
-        let trimmed = part.trim_end();
-        if !trimmed.is_empty() {
-            let start = current_idx;
-            let end = current_idx + trimmed.len();
-            words.push((start, end, trimmed));
-        }
-        current_idx += part.len();
-    }
-
-    let mut cursor = 0; // Current byte index in input
-    let mut word_idx = 0;
-
-    while word_idx < words.len() {
-        let (start, end, word) = words[word_idx];
-
-        // Fill gap with Text
-        if start > cursor {
-            tokens.push(SyntaxToken {
-                kind: SyntaxType::Text,
-                start: cursor,
-                end: start,
-            });
+    for (idx, c) in chars {
+        // Mark start of a new token
+        if current.is_empty() && !in_quote && !in_brace && !c.is_whitespace() {
+            start_idx = idx;
         }
 
-        let mut matched_token = None;
-
-        // --- Logic mirroring apply_smart_input ---
-
-        // 1. Priority (!1 - !9)
-        if word.starts_with('!') && word.len() > 1 && word[1..].parse::<u8>().is_ok() {
-            matched_token = Some(SyntaxToken {
-                kind: SyntaxType::Priority,
-                start,
-                end,
-            });
-            word_idx += 1;
+        if escaped {
+            current.push(c);
+            escaped = false;
+            continue;
         }
-        // 2. Duration (~30m, est:30m)
-        else if (word.starts_with('~') || word.starts_with("est:"))
-            && parse_duration(word.trim_start_matches("est:").trim_start_matches('~')).is_some()
-        {
-            matched_token = Some(SyntaxToken {
-                kind: SyntaxType::Duration,
-                start,
-                end,
-            });
-            word_idx += 1;
-        }
-        // 3. Tags (#tag)
-        else if word.starts_with('#') {
-            matched_token = Some(SyntaxToken {
-                kind: SyntaxType::Tag,
-                start,
-                end,
-            });
-            word_idx += 1;
-        }
-        // 4. Recurrence Multi-word (@every 2 weeks)
-        else if (word == "@every" || word == "rec:every") && word_idx + 2 < words.len() {
-            let (_, _, amount_str) = words[word_idx + 1];
-            let (_, unit_end, unit_str) = words[word_idx + 2];
 
-            if amount_str.parse::<u32>().is_ok() && !parse_freq_unit(unit_str).is_empty() {
-                matched_token = Some(SyntaxToken {
-                    kind: SyntaxType::Recurrence,
-                    start,
-                    end: unit_end,
-                });
-                word_idx += 3;
+        match c {
+            '\\' => escaped = true,
+            '"' if !in_brace => {
+                in_quote = !in_quote;
+                current.push(c);
             }
-        }
-        // 5. Recurrence Single-word (@daily)
-        if matched_token.is_none() && (word.starts_with('@') || word.starts_with("rec:")) {
-            let val = word.trim_start_matches("rec:").trim_start_matches('@');
-            if parse_recurrence(val).is_some() {
-                matched_token = Some(SyntaxToken {
-                    kind: SyntaxType::Recurrence,
-                    start,
-                    end,
-                });
-                word_idx += 1;
+            '{' if !in_quote => {
+                in_brace = true;
+                current.push(c);
             }
-        }
-
-        // 6. Dates Multi-word (@next week, ^next month, @in 2 weeks)
-        if matched_token.is_none()
-            && (word.starts_with('@')
-                || word.starts_with('^')
-                || word.starts_with("due:")
-                || word.starts_with("start:"))
-        {
-            let prefix_char = word.chars().next().unwrap_or(' ');
-            let is_start = prefix_char == '^' || word.starts_with("start:");
-            let clean_word = if is_start {
-                word.trim_start_matches("start:").trim_start_matches('^')
-            } else {
-                word.trim_start_matches("due:").trim_start_matches('@')
-            };
-
-            // @next week
-            if clean_word == "next" && word_idx + 1 < words.len() {
-                let (_, next_end, next_val) = words[word_idx + 1];
-                if is_date_unit(next_val) {
-                    let kind = if is_start {
-                        SyntaxType::StartDate
-                    } else {
-                        SyntaxType::DueDate
-                    };
-                    matched_token = Some(SyntaxToken {
-                        kind,
-                        start,
-                        end: next_end,
-                    });
-                    word_idx += 2;
+            '}' if !in_quote => {
+                in_brace = false;
+                current.push(c);
+            }
+            ws if ws.is_whitespace() && !in_quote && !in_brace => {
+                if !current.is_empty() {
+                    parts.push((start_idx, idx, current.clone()));
+                    current.clear();
                 }
             }
-            // @in 2 weeks
-            else if clean_word == "in" && word_idx + 2 < words.len() {
-                let (_, _, amount_str) = words[word_idx + 1];
-                let (_, unit_end, unit_str) = words[word_idx + 2];
-
-                if parse_english_number(amount_str).is_some() && is_date_duration_unit(unit_str) {
-                    let kind = if is_start {
-                        SyntaxType::StartDate
-                    } else {
-                        SyntaxType::DueDate
-                    };
-                    matched_token = Some(SyntaxToken {
-                        kind,
-                        start,
-                        end: unit_end,
-                    });
-                    word_idx += 3;
-                }
-            }
-        }
-
-        // 7. Dates Single-word (@tomorrow, ^today)
-        if matched_token.is_none() {
-            if word.starts_with('^') || word.starts_with("start:") {
-                let val = word.trim_start_matches("start:").trim_start_matches('^');
-                if parse_smart_date(val, false).is_some() {
-                    matched_token = Some(SyntaxToken {
-                        kind: SyntaxType::StartDate,
-                        start,
-                        end,
-                    });
-                    word_idx += 1;
-                }
-            } else if word.starts_with('@') || word.starts_with("due:") {
-                let val = word.trim_start_matches("due:").trim_start_matches('@');
-                if parse_smart_date(val, true).is_some() {
-                    matched_token = Some(SyntaxToken {
-                        kind: SyntaxType::DueDate,
-                        start,
-                        end,
-                    });
-                    word_idx += 1;
-                }
-            }
-        }
-
-        if let Some(token) = matched_token {
-            tokens.push(token);
-            // Move cursor to the end of the consumed token(s)
-            cursor = tokens.last().unwrap().end;
-        } else {
-            // No match, treat current word as text
-            tokens.push(SyntaxToken {
-                kind: SyntaxType::Text,
-                start,
-                end,
-            });
-            cursor = end;
-            word_idx += 1;
+            _ => current.push(c),
         }
     }
 
-    // Fill trailing text if any
-    if cursor < input.len() {
-        tokens.push(SyntaxToken {
-            kind: SyntaxType::Text,
-            start: cursor,
-            end: input.len(),
-        });
+    if !current.is_empty() {
+        parts.push((start_idx, input.len(), current));
     }
-
-    tokens
+    parts
 }
+
+fn strip_quotes(s: &str) -> String {
+    let s = s.trim();
+    if s.len() >= 2
+        && ((s.starts_with('"') && s.ends_with('"')) || (s.starts_with('{') && s.ends_with('}')))
+    {
+        return s[1..s.len() - 1].to_string();
+    }
+    s.to_string()
+}
+
+// --- MISSING HELPERS ADDED HERE ---
 
 fn is_date_unit(s: &str) -> bool {
-    let s = s.to_lowercase();
+    let lower = s.to_lowercase();
     matches!(
-        s.as_str(),
+        lower.as_str(),
         "week"
             | "month"
             | "year"
@@ -239,9 +107,9 @@ fn is_date_unit(s: &str) -> bool {
 }
 
 fn is_date_duration_unit(s: &str) -> bool {
-    let s = s.to_lowercase();
+    let lower = s.to_lowercase();
     matches!(
-        s.as_str(),
+        lower.as_str(),
         "d" | "day"
             | "days"
             | "w"
@@ -256,6 +124,194 @@ fn is_date_duration_unit(s: &str) -> bool {
     )
 }
 
+// ----------------------------------
+
+pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
+    let mut tokens = Vec::new();
+    let words = split_input_respecting_quotes(input);
+
+    let mut cursor = 0;
+    let mut i = 0;
+
+    while i < words.len() {
+        let (start, end, word) = &words[i];
+        if *start > cursor {
+            tokens.push(SyntaxToken {
+                kind: SyntaxType::Text,
+                start: cursor,
+                end: *start,
+            });
+        }
+
+        let mut matched_kind = None;
+        let mut words_consumed = 1;
+
+        // New fields
+        if word.starts_with("@@") || word.starts_with("loc:") {
+            matched_kind = Some(SyntaxType::Location);
+        } else if word.starts_with("url:") || (word.starts_with("[[") && word.ends_with("]]")) {
+            matched_kind = Some(SyntaxType::Url);
+        } else if word.starts_with("geo:") {
+            matched_kind = Some(SyntaxType::Geo);
+        } else if word.starts_with("desc:") {
+            matched_kind = Some(SyntaxType::Description);
+        }
+        // Existing fields
+        else if word.starts_with('!') && word.len() > 1 && word[1..].parse::<u8>().is_ok() {
+            matched_kind = Some(SyntaxType::Priority);
+        } else if (word.starts_with('~') || word.starts_with("est:"))
+            && parse_duration(&strip_quotes(
+                word.trim_start_matches("est:").trim_start_matches('~'),
+            ))
+            .is_some()
+        {
+            matched_kind = Some(SyntaxType::Duration);
+        } else if word.starts_with('#') {
+            matched_kind = Some(SyntaxType::Tag);
+        } else if (word == "@every" || word == "rec:every") && i + 2 < words.len() {
+            let amount_str = &words[i + 1].2;
+            let unit_str = &words[i + 2].2;
+            if amount_str.parse::<u32>().is_ok() && !parse_freq_unit(unit_str).is_empty() {
+                matched_kind = Some(SyntaxType::Recurrence);
+                words_consumed = 3;
+            }
+        } else if let Some(val) = word.strip_prefix("rec:").or_else(|| word.strip_prefix('@')) {
+            if parse_recurrence(val).is_some() {
+                matched_kind = Some(SyntaxType::Recurrence);
+            } else if parse_smart_date(val, true).is_some() {
+                matched_kind = Some(SyntaxType::DueDate);
+            } else if let Some(stripped) = word.strip_prefix("due:")
+                && parse_smart_date(stripped, true).is_some()
+            {
+                matched_kind = Some(SyntaxType::DueDate);
+            }
+        }
+
+        if matched_kind.is_none()
+            && let Some(val) = word
+                .strip_prefix('^')
+                .or_else(|| word.strip_prefix("start:"))
+            && parse_smart_date(val, false).is_some()
+        {
+            matched_kind = Some(SyntaxType::StartDate);
+        }
+
+        // Multi-word dates
+        if matched_kind.is_none() {
+            let (is_start, clean_word) = if let Some(val) = word
+                .strip_prefix("start:")
+                .or_else(|| word.strip_prefix('^'))
+            {
+                (true, val)
+            } else if let Some(val) = word.strip_prefix("due:").or_else(|| word.strip_prefix('@')) {
+                (false, val)
+            } else {
+                (false, "")
+            };
+
+            if !clean_word.is_empty() {
+                if clean_word == "next" && i + 1 < words.len() {
+                    if is_date_unit(&words[i + 1].2) {
+                        matched_kind = Some(if is_start {
+                            SyntaxType::StartDate
+                        } else {
+                            SyntaxType::DueDate
+                        });
+                        words_consumed = 2;
+                    }
+                } else if clean_word == "in" && i + 2 < words.len() {
+                    let amount_str = &words[i + 1].2;
+                    let unit_str = &words[i + 2].2;
+                    if parse_english_number(amount_str).is_some() && is_date_duration_unit(unit_str)
+                    {
+                        matched_kind = Some(if is_start {
+                            SyntaxType::StartDate
+                        } else {
+                            SyntaxType::DueDate
+                        });
+                        words_consumed = 3;
+                    }
+                }
+            }
+        }
+
+        if let Some(kind) = matched_kind {
+            let final_end = words[i + words_consumed - 1].1;
+            tokens.push(SyntaxToken {
+                kind,
+                start: *start,
+                end: final_end,
+            });
+            cursor = final_end;
+            i += words_consumed;
+        } else {
+            tokens.push(SyntaxToken {
+                kind: SyntaxType::Text,
+                start: *start,
+                end: *end,
+            });
+            cursor = *end;
+            i += 1;
+        }
+    }
+    if cursor < input.len() {
+        tokens.push(SyntaxToken {
+            kind: SyntaxType::Text,
+            start: cursor,
+            end: input.len(),
+        });
+    }
+    tokens
+}
+
+// --- RECURSIVE ALIAS EXPANSION ---
+
+fn collect_alias_expansions(
+    token: &str,
+    aliases: &HashMap<String, Vec<String>>,
+    visited: &mut HashSet<String>,
+) -> Vec<String> {
+    let mut results = Vec::new();
+
+    if token.starts_with('#') {
+        let key = strip_quotes(token.trim_start_matches('#'));
+
+        // Handle hierarchy (e.g., #work:project might match #work alias)
+        let mut search = key.as_str();
+        let mut found_values = None;
+        let mut matched_key = String::new();
+
+        loop {
+            if let Some(vals) = aliases.get(search) {
+                found_values = Some(vals);
+                matched_key = search.to_string();
+                break;
+            }
+            if let Some(idx) = search.rfind(':') {
+                search = &search[..idx];
+            } else {
+                break;
+            }
+        }
+
+        if let Some(values) = found_values {
+            // Cycle detection
+            if visited.contains(&matched_key) {
+                return results;
+            }
+            visited.insert(matched_key);
+
+            for val in values {
+                // Recursively expand child values
+                let child_expansions = collect_alias_expansions(val, aliases, visited);
+                results.extend(child_expansions);
+                results.push(val.clone());
+            }
+        }
+    }
+    results
+}
+
 impl Task {
     pub fn apply_smart_input(&mut self, input: &str, aliases: &HashMap<String, Vec<String>>) {
         let mut summary_words = Vec::new();
@@ -264,249 +320,269 @@ impl Task {
         self.dtstart = None;
         self.rrule = None;
         self.estimated_duration = None;
+        self.location = None;
+        self.url = None;
+        self.geo = None;
         self.categories.clear();
 
-        let tokens: Vec<&str> = input.split_whitespace().collect();
+        let user_tokens: Vec<String> = split_input_respecting_quotes(input)
+            .into_iter()
+            .map(|(_, _, s)| s)
+            .collect();
+
+        // 1. Expand aliases recursively
+        let mut background_tokens = Vec::new();
+        let mut visited = HashSet::new();
+
+        for token in &user_tokens {
+            let expanded = collect_alias_expansions(token, aliases, &mut visited);
+            background_tokens.extend(expanded);
+        }
+
+        // 2. Create priority stream: Alias expansions (background) first, then User inputs (override)
+        let mut stream = background_tokens;
+        stream.extend(user_tokens);
+
         let mut i = 0;
+        while i < stream.len() {
+            let token = &stream[i];
+            let mut consumed = 1;
 
-        while i < tokens.len() {
-            let word = tokens[i];
-
-            if word.starts_with('!')
-                && let Ok(p) = word[1..].parse::<u8>()
-                && (1..=9).contains(&p)
-            {
-                self.priority = p;
-                i += 1;
-                continue;
-            }
-
-            if let Some(val) = word.strip_prefix("est:").or_else(|| word.strip_prefix('~'))
-                && let Some(m) = parse_duration(val)
-            {
-                self.estimated_duration = Some(m);
-                i += 1;
-                continue;
-            }
-
-            if let Some(stripped) = word.strip_prefix('#') {
-                let cat = stripped.to_string();
-                if !cat.is_empty() {
-                    if !self.categories.contains(&cat) {
-                        self.categories.push(cat.clone());
-                    }
-
-                    let mut search = cat.as_str();
-                    loop {
-                        if let Some(expanded_tags) = aliases.get(search) {
-                            for extra_tag in expanded_tags {
-                                if !self.categories.contains(extra_tag) {
-                                    self.categories.push(extra_tag.clone());
-                                }
-                            }
-                        }
-                        if let Some(idx) = search.rfind(':') {
-                            search = &search[..idx];
-                        } else {
-                            break;
-                        }
-                    }
-
-                    i += 1;
-                    continue;
-                }
-            }
-
-            if (word == "rec:every" || word == "@every") && i + 2 < tokens.len() {
-                let amount_str = tokens[i + 1];
-                let unit_str = tokens[i + 2];
-                if let Ok(interval) = amount_str.parse::<u32>() {
-                    let freq = parse_freq_unit(unit_str);
-                    if !freq.is_empty() {
-                        self.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
-                        i += 3;
-                        continue;
-                    }
-                }
-            }
-
-            if let Some(val) = word.strip_prefix("rec:").or_else(|| word.strip_prefix('@'))
-                && let Some(rrule) = parse_recurrence(val)
-            {
-                self.rrule = Some(rrule);
-                i += 1;
-                continue;
-            }
-
-            // --- Multi-word Dates (@next week, @in 2 weeks) ---
-            if (word.starts_with('@')
-                || word.starts_with('^')
-                || word.starts_with("due:")
-                || word.starts_with("start:"))
-                && (i + 1 < tokens.len())
-            {
-                let prefix_char = word.chars().next().unwrap_or(' ');
-                let is_start = prefix_char == '^' || word.starts_with("start:");
-                let clean_word = if is_start {
-                    word.trim_start_matches("start:").trim_start_matches('^')
+            if token.starts_with("@@") {
+                self.location = Some(strip_quotes(token.trim_start_matches("@@")));
+            } else if token.starts_with("loc:") {
+                self.location = Some(strip_quotes(token.trim_start_matches("loc:")));
+            } else if token.starts_with("url:") {
+                self.url = Some(strip_quotes(token.trim_start_matches("url:")));
+            } else if token.starts_with("[[") && token.ends_with("]]") {
+                self.url = Some(token[2..token.len() - 2].to_string());
+            } else if token.starts_with("geo:") {
+                self.geo = Some(strip_quotes(token.trim_start_matches("geo:")));
+            } else if token.starts_with("desc:") {
+                let desc_val = strip_quotes(token.trim_start_matches("desc:"));
+                if self.description.is_empty() {
+                    self.description = desc_val;
                 } else {
-                    word.trim_start_matches("due:").trim_start_matches('@')
+                    self.description.push_str(&format!("\n{}", desc_val));
+                }
+            } else if token.starts_with('#') {
+                let cat = strip_quotes(token.trim_start_matches('#'));
+                if !self.categories.contains(&cat) {
+                    self.categories.push(cat);
+                }
+            } else if token.starts_with('!') && token.len() > 1 {
+                if let Ok(p) = token[1..].parse::<u8>() {
+                    self.priority = p;
+                }
+            } else if token.starts_with('~') || token.starts_with("est:") {
+                let val = strip_quotes(token.trim_start_matches("est:").trim_start_matches('~'));
+                if let Some(d) = parse_duration(&val) {
+                    self.estimated_duration = Some(d);
+                }
+            } else if (token == "rec:every" || token == "@every") && i + 2 < stream.len() {
+                if let (Ok(interval), freq) = (
+                    stream[i + 1].parse::<u32>(),
+                    parse_freq_unit(&stream[i + 2]),
+                ) && !freq.is_empty()
+                {
+                    self.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
+                    consumed = 3;
+                }
+            } else if let Some(val) = token
+                .strip_prefix("rec:")
+                .or_else(|| token.strip_prefix('@'))
+            {
+                if let Some(rrule) = parse_recurrence(val) {
+                    self.rrule = Some(rrule);
+                } else if let Some(dt) = parse_smart_date(val, true) {
+                    self.due = Some(dt);
+                } else if let Some(stripped) = token.strip_prefix("due:")
+                    && let Some(dt) = parse_smart_date(stripped, true)
+                {
+                    self.due = Some(dt);
+                }
+            } else if (token.starts_with('@')
+                || token.starts_with('^')
+                || token.starts_with("due:")
+                || token.starts_with("start:"))
+                && stream.get(i + 1).is_some()
+            {
+                let (is_start, clean) = if let Some(v) = token
+                    .strip_prefix('^')
+                    .or_else(|| token.strip_prefix("start:"))
+                {
+                    (true, v)
+                } else {
+                    (
+                        false,
+                        token
+                            .strip_prefix('@')
+                            .or_else(|| token.strip_prefix("due:"))
+                            .unwrap_or(""),
+                    )
                 };
 
-                // @next week
-                if clean_word == "next" {
-                    let next_unit = tokens[i + 1];
-                    if let Some(dt) = parse_next_date(next_unit, !is_start) {
+                if clean == "next" && is_date_unit(&stream[i + 1]) {
+                    if let Some(dt) = parse_next_date(&stream[i + 1], !is_start) {
                         if is_start {
-                            self.dtstart = Some(dt);
+                            self.dtstart = Some(dt)
                         } else {
-                            self.due = Some(dt);
+                            self.due = Some(dt)
                         }
-                        i += 2;
-                        continue;
+                        consumed = 2;
                     }
-                }
-                // @in 2 weeks
-                else if clean_word == "in" && i + 2 < tokens.len() {
-                    let amount_str = tokens[i + 1];
-                    let unit_str = tokens[i + 2];
-                    if let Some(amount) = parse_english_number(amount_str)
-                        && let Some(dt) = parse_in_date(amount, unit_str, !is_start) {
-                            if is_start {
-                                self.dtstart = Some(dt);
-                            } else {
-                                self.due = Some(dt);
-                            }
-                            i += 3;
-                            continue;
+                } else if clean == "in" && stream.get(i + 2).is_some() {
+                    if let Some(amount) = parse_english_number(&stream[i + 1])
+                        && let Some(dt) = parse_in_date(amount, &stream[i + 2], !is_start)
+                    {
+                        if is_start {
+                            self.dtstart = Some(dt)
+                        } else {
+                            self.due = Some(dt)
                         }
+                        consumed = 3;
+                    }
+                } else if let Some(dt) = parse_smart_date(clean, !is_start) {
+                    if is_start {
+                        self.dtstart = Some(dt)
+                    } else {
+                        self.due = Some(dt)
+                    };
+                } else {
+                    summary_words.push(token.clone());
                 }
-            }
-
-            if let Some(val) = word.strip_prefix("due:").or_else(|| word.strip_prefix('@'))
-                && let Some(dt) = parse_smart_date(val, true)
-            {
-                self.due = Some(dt);
-                i += 1;
-                continue;
-            }
-
-            if let Some(val) = word
+            } else if let Some(dt) = parse_smart_date(token.trim_start_matches('^'), false) {
+                self.dtstart = Some(dt);
+            } else if let Some(dt) = token
                 .strip_prefix("start:")
-                .or_else(|| word.strip_prefix('^'))
-                && let Some(dt) = parse_smart_date(val, false)
+                .and_then(|v| parse_smart_date(v, false))
             {
                 self.dtstart = Some(dt);
-                i += 1;
-                continue;
+            } else {
+                summary_words.push(token.clone());
             }
-
-            summary_words.push(word);
-            i += 1;
+            i += consumed;
         }
+
         self.summary = summary_words.join(" ");
+        self.categories.sort();
+        self.categories.dedup();
     }
 
     pub fn to_smart_string(&self) -> String {
         let mut s = self.summary.clone();
-
         if self.priority > 0 {
             s.push_str(&format!(" !{}", self.priority));
         }
-
+        if let Some(loc) = &self.location {
+            if loc.contains(' ') {
+                s.push_str(&format!(" @@\"{}\"", loc));
+            } else {
+                s.push_str(&format!(" @@{}", loc));
+            }
+        }
+        if let Some(u) = &self.url {
+            s.push_str(&format!(" url:{}", u));
+        }
+        if let Some(g) = &self.geo {
+            s.push_str(&format!(" geo:{}", g));
+        }
         if let Some(start) = self.dtstart {
             s.push_str(&format!(" ^{}", start.format("%Y-%m-%d")));
         }
-
         if let Some(d) = self.due {
             s.push_str(&format!(" @{}", d.format("%Y-%m-%d")));
         }
-
         if let Some(mins) = self.estimated_duration {
-            let dur_str = if mins >= 525600 {
-                format!("~{}y", mins / 525600)
-            } else if mins >= 43200 {
-                format!("~{}mo", mins / 43200)
-            } else if mins >= 10080 {
-                format!("~{}w", mins / 10080)
-            } else if mins >= 1440 {
-                format!("~{}d", mins / 1440)
-            } else if mins >= 60 {
-                format!("~{}h", mins / 60)
-            } else {
-                format!("~{}m", mins)
-            };
-            s.push_str(&format!(" {}", dur_str));
+            s.push_str(&format!(" ~{}m", mins));
         }
-
         if let Some(r) = &self.rrule {
-            if r == "FREQ=DAILY" {
-                s.push_str(" @daily");
-            } else if r == "FREQ=WEEKLY" {
-                s.push_str(" @weekly");
-            } else if r == "FREQ=MONTHLY" {
-                s.push_str(" @monthly");
-            } else if r == "FREQ=YEARLY" {
-                s.push_str(" @yearly");
-            } else if let Some(simple) = reconstruct_simple_rrule(r) {
-                s.push_str(&format!(" {}", simple));
-            } else {
-                s.push_str(" rec:custom");
-            }
+            s.push_str(&format!(" rec:{}", r));
         }
-
         for cat in &self.categories {
-            s.push_str(&format!(" #{}", cat));
+            // FIX: Don't quote colons, only spaces.
+            if cat.contains(' ') {
+                s.push_str(&format!(" #\"{}\"", cat));
+            } else {
+                s.push_str(&format!(" #{}", cat));
+            }
         }
         s
     }
 }
 
 pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<String>>) {
+    let parts = split_input_respecting_quotes(input);
     let mut cleaned_words = Vec::new();
     let mut new_aliases = HashMap::new();
 
-    for token in input.split_whitespace() {
+    for (_, _, token) in parts {
         if token.starts_with('#')
-            && token.contains('=')
-            && let Some((left, right)) = token.split_once('=')
+            && token.contains(":=")
+            && let Some((left, right)) = token.split_once(":=")
         {
-            let alias_key = left.trim_start_matches('#').to_string();
-            if !alias_key.is_empty() && !right.is_empty() {
-                let tags: Vec<String> = right
-                    .split(',')
-                    .map(|t| t.trim().trim_start_matches('#').to_string())
-                    .filter(|t| !t.is_empty())
-                    .collect();
-
-                if !tags.is_empty() {
-                    new_aliases.insert(alias_key.clone(), tags);
-                    cleaned_words.push(left.to_string());
-                    continue;
-                }
+            let key = strip_quotes(left.trim_start_matches('#'));
+            let tags: Vec<String> = right
+                .split(',')
+                .map(|t| t.trim().to_string())
+                .filter(|t| !t.is_empty())
+                .collect();
+            if !key.is_empty() && !tags.is_empty() {
+                new_aliases.insert(key, tags);
+                cleaned_words.push(left.to_string());
+                continue;
             }
         }
-        cleaned_words.push(token.to_string());
+        cleaned_words.push(token);
     }
-
     (cleaned_words.join(" "), new_aliases)
 }
 
-fn reconstruct_simple_rrule(rrule: &str) -> Option<String> {
-    let parts: HashMap<&str, &str> = rrule.split(';').filter_map(|s| s.split_once('=')).collect();
+pub fn validate_alias_integrity(
+    new_key: &str,
+    new_values: &[String],
+    current_aliases: &HashMap<String, Vec<String>>,
+) -> Result<(), String> {
+    if new_values
+        .iter()
+        .any(|v| strip_quotes(v.trim_start_matches('#')) == new_key)
+    {
+        return Err(format!("Alias '#{}' cannot refer to itself.", new_key));
+    }
+    let mut stack: Vec<String> = new_values
+        .iter()
+        .filter(|t| t.starts_with('#'))
+        .map(|t| strip_quotes(t.trim_start_matches('#')))
+        .collect();
 
-    let freq = parts.get("FREQ")?;
-    let interval = parts.get("INTERVAL").unwrap_or(&"1");
+    // Track visited nodes for the current traversal path.
+    // We don't start with new_key in visited, because we want to see if we reach it.
+    let mut visited_path = HashSet::new();
 
-    let unit = match *freq {
-        "DAILY" => "days",
-        "WEEKLY" => "weeks",
-        "MONTHLY" => "months",
-        "YEARLY" => "years",
-        _ => return None,
-    };
+    while let Some(current_ref) = stack.pop() {
+        // If we loop back to the key being defined, it's a cycle.
+        if current_ref == new_key {
+            return Err(format!(
+                "Circular dependency: '#{}' leads back to itself.",
+                new_key
+            ));
+        }
 
-    Some(format!("@every {} {}", interval, unit))
+        // Standard DFS visited check to prevent infinite loops on existing valid cycles or diamond paths
+        if visited_path.contains(&current_ref) {
+            continue;
+        }
+        visited_path.insert(current_ref.clone());
+
+        if let Some(children) = current_aliases.get(&current_ref) {
+            for child in children {
+                if child.starts_with('#') {
+                    stack.push(strip_quotes(child.trim_start_matches('#')));
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 fn parse_duration(val: &str) -> Option<u32> {
@@ -585,14 +661,12 @@ fn parse_smart_date(val: &str, end_of_day: bool) -> Option<DateTime<Utc>> {
     None
 }
 
-// Logic for "@next week", "@next month", etc.
 fn parse_next_date(unit: &str, end_of_day: bool) -> Option<DateTime<Utc>> {
     let now = Local::now().date_naive();
     match unit.to_lowercase().as_str() {
         "week" => finalize_date(now + Duration::days(7), end_of_day),
         "month" => finalize_date(now + Duration::days(30), end_of_day),
         "year" => finalize_date(now + Duration::days(365), end_of_day),
-        // Simple day matching
         "monday" => next_weekday(now, chrono::Weekday::Mon, end_of_day),
         "tuesday" => next_weekday(now, chrono::Weekday::Tue, end_of_day),
         "wednesday" => next_weekday(now, chrono::Weekday::Wed, end_of_day),
@@ -604,7 +678,6 @@ fn parse_next_date(unit: &str, end_of_day: bool) -> Option<DateTime<Utc>> {
     }
 }
 
-// Logic for "@in X units"
 fn parse_in_date(amount: u32, unit: &str, end_of_day: bool) -> Option<DateTime<Utc>> {
     let now = Local::now().date_naive();
     let days = match unit.to_lowercase().as_str() {
@@ -654,13 +727,9 @@ fn finalize_date(d: NaiveDate, end_of_day: bool) -> Option<DateTime<Utc>> {
         d.and_hms_opt(0, 0, 0)?
     };
 
-    // Interpret as Local, then convert to UTC
     match Local.from_local_datetime(&t) {
         chrono::LocalResult::Single(dt) => Some(dt.with_timezone(&Utc)),
         chrono::LocalResult::Ambiguous(dt1, _) => Some(dt1.with_timezone(&Utc)),
-        chrono::LocalResult::None => {
-            // Fallback for invalid local times
-            Some(t.and_utc())
-        }
+        chrono::LocalResult::None => Some(t.and_utc()),
     }
 }

@@ -7,7 +7,7 @@ Cfait is a powerful, fast and elegant, cross-platform and open-source CalDAV tas
   <li><b>Open Source & Cross-Platform:</b> Use Cfait on Android, Linux, and Windows. Your tasks adhere to open standards (CalDAV), not walled gardens.</li>
   <li><b>Syncs Everywhere:</b> Fully compatible with Nextcloud, iCloud, Radicale, Xandikos, and other standard CalDAV servers.</li>
   <li><b>Offline First:</b> Optimistic UI updates mean you never wait for a server response. Use the persistent "Local" calendar for offline tasks and migrate them to a server later.</li>
-  <li><b>Smart Input:</b> Add tasks naturally. Typing "Buy cat food !1 @tomorrow ~15m" automatically sets the priority, due date, and duration.</li>
+  <li><b>Smart Input:</b> Add tasks naturally. Typing "Buy cat food !1 @tomorrow @@grocery_store ~15m" automatically sets the priority, due date, location and duration.</li>
 </ul>
 <br>
 <b>Productivity Features</b>
@@ -15,7 +15,7 @@ Cfait is a powerful, fast and elegant, cross-platform and open-source CalDAV tas
   <li><b>GTD Workflow:</b> Mark tasks as Needs Action, In Process (&gt;), Cancelled (x), or Done.</li>
   <li><b>Hierarchy:</b> Create sub-tasks, promote children, and organize nested lists.</li>
   <li><b>Dependencies:</b> Link tasks using "Blocked-by" or "Child-of" logic (RFC 9253).</li>
-  <li><b>Tags & Aliases:</b> Organize with hierarchical tags (e.g., #work:backend). Create inline aliases (e.g., #shop=#home,#buy) for rapid filing.</li>
+  <li><b>Tags & Aliases:</b> Organize with hierarchical tags (e.g., #work:backend). Create inline aliases (e.g., #shed:=@@home,#home_improvement) for rapid filing.</li>
   <li><b>Sane Sorting:</b> Tasks are sorted by Status &gt; Start Date &gt; Due Date &gt; Priority.</li>
 </ul>
 <br>
@@ -24,10 +24,12 @@ Cfait is a powerful, fast and elegant, cross-platform and open-source CalDAV tas
 When adding or editing a task, use these shortcuts:
 <ul>
   <li><b>!1 to !9:</b> Set Priority (1 is Critical, 9 is Low).</li>
-  <li><b>@date:</b> Set Due Date (e.g., @tomorrow, @2025-12-31, @2w).</li>
+  <li><b>@date:</b> Set Due Date (e.g., @tomorrow, @2025-12-31, @2w, @in two weeks).</li>
   <li><b>^date:</b> Set Start Date (hides task until date).</li>
   <li><b>~duration:</b> Estimate time (e.g., ~30m, ~2h).</li>
   <li><b>@every X:</b> Set Recurrence (e.g., @daily, @every 2 weeks).</li>
+  <li><b>@@loc:</b> Set Location (e.g., @@home, @@"hardware store").</li>
+  <li><b>url:http://perdu.com:</b> Attach a URL.</li>
 </ul>
 <br>
 <b>Advanced Search</b>
@@ -38,6 +40,7 @@ Find exactly what you need with powerful filters:
   <li><b>~&lt;30m:</b> Find tasks taking less than 30 minutes.</li>
   <li><b>!&lt;3:</b> Find high-priority tasks.</li>
   <li><b>@&lt;today:</b> Find overdue tasks.</li>
+  <li><b>@@home:</b> Find tasks at a specific location.</li>
 </ul>
 <br>
 <b>Support the Developer</b>

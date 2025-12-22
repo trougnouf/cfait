@@ -1,17 +1,17 @@
+// File: src/tui/action.rs
 use crate::model::{CalendarListEntry, Task};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SidebarMode {
     Calendars,
     Categories,
+    Locations, // NEW
 }
 
 #[derive(Debug)]
 pub enum Action {
     SwitchCalendar(String),
-
     CreateTask(Task),
-
     UpdateTask(Task),
     ToggleTask(Task),
     MarkInProcess(Task),
@@ -19,9 +19,9 @@ pub enum Action {
     DeleteTask(Task),
     Refresh,
     Quit,
-    MoveTask(Task, String),   // Task, New Calendar Href
-    StartCreateChild(String), // Parent Task UID
-    MigrateLocal(String),     // target_href
+    MoveTask(Task, String),
+    StartCreateChild(String),
+    MigrateLocal(String),
     ToggleCalendarVisibility(String),
     IsolateCalendar(String),
 }

@@ -43,12 +43,12 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 <a name="features"></a>
 ## ✨ Features
 
-*   **Smart Input:** Type your tasks naturally. `Buy cookies @tomorrow !1` is parsed instantly into a high-priority task due tomorrow.
+*   **Smart Input:** Type your tasks naturally. `Buy cookies @tomorrow @@bakery !1` is parsed instantly into a high-priority task due tomorrow at the bakery.
 *   **Hierarchical Tags:** Organize deeply with tags like `#dev:cfait` or `#cooking:cookies`.
 *   **Dependencies:** Block tasks until others are done. You can create parent/child tasks or loose dependencies <small>(RFC9253)</small>.
 *   **Recurrence:** Powerful repetition rules for habits and recurrent tasks.
-*   **Inline Aliases:** Define shortcuts on the fly; typing `#groceries=#home,#shopping` applies the alias immediately and saves it for future use.
-*   **Cross-Platform:** Runs on Linux, Windows, and Android. (Probably on MacOS too.)
+*   **Inline Aliases:** Define shortcuts on the fly; typing `#gardening:=#fun,@@home` applies the alias and location immediately and saves it for future use.
+*   **Cross-Platform:** Runs on Linux, Android, and Windows. (Probably on MacOS too.)
 
 <a name="screenshots"></a>
 ## 📸 Screenshots
@@ -91,17 +91,20 @@ Replace `cfait` with `.` to build locally.
 <a name="smart-input-syntax"></a>
 ## ⌨️ Smart Input Syntax
 
-You don't need to click through menus to set dates or priorities. Just type them.
+You don't need to click through menus to set the due/start date, length, priority, recurrence, tags, location,... Just type.
 
 ### Basics
-| Property | Short | Long | Description |
-| :--- | :--- | :--- | :--- |
-| **Priority** | `!1` | - | 1 is highest (critical), 9 is lowest. 5 is normal. |
-| **Due Date** | `@` | `due:` | When the task must be finished. |
-| **Start Date** | `^` | `start:` | When you plan to start (hides from "active" views until then). |
-| **Recurrence** | `@` | `rec:` | How often the task repeats. |
-| **Duration** | `~` | `est:` | Estimated time to complete. |
-| **Tag** | `#` | - | Categories. Use `:` for hierarchy (e.g. `#work:admin`). |
+| Property | Syntax | Description |
+| :--- | :--- | :--- |
+| **Priority** | `!1` | 1 is highest (critical), 9 is lowest. 5 is normal. |
+| **Due Date** | `@` / `due:` | When the task must be finished. |
+| **Start Date** | `^` / `start:` | When you plan to start (hides from "active" views until then). |
+| **Recurrence** | `@` / `rec:` | How often the task repeats. |
+| **Duration** | `~` / `est:` | Estimated time to complete. |
+| **Tag** | `#` | Categories. Use `:` for hierarchy (e.g. `#gardening:tree_planting`). |
+| **Location** | `@@` / `loc:` | Where the task happens. (e.g. `@@home``. Use quotes for spaces: `@@"somewhere else"`. |
+
+You can also type url: (e.g. `url:https://www.trougnouf.com`), geo: (e.g. `geo:53.046070, -121.105264`), and desc: (e.g. `desc:"a description added from the input bar"`)
 
 ### Date & Time Formats
 You can use absolute ISO dates or natural language relative offsets.
@@ -130,6 +133,16 @@ Supported units for `~` duration estimates: `m` (minutes), `h` (hours), `d` (day
 >
 > `"Update server certificates @2025-12-31 ^2025-12-01 @every 2 years"` (Due Dec 31, start working on it 1 month prior)
 
+### Aliases (Templates)
+Define global shortcuts using `:=`. Aliases can inject tags, locations, priorities, or text. This applies to the past, present, and future tasks.
+*   **Define:** `#gardening:=#fun,@@home`
+*   **Use:** Typing `Plant cherry tree #gardening` expands to:
+    *   Summary: "Plant tree"
+    *   Tag: `#gardening #fun`
+    *   Location: "home"
+
+**Note:** If your alias contains spaces, quote it: `#work:mtg:="Daily Standup",#work,~15m`
+
 <a name="search--filtering"></a>
 ## 🔍 Search & Filtering
 
@@ -149,6 +162,7 @@ The search bar isn't just for text. You can use operators (`<`, `>`, `<=`, `>=`)
     *   `~>2h` (Long tasks)
 *   **Tags:**
     *   `#gardening` (Contains this tag)
+*   **Location:** `@@home` (matches location field)
 
 You can combine them: `!<4 ~<1h #gardening` (high priority gardening task that takes less than an hour).
 
@@ -160,7 +174,7 @@ If you are using the Terminal interface, here are the essentials (*Press `?` ins
 **Navigation & Views**
 *   `Tab`: Switch focus (Tasks ↔ Sidebar)
 *   `j` / `k`: Move selection Down / Up
-*   `1` / `2`: Switch Sidebar View (Calendars / Tags)
+*   `1` / `2` / `3`: Switch Sidebar (Calendars / Tags / Locations)
 *   `/`: Search tasks
 
 **Task Management**

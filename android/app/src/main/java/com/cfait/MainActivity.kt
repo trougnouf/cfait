@@ -1,4 +1,3 @@
-// File: ./android/app/src/main/java/com/cfait/MainActivity.kt
 package com.cfait
 
 import android.os.Bundle
@@ -15,17 +14,18 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.cfait.core.MobileCalendar
+import com.cfait.core.MobileLocation
 import com.cfait.core.MobileTag
+import com.cfait.ui.HelpScreen
 import com.cfait.ui.HomeScreen
 import com.cfait.ui.SettingsScreen
 import com.cfait.ui.TaskDetailScreen
-import com.cfait.ui.HelpScreen
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         val app = application as CfaitApplication
         val api = app.api
 
@@ -42,24 +42,27 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
     val navController = rememberNavController()
     var calendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
     var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
+    var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) } // <--- Added
     var defaultCalHref by remember { mutableStateOf<String?>(null) }
     var hasUnsynced by remember { mutableStateOf(false) }
-    
+
     // State to trigger scrolling in HomeScreen
     var autoScrollUid by remember { mutableStateOf<String?>(null) }
-    
+
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var isLoading by remember { mutableStateOf(false) }
-    
+
     fun refreshLists() {
         scope.launch {
             try {
                 calendars = api.getCalendars()
                 tags = api.getAllTags()
+                locations = api.getAllLocations() // <--- Fetch locations
                 defaultCalHref = api.getConfig().defaultCalendar
                 hasUnsynced = api.hasUnsyncedChanges()
-            } catch (e: Exception) { }
+            } catch (e: Exception) {
+            }
         }
     }
 
@@ -67,16 +70,21 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
         refreshLists()
         scope.launch {
             isLoading = true
-            try { 
+            try {
                 api.sync()
                 refreshLists()
-            } catch (e: Exception) { }
+            } catch (e: Exception) {
+            }
             isLoading = false
         }
     }
 
     // This runs in the NavHost scope, so it survives screen transitions
-    fun saveTaskInBackground(uid: String, smart: String, desc: String) {
+    fun saveTaskInBackground(
+        uid: String,
+        smart: String,
+        desc: String,
+    ) {
         scope.launch {
             try {
                 api.updateTaskSmart(uid, smart)
@@ -97,14 +105,15 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                 api = api,
                 calendars = calendars,
                 tags = tags,
+                locations = locations, // <--- Pass locations
                 defaultCalHref = defaultCalHref,
                 isLoading = isLoading,
                 hasUnsynced = hasUnsynced,
-                autoScrollUid = autoScrollUid, // Pass the UID
+                autoScrollUid = autoScrollUid,
                 onGlobalRefresh = { fastStart() },
                 onSettings = { navController.navigate("settings") },
                 onTaskClick = { uid -> navController.navigate("detail/$uid") },
-                onDataChanged = { refreshLists() }
+                onDataChanged = { refreshLists() },
             )
         }
         composable("detail/{uid}") { backStackEntry ->
@@ -114,22 +123,28 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                     api = api,
                     uid = uid,
                     calendars = calendars,
-                    onBack = { navController.popBackStack(); refreshLists() },
-                    onSave = { smart, desc -> 
+                    onBack = {
+                        navController.popBackStack()
+                        refreshLists()
+                    },
+                    onSave = { smart, desc ->
                         saveTaskInBackground(uid, smart, desc)
                         // Trigger scroll on return
                         autoScrollUid = uid
                         navController.popBackStack()
                         refreshLists()
-                    }
+                    },
                 )
             }
         }
         composable("settings") {
             SettingsScreen(
-                api = api, 
-                onBack = { navController.popBackStack(); refreshLists() },
-                onHelp = { navController.navigate("help") }
+                api = api,
+                onBack = {
+                    navController.popBackStack()
+                    refreshLists()
+                },
+                onHelp = { navController.navigate("help") },
             )
         }
         composable("help") {

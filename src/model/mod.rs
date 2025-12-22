@@ -5,4 +5,4 @@ pub mod matcher;
 pub mod parser;
 
 pub use item::{CalendarListEntry, Task, TaskStatus};
-pub use parser::extract_inline_aliases;
+pub use parser::{extract_inline_aliases, validate_alias_integrity};

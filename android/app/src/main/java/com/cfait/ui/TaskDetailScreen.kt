@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/ui/TaskDetailScreen.kt
+// File: android/app/src/main/java/com/cfait/ui/TaskDetailScreen.kt
 package com.cfait.ui
 
 import androidx.compose.foundation.clickable
@@ -37,7 +37,8 @@ fun TaskDetailScreen(
 
     fun reload() {
         scope.launch {
-            val all = api.getViewTasks(null, "")
+            // FIX: Pass 3 arguments (filterTag, filterLocation, searchQuery)
+            val all = api.getViewTasks(null, null, "")
             task = all.find { it.uid == uid }
             task?.let {
                 smartInput = it.smartString

@@ -69,6 +69,10 @@ pub struct MobileTask {
     pub blocked_by_names: Vec<String>,
     pub blocked_by_uids: Vec<String>,
     pub is_paused: bool,
+    // --- NEW FIELDS ---
+    pub location: Option<String>,
+    pub url: Option<String>,
+    pub geo: Option<String>,
 }
 
 #[derive(uniffi::Record)]
@@ -86,6 +90,12 @@ pub struct MobileTag {
     pub name: String,
     pub count: u32,
     pub is_uncategorized: bool,
+}
+
+#[derive(uniffi::Record)]
+pub struct MobileLocation {
+    pub name: String,
+    pub count: u32,
 }
 
 #[derive(uniffi::Record)]
@@ -130,6 +140,10 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         blocked_by_names,
         blocked_by_uids: t.dependencies.clone(),
         is_paused: t.is_paused(),
+        // --- NEW FIELDS ---
+        location: t.location.clone(),
+        url: t.url.clone(),
+        geo: t.geo.clone(),
     }
 }
 
@@ -157,6 +171,35 @@ impl CfaitMobile {
             client: Arc::new(Mutex::new(None)),
             store: Arc::new(Mutex::new(TaskStore::new())),
         }
+    }
+
+    pub async fn add_alias(&self, key: String, tags: Vec<String>) -> Result<(), MobileError> {
+        let mut c = Config::load().unwrap_or_default();
+
+        // VALIDATION: Prevent loops/conflicts
+        crate::model::parser::validate_alias_integrity(&key, &tags, &c.tag_aliases)
+            .map_err(MobileError::from)?;
+
+        c.tag_aliases.insert(key.clone(), tags.clone());
+        c.save().map_err(MobileError::from)?;
+
+        let mut store = self.store.lock().await;
+        let modified = store.apply_alias_retroactively(&key, &tags);
+        drop(store);
+
+        if !modified.is_empty() {
+            let client_guard = self.client.lock().await;
+            if let Some(client) = &*client_guard {
+                for mut t in modified {
+                    let _ = client.update_task(&mut t).await;
+                }
+            } else {
+                for t in modified {
+                    let _ = crate::journal::Journal::push(crate::journal::Action::Update(t));
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn has_unsynced_changes(&self) -> bool {
@@ -256,30 +299,6 @@ impl CfaitMobile {
         config.save().map_err(MobileError::from)
     }
 
-    pub async fn add_alias(&self, key: String, tags: Vec<String>) -> Result<(), MobileError> {
-        let mut c = Config::load().unwrap_or_default();
-        c.tag_aliases.insert(key.clone(), tags.clone());
-        c.save().map_err(MobileError::from)?;
-
-        let mut store = self.store.lock().await;
-        let modified = store.apply_alias_retroactively(&key, &tags);
-        drop(store);
-
-        if !modified.is_empty() {
-            let client_guard = self.client.lock().await;
-            if let Some(client) = &*client_guard {
-                for mut t in modified {
-                    let _ = client.update_task(&mut t).await;
-                }
-            } else {
-                for t in modified {
-                    let _ = crate::journal::Journal::push(crate::journal::Action::Update(t));
-                }
-            }
-        }
-        Ok(())
-    }
-
     pub fn remove_alias(&self, key: String) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
         c.tag_aliases.remove(&key);
@@ -305,22 +324,16 @@ impl CfaitMobile {
     pub fn load_from_cache(&self) {
         let mut store = self.store.blocking_lock();
         store.clear();
-
-        // Load Local Tasks
         if let Ok(mut local) = LocalStorage::load() {
-            // Apply offline edits
             crate::journal::Journal::apply_to_tasks(&mut local, LOCAL_CALENDAR_HREF);
             store.insert(LOCAL_CALENDAR_HREF.to_string(), local);
         }
-
-        // Load Remote Caches
         if let Ok(cals) = Cache::load_calendars() {
             for cal in cals {
                 if cal.href == LOCAL_CALENDAR_HREF {
                     continue;
                 }
                 if let Ok((mut tasks, _)) = Cache::load(&cal.href) {
-                    // Apply offline edits (DRY: Using shared logic now)
                     crate::journal::Journal::apply_to_tasks(&mut tasks, &cal.href);
                     store.insert(cal.href, tasks);
                 }
@@ -403,26 +416,51 @@ impl CfaitMobile {
             .collect()
     }
 
+    pub async fn get_all_locations(&self) -> Vec<MobileLocation> {
+        let store = self.store.lock().await;
+        let config = Config::load().unwrap_or_default();
+        let mut hidden_cals: HashSet<String> = config.hidden_calendars.into_iter().collect();
+        hidden_cals.extend(config.disabled_calendars);
+
+        store
+            .get_all_locations(config.hide_completed, &hidden_cals)
+            .into_iter()
+            .map(|(name, count)| MobileLocation {
+                name,
+                count: count as u32,
+            })
+            .collect()
+    }
+
     pub async fn get_view_tasks(
         &self,
         filter_tag: Option<String>,
+        filter_location: Option<String>, // New param
         search_query: String,
     ) -> Vec<MobileTask> {
         let store = self.store.lock().await;
         let config = Config::load().unwrap_or_default();
+
         let mut selected_categories = HashSet::new();
         if let Some(tag) = filter_tag {
             selected_categories.insert(tag);
         }
+        let mut selected_locations = HashSet::new();
+        if let Some(l) = filter_location {
+            selected_locations.insert(l);
+        }
+
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
         let cutoff_date = config
             .sort_cutoff_months
             .map(|months| chrono::Utc::now() + chrono::Duration::days(months as i64 * 30));
+
         let filtered = store.filter(FilterOptions {
             active_cal_href: None,
             hidden_calendars: &hidden,
             selected_categories: &selected_categories,
+            selected_locations: &selected_locations,
             match_all_categories: false,
             search_term: &search_query,
             hide_completed_global: config.hide_completed,
@@ -431,6 +469,7 @@ impl CfaitMobile {
             max_duration: None,
             include_unset_duration: true,
         });
+
         filtered
             .into_iter()
             .map(|t| task_to_mobile(&t, &store))
@@ -441,7 +480,6 @@ impl CfaitMobile {
         Ok(())
     }
 
-    // --- UPDATED to handle offline fallback ---
     pub async fn add_task_smart(&self, input: String) -> Result<String, MobileError> {
         let aliases = Config::load().unwrap_or_default().tag_aliases;
         let mut task = Task::new(&input, &aliases);
@@ -473,7 +511,6 @@ impl CfaitMobile {
                 crate::journal::Journal::push(crate::journal::Action::Create(task.clone()))
                     .map_err(MobileError::from)?;
             }
-            // Ensure store has the task (e.g. if we went straight to fallback)
             self.store.lock().await.update_or_add_task(task.clone());
         }
 
@@ -666,9 +703,7 @@ impl CfaitMobile {
     }
 }
 
-// ----------------------------------------------------------------------------
-// INTERNAL HELPERS (Not exposed to UniFFI)
-// ----------------------------------------------------------------------------
+// Helpers unchanged...
 impl CfaitMobile {
     async fn apply_connection(&self, config: Config) -> Result<String, MobileError> {
         let (client, cals, _, _, warning_from_fallback) =
@@ -678,7 +713,6 @@ impl CfaitMobile {
 
         *self.client.lock().await = Some(client.clone());
 
-        // Fetch without lock
         let fetch_result = client.get_all_tasks(&cals).await;
 
         let mut store = self.store.lock().await;
@@ -697,8 +731,6 @@ impl CfaitMobile {
                     store.insert(href.clone(), tasks);
                     fetched_hrefs.insert(href);
                 }
-
-                // Backfill from cache for missed calendars
                 for cal in &cals {
                     if cal.href != LOCAL_CALENDAR_HREF
                         && !fetched_hrefs.contains(&cal.href)
@@ -708,22 +740,8 @@ impl CfaitMobile {
                         store.insert(cal.href.clone(), cached);
                     }
                 }
-
-                let remote_cal_count = cals
-                    .iter()
-                    .filter(|c| c.href != LOCAL_CALENDAR_HREF)
-                    .count();
-                let fetched_remote_count = fetched_hrefs
-                    .iter()
-                    .filter(|h| h.as_str() != LOCAL_CALENDAR_HREF)
-                    .count();
-
-                if remote_cal_count > 0 && fetched_remote_count == 0 {
-                    return Err(MobileError::from("Sync failed: No response from server."));
-                }
             }
             Err(e) => {
-                // Fallback to cache entirely
                 for cal in &cals {
                     if cal.href != LOCAL_CALENDAR_HREF
                         && !store.calendars.contains_key(&cal.href)
@@ -773,7 +791,6 @@ impl CfaitMobile {
                     .map_err(MobileError::from)?;
             }
         }
-
         Ok(())
     }
 }

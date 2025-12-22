@@ -31,7 +31,7 @@ fun SettingsScreen(
     var pass by remember { mutableStateOf("") }
     var insecure by remember { mutableStateOf(false) }
     var hideCompleted by remember { mutableStateOf(false) }
-    var sortMonths by remember { mutableStateOf("2") } // New state
+    var sortMonths by remember { mutableStateOf("2") }
     var status by remember { mutableStateOf("") }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var newAliasKey by remember { mutableStateOf("") }
@@ -55,13 +55,11 @@ fun SettingsScreen(
 
     LaunchedEffect(Unit) { reload() }
 
-    // Helper to save everything currently in state to disk
     fun saveToDisk() {
         val sortInt = sortMonths.trim().toUIntOrNull()
         api.saveConfig(url, user, pass, insecure, hideCompleted, disabledSet.toList(), sortInt)
     }
 
-    // Connect Button Action
     fun saveAndConnect() {
         scope.launch {
             status = "Connecting..."
@@ -75,7 +73,6 @@ fun SettingsScreen(
         }
     }
 
-    // Navigation Back Action (Saves first)
     fun handleBack() {
         scope.launch {
             saveToDisk()
@@ -87,22 +84,12 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Settings") },
-                navigationIcon = {
-                    IconButton(onClick = { handleBack() }) {
-                        NfIcon(NfIcons.BACK, 20.sp)
-                    }
-                },
-                actions = {
-                    // Moved Help here as requested
-                    IconButton(onClick = onHelp) {
-                        NfIcon(NfIcons.HELP, 24.sp)
-                    }
-                },
+                navigationIcon = { IconButton(onClick = { handleBack() }) { NfIcon(NfIcons.BACK, 20.sp) } },
+                actions = { IconButton(onClick = onHelp) { NfIcon(NfIcons.HELP, 24.sp) } },
             )
         },
     ) { p ->
         LazyColumn(modifier = Modifier.padding(p).padding(16.dp)) {
-            // --- SERVER SETTINGS ---
             item {
                 Text(
                     "Server Connection",
@@ -131,10 +118,7 @@ fun SettingsScreen(
                     Checkbox(checked = insecure, onCheckedChange = { insecure = it })
                     Text("Allow insecure SSL")
                 }
-
-                Button(onClick = { saveAndConnect() }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-                    Text("Save & Connect")
-                }
+                Button(onClick = { saveAndConnect() }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Save & Connect") }
                 if (status.isNotEmpty()) {
                     Text(
                         status,
@@ -142,11 +126,9 @@ fun SettingsScreen(
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }
-
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
             }
 
-            // --- PREFERENCES ---
             item {
                 Text(
                     "Preferences",
@@ -154,52 +136,45 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
                 )
-
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = hideCompleted, onCheckedChange = {
                         hideCompleted = it
-                        // Immediate save for toggles feels better
                         saveToDisk()
                     })
-                    // Rename as requested
                     Text("Hide completed and canceled tasks")
                 }
-
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                     Text("Sorting priority cutoff (months):", modifier = Modifier.weight(1f))
                     OutlinedTextField(
                         value = sortMonths,
-                        onValueChange = { sortMonths = it },
-                        modifier = Modifier.width(80.dp),
+                        onValueChange = {
+                            sortMonths = it
+                        },
+                        modifier =
+                            Modifier.width(
+                                80.dp,
+                            ),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                     )
                 }
                 Text("Tasks due within this range are shown first.", fontSize = 12.sp, color = androidx.compose.ui.graphics.Color.Gray)
-
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
             }
 
-            // --- CALENDARS ---
-            item {
-                Text("Manage calendars", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
-            }
+            item { Text("Manage calendars", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp)) }
             items(allCalendars) { cal ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(
-                        checked = !disabledSet.contains(cal.href),
-                        onCheckedChange = { enabled ->
-                            val newSet = disabledSet.toMutableSet()
-                            if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
-                            disabledSet = newSet
-                            saveToDisk() // Immediate save
-                        },
-                    )
+                    Checkbox(checked = !disabledSet.contains(cal.href), onCheckedChange = { enabled ->
+                        val newSet = disabledSet.toMutableSet()
+                        if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
+                        disabledSet = newSet
+                        saveToDisk()
+                    })
                     Text(cal.name)
                 }
             }
 
-            // --- ALIASES ---
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text("Tag aliases", fontWeight = FontWeight.Bold)
@@ -230,16 +205,20 @@ fun SettingsScreen(
                         newAliasTags = it
                     }, label = { Text("Tags (comma)") }, modifier = Modifier.weight(1f))
                     IconButton(onClick = {
-                        if (newAliasKey.isNotBlank() &&
-                            newAliasTags.isNotBlank()
-                        ) {
+                        if (newAliasKey.isNotBlank() && newAliasTags.isNotBlank()) {
                             val tags = newAliasTags.split(",").map { it.trim().trimStart('#') }.filter { it.isNotEmpty() }
                             scope.launch {
-                                api.addAlias(newAliasKey.trimStart('#'), tags)
-                                newAliasKey =
-                                    ""
-                                newAliasTags = ""
-                                reload()
+                                // --- ERROR HANDLING ADDED ---
+                                try {
+                                    api.addAlias(newAliasKey.trimStart('#'), tags)
+                                    newAliasKey = ""
+                                    newAliasTags = ""
+                                    reload()
+                                    // Clear any previous error status
+                                    if (status.startsWith("Error")) status = ""
+                                } catch (e: Exception) {
+                                    status = "Error adding alias: ${e.message}"
+                                }
                             }
                         }
                     }) { NfIcon(NfIcons.ADD) }

@@ -749,6 +749,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_task(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_locations(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_tags(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_calendars(): Short
@@ -865,6 +867,8 @@ internal object UniffiLib {
         `uid`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_all_locations(`ptr`: Long): Long
+
     external fun uniffi_cfait_fn_method_cfaitmobile_get_all_tags(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_calendars(
@@ -880,6 +884,7 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
         `ptr`: Long,
         `filterTag`: RustBuffer.ByValue,
+        `filterLocation`: RustBuffer.ByValue,
         `searchQuery`: RustBuffer.ByValue,
     ): Long
 
@@ -1234,6 +1239,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_task() != 55596.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_all_locations() != 18355.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_all_tags() != 21633.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1243,7 +1251,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_config() != 1475.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 40875.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 2430.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_unsynced_changes() != 28210.toShort()) {
@@ -1791,6 +1799,8 @@ public interface CfaitMobileInterface {
 
     suspend fun `deleteTask`(`uid`: kotlin.String)
 
+    suspend fun `getAllLocations`(): List<MobileLocation>
+
     suspend fun `getAllTags`(): List<MobileTag>
 
     fun `getCalendars`(): List<MobileCalendar>
@@ -1799,6 +1809,7 @@ public interface CfaitMobileInterface {
 
     suspend fun `getViewTasks`(
         `filterTag`: kotlin.String?,
+        `filterLocation`: kotlin.String?,
         `searchQuery`: kotlin.String,
     ): List<MobileTask>
 
@@ -2111,6 +2122,23 @@ open class CfaitMobile :
         )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `getAllLocations`(): List<MobileLocation> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_all_locations(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceTypeMobileLocation.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
+
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `getAllTags`(): List<MobileTag> =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -2154,6 +2182,7 @@ open class CfaitMobile :
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `getViewTasks`(
         `filterTag`: kotlin.String?,
+        `filterLocation`: kotlin.String?,
         `searchQuery`: kotlin.String,
     ): List<MobileTask> =
         uniffiRustCallAsync(
@@ -2161,6 +2190,7 @@ open class CfaitMobile :
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
                     uniffiHandle,
                     FfiConverterOptionalString.lower(`filterTag`),
+                    FfiConverterOptionalString.lower(`filterLocation`),
                     FfiConverterString.lower(`searchQuery`),
                 )
             },
@@ -2681,6 +2711,38 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
     }
 }
 
+data class MobileLocation(
+    var `name`: kotlin.String,
+    var `count`: kotlin.UInt,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileLocation : FfiConverterRustBuffer<MobileLocation> {
+    override fun read(buf: ByteBuffer): MobileLocation =
+        MobileLocation(
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+
+    override fun allocationSize(value: MobileLocation) =
+        (
+            FfiConverterString.allocationSize(value.`name`) +
+                FfiConverterUInt.allocationSize(value.`count`)
+        )
+
+    override fun write(
+        value: MobileLocation,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`name`, buf)
+        FfiConverterUInt.write(value.`count`, buf)
+    }
+}
+
 data class MobileTag(
     var `name`: kotlin.String,
     var `count`: kotlin.UInt,
@@ -2737,6 +2799,9 @@ data class MobileTask(
     var `blockedByNames`: List<kotlin.String>,
     var `blockedByUids`: List<kotlin.String>,
     var `isPaused`: kotlin.Boolean,
+    var `location`: kotlin.String?,
+    var `url`: kotlin.String?,
+    var `geo`: kotlin.String?,
 ) {
     companion object
 }
@@ -2766,6 +2831,9 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
 
     override fun allocationSize(value: MobileTask) =
@@ -2788,7 +2856,10 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterString.allocationSize(value.`statusString`) +
                 FfiConverterSequenceString.allocationSize(value.`blockedByNames`) +
                 FfiConverterSequenceString.allocationSize(value.`blockedByUids`) +
-                FfiConverterBoolean.allocationSize(value.`isPaused`)
+                FfiConverterBoolean.allocationSize(value.`isPaused`) +
+                FfiConverterOptionalString.allocationSize(value.`location`) +
+                FfiConverterOptionalString.allocationSize(value.`url`) +
+                FfiConverterOptionalString.allocationSize(value.`geo`)
         )
 
     override fun write(
@@ -2814,6 +2885,9 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterSequenceString.write(value.`blockedByNames`, buf)
         FfiConverterSequenceString.write(value.`blockedByUids`, buf)
         FfiConverterBoolean.write(value.`isPaused`, buf)
+        FfiConverterOptionalString.write(value.`location`, buf)
+        FfiConverterOptionalString.write(value.`url`, buf)
+        FfiConverterOptionalString.write(value.`geo`, buf)
     }
 }
 
@@ -2970,6 +3044,34 @@ public object FfiConverterSequenceTypeMobileCalendar : FfiConverterRustBuffer<Li
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileCalendar.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMobileLocation : FfiConverterRustBuffer<List<MobileLocation>> {
+    override fun read(buf: ByteBuffer): List<MobileLocation> {
+        val len = buf.getInt()
+        return List<MobileLocation>(len) {
+            FfiConverterTypeMobileLocation.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MobileLocation>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMobileLocation.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<MobileLocation>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMobileLocation.write(it, buf)
         }
     }
 }

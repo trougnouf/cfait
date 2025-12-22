@@ -1,4 +1,3 @@
-// File: src/gui/update/view.rs
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp, ResizeDirection, SidebarMode};
@@ -15,14 +14,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 operation::focus_next()
             }
         }
-        Message::FocusInput => {
-            // Use generic widget focus operation from operation module
-            operation::focus("main_input")
-        }
-        Message::FocusSearch => {
-            // Use generic widget focus operation from operation module
-            operation::focus("header_search_input")
-        }
+        Message::FocusInput => operation::focus("main_input"),
+        Message::FocusSearch => operation::focus("header_search_input"),
         Message::DismissError => {
             app.error_msg = None;
             Task::none()
@@ -83,8 +76,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             Task::none()
         }
+        Message::LocationToggled(loc) => {
+            if app.selected_locations.contains(&loc) {
+                app.selected_locations.remove(&loc);
+            } else {
+                app.selected_locations.insert(loc);
+            }
+            refresh_filtered_tasks(app);
+            Task::none()
+        }
         Message::ClearAllTags => {
             app.selected_categories.clear();
+            refresh_filtered_tasks(app);
+            Task::none()
+        }
+        Message::ClearAllLocations => {
+            app.selected_locations.clear();
             refresh_filtered_tasks(app);
             Task::none()
         }
@@ -240,7 +247,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.search_value.clear();
             refresh_filtered_tasks(app);
 
-            // AUTO-SCROLL LOGIC
+            // AUTO-SCROLL LOGIC TAGS
             let all_cats = app.store.get_all_categories(
                 app.hide_completed,
                 app.hide_fully_completed_tags,
@@ -264,15 +271,43 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             Task::none()
         }
+        Message::JumpToLocation(loc) => {
+            app.sidebar_mode = SidebarMode::Locations;
+            app.selected_locations.clear();
+            app.selected_locations.insert(loc.clone());
+            app.search_value.clear();
+            refresh_filtered_tasks(app);
+
+            // AUTO-SCROLL LOGIC LOCATIONS
+            let all_locs = app
+                .store
+                .get_all_locations(app.hide_completed, &app.hidden_calendars);
+
+            if let Some(index) = all_locs.iter().position(|(l, _)| l == &loc) {
+                let total = all_locs.len();
+                if total > 1 {
+                    let y_offset = index as f32 / (total - 1) as f32;
+                    return iced::widget::operation::snap_to(
+                        app.sidebar_scrollable_id.clone(),
+                        iced::widget::scrollable::RelativeOffset {
+                            x: 0.0,
+                            y: y_offset,
+                        },
+                    );
+                }
+            }
+
+            Task::none()
+        }
         Message::OpenUrl(_url) => {
             #[cfg(not(target_os = "android"))]
             std::thread::spawn(move || {
                 #[cfg(target_os = "linux")]
-                let _ = std::process::Command::new("xdg-open").arg(_url).spawn(); // <-- Use '_url' here
+                let _ = std::process::Command::new("xdg-open").arg(_url).spawn();
                 #[cfg(target_os = "windows")]
-                let _ = std::process::Command::new("explorer").arg(_url).spawn(); // <-- and here
+                let _ = std::process::Command::new("explorer").arg(_url).spawn();
                 #[cfg(target_os = "macos")]
-                let _ = std::process::Command::new("open").arg(_url).spawn(); // <-- and here
+                let _ = std::process::Command::new("open").arg(_url).spawn();
             });
             Task::none()
         }

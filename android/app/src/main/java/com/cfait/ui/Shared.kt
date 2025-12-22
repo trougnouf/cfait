@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/ui/Shared.kt
+// File: android/app/src/main/java/com/cfait/ui/Shared.kt
 package com.cfait.ui
 
 import androidx.compose.material3.MaterialTheme
@@ -23,12 +23,20 @@ val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
 object NfIcons {
     fun get(code: Int): String = String(Character.toChars(code))
 
+    // --- UPDATED ICONS ---
+    val CALENDARS_VIEW = get(0xf00f2) // nf-md-calendar_multiple_check
+    val TAGS_VIEW = get(0xf04fb) // nf-md-tag_multiple
+    val LOCATION = get(0xf01e7) // nf-md-earth
+    val URL = get(0xf0c1)
+    val GEO = get(0xf041)
+    // --------------------
+
     val CALENDAR = get(0xf073) // 
     val TAG = get(0xf02b) // 
     val SETTINGS = get(0xe690) // nf-seti-settings
     val REFRESH = get(0xf0450) // nf-md-refresh
-    val SYNC_ALERT = get(0xf04e7) // nf-md-sync_alert (Exclamation arrow)
-    val SYNC_OFF = get(0xf04e8) // nf-md-sync_off (Slash through arrows)
+    val SYNC_ALERT = get(0xf04e7) // nf-md-sync_alert
+    val SYNC_OFF = get(0xf04e8) // nf-md-sync_off
     val DELETE = get(0xf1f8) // 
     val CHECK = get(0xf00c) // 
     val CROSS = get(0xf00d) // 
@@ -131,6 +139,7 @@ fun formatDuration(minutes: UInt): String {
 class SmartSyntaxTransformation(
     val isDark: Boolean,
 ) : VisualTransformation {
+    // ... [existing validator helper methods] ...
     private fun isValidDateUnit(s: String): Boolean {
         val lower = s.lowercase()
         return when (lower) {
@@ -145,15 +154,14 @@ class SmartSyntaxTransformation(
     private fun isValidDurationUnit(s: String): Boolean {
         val lower = s.lowercase()
         return lower == "d" || lower == "day" || lower == "days" ||
-               lower == "w" || lower == "week" || lower == "weeks" ||
-               lower == "mo" || lower == "month" || lower == "months" ||
-               lower == "y" || lower == "year" || lower == "years"
+            lower == "w" || lower == "week" || lower == "weeks" ||
+            lower == "mo" || lower == "month" || lower == "months" ||
+            lower == "y" || lower == "year" || lower == "years"
     }
 
     private fun isValidSmartDate(s: String): Boolean {
         val lower = s.lowercase()
         if (lower == "today" || lower == "tomorrow") return true
-        // YYYY-MM-DD
         if (lower.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) return true
 
         fun check(suffix: String) = lower.endsWith(suffix) && lower.removeSuffix(suffix).toLongOrNull() != null
@@ -177,15 +185,15 @@ class SmartSyntaxTransformation(
         return lower.startsWith("day") || lower.startsWith("week") || lower.startsWith("month") || lower.startsWith("year")
     }
 
-    // --- COLORS ---
-    // DueDate -> Blue
-    private val COLOR_DUE = Color(0xFF42A5F5) 
-    // StartDate -> Green
+    private val COLOR_DUE = Color(0xFF42A5F5)
     private val COLOR_START = Color(0xFF66BB6A)
-    // Recurrence -> Purple/Magenta
     private val COLOR_RECUR = Color(0xFFAB47BC)
-    // Duration -> Grey
     private val COLOR_DURATION = Color(0xFF9E9E9E)
+
+    // --- NEW COLORS ---
+    private val COLOR_LOCATION = Color(0xFFFFB300) // Amber
+    private val COLOR_URL = Color(0xFF4FC3F7) // Light Blue
+    private val COLOR_META = Color(0xFF757575) // Grey for Desc/Geo
 
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
@@ -213,8 +221,20 @@ class SmartSyntaxTransformation(
             val (start, end, word) = words[i]
             var matched = false
 
-            // 1. Priority (!1 to !9 only)
-            if (word.startsWith("!") && word.length > 1) {
+            // 1. New Fields
+            if (word.startsWith("@@") || word.startsWith("loc:")) {
+                builder.addStyle(SpanStyle(color = COLOR_LOCATION), start, end)
+                matched = true
+            } else if (word.startsWith("url:") || (word.startsWith("[[") && word.endsWith("]]"))) {
+                builder.addStyle(SpanStyle(color = COLOR_URL), start, end)
+                matched = true
+            } else if (word.startsWith("geo:") || word.startsWith("desc:")) {
+                builder.addStyle(SpanStyle(color = COLOR_META), start, end)
+                matched = true
+            }
+
+            // 2. Priority (!1 to !9 only)
+            if (!matched && word.startsWith("!") && word.length > 1) {
                 val p = word.substring(1).toIntOrNull()
                 if (p != null && p in 1..9) {
                     val color = getTaskTextColor(p, false, isDark)
@@ -222,24 +242,24 @@ class SmartSyntaxTransformation(
                     matched = true
                 }
             }
-            // 2. Duration (~30m)
-            else if ((word.startsWith("~") || word.startsWith("est:")) && word.length > 1) {
+            // 3. Duration (~30m)
+            else if (!matched && (word.startsWith("~") || word.startsWith("est:")) && word.length > 1) {
                 val valStr = if (word.startsWith("~")) word.substring(1) else word.substring(4)
                 if (isValidDuration(valStr)) {
                     builder.addStyle(SpanStyle(color = COLOR_DURATION), start, end)
                     matched = true
                 }
             }
-            // 3. Tags
-            else if (word.startsWith("#")) {
+            // 4. Tags
+            else if (!matched && word.startsWith("#")) {
                 val tagName = word.removePrefix("#")
                 if (tagName.isNotEmpty()) {
                     builder.addStyle(SpanStyle(color = getTagColor(tagName), fontWeight = FontWeight.Bold), start, end)
                     matched = true
                 }
             }
-            // 4. Recurrence: @every X Y
-            else if ((word == "@every" || word == "rec:every") && i + 2 < words.size) {
+            // 5. Recurrence: @every X Y
+            else if (!matched && (word == "@every" || word == "rec:every") && i + 2 < words.size) {
                 val (_, _, amount) = words[i + 1]
                 val (_, unitEnd, unit) = words[i + 2]
                 if (amount.toIntOrNull() != null && isValidFreqUnit(unit)) {
@@ -249,7 +269,7 @@ class SmartSyntaxTransformation(
                 }
             }
 
-            // 5. Recurrence: @daily etc
+            // 6. Recurrence: @daily etc
             if (!matched && (word.startsWith("@") || word.startsWith("rec:"))) {
                 val valStr = if (word.startsWith("@")) word.substring(1) else word.substring(4)
                 if (isValidRecurrence(valStr)) {
@@ -258,17 +278,17 @@ class SmartSyntaxTransformation(
                 }
             }
 
-            // 6. Dates Multi-word: @next week, @in 2 weeks
+            // 7. Dates
             if (!matched && (word.startsWith("@") || word.startsWith("^") || word.startsWith("due:") || word.startsWith("start:"))) {
                 val prefixChar = word.firstOrNull() ?: ' '
                 val isStart = prefixChar == '^' || word.startsWith("start:")
-                val cleanWord = if (isStart) {
-                    word.removePrefix("start:").removePrefix("^")
-                } else {
-                    word.removePrefix("due:").removePrefix("@")
-                }
+                val cleanWord =
+                    if (isStart) {
+                        word.removePrefix("start:").removePrefix("^")
+                    } else {
+                        word.removePrefix("due:").removePrefix("@")
+                    }
 
-                // @next week
                 if (cleanWord == "next" && i + 1 < words.size) {
                     val (_, nextEnd, nextVal) = words[i + 1]
                     if (isValidDateUnit(nextVal)) {
@@ -277,17 +297,23 @@ class SmartSyntaxTransformation(
                         i += 2
                         continue
                     }
-                }
-                // @in 2 weeks
-                else if (cleanWord == "in" && i + 2 < words.size) {
-                    val (_, _, amountStr) = words[i+1]
-                    val (_, unitEnd, unitStr) = words[i+2]
-                    
-                    // Simple number check or english check could be added here, sticking to digits for transform visualization
-                    // Actually, let's just check if it looks like a number
-                    val isNum = amountStr.toIntOrNull() != null || 
-                                listOf("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten").contains(amountStr.lowercase())
-                    
+                } else if (cleanWord == "in" && i + 2 < words.size) {
+                    val (_, _, amountStr) = words[i + 1]
+                    val (_, unitEnd, unitStr) = words[i + 2]
+                    val isNum =
+                        amountStr.toIntOrNull() != null ||
+                            listOf(
+                                "one",
+                                "two",
+                                "three",
+                                "four",
+                                "five",
+                                "six",
+                                "seven",
+                                "eight",
+                                "nine",
+                                "ten",
+                            ).contains(amountStr.lowercase())
                     if (isNum && isValidDurationUnit(unitStr)) {
                         val color = if (isStart) COLOR_START else COLOR_DUE
                         builder.addStyle(SpanStyle(color = color), start, unitEnd)
@@ -297,17 +323,18 @@ class SmartSyntaxTransformation(
                 }
             }
 
-            // 7. Dates Single-word
             if (!matched) {
                 if (word.startsWith("^") || word.startsWith("start:")) {
                     val valStr = if (word.startsWith("^")) word.substring(1) else word.substring(6)
                     if (isValidSmartDate(valStr)) {
                         builder.addStyle(SpanStyle(color = COLOR_START), start, end)
+                        matched = true
                     }
                 } else if (word.startsWith("@") || word.startsWith("due:")) {
                     val valStr = if (word.startsWith("@")) word.substring(1) else word.substring(4)
                     if (isValidSmartDate(valStr)) {
                         builder.addStyle(SpanStyle(color = COLOR_DUE), start, end)
+                        matched = true
                     }
                 }
             }

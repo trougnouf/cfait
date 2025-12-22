@@ -68,3 +68,12 @@ pub const BANK: char = '\u{f0a27}'; // nf-md-bank_transfer
 pub const BITCOIN: char = '\u{f10f}'; // nf-fa-bitcoin
 pub const LITECOIN: char = '\u{f0a61}'; // nf-md-litecoin
 pub const ETHEREUM: char = '\u{ed58}'; // nf-fa-ethereum
+
+// --- NEW FIELD ICONS ---
+pub const LOCATION: char = '\u{f01e7}'; // nf-md-earth
+pub const URL: char = '\u{f0c1}'; // Link
+pub const GEO: char = '\u{f041}'; // Map Marker
+
+// NEW HEADER ICONS per request
+pub const CALENDARS_HEADER: char = '\u{f00f2}'; // nf-md-calendar_multiple_check
+pub const TAGS_HEADER: char = '\u{f04fb}'; // nf-md-tag_multiple

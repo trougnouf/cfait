@@ -6,12 +6,9 @@ use crate::gui::state::GuiApp;
 use crate::store::FilterOptions;
 use chrono::{Duration, Utc};
 use iced::Task;
-use iced::widget::operation;
-use iced::widget::scrollable::RelativeOffset;
+use iced::widget::{operation, scrollable::RelativeOffset};
 
 pub fn refresh_filtered_tasks(app: &mut GuiApp) {
-    let cal_filter = None;
-
     let cutoff_date = if let Some(months) = app.sort_cutoff_months {
         let now = Utc::now();
         let days = months as i64 * 30;
@@ -21,9 +18,10 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     };
 
     app.tasks = app.store.filter(FilterOptions {
-        active_cal_href: cal_filter,
+        active_cal_href: None, // This is now handled by hidden_calendars
         hidden_calendars: &app.hidden_calendars,
         selected_categories: &app.selected_categories,
+        selected_locations: &app.selected_locations, // NEW
         match_all_categories: app.match_all_categories,
         search_term: &app.search_value,
         hide_completed_global: app.hide_completed,

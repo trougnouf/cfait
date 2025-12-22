@@ -17,7 +17,7 @@ const HANDLED_KEYS: &[&str] = &[
     "RRULE",
     "DURATION",
     "X-ESTIMATED-DURATION",
-    "PERCENT-COMPLETE", // <--- Added to handled keys
+    "PERCENT-COMPLETE",
     "CATEGORIES",
     "RELATED-TO",
     "DTSTAMP",
@@ -28,6 +28,10 @@ const HANDLED_KEYS: &[&str] = &[
     "VERSION",
     "CALSCALE",
     "RECURRENCE-ID", // <--- prevents corruption of exception tasks
+    // --- New handled keys ---
+    "LOCATION",
+    "URL",
+    "GEO",
 ];
 
 impl Task {
@@ -140,6 +144,19 @@ impl Task {
 
         // Sequence
         todo.add_property("SEQUENCE", self.sequence.to_string());
+
+        // --- NEW PROPERTIES ---
+        if let Some(loc) = &self.location {
+            todo.add_property("LOCATION", loc);
+        }
+        if let Some(url) = &self.url {
+            todo.add_property("URL", url);
+        }
+        if let Some(geo) = &self.geo {
+            // ICS standard uses semicolon for GEO (lat;long)
+            todo.add_property("GEO", geo.replace(',', ";"));
+        }
+        // ----------------------
 
         match self.status {
             TaskStatus::NeedsAction => todo.status(TodoStatus::NeedsAction),
@@ -336,6 +353,19 @@ impl Task {
             .properties()
             .get("PERCENT-COMPLETE")
             .and_then(|p| p.value().parse::<u8>().ok());
+
+        // --- NEW PROPERTIES EXTRACTION ---
+        let location = todo
+            .properties()
+            .get("LOCATION")
+            .map(|p| p.value().to_string());
+        let url = todo.properties().get("URL").map(|p| p.value().to_string());
+        // Normalize Geo to use comma internally for consistency with smart input
+        let geo = todo
+            .properties()
+            .get("GEO")
+            .map(|p| p.value().replace(';', ","));
+        // ---------------------------------
 
         let parse_date_prop = |val: &str| -> Option<DateTime<Utc>> {
             if val.len() == 8 {
@@ -538,6 +568,9 @@ impl Task {
             categories,
             depth: 0,
             rrule,
+            location,
+            url,
+            geo,
             unmapped_properties,
             sequence,
             raw_alarms,

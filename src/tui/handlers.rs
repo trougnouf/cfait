@@ -1,6 +1,6 @@
 // File: src/tui/handlers.rs
 use crate::config::Config;
-use crate::model::{Task, TaskStatus, extract_inline_aliases};
+use crate::model::{Task, TaskStatus, extract_inline_aliases, validate_alias_integrity};
 use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
 use crate::tui::state::{AppState, Focus, InputMode};
@@ -53,14 +53,20 @@ pub async fn handle_key_event(
     match state.mode {
         InputMode::Creating => match key.code {
             KeyCode::Enter if !state.input_buffer.is_empty() => {
-                // --- 1. Extract Inline Aliases ---
+                // --- 1. Extract Inline Aliases with Validation ---
                 let (clean_input, new_aliases) = extract_inline_aliases(&state.input_buffer);
 
                 if !new_aliases.is_empty() {
                     for (key, tags) in new_aliases {
+                        // VALIDATION CHECK
+                        if let Err(e) = validate_alias_integrity(&key, &tags, &state.tag_aliases) {
+                            state.message = format!("Alias Error: {}", e);
+                            return None; // Abort creation
+                        }
+
                         state.tag_aliases.insert(key.clone(), tags.clone());
 
-                        // Shared Logic: Retroactive Update
+                        // Retroactive Update
                         let modified = state.store.apply_alias_retroactively(&key, &tags);
 
                         // Dispatch Updates
@@ -81,7 +87,7 @@ pub async fn handle_key_event(
                     && !clean_input.trim().contains(' ')
                     && state.creating_child_of.is_none()
                 {
-                    let was_alias_def = state.input_buffer.contains('=');
+                    let was_alias_def = state.input_buffer.contains(":=");
 
                     if !was_alias_def {
                         let tag = clean_input.trim().trim_start_matches('#').to_string();
@@ -144,6 +150,12 @@ pub async fn handle_key_event(
                 let (clean_input, new_aliases) = extract_inline_aliases(&state.input_buffer);
                 if !new_aliases.is_empty() {
                     for (k, v) in new_aliases {
+                        // VALIDATION CHECK
+                        if let Err(e) = validate_alias_integrity(&k, &v, &state.tag_aliases) {
+                            state.message = format!("Alias Error: {}", e);
+                            return None;
+                        }
+
                         state.tag_aliases.insert(k.clone(), v.clone());
                         let modified = state.store.apply_alias_retroactively(&k, &v);
                         for mod_t in modified {
@@ -182,6 +194,7 @@ pub async fn handle_key_event(
             KeyCode::Right => state.move_cursor_right(),
             _ => {}
         },
+        // ... [Rest of the file remains unchanged] ...
         InputMode::EditingDescription => match key.code {
             KeyCode::Enter => {
                 if key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
@@ -221,15 +234,13 @@ pub async fn handle_key_event(
         },
         InputMode::Searching => match key.code {
             KeyCode::Enter => {
-                // Check for Tag Jump syntax (#tag without spaces)
                 if state.input_buffer.starts_with('#') && !state.input_buffer.contains(' ') {
                     let tag = state.input_buffer.trim_start_matches('#').to_string();
                     state.sidebar_mode = SidebarMode::Categories;
                     state.selected_categories.clear();
                     state.selected_categories.insert(tag);
-                    state.active_search_query.clear(); // Clear search on tag jump
+                    state.active_search_query.clear();
                 } else {
-                    // Commit search: Go to Normal mode to interact with results
                     state.active_search_query = state.input_buffer.clone();
                 }
 
@@ -238,7 +249,6 @@ pub async fn handle_key_event(
                 state.refresh_filtered_view();
             }
             KeyCode::Esc => {
-                // Cancel search: Clear active search and go to Normal
                 state.active_search_query.clear();
                 state.mode = InputMode::Normal;
                 state.reset_input();
@@ -254,13 +264,10 @@ pub async fn handle_key_event(
             }
             KeyCode::Left => state.move_cursor_left(),
             KeyCode::Right => state.move_cursor_right(),
-
-            // Allow navigation while searching
             KeyCode::Down => state.next(),
             KeyCode::Up => state.previous(),
             KeyCode::PageDown => state.jump_forward(10),
             KeyCode::PageUp => state.jump_backward(10),
-
             _ => {}
         },
         InputMode::Normal => match key.code {
@@ -312,15 +319,12 @@ pub async fn handle_key_event(
                     }
                 }
             }
-            // START / PAUSE / RESUME logic
             KeyCode::Char('s') => {
                 if let Some(task) = state.get_selected_task() {
                     let uid = task.uid.clone();
                     let updated_opt = if task.status == TaskStatus::InProcess {
-                        // Currently Running -> Pause
                         state.store.pause_task(&uid)
                     } else {
-                        // Currently Paused or Stopped -> Start/Resume
                         state.store.set_status_in_process(&uid)
                     };
 
@@ -330,7 +334,6 @@ pub async fn handle_key_event(
                     }
                 }
             }
-            // STOP logic (Shift+S)
             KeyCode::Char('S') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
                     && let Some(updated) = state.store.stop_task(&uid)
@@ -386,7 +389,7 @@ pub async fn handle_key_event(
                     } else if let Some(updated) =
                         state.store.set_parent(&child_uid, Some(parent_uid))
                     {
-                        state.yanked_uid = None; // Auto-unlink after action
+                        state.yanked_uid = None;
                         state.refresh_filtered_view();
                         return Some(Action::UpdateTask(updated));
                     }
@@ -399,7 +402,6 @@ pub async fn handle_key_event(
                     let uid = task.uid.clone();
                     let summary = task.summary.clone();
 
-                    // --- Auto-fill tags from parent ---
                     let mut initial_input = String::new();
                     for cat in &task.categories {
                         initial_input.push_str(&format!("#{} ", cat));
@@ -435,7 +437,7 @@ pub async fn handle_key_event(
                         state.message = "Cannot depend on self!".to_string();
                     } else if let Some(updated) = state.store.add_dependency(&curr_uid, yanked_uid)
                     {
-                        state.yanked_uid = None; // Auto-unlink after action
+                        state.yanked_uid = None;
                         state.refresh_filtered_view();
                         return Some(Action::UpdateTask(updated));
                     }
@@ -515,6 +517,10 @@ pub async fn handle_key_event(
                 state.sidebar_mode = SidebarMode::Categories;
                 state.refresh_filtered_view();
             }
+            KeyCode::Char('3') => {
+                state.sidebar_mode = SidebarMode::Locations;
+                state.refresh_filtered_view();
+            }
             KeyCode::Char('m') => {
                 state.match_all_categories = !state.match_all_categories;
                 state.refresh_filtered_view();
@@ -553,6 +559,9 @@ pub async fn handle_key_event(
                         }
                         SidebarMode::Categories => {
                             state.selected_categories.clear();
+                        }
+                        SidebarMode::Locations => {
+                            state.selected_locations.clear();
                         }
                     }
                     state.refresh_filtered_view();
@@ -624,6 +633,21 @@ pub async fn handle_key_event(
                                 }
                                 state.refresh_filtered_view();
                             }
+                        }
+                        SidebarMode::Locations => {
+                            let locs = state
+                                .store
+                                .get_all_locations(state.hide_completed, &state.hidden_calendars);
+                            if let Some(idx) = state.cal_state.selected()
+                                && let Some((l, _)) = locs.get(idx) {
+                                    let l_clone = l.clone();
+                                    if state.selected_locations.contains(&l_clone) {
+                                        state.selected_locations.remove(&l_clone);
+                                    } else {
+                                        state.selected_locations.insert(l_clone);
+                                    }
+                                    state.refresh_filtered_view();
+                                }
                         }
                     }
                 }

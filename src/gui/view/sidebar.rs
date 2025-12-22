@@ -1,14 +1,18 @@
-// File: src/gui/view/sidebar.rs
 use super::tooltip_style;
 use crate::color_utils;
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
+use crate::gui::view::COLOR_LOCATION;
 use crate::store::UNCATEGORIZED_ID;
 use iced::never;
 use iced::widget::{Space, button, checkbox, column, container, row, text, toggler, tooltip};
+// Import rich_text and span for multi-colored text
+use iced::widget::{rich_text, span};
 use iced::{Color, Element, Length, Theme};
-use std::time::Duration; // Import from super (mod.rs)
+use std::time::Duration;
+
+// Define the semantic color for Locations (Amber/Gold)
 
 pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     // ... [setup] ...
@@ -251,9 +255,9 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                     } else {
                         let (r, g, b) = color_utils::generate_color(&cat);
                         let tag_color = Color::from_rgb(r, g, b);
-                        crate::gui::view::task_row::rich_text![
-                            crate::gui::view::task_row::span("#").color(tag_color),
-                            crate::gui::view::task_row::span(format!("{} ({})", cat, count))
+                        rich_text![
+                            span("#").color(tag_color),
+                            span(format!("{} ({})", cat, count))
                         ]
                         .size(16)
                         .on_link_click(never)
@@ -338,4 +342,91 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     });
 
     column![tags_list, dur_filters].spacing(10).into()
+}
+
+pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
+    let all_locs = app
+        .store
+        .get_all_locations(app.hide_completed, &app.hidden_calendars);
+
+    let has_selection = !app.selected_locations.is_empty();
+
+    let clear_btn = if has_selection {
+        button(icon::icon(icon::CLEAR_ALL).size(16))
+            .style(button::text)
+            .padding(5)
+            .on_press(Message::ClearAllLocations)
+    } else {
+        button(
+            icon::icon(icon::CLEAR_ALL)
+                .size(16)
+                .style(move |_| text::Style {
+                    color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
+                }),
+        )
+        .style(button::text)
+        .padding(5)
+    };
+
+    // Apply tooltip
+    let clear_tooltip = tooltip(
+        clear_btn,
+        text("Clear all locations").size(12),
+        tooltip::Position::Top,
+    )
+    .style(tooltip_style)
+    .delay(Duration::from_millis(700));
+
+    let header = row![
+        text("Locations").size(14),
+        Space::new().width(Length::Fill),
+        clear_tooltip
+    ]
+    .padding(10)
+    .align_y(iced::Alignment::Center);
+
+    if all_locs.is_empty() {
+        return column![
+            header,
+            text("No locations")
+                .size(14)
+                .color(Color::from_rgb(0.5, 0.5, 0.5))
+        ]
+        .into();
+    }
+
+    let list = column(
+        all_locs
+            .into_iter()
+            .map(|(loc, count)| {
+                let is_selected = app.selected_locations.contains(&loc);
+                let loc_clone = loc.clone();
+
+                let check = checkbox(is_selected)
+                    .on_toggle(move |_| Message::LocationToggled(loc_clone.clone()));
+
+                // Highlighted @@ text for Locations
+                let label = rich_text![
+                    span("@@").color(COLOR_LOCATION),
+                    span(format!("{} ({})", loc, count))
+                ]
+                .size(14)
+                .on_link_click(never); // Prevent interactivity on text
+
+                // Make the text clickable to toggle
+                let label_btn = button(label)
+                    .style(button::text)
+                    .padding(0)
+                    .on_press(Message::LocationToggled(loc.clone()));
+
+                row![check, label_btn]
+                    .spacing(5)
+                    .align_y(iced::Alignment::Center)
+                    .into()
+            })
+            .collect::<Vec<_>>(),
+    )
+    .spacing(5);
+
+    column![header, list].spacing(10).into()
 }

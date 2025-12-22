@@ -21,6 +21,7 @@ pub enum SidebarMode {
     #[default]
     Calendars,
     Categories,
+    Locations, // NEW
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -49,6 +50,7 @@ pub struct GuiApp {
     pub hidden_calendars: HashSet<String>,
     pub disabled_calendars: HashSet<String>,
     pub selected_categories: HashSet<String>,
+    pub selected_locations: HashSet<String>, // NEW
     pub match_all_categories: bool,
     pub yanked_uid: Option<String>,
 
@@ -94,7 +96,7 @@ pub struct GuiApp {
     pub ob_sort_months_input: String,
     pub ob_insecure: bool,
     pub scrollable_id: iced::widget::Id,
-    pub sidebar_scrollable_id: iced::widget::Id, // Added for tag scrolling
+    pub sidebar_scrollable_id: iced::widget::Id,
 
     // Window Resizing State
     pub resize_direction: Option<ResizeDirection>,
@@ -116,6 +118,7 @@ impl Default for GuiApp {
             hidden_calendars: HashSet::new(),
             disabled_calendars: HashSet::new(),
             selected_categories: HashSet::new(),
+            selected_locations: HashSet::new(),
             match_all_categories: false,
             yanked_uid: None,
             selected_uid: None,
@@ -151,7 +154,7 @@ impl Default for GuiApp {
             ob_default_cal: None,
             ob_insecure: false,
             scrollable_id: iced::widget::Id::unique(),
-            sidebar_scrollable_id: iced::widget::Id::unique(), // Initialize unique ID
+            sidebar_scrollable_id: iced::widget::Id::unique(),
 
             resize_direction: None,
             current_window_size: iced::Size::new(800.0, 600.0),

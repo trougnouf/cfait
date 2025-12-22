@@ -1,22 +1,20 @@
-// File: ./src/gui/view/task_row.rs
 use crate::color_utils;
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
+use crate::gui::view::COLOR_LOCATION; // Import the shared color
 use crate::model::Task as TodoTask;
 use std::collections::HashSet;
 use std::time::Duration;
 
 use super::tooltip_style;
 use iced::widget::{Space, button, column, container, responsive, row, text, tooltip};
-pub use iced::widget::{rich_text, span};
 use iced::{Border, Color, Element, Length, Theme};
 
 // Imports needed for NoPointer and general widget logic
 use iced::advanced::Renderer as AdvancedRenderer;
 use iced::advanced::widget::{self, Widget};
-use iced::advanced::{Clipboard, Layout, Shell, layout, renderer};
-use iced::mouse;
+use iced::advanced::{Clipboard, Layout, Shell, layout, mouse, renderer};
 use iced::{Event, Rectangle, Size, Vector};
 
 pub fn view_task_row<'a>(
@@ -460,7 +458,11 @@ pub fn view_task_row<'a>(
     let has_metadata = !task.categories.is_empty()
         || task.rrule.is_some()
         || is_blocked
-        || task.estimated_duration.is_some();
+        || task.estimated_duration.is_some()
+        // --- NEW FIELDS ---
+        || task.location.is_some()
+        || task.url.is_some()
+        || task.geo.is_some();
 
     let main_text_col = responsive(move |size| {
         let available_width = size.width;
@@ -506,11 +508,17 @@ pub fn view_task_row<'a>(
                     tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
                 }
             }
+            if let Some(l) = &task.location {
+                tags_width += (l.len() as f32 * 7.0) + 25.0;
+            }
             if task.estimated_duration.is_some() {
                 tags_width += 50.0;
             }
             if task.rrule.is_some() {
                 tags_width += 30.0;
+            }
+            if task.url.is_some() {
+                tags_width += 20.0;
             }
         }
 
@@ -573,19 +581,54 @@ pub fn view_task_row<'a>(
                         .on_press(Message::JumpToTag(cat.clone())),
                 );
             }
+
+            // --- COLORED LOCATION PILL (Moved Here) ---
+            if let Some(loc) = &task.location {
+                let text_color = Color::WHITE; // White text on gray bg
+
+                let loc_btn = button(text(format!("@@{}", loc)).size(12).color(text_color))
+                    .style(move |_theme, status| {
+                        let base = button::Style {
+                            background: Some(COLOR_LOCATION.into()),
+                            text_color,
+                            border: iced::Border {
+                                radius: 4.0.into(),
+                                ..Default::default()
+                            },
+                            ..button::Style::default()
+                        };
+                        match status {
+                            button::Status::Hovered | button::Status::Pressed => button::Style {
+                                border: iced::Border {
+                                    color: Color::BLACK.scale_alpha(0.2),
+                                    width: 1.0,
+                                    radius: 4.0.into(),
+                                },
+                                ..base
+                            },
+                            _ => base,
+                        }
+                    })
+                    .padding(3)
+                    .on_press(Message::JumpToLocation(loc.clone()));
+
+                tags_row = tags_row.push(loc_btn);
+            }
+            // ----------------------------------------
+
             if let Some(mins) = task.estimated_duration {
                 let label = if mins >= 525600 {
-                    format!("{}y", mins / 525600)
+                    format!("~{}y", mins / 525600)
                 } else if mins >= 43200 {
-                    format!("{}mo", mins / 43200)
+                    format!("~{}mo", mins / 43200)
                 } else if mins >= 10080 {
-                    format!("{}w", mins / 10080)
+                    format!("~{}w", mins / 10080)
                 } else if mins >= 1440 {
-                    format!("{}d", mins / 1440)
+                    format!("~{}d", mins / 1440)
                 } else if mins >= 60 {
-                    format!("{}h", mins / 60)
+                    format!("~{}h", mins / 60)
                 } else {
-                    format!("{}m", mins)
+                    format!("~{}m", mins)
                 };
                 tags_row = tags_row.push(
                     container(text(label).size(10).color(Color::WHITE))
@@ -606,6 +649,18 @@ pub fn view_task_row<'a>(
                     .color(Color::from_rgb(0.5, 0.5, 0.5));
                 tags_row = tags_row.push(container(recurrence_icon).padding(0));
             }
+
+            if let Some(u) = &task.url {
+                let url_btn = button(icon::icon(icon::URL).size(14))
+                    .style(button::text)
+                    .padding(0)
+                    .on_press(Message::OpenUrl(u.clone()));
+                tags_row = tags_row.push(
+                    tooltip(url_btn, text("Open URL").size(12), tooltip::Position::Top)
+                        .style(tooltip_style),
+                );
+            }
+
             tags_row.into()
         };
 
@@ -621,12 +676,16 @@ pub fn view_task_row<'a>(
             (available_width - tags_width - padding_safety) > required_title_space
         };
 
+        // --- ENFORCE WRAPPING ---
+        let summary_text = text(&task.summary)
+            .size(20)
+            .color(color)
+            .width(Length::Fill)
+            .wrapping(iced::widget::text::Wrapping::Word);
+
         if place_inline {
             row![
-                text(&task.summary)
-                    .size(20)
-                    .color(color)
-                    .width(Length::Fill),
+                summary_text,
                 if has_metadata {
                     build_tags()
                 } else {
@@ -638,10 +697,7 @@ pub fn view_task_row<'a>(
             .into()
         } else {
             column![
-                text(&task.summary)
-                    .size(20)
-                    .color(color)
-                    .width(Length::Fill),
+                summary_text,
                 if has_metadata {
                     row![Space::new().width(Length::Fill), build_tags()]
                 } else {

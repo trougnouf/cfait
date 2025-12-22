@@ -10,7 +10,6 @@ pub const UNCATEGORIZED_ID: &str = ":::uncategorized:::";
 #[derive(Debug, Clone, Default)]
 pub struct TaskStore {
     pub calendars: HashMap<String, Vec<Task>>,
-    /// Reverse index: Maps Task UID -> Calendar HREF for O(1) lookups
     pub index: HashMap<String, String>,
 }
 
@@ -18,6 +17,7 @@ pub struct FilterOptions<'a> {
     pub active_cal_href: Option<&'a str>,
     pub hidden_calendars: &'a std::collections::HashSet<String>,
     pub selected_categories: &'a HashSet<String>,
+    pub selected_locations: &'a HashSet<String>, // NEW
     pub match_all_categories: bool,
     pub search_term: &'a str,
     pub hide_completed_global: bool,
@@ -382,6 +382,33 @@ impl TaskStore {
         result
     }
 
+    // --- NEW: Location Aggregation ---
+    pub fn get_all_locations(
+        &self,
+        hide_completed: bool,
+        hidden_calendars: &HashSet<String>,
+    ) -> Vec<(String, usize)> {
+        let mut counts = HashMap::new();
+
+        for (href, tasks) in &self.calendars {
+            if hidden_calendars.contains(href) {
+                continue;
+            }
+            for task in tasks {
+                if hide_completed && task.status.is_done() {
+                    continue;
+                }
+                if let Some(loc) = &task.location {
+                    *counts.entry(loc.clone()).or_insert(0) += 1;
+                }
+            }
+        }
+
+        let mut result: Vec<_> = counts.into_iter().collect();
+        result.sort_by(|a, b| a.0.cmp(&b.0));
+        result
+    }
+
     fn count_uncategorized_active(&self, hidden_calendars: &HashSet<String>) -> usize {
         let mut count = 0;
         for (href, tasks) in &self.calendars {
@@ -496,6 +523,17 @@ impl TaskStore {
                         if !hit {
                             return false;
                         }
+                    }
+                }
+
+                // --- NEW: Location Filtering ---
+                if !options.selected_locations.is_empty() {
+                    if let Some(loc) = &t.location {
+                        if !options.selected_locations.contains(loc) {
+                            return false;
+                        }
+                    } else {
+                        return false;
                     }
                 }
 

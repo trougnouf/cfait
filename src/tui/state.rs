@@ -42,6 +42,7 @@ pub struct AppState {
     pub hidden_calendars: HashSet<String>,
     pub disabled_calendars: HashSet<String>,
     pub selected_categories: HashSet<String>,
+    pub selected_locations: HashSet<String>, // NEW
     pub match_all_categories: bool,
     pub hide_completed: bool,
     pub hide_fully_completed_tags: bool,
@@ -95,6 +96,7 @@ impl AppState {
             hidden_calendars: HashSet::new(),
             disabled_calendars: HashSet::new(),
             selected_categories: HashSet::new(),
+            selected_locations: HashSet::new(), // Init
             match_all_categories: false,
             hide_completed: false,
             hide_fully_completed_tags: false,
@@ -126,8 +128,6 @@ impl AppState {
     }
 
     pub fn refresh_filtered_view(&mut self) {
-        let cal_filter = None;
-
         let search_term = if self.mode == InputMode::Searching {
             &self.input_buffer
         } else {
@@ -146,14 +146,14 @@ impl AppState {
         effective_hidden.extend(self.disabled_calendars.clone());
 
         self.tasks = self.store.filter(FilterOptions {
-            active_cal_href: cal_filter,
+            active_cal_href: None, // Logic handled by hidden_calendars
             selected_categories: &self.selected_categories,
+            selected_locations: &self.selected_locations, // Pass locations
             match_all_categories: self.match_all_categories,
             hidden_calendars: &effective_hidden,
             search_term,
             hide_completed_global: self.hide_completed,
             cutoff_date,
-            // TUI currently doesn't implement duration filtering UI, so we disable it
             min_duration: None,
             max_duration: None,
             include_unset_duration: true,
@@ -227,6 +227,10 @@ impl AppState {
                     &self.hidden_calendars,
                 )
                 .len(),
+            SidebarMode::Locations => self
+                .store
+                .get_all_locations(self.hide_completed, &self.hidden_calendars)
+                .len(), // NEW
         }
     }
 

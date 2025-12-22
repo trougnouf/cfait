@@ -1,4 +1,3 @@
-// File: ./android/app/src/main/java/com/cfait/ui/HomeScreen.kt
 package com.cfait.ui
 
 import android.content.ClipData
@@ -33,10 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cfait.R
-import com.cfait.core.CfaitMobile
-import com.cfait.core.MobileCalendar
-import com.cfait.core.MobileTag
-import com.cfait.core.MobileTask
+import com.cfait.core.*
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +41,7 @@ fun HomeScreen(
     api: CfaitMobile,
     calendars: List<MobileCalendar>,
     tags: List<MobileTag>,
+    locations: List<MobileLocation>, // <--- Added parameter
     defaultCalHref: String?,
     isLoading: Boolean,
     hasUnsynced: Boolean,
@@ -56,18 +53,17 @@ fun HomeScreen(
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    
-    // CHANGED: Use rememberSaveable so tab selection survives navigation
     var sidebarTab by rememberSaveable { mutableIntStateOf(0) }
-
-    // Sync State Tracking
     var isManualSyncing by remember { mutableStateOf(false) }
-    // activeOpCount tracks background saves (add/toggle/delete) to show the spinner
     var activeOpCount by remember { mutableIntStateOf(0) }
-
     var lastSyncFailed by remember { mutableStateOf(false) }
-
+    // We can use the parameter directly for simple boolean checks,
+    // but local state is fine for optimistic UI updates if needed.
+    // For simplicity, let's use the parameter directly where possible.
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
+
+    var filterLocation by rememberSaveable { mutableStateOf<String?>(null) }
+
     LaunchedEffect(hasUnsynced) { localHasUnsynced = hasUnsynced }
 
     fun checkSyncStatus() {
@@ -79,9 +75,7 @@ fun HomeScreen(
         }
     }
 
-    // CHANGED: Use rememberSaveable so we don't reset the tab logic on back navigation
     var hasSetDefaultTab by rememberSaveable { mutableStateOf(false) }
-    
     LaunchedEffect(calendars) {
         if (!hasSetDefaultTab && calendars.isNotEmpty()) {
             val hasRemote = calendars.any { !it.isLocal }
@@ -91,27 +85,20 @@ fun HomeScreen(
             hasSetDefaultTab = true
         }
     }
-    val listState = rememberLazyListState()
 
+    val listState = rememberLazyListState()
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
-    
-    // CHANGED: Use rememberSaveable for search/filter state
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var filterTag by rememberSaveable { mutableStateOf<String?>(null) }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
-    
     val searchFocusRequester = remember { FocusRequester() }
     var newTaskText by remember { mutableStateOf("") }
-
     var showExportDialog by remember { mutableStateOf(false) }
-
     var yankedUid by remember { mutableStateOf<String?>(null) }
     val yankedTask = remember(tasks, yankedUid) { tasks.find { it.uid == yankedUid } }
-
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
-
     val calColorMap =
         remember(calendars) {
             calendars.associate { it.href to (it.color?.let { hex -> parseHexColor(hex) } ?: Color.Gray) }
@@ -122,7 +109,7 @@ fun HomeScreen(
     fun updateTaskList() {
         scope.launch {
             try {
-                tasks = api.getViewTasks(filterTag, searchQuery)
+                tasks = api.getViewTasks(filterTag, filterLocation, searchQuery)
             } catch (_: Exception) {
             }
         }
@@ -148,7 +135,10 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(searchQuery, filterTag, isLoading, calendars, tags) { updateTaskList() }
+    // Trigger update when parameters or filter state changes
+    LaunchedEffect(searchQuery, filterTag, filterLocation, isLoading, calendars, tags, locations) {
+        updateTaskList()
+    }
 
     LaunchedEffect(autoScrollUid, tasks) {
         if (autoScrollUid != null) {
@@ -157,16 +147,14 @@ fun HomeScreen(
         }
     }
 
-    // --- TASK ACTIONS (Wrapped with Spinner Logic) ---
-
     fun toggleTask(task: MobileTask) {
         val newIsDone = !task.isDone
         val newStatus = if (newIsDone) "Completed" else "NeedsAction"
+        // Optimistic update
         tasks =
             tasks.map {
                 if (it.uid == task.uid) it.copy(isDone = newIsDone, statusString = newStatus, isPaused = false) else it
             }
-
         scope.launch {
             activeOpCount++
             try {
@@ -174,7 +162,6 @@ fun HomeScreen(
                 updateTaskList()
                 checkSyncStatus()
                 onDataChanged()
-                // If we succeeded without error, clear failure flag
                 lastSyncFailed = false
             } catch (_: Exception) {
                 lastSyncFailed = true
@@ -188,7 +175,9 @@ fun HomeScreen(
 
     fun addTask(txt: String) {
         val text = txt.trim()
-        if (text.startsWith("#") && !text.contains(" ")) {
+        val isAliasDef = text.contains(":=")
+
+        if (text.startsWith("#") && !text.contains(" ") && !isAliasDef) {
             val tag = text.removePrefix("#")
             filterTag = tag
             sidebarTab = 1
@@ -203,7 +192,7 @@ fun HomeScreen(
                     onDataChanged()
                     lastSyncFailed = false
                     try {
-                        val newTasks = api.getViewTasks(filterTag, searchQuery)
+                        val newTasks = api.getViewTasks(filterTag, filterLocation, searchQuery)
                         tasks = newTasks
                         val index = newTasks.indexOfFirst { it.uid == newUid }
                         if (index >= 0) listState.animateScrollToItem(index)
@@ -272,9 +261,7 @@ fun HomeScreen(
                         t
                     }
                 }.filterNotNull()
-
         tasks = updatedList
-
         scope.launch {
             activeOpCount++
             try {
@@ -380,14 +367,17 @@ fun HomeScreen(
                         Tab(
                             selected = sidebarTab == 0,
                             onClick = { sidebarTab = 0 },
-                            text = { Text("Calendars") },
-                            icon = { NfIcon(NfIcons.CALENDAR) },
+                            icon = { NfIcon(NfIcons.CALENDARS_VIEW) },
                         )
                         Tab(
                             selected = sidebarTab == 1,
                             onClick = { sidebarTab = 1 },
-                            text = { Text("Tags") },
-                            icon = { NfIcon(NfIcons.TAG) },
+                            icon = { NfIcon(NfIcons.TAGS_VIEW) },
+                        )
+                        Tab(
+                            selected = sidebarTab == 2,
+                            onClick = { sidebarTab = 2 },
+                            icon = { NfIcon(NfIcons.LOCATION) },
                         )
                     }
                     LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -451,14 +441,13 @@ fun HomeScreen(
                                     }) { NfIcon(NfIcons.ARROW_RIGHT, size = 18.sp) }
                                 }
                             }
-                        } else {
+                        } else if (sidebarTab == 1) {
                             item {
                                 CompactTagRow(
                                     name = "All Tasks",
                                     count = null,
                                     color = MaterialTheme.colorScheme.onSurface,
-                                    isSelected =
-                                        filterTag == null,
+                                    isSelected = filterTag == null,
                                     onClick = {
                                         filterTag = null
                                         scope.launch { drawerState.close() }
@@ -471,10 +460,35 @@ fun HomeScreen(
                                 val isSel = if (isUncat) filterTag == ":::uncategorized:::" else filterTag == tag.name
                                 val color = if (isUncat) Color.Gray else getTagColor(tag.name)
                                 CompactTagRow(name = displayName, count = tag.count.toInt(), color = color, isSelected = isSel, onClick = {
-                                    filterTag =
-                                        if (isUncat) ":::uncategorized:::" else tag.name
-                                    ; scope.launch { drawerState.close() }
+                                    filterTag = if (isUncat) ":::uncategorized:::" else tag.name
+                                    scope.launch { drawerState.close() }
                                 })
+                            }
+                        } else {
+                            // Locations List
+                            item {
+                                CompactTagRow(
+                                    name = "All Locations",
+                                    count = null,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    isSelected = filterLocation == null,
+                                    onClick = {
+                                        filterLocation = null
+                                        scope.launch { drawerState.close() }
+                                    },
+                                )
+                            }
+                            items(locations) { loc ->
+                                CompactTagRow(
+                                    name = loc.name,
+                                    count = loc.count.toInt(),
+                                    color = Color(0xFFFFB300), // Amber
+                                    isSelected = filterLocation == loc.name,
+                                    onClick = {
+                                        filterLocation = loc.name
+                                        scope.launch { drawerState.close() }
+                                    },
+                                )
                             }
                         }
                         item {
@@ -564,21 +578,10 @@ fun HomeScreen(
                             if (isLoading || isManualSyncing || activeOpCount > 0) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                             } else {
-                                // -----------------------------------------------------------
-                                // REFINED ICON LOGIC:
-                                // 1. Unsynced Changes -> RED ALERT (Failed to sync)
-                                // 2. Sync Failed but Clean -> AMBER SYNC_OFF (Offline view)
-                                // 3. Clean -> REFRESH (Normal)
-                                // -----------------------------------------------------------
                                 val (icon, iconColor) =
                                     when {
-                                        // If we have unsynced changes and we are NOT loading, it implies failure to sync them.
                                         localHasUnsynced -> Pair(NfIcons.SYNC_ALERT, Color(0xFFEB0000))
-
-                                        // If we failed to sync (server offline) but have no pending changes (viewing cache)
                                         lastSyncFailed -> Pair(NfIcons.SYNC_OFF, Color(0xFFFFB300))
-
-                                        // Normal state
                                         else -> Pair(NfIcons.REFRESH, MaterialTheme.colorScheme.onSurface)
                                     }
 

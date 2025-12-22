@@ -362,7 +362,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         && !clean_input.trim().contains(' ')
         && app.editing_uid.is_none()
     {
-        let was_alias_definition = text_to_submit.contains('=');
+        let was_alias_definition = text_to_submit.contains(":=");
 
         if !was_alias_definition {
             let tag = clean_input.trim().trim_start_matches('#').to_string();

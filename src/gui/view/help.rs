@@ -27,8 +27,9 @@ pub fn view_help() -> Element<'static, Message> {
             vec![
                 entry("!1", "Priority High (1) to Low (9)", "!1, !5, !9"),
                 entry("#tag", "Add category. Use ':' for sub-tags.", "#work, #dev:backend"),
-                entry("#a=#b,#c", "Define alias inline (Retroactive).", "#groceries=#home,#shopping"),
+                entry("@@loc", "Location. Quote if containing spaces.", "@@home, @@\"somewhere else\""),
                 entry("~30m", "Estimated Duration (m/h/d/w).", "~30m, ~1.5h, ~2d"),
+                entry("#a:=#b,#c,@@d", "Define alias inline (Retroactive).", "#tree_planting:=#gardening,@@home"),
             ]
         ),
 
@@ -56,6 +57,16 @@ pub fn view_help() -> Element<'static, Message> {
             ]
         ),
 
+        help_card(
+            "Metadata", 
+            crate::gui::icon::INFO,
+            vec![
+                entry("url:", "Attach a link.", "url:https://perdu.com"),
+                entry("geo:", "Coordinates (lat,long).", "geo:53.046070, -121.105264"),
+                entry("desc:", "Append description text.", "desc:\"Call back later\""),
+            ]
+        ),
+
         // 4. POWER SEARCH
         help_card(
             "Search & Filtering", 
@@ -68,6 +79,7 @@ pub fn view_help() -> Element<'static, Message> {
                 entry("  Dates", "Filter by timeframe.", "@<today (Overdue), ^>tomorrow"),
                 entry("  Priority", "Filter by priority range.", "!<3 (High prio), !>=5"),
                 entry("  Duration", "Filter by effort.", "~<15m (Quick tasks)"),
+                entry("  Location", "Filter by location.", "@@home"),
             ]
         ),
 

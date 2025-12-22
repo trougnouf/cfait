@@ -1,4 +1,4 @@
-// File: ./src/gui/view/syntax.rs
+// File: src/gui/view/syntax.rs
 use crate::color_utils;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use iced::advanced::text::highlighter::{self, Highlighter};
@@ -29,7 +29,6 @@ impl Highlighter for SmartInputHighlighter {
             .map(|t| {
                 let format = match t.kind {
                     SyntaxType::Priority => {
-                        // Extract priority number to get dynamic color
                         let text = &line[t.start..t.end];
                         let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
                         let (r, g, b) = color_utils::get_priority_rgb(p);
@@ -71,7 +70,24 @@ impl Highlighter for SmartInputHighlighter {
                         }
                     }
                     SyntaxType::Text => highlighter::Format {
-                        color: None, // Use default text color from the theme
+                        color: None,
+                        font: None,
+                    },
+                    // --- NEW TYPES ---
+                    SyntaxType::Location => highlighter::Format {
+                        color: Some(Color::from_rgb(0.8, 0.5, 0.0)), // Amber/Orange
+                        font: None,
+                    },
+                    SyntaxType::Url => highlighter::Format {
+                        color: Some(Color::from_rgb(0.2, 0.2, 0.8)), // Dark Blue
+                        font: None,
+                    },
+                    SyntaxType::Geo => highlighter::Format {
+                        color: Some(Color::from_rgb(0.5, 0.5, 0.5)), // Grey
+                        font: None,
+                    },
+                    SyntaxType::Description => highlighter::Format {
+                        color: Some(Color::from_rgb(0.6, 0.0, 0.6)), // Dark Magenta
                         font: None,
                     },
                 };

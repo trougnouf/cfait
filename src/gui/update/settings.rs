@@ -5,12 +5,14 @@ use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tasks, save_config};
+use crate::model::parser::validate_alias_integrity; // New import
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalStorage};
 use iced::Task;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::ConfigLoaded(Ok(config)) => {
+            // ... [Same loading logic as before] ...
             app.hidden_calendars = config.hidden_calendars.clone().into_iter().collect();
             app.disabled_calendars = config.disabled_calendars.clone().into_iter().collect();
             app.sort_cutoff_months = config.sort_cutoff_months;
@@ -55,7 +57,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
             }
 
-            // --- Set Active Calendar (with new unhide logic) ---
             let mut target_href = None;
             if let Some(def) = &app.ob_default_cal
                 && let Some(cal) = app
@@ -63,7 +64,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     .iter()
                     .find(|c| c.name == *def || c.href == *def)
             {
-                // Unhide the default calendar if it was hidden
                 if app.hidden_calendars.contains(&cal.href) {
                     app.hidden_calendars.remove(&cal.href);
                 }
@@ -117,8 +117,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.sort_cutoff_months = Some(n);
             }
 
-            // The explicit struct is here to preserve settings
-            // that may have been changed in the UI before the first save.
             let mut config_to_save = Config::load().unwrap_or_else(|_| Config {
                 url: String::new(),
                 username: String::new(),
@@ -131,7 +129,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 hide_fully_completed_tags: app.hide_fully_completed_tags,
                 tag_aliases: app.tag_aliases.clone(),
                 sort_cutoff_months: Some(2),
-                theme: app.current_theme, // Make sure to include the new theme field
+                theme: app.current_theme,
             });
 
             config_to_save.url = app.ob_url.clone();
@@ -145,7 +143,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             config_to_save.hide_fully_completed_tags = app.hide_fully_completed_tags;
             config_to_save.tag_aliases = app.tag_aliases.clone();
             config_to_save.sort_cutoff_months = app.sort_cutoff_months;
-            config_to_save.theme = app.current_theme; // Also update it here
+            config_to_save.theme = app.current_theme;
 
             let _ = config_to_save.save();
 
@@ -176,7 +174,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::CancelSettings => {
-            // Save local settings before returning to Active state
             save_config(app);
             app.state = AppState::Active;
             Task::none()
@@ -229,14 +226,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         .trim()
                         .trim_start_matches('#')
                         .to_string();
-                    app.tag_aliases.insert(key.clone(), tags.clone());
-                    app.alias_input_key.clear();
-                    app.alias_input_values.clear();
-                    save_config(app);
 
-                    // Use common helper
-                    if let Some(task) = apply_alias_retroactively(app, &key, &tags) {
-                        return task;
+                    // --- VALIDATION ADDED HERE ---
+                    match validate_alias_integrity(&key, &tags, &app.tag_aliases) {
+                        Ok(_) => {
+                            app.tag_aliases.insert(key.clone(), tags.clone());
+                            app.alias_input_key.clear();
+                            app.alias_input_values.clear();
+                            app.error_msg = None; // Clear previous errors
+                            save_config(app);
+
+                            if let Some(task) = apply_alias_retroactively(app, &key, &tags) {
+                                return task;
+                            }
+                        }
+                        Err(e) => {
+                            app.error_msg = Some(format!("Cannot add alias: {}", e));
+                        }
                     }
                 }
             }
@@ -251,7 +257,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
                 app.ob_sort_months_input = val.clone();
 
-                // Apply and save immediately
                 if val.trim().is_empty() {
                     app.sort_cutoff_months = None;
                 } else if let Ok(n) = val.trim().parse::<u32>() {
