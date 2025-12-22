@@ -1,4 +1,4 @@
-// File: ./src/journal.rs
+// File: src/journal.rs
 use crate::model::Task;
 use crate::paths::AppPaths;
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalStorage};
@@ -71,6 +71,60 @@ impl Journal {
         self.queue.is_empty()
     }
 
+    /// Squashes redundant actions for the same task.
+    /// E.g. [Create(A), Update(A'), Update(A'')] -> [Create(A'')]
+    /// This fixes the "Stuck Loading" issue caused by alias update explosions.
+    pub fn compact(&mut self) {
+        let mut uid_map: HashMap<String, usize> = HashMap::new();
+        let mut compacted: Vec<Option<Action>> = Vec::new();
+
+        for action in self.queue.drain(..) {
+            let uid = match &action {
+                Action::Create(t) => t.uid.clone(),
+                Action::Update(t) => t.uid.clone(),
+                Action::Delete(t) => t.uid.clone(),
+                Action::Move(t, _) => t.uid.clone(),
+            };
+
+            let mut merged = false;
+            if let Some(&idx) = uid_map.get(&uid) {
+                if let Some(prev) = &compacted[idx] {
+                    match (prev, &action) {
+                        (Action::Create(_), Action::Update(t)) => {
+                            // Upgrade the Create to include the updates
+                            compacted[idx] = Some(Action::Create(t.clone()));
+                            merged = true;
+                        }
+                        (Action::Update(_), Action::Update(t)) => {
+                            // Replace old update with new update (Last write wins)
+                            compacted[idx] = Some(Action::Update(t.clone()));
+                            merged = true;
+                        }
+                        (Action::Create(_), Action::Delete(_)) => {
+                            // Created then Deleted -> Cancel out entirely
+                            compacted[idx] = None;
+                            uid_map.remove(&uid);
+                            merged = true;
+                        }
+                        (Action::Update(_), Action::Delete(t)) => {
+                            // Updated then Deleted -> Just Delete
+                            compacted[idx] = Some(Action::Delete(t.clone()));
+                            merged = true;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            if !merged {
+                compacted.push(Some(action));
+                uid_map.insert(uid, compacted.len() - 1);
+            }
+        }
+
+        self.queue = compacted.into_iter().flatten().collect();
+    }
+
     /// Applies pending journal actions to a list of tasks.
     /// Also performs garbage collection on invalid "Ghost" tasks.
     pub fn apply_to_tasks(tasks: &mut Vec<Task>, calendar_href: &str) {
@@ -95,7 +149,6 @@ impl Journal {
         }
 
         // 2. Ghost Pruning: Remove tasks with no ETag that are NOT in the journal.
-        // These are failed creations that shouldn't exist anymore.
         // FIX: Explicitly skip pruning for the Local Calendar, as local tasks never have ETags.
         if calendar_href != LOCAL_CALENDAR_HREF {
             tasks.retain(|t| !t.etag.is_empty() || pending_uids.contains(&t.uid));
@@ -128,10 +181,8 @@ impl Journal {
                 }
                 Action::Move(t, new_href) => {
                     if t.calendar_href == calendar_href {
-                        // Source: Remove
                         task_map.remove(&t.uid);
                     } else if new_href == calendar_href {
-                        // Dest: Insert (Update href)
                         let mut moved_task = t;
                         moved_task.calendar_href = new_href;
                         task_map.insert(moved_task.uid.clone(), moved_task);

@@ -592,6 +592,14 @@ impl RustyClient {
     }
 
     pub async fn sync_journal(&self) -> Result<Vec<String>, String> {
+        // Compact journal to merge redundant updates before syncing ---
+        let _ = Journal::modify(|queue| {
+            let mut tmp_j = Journal {
+                queue: queue.drain(..).collect(),
+            };
+            tmp_j.compact();
+            *queue = tmp_j.queue;
+        });
         let client = self.client.as_ref().ok_or("Offline")?;
         let mut warnings = Vec::new();
 

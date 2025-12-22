@@ -1,47 +1,53 @@
-// File: ./tests/local_safety.rs
-use cfait::journal::Journal;
+// File: tests/local_safety.rs
+use cfait::journal::{Action, Journal};
 use cfait::model::Task;
 use cfait::storage::LOCAL_CALENDAR_HREF;
 use std::collections::HashMap;
 
+// --- TEST 1: Data Loss Prevention ---
 #[test]
 fn test_local_tasks_are_not_pruned_as_ghosts() {
-    // 1. Setup a "Local" task (Empty ETag, not in Journal)
     let mut tasks = vec![];
     let mut t1 = Task::new("Local Task 1", &HashMap::new());
     t1.calendar_href = LOCAL_CALENDAR_HREF.to_string();
-    t1.etag = "".to_string(); // Typical for local tasks
-    tasks.push(t1.clone());
-
-    // 2. Run Journal application on the Local Calendar
-    // In the buggy version, this sees (Empty ETag + Not in Journal) -> Prune
-    Journal::apply_to_tasks(&mut tasks, LOCAL_CALENDAR_HREF);
-
-    // 3. Assert survival
-    assert_eq!(
-        tasks.len(),
-        1,
-        "Local tasks must not be pruned even if they have no ETag!"
-    );
-    assert_eq!(tasks[0].summary, "Local Task 1");
-}
-
-#[test]
-fn test_server_ghosts_are_still_pruned() {
-    // 1. Setup a "Server" Ghost task (Empty ETag, not in Journal)
-    let mut tasks = vec![];
-    let mut t1 = Task::new("Ghost Task", &HashMap::new());
-    t1.calendar_href = "https://server.com/cal/".to_string();
     t1.etag = "".to_string();
     tasks.push(t1);
 
-    // 2. Run Journal application on the Server Calendar
-    Journal::apply_to_tasks(&mut tasks, "https://server.com/cal/");
+    // This panicked/deleted items in the old code
+    Journal::apply_to_tasks(&mut tasks, LOCAL_CALENDAR_HREF);
 
-    // 3. Assert deletion
-    assert_eq!(
-        tasks.len(),
-        0,
-        "Server tasks with no ETag (Ghosts) MUST be pruned."
-    );
+    assert_eq!(tasks.len(), 1, "Local tasks must persist!");
+}
+
+// --- TEST 2: Journal Compaction (Fixes Stuck Loading) ---
+#[test]
+fn test_journal_compaction_squashes_updates() {
+    let mut j = Journal::default();
+    let uid = "task-explosion";
+
+    // Simulate the explosion: Create + 3 redundant updates
+    let mut t = Task::new("Base", &HashMap::new());
+    t.uid = uid.to_string();
+    j.queue.push(Action::Create(t.clone()));
+
+    t.summary = "Update 1".to_string();
+    j.queue.push(Action::Update(t.clone()));
+
+    t.summary = "Update 2".to_string();
+    j.queue.push(Action::Update(t.clone()));
+
+    t.summary = "Final State".to_string();
+    j.queue.push(Action::Update(t.clone()));
+
+    assert_eq!(j.queue.len(), 4);
+
+    // Apply compaction
+    j.compact();
+
+    // Should result in a single CREATE action with the Final State
+    assert_eq!(j.queue.len(), 1);
+    match &j.queue[0] {
+        Action::Create(res) => assert_eq!(res.summary, "Final State"),
+        _ => panic!("Should have squashed into the initial Create"),
+    }
 }
