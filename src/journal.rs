@@ -1,7 +1,7 @@
-// File: src/journal.rs
+// File: ./src/journal.rs
 use crate::model::Task;
 use crate::paths::AppPaths;
-use crate::storage::LocalStorage;
+use crate::storage::{LOCAL_CALENDAR_HREF, LocalStorage};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -96,7 +96,10 @@ impl Journal {
 
         // 2. Ghost Pruning: Remove tasks with no ETag that are NOT in the journal.
         // These are failed creations that shouldn't exist anymore.
-        tasks.retain(|t| !t.etag.is_empty() || pending_uids.contains(&t.uid));
+        // FIX: Explicitly skip pruning for the Local Calendar, as local tasks never have ETags.
+        if calendar_href != LOCAL_CALENDAR_HREF {
+            tasks.retain(|t| !t.etag.is_empty() || pending_uids.contains(&t.uid));
+        }
 
         if journal.is_empty() {
             return;
