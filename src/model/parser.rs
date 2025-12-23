@@ -192,6 +192,19 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                 matched_kind = Some(SyntaxType::Url);
             } else if word.starts_with("geo:") {
                 matched_kind = Some(SyntaxType::Geo);
+                // Handle "geo:lat, long" where space splits the token
+                if word.ends_with(',') && i + 1 < words.len() {
+                    let next_val = &words[i + 1].2;
+                    // Loose check: looks like a number (starts with digit or minus)
+                    if next_val
+                        .chars()
+                        .next()
+                        .map(|c| c.is_numeric() || c == '-')
+                        .unwrap_or(false)
+                    {
+                        words_consumed = 2;
+                    }
+                }
             } else if word.starts_with("desc:") {
                 matched_kind = Some(SyntaxType::Description);
             }
@@ -359,8 +372,26 @@ impl Task {
             } else if token.starts_with("[[") && token.ends_with("]]") {
                 self.url = Some(token[2..token.len() - 2].to_string());
             } else if token.starts_with("geo:") {
-                let raw_geo = strip_quotes(token.trim_start_matches("geo:"));
-                // Simple validation: must contain a comma and numbers
+                let mut raw_val = token.trim_start_matches("geo:").to_string();
+
+                // Handle "geo:lat, long" case
+                if token.ends_with(',') && i + 1 < stream.len() {
+                    let next_token = &stream[i + 1];
+                    if next_token
+                        .chars()
+                        .next()
+                        .map(|c| c.is_numeric() || c == '-')
+                        .unwrap_or(false)
+                    {
+                        // Concat the split parts (lat, + long) effectively removing the space
+                        raw_val.push_str(next_token);
+                        consumed = 2;
+                    }
+                }
+
+                let raw_geo = strip_quotes(&raw_val);
+
+                // Validation: must contain a comma and reasonable chars
                 if raw_geo.contains(',')
                     && raw_geo
                         .chars()
@@ -368,8 +399,13 @@ impl Task {
                 {
                     self.geo = Some(raw_geo);
                 } else {
-                    // Fallback: treat as text summary if invalid
                     summary_words.push(token.clone());
+                    // If we consumed a second token but validation failed,
+                    // we should arguably push the second token to summary too,
+                    // but simplifying to just treat the 'geo:' part as text here.
+                    if consumed == 2 {
+                        summary_words.push(stream[i + 1].clone());
+                    }
                 }
             } else if token.starts_with("desc:") {
                 let desc_val = strip_quotes(token.trim_start_matches("desc:"));
