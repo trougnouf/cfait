@@ -324,13 +324,15 @@ impl Task {
             }
 
             // Standard Text Search
-            // Explicitly search categories for matches even without # prefix
+            // Explicitly search categories AND LOCATION for matches
             if !self.summary.to_lowercase().contains(part)
                 && !self.description.to_lowercase().contains(part)
                 && !self
                     .categories
                     .iter()
                     .any(|c| c.to_lowercase().contains(part))
+                // FIX: Check location for plain text matches
+                && !self.location.as_deref().is_some_and(|l| l.to_lowercase().contains(part))
             {
                 return false;
             }

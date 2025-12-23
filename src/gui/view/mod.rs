@@ -1,3 +1,4 @@
+// File: src/gui/view/mod.rs
 use std::time::Duration;
 pub mod help;
 pub mod settings;
@@ -539,6 +540,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     let input_area = view_input_area(app);
     let mut main_col = column![header_drag_area, export_ui, input_area];
 
+    // Existing Tag Jump
     if app.search_value.starts_with('#') {
         let tag = app.search_value.trim_start_matches('#').trim().to_string();
         if !tag.is_empty() {
@@ -556,6 +558,41 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
                     .padding(5)
                     .width(Length::Fill)
                     .on_press(Message::JumpToTag(tag)),
+                )
+                .padding(iced::Padding {
+                    left: 10.0,
+                    right: 10.0,
+                    bottom: 5.0,
+                    ..Default::default()
+                }),
+            );
+        }
+    }
+
+    // NEW: Location Jump Button
+    if app.search_value.starts_with("@@") || app.search_value.starts_with("loc:") {
+        let raw = if app.search_value.starts_with("@@") {
+            app.search_value.trim_start_matches("@@")
+        } else {
+            app.search_value.trim_start_matches("loc:")
+        };
+        let loc = raw.trim().to_string();
+
+        if !loc.is_empty() {
+            main_col = main_col.push(
+                container(
+                    iced::widget::button(
+                        row![
+                            icon::icon(icon::LOCATION).size(14),
+                            text(format!(" Go to location: @@{}", loc)).size(14)
+                        ]
+                        .spacing(5)
+                        .align_y(iced::Alignment::Center),
+                    )
+                    .style(iced::widget::button::secondary)
+                    .padding(5)
+                    .width(Length::Fill)
+                    .on_press(Message::JumpToLocation(loc)),
                 )
                 .padding(iced::Padding {
                     left: 10.0,

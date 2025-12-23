@@ -83,6 +83,7 @@ pub async fn handle_key_event(
 
                 // --- 2. Existing Logic with Clean Input ---
 
+                // 1. Tag Jump
                 if clean_input.starts_with('#')
                     && !clean_input.trim().contains(' ')
                     && state.creating_child_of.is_none()
@@ -104,6 +105,28 @@ pub async fn handle_key_event(
                         state.mode = InputMode::Normal;
                         state.reset_input();
                         state.message = "Alias updated.".to_string();
+                        return None;
+                    }
+                }
+
+                // 2. NEW: Location Jump
+                let is_loc = clean_input.starts_with("@@") || clean_input.starts_with("loc:");
+                if is_loc && !clean_input.trim().contains(' ') && state.creating_child_of.is_none()
+                {
+                    let raw = if clean_input.starts_with("@@") {
+                        clean_input.trim_start_matches("@@")
+                    } else {
+                        clean_input.trim_start_matches("loc:")
+                    };
+                    let loc = crate::model::parser::strip_quotes(raw);
+
+                    if !loc.is_empty() {
+                        state.sidebar_mode = SidebarMode::Locations;
+                        state.selected_locations.clear();
+                        state.selected_locations.insert(loc);
+                        state.mode = InputMode::Normal;
+                        state.reset_input();
+                        state.refresh_filtered_view();
                         return None;
                     }
                 }
@@ -239,6 +262,23 @@ pub async fn handle_key_event(
                     state.sidebar_mode = SidebarMode::Categories;
                     state.selected_categories.clear();
                     state.selected_categories.insert(tag);
+                    state.active_search_query.clear();
+                }
+                // NEW: Location Jump
+                else if (state.input_buffer.starts_with("@@")
+                    || state.input_buffer.starts_with("loc:"))
+                    && !state.input_buffer.contains(' ')
+                {
+                    let raw = if state.input_buffer.starts_with("@@") {
+                        state.input_buffer.trim_start_matches("@@")
+                    } else {
+                        state.input_buffer.trim_start_matches("loc:")
+                    };
+                    let loc = crate::model::parser::strip_quotes(raw);
+
+                    state.sidebar_mode = SidebarMode::Locations;
+                    state.selected_locations.clear();
+                    state.selected_locations.insert(loc);
                     state.active_search_query.clear();
                 } else {
                     state.active_search_query = state.input_buffer.clone();
@@ -639,15 +679,16 @@ pub async fn handle_key_event(
                                 .store
                                 .get_all_locations(state.hide_completed, &state.hidden_calendars);
                             if let Some(idx) = state.cal_state.selected()
-                                && let Some((l, _)) = locs.get(idx) {
-                                    let l_clone = l.clone();
-                                    if state.selected_locations.contains(&l_clone) {
-                                        state.selected_locations.remove(&l_clone);
-                                    } else {
-                                        state.selected_locations.insert(l_clone);
-                                    }
-                                    state.refresh_filtered_view();
+                                && let Some((l, _)) = locs.get(idx)
+                            {
+                                let l_clone = l.clone();
+                                if state.selected_locations.contains(&l_clone) {
+                                    state.selected_locations.remove(&l_clone);
+                                } else {
+                                    state.selected_locations.insert(l_clone);
                                 }
+                                state.refresh_filtered_view();
+                            }
                         }
                     }
                 }

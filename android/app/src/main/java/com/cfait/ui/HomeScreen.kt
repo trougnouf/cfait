@@ -1,3 +1,4 @@
+// File: android/app/src/main/java/com/cfait/ui/HomeScreen.kt
 package com.cfait.ui
 
 import android.content.ClipData
@@ -177,10 +178,27 @@ fun HomeScreen(
         val text = txt.trim()
         val isAliasDef = text.contains(":=")
 
+        // Tag Jump
         if (text.startsWith("#") && !text.contains(" ") && !isAliasDef) {
             val tag = text.removePrefix("#")
             filterTag = tag
             sidebarTab = 1
+            newTaskText = ""
+            updateTaskList()
+        }
+        // NEW: Location Jump
+        else if ((text.startsWith("@@") || text.startsWith("loc:")) && !text.contains(" ") && !isAliasDef) {
+            val loc =
+                if (text.startsWith("@@")) {
+                    text.removePrefix("@@")
+                } else {
+                    text.removePrefix("loc:")
+                }
+            // Strip quotes if present (simple check)
+            val cleanLoc = loc.replace("\"", "")
+
+            filterLocation = cleanLoc
+            sidebarTab = 2 // Locations tab index
             newTaskText = ""
             updateTaskList()
         } else {

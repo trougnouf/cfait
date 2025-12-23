@@ -354,6 +354,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         save_config(app);
     }
 
+    // 1. Check for Tag Jump (#tag)
     if clean_input.starts_with('#')
         && !clean_input.trim().contains(' ')
         && app.editing_uid.is_none()
@@ -377,6 +378,31 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         } else {
             app.input_value = text_editor::Content::new();
             refresh_filtered_tasks(app);
+            if !retroactive_sync_batch.is_empty() {
+                return Task::batch(retroactive_sync_batch);
+            }
+            return Task::none();
+        }
+    }
+
+    // 2. NEW: Check for Location Jump (@@loc or loc:name)
+    let is_loc_jump = clean_input.starts_with("@@") || clean_input.starts_with("loc:");
+    if is_loc_jump && !clean_input.trim().contains(' ') && app.editing_uid.is_none() {
+        let loc = if clean_input.starts_with("@@") {
+            clean_input.trim_start_matches("@@")
+        } else {
+            clean_input.trim_start_matches("loc:")
+        };
+
+        let clean_loc = crate::model::parser::strip_quotes(loc);
+
+        if !clean_loc.is_empty() {
+            app.sidebar_mode = SidebarMode::Locations;
+            app.selected_locations.clear();
+            app.selected_locations.insert(clean_loc);
+            app.input_value = text_editor::Content::new();
+            refresh_filtered_tasks(app);
+
             if !retroactive_sync_batch.is_empty() {
                 return Task::batch(retroactive_sync_batch);
             }
