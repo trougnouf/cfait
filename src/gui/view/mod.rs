@@ -23,7 +23,8 @@ use iced::widget::{
 use iced::{Color, Element, Length, Theme, mouse};
 
 /// Shared semantic color for Locations (Gray)
-pub const COLOR_LOCATION: Color = Color::from_rgb(0.5, 0.55, 0.45);
+//pub const COLOR_LOCATION: Color = Color::from_rgb(0.5, 0.55, 0.45);
+pub const COLOR_LOCATION: Color = Color::from_rgb(0.4, 0.4, 0.6);
 
 /// Shared style for tooltips with slight transparency
 pub fn tooltip_style(theme: &Theme) -> container::Style {

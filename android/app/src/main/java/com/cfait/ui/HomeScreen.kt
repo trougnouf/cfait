@@ -494,18 +494,20 @@ fun HomeScreen(
                                         filterLocation = null
                                         scope.launch { drawerState.close() }
                                     },
+                                    icon = NfIcons.MAP,
                                 )
                             }
                             items(locations) { loc ->
                                 CompactTagRow(
                                     name = loc.name,
                                     count = loc.count.toInt(),
-                                    color = Color(0xFFFFB300), // Amber
+                                    color = Color(0xFFFFB300),
                                     isSelected = filterLocation == loc.name,
                                     onClick = {
                                         filterLocation = loc.name
                                         scope.launch { drawerState.close() }
                                     },
+                                    icon = NfIcons.MAP_PIN,
                                 )
                             }
                         }

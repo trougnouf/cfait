@@ -26,7 +26,9 @@ object NfIcons {
     // --- UPDATED ICONS ---
     val CALENDARS_VIEW = get(0xf00f2) // nf-md-calendar_multiple_check
     val TAGS_VIEW = get(0xf04fb) // nf-md-tag_multiple
-    val LOCATION = get(0xf01e7) // nf-md-earth
+    val LOCATION = get(0xef4b) // nf-fa-earth_europe
+    val MAP_PIN = get(0xf276) // nf-fa-map_pin
+    val MAP = get(0xec05) // nf-cod-map
     val URL = get(0xf0c1)
     val GEO = get(0xf041)
     // --------------------

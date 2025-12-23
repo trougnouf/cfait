@@ -80,10 +80,10 @@ fun TaskRow(
                     // --- NEW FIELDS ---
                     if (task.location != null) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Using a subtle amber color for @@
-                            Text("@@", fontSize = 10.sp, color = Color(0xFFFFB300), fontWeight = FontWeight.Bold)
+                            val locationColor = Color(0xFFFFB300)
+                            Text("@@", fontSize = 10.sp, color = locationColor, fontWeight = FontWeight.Bold)
                             Spacer(Modifier.width(2.dp))
-                            Text(task.location!!, fontSize = 10.sp, color = Color.Gray)
+                            Text(task.location!!, fontSize = 10.sp, color = locationColor)
                         }
                     }
                     if (task.url != null) {
@@ -216,6 +216,7 @@ fun CompactTagRow(
     color: Color,
     isSelected: Boolean,
     onClick: () -> Unit,
+    icon: String = NfIcons.TAG,
 ) {
     val bg = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
     Row(
@@ -229,7 +230,7 @@ fun CompactTagRow(
                 }.padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        NfIcon(NfIcons.TAG, size = 14.sp, color = color)
+        NfIcon(icon, size = 14.sp, color = color)
         Spacer(Modifier.width(12.dp))
         Text(name, fontSize = 14.sp, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
         if (count != null) Text("$count", fontSize = 12.sp, color = Color.Gray)

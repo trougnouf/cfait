@@ -407,8 +407,10 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
 
                 // Highlighted @@ text for Locations
                 let label = rich_text![
-                    span("@@").color(COLOR_LOCATION),
-                    span(format!("{} ({})", loc, count))
+                    span(icon::MAP_PIN.to_string())
+                        .font(icon::FONT)
+                        .color(COLOR_LOCATION),
+                    span(format!(" {} ({})", loc, count))
                 ]
                 .size(14)
                 .on_link_click(never); // Prevent interactivity on text

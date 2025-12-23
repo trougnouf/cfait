@@ -45,6 +45,7 @@ pub const BLOCKED: char = '\u{f479}'; // nf-oct-blocked
 pub const CHILD: char = '\u{f0a89}'; // nf-md-account_child
 pub const CREATE_CHILD: char = '\u{f0014}'; // nf-md-account_plus
 pub const CLEAR_ALL: char = '\u{eabf}'; // nf-cod-clear_all
+pub const MAP_PIN: char = '\u{f276}'; // nf-fa-map_pin
 pub const ELEVATOR_UP: char = '\u{f12c1}'; // nf-md-elevator_up
 
 // New Icons
@@ -70,7 +71,7 @@ pub const LITECOIN: char = '\u{f0a61}'; // nf-md-litecoin
 pub const ETHEREUM: char = '\u{ed58}'; // nf-fa-ethereum
 
 // --- NEW FIELD ICONS ---
-pub const LOCATION: char = '\u{f01e7}'; // nf-md-earth
+pub const LOCATION: char = '\u{ef4b}'; // nf-md-earth_europe
 pub const URL: char = '\u{f0c1}'; // Link
 pub const GEO: char = '\u{f041}'; // Map Marker
 
