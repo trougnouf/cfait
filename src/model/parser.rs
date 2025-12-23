@@ -1,5 +1,5 @@
 use crate::model::item::Task;
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, Utc};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -146,94 +146,96 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
         let mut matched_kind = None;
         let mut words_consumed = 1;
 
-        // New fields
-        if word.starts_with("@@") || word.starts_with("loc:") {
-            matched_kind = Some(SyntaxType::Location);
-        } else if word.starts_with("url:") || (word.starts_with("[[") && word.ends_with("]]")) {
-            matched_kind = Some(SyntaxType::Url);
-        } else if word.starts_with("geo:") {
-            matched_kind = Some(SyntaxType::Geo);
-        } else if word.starts_with("desc:") {
-            matched_kind = Some(SyntaxType::Description);
-        }
-        // Existing fields
-        else if word.starts_with('!') && word.len() > 1 && word[1..].parse::<u8>().is_ok() {
-            matched_kind = Some(SyntaxType::Priority);
-        } else if (word.starts_with('~') || word.starts_with("est:"))
-            && parse_duration(&strip_quotes(
-                word.trim_start_matches("est:").trim_start_matches('~'),
-            ))
-            .is_some()
+        // --- FIX #2: START ---
+        // CHECK MULTI-WORD DATES FIRST
+        let (is_start, clean_word) = if let Some(val) = word
+            .strip_prefix("start:")
+            .or_else(|| word.strip_prefix('^'))
         {
-            matched_kind = Some(SyntaxType::Duration);
-        } else if word.starts_with('#') {
-            matched_kind = Some(SyntaxType::Tag);
-        } else if (word == "@every" || word == "rec:every") && i + 2 < words.len() {
-            let amount_str = &words[i + 1].2;
-            let unit_str = &words[i + 2].2;
-            if amount_str.parse::<u32>().is_ok() && !parse_freq_unit(unit_str).is_empty() {
-                matched_kind = Some(SyntaxType::Recurrence);
-                words_consumed = 3;
-            }
-        } else if let Some(val) = word.strip_prefix("rec:").or_else(|| word.strip_prefix('@')) {
-            if parse_recurrence(val).is_some() {
-                matched_kind = Some(SyntaxType::Recurrence);
-            } else if parse_smart_date(val, true).is_some() {
-                matched_kind = Some(SyntaxType::DueDate);
-            } else if let Some(stripped) = word.strip_prefix("due:")
-                && parse_smart_date(stripped, true).is_some()
-            {
-                matched_kind = Some(SyntaxType::DueDate);
-            }
-        }
+            (true, val)
+        } else if let Some(val) = word.strip_prefix("due:").or_else(|| word.strip_prefix('@')) {
+            (false, val)
+        } else {
+            (false, "")
+        };
 
-        if matched_kind.is_none()
-            && let Some(val) = word
-                .strip_prefix('^')
-                .or_else(|| word.strip_prefix("start:"))
-            && parse_smart_date(val, false).is_some()
-        {
-            matched_kind = Some(SyntaxType::StartDate);
-        }
-
-        // Multi-word dates
-        if matched_kind.is_none() {
-            let (is_start, clean_word) = if let Some(val) = word
-                .strip_prefix("start:")
-                .or_else(|| word.strip_prefix('^'))
-            {
-                (true, val)
-            } else if let Some(val) = word.strip_prefix("due:").or_else(|| word.strip_prefix('@')) {
-                (false, val)
-            } else {
-                (false, "")
-            };
-
-            if !clean_word.is_empty() {
-                if clean_word == "next" && i + 1 < words.len() {
-                    if is_date_unit(&words[i + 1].2) {
-                        matched_kind = Some(if is_start {
-                            SyntaxType::StartDate
-                        } else {
-                            SyntaxType::DueDate
-                        });
-                        words_consumed = 2;
-                    }
-                } else if clean_word == "in" && i + 2 < words.len() {
-                    let amount_str = &words[i + 1].2;
-                    let unit_str = &words[i + 2].2;
-                    if parse_english_number(amount_str).is_some() && is_date_duration_unit(unit_str)
-                    {
-                        matched_kind = Some(if is_start {
-                            SyntaxType::StartDate
-                        } else {
-                            SyntaxType::DueDate
-                        });
-                        words_consumed = 3;
-                    }
+        if !clean_word.is_empty() {
+            if clean_word == "next" && i + 1 < words.len() {
+                if is_date_unit(&words[i + 1].2) {
+                    matched_kind = Some(if is_start {
+                        SyntaxType::StartDate
+                    } else {
+                        SyntaxType::DueDate
+                    });
+                    words_consumed = 2;
+                }
+            } else if clean_word == "in" && i + 2 < words.len() {
+                let amount_str = &words[i + 1].2;
+                let unit_str = &words[i + 2].2;
+                if parse_english_number(amount_str).is_some() && is_date_duration_unit(unit_str) {
+                    matched_kind = Some(if is_start {
+                        SyntaxType::StartDate
+                    } else {
+                        SyntaxType::DueDate
+                    });
+                    words_consumed = 3;
                 }
             }
         }
+
+        // NOW CHECK SINGLE-WORD AND OTHER TOKENS
+        if matched_kind.is_none() {
+            // New fields
+            if word.starts_with("@@") || word.starts_with("loc:") {
+                matched_kind = Some(SyntaxType::Location);
+            } else if word.starts_with("url:") || (word.starts_with("[[") && word.ends_with("]]")) {
+                matched_kind = Some(SyntaxType::Url);
+            } else if word.starts_with("geo:") {
+                matched_kind = Some(SyntaxType::Geo);
+            } else if word.starts_with("desc:") {
+                matched_kind = Some(SyntaxType::Description);
+            }
+            // Existing fields
+            else if word.starts_with('!') && word.len() > 1 && word[1..].parse::<u8>().is_ok() {
+                matched_kind = Some(SyntaxType::Priority);
+            } else if (word.starts_with('~') || word.starts_with("est:"))
+                && parse_duration(&strip_quotes(
+                    word.trim_start_matches("est:").trim_start_matches('~'),
+                ))
+                .is_some()
+            {
+                matched_kind = Some(SyntaxType::Duration);
+            } else if word.starts_with('#') {
+                matched_kind = Some(SyntaxType::Tag);
+            } else if (word == "@every" || word == "rec:every") && i + 2 < words.len() {
+                let amount_str = &words[i + 1].2;
+                let unit_str = &words[i + 2].2;
+                if amount_str.parse::<u32>().is_ok() && !parse_freq_unit(unit_str).is_empty() {
+                    matched_kind = Some(SyntaxType::Recurrence);
+                    words_consumed = 3;
+                }
+            } else if let Some(val) = word.strip_prefix("rec:").or_else(|| word.strip_prefix('@')) {
+                if parse_recurrence(val).is_some() {
+                    matched_kind = Some(SyntaxType::Recurrence);
+                } else if parse_smart_date(val, true).is_some() {
+                    matched_kind = Some(SyntaxType::DueDate);
+                } else if let Some(stripped) = word.strip_prefix("due:")
+                    && parse_smart_date(stripped, true).is_some()
+                {
+                    matched_kind = Some(SyntaxType::DueDate);
+                }
+            }
+
+            if matched_kind.is_none()
+                && let Some(val) = word
+                    .strip_prefix('^')
+                    .or_else(|| word.strip_prefix("start:"))
+                && parse_smart_date(val, false).is_some()
+            {
+                matched_kind = Some(SyntaxType::StartDate);
+            }
+        }
+        // --- FIX #2: END ---
 
         if let Some(kind) = matched_kind {
             let final_end = words[i + words_consumed - 1].1;
@@ -357,7 +359,18 @@ impl Task {
             } else if token.starts_with("[[") && token.ends_with("]]") {
                 self.url = Some(token[2..token.len() - 2].to_string());
             } else if token.starts_with("geo:") {
-                self.geo = Some(strip_quotes(token.trim_start_matches("geo:")));
+                let raw_geo = strip_quotes(token.trim_start_matches("geo:"));
+                // Simple validation: must contain a comma and numbers
+                if raw_geo.contains(',')
+                    && raw_geo
+                        .chars()
+                        .all(|c| c.is_numeric() || c == ',' || c == '.' || c == '-' || c == ' ')
+                {
+                    self.geo = Some(raw_geo);
+                } else {
+                    // Fallback: treat as text summary if invalid
+                    summary_words.push(token.clone());
+                }
             } else if token.starts_with("desc:") {
                 let desc_val = strip_quotes(token.trim_start_matches("desc:"));
                 if self.description.is_empty() {
@@ -379,28 +392,8 @@ impl Task {
                 if let Some(d) = parse_duration(&val) {
                     self.estimated_duration = Some(d);
                 }
-            } else if (token == "rec:every" || token == "@every") && i + 2 < stream.len() {
-                if let (Ok(interval), freq) = (
-                    stream[i + 1].parse::<u32>(),
-                    parse_freq_unit(&stream[i + 2]),
-                ) && !freq.is_empty()
-                {
-                    self.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
-                    consumed = 3;
-                }
-            } else if let Some(val) = token
-                .strip_prefix("rec:")
-                .or_else(|| token.strip_prefix('@'))
-            {
-                if let Some(rrule) = parse_recurrence(val) {
-                    self.rrule = Some(rrule);
-                } else if let Some(dt) = parse_smart_date(val, true) {
-                    self.due = Some(dt);
-                } else if let Some(stripped) = token.strip_prefix("due:")
-                    && let Some(dt) = parse_smart_date(stripped, true)
-                {
-                    self.due = Some(dt);
-                }
+            // --- FIX #1: START ---
+            // MOVE THE MULTI-WORD DATE BLOCK HERE, BEFORE THE SINGLE-WORD ONE
             } else if (token.starts_with('@')
                 || token.starts_with('^')
                 || token.starts_with("due:")
@@ -450,6 +443,29 @@ impl Task {
                     };
                 } else {
                     summary_words.push(token.clone());
+                }
+            // --- FIX #1: END ---
+            } else if (token == "rec:every" || token == "@every") && i + 2 < stream.len() {
+                if let (Ok(interval), freq) = (
+                    stream[i + 1].parse::<u32>(),
+                    parse_freq_unit(&stream[i + 2]),
+                ) && !freq.is_empty()
+                {
+                    self.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
+                    consumed = 3;
+                }
+            } else if let Some(val) = token
+                .strip_prefix("rec:")
+                .or_else(|| token.strip_prefix('@'))
+            {
+                if let Some(rrule) = parse_recurrence(val) {
+                    self.rrule = Some(rrule);
+                } else if let Some(dt) = parse_smart_date(val, true) {
+                    self.due = Some(dt);
+                } else if let Some(stripped) = token.strip_prefix("due:")
+                    && let Some(dt) = parse_smart_date(stripped, true)
+                {
+                    self.due = Some(dt);
                 }
             } else if let Some(dt) = parse_smart_date(token.trim_start_matches('^'), false) {
                 self.dtstart = Some(dt);
@@ -726,10 +742,11 @@ fn finalize_date(d: NaiveDate, end_of_day: bool) -> Option<DateTime<Utc>> {
     } else {
         d.and_hms_opt(0, 0, 0)?
     };
+    Some(t.and_utc())
 
-    match Local.from_local_datetime(&t) {
-        chrono::LocalResult::Single(dt) => Some(dt.with_timezone(&Utc)),
-        chrono::LocalResult::Ambiguous(dt1, _) => Some(dt1.with_timezone(&Utc)),
-        chrono::LocalResult::None => Some(t.and_utc()),
-    }
+    // match Local.from_local_datetime(&t) {
+    //     chrono::LocalResult::Single(dt) => Some(dt.with_timezone(&Utc)),
+    //     chrono::LocalResult::Ambiguous(dt1, _) => Some(dt1.with_timezone(&Utc)),
+    //     chrono::LocalResult::None => Some(t.and_utc()),
+    // }
 }

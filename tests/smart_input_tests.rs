@@ -1,4 +1,9 @@
-use cfait::model::{Task, validate_alias_integrity};
+use cfait::model::{
+    Task,
+    parser::{SyntaxType, tokenize_smart_input},
+    validate_alias_integrity,
+};
+use chrono::{Duration, Local};
 use std::collections::HashMap;
 
 #[test]
@@ -141,4 +146,49 @@ fn test_alias_preserves_sigils() {
 
     assert_eq!(task.location, Some("123 Main St".to_string()));
     assert!(task.categories.contains(&"home".to_string()));
+}
+
+#[test]
+fn test_natural_date_parsing_in_keyword() {
+    let aliases = HashMap::new();
+
+    // 1. Standard Case
+    let t1 = Task::new("Meeting @in 2 weeks", &aliases);
+
+    let now = Local::now(); // Change Utc::now() to Local::now()
+
+    let expected = now + Duration::days(14);
+
+    assert!(t1.due.is_some());
+    let due = t1.due.unwrap();
+    // The test now correctly compares the local-based parse result
+    // with a local-based expectation.
+    assert_eq!(due.date_naive(), expected.date_naive());
+
+    // 2. "Start in" case
+    let t2 = Task::new("Work ^in 3 days", &aliases);
+    assert!(t2.dtstart.is_some());
+    let start = t2.dtstart.unwrap();
+    assert_eq!(start.date_naive(), (now + Duration::days(3)).date_naive());
+
+    // 3. Edge Case: "in" used as a preposition (not a date)
+    let t3 = Task::new("Turn report in", &aliases);
+    assert!(t3.due.is_none());
+    assert!(t3.dtstart.is_none());
+    assert_eq!(t3.summary, "Turn report in");
+
+    // 4. Edge Case: "in" followed by non-number
+    let t4 = Task::new("Go in room", &aliases);
+    assert!(t4.due.is_none());
+}
+
+#[test]
+fn test_syntax_highlighting_tokens_for_in_keyword() {
+    let input = "Buy food @in 2 days #chores";
+    let tokens = tokenize_smart_input(input);
+
+    let due_token = tokens.iter().find(|t| t.kind == SyntaxType::DueDate);
+    assert!(due_token.is_some(), "DueDate token for '@in' was not found");
+    let t = due_token.unwrap();
+    assert_eq!(&input[t.start..t.end], "@in 2 days");
 }

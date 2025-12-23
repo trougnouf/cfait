@@ -977,7 +977,7 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
                 if server.$field == base.$field {
                     merged.$field = local.$field.clone();
                 } else if local.$field != server.$field {
-                    return None;
+                    return None; // Conflict cannot be resolved automatically
                 }
             }
         };
@@ -992,6 +992,9 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
     merge_field!(estimated_duration);
     merge_field!(rrule);
     merge_field!(percent_complete);
+    merge_field!(location);
+    merge_field!(url);
+    merge_field!(geo);
 
     if local.categories != base.categories {
         let mut new_cats = server.categories.clone();
@@ -1025,4 +1028,37 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
     }
 
     Some(merged)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_three_way_merge_preserves_new_fields() {
+        let mut base = Task::new("Base Task", &HashMap::new());
+        base.location = Some("Old Loc".to_string());
+        base.url = None;
+
+        // Local client changed Location
+        let mut local = base.clone();
+        local.location = Some("New Loc".to_string());
+
+        // Server client changed Summary
+        let mut server = base.clone();
+        server.summary = "Server Title Change".to_string();
+
+        let merged = three_way_merge(&base, &local, &server).expect("Should merge successfully");
+
+        assert_eq!(
+            merged.summary, "Server Title Change",
+            "Failed to keep server's summary change"
+        );
+        assert_eq!(
+            merged.location,
+            Some("New Loc".to_string()),
+            "Failed to keep local's location change"
+        );
+    }
 }
