@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.3.8] - 2025-12-23
+
+### 🚀 Features
+
+- *(core/ui)* Add locations, URLs, recursive aliases with cycle detection, quoted string support, safer alias syntax (:=), and filter views by location
+- *(search)* Implement implicit location search and jump-to-location navigation
+
+### 🐛 Bug Fixes
+
+- *(journal)* Skip ghost pruning for local calendar to prevent data loss
+- *(core)* Optimize sync, fix GUI inputs, and improve alias expansion
+- *(core)* Resolve timezone and multi-word date parsing bugs
+
+### ⚡ Performance
+
+- Compact journal on sync
+
+### 🎨 Styling
+
+- Add location icons and color
 ## [0.3.7] - 2025-12-21
 
 ### 🚀 Features
@@ -18,6 +38,10 @@
 ### 📚 Documentation
 
 - Mention Baikal in README since it has been explicitly tested
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cfait version 0.3.7
 ## [0.3.6] - 2025-12-21
 
 ### 🚀 Features
@@ -94,13 +118,6 @@
 
 ### ⚙️ Miscellaneous Tasks
 
-- Add Cargo.lock
-- *(android)* Rm i686-linux-android
-- *(fdroid)* Work on Reproducible Builds
-- *(fdroid)* Pin rust version for F-Droid build
-- *(fdroid)* Work on reproducible build (locked ndkVersion, RUSTFLAGS)
-- *(fdroid)* Strip dependenciesInfo
-- *(fdroid)* Set Android rust toolchain in rust_toolchain.toml
 - *(fdroid)* Simplify screenshot names
 - Prepare for release v0.3.3
 - Disable signed commit
@@ -121,6 +138,13 @@
 - *(android)* Generate static Android version number for F-Droid release
 - Release cfait version 0.3.2
 - Auto-generate changelogs (fastlane and CHANGELOG.md), backfill previous ones
+- Add Cargo.lock
+- *(android)* Rm i686-linux-android
+- *(fdroid)* Work on Reproducible Builds
+- *(fdroid)* Pin rust version for F-Droid build
+- *(fdroid)* Work on reproducible build (locked ndkVersion, RUSTFLAGS)
+- *(fdroid)* Strip dependenciesInfo
+- *(fdroid)* Set Android rust toolchain in rust_toolchain.toml
 ## [0.3.1] - 2025-12-17
 
 ### 🐛 Bug Fixes

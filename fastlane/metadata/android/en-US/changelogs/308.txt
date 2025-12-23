@@ -1,0 +1,20 @@
+## [0.3.8] - 2025-12-23
+
+### 🚀 Features
+
+- *(core/ui)* Add locations, URLs, recursive aliases with cycle detection, quoted string support, safer alias syntax (:=), and filter views by location
+- *(search)* Implement implicit location search and jump-to-location navigation
+
+### 🐛 Bug Fixes
+
+- *(journal)* Skip ghost pruning for local calendar to prevent data loss
+- *(core)* Optimize sync, fix GUI inputs, and improve alias expansion
+- *(core)* Resolve timezone and multi-word date parsing bugs
+
+### ⚡ Performance
+
+- Compact journal on sync
+
+### 🎨 Styling
+
+- Add location icons and color
