@@ -85,6 +85,9 @@ pub const EARTH_GENERIC: char = '\u{f01e7}'; // nf-md-earth
 pub const PLANET: char = '\u{e22e}'; // nf-fae-planet
 pub const GALAXY: char = '\u{e243}'; // nf-fae-galaxy
 pub const ISLAND: char = '\u{f104f}'; // nf-md-island
+pub const COMPASS: char = '\u{ebd5}'; // nf-cod-compass
+pub const MOUNTAINS: char = '\u{e2a6}'; // nf-fae-mountains
+pub const GLOBE: char = '\u{f0ac}'; // nf-fa-globe
 
 // NEW HEADER ICONS per request
 pub const CALENDARS_HEADER: char = '\u{f00f2}'; // nf-md-calendar_multiple_check

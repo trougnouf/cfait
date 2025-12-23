@@ -74,6 +74,16 @@ object NfIcons {
     val MOVE = get(0xef0c)
     val MAP_LOCATION_DOT = get(0xee69)
     val WEB_CHECK = get(0xf0789)
+    val EARTH_ASIA = get(0xee47)
+    val EARTH_AMERICAS = get(0xee46)
+    val EARTH_AFRICA = get(0xee45)
+    val EARTH_GENERIC = get(0xf01e7)
+    val PLANET = get(0xe22e)
+    val GALAXY = get(0xe243)
+    val ISLAND = get(0xf104f)
+    val COMPASS = get(0xebd5)
+    val MOUNTAINS = get(0xe2a6)
+    val GLOBE = get(0xf0ac)
 }
 
 @Composable

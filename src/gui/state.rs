@@ -112,7 +112,8 @@ impl Default for GuiApp {
         // Randomize Location Icon
         let loc_icons = [
             icon::LOCATION,
-            icon::LOCATION, // Double weight
+            icon::LOCATION,
+            icon::LOCATION,
             icon::EARTH_ASIA,
             icon::EARTH_AMERICAS,
             icon::EARTH_AFRICA,
@@ -120,6 +121,9 @@ impl Default for GuiApp {
             icon::PLANET,
             icon::GALAXY,
             icon::ISLAND,
+            icon::COMPASS,
+            icon::MOUNTAINS,
+            icon::GLOBE,
         ];
 
         let nanos = std::time::SystemTime::now()

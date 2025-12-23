@@ -63,6 +63,27 @@ fun HomeScreen(
     var isPullRefreshing by remember { mutableStateOf(false) }
     var filterLocation by rememberSaveable { mutableStateOf<String?>(null) }
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
+    // RANDOM LOCATION ICON LOGIC
+    val locationTabIcon =
+        rememberSaveable {
+            val icons =
+                listOf(
+                    NfIcons.LOCATION,
+                    NfIcons.LOCATION,
+                    NfIcons.LOCATION,
+                    NfIcons.EARTH_ASIA,
+                    NfIcons.EARTH_AMERICAS,
+                    NfIcons.EARTH_AFRICA,
+                    NfIcons.EARTH_GENERIC,
+                    NfIcons.PLANET,
+                    NfIcons.GALAXY,
+                    NfIcons.ISLAND,
+                    NfIcons.COMPASS,
+                    NfIcons.MOUNTAINS,
+                    NfIcons.GLOBE,
+                )
+            icons.random()
+        }
 
     // --- New Calculation ---
     val enabledCalendarCount =
@@ -457,7 +478,7 @@ fun HomeScreen(
                         Tab(
                             selected = sidebarTab == 2,
                             onClick = { sidebarTab = 2 },
-                            icon = { NfIcon(NfIcons.LOCATION) },
+                            icon = { NfIcon(locationTabIcon) }, // <--- UPDATED HERE
                         )
                     }
                     LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
