@@ -1,10 +1,10 @@
 <b>Take control of your TODO list.</b>
 <br><br>
-Cfait is a powerful, fast and elegant, cross-platform and open-source CalDAV task manager. Designed for speed and stability using Rust, it puts you in control of your data with a local-first approach that syncs seamlessly across your devices.
+Cfait is designed for speed and stability using Rust, it puts you in control of your data with a local-first approach that syncs seamlessly across your devices.
 <br><br>
 <b>Why Cfait?</b>
 <ul>
-  <li><b>Open Source & Cross-Platform:</b> Use Cfait on Android, Linux, and Windows. Your tasks adhere to open standards (CalDAV), not walled gardens.</li>
+  <li><b>Open Source & Cross-Platform:</b> Use Cfait on Android, Linux, and Windows. Your tasks adhere to open standards (CalDAV and iCalendar), not walled gardens.</li>
   <li><b>Syncs Everywhere:</b> Fully compatible with Nextcloud, iCloud, Radicale, Xandikos, and other standard CalDAV servers.</li>
   <li><b>Offline First:</b> Optimistic UI updates mean you never wait for a server response. Use the persistent "Local" calendar for offline tasks and migrate them to a server later.</li>
   <li><b>Smart Input:</b> Add tasks naturally. Typing "Buy cat food !1 @tomorrow @@grocery_store ~15m" automatically sets the priority, due date, location and duration.</li>
@@ -15,7 +15,7 @@ Cfait is a powerful, fast and elegant, cross-platform and open-source CalDAV tas
   <li><b>GTD Workflow:</b> Mark tasks as Needs Action, In Process (&gt;), Cancelled (x), or Done.</li>
   <li><b>Hierarchy:</b> Create sub-tasks, promote children, and organize nested lists.</li>
   <li><b>Dependencies:</b> Link tasks using "Blocked-by" or "Child-of" logic (RFC 9253).</li>
-  <li><b>Tags & Aliases:</b> Organize with hierarchical tags (e.g., #work:backend). Create inline aliases (e.g., #shed:=@@home,#home_improvement) for rapid filing.</li>
+  <li><b>Tags & Aliases:</b> Organize with hierarchical tags (e.g., #work:backend). Create inline aliases (e.g., #shed:=#home_improvement and @home_improvement:=@@home) for rapid filing.</li>
   <li><b>Sane Sorting:</b> Tasks are sorted by Status &gt; Start Date &gt; Due Date &gt; Priority.</li>
 </ul>
 <br>

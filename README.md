@@ -102,9 +102,9 @@ You don't need to click through menus to set the due/start date, length, priorit
 | **Recurrence** | `@` / `rec:` | How often the task repeats. |
 | **Duration** | `~` / `est:` | Estimated time to complete. |
 | **Tag** | `#` | Categories. Use `:` for hierarchy (e.g. `#gardening:tree_planting`). |
-| **Location** | `@@` / `loc:` | Where the task happens. (e.g. `@@home``. Use quotes for spaces: `@@"somewhere else"`. |
+| **Location** | `@@` / `loc:` | Where the task happens. (e.g. `@@home`, `@@"somewhere else"`. |
 
-You can also type url: (e.g. `url:https://www.trougnouf.com`), geo: (e.g. `geo:53.046070, -121.105264`), and desc: (e.g. `desc:"a description added from the input bar"`)
+You can also type url: (e.g. `url:https://www.trougnouf.com`), geo: (e.g. `geo:53.046070, -121.105264`), and desc: (e.g. `desc:"a description"` or `desc:{une description}`)
 
 ### Date & Time Formats
 You can use absolute ISO dates or natural language relative offsets.
@@ -133,15 +133,17 @@ Supported units for `~` duration estimates: `m` (minutes), `h` (hours), `d` (day
 >
 > `"Update server certificates @2025-12-31 ^2025-12-01 @every 2 years"` (Due Dec 31, start working on it 1 month prior)
 
+The syntax highlighting should visually let you know whether your statements are valid.
+
 ### Aliases (Templates)
-Define global shortcuts using `:=`. Aliases can inject tags, locations, priorities, or text. This applies to the past, present, and future tasks.
-*   **Define:** `#gardening:=#fun,@@home`
-*   **Use:** Typing `Plant cherry tree #gardening` expands to:
-    *   Summary: "Plant tree"
-    *   Tag: `#gardening #fun`
+Define global shortcuts using `:=`. Aliases can inject tags, locations, priorities, or text. This applies to the past, present, and future tasks. (It may take some time to update all affected tasks.)
+*   **Define:** `#tree_planting:=#gardening` and `#gardening:=#fun,@@home`
+*   **Subsequent use:** Typing `Plant plum tree #tree_planting !3 ~1h` expands to:
+    *   Summary: "Plant plum tree" (priority: 3, estimated time: 1 hour)
+    *   Tags: `#tree_planting #gardening #fun`
     *   Location: "home"
 
-**Note:** If your alias contains spaces, quote it: `#work:mtg:="Daily Standup",#work,~15m`
+**Note:** If your alias contains spaces, `"`quote it`"` or `{`put it between brockets`}`, e.g. `#"tree planting":=#gardening` or `#gardening:=#{home improvement}` 
 
 <a name="search--filtering"></a>
 ## 🔍 Search & Filtering
