@@ -1,3 +1,4 @@
+// File: android/app/src/main/java/com/cfait/ui/SettingsScreen.kt
 package com.cfait.ui
 
 import androidx.compose.foundation.clickable
@@ -196,25 +197,29 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = newAliasKey,
                         onValueChange = { newAliasKey = it },
-                        label = { Text("Alias") },
+                        label = { Text("Key (e.g. #tag_a)") },
                         modifier = Modifier.weight(1f),
+                        placeholder = { Text("#tag_a") },
                     )
                     Spacer(Modifier.width(8.dp))
-                    OutlinedTextField(value = newAliasTags, onValueChange = {
-                        newAliasTags = it
-                    }, label = { Text("Tags (comma)") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = newAliasTags,
+                        onValueChange = {
+                            newAliasTags = it
+                        },
+                        label = { Text("Values") },
+                        placeholder = { Text("@@loc, #tag_b, !1") },
+                        modifier = Modifier.weight(1f),
+                    )
                     IconButton(onClick = {
                         if (newAliasKey.isNotBlank() && newAliasTags.isNotBlank()) {
-                            // FIX: Removed .trimStart('#')
                             val tags = newAliasTags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
                             scope.launch {
-                                // --- ERROR HANDLING ADDED ---
                                 try {
                                     api.addAlias(newAliasKey.trimStart('#'), tags)
                                     newAliasKey = ""
                                     newAliasTags = ""
                                     reload()
-                                    // Clear any previous error status
                                     if (status.startsWith("Error")) status = ""
                                 } catch (e: Exception) {
                                     status = "Error adding alias: ${e.message}"

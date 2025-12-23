@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -42,7 +43,7 @@ fun HomeScreen(
     api: CfaitMobile,
     calendars: List<MobileCalendar>,
     tags: List<MobileTag>,
-    locations: List<MobileLocation>, // <--- Added parameter
+    locations: List<MobileLocation>,
     defaultCalHref: String?,
     isLoading: Boolean,
     hasUnsynced: Boolean,
@@ -58,12 +59,15 @@ fun HomeScreen(
     var isManualSyncing by remember { mutableStateOf(false) }
     var activeOpCount by remember { mutableIntStateOf(0) }
     var lastSyncFailed by remember { mutableStateOf(false) }
-    // We can use the parameter directly for simple boolean checks,
-    // but local state is fine for optimistic UI updates if needed.
-    // For simplicity, let's use the parameter directly where possible.
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
 
+    // State for Pull-to-refresh
+    var isPullRefreshing by remember { mutableStateOf(false) }
+
     var filterLocation by rememberSaveable { mutableStateOf<String?>(null) }
+
+    // State for moving a task via the context menu
+    var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
 
     LaunchedEffect(hasUnsynced) { localHasUnsynced = hasUnsynced }
 
@@ -136,7 +140,27 @@ fun HomeScreen(
         }
     }
 
-    // Trigger update when parameters or filter state changes
+    // Pull refresh handler sets isPullRefreshing=true to drive the top bar
+    val handlePullRefresh = {
+        scope.launch {
+            isPullRefreshing = true
+            try {
+                api.sync()
+                lastSyncFailed = false
+                onDataChanged()
+                updateTaskList()
+            } catch (e: Exception) {
+                lastSyncFailed = true
+                Toast.makeText(context, "Sync issue: ${e.message}", Toast.LENGTH_SHORT).show()
+                api.loadFromCache()
+                updateTaskList()
+            } finally {
+                checkSyncStatus()
+                isPullRefreshing = false
+            }
+        }
+    }
+
     LaunchedEffect(searchQuery, filterTag, filterLocation, isLoading, calendars, tags, locations) {
         updateTaskList()
     }
@@ -151,7 +175,6 @@ fun HomeScreen(
     fun toggleTask(task: MobileTask) {
         val newIsDone = !task.isDone
         val newStatus = if (newIsDone) "Completed" else "NeedsAction"
-        // Optimistic update
         tasks =
             tasks.map {
                 if (it.uid == task.uid) it.copy(isDone = newIsDone, statusString = newStatus, isPaused = false) else it
@@ -178,27 +201,23 @@ fun HomeScreen(
         val text = txt.trim()
         val isAliasDef = text.contains(":=")
 
-        // Tag Jump
         if (text.startsWith("#") && !text.contains(" ") && !isAliasDef) {
             val tag = text.removePrefix("#")
             filterTag = tag
             sidebarTab = 1
             newTaskText = ""
             updateTaskList()
-        }
-        // NEW: Location Jump
-        else if ((text.startsWith("@@") || text.startsWith("loc:")) && !text.contains(" ") && !isAliasDef) {
+        } else if ((text.startsWith("@@") || text.startsWith("loc:")) && !text.contains(" ") && !isAliasDef) {
             val loc =
                 if (text.startsWith("@@")) {
                     text.removePrefix("@@")
                 } else {
                     text.removePrefix("loc:")
                 }
-            // Strip quotes if present (simple check)
             val cleanLoc = loc.replace("\"", "")
 
             filterLocation = cleanLoc
-            sidebarTab = 2 // Locations tab index
+            sidebarTab = 2
             newTaskText = ""
             updateTaskList()
         } else {
@@ -230,6 +249,11 @@ fun HomeScreen(
         action: String,
         task: MobileTask,
     ) {
+        if (action == "move") {
+            taskToMove = task
+            return
+        }
+
         val updatedList =
             tasks
                 .map { t ->
@@ -244,9 +268,7 @@ fun HomeScreen(
                             }
 
                             "playpause" -> {
-                                if (t.statusString ==
-                                    "InProcess"
-                                ) {
+                                if (t.statusString == "InProcess") {
                                     t.copy(statusString = "NeedsAction", isPaused = true)
                                 } else {
                                     t.copy(statusString = "InProcess", isPaused = false)
@@ -280,6 +302,7 @@ fun HomeScreen(
                     }
                 }.filterNotNull()
         tasks = updatedList
+
         scope.launch {
             activeOpCount++
             try {
@@ -342,6 +365,45 @@ fun HomeScreen(
     }
 
     val remoteCals = remember(calendars) { calendars.filter { !it.isLocal && !it.isDisabled } }
+
+    if (taskToMove != null) {
+        val targetCals =
+            remember(calendars) {
+                calendars.filter { it.href != taskToMove!!.calendarHref && !it.isDisabled }
+            }
+        AlertDialog(
+            onDismissRequest = { taskToMove = null },
+            title = { Text("Move task") },
+            text = {
+                Column {
+                    Text("Select destination:", fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    LazyColumn {
+                        items(targetCals) { cal ->
+                            ListItem(
+                                headlineContent = { Text(cal.name) },
+                                leadingContent = { NfIcon(NfIcons.CALENDAR, 16.sp) },
+                                modifier =
+                                    Modifier.clickable {
+                                        scope.launch {
+                                            try {
+                                                api.moveTask(taskToMove!!.uid, cal.href)
+                                                taskToMove = null
+                                                updateTaskList()
+                                                onDataChanged()
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Move failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    },
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { taskToMove = null }) { Text("Cancel") } },
+        )
+    }
+
     if (showExportDialog) {
         AlertDialog(
             onDismissRequest = { showExportDialog = false },
@@ -483,7 +545,6 @@ fun HomeScreen(
                                 })
                             }
                         } else {
-                            // Locations List
                             item {
                                 CompactTagRow(
                                     name = "All Locations",
@@ -595,7 +656,7 @@ fun HomeScreen(
                         actions = {
                             IconButton(onClick = { isSearchActive = true }) { NfIcon(NfIcons.SEARCH, 18.sp) }
 
-                            if (isLoading || isManualSyncing || activeOpCount > 0) {
+                            if (isLoading || isManualSyncing || activeOpCount > 0 || isPullRefreshing) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                             } else {
                                 val (icon, iconColor) =
@@ -677,18 +738,30 @@ fun HomeScreen(
                     }
                 }
 
-                LazyColumn(modifier = Modifier.weight(1f), state = listState, contentPadding = PaddingValues(bottom = 80.dp)) {
-                    items(tasks, key = { it.uid }) { task ->
-                        val calColor = calColorMap[task.calendarHref] ?: Color.Gray
-                        TaskRow(
-                            task = task,
-                            calColor = calColor,
-                            isDark = isDark,
-                            onToggle = { toggleTask(task) },
-                            onAction = { act -> onTaskAction(act, task) },
-                            onClick = onTaskClick,
-                            yankedUid = yankedUid,
-                        )
+                // Prevent the PullToRefreshBox from showing its own spinner by hardcoding refreshing to false.
+                // The actual logic is handled via the onRefresh callback which triggers the top bar spinner.
+                PullToRefreshBox(
+                    isRefreshing = false,
+                    onRefresh = { handlePullRefresh() },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(bottom = 80.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        items(tasks, key = { it.uid }) { task ->
+                            val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+                            TaskRow(
+                                task = task,
+                                calColor = calColor,
+                                isDark = isDark,
+                                onToggle = { toggleTask(task) },
+                                onAction = { act -> onTaskAction(act, task) },
+                                onClick = onTaskClick,
+                                yankedUid = yankedUid,
+                            )
+                        }
                     }
                 }
             }

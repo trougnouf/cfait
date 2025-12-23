@@ -16,67 +16,61 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.cfait.R
-import java.util.regex.Pattern
 
 val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
 
 object NfIcons {
     fun get(code: Int): String = String(Character.toChars(code))
 
-    // --- UPDATED ICONS ---
-    val CALENDARS_VIEW = get(0xf00f2) // nf-md-calendar_multiple_check
-    val TAGS_VIEW = get(0xf04fb) // nf-md-tag_multiple
-    val LOCATION = get(0xef4b) // nf-fa-earth_europe
-    val MAP_PIN = get(0xf276) // nf-fa-map_pin
-    val MAP = get(0xec05) // nf-cod-map
+    val CALENDARS_VIEW = get(0xf00f2)
+    val TAGS_VIEW = get(0xf04fb)
+    val LOCATION = get(0xef4b)
+    val MAP_PIN = get(0xf276)
+    val MAP = get(0xec05)
     val URL = get(0xf0c1)
     val GEO = get(0xf041)
-    // --------------------
-
-    val CALENDAR = get(0xf073) // 
-    val TAG = get(0xf02b) // 
-    val SETTINGS = get(0xe690) // nf-seti-settings
-    val REFRESH = get(0xf0450) // nf-md-refresh
-    val SYNC_ALERT = get(0xf04e7) // nf-md-sync_alert
-    val SYNC_OFF = get(0xf04e8) // nf-md-sync_off
-    val DELETE = get(0xf1f8) // 
-    val CHECK = get(0xf00c) // 
-    val CROSS = get(0xf00d) // 
-    val PLAY = get(0xeb2c) // nf-cod-play
-    val PAUSE = get(0xf04c) // 
-    val REPEAT = get(0xf0b6) // 
-    val VISIBLE = get(0xea70) // nf-cod-eye
-    val HIDDEN = get(0xeae7) // nf-cod-eye_closed
-    val WRITE_TARGET = get(0xf0cfb) // nf-md-content_save_edit
-    val ADD = get(0xf067) // +
-    val BACK = get(0xf060) // 
-    val PRIORITY_UP = get(0xf0603) // nf-md-priority_high
-    val PRIORITY_DOWN = get(0xf0604) // nf-md-priority_low
-    val EDIT = get(0xf040) // 
-    val ARROW_RIGHT = get(0xf061) // 
-    val LINK = get(0xf0c1) // 
-    val UNLINK = get(0xf127) // 
-    val INFO = get(0xf129) // 
-    val UNSYNCED = get(0xf0c2) // 
-    val EXPORT = get(0xeac3) // 
-    val HELP = get(0xf0625) // 󰘥
-
-    val BLOCKED = get(0xf479) // nf-oct-blocked
-    val CHILD = get(0xf0a89) // nf-md-account_child
-
+    val CALENDAR = get(0xf073)
+    val TAG = get(0xf02b)
+    val SETTINGS = get(0xe690)
+    val REFRESH = get(0xf0450)
+    val SYNC_ALERT = get(0xf04e7)
+    val SYNC_OFF = get(0xf04e8)
+    val DELETE = get(0xf1f8)
+    val CHECK = get(0xf00c)
+    val CROSS = get(0xf00d)
+    val PLAY = get(0xeb2c)
+    val PAUSE = get(0xf04c)
+    val REPEAT = get(0xf0b6)
+    val VISIBLE = get(0xea70)
+    val HIDDEN = get(0xeae7)
+    val WRITE_TARGET = get(0xf0cfb)
+    val ADD = get(0xf067)
+    val BACK = get(0xf060)
+    val PRIORITY_UP = get(0xf0603)
+    val PRIORITY_DOWN = get(0xf0604)
+    val EDIT = get(0xf040)
+    val ARROW_RIGHT = get(0xf061)
+    val LINK = get(0xf0c1)
+    val UNLINK = get(0xf127)
+    val INFO = get(0xf129)
+    val UNSYNCED = get(0xf0c2)
+    val EXPORT = get(0xeac3)
+    val HELP = get(0xf0625)
+    val BLOCKED = get(0xf479)
+    val CHILD = get(0xf0a89)
     val HEART_HAND = get(0xed9b)
     val CREDIT_CARD = get(0xf09d)
     val BANK = get(0xf0a27)
     val BITCOIN = get(0xf10f)
     val LITECOIN = get(0xf0a61)
     val ETHEREUM = get(0xed58)
-
-    val SEARCH = get(0xf002) // 
-    val MENU = get(0xf0c9) // 
+    val SEARCH = get(0xf002)
+    val MENU = get(0xf0c9)
     val DOTS_CIRCLE = get(0xf1978)
     val COPY = get(0xf0c5)
     val EXTERNAL_LINK = get(0xf08e)
     val DEBUG_STOP = get(0xead7)
+    val MOVE = get(0xef0c)
 }
 
 @Composable
@@ -141,7 +135,15 @@ fun formatDuration(minutes: UInt): String {
 class SmartSyntaxTransformation(
     val isDark: Boolean,
 ) : VisualTransformation {
-    // ... [existing validator helper methods] ...
+    // Helper to clean quotes for logic checking
+    private fun strip(s: String): String {
+        val t = s.trim()
+        if (t.length >= 2 && ((t.startsWith("\"") && t.endsWith("\"")) || (t.startsWith("{") && t.endsWith("}")))) {
+            return t.substring(1, t.length - 1)
+        }
+        return t
+    }
+
     private fun isValidDateUnit(s: String): Boolean {
         val lower = s.lowercase()
         return when (lower) {
@@ -166,14 +168,14 @@ class SmartSyntaxTransformation(
         if (lower == "today" || lower == "tomorrow") return true
         if (lower.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) return true
 
-        fun check(suffix: String) = lower.endsWith(suffix) && lower.removeSuffix(suffix).toLongOrNull() != null
+        fun check(suffix: String) = lower.endsWith(suffix) && lower.removeSuffix(suffix).trim().toLongOrNull() != null
         return check("d") || check("w") || check("y") || check("mo")
     }
 
     private fun isValidDuration(s: String): Boolean {
         val lower = s.lowercase()
 
-        fun check(suffix: String) = lower.endsWith(suffix) && lower.removeSuffix(suffix).toLongOrNull() != null
+        fun check(suffix: String) = lower.endsWith(suffix) && lower.removeSuffix(suffix).trim().toLongOrNull() != null
         return check("min") || check("m") || check("h") || check("d") || check("w") || check("mo") || check("y")
     }
 
@@ -187,43 +189,71 @@ class SmartSyntaxTransformation(
         return lower.startsWith("day") || lower.startsWith("week") || lower.startsWith("month") || lower.startsWith("year")
     }
 
+    private fun isNumberLike(s: String): Boolean {
+        val lower = s.lowercase()
+        return lower.toIntOrNull() != null ||
+            listOf("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+                .contains(lower)
+    }
+
     private val COLOR_DUE = Color(0xFF42A5F5)
     private val COLOR_START = Color(0xFF66BB6A)
     private val COLOR_RECUR = Color(0xFFAB47BC)
     private val COLOR_DURATION = Color(0xFF9E9E9E)
-
-    // --- NEW COLORS ---
-    private val COLOR_LOCATION = Color(0xFFFFB300) // Amber
-    private val COLOR_URL = Color(0xFF4FC3F7) // Light Blue
-    private val COLOR_META = Color(0xFF757575) // Grey for Desc/Geo
+    private val COLOR_LOCATION = Color(0xFFFFB300)
+    private val COLOR_URL = Color(0xFF4FC3F7)
+    private val COLOR_META = Color(0xFF757575)
 
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
         val builder = AnnotatedString.Builder(raw)
 
-        val pattern = Pattern.compile("\\s+")
-        val matcher = pattern.matcher(raw)
-
         val words = mutableListOf<Triple<Int, Int, String>>()
-        var lastEnd = 0
-
-        while (matcher.find()) {
-            val start = matcher.start()
-            if (start > lastEnd) {
-                words.add(Triple(lastEnd, start, raw.substring(lastEnd, start)))
-            }
-            lastEnd = matcher.end()
-        }
-        if (lastEnd < raw.length) {
-            words.add(Triple(lastEnd, raw.length, raw.substring(lastEnd)))
-        }
-
         var i = 0
-        while (i < words.size) {
-            val (start, end, word) = words[i]
+        val len = raw.length
+
+        // Tokenizer handling quotes and braces
+        while (i < len) {
+            while (i < len && raw[i].isWhitespace()) {
+                i++
+            }
+            if (i >= len) break
+
+            val start = i
+            var inQuote = false
+            var braceDepth = 0
+            var escaped = false
+
+            while (i < len) {
+                val c = raw[i]
+                if (escaped) {
+                    escaped = false
+                    i++
+                    continue
+                }
+
+                if (c == '\\') {
+                    escaped = true
+                } else if (c == '"' && braceDepth == 0) {
+                    inQuote = !inQuote
+                } else if (c == '{' && !inQuote) {
+                    braceDepth++
+                } else if (c == '}' && !inQuote) {
+                    if (braceDepth > 0) braceDepth--
+                } else if (c.isWhitespace() && !inQuote && braceDepth == 0) {
+                    break
+                }
+                i++
+            }
+            words.add(Triple(start, i, raw.substring(start, i)))
+        }
+
+        var idx = 0
+        while (idx < words.size) {
+            val (start, end, word) = words[idx]
             var matched = false
 
-            // 1. New Fields
+            // 1. New Fields (desc:, geo:, url:, loc:, @@)
             if (word.startsWith("@@") || word.startsWith("loc:")) {
                 builder.addStyle(SpanStyle(color = COLOR_LOCATION), start, end)
                 matched = true
@@ -235,7 +265,7 @@ class SmartSyntaxTransformation(
                 matched = true
             }
 
-            // 2. Priority (!1 to !9 only)
+            // 2. Priority
             if (!matched && word.startsWith("!") && word.length > 1) {
                 val p = word.substring(1).toIntOrNull()
                 if (p != null && p in 1..9) {
@@ -244,43 +274,42 @@ class SmartSyntaxTransformation(
                     matched = true
                 }
             }
-            // 3. Duration (~30m)
+            // 3. Duration
             else if (!matched && (word.startsWith("~") || word.startsWith("est:")) && word.length > 1) {
-                val valStr = if (word.startsWith("~")) word.substring(1) else word.substring(4)
-                if (isValidDuration(valStr)) {
+                val clean = strip(if (word.startsWith("~")) word.substring(1) else word.substring(4))
+                if (isValidDuration(clean)) {
                     builder.addStyle(SpanStyle(color = COLOR_DURATION), start, end)
                     matched = true
                 }
             }
             // 4. Tags
             else if (!matched && word.startsWith("#")) {
-                val tagName = word.removePrefix("#")
+                val tagName = strip(word.removePrefix("#"))
                 if (tagName.isNotEmpty()) {
                     builder.addStyle(SpanStyle(color = getTagColor(tagName), fontWeight = FontWeight.Bold), start, end)
                     matched = true
                 }
             }
-            // 5. Recurrence: @every X Y
-            else if (!matched && (word == "@every" || word == "rec:every") && i + 2 < words.size) {
-                val (_, _, amount) = words[i + 1]
-                val (_, unitEnd, unit) = words[i + 2]
-                if (amount.toIntOrNull() != null && isValidFreqUnit(unit)) {
+            // 5. Multi-word Recurrence: @every 3 days
+            else if (!matched && (word == "@every" || word == "rec:every") && idx + 2 < words.size) {
+                val (_, _, amount) = words[idx + 1]
+                val (_, unitEnd, unit) = words[idx + 2]
+                if (isNumberLike(strip(amount)) && isValidFreqUnit(strip(unit))) {
                     builder.addStyle(SpanStyle(color = COLOR_RECUR), start, unitEnd)
-                    i += 3
+                    idx += 3
                     continue
                 }
             }
-
-            // 6. Recurrence: @daily etc
-            if (!matched && (word.startsWith("@") || word.startsWith("rec:"))) {
-                val valStr = if (word.startsWith("@")) word.substring(1) else word.substring(4)
+            // 6. Recurrence: @daily
+            else if (!matched && (word.startsWith("@") || word.startsWith("rec:"))) {
+                val valStr = strip(if (word.startsWith("@")) word.substring(1) else word.substring(4))
                 if (isValidRecurrence(valStr)) {
                     builder.addStyle(SpanStyle(color = COLOR_RECUR), start, end)
                     matched = true
                 }
             }
 
-            // 7. Dates
+            // 7. Dates (Enhanced for multi-word)
             if (!matched && (word.startsWith("@") || word.startsWith("^") || word.startsWith("due:") || word.startsWith("start:"))) {
                 val prefixChar = word.firstOrNull() ?: ' '
                 val isStart = prefixChar == '^' || word.startsWith("start:")
@@ -291,57 +320,39 @@ class SmartSyntaxTransformation(
                         word.removePrefix("due:").removePrefix("@")
                     }
 
-                if (cleanWord == "next" && i + 1 < words.size) {
-                    val (_, nextEnd, nextVal) = words[i + 1]
-                    if (isValidDateUnit(nextVal)) {
+                val strippedCleanWord = strip(cleanWord)
+
+                // Check for multi-word: "@next week"
+                if (strippedCleanWord == "next" && idx + 1 < words.size) {
+                    val (_, nextEnd, nextVal) = words[idx + 1]
+                    if (isValidDateUnit(strip(nextVal))) {
                         val color = if (isStart) COLOR_START else COLOR_DUE
                         builder.addStyle(SpanStyle(color = color), start, nextEnd)
-                        i += 2
+                        idx += 2
                         continue
                     }
-                } else if (cleanWord == "in" && i + 2 < words.size) {
-                    val (_, _, amountStr) = words[i + 1]
-                    val (_, unitEnd, unitStr) = words[i + 2]
-                    val isNum =
-                        amountStr.toIntOrNull() != null ||
-                            listOf(
-                                "one",
-                                "two",
-                                "three",
-                                "four",
-                                "five",
-                                "six",
-                                "seven",
-                                "eight",
-                                "nine",
-                                "ten",
-                            ).contains(amountStr.lowercase())
-                    if (isNum && isValidDurationUnit(unitStr)) {
+                }
+                // Check for multi-word: "@in 2 days"
+                else if (strippedCleanWord == "in" && idx + 2 < words.size) {
+                    val (_, _, amountStr) = words[idx + 1]
+                    val (_, unitEnd, unitStr) = words[idx + 2]
+
+                    if (isNumberLike(strip(amountStr)) && isValidDurationUnit(strip(unitStr))) {
                         val color = if (isStart) COLOR_START else COLOR_DUE
                         builder.addStyle(SpanStyle(color = color), start, unitEnd)
-                        i += 3
+                        idx += 3
                         continue
                     }
                 }
-            }
-
-            if (!matched) {
-                if (word.startsWith("^") || word.startsWith("start:")) {
-                    val valStr = if (word.startsWith("^")) word.substring(1) else word.substring(6)
-                    if (isValidSmartDate(valStr)) {
-                        builder.addStyle(SpanStyle(color = COLOR_START), start, end)
-                        matched = true
-                    }
-                } else if (word.startsWith("@") || word.startsWith("due:")) {
-                    val valStr = if (word.startsWith("@")) word.substring(1) else word.substring(4)
-                    if (isValidSmartDate(valStr)) {
-                        builder.addStyle(SpanStyle(color = COLOR_DUE), start, end)
-                        matched = true
-                    }
+                // Check single word: @tomorrow
+                else if (isValidSmartDate(strippedCleanWord)) {
+                    val color = if (isStart) COLOR_START else COLOR_DUE
+                    builder.addStyle(SpanStyle(color = color), start, end)
+                    matched = true
                 }
             }
 
-            i++
+            idx++
         }
 
         return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)

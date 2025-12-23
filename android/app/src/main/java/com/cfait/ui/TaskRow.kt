@@ -61,12 +61,15 @@ fun TaskRow(
                     lineHeight = 18.sp,
                 )
 
-                // Render Metadata
                 FlowRow(
                     modifier = Modifier.padding(top = 2.dp),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
+                    if (task.description.isNotEmpty()) {
+                        NfIcon(NfIcons.INFO, 10.sp, Color.Gray)
+                    }
+
                     if (task.isBlocked) NfIcon(NfIcons.BLOCKED, 10.sp, MaterialTheme.colorScheme.error)
                     if (!task.dueDateIso.isNullOrEmpty()) {
                         NfIcon(NfIcons.CALENDAR, 10.sp, Color.Gray)
@@ -77,20 +80,16 @@ fun TaskRow(
                     }
                     if (task.isRecurring) NfIcon(NfIcons.REPEAT, 10.sp, Color.Gray)
 
-                    // --- NEW FIELDS ---
                     if (task.location != null) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val locationColor = Color(0xFFFFB300)
                             Text("@@", fontSize = 10.sp, color = locationColor, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.width(2.dp))
                             Text(task.location!!, fontSize = 10.sp, color = locationColor)
                         }
                     }
                     if (task.url != null) {
-                        // URL Icon
                         NfIcon(NfIcons.URL, 10.sp, Color(0xFF4FC3F7))
                     }
-                    // ------------------
 
                     task.categories.forEach { tag ->
                         Text("#$tag", fontSize = 10.sp, color = getTagColor(tag), modifier = Modifier.padding(end = 2.dp))
@@ -152,6 +151,13 @@ fun TaskRow(
                             onAction("yank")
                         }, leadingIcon = { NfIcon(NfIcons.LINK, 16.sp) })
                     }
+
+                    // Moved to after Yank
+                    DropdownMenuItem(text = { Text("Move") }, onClick = {
+                        expanded = false
+                        onAction("move")
+                    }, leadingIcon = { NfIcon(NfIcons.MOVE, 16.sp) })
+
                     if (task.statusString != "Cancelled") {
                         DropdownMenuItem(text = { Text("Cancel") }, onClick = {
                             expanded = false
