@@ -370,8 +370,8 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             .unwrap_or("Calendar".to_string())
     };
 
-    let task_count = app.tasks.len();
-    let mut subtitle = format!("{} Tasks", task_count);
+    let active_count = app.tasks.iter().filter(|t| !t.status.is_done()).count();
+    let mut subtitle = format!("{} Tasks", active_count);
 
     if !app.search_value.is_empty() {
         subtitle.push_str(&format!(" | Search: '{}'", app.search_value));

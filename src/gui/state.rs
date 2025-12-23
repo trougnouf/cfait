@@ -124,6 +124,7 @@ impl Default for GuiApp {
             icon::COMPASS,
             icon::MOUNTAINS,
             icon::GLOBE,
+            icon::GLOBEMODEL,
         ];
 
         let nanos = std::time::SystemTime::now()

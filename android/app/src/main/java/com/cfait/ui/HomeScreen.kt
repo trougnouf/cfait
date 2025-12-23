@@ -81,6 +81,7 @@ fun HomeScreen(
                     NfIcons.COMPASS,
                     NfIcons.MOUNTAINS,
                     NfIcons.GLOBE,
+                    NfIcons.GLOBEMODEL,
                 )
             icons.random()
         }
@@ -660,10 +661,14 @@ fun HomeScreen(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f, fill = false),
                             )
+
+                            // Count only active tasks
+                            val activeCount = tasks.count { !it.isDone }
+
                             if (tasks.isNotEmpty()) {
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = "(${tasks.size})",
+                                    text = "($activeCount)",
                                     fontSize = 13.sp,
                                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                 )

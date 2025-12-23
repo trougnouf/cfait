@@ -88,6 +88,7 @@ pub const ISLAND: char = '\u{f104f}'; // nf-md-island
 pub const COMPASS: char = '\u{ebd5}'; // nf-cod-compass
 pub const MOUNTAINS: char = '\u{e2a6}'; // nf-fae-mountains
 pub const GLOBE: char = '\u{f0ac}'; // nf-fa-globe
+pub const GLOBEMODEL: char = '\u{f08e9}'; // nf-md-globe_model
 
 // NEW HEADER ICONS per request
 pub const CALENDARS_HEADER: char = '\u{f00f2}'; // nf-md-calendar_multiple_check

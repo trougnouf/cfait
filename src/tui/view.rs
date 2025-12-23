@@ -400,10 +400,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         })
         .collect();
 
+    let active_count = state.tasks.iter().filter(|t| !t.status.is_done()).count();
+
     let mut title = if state.loading {
         " Tasks (Loading...) ".to_string()
     } else {
-        format!(" Tasks ({}) ", state.tasks.len())
+        format!(" Tasks ({}) ", active_count)
     };
     if state.unsynced_changes {
         title.push_str(" [UNSYNCED] ");

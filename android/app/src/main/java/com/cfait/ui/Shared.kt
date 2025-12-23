@@ -84,6 +84,7 @@ object NfIcons {
     val COMPASS = get(0xebd5)
     val MOUNTAINS = get(0xe2a6)
     val GLOBE = get(0xf0ac)
+    val GLOBEMODEL = get(0xf08e9)
 }
 
 @Composable
