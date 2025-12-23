@@ -60,14 +60,15 @@ fun HomeScreen(
     var activeOpCount by remember { mutableIntStateOf(0) }
     var lastSyncFailed by remember { mutableStateOf(false) }
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
-
-    // State for Pull-to-refresh
     var isPullRefreshing by remember { mutableStateOf(false) }
-
     var filterLocation by rememberSaveable { mutableStateOf<String?>(null) }
-
-    // State for moving a task via the context menu
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
+
+    // --- New Calculation ---
+    val enabledCalendarCount =
+        remember(calendars) {
+            calendars.count { !it.isDisabled }
+        }
 
     LaunchedEffect(hasUnsynced) { localHasUnsynced = hasUnsynced }
 
@@ -140,7 +141,6 @@ fun HomeScreen(
         }
     }
 
-    // Pull refresh handler sets isPullRefreshing=true to drive the top bar
     val handlePullRefresh = {
         scope.launch {
             isPullRefreshing = true
@@ -760,6 +760,7 @@ fun HomeScreen(
                                 onAction = { act -> onTaskAction(act, task) },
                                 onClick = onTaskClick,
                                 yankedUid = yankedUid,
+                                enabledCalendarCount = enabledCalendarCount,
                             )
                         }
                     }

@@ -29,6 +29,7 @@ fun TaskRow(
     onAction: (String) -> Unit,
     onClick: (String) -> Unit,
     yankedUid: String?,
+    enabledCalendarCount: Int,
 ) {
     val startPadding = (task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
@@ -152,11 +153,12 @@ fun TaskRow(
                         }, leadingIcon = { NfIcon(NfIcons.LINK, 16.sp) })
                     }
 
-                    // Moved to after Yank
-                    DropdownMenuItem(text = { Text("Move") }, onClick = {
-                        expanded = false
-                        onAction("move")
-                    }, leadingIcon = { NfIcon(NfIcons.MOVE, 16.sp) })
+                    if (enabledCalendarCount > 1) {
+                        DropdownMenuItem(text = { Text("Move") }, onClick = {
+                            expanded = false
+                            onAction("move")
+                        }, leadingIcon = { NfIcon(NfIcons.MOVE, 16.sp) })
+                    }
 
                     if (task.statusString != "Cancelled") {
                         DropdownMenuItem(text = { Text("Cancel") }, onClick = {

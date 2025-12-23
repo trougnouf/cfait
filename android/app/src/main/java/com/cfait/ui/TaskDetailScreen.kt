@@ -35,9 +35,13 @@ fun TaskDetailScreen(
     var showMoveDialog by remember { mutableStateOf(false) }
     val isDark = isSystemInDarkTheme()
 
+    val enabledCalendarCount =
+        remember(calendars) {
+            calendars.count { !it.isDisabled }
+        }
+
     fun reload() {
         scope.launch {
-            // FIX: Pass 3 arguments (filterTag, filterLocation, searchQuery)
             val all = api.getViewTasks(null, null, "")
             task = all.find { it.uid == uid }
             task?.let {
@@ -83,7 +87,9 @@ fun TaskDetailScreen(
                 title = { Text("Edit task") },
                 navigationIcon = { IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) } },
                 actions = {
-                    TextButton(onClick = { showMoveDialog = true }) { Text("Move") }
+                    if (enabledCalendarCount > 1) {
+                        TextButton(onClick = { showMoveDialog = true }) { Text("Move") }
+                    }
                     TextButton(
                         onClick = {
                             // Optimistic Save:
