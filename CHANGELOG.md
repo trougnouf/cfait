@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.9] - 2025-12-23
+
+### 🚀 Features
+
+- *(android)* Improve (multi-words) highlighting, add pull down to refresh, add move in task menu, add description indicator in tasks list
+- *(ui)* Add clickable URL/Geo icons and randomized location tab
+- *(ui)* Count only active tasks (header)
+
+### 🐛 Bug Fixes
+
+- *(cache)* Add versioning to invalidate stale caches on upgrade
+- *(geo)* Allow entering spaced geocoordinates (e.g. geo:53.046880, -121.105042)
+
+### 🎨 Styling
+
+- *(android)* Only show Move if there are multiple calendars
+- Add some random icons to the mix, include Android
 ## [0.3.8] - 2025-12-23
 
 ### 🚀 Features
@@ -20,6 +37,10 @@
 ### 🎨 Styling
 
 - Add location icons and color
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cfait version 0.3.8
 ## [0.3.7] - 2025-12-21
 
 ### 🚀 Features
