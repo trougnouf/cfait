@@ -1,6 +1,7 @@
 // File: src/gui/state.rs
 use crate::client::RustyClient;
 use crate::config::AppTheme;
+use crate::gui::icon;
 use crate::model::{CalendarListEntry, Task as TodoTask};
 use crate::store::TaskStore;
 use iced::widget::text_editor;
@@ -80,6 +81,9 @@ pub struct GuiApp {
     // Computed State (Persisted for view borrowing)
     pub current_placeholder: String,
 
+    // UI Visuals
+    pub location_tab_icon: char,
+
     // Inputs - Settings (Aliases)
     pub alias_input_key: String,
     pub alias_input_values: String,
@@ -105,6 +109,26 @@ pub struct GuiApp {
 
 impl Default for GuiApp {
     fn default() -> Self {
+        // Randomize Location Icon
+        let loc_icons = [
+            icon::LOCATION,
+            icon::LOCATION, // Double weight
+            icon::EARTH_ASIA,
+            icon::EARTH_AMERICAS,
+            icon::EARTH_AFRICA,
+            icon::EARTH_GENERIC,
+            icon::PLANET,
+            icon::GALAXY,
+            icon::ISLAND,
+        ];
+
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .subsec_nanos() as usize;
+
+        let location_tab_icon = loc_icons[nanos % loc_icons.len()];
+
         Self {
             state: AppState::Loading,
             store: TaskStore::new(),
@@ -143,6 +167,7 @@ impl Default for GuiApp {
 
             current_placeholder: "Add a task...".to_string(),
 
+            location_tab_icon, // Add this
             alias_input_key: String::new(),
             alias_input_values: String::new(),
 

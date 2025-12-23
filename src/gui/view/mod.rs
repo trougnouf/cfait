@@ -256,15 +256,16 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         })
         .on_press(Message::SidebarModeChanged(SidebarMode::Categories));
 
-    let btn_locs = button(container(icon::icon(icon::LOCATION).size(18)).center_x(Length::Fill))
-        .padding(8)
-        .width(Length::Fill)
-        .style(if app.sidebar_mode == SidebarMode::Locations {
-            active_style
-        } else {
-            button::text
-        })
-        .on_press(Message::SidebarModeChanged(SidebarMode::Locations));
+    let btn_locs =
+        button(container(icon::icon(app.location_tab_icon).size(18)).center_x(Length::Fill))
+            .padding(8)
+            .width(Length::Fill)
+            .style(if app.sidebar_mode == SidebarMode::Locations {
+                active_style
+            } else {
+                button::text
+            })
+            .on_press(Message::SidebarModeChanged(SidebarMode::Locations));
 
     let tabs = row![btn_cals, btn_tags, btn_locs].spacing(2);
 

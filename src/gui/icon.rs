@@ -70,10 +70,21 @@ pub const BITCOIN: char = '\u{f10f}'; // nf-fa-bitcoin
 pub const LITECOIN: char = '\u{f0a61}'; // nf-md-litecoin
 pub const ETHEREUM: char = '\u{ed58}'; // nf-fa-ethereum
 
-// --- NEW FIELD ICONS ---
-pub const LOCATION: char = '\u{ef4b}'; // nf-md-earth_europe
-pub const URL: char = '\u{f0c1}'; // Link
+// --- NEW FIELD ICONS (Updated) ---
+pub const LOCATION: char = '\u{ef4b}'; // Default European Earth
+pub const URL: char = '\u{f0c1}'; // Generic Link
+pub const URL_CHECK: char = '\u{f0789}'; // nf-md-web_check
+pub const MAP_LOCATION_DOT: char = '\u{ee69}'; // nf-fa-map_location_dot
 pub const GEO: char = '\u{f041}'; // Map Marker
+
+// Location Tab Variations
+pub const EARTH_ASIA: char = '\u{ee47}';
+pub const EARTH_AMERICAS: char = '\u{ee46}';
+pub const EARTH_AFRICA: char = '\u{ee45}';
+pub const EARTH_GENERIC: char = '\u{f01e7}'; // nf-md-earth
+pub const PLANET: char = '\u{e22e}'; // nf-fae-planet
+pub const GALAXY: char = '\u{e243}'; // nf-fae-galaxy
+pub const ISLAND: char = '\u{f104f}'; // nf-md-island
 
 // NEW HEADER ICONS per request
 pub const CALENDARS_HEADER: char = '\u{f00f2}'; // nf-md-calendar_multiple_check

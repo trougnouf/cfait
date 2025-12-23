@@ -1,3 +1,4 @@
+// File: src/gui/view/task_row.rs
 use crate::color_utils;
 use crate::gui::icon;
 use crate::gui::message::Message;
@@ -650,8 +651,25 @@ pub fn view_task_row<'a>(
                 tags_row = tags_row.push(container(recurrence_icon).padding(0));
             }
 
+            if let Some(geo) = &task.geo {
+                let geo_target = format!("geo:{}", geo);
+                let geo_btn = button(icon::icon(icon::MAP_LOCATION_DOT).size(14))
+                    .style(button::text)
+                    .padding(0)
+                    .on_press(Message::OpenUrl(geo_target));
+
+                tags_row = tags_row.push(
+                    tooltip(
+                        geo_btn,
+                        text("Open Coordinates").size(12),
+                        tooltip::Position::Top,
+                    )
+                    .style(tooltip_style),
+                );
+            }
+
             if let Some(u) = &task.url {
-                let url_btn = button(icon::icon(icon::URL).size(14))
+                let url_btn = button(icon::icon(icon::URL_CHECK).size(14))
                     .style(button::text)
                     .padding(0)
                     .on_press(Message::OpenUrl(u.clone()));

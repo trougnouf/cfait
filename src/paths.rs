@@ -1,4 +1,3 @@
-// File: src/paths.rs
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use std::env;

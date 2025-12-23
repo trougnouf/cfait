@@ -1,3 +1,4 @@
+
 // File: android/app/src/main/java/com/cfait/ui/TaskRow.kt
 package com.cfait.ui
 
@@ -13,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -36,6 +38,7 @@ fun TaskRow(
     val textColor = getTaskTextColor(task.priority.toInt(), task.isDone, isDark)
     val highlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
     val containerColor = if (expanded) highlightColor else MaterialTheme.colorScheme.surface
+    val uriHandler = LocalUriHandler.current // Get handler
 
     Card(
         modifier =
@@ -81,6 +84,17 @@ fun TaskRow(
                     }
                     if (task.isRecurring) NfIcon(NfIcons.REPEAT, 10.sp, Color.Gray)
 
+                    // Geo Link
+                    if (task.geo != null) {
+                        IconButton(
+                            onClick = { uriHandler.openUri("geo:${task.geo}") },
+                            modifier = Modifier.size(16.dp).padding(0.dp),
+                        ) {
+                            NfIcon(NfIcons.MAP_LOCATION_DOT, 10.sp, Color(0xFF64B5F6))
+                        }
+                    }
+
+                    // Location Text
                     if (task.location != null) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val locationColor = Color(0xFFFFB300)
@@ -88,8 +102,15 @@ fun TaskRow(
                             Text(task.location!!, fontSize = 10.sp, color = locationColor)
                         }
                     }
+
+                    // URL Link
                     if (task.url != null) {
-                        NfIcon(NfIcons.URL, 10.sp, Color(0xFF4FC3F7))
+                        IconButton(
+                            onClick = { uriHandler.openUri(task.url!!) },
+                            modifier = Modifier.size(16.dp).padding(0.dp),
+                        ) {
+                            NfIcon(NfIcons.WEB_CHECK, 10.sp, Color(0xFF4FC3F7))
+                        }
                     }
 
                     task.categories.forEach { tag ->

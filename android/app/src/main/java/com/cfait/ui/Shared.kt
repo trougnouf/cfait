@@ -1,3 +1,4 @@
+
 // File: android/app/src/main/java/com/cfait/ui/Shared.kt
 package com.cfait.ui
 
@@ -71,6 +72,8 @@ object NfIcons {
     val EXTERNAL_LINK = get(0xf08e)
     val DEBUG_STOP = get(0xead7)
     val MOVE = get(0xef0c)
+    val MAP_LOCATION_DOT = get(0xee69)
+    val WEB_CHECK = get(0xf0789)
 }
 
 @Composable

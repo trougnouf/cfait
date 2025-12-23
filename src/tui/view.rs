@@ -358,14 +358,30 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 spans.push(Span::styled(due_str, Style::default().fg(Color::Blue)));
             }
 
-            // 2. Location (Right side, @@ syntax)
+            // 2. NEW: URL & Geo Indicators
+            if t.geo.is_some() {
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled(
+                    "\u{ee69}",
+                    Style::default().fg(Color::LightBlue),
+                )); // Map Dot
+            }
+            if t.url.is_some() {
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled(
+                    "\u{f0789}",
+                    Style::default().fg(Color::LightBlue),
+                )); // Web Check
+            }
+
+            // 3. Location (Right side, @@ syntax)
             if let Some(loc) = &t.location {
                 spans.push(Span::raw(" "));
                 spans.push(Span::styled("@@", Style::default().fg(Color::Yellow))); // Yellow/Amber for location
                 spans.push(Span::styled(loc, Style::default().fg(Color::Yellow)));
             }
 
-            // 3. Tags (Right side)
+            // 4. Tags (Right side)
             // ... [Tag hiding/alias logic] ...
             for cat in &t.categories {
                 let (r, g, b) = color_utils::generate_color(cat);

@@ -1,3 +1,4 @@
+// File: src/gui/update/view.rs
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp, ResizeDirection, SidebarMode};
@@ -299,15 +300,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             Task::none()
         }
-        Message::OpenUrl(_url) => {
+        Message::OpenUrl(target) => {
+            // Note: target can be "https://..." or "geo:lat,long"
+            let target_url = target.clone();
+
             #[cfg(not(target_os = "android"))]
             std::thread::spawn(move || {
                 #[cfg(target_os = "linux")]
-                let _ = std::process::Command::new("xdg-open").arg(_url).spawn();
+                let _ = std::process::Command::new("xdg-open")
+                    .arg(target_url)
+                    .spawn();
                 #[cfg(target_os = "windows")]
-                let _ = std::process::Command::new("explorer").arg(_url).spawn();
+                let _ = std::process::Command::new("explorer")
+                    .arg(target_url)
+                    .spawn();
                 #[cfg(target_os = "macos")]
-                let _ = std::process::Command::new("open").arg(_url).spawn();
+                let _ = std::process::Command::new("open").arg(target_url).spawn();
             });
             Task::none()
         }
