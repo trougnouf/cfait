@@ -69,7 +69,6 @@ pub struct MobileTask {
     pub blocked_by_names: Vec<String>,
     pub blocked_by_uids: Vec<String>,
     pub is_paused: bool,
-    // --- NEW FIELDS ---
     pub location: Option<String>,
     pub url: Option<String>,
     pub geo: Option<String>,

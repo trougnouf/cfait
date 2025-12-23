@@ -243,3 +243,10 @@ Cfait works with any standard CalDAV server. If you don't have one yet, here are
     *   *How to connect:* After signing up, go to [config.infomaniak.com](https://config.infomaniak.com/). Click **"On this device"** followed by **"My Calendars"** to reveal your specific Server URL and Login username. (Use your infomaniak password.)
 
 You can also use the `Local` calendar entirely offline (and there is the possibility to migrate to and synchronize with a CalDAV server at a later time).
+
+## 💬 Community & Support
+
+Have a question, found a bug, a great idea, or just want to chat?
+
+*   **🗨️ Chat:** on [#Cfait:matrix.org](https://matrix.to/#/#Cfait:matrix.org).
+*   **🐛 Report a Bug / ✨ Request a Feature:** [Open an issue on Codeberg](https://codeberg.org/trougnouf/cfait/issues) (or [Github](https://github.com/trougnouf/cfait/issues)).
