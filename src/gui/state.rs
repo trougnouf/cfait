@@ -105,6 +105,10 @@ pub struct GuiApp {
     // Window Resizing State
     pub resize_direction: Option<ResizeDirection>,
     pub current_window_size: iced::Size,
+    pub ob_urgent_days_input: String,
+    pub ob_urgent_prio_input: String,
+    pub urgent_days: u32,
+    pub urgent_prio: u8,
 }
 
 impl Default for GuiApp {
@@ -188,6 +192,10 @@ impl Default for GuiApp {
 
             resize_direction: None,
             current_window_size: iced::Size::new(800.0, 600.0),
+            ob_urgent_days_input: "1".to_string(),
+            ob_urgent_prio_input: "1".to_string(),
+            urgent_days: 1,
+            urgent_prio: 1,
         }
     }
 }

@@ -29,6 +29,8 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         min_duration: app.filter_min_duration,
         max_duration: app.filter_max_duration,
         include_unset_duration: app.filter_include_unset_duration,
+        urgent_days: app.urgent_days,
+        urgent_prio: app.urgent_prio,
     });
 }
 
@@ -46,6 +48,8 @@ pub fn save_config(app: &GuiApp) {
         tag_aliases: app.tag_aliases.clone(),
         sort_cutoff_months: app.sort_cutoff_months,
         theme: app.current_theme,
+        urgent_days_horizon: app.urgent_days,
+        urgent_priority_threshold: app.urgent_prio,
     }
     .save();
 }

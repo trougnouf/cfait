@@ -25,6 +25,8 @@ pub struct FilterOptions<'a> {
     pub min_duration: Option<u32>,
     pub max_duration: Option<u32>,
     pub include_unset_duration: bool,
+    pub urgent_days: u32,
+    pub urgent_prio: u8,
 }
 
 impl TaskStore {
@@ -593,7 +595,12 @@ impl TaskStore {
             })
             .collect();
 
-        Task::organize_hierarchy(filtered, options.cutoff_date)
+        Task::organize_hierarchy(
+            filtered,
+            options.cutoff_date,
+            options.urgent_days,
+            options.urgent_prio,
+        )
     }
 
     pub fn is_task_done(&self, uid: &str) -> Option<bool> {

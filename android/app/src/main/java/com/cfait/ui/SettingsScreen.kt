@@ -38,6 +38,8 @@ fun SettingsScreen(
     var newAliasTags by remember { mutableStateOf("") }
     var allCalendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
     var disabledSet by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var urgentDays by remember { mutableStateOf("1") }
+    var urgentPrio by remember { mutableStateOf("1") }
 
     val scope = rememberCoroutineScope()
 
@@ -51,13 +53,22 @@ fun SettingsScreen(
         aliases = cfg.tagAliases
         allCalendars = api.getCalendars()
         disabledSet = allCalendars.filter { it.isDisabled }.map { it.href }.toSet()
+        urgentDays = cfg.urgentDays.toString()
+        urgentPrio = cfg.urgentPrio.toString()
     }
 
     LaunchedEffect(Unit) { reload() }
 
     fun saveToDisk() {
         val sortInt = sortMonths.trim().toUIntOrNull()
-        api.saveConfig(url, user, pass, insecure, hideCompleted, disabledSet.toList(), sortInt)
+        val daysInt = urgentDays.trim().toUIntOrNull() ?: 1u
+        val prioInt = urgentPrio.trim().toUByteOrNull() ?: 1u
+
+        api.saveConfig(
+            url, user, pass, insecure, hideCompleted,
+            disabledSet.toList(), sortInt,
+            daysInt, prioInt // <--- Pass new values
+        )
     }
 
     fun saveAndConnect() {
@@ -111,14 +122,23 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(value = pass, onValueChange = {
-                    pass = it
-                }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = pass,
+                    onValueChange = {
+                        pass = it
+                    },
+                    label = { Text("Password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = insecure, onCheckedChange = { insecure = it })
                     Text("Allow insecure SSL")
                 }
-                Button(onClick = { saveAndConnect() }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Save & Connect") }
+                Button(
+                    onClick = { saveAndConnect() },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                ) { Text("Save & Connect") }
                 if (status.isNotEmpty()) {
                     Text(
                         status,
@@ -143,6 +163,42 @@ fun SettingsScreen(
                     })
                     Text("Hide completed and canceled tasks")
                 }
+
+                // Urgency Settings
+                Text("Urgency sorting rules:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                    Text("Due within (days):", modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = urgentDays,
+                        onValueChange = { urgentDays = it },
+                        modifier = Modifier.width(80.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+                Text(
+                    "Tasks due in this range show at top.",
+                    fontSize = 12.sp,
+                    color = androidx.compose.ui.graphics.Color.Gray
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                    Text("Top Priority Threshold (!):", modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = urgentPrio,
+                        onValueChange = { urgentPrio = it },
+                        modifier = Modifier.width(80.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+                Text(
+                    "Priorities <= this value show at top.",
+                    fontSize = 12.sp,
+                    color = androidx.compose.ui.graphics.Color.Gray
+                )
+
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                     Text("Sorting priority cutoff (months):", modifier = Modifier.weight(1f))
                     OutlinedTextField(
@@ -158,7 +214,11 @@ fun SettingsScreen(
                         singleLine = true,
                     )
                 }
-                Text("Tasks due within this range are shown first.", fontSize = 12.sp, color = androidx.compose.ui.graphics.Color.Gray)
+                Text(
+                    "Tasks due within this range are shown first.",
+                    fontSize = 12.sp,
+                    color = androidx.compose.ui.graphics.Color.Gray
+                )
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
             }
 

@@ -137,12 +137,41 @@ impl Task {
         }
     }
 
-    pub fn compare_with_cutoff(&self, other: &Self, cutoff: Option<DateTime<Utc>>) -> Ordering {
+    pub fn compare_with_cutoff(
+        &self,
+        other: &Self,
+        cutoff: Option<DateTime<Utc>>,
+        urgent_days: u32,
+        urgent_prio: u8,
+    ) -> Ordering {
+        let now = Utc::now();
+
+        // Helper to determine urgency
+        let is_urgent = |t: &Task| -> bool {
+            if t.status.is_done() {
+                return false;
+            }
+
+            let is_high_prio = t.priority > 0 && t.priority <= urgent_prio;
+
+            // Check if due date is within horizon (e.g., Now + 1 Day)
+            let is_due_soon = if let Some(due) = t.due {
+                due <= now + chrono::Duration::days(urgent_days as i64)
+            } else {
+                false
+            };
+
+            is_high_prio || is_due_soon
+        };
+
+        let s1_urgent = is_urgent(self);
+        let s2_urgent = is_urgent(other);
+
         let s1_active = self.status == TaskStatus::InProcess;
         let s2_active = other.status == TaskStatus::InProcess;
         let s1_done = self.status.is_done();
         let s2_done = other.status.is_done();
-        let now = Utc::now();
+
         let s1_future = self.dtstart.map(|d| d > now).unwrap_or(false);
         let s2_future = other.dtstart.map(|d| d > now).unwrap_or(false);
 
@@ -157,10 +186,20 @@ impl Task {
         let s2_in = is_in_window(other);
 
         let p1 = if self.priority == 0 { 5 } else { self.priority };
-        let p2 = if other.priority == 0 { 5 } else { other.priority };
+        let p2 = if other.priority == 0 {
+            5
+        } else {
+            other.priority
+        };
 
-        s2_active
-            .cmp(&s1_active)
+        // NEW SORT ORDER:
+        // 1. Urgency (High Prio or Due Soon)
+        // 2. Active Status (InProcess)
+        // 3. Completion Status
+        // ... rest
+        s2_urgent
+            .cmp(&s1_urgent) // True > False
+            .then(s2_active.cmp(&s1_active))
             .then(s1_done.cmp(&s2_done))
             .then(s1_future.cmp(&s2_future))
             .then(s2_in.cmp(&s1_in))
@@ -175,12 +214,17 @@ impl Task {
             .then(self.summary.cmp(&other.summary))
     }
 
-    pub fn organize_hierarchy(mut tasks: Vec<Task>, cutoff: Option<DateTime<Utc>>) -> Vec<Task> {
+    pub fn organize_hierarchy(
+        mut tasks: Vec<Task>,
+        cutoff: Option<DateTime<Utc>>,
+        urgent_days: u32,
+        urgent_prio: u8,
+    ) -> Vec<Task> {
         let present_uids: HashSet<String> = tasks.iter().map(|t| t.uid.clone()).collect();
         let mut children_map: HashMap<String, Vec<Task>> = HashMap::new();
         let mut roots: Vec<Task> = Vec::new();
 
-        tasks.sort_by(|a, b| a.compare_with_cutoff(b, cutoff));
+        tasks.sort_by(|a, b| a.compare_with_cutoff(b, cutoff, urgent_days, urgent_prio));
 
         for mut task in tasks.clone() {
             let is_orphan = match &task.parent_uid {

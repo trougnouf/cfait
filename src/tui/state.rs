@@ -48,6 +48,8 @@ pub struct AppState {
     pub hide_fully_completed_tags: bool,
     pub sort_cutoff_months: Option<u32>,
 
+    pub urgent_days: u32,
+    pub urgent_prio: u8,
     // Input Buffers
     pub input_buffer: String,
     pub active_search_query: String, // Holds the committed search term
@@ -101,6 +103,8 @@ impl AppState {
             hide_completed: false,
             hide_fully_completed_tags: false,
             sort_cutoff_months: Some(2),
+            urgent_days: 1,
+            urgent_prio: 1,
 
             input_buffer: String::new(),
             active_search_query: String::new(),
@@ -157,6 +161,8 @@ impl AppState {
             min_duration: None,
             max_duration: None,
             include_unset_duration: true,
+            urgent_days: self.urgent_days,
+            urgent_prio: self.urgent_prio,
         });
 
         let len = self.tasks.len();

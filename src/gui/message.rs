@@ -1,3 +1,4 @@
+// File: src/gui/message.rs
 use crate::client::RustyClient;
 use crate::config::{AppTheme, Config};
 use crate::gui::state::{ResizeDirection, SidebarMode};
@@ -119,4 +120,6 @@ pub enum Message {
 
     // Open URL
     OpenUrl(String),
+    ObUrgentDaysChanged(String),
+    ObUrgentPrioChanged(String),
 }

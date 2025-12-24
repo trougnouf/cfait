@@ -1,4 +1,4 @@
-// File: ./src/tui/mod.rs
+// File: src/tui/mod.rs
 pub mod action;
 pub mod handlers;
 pub mod network;
@@ -54,6 +54,8 @@ pub async fn run() -> Result<()> {
         allow_insecure,
         hidden_calendars,
         disabled_calendars,
+        urgent_days,
+        urgent_prio,
     ) = match config_result {
         Ok(cfg) => (
             cfg.url,
@@ -67,6 +69,8 @@ pub async fn run() -> Result<()> {
             cfg.allow_insecure_certs,
             cfg.hidden_calendars,
             cfg.disabled_calendars,
+            cfg.urgent_days_horizon,
+            cfg.urgent_priority_threshold,
         ),
         Err(_) => {
             let path_str =
@@ -91,6 +95,8 @@ pub async fn run() -> Result<()> {
     app_state.sort_cutoff_months = sort_cutoff;
     app_state.hidden_calendars = hidden_calendars.into_iter().collect();
     app_state.disabled_calendars = disabled_calendars.into_iter().collect();
+    app_state.urgent_days = urgent_days;
+    app_state.urgent_prio = urgent_prio;
 
     let (action_tx, action_rx) = mpsc::channel(10);
     let (event_tx, mut event_rx) = mpsc::channel(10);

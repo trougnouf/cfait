@@ -1,3 +1,4 @@
+// File: src/gui/update/mod.rs
 pub mod common;
 pub mod network;
 pub mod settings;
@@ -28,6 +29,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::AddAlias
         | Message::RemoveAlias(_)
         | Message::ObSortMonthsChanged(_)
+        | Message::ObUrgentDaysChanged(_)
+        | Message::ObUrgentPrioChanged(_)
         | Message::ThemeChanged(_) => settings::handle(app, message),
 
         Message::InputChanged(_)

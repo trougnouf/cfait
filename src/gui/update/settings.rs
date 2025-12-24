@@ -1,3 +1,4 @@
+// File: src/gui/update/settings.rs
 use crate::cache::Cache;
 use crate::config::Config;
 use crate::gui::async_ops::*;
@@ -29,6 +30,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_user = config.username.clone();
             app.ob_pass = config.password.clone();
             app.ob_default_cal = config.default_calendar.clone();
+            app.urgent_days = config.urgent_days_horizon;
+            app.urgent_prio = config.urgent_priority_threshold;
+            app.ob_urgent_days_input = app.urgent_days.to_string();
+            app.ob_urgent_prio_input = app.urgent_prio.to_string();
 
             let mut cached_cals = Cache::load_calendars().unwrap_or_default();
 
@@ -129,6 +134,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 tag_aliases: app.tag_aliases.clone(),
                 sort_cutoff_months: Some(2),
                 theme: app.current_theme,
+                urgent_days_horizon: app.urgent_days,
+                urgent_priority_threshold: app.urgent_prio,
             });
 
             config_to_save.url = app.ob_url.clone();
@@ -195,6 +202,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 tag_aliases: app.tag_aliases.clone(),
                 sort_cutoff_months: app.sort_cutoff_months,
                 theme: app.current_theme,
+                urgent_days_horizon: app.urgent_days,
+                urgent_priority_threshold: app.urgent_prio,
             };
 
             let _ = config_to_save.save();
@@ -264,6 +273,28 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
                 save_config(app);
                 refresh_filtered_tasks(app);
+            }
+            Task::none()
+        }
+        Message::ObUrgentDaysChanged(val) => {
+            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
+                app.ob_urgent_days_input = val.clone();
+                if let Ok(n) = val.trim().parse::<u32>() {
+                    app.urgent_days = n;
+                    save_config(app);
+                    refresh_filtered_tasks(app);
+                }
+            }
+            Task::none()
+        }
+        Message::ObUrgentPrioChanged(val) => {
+            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
+                app.ob_urgent_prio_input = val.clone();
+                if let Ok(n) = val.trim().parse::<u8>() {
+                    app.urgent_prio = n;
+                    save_config(app);
+                    refresh_filtered_tasks(app);
+                }
             }
             Task::none()
         }

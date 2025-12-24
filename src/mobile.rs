@@ -149,6 +149,8 @@ pub struct MobileConfig {
     pub tag_aliases: HashMap<String, Vec<String>>,
     pub disabled_calendars: Vec<String>,
     pub sort_cutoff_months: Option<u32>,
+    pub urgent_days: u32,
+    pub urgent_prio: u8,
 }
 
 fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
@@ -283,6 +285,8 @@ impl CfaitMobile {
             tag_aliases: c.tag_aliases,
             disabled_calendars: c.disabled_calendars,
             sort_cutoff_months: c.sort_cutoff_months,
+            urgent_days: c.urgent_days_horizon,
+            urgent_prio: c.urgent_priority_threshold,
         }
     }
 
@@ -296,6 +300,8 @@ impl CfaitMobile {
         hide_completed: bool,
         disabled_calendars: Vec<String>,
         sort_cutoff_months: Option<u32>,
+        urgent_days: u32,
+        urgent_prio: u8,
     ) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
         c.url = url;
@@ -307,6 +313,8 @@ impl CfaitMobile {
         c.hide_completed = hide_completed;
         c.disabled_calendars = disabled_calendars;
         c.sort_cutoff_months = sort_cutoff_months;
+        c.urgent_days_horizon = urgent_days;
+        c.urgent_priority_threshold = urgent_prio;
         c.save().map_err(MobileError::from)
     }
 
@@ -534,6 +542,8 @@ impl CfaitMobile {
             min_duration: None,
             max_duration: None,
             include_unset_duration: true,
+            urgent_days: config.urgent_days_horizon,
+            urgent_prio: config.urgent_priority_threshold,
         });
 
         filtered

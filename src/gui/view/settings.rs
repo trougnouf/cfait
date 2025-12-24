@@ -1,3 +1,4 @@
+// File: src/gui/view/settings.rs
 use crate::config::AppTheme;
 use crate::gui::icon;
 use crate::gui::message::Message;
@@ -100,7 +101,28 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             text_input("6", &app.ob_sort_months_input)
                 .on_input(Message::ObSortMonthsChanged)
                 .padding(10)
-                .width(Length::Fixed(100.0))
+                .width(Length::Fixed(100.0)),
+            // New Urgency UI
+            Space::new().height(10),
+            text("Urgency Rules (Shown at top):").size(16),
+            row![
+                text("Due within (days):").width(Length::Fixed(150.0)),
+                text_input("1", &app.ob_urgent_days_input)
+                    .on_input(Message::ObUrgentDaysChanged)
+                    .width(Length::Fixed(60.0))
+                    .padding(5)
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
+            row![
+                text("Priority <= (!):").width(Length::Fixed(150.0)),
+                text_input("1", &app.ob_urgent_prio_input)
+                    .on_input(Message::ObUrgentPrioChanged)
+                    .width(Length::Fixed(60.0))
+                    .padding(5)
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
         ]
         .spacing(5)
         .into()

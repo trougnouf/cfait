@@ -14,6 +14,13 @@ fn default_cutoff() -> Option<u32> {
     Some(2)
 }
 
+fn default_urgent_days() -> u32 {
+    1
+} // Tomorrow
+fn default_urgent_prio() -> u8 {
+    1
+} // !1
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum AppTheme {
     Dark,
@@ -56,6 +63,11 @@ pub struct Config {
     pub tag_aliases: HashMap<String, Vec<String>>,
     #[serde(default)]
     pub theme: AppTheme,
+
+    #[serde(default = "default_urgent_days")]
+    pub urgent_days_horizon: u32,
+    #[serde(default = "default_urgent_prio")]
+    pub urgent_priority_threshold: u8,
 }
 
 impl Default for Config {
@@ -74,6 +86,8 @@ impl Default for Config {
             sort_cutoff_months: Some(2),
             tag_aliases: HashMap::new(),
             theme: AppTheme::default(),
+            urgent_days_horizon: 1,
+            urgent_priority_threshold: 1,
         }
     }
 }
