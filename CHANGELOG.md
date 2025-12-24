@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.12] - 2025-12-24
+
+### 🚀 Features
+
+- *(sort)* Prioritize urgent tasks and make urgency rules configurable (priority and days to overdue).
+- *(parser)* Handle escape character
+
+### 🐛 Bug Fixes
+
+- *(android)* Use i32 for token indices to match Kotlin/JVM Int type
+
+### 🚜 Refactor
+
+- *(android)* Unify syntax highlighting with core Rust parser via UniFFI.
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove dead code
+- Lint
 ## [0.3.11] - 2025-12-24
 
 ### 🚜 Refactor
@@ -9,6 +28,10 @@
 ### 🧪 Testing
 
 - Improve test coverage
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cfait version 0.3.11
 ## [0.3.10] - 2025-12-24
 
 ### 🐛 Bug Fixes
