@@ -16,6 +16,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 import com.cfait.R
+import com.cfait.core.CfaitMobile
+import com.cfait.core.MobileSyntaxType
 
 val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
 
@@ -146,71 +148,11 @@ fun formatDuration(minutes: UInt): String {
 }
 
 class SmartSyntaxTransformation(
+    val api: CfaitMobile,
     val isDark: Boolean,
 ) : VisualTransformation {
-    // Helper to clean quotes for logic checking
-    private fun strip(s: String): String {
-        val t = s.trim()
-        if (t.length >= 2 && ((t.startsWith("\"") && t.endsWith("\"")) || (t.startsWith("{") && t.endsWith("}")))) {
-            return t.substring(1, t.length - 1)
-        }
-        return t
-    }
 
-    private fun isValidDateUnit(s: String): Boolean {
-        val lower = s.lowercase()
-        return when (lower) {
-            "week", "month", "year",
-            "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
-            -> true
-
-            else -> false
-        }
-    }
-
-    private fun isValidDurationUnit(s: String): Boolean {
-        val lower = s.lowercase()
-        return lower == "d" || lower == "day" || lower == "days" ||
-            lower == "w" || lower == "week" || lower == "weeks" ||
-            lower == "mo" || lower == "month" || lower == "months" ||
-            lower == "y" || lower == "year" || lower == "years"
-    }
-
-    private fun isValidSmartDate(s: String): Boolean {
-        val lower = s.lowercase()
-        if (lower == "today" || lower == "tomorrow") return true
-        if (lower.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) return true
-
-        fun check(suffix: String) = lower.endsWith(suffix) && lower.removeSuffix(suffix).trim().toLongOrNull() != null
-        return check("d") || check("w") || check("y") || check("mo")
-    }
-
-    private fun isValidDuration(s: String): Boolean {
-        val lower = s.lowercase()
-
-        fun check(suffix: String) = lower.endsWith(suffix) && lower.removeSuffix(suffix).trim().toLongOrNull() != null
-        return check("min") || check("m") || check("h") || check("d") || check("w") || check("mo") || check("y")
-    }
-
-    private fun isValidRecurrence(s: String): Boolean {
-        val lower = s.lowercase()
-        // Fix: Allow raw FREQ=... strings to be highlighted
-        if (lower.startsWith("freq=")) return true
-        return lower == "daily" || lower == "weekly" || lower == "monthly" || lower == "yearly"
-    }
-
-    private fun isValidFreqUnit(s: String): Boolean {
-        val lower = s.lowercase()
-        return lower.startsWith("day") || lower.startsWith("week") || lower.startsWith("month") || lower.startsWith("year")
-    }
-
-    private fun isNumberLike(s: String): Boolean {
-        val lower = s.lowercase()
-        return lower.toIntOrNull() != null ||
-            listOf("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
-                .contains(lower)
-    }
-
+    // Define colors once
     private val COLOR_DUE = Color(0xFF42A5F5)
     private val COLOR_START = Color(0xFF66BB6A)
     private val COLOR_RECUR = Color(0xFFAB47BC)
@@ -223,151 +165,60 @@ class SmartSyntaxTransformation(
         val raw = text.text
         val builder = AnnotatedString.Builder(raw)
 
-        val words = mutableListOf<Triple<Int, Int, String>>()
-        var i = 0
-        val len = raw.length
+        // Offload parsing to Rust Core
+        // Note: VisualTransformation runs on UI thread.
+        // Rust string parsing is extremely fast (μs range), so blocking here is acceptable.
+        try {
+            val tokens = api.parseSmartString(raw)
 
-        // Tokenizer handling quotes and braces
-        while (i < len) {
-            while (i < len && raw[i].isWhitespace()) {
-                i++
-            }
-            if (i >= len) break
+            for (token in tokens) {
+                // Ensure indices are within bounds (Rust UTF-16 mapping logic handles emoji,
+                // but safety check prevents crashes during race conditions or weird inputs)
+                if (token.start >= raw.length || token.end > raw.length) continue
 
-            val start = i
-            var inQuote = false
-            var braceDepth = 0
-            var escaped = false
+                val spanColor: Color? =
+                    when (token.kind) {
+                        MobileSyntaxType.PRIORITY -> {
+                            // Extract number from text for priority color
+                            val sub = raw.substring(token.start.toInt(), token.end.toInt())
+                            val p = sub.trimStart('!').toIntOrNull() ?: 0
+                            getTaskTextColor(p, false, isDark)
+                        }
 
-            while (i < len) {
-                val c = raw[i]
-                if (escaped) {
-                    escaped = false
-                    i++
-                    continue
-                }
+                        MobileSyntaxType.DUE_DATE -> COLOR_DUE
+                        MobileSyntaxType.START_DATE -> COLOR_START
+                        MobileSyntaxType.RECURRENCE -> COLOR_RECUR
+                        MobileSyntaxType.DURATION -> COLOR_DURATION
+                        MobileSyntaxType.TAG -> {
+                            val sub = raw.substring(token.start.toInt(), token.end.toInt())
+                            val tagName = sub.trimStart('#').replace("\"", "")
+                            getTagColor(tagName)
+                        }
 
-                if (c == '\\') {
-                    escaped = true
-                } else if (c == '"' && braceDepth == 0) {
-                    inQuote = !inQuote
-                } else if (c == '{' && !inQuote) {
-                    braceDepth++
-                } else if (c == '}' && !inQuote) {
-                    if (braceDepth > 0) braceDepth--
-                } else if (c.isWhitespace() && !inQuote && braceDepth == 0) {
-                    break
-                }
-                i++
-            }
-            words.add(Triple(start, i, raw.substring(start, i)))
-        }
-
-        var idx = 0
-        while (idx < words.size) {
-            val (start, end, word) = words[idx]
-            var matched = false
-
-            // 1. New Fields (desc:, geo:, url:, loc:, @@)
-            if (word.startsWith("@@") || word.startsWith("loc:")) {
-                builder.addStyle(SpanStyle(color = COLOR_LOCATION), start, end)
-                matched = true
-            } else if (word.startsWith("url:") || (word.startsWith("[[") && word.endsWith("]]"))) {
-                builder.addStyle(SpanStyle(color = COLOR_URL), start, end)
-                matched = true
-            } else if (word.startsWith("geo:") || word.startsWith("desc:")) {
-                builder.addStyle(SpanStyle(color = COLOR_META), start, end)
-                matched = true
-            }
-
-            // 2. Priority
-            if (!matched && word.startsWith("!") && word.length > 1) {
-                val p = word.substring(1).toIntOrNull()
-                if (p != null && p in 1..9) {
-                    val color = getTaskTextColor(p, false, isDark)
-                    builder.addStyle(SpanStyle(color = color, fontWeight = FontWeight.Bold), start, end)
-                    matched = true
-                }
-            }
-            // 3. Duration
-            else if (!matched && (word.startsWith("~") || word.startsWith("est:")) && word.length > 1) {
-                val clean = strip(if (word.startsWith("~")) word.substring(1) else word.substring(4))
-                if (isValidDuration(clean)) {
-                    builder.addStyle(SpanStyle(color = COLOR_DURATION), start, end)
-                    matched = true
-                }
-            }
-            // 4. Tags
-            else if (!matched && word.startsWith("#")) {
-                val tagName = strip(word.removePrefix("#"))
-                if (tagName.isNotEmpty()) {
-                    builder.addStyle(SpanStyle(color = getTagColor(tagName), fontWeight = FontWeight.Bold), start, end)
-                    matched = true
-                }
-            }
-            // 5. Multi-word Recurrence: @every 3 days
-            else if (!matched && (word == "@every" || word == "rec:every") && idx + 2 < words.size) {
-                val (_, _, amount) = words[idx + 1]
-                val (_, unitEnd, unit) = words[idx + 2]
-                if (isNumberLike(strip(amount)) && isValidFreqUnit(strip(unit))) {
-                    builder.addStyle(SpanStyle(color = COLOR_RECUR), start, unitEnd)
-                    idx += 3
-                    continue
-                }
-            }
-            // 6. Recurrence: @daily
-            else if (!matched && (word.startsWith("@") || word.startsWith("rec:"))) {
-                val valStr = strip(if (word.startsWith("@")) word.substring(1) else word.substring(4))
-                if (isValidRecurrence(valStr)) {
-                    builder.addStyle(SpanStyle(color = COLOR_RECUR), start, end)
-                    matched = true
-                }
-            }
-
-            // 7. Dates (Enhanced for multi-word)
-            if (!matched && (word.startsWith("@") || word.startsWith("^") || word.startsWith("due:") || word.startsWith("start:"))) {
-                val prefixChar = word.firstOrNull() ?: ' '
-                val isStart = prefixChar == '^' || word.startsWith("start:")
-                val cleanWord =
-                    if (isStart) {
-                        word.removePrefix("start:").removePrefix("^")
-                    } else {
-                        word.removePrefix("due:").removePrefix("@")
+                        MobileSyntaxType.LOCATION -> COLOR_LOCATION
+                        MobileSyntaxType.URL -> COLOR_URL
+                        MobileSyntaxType.GEO -> COLOR_META
+                        MobileSyntaxType.DESCRIPTION -> COLOR_META
+                        else -> null
                     }
 
-                val strippedCleanWord = strip(cleanWord)
+                if (spanColor != null) {
+                    val weight =
+                        if (token.kind == MobileSyntaxType.PRIORITY || token.kind == MobileSyntaxType.TAG) {
+                            FontWeight.Bold
+                        } else {
+                            FontWeight.Normal
+                        }
 
-                // Check for multi-word: "@next week"
-                if (strippedCleanWord == "next" && idx + 1 < words.size) {
-                    val (_, nextEnd, nextVal) = words[idx + 1]
-                    if (isValidDateUnit(strip(nextVal))) {
-                        val color = if (isStart) COLOR_START else COLOR_DUE
-                        builder.addStyle(SpanStyle(color = color), start, nextEnd)
-                        idx += 2
-                        continue
-                    }
-                }
-                // Check for multi-word: "@in 2 days"
-                else if (strippedCleanWord == "in" && idx + 2 < words.size) {
-                    val (_, _, amountStr) = words[idx + 1]
-                    val (_, unitEnd, unitStr) = words[idx + 2]
-
-                    if (isNumberLike(strip(amountStr)) && isValidDurationUnit(strip(unitStr))) {
-                        val color = if (isStart) COLOR_START else COLOR_DUE
-                        builder.addStyle(SpanStyle(color = color), start, unitEnd)
-                        idx += 3
-                        continue
-                    }
-                }
-                // Check single word: @tomorrow
-                else if (isValidSmartDate(strippedCleanWord)) {
-                    val color = if (isStart) COLOR_START else COLOR_DUE
-                    builder.addStyle(SpanStyle(color = color), start, end)
-                    matched = true
+                    builder.addStyle(
+                        SpanStyle(color = spanColor, fontWeight = weight),
+                        token.start.toInt(),
+                        token.end.toInt(),
+                    )
                 }
             }
-
-            idx++
+        } catch (e: Exception) {
+            // Fallback to plain text if Rust bridge fails (rare)
         }
 
         return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)

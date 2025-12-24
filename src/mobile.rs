@@ -3,6 +3,7 @@ use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::config::Config;
 use crate::model::Task;
+use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::paths::AppPaths;
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
@@ -47,6 +48,46 @@ impl std::fmt::Display for MobileError {
     }
 }
 impl std::error::Error for MobileError {}
+
+#[derive(uniffi::Enum)]
+pub enum MobileSyntaxType {
+    Text,
+    Priority,
+    DueDate,
+    StartDate,
+    Recurrence,
+    Duration,
+    Tag,
+    Location,
+    Url,
+    Geo,
+    Description,
+}
+
+impl From<SyntaxType> for MobileSyntaxType {
+    fn from(t: SyntaxType) -> Self {
+        match t {
+            SyntaxType::Text => MobileSyntaxType::Text,
+            SyntaxType::Priority => MobileSyntaxType::Priority,
+            SyntaxType::DueDate => MobileSyntaxType::DueDate,
+            SyntaxType::StartDate => MobileSyntaxType::StartDate,
+            SyntaxType::Recurrence => MobileSyntaxType::Recurrence,
+            SyntaxType::Duration => MobileSyntaxType::Duration,
+            SyntaxType::Tag => MobileSyntaxType::Tag,
+            SyntaxType::Location => MobileSyntaxType::Location,
+            SyntaxType::Url => MobileSyntaxType::Url,
+            SyntaxType::Geo => MobileSyntaxType::Geo,
+            SyntaxType::Description => MobileSyntaxType::Description,
+        }
+    }
+}
+
+#[derive(uniffi::Record)]
+pub struct MobileSyntaxToken {
+    pub kind: MobileSyntaxType,
+    pub start: u32,
+    pub end: u32,
+}
 
 #[derive(uniffi::Record)]
 pub struct MobileTask {
@@ -198,6 +239,42 @@ impl CfaitMobile {
 
     pub fn has_unsynced_changes(&self) -> bool {
         !crate::journal::Journal::load().is_empty()
+    }
+
+    pub fn parse_smart_string(&self, input: String) -> Vec<MobileSyntaxToken> {
+        let tokens = tokenize_smart_input(&input);
+
+        // Rust returns byte indices (UTF-8).
+        // Kotlin/Java expects char indices (UTF-16).
+        // We must map them.
+
+        let mut byte_to_utf16 = std::collections::BTreeMap::new();
+        let mut byte_pos = 0;
+        let mut utf16_pos = 0;
+
+        // Anchor 0
+        byte_to_utf16.insert(0, 0);
+
+        for c in input.chars() {
+            byte_pos += c.len_utf8();
+            utf16_pos += c.len_utf16();
+            byte_to_utf16.insert(byte_pos, utf16_pos as u32);
+        }
+
+        tokens
+            .into_iter()
+            .map(|t| {
+                // If strictly mapped, unwrap is safe. Use 0 as fallback just in case.
+                let start_16 = *byte_to_utf16.get(&t.start).unwrap_or(&0);
+                let end_16 = *byte_to_utf16.get(&t.end).unwrap_or(&start_16);
+
+                MobileSyntaxToken {
+                    kind: MobileSyntaxType::from(t.kind),
+                    start: start_16,
+                    end: end_16,
+                }
+            })
+            .collect()
     }
 
     pub fn get_config(&self) -> MobileConfig {

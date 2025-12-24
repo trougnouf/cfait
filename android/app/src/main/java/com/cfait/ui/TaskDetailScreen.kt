@@ -108,7 +108,7 @@ fun TaskDetailScreen(
                 onValueChange = { smartInput = it },
                 label = { Text("Task (smart syntax)") },
                 modifier = Modifier.fillMaxWidth(),
-                visualTransformation = remember(isDark) { SmartSyntaxTransformation(isDark) },
+                visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
             )
             Text(
                 "Use !1, @date, #tag, ~duration",
@@ -118,7 +118,12 @@ fun TaskDetailScreen(
             )
 
             if (task!!.blockedByNames.isNotEmpty()) {
-                Text("Blocked by:", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(
+                    "Blocked by:",
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
 
                 val blockedPairs = task!!.blockedByNames.zip(task!!.blockedByUids)
 

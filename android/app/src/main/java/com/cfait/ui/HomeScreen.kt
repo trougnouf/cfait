@@ -413,7 +413,8 @@ fun HomeScreen(
                                                 updateTaskList()
                                                 onDataChanged()
                                             } catch (e: Exception) {
-                                                Toast.makeText(context, "Move failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, "Move failed: ${e.message}", Toast.LENGTH_SHORT)
+                                                    .show()
                                             }
                                         }
                                     },
@@ -447,7 +448,11 @@ fun HomeScreen(
                                                 showExportDialog = false
                                                 onGlobalRefresh()
                                             } catch (e: Exception) {
-                                                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(
+                                                    context,
+                                                    "Export failed: ${e.message}",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
                                             }
                                         }
                                     },
@@ -561,10 +566,15 @@ fun HomeScreen(
                                 val displayName = if (isUncat) "Uncategorized" else "#${tag.name}"
                                 val isSel = if (isUncat) filterTag == ":::uncategorized:::" else filterTag == tag.name
                                 val color = if (isUncat) Color.Gray else getTagColor(tag.name)
-                                CompactTagRow(name = displayName, count = tag.count.toInt(), color = color, isSelected = isSel, onClick = {
-                                    filterTag = if (isUncat) ":::uncategorized:::" else tag.name
-                                    scope.launch { drawerState.close() }
-                                })
+                                CompactTagRow(
+                                    name = displayName,
+                                    count = tag.count.toInt(),
+                                    color = color,
+                                    isSelected = isSel,
+                                    onClick = {
+                                        filterTag = if (isUncat) ":::uncategorized:::" else tag.name
+                                        scope.launch { drawerState.close() }
+                                    })
                             }
                         } else {
                             item {
@@ -678,7 +688,14 @@ fun HomeScreen(
 
                     TopAppBar(
                         title = headerTitle,
-                        navigationIcon = { IconButton(onClick = { scope.launch { drawerState.open() } }) { NfIcon(NfIcons.MENU, 20.sp) } },
+                        navigationIcon = {
+                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                NfIcon(
+                                    NfIcons.MENU,
+                                    20.sp
+                                )
+                            }
+                        },
                         actions = {
                             IconButton(onClick = { isSearchActive = true }) { NfIcon(NfIcons.SEARCH, 18.sp) }
 
@@ -704,7 +721,10 @@ fun HomeScreen(
             bottomBar = {
                 Column {
                     if (yankedTask != null) {
-                        Surface(color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.fillMaxWidth()) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                                 NfIcon(NfIcons.LINK, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer)
                                 Spacer(Modifier.width(8.dp))
@@ -729,16 +749,23 @@ fun HomeScreen(
                         }
                     }
                     Surface(tonalElevation = 3.dp) {
-                        Row(Modifier.padding(16.dp).navigationBarsPadding(), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.padding(16.dp).navigationBarsPadding(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             OutlinedTextField(
                                 value = newTaskText,
                                 onValueChange = { newTaskText = it },
                                 placeholder = { Text("!1 @tomorrow Buy cat food #groceries") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
-                                visualTransformation = remember(isDark) { SmartSyntaxTransformation(isDark) },
+                                visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
                                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
-                                keyboardActions = KeyboardActions(onSend = { if (newTaskText.isNotBlank()) addTask(newTaskText) }),
+                                keyboardActions = KeyboardActions(onSend = {
+                                    if (newTaskText.isNotBlank()) addTask(
+                                        newTaskText
+                                    )
+                                }),
                             )
                         }
                     }

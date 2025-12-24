@@ -769,6 +769,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_move_task(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_pause_task(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_remove_alias(): Short
@@ -914,6 +916,12 @@ internal object UniffiLib {
         `uid`: RustBuffer.ByValue,
         `newCalHref`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_parse_smart_string(
+        `ptr`: Long,
+        `input`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_pause_task(
         `ptr`: Long,
@@ -1267,6 +1275,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_move_task() != 45551.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string() != 44327.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_pause_task() != 53207.toShort()) {
@@ -1826,6 +1837,8 @@ public interface CfaitMobileInterface {
         `newCalHref`: kotlin.String,
     )
 
+    fun `parseSmartString`(`input`: kotlin.String): List<MobileSyntaxToken>
+
     suspend fun `pauseTask`(`uid`: kotlin.String)
 
     fun `removeAlias`(`key`: kotlin.String)
@@ -2277,6 +2290,19 @@ open class CfaitMobile :
         // Error FFI converter
         MobileException.ErrorHandler,
     )
+
+    override fun `parseSmartString`(`input`: kotlin.String): List<MobileSyntaxToken> =
+        FfiConverterSequenceTypeMobileSyntaxToken.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_parse_smart_string(
+                        it,
+                        FfiConverterString.lower(`input`),
+                        _status,
+                    )
+                }
+            },
+        )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -2743,6 +2769,42 @@ public object FfiConverterTypeMobileLocation : FfiConverterRustBuffer<MobileLoca
     }
 }
 
+data class MobileSyntaxToken(
+    var `kind`: MobileSyntaxType,
+    var `start`: kotlin.UInt,
+    var `end`: kotlin.UInt,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileSyntaxToken : FfiConverterRustBuffer<MobileSyntaxToken> {
+    override fun read(buf: ByteBuffer): MobileSyntaxToken =
+        MobileSyntaxToken(
+            FfiConverterTypeMobileSyntaxType.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+
+    override fun allocationSize(value: MobileSyntaxToken) =
+        (
+            FfiConverterTypeMobileSyntaxType.allocationSize(value.`kind`) +
+                FfiConverterUInt.allocationSize(value.`start`) +
+                FfiConverterUInt.allocationSize(value.`end`)
+        )
+
+    override fun write(
+        value: MobileSyntaxToken,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeMobileSyntaxType.write(value.`kind`, buf)
+        FfiConverterUInt.write(value.`start`, buf)
+        FfiConverterUInt.write(value.`end`, buf)
+    }
+}
+
 data class MobileTag(
     var `name`: kotlin.String,
     var `count`: kotlin.UInt,
@@ -2928,6 +2990,44 @@ public object FfiConverterTypeMobileError : FfiConverterRustBuffer<MobileExcepti
     }
 }
 
+enum class MobileSyntaxType {
+    TEXT,
+    PRIORITY,
+    DUE_DATE,
+    START_DATE,
+    RECURRENCE,
+    DURATION,
+    TAG,
+    LOCATION,
+    URL,
+    GEO,
+    DESCRIPTION,
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileSyntaxType : FfiConverterRustBuffer<MobileSyntaxType> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            MobileSyntaxType.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: MobileSyntaxType) = 4UL
+
+    override fun write(
+        value: MobileSyntaxType,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
 /**
  * @suppress
  */
@@ -3072,6 +3172,34 @@ public object FfiConverterSequenceTypeMobileLocation : FfiConverterRustBuffer<Li
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileLocation.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMobileSyntaxToken : FfiConverterRustBuffer<List<MobileSyntaxToken>> {
+    override fun read(buf: ByteBuffer): List<MobileSyntaxToken> {
+        val len = buf.getInt()
+        return List<MobileSyntaxToken>(len) {
+            FfiConverterTypeMobileSyntaxToken.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MobileSyntaxToken>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMobileSyntaxToken.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<MobileSyntaxToken>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMobileSyntaxToken.write(it, buf)
         }
     }
 }
