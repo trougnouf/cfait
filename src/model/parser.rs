@@ -766,12 +766,6 @@ fn collect_alias_expansions(
     results
 }
 
-#[allow(dead_code)]
-fn is_date_unit(s: &str) -> bool {
-    let lower = s.to_lowercase();
-    matches!(lower.as_str(), "week" | "month" | "year")
-}
-
 fn is_date_unit_full(s: &str) -> bool {
     let lower = s.to_lowercase();
     matches!(
@@ -781,25 +775,6 @@ fn is_date_unit_full(s: &str) -> bool {
 }
 
 fn is_date_unit_short(s: &str) -> bool {
-    let lower = s.to_lowercase();
-    matches!(
-        lower.as_str(),
-        "d" | "day"
-            | "days"
-            | "w"
-            | "week"
-            | "weeks"
-            | "mo"
-            | "month"
-            | "months"
-            | "y"
-            | "year"
-            | "years"
-    )
-}
-
-#[allow(dead_code)]
-fn is_date_duration_unit(s: &str) -> bool {
     let lower = s.to_lowercase();
     matches!(
         lower.as_str(),

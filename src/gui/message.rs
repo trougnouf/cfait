@@ -61,7 +61,7 @@ pub enum Message {
     SyncToggleComplete(Box<Result<(TodoTask, Option<TodoTask>), String>>),
 
     TasksRefreshed(Result<(String, Vec<TodoTask>), String>),
-    DeleteComplete(#[allow(dead_code)] Result<(), String>),
+    DeleteComplete(Result<(), String>),
 
     SidebarModeChanged(SidebarMode),
     SelectCalendar(String),

@@ -1,6 +1,6 @@
 // File: tests/logic_recurrence.rs
 use cfait::model::{Task, TaskStatus};
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use std::collections::HashMap;
 
 fn create_task_due(date_str: &str, recurrence: &str) -> Task {
