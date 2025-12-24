@@ -250,13 +250,12 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                     }
                 } else if parse_smart_date(val, true).is_some() {
                     matched_kind = Some(SyntaxType::DueDate);
-                } else if let Some(_stripped) = word_lower.strip_prefix("due:") {
-                    if parse_smart_date(&word[4..], true).is_some()
-                        || parse_weekday_code(&word[4..]).is_some()
+                } else if let Some(_stripped) = word_lower.strip_prefix("due:")
+                    && (parse_smart_date(&word[4..], true).is_some()
+                        || parse_weekday_code(&word[4..]).is_some())
                     {
                         matched_kind = Some(SyntaxType::DueDate);
                     }
-                }
             } else if let Some(_stripped) = word_lower.strip_prefix("due:") {
                 if parse_smart_date(&word[4..], true).is_some()
                     || parse_weekday_code(&word[4..]).is_some()

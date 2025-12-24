@@ -96,10 +96,10 @@ fn test_integrity_validation() {
     aliases.insert("a".to_string(), vec!["#b".to_string()]);
 
     // Valid update
-    assert!(validate_alias_integrity("b", &vec!["#c".to_string()], &aliases).is_ok());
+    assert!(validate_alias_integrity("b", &["#c".to_string()], &aliases).is_ok());
 
     // Cyclic update (#b -> #a, while #a -> #b)
-    let res = validate_alias_integrity("b", &vec!["#a".to_string()], &aliases);
+    let res = validate_alias_integrity("b", &["#a".to_string()], &aliases);
     assert!(res.is_err());
     assert_eq!(
         res.unwrap_err(),
@@ -107,7 +107,7 @@ fn test_integrity_validation() {
     );
 
     // Self reference
-    let res_self = validate_alias_integrity("x", &vec!["#x".to_string()], &aliases);
+    let res_self = validate_alias_integrity("x", &["#x".to_string()], &aliases);
     assert!(res_self.is_err());
 }
 

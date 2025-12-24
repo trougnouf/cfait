@@ -56,11 +56,10 @@ async fn test_move_propagates_href_to_pending_update() {
     task.href = old_href.clone();
     task.etag = "\"orig-etag\"".to_string();
 
-    if let Some(p) = Journal::get_path() {
-        if p.exists() {
+    if let Some(p) = Journal::get_path()
+        && p.exists() {
             let _ = fs::remove_file(p);
         }
-    }
 
     Journal::push(Action::Move(task.clone(), new_cal.to_string())).unwrap();
 

@@ -17,11 +17,10 @@ fn setup_ghost_env(suffix: &str) -> std::path::PathBuf {
     unsafe {
         env::set_var("CFAIT_TEST_DIR", &temp_dir);
     }
-    if let Some(p) = Journal::get_path() {
-        if p.exists() {
+    if let Some(p) = Journal::get_path()
+        && p.exists() {
             let _ = fs::remove_file(p);
         }
-    }
     temp_dir
 }
 

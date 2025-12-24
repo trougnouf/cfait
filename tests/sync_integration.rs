@@ -55,11 +55,10 @@ async fn test_sync_recovers_from_412() {
     task.etag = "old-etag".to_string();
 
     // Clean any residual file in temp (unlikely, but safe)
-    if let Some(p) = cfait::journal::Journal::get_path() {
-        if p.exists() {
+    if let Some(p) = cfait::journal::Journal::get_path()
+        && p.exists() {
             let _ = fs::remove_file(p);
         }
-    }
 
     cfait::journal::Journal::push(Action::Update(task)).unwrap();
 

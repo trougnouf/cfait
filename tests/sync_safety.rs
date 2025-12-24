@@ -16,17 +16,15 @@ fn setup_safety_env(suffix: &str) -> std::path::PathBuf {
     unsafe {
         env::set_var("CFAIT_TEST_DIR", &temp_dir);
     }
-    if let Some(p) = Journal::get_path() {
-        if p.exists() {
+    if let Some(p) = Journal::get_path()
+        && p.exists() {
             let _ = fs::remove_file(p);
         }
-    }
-    if let Ok(cache_dir) = cfait::paths::AppPaths::get_cache_dir() {
-        if cache_dir.exists() {
+    if let Ok(cache_dir) = cfait::paths::AppPaths::get_cache_dir()
+        && cache_dir.exists() {
             let _ = fs::remove_dir_all(&cache_dir);
             let _ = fs::create_dir_all(&cache_dir);
         }
-    }
     temp_dir
 }
 
@@ -118,9 +116,7 @@ async fn test_safety_conflict_copy_on_hard_412() {
         .create_async()
         .await;
 
-    let server_ics = format!(
-        "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:conflict\nSUMMARY:Local Version\nDESCRIPTION:Server Change\nEND:VTODO\nEND:VCALENDAR"
-    );
+    let server_ics = "BEGIN:VCALENDAR\nBEGIN:VTODO\nUID:conflict\nSUMMARY:Local Version\nDESCRIPTION:Server Change\nEND:VTODO\nEND:VCALENDAR".to_string();
 
     let _mock_fetch_item = server
         .mock("REPORT", "/cal/")

@@ -23,11 +23,10 @@ fn setup_env(suffix: &str) -> std::path::PathBuf {
     }
 
     // Clean potential previous run
-    if let Some(p) = Journal::get_path() {
-        if p.exists() {
+    if let Some(p) = Journal::get_path()
+        && p.exists() {
             let _ = fs::remove_file(p);
         }
-    }
     temp_dir
 }
 

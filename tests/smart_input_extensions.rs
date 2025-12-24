@@ -69,7 +69,7 @@ fn test_duration_units() {
 
     // Weeks
     let t4 = Task::new("Sabbatical ~1w", &aliases);
-    assert_eq!(t4.estimated_duration, Some(1 * 7 * 24 * 60));
+    assert_eq!(t4.estimated_duration, Some(7 * 24 * 60));
 }
 
 #[test]
