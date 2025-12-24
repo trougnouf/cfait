@@ -139,7 +139,6 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         blocked_by_names,
         blocked_by_uids: t.dependencies.clone(),
         is_paused: t.is_paused(),
-        // --- NEW FIELDS ---
         location: t.location.clone(),
         url: t.url.clone(),
         geo: t.geo.clone(),
@@ -152,9 +151,6 @@ pub struct CfaitMobile {
     store: Arc<Mutex<TaskStore>>,
 }
 
-// ----------------------------------------------------------------------------
-// EXPORTED API (UniFFI)
-// ----------------------------------------------------------------------------
 #[uniffi::export(async_runtime = "tokio")]
 impl CfaitMobile {
     #[uniffi::constructor]
@@ -175,8 +171,7 @@ impl CfaitMobile {
     pub async fn add_alias(&self, key: String, tags: Vec<String>) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
 
-        // VALIDATION: Prevent loops/conflicts
-        crate::model::parser::validate_alias_integrity(&key, &tags, &c.tag_aliases)
+        crate::model::validate_alias_integrity(&key, &tags, &c.tag_aliases)
             .map_err(MobileError::from)?;
 
         c.tag_aliases.insert(key.clone(), tags.clone());
@@ -434,7 +429,7 @@ impl CfaitMobile {
     pub async fn get_view_tasks(
         &self,
         filter_tag: Option<String>,
-        filter_location: Option<String>, // New param
+        filter_location: Option<String>,
         search_query: String,
     ) -> Vec<MobileTask> {
         let store = self.store.lock().await;
@@ -702,7 +697,6 @@ impl CfaitMobile {
     }
 }
 
-// Helpers unchanged...
 impl CfaitMobile {
     async fn apply_connection(&self, config: Config) -> Result<String, MobileError> {
         let (client, cals, _, _, warning_from_fallback) =

@@ -5,6 +5,7 @@ use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
 use crate::tui::state::{AppState, Focus, InputMode};
 use crossterm::event::{KeyCode, KeyEvent};
+use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
 pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Option<String>) {
@@ -17,7 +18,6 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
         AppEvent::CalendarsLoaded(cals) => {
             state.calendars = cals;
 
-            // Unhide default calendar on load
             if let Some(def) = default_cal
                 && let Some(found) = state
                     .calendars
@@ -53,37 +53,29 @@ pub async fn handle_key_event(
     match state.mode {
         InputMode::Creating => match key.code {
             KeyCode::Enter if !state.input_buffer.is_empty() => {
-                // --- 1. Extract Inline Aliases with Validation ---
-                let (clean_input, new_aliases) = extract_inline_aliases(&state.input_buffer);
+                let (clean_input, new_aliases): (String, HashMap<String, Vec<String>>) =
+                    extract_inline_aliases(&state.input_buffer);
 
                 if !new_aliases.is_empty() {
                     for (key, tags) in new_aliases {
-                        // VALIDATION CHECK
                         if let Err(e) = validate_alias_integrity(&key, &tags, &state.tag_aliases) {
                             state.message = format!("Alias Error: {}", e);
-                            return None; // Abort creation
+                            return None;
                         }
 
                         state.tag_aliases.insert(key.clone(), tags.clone());
-
-                        // Retroactive Update
                         let modified = state.store.apply_alias_retroactively(&key, &tags);
 
-                        // Dispatch Updates
                         for t in modified {
                             let _ = action_tx.send(Action::UpdateTask(t)).await;
                         }
                     }
-                    // Persist Aliases
                     if let Ok(mut cfg) = Config::load() {
                         cfg.tag_aliases = state.tag_aliases.clone();
                         let _ = cfg.save();
                     }
                 }
 
-                // --- 2. Existing Logic with Clean Input ---
-
-                // 1. Tag Jump
                 if clean_input.starts_with('#')
                     && !clean_input.trim().contains(' ')
                     && state.creating_child_of.is_none()
@@ -109,7 +101,6 @@ pub async fn handle_key_event(
                     }
                 }
 
-                // 2. NEW: Location Jump
                 let is_loc = clean_input.starts_with("@@") || clean_input.starts_with("loc:");
                 if is_loc && !clean_input.trim().contains(' ') && state.creating_child_of.is_none()
                 {
@@ -145,7 +136,6 @@ pub async fn handle_key_event(
                     state.store.add_task(task.clone());
                     state.refresh_filtered_view();
 
-                    // Jump to new task
                     if let Some(idx) = state.tasks.iter().position(|t| t.uid == new_uid) {
                         state.list_state.select(Some(idx));
                     }
@@ -170,10 +160,10 @@ pub async fn handle_key_event(
         },
         InputMode::Editing => match key.code {
             KeyCode::Enter => {
-                let (clean_input, new_aliases) = extract_inline_aliases(&state.input_buffer);
+                let (clean_input, new_aliases): (String, HashMap<String, Vec<String>>) =
+                    extract_inline_aliases(&state.input_buffer);
                 if !new_aliases.is_empty() {
                     for (k, v) in new_aliases {
-                        // VALIDATION CHECK
                         if let Err(e) = validate_alias_integrity(&k, &v, &state.tag_aliases) {
                             state.message = format!("Alias Error: {}", e);
                             return None;
@@ -217,7 +207,6 @@ pub async fn handle_key_event(
             KeyCode::Right => state.move_cursor_right(),
             _ => {}
         },
-        // ... [Rest of the file remains unchanged] ...
         InputMode::EditingDescription => match key.code {
             KeyCode::Enter => {
                 if key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
@@ -263,9 +252,7 @@ pub async fn handle_key_event(
                     state.selected_categories.clear();
                     state.selected_categories.insert(tag);
                     state.active_search_query.clear();
-                }
-                // NEW: Location Jump
-                else if (state.input_buffer.starts_with("@@")
+                } else if (state.input_buffer.starts_with("@@")
                     || state.input_buffer.starts_with("loc:"))
                     && !state.input_buffer.contains(' ')
                 {

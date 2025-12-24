@@ -10,11 +10,11 @@ use iced::Task;
 use iced::widget::operation;
 use iced::widget::scrollable::RelativeOffset;
 use iced::widget::text_editor;
+use std::collections::HashMap;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::InputChanged(action) => {
-            // FIX: Check for Edit::Enter variant
             if let text_editor::Action::Edit(text_editor::Edit::Enter) = action {
                 return handle_submit(app);
             }
@@ -29,7 +29,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.creating_child_of = Some(parent_uid.clone());
             app.selected_uid = Some(parent_uid.clone());
 
-            // Auto-fill tags from parent
             let mut initial_input = String::new();
             if let Some((parent, _)) = app.store.get_task_mut(&parent_uid) {
                 for cat in &parent.categories {
@@ -127,7 +126,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        // --- START / PAUSE / STOP HANDLERS ---
         Message::StartTask(uid) => {
             if let Some(updated) = app.store.set_status_in_process(&uid) {
                 app.selected_uid = Some(uid.clone());
@@ -173,8 +171,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        // -----------------------------------------
-        // --- YANK / LINKING Handlers ---
         Message::YankTask(uid) => {
             app.yanked_uid = Some(uid);
             Task::none()
@@ -190,7 +186,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some(updated) = app.store.set_parent(&target_uid, Some(parent_uid.clone()))
             {
                 app.selected_uid = Some(target_uid);
-                app.yanked_uid = None; // Clear yank state
+                app.yanked_uid = None;
                 refresh_filtered_tasks(app);
                 if let Some(client) = &app.client {
                     return Task::perform(
@@ -240,7 +236,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some(updated) = app.store.add_dependency(&target_uid, blocker_uid.clone())
             {
                 app.selected_uid = Some(target_uid);
-                app.yanked_uid = None; // Clear yank state
+                app.yanked_uid = None;
                 refresh_filtered_tasks(app);
                 if let Some(client) = &app.client {
                     return Task::perform(
@@ -254,7 +250,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::MoveTask(task_uid, target_href) => {
-            // **FIX**: Capture the original task state *before* moving it.
             let original_task = app
                 .store
                 .calendars
@@ -272,7 +267,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         Message::TaskMoved,
                     );
                 } else if let Some(old_task) = original_task {
-                    // Correctly journal the MOVE action using the original task snapshot.
                     app.unsynced_changes = true;
                     let _ = Journal::push(Action::Move(old_task, target_href));
                 }
@@ -280,8 +274,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::MigrateLocalTo(target_href) => {
-            // Migration is strictly "Local -> Server".
-            // It cannot run without a client.
             if let Some(local_tasks) = app.store.calendars.get(LOCAL_CALENDAR_HREF) {
                 let tasks_to_move = local_tasks.clone();
                 if tasks_to_move.is_empty() {
@@ -294,7 +286,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         Message::MigrationComplete,
                     );
                 } else {
-                    // Cannot migrate offline
                     app.error_msg = Some("Cannot export while offline/connecting.".to_string());
                     app.loading = false;
                 }
@@ -304,8 +295,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         _ => Task::none(),
     }
 }
-
-// --- HELPER HANDLERS FOR OFFLINE ACTIONS ---
 
 fn handle_offline_update(app: &mut GuiApp, task: TodoTask) {
     app.unsynced_changes = true;
@@ -329,8 +318,6 @@ fn handle_offline_delete(app: &mut GuiApp, task: TodoTask) {
     }
 }
 
-// --- SUBMIT HANDLER ---
-
 fn handle_submit(app: &mut GuiApp) -> Task<Message> {
     let raw_text = app.input_value.text();
     let text_to_submit = raw_text.trim().to_string();
@@ -340,7 +327,8 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         return Task::none();
     }
 
-    let (clean_input, new_aliases) = extract_inline_aliases(&text_to_submit);
+    let (clean_input, new_aliases): (String, HashMap<String, Vec<String>>) =
+        extract_inline_aliases(&text_to_submit);
 
     let mut retroactive_sync_batch = Vec::new();
 
@@ -354,7 +342,6 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         save_config(app);
     }
 
-    // 1. Check for Tag Jump (#tag)
     if clean_input.starts_with('#')
         && !clean_input.trim().contains(' ')
         && app.editing_uid.is_none()
@@ -385,7 +372,6 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         }
     }
 
-    // 2. NEW: Check for Location Jump (@@loc or loc:name)
     let is_loc_jump = clean_input.starts_with("@@") || clean_input.starts_with("loc:");
     if is_loc_jump && !clean_input.trim().contains(' ') && app.editing_uid.is_none() {
         let loc = if clean_input.starts_with("@@") {
@@ -482,7 +468,6 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
                 return Task::batch(retroactive_sync_batch);
             } else {
-                // Client not ready (Loading/Offline): Persist to Journal immediately
                 if new_task.calendar_href == LOCAL_CALENDAR_HREF {
                     if let Ok(mut local) = LocalStorage::load() {
                         local.push(new_task.clone());

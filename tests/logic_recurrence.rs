@@ -1,17 +1,15 @@
 // File: tests/logic_recurrence.rs
 use cfait::model::{Task, TaskStatus};
-use chrono::{Duration, TimeZone, Utc};
+use chrono::{NaiveDateTime, Utc};
 use std::collections::HashMap;
 
 fn create_task_due(date_str: &str, recurrence: &str) -> Task {
     let mut t = Task::new("Task", &HashMap::new());
     // Create a date at 12:00 UTC to avoid timezone edge cases in tests
-    let dt = Utc
-        .datetime_from_str(
-            format!("{} 12:00:00", date_str).as_str(),
-            "%Y-%m-%d %H:%M:%S",
-        )
-        .unwrap();
+    let dt_str = format!("{} 12:00:00", date_str);
+    let dt = NaiveDateTime::parse_from_str(&dt_str, "%Y-%m-%d %H:%M:%S")
+        .unwrap()
+        .and_utc();
     t.due = Some(dt);
     t.rrule = Some(recurrence.to_string());
     t.status = TaskStatus::Completed; // Simulate completion
@@ -77,9 +75,9 @@ fn test_complex_weekday_recurrence() {
 fn test_recurrence_preserves_time() {
     // Ensure that if a task is due at 14:00, the next one is also due at 14:00
     let mut t = Task::new("Time Test", &HashMap::new());
-    let dt = Utc
-        .datetime_from_str("2023-01-01 14:30:00", "%Y-%m-%d %H:%M:%S")
-        .unwrap();
+    let dt = NaiveDateTime::parse_from_str("2023-01-01 14:30:00", "%Y-%m-%d %H:%M:%S")
+        .unwrap()
+        .and_utc();
     t.due = Some(dt);
     t.rrule = Some("FREQ=DAILY".to_string());
 
