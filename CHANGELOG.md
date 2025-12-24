@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.10] - 2025-12-24
+
+### 🐛 Bug Fixes
+
+- *(parser)* Correct recurrence parsing, fix highlighting, and add comprehensive README compliance tests
+
+### 📚 Documentation
+
+- Fix README syntax error & minor update
+- Add Matrix chatroom to README
 ## [0.3.9] - 2025-12-23
 
 ### 🚀 Features
@@ -17,6 +27,10 @@
 
 - *(android)* Only show Move if there are multiple calendars
 - Add some random icons to the mix, include Android
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cfait version 0.3.9
 ## [0.3.8] - 2025-12-23
 
 ### 🚀 Features
@@ -139,6 +153,13 @@
 
 ### ⚙️ Miscellaneous Tasks
 
+- Add Cargo.lock
+- *(android)* Rm i686-linux-android
+- *(fdroid)* Work on Reproducible Builds
+- *(fdroid)* Pin rust version for F-Droid build
+- *(fdroid)* Work on reproducible build (locked ndkVersion, RUSTFLAGS)
+- *(fdroid)* Strip dependenciesInfo
+- *(fdroid)* Set Android rust toolchain in rust_toolchain.toml
 - *(fdroid)* Simplify screenshot names
 - Prepare for release v0.3.3
 - Disable signed commit
@@ -159,13 +180,6 @@
 - *(android)* Generate static Android version number for F-Droid release
 - Release cfait version 0.3.2
 - Auto-generate changelogs (fastlane and CHANGELOG.md), backfill previous ones
-- Add Cargo.lock
-- *(android)* Rm i686-linux-android
-- *(fdroid)* Work on Reproducible Builds
-- *(fdroid)* Pin rust version for F-Droid build
-- *(fdroid)* Work on reproducible build (locked ndkVersion, RUSTFLAGS)
-- *(fdroid)* Strip dependenciesInfo
-- *(fdroid)* Set Android rust toolchain in rust_toolchain.toml
 ## [0.3.1] - 2025-12-17
 
 ### 🐛 Bug Fixes
