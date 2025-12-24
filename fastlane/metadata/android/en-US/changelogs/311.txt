@@ -1,0 +1,9 @@
+## [0.3.11] - 2025-12-24
+
+### 🚜 Refactor
+
+- *(parser)* Improve smart input engine for robust date, recurrence, and metadata parsing. (Fixes bug where short dates were parsed as start dates.)
+
+### 🧪 Testing
+
+- Improve test coverage

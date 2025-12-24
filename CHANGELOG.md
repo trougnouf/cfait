@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.11] - 2025-12-24
+
+### 🚜 Refactor
+
+- *(parser)* Improve smart input engine for robust date, recurrence, and metadata parsing. (Fixes bug where short dates were parsed as start dates.)
+
+### 🧪 Testing
+
+- Improve test coverage
 ## [0.3.10] - 2025-12-24
 
 ### 🐛 Bug Fixes
@@ -10,6 +19,10 @@
 
 - Fix README syntax error & minor update
 - Add Matrix chatroom to README
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cfait version 0.3.10
 ## [0.3.9] - 2025-12-23
 
 ### 🚀 Features
