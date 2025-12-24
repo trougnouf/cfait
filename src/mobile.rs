@@ -85,8 +85,9 @@ impl From<SyntaxType> for MobileSyntaxType {
 #[derive(uniffi::Record)]
 pub struct MobileSyntaxToken {
     pub kind: MobileSyntaxType,
-    pub start: u32,
-    pub end: u32,
+    // Change u32 -> i32 for compatibility with Kotlin String indices
+    pub start: i32,
+    pub end: i32,
 }
 
 #[derive(uniffi::Record)]
@@ -244,27 +245,21 @@ impl CfaitMobile {
     pub fn parse_smart_string(&self, input: String) -> Vec<MobileSyntaxToken> {
         let tokens = tokenize_smart_input(&input);
 
-        // Rust returns byte indices (UTF-8).
-        // Kotlin/Java expects char indices (UTF-16).
-        // We must map them.
-
         let mut byte_to_utf16 = std::collections::BTreeMap::new();
         let mut byte_pos = 0;
         let mut utf16_pos = 0;
 
-        // Anchor 0
         byte_to_utf16.insert(0, 0);
 
         for c in input.chars() {
             byte_pos += c.len_utf8();
             utf16_pos += c.len_utf16();
-            byte_to_utf16.insert(byte_pos, utf16_pos as u32);
+            byte_to_utf16.insert(byte_pos, utf16_pos as i32); // Cast to i32 here
         }
 
         tokens
             .into_iter()
             .map(|t| {
-                // If strictly mapped, unwrap is safe. Use 0 as fallback just in case.
                 let start_16 = *byte_to_utf16.get(&t.start).unwrap_or(&0);
                 let end_16 = *byte_to_utf16.get(&t.end).unwrap_or(&start_16);
 

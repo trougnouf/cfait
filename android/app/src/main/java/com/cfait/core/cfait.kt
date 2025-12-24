@@ -1611,6 +1611,26 @@ public object FfiConverterUInt : FfiConverter<UInt, Int> {
 /**
  * @suppress
  */
+public object FfiConverterInt : FfiConverter<Int, Int> {
+    override fun lift(value: Int): Int = value
+
+    override fun read(buf: ByteBuffer): Int = buf.getInt()
+
+    override fun lower(value: Int): Int = value
+
+    override fun allocationSize(value: Int) = 4UL
+
+    override fun write(
+        value: Int,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value)
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterBoolean : FfiConverter<Boolean, Byte> {
     override fun lift(value: Byte): Boolean = value.toInt() != 0
 
@@ -2771,8 +2791,8 @@ public object FfiConverterTypeMobileLocation : FfiConverterRustBuffer<MobileLoca
 
 data class MobileSyntaxToken(
     var `kind`: MobileSyntaxType,
-    var `start`: kotlin.UInt,
-    var `end`: kotlin.UInt,
+    var `start`: kotlin.Int,
+    var `end`: kotlin.Int,
 ) {
     companion object
 }
@@ -2784,15 +2804,15 @@ public object FfiConverterTypeMobileSyntaxToken : FfiConverterRustBuffer<MobileS
     override fun read(buf: ByteBuffer): MobileSyntaxToken =
         MobileSyntaxToken(
             FfiConverterTypeMobileSyntaxType.read(buf),
-            FfiConverterUInt.read(buf),
-            FfiConverterUInt.read(buf),
+            FfiConverterInt.read(buf),
+            FfiConverterInt.read(buf),
         )
 
     override fun allocationSize(value: MobileSyntaxToken) =
         (
             FfiConverterTypeMobileSyntaxType.allocationSize(value.`kind`) +
-                FfiConverterUInt.allocationSize(value.`start`) +
-                FfiConverterUInt.allocationSize(value.`end`)
+                FfiConverterInt.allocationSize(value.`start`) +
+                FfiConverterInt.allocationSize(value.`end`)
         )
 
     override fun write(
@@ -2800,8 +2820,8 @@ public object FfiConverterTypeMobileSyntaxToken : FfiConverterRustBuffer<MobileS
         buf: ByteBuffer,
     ) {
         FfiConverterTypeMobileSyntaxType.write(value.`kind`, buf)
-        FfiConverterUInt.write(value.`start`, buf)
-        FfiConverterUInt.write(value.`end`, buf)
+        FfiConverterInt.write(value.`start`, buf)
+        FfiConverterInt.write(value.`end`, buf)
     }
 }
 

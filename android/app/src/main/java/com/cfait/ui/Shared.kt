@@ -172,15 +172,14 @@ class SmartSyntaxTransformation(
             val tokens = api.parseSmartString(raw)
 
             for (token in tokens) {
-                // Ensure indices are within bounds (Rust UTF-16 mapping logic handles emoji,
-                // but safety check prevents crashes during race conditions or weird inputs)
+                // Ensure indices are within bounds
                 if (token.start >= raw.length || token.end > raw.length) continue
 
                 val spanColor: Color? =
                     when (token.kind) {
                         MobileSyntaxType.PRIORITY -> {
                             // Extract number from text for priority color
-                            val sub = raw.substring(token.start.toInt(), token.end.toInt())
+                            val sub = raw.substring(token.start, token.end)
                             val p = sub.trimStart('!').toIntOrNull() ?: 0
                             getTaskTextColor(p, false, isDark)
                         }
@@ -190,7 +189,7 @@ class SmartSyntaxTransformation(
                         MobileSyntaxType.RECURRENCE -> COLOR_RECUR
                         MobileSyntaxType.DURATION -> COLOR_DURATION
                         MobileSyntaxType.TAG -> {
-                            val sub = raw.substring(token.start.toInt(), token.end.toInt())
+                            val sub = raw.substring(token.start, token.end)
                             val tagName = sub.trimStart('#').replace("\"", "")
                             getTagColor(tagName)
                         }
@@ -212,8 +211,8 @@ class SmartSyntaxTransformation(
 
                     builder.addStyle(
                         SpanStyle(color = spanColor, fontWeight = weight),
-                        token.start.toInt(),
-                        token.end.toInt(),
+                        token.start,
+                        token.end,
                     )
                 }
             }
