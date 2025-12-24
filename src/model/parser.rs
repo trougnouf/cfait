@@ -1,3 +1,4 @@
+// File: src/model/parser.rs
 use crate::model::item::Task;
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, Utc};
 use std::collections::{HashMap, HashSet};
@@ -25,7 +26,6 @@ pub struct SyntaxToken {
 }
 
 /// Tokenizes input while preserving quoted strings.
-/// Handles escaping via backslash (e.g. \" inside a string).
 fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
     let mut parts = Vec::new();
     let mut current = String::new();
@@ -36,7 +36,6 @@ fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
     let chars = input.char_indices().peekable();
 
     for (idx, c) in chars {
-        // Mark start of a new token
         if current.is_empty() && !in_quote && !in_brace && !c.is_whitespace() {
             start_idx = idx;
         }
@@ -87,8 +86,6 @@ pub fn strip_quotes(s: &str) -> String {
     s.to_string()
 }
 
-// --- MISSING HELPERS ADDED HERE ---
-
 fn is_date_unit(s: &str) -> bool {
     let lower = s.to_lowercase();
     matches!(
@@ -124,7 +121,41 @@ fn is_date_duration_unit(s: &str) -> bool {
     )
 }
 
-// ----------------------------------
+// Helper for prettifying recurrence strings
+fn prettify_recurrence(rrule: &str) -> String {
+    match rrule {
+        "FREQ=DAILY" => "@daily".to_string(),
+        "FREQ=WEEKLY" => "@weekly".to_string(),
+        "FREQ=MONTHLY" => "@monthly".to_string(),
+        "FREQ=YEARLY" => "@yearly".to_string(),
+        _ => {
+            let mut freq = "";
+            let mut interval = "";
+
+            for part in rrule.split(';') {
+                if let Some(v) = part.strip_prefix("FREQ=") {
+                    freq = v;
+                } else if let Some(v) = part.strip_prefix("INTERVAL=") {
+                    interval = v;
+                }
+            }
+
+            if !freq.is_empty() && !interval.is_empty() {
+                let unit = match freq {
+                    "DAILY" => "days",
+                    "WEEKLY" => "weeks",
+                    "MONTHLY" => "months",
+                    "YEARLY" => "years",
+                    _ => "",
+                };
+                if !unit.is_empty() {
+                    return format!("@every {} {}", interval, unit);
+                }
+            }
+            format!("rec:{}", rrule)
+        }
+    }
+}
 
 pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
     let mut tokens = Vec::new();
@@ -146,56 +177,65 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
         let mut matched_kind = None;
         let mut words_consumed = 1;
 
-        // --- FIX #2: START ---
-        // CHECK MULTI-WORD DATES FIRST
-        let (is_start, clean_word) = if let Some(val) = word
-            .strip_prefix("start:")
-            .or_else(|| word.strip_prefix('^'))
-        {
-            (true, val)
-        } else if let Some(val) = word.strip_prefix("due:").or_else(|| word.strip_prefix('@')) {
-            (false, val)
-        } else {
-            (false, "")
-        };
+        // 1. Recurrence: @every X units (Must be checked BEFORE dates)
+        if (word == "@every" || word == "rec:every") && i + 2 < words.len() {
+            let amount_str = &words[i + 1].2;
+            let unit_str = &words[i + 2].2;
+            if parse_english_number(amount_str).is_some() && !parse_freq_unit(unit_str).is_empty() {
+                matched_kind = Some(SyntaxType::Recurrence);
+                words_consumed = 3;
+            }
+        }
 
-        if !clean_word.is_empty() {
-            if clean_word == "next" && i + 1 < words.len() {
-                if is_date_unit(&words[i + 1].2) {
-                    matched_kind = Some(if is_start {
-                        SyntaxType::StartDate
-                    } else {
-                        SyntaxType::DueDate
-                    });
-                    words_consumed = 2;
-                }
-            } else if clean_word == "in" && i + 2 < words.len() {
-                let amount_str = &words[i + 1].2;
-                let unit_str = &words[i + 2].2;
-                if parse_english_number(amount_str).is_some() && is_date_duration_unit(unit_str) {
-                    matched_kind = Some(if is_start {
-                        SyntaxType::StartDate
-                    } else {
-                        SyntaxType::DueDate
-                    });
-                    words_consumed = 3;
+        // 2. Dates (Multi-word)
+        if matched_kind.is_none() {
+            let (is_start, clean_word) = if let Some(val) = word
+                .strip_prefix("start:")
+                .or_else(|| word.strip_prefix('^'))
+            {
+                (true, val)
+            } else if let Some(val) = word.strip_prefix("due:").or_else(|| word.strip_prefix('@')) {
+                (false, val)
+            } else {
+                (false, "")
+            };
+
+            if !clean_word.is_empty() {
+                if clean_word == "next" && i + 1 < words.len() {
+                    if is_date_unit(&words[i + 1].2) {
+                        matched_kind = Some(if is_start {
+                            SyntaxType::StartDate
+                        } else {
+                            SyntaxType::DueDate
+                        });
+                        words_consumed = 2;
+                    }
+                } else if clean_word == "in" && i + 2 < words.len() {
+                    let amount_str = &words[i + 1].2;
+                    let unit_str = &words[i + 2].2;
+                    if parse_english_number(amount_str).is_some() && is_date_duration_unit(unit_str)
+                    {
+                        matched_kind = Some(if is_start {
+                            SyntaxType::StartDate
+                        } else {
+                            SyntaxType::DueDate
+                        });
+                        words_consumed = 3;
+                    }
                 }
             }
         }
 
-        // NOW CHECK SINGLE-WORD AND OTHER TOKENS
+        // 3. Single tokens
         if matched_kind.is_none() {
-            // New fields
             if word.starts_with("@@") || word.starts_with("loc:") {
                 matched_kind = Some(SyntaxType::Location);
             } else if word.starts_with("url:") || (word.starts_with("[[") && word.ends_with("]]")) {
                 matched_kind = Some(SyntaxType::Url);
             } else if word.starts_with("geo:") {
                 matched_kind = Some(SyntaxType::Geo);
-                // Handle "geo:lat, long" where space splits the token
                 if word.ends_with(',') && i + 1 < words.len() {
                     let next_val = &words[i + 1].2;
-                    // Loose check: looks like a number (starts with digit or minus)
                     if next_val
                         .chars()
                         .next()
@@ -207,9 +247,7 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                 }
             } else if word.starts_with("desc:") {
                 matched_kind = Some(SyntaxType::Description);
-            }
-            // Existing fields
-            else if word.starts_with('!') && word.len() > 1 && word[1..].parse::<u8>().is_ok() {
+            } else if word.starts_with('!') && word.len() > 1 && word[1..].parse::<u8>().is_ok() {
                 matched_kind = Some(SyntaxType::Priority);
             } else if (word.starts_with('~') || word.starts_with("est:"))
                 && parse_duration(&strip_quotes(
@@ -220,13 +258,6 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                 matched_kind = Some(SyntaxType::Duration);
             } else if word.starts_with('#') {
                 matched_kind = Some(SyntaxType::Tag);
-            } else if (word == "@every" || word == "rec:every") && i + 2 < words.len() {
-                let amount_str = &words[i + 1].2;
-                let unit_str = &words[i + 2].2;
-                if amount_str.parse::<u32>().is_ok() && !parse_freq_unit(unit_str).is_empty() {
-                    matched_kind = Some(SyntaxType::Recurrence);
-                    words_consumed = 3;
-                }
             } else if let Some(val) = word.strip_prefix("rec:").or_else(|| word.strip_prefix('@')) {
                 if parse_recurrence(val).is_some() {
                     matched_kind = Some(SyntaxType::Recurrence);
@@ -248,7 +279,6 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                 matched_kind = Some(SyntaxType::StartDate);
             }
         }
-        // --- FIX #2: END ---
 
         if let Some(kind) = matched_kind {
             let final_end = words[i + words_consumed - 1].1;
@@ -279,8 +309,6 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
     tokens
 }
 
-// --- RECURSIVE ALIAS EXPANSION ---
-
 fn collect_alias_expansions(
     token: &str,
     aliases: &HashMap<String, Vec<String>>,
@@ -290,8 +318,6 @@ fn collect_alias_expansions(
 
     if token.starts_with('#') {
         let key = strip_quotes(token.trim_start_matches('#'));
-
-        // Handle hierarchy (e.g., #work:project might match #work alias)
         let mut search = key.as_str();
         let mut found_values = None;
         let mut matched_key = String::new();
@@ -310,14 +336,12 @@ fn collect_alias_expansions(
         }
 
         if let Some(values) = found_values {
-            // Cycle detection
             if visited.contains(&matched_key) {
                 return results;
             }
             visited.insert(matched_key);
 
             for val in values {
-                // Recursively expand child values
                 let child_expansions = collect_alias_expansions(val, aliases, visited);
                 results.extend(child_expansions);
                 results.push(val.clone());
@@ -328,199 +352,6 @@ fn collect_alias_expansions(
 }
 
 impl Task {
-    pub fn apply_smart_input(&mut self, input: &str, aliases: &HashMap<String, Vec<String>>) {
-        let mut summary_words = Vec::new();
-        self.priority = 0;
-        self.due = None;
-        self.dtstart = None;
-        self.rrule = None;
-        self.estimated_duration = None;
-        self.location = None;
-        self.url = None;
-        self.geo = None;
-        self.categories.clear();
-
-        let user_tokens: Vec<String> = split_input_respecting_quotes(input)
-            .into_iter()
-            .map(|(_, _, s)| s)
-            .collect();
-
-        // 1. Expand aliases recursively
-        let mut background_tokens = Vec::new();
-        let mut visited = HashSet::new();
-
-        for token in &user_tokens {
-            let expanded = collect_alias_expansions(token, aliases, &mut visited);
-            background_tokens.extend(expanded);
-        }
-
-        // 2. Create priority stream: Alias expansions (background) first, then User inputs (override)
-        let mut stream = background_tokens;
-        stream.extend(user_tokens);
-
-        let mut i = 0;
-        while i < stream.len() {
-            let token = &stream[i];
-            let mut consumed = 1;
-
-            if token.starts_with("@@") {
-                self.location = Some(strip_quotes(token.trim_start_matches("@@")));
-            } else if token.starts_with("loc:") {
-                self.location = Some(strip_quotes(token.trim_start_matches("loc:")));
-            } else if token.starts_with("url:") {
-                self.url = Some(strip_quotes(token.trim_start_matches("url:")));
-            } else if token.starts_with("[[") && token.ends_with("]]") {
-                self.url = Some(token[2..token.len() - 2].to_string());
-            } else if token.starts_with("geo:") {
-                let mut raw_val = token.trim_start_matches("geo:").to_string();
-
-                // Handle "geo:lat, long" case
-                if token.ends_with(',') && i + 1 < stream.len() {
-                    let next_token = &stream[i + 1];
-                    if next_token
-                        .chars()
-                        .next()
-                        .map(|c| c.is_numeric() || c == '-')
-                        .unwrap_or(false)
-                    {
-                        // Concat the split parts (lat, + long) effectively removing the space
-                        raw_val.push_str(next_token);
-                        consumed = 2;
-                    }
-                }
-
-                let raw_geo = strip_quotes(&raw_val);
-
-                // Validation: must contain a comma and reasonable chars
-                if raw_geo.contains(',')
-                    && raw_geo
-                        .chars()
-                        .all(|c| c.is_numeric() || c == ',' || c == '.' || c == '-' || c == ' ')
-                {
-                    self.geo = Some(raw_geo);
-                } else {
-                    summary_words.push(token.clone());
-                    // If we consumed a second token but validation failed,
-                    // we should arguably push the second token to summary too,
-                    // but simplifying to just treat the 'geo:' part as text here.
-                    if consumed == 2 {
-                        summary_words.push(stream[i + 1].clone());
-                    }
-                }
-            } else if token.starts_with("desc:") {
-                let desc_val = strip_quotes(token.trim_start_matches("desc:"));
-                if self.description.is_empty() {
-                    self.description = desc_val;
-                } else {
-                    self.description.push_str(&format!("\n{}", desc_val));
-                }
-            } else if token.starts_with('#') {
-                let cat = strip_quotes(token.trim_start_matches('#'));
-                if !self.categories.contains(&cat) {
-                    self.categories.push(cat);
-                }
-            } else if token.starts_with('!') && token.len() > 1 {
-                if let Ok(p) = token[1..].parse::<u8>() {
-                    self.priority = p;
-                }
-            } else if token.starts_with('~') || token.starts_with("est:") {
-                let val = strip_quotes(token.trim_start_matches("est:").trim_start_matches('~'));
-                if let Some(d) = parse_duration(&val) {
-                    self.estimated_duration = Some(d);
-                }
-            // --- FIX #1: START ---
-            // MOVE THE MULTI-WORD DATE BLOCK HERE, BEFORE THE SINGLE-WORD ONE
-            } else if (token.starts_with('@')
-                || token.starts_with('^')
-                || token.starts_with("due:")
-                || token.starts_with("start:"))
-                && stream.get(i + 1).is_some()
-            {
-                let (is_start, clean) = if let Some(v) = token
-                    .strip_prefix('^')
-                    .or_else(|| token.strip_prefix("start:"))
-                {
-                    (true, v)
-                } else {
-                    (
-                        false,
-                        token
-                            .strip_prefix('@')
-                            .or_else(|| token.strip_prefix("due:"))
-                            .unwrap_or(""),
-                    )
-                };
-
-                if clean == "next" && is_date_unit(&stream[i + 1]) {
-                    if let Some(dt) = parse_next_date(&stream[i + 1], !is_start) {
-                        if is_start {
-                            self.dtstart = Some(dt)
-                        } else {
-                            self.due = Some(dt)
-                        }
-                        consumed = 2;
-                    }
-                } else if clean == "in" && stream.get(i + 2).is_some() {
-                    if let Some(amount) = parse_english_number(&stream[i + 1])
-                        && let Some(dt) = parse_in_date(amount, &stream[i + 2], !is_start)
-                    {
-                        if is_start {
-                            self.dtstart = Some(dt)
-                        } else {
-                            self.due = Some(dt)
-                        }
-                        consumed = 3;
-                    }
-                } else if let Some(dt) = parse_smart_date(clean, !is_start) {
-                    if is_start {
-                        self.dtstart = Some(dt)
-                    } else {
-                        self.due = Some(dt)
-                    };
-                } else {
-                    summary_words.push(token.clone());
-                }
-            // --- FIX #1: END ---
-            } else if (token == "rec:every" || token == "@every") && i + 2 < stream.len() {
-                if let (Ok(interval), freq) = (
-                    stream[i + 1].parse::<u32>(),
-                    parse_freq_unit(&stream[i + 2]),
-                ) && !freq.is_empty()
-                {
-                    self.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
-                    consumed = 3;
-                }
-            } else if let Some(val) = token
-                .strip_prefix("rec:")
-                .or_else(|| token.strip_prefix('@'))
-            {
-                if let Some(rrule) = parse_recurrence(val) {
-                    self.rrule = Some(rrule);
-                } else if let Some(dt) = parse_smart_date(val, true) {
-                    self.due = Some(dt);
-                } else if let Some(stripped) = token.strip_prefix("due:")
-                    && let Some(dt) = parse_smart_date(stripped, true)
-                {
-                    self.due = Some(dt);
-                }
-            } else if let Some(dt) = parse_smart_date(token.trim_start_matches('^'), false) {
-                self.dtstart = Some(dt);
-            } else if let Some(dt) = token
-                .strip_prefix("start:")
-                .and_then(|v| parse_smart_date(v, false))
-            {
-                self.dtstart = Some(dt);
-            } else {
-                summary_words.push(token.clone());
-            }
-            i += consumed;
-        }
-
-        self.summary = summary_words.join(" ");
-        self.categories.sort();
-        self.categories.dedup();
-    }
-
     pub fn to_smart_string(&self) -> String {
         let mut s = self.summary.clone();
         if self.priority > 0 {
@@ -549,10 +380,10 @@ impl Task {
             s.push_str(&format!(" ~{}m", mins));
         }
         if let Some(r) = &self.rrule {
-            s.push_str(&format!(" rec:{}", r));
+            let pretty = prettify_recurrence(r);
+            s.push_str(&format!(" {}", pretty));
         }
         for cat in &self.categories {
-            // FIX: Don't quote colons, only spaces.
             if cat.contains(' ') {
                 s.push_str(&format!(" #\"{}\"", cat));
             } else {
@@ -560,6 +391,210 @@ impl Task {
             }
         }
         s
+    }
+
+    pub fn apply_smart_input(&mut self, input: &str, aliases: &HashMap<String, Vec<String>>) {
+        let mut summary_words = Vec::new();
+        self.priority = 0;
+        self.due = None;
+        self.dtstart = None;
+        self.rrule = None;
+        self.estimated_duration = None;
+        self.location = None;
+        self.url = None;
+        self.geo = None;
+        self.categories.clear();
+
+        let user_tokens: Vec<String> = split_input_respecting_quotes(input)
+            .into_iter()
+            .map(|(_, _, s)| s)
+            .collect();
+
+        let mut background_tokens = Vec::new();
+        let mut visited = HashSet::new();
+
+        for token in &user_tokens {
+            let expanded = collect_alias_expansions(token, aliases, &mut visited);
+            background_tokens.extend(expanded);
+        }
+
+        let mut stream = background_tokens;
+        stream.extend(user_tokens);
+
+        let mut i = 0;
+        while i < stream.len() {
+            let token = &stream[i];
+            let mut consumed = 1;
+
+            // 1. Recurrence: @every X units (PRIORITY)
+            if (token == "rec:every" || token == "@every") && i + 2 < stream.len() {
+                if let (Some(interval), freq) = (
+                    parse_english_number(&stream[i + 1]),
+                    parse_freq_unit(&stream[i + 2]),
+                ) && !freq.is_empty()
+                {
+                    self.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
+                    consumed = 3;
+                } else {
+                    summary_words.push(token.clone());
+                }
+            }
+            // 2. New Fields
+            else if token.starts_with("@@") {
+                self.location = Some(strip_quotes(token.trim_start_matches("@@")));
+            } else if token.starts_with("loc:") {
+                self.location = Some(strip_quotes(token.trim_start_matches("loc:")));
+            } else if token.starts_with("url:") {
+                self.url = Some(strip_quotes(token.trim_start_matches("url:")));
+            } else if token.starts_with("[[") && token.ends_with("]]") {
+                self.url = Some(token[2..token.len() - 2].to_string());
+            } else if token.starts_with("geo:") {
+                let mut raw_val = token.trim_start_matches("geo:").to_string();
+                if token.ends_with(',') && i + 1 < stream.len() {
+                    let next_token = &stream[i + 1];
+                    if next_token
+                        .chars()
+                        .next()
+                        .map(|c| c.is_numeric() || c == '-')
+                        .unwrap_or(false)
+                    {
+                        raw_val.push_str(next_token);
+                        consumed = 2;
+                    }
+                }
+                let raw_geo = strip_quotes(&raw_val);
+                if raw_geo.contains(',')
+                    && raw_geo
+                        .chars()
+                        .all(|c| c.is_numeric() || c == ',' || c == '.' || c == '-' || c == ' ')
+                {
+                    self.geo = Some(raw_geo);
+                } else {
+                    summary_words.push(token.clone());
+                    if consumed == 2 {
+                        summary_words.push(stream[i + 1].clone());
+                    }
+                }
+            } else if token.starts_with("desc:") {
+                let desc_val = strip_quotes(token.trim_start_matches("desc:"));
+                if self.description.is_empty() {
+                    self.description = desc_val;
+                } else {
+                    self.description.push_str(&format!("\n{}", desc_val));
+                }
+            } else if token.starts_with('#') {
+                let cat = strip_quotes(token.trim_start_matches('#'));
+                if !self.categories.contains(&cat) {
+                    self.categories.push(cat);
+                }
+            } else if token.starts_with('!') && token.len() > 1 && token[1..].parse::<u8>().is_ok()
+            {
+                // FIXED: Strict check ensures search operators (!<2) aren't consumed as valid priority
+                if let Ok(p) = token[1..].parse::<u8>() {
+                    self.priority = p;
+                }
+            } else if (token.starts_with('~') || token.starts_with("est:"))
+                && parse_duration(&strip_quotes(
+                    token.trim_start_matches("est:").trim_start_matches('~'),
+                ))
+                .is_some()
+            {
+                // FIXED: Strict check ensures search operators (~<20m) aren't consumed
+                let val = strip_quotes(token.trim_start_matches("est:").trim_start_matches('~'));
+                self.estimated_duration = parse_duration(&val);
+            }
+            // 3. Dates (Multi-word)
+            else if (token.starts_with('@')
+                || token.starts_with('^')
+                || token.starts_with("due:")
+                || token.starts_with("start:"))
+                && stream.get(i + 1).is_some()
+            {
+                let (is_start, clean) = if let Some(v) = token
+                    .strip_prefix('^')
+                    .or_else(|| token.strip_prefix("start:"))
+                {
+                    (true, v)
+                } else {
+                    (
+                        false,
+                        token
+                            .strip_prefix('@')
+                            .or_else(|| token.strip_prefix("due:"))
+                            .unwrap_or(""),
+                    )
+                };
+
+                let mut matched_date = false;
+                if clean == "next" && is_date_unit(&stream[i + 1]) {
+                    if let Some(dt) = parse_next_date(&stream[i + 1], !is_start) {
+                        if is_start {
+                            self.dtstart = Some(dt)
+                        } else {
+                            self.due = Some(dt)
+                        }
+                        consumed = 2;
+                        matched_date = true;
+                    }
+                } else if clean == "in" && stream.get(i + 2).is_some()
+                    && let Some(amount) = parse_english_number(&stream[i + 1])
+                        && let Some(dt) = parse_in_date(amount, &stream[i + 2], !is_start)
+                    {
+                        if is_start {
+                            self.dtstart = Some(dt)
+                        } else {
+                            self.due = Some(dt)
+                        }
+                        consumed = 3;
+                        matched_date = true;
+                    }
+
+                if !matched_date {
+                    if let Some(dt) = parse_smart_date(clean, !is_start) {
+                        if is_start {
+                            self.dtstart = Some(dt)
+                        } else {
+                            self.due = Some(dt)
+                        };
+                    } else if let Some(rrule) = parse_recurrence(clean) {
+                        self.rrule = Some(rrule);
+                    } else {
+                        summary_words.push(token.clone());
+                    }
+                }
+            }
+            // 4. Recurrence / Dates (Single-word)
+            else if let Some(val) = token
+                .strip_prefix("rec:")
+                .or_else(|| token.strip_prefix('@'))
+            {
+                if let Some(rrule) = parse_recurrence(val) {
+                    self.rrule = Some(rrule);
+                } else if let Some(dt) = parse_smart_date(val, true) {
+                    self.due = Some(dt);
+                } else if let Some(stripped) = token.strip_prefix("due:")
+                    && let Some(dt) = parse_smart_date(stripped, true)
+                {
+                    self.due = Some(dt);
+                } else {
+                    summary_words.push(token.clone());
+                }
+            } else if let Some(dt) = parse_smart_date(token.trim_start_matches('^'), false) {
+                self.dtstart = Some(dt);
+            } else if let Some(dt) = token
+                .strip_prefix("start:")
+                .and_then(|v| parse_smart_date(v, false))
+            {
+                self.dtstart = Some(dt);
+            } else {
+                summary_words.push(token.clone());
+            }
+            i += consumed;
+        }
+
+        self.summary = summary_words.join(" ");
+        self.categories.sort();
+        self.categories.dedup();
     }
 }
 
@@ -607,20 +642,15 @@ pub fn validate_alias_integrity(
         .map(|t| strip_quotes(t.trim_start_matches('#')))
         .collect();
 
-    // Track visited nodes for the current traversal path.
-    // We don't start with new_key in visited, because we want to see if we reach it.
     let mut visited_path = HashSet::new();
 
     while let Some(current_ref) = stack.pop() {
-        // If we loop back to the key being defined, it's a cycle.
         if current_ref == new_key {
             return Err(format!(
                 "Circular dependency: '#{}' leads back to itself.",
                 new_key
             ));
         }
-
-        // Standard DFS visited check to prevent infinite loops on existing valid cycles or diamond paths
         if visited_path.contains(&current_ref) {
             continue;
         }
@@ -659,12 +689,18 @@ fn parse_duration(val: &str) -> Option<u32> {
 }
 
 fn parse_recurrence(val: &str) -> Option<String> {
-    match val {
+    match val.to_lowercase().as_str() {
         "daily" => Some("FREQ=DAILY".to_string()),
         "weekly" => Some("FREQ=WEEKLY".to_string()),
         "monthly" => Some("FREQ=MONTHLY".to_string()),
         "yearly" => Some("FREQ=YEARLY".to_string()),
-        _ => None,
+        _ => {
+            if val.to_uppercase().starts_with("FREQ=") {
+                Some(val.to_string())
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -779,10 +815,4 @@ fn finalize_date(d: NaiveDate, end_of_day: bool) -> Option<DateTime<Utc>> {
         d.and_hms_opt(0, 0, 0)?
     };
     Some(t.and_utc())
-
-    // match Local.from_local_datetime(&t) {
-    //     chrono::LocalResult::Single(dt) => Some(dt.with_timezone(&Utc)),
-    //     chrono::LocalResult::Ambiguous(dt1, _) => Some(dt1.with_timezone(&Utc)),
-    //     chrono::LocalResult::None => Some(t.and_utc()),
-    // }
 }

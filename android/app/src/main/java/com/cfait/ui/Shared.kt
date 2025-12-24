@@ -1,4 +1,3 @@
-
 // File: android/app/src/main/java/com/cfait/ui/Shared.kt
 package com.cfait.ui
 
@@ -195,6 +194,8 @@ class SmartSyntaxTransformation(
 
     private fun isValidRecurrence(s: String): Boolean {
         val lower = s.lowercase()
+        // Fix: Allow raw FREQ=... strings to be highlighted
+        if (lower.startsWith("freq=")) return true
         return lower == "daily" || lower == "weekly" || lower == "monthly" || lower == "yearly"
     }
 

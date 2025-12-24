@@ -1,3 +1,4 @@
+// File: src/model/item.rs
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
@@ -52,11 +53,9 @@ pub struct Task {
     pub depth: usize,
     pub rrule: Option<String>,
 
-    // --- NEW FIELDS ---
     pub location: Option<String>,
     pub url: Option<String>,
-    pub geo: Option<String>, // Stored internally as "lat,long"
-    // ------------------
+    pub geo: Option<String>,
     pub unmapped_properties: Vec<RawProperty>,
 
     #[serde(default)]
@@ -95,8 +94,7 @@ impl Task {
             raw_alarms: Vec::new(),
             raw_components: Vec::new(),
         };
-        // The apply_smart_input implementation now lives exclusively in the parser module.
-        // It's part of the `impl Task` block there.
+        // The apply_smart_input implementation lives in the parser module.
         task.apply_smart_input(input, aliases);
         task
     }
@@ -140,7 +138,6 @@ impl Task {
     }
 
     pub fn compare_with_cutoff(&self, other: &Self, cutoff: Option<DateTime<Utc>>) -> Ordering {
-        // Helper booleans for sorting
         let s1_active = self.status == TaskStatus::InProcess;
         let s2_active = other.status == TaskStatus::InProcess;
         let s1_done = self.status.is_done();
@@ -153,42 +150,28 @@ impl Task {
             match (t.due, cutoff) {
                 (Some(d), Some(limit)) => d <= limit,
                 (Some(_), None) => true,
-                (None, _) => false, // No due date = bottom of list if sorting by date
+                (None, _) => false,
             }
         };
         let s1_in = is_in_window(self);
         let s2_in = is_in_window(other);
 
-        // Priority Normalization (0 becomes 5)
         let p1 = if self.priority == 0 { 5 } else { self.priority };
-        let p2 = if other.priority == 0 {
-            5
-        } else {
-            other.priority
-        };
+        let p2 = if other.priority == 0 { 5 } else { other.priority };
 
-        // 1. ACTIVE (InProcess) always floats to top
         s2_active
             .cmp(&s1_active)
-            // 2. DONE (Completed/Cancelled) always sinks to bottom
             .then(s1_done.cmp(&s2_done))
-            // 3. START DATE (Future tasks pushed down)
             .then(s1_future.cmp(&s2_future))
-            // 4. CUTOFF (In View vs Out of View)
             .then(s2_in.cmp(&s1_in))
-            // 5. PRIORITY (1 is highest/smallest)
             .then(p1.cmp(&p2))
-            // 6. DUE DATE (Earlier is better)
-            // Note: We handle Option comparison manually to ensure HasDate < NoDate
             .then_with(|| match (self.due, other.due) {
                 (Some(d1), Some(d2)) => d1.cmp(&d2),
                 (Some(_), None) => Ordering::Less,
                 (None, Some(_)) => Ordering::Greater,
                 (None, None) => Ordering::Equal,
             })
-            // 7. PAUSED vs FRESH (Paused floats up)
             .then(other.is_paused().cmp(&self.is_paused()))
-            // 8. ALPHABETICAL fallback
             .then(self.summary.cmp(&other.summary))
     }
 
@@ -223,7 +206,6 @@ impl Task {
             Self::append_task_and_children(&root, &mut result, &children_map, 0, &mut visited_uids);
         }
 
-        // Add any remaining tasks that might have been part of a cycle or missed
         if result.len() < tasks.len() {
             for mut task in tasks {
                 if !visited_uids.contains(&task.uid) {
