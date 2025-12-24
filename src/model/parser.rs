@@ -1,4 +1,4 @@
-// File: src/model/parser.rs
+// File: ./src/model/parser.rs
 use crate::model::item::Task;
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, Utc};
 use std::collections::{HashMap, HashSet};
@@ -196,14 +196,10 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
 
         // 3. Single tokens
         if matched_kind.is_none() {
-            // FIX: Check lowercased word for case-insensitive prefixes
             if word.starts_with("@@") || word_lower.starts_with("loc:") {
                 let val = if word.starts_with("@@") {
                     strip_quotes(word.trim_start_matches("@@"))
                 } else {
-                    // Note: trim from original word to preserve casing of value, but check against lower prefix
-                    // This is slightly tricky with strict string slicing if casing mismatches length,
-                    // but "loc:" is ASCII so length is safe.
                     strip_quotes(&word[4..])
                 };
                 if !val.is_empty() {
@@ -242,7 +238,6 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
             } else if word.starts_with('#') {
                 matched_kind = Some(SyntaxType::Tag);
             } else if let Some(val) = word.strip_prefix("rec:").or_else(|| word.strip_prefix('@')) {
-                // Priority: Recurrence -> Date -> Start Date
                 if parse_recurrence(val).is_some() {
                     matched_kind = Some(SyntaxType::Recurrence);
                 } else if parse_weekday_code(val).is_some() {
@@ -256,7 +251,6 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                 } else if parse_smart_date(val, true).is_some() {
                     matched_kind = Some(SyntaxType::DueDate);
                 } else if let Some(_stripped) = word_lower.strip_prefix("due:") {
-                    // FIX: use word_lower for stripping 'due:'
                     if parse_smart_date(&word[4..], true).is_some()
                         || parse_weekday_code(&word[4..]).is_some()
                     {
@@ -264,7 +258,6 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                     }
                 }
             } else if let Some(_stripped) = word_lower.strip_prefix("due:") {
-                // FIX: Top-level check for due: prefix (case-insensitive)
                 if parse_smart_date(&word[4..], true).is_some()
                     || parse_weekday_code(&word[4..]).is_some()
                 {
@@ -318,36 +311,60 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
     tokens
 }
 
+fn unescape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(next) = chars.next() {
+                out.push(next);
+            } else {
+                out.push('\\');
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 pub fn strip_quotes(s: &str) -> String {
     let s = s.trim();
-    if s.len() >= 2
+    let inner = if s.len() >= 2
         && ((s.starts_with('"') && s.ends_with('"')) || (s.starts_with('{') && s.ends_with('}')))
     {
-        return s[1..s.len() - 1].to_string();
+        &s[1..s.len() - 1]
+    } else {
+        s
+    };
+    unescape(inner)
+}
+
+fn quote_value(s: &str) -> String {
+    if s.contains(' ') || s.contains('"') || s.contains('\\') || s.contains('#') || s.is_empty() {
+        let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
+        format!("\"{}\"", escaped)
+    } else {
+        s.to_string()
     }
-    s.to_string()
 }
 
 // --- TASK IMPLEMENTATION ---
 
 impl Task {
     pub fn to_smart_string(&self) -> String {
-        let mut s = self.summary.clone();
+        let mut s = escape_summary(&self.summary);
         if self.priority > 0 {
             s.push_str(&format!(" !{}", self.priority));
         }
         if let Some(loc) = &self.location {
-            if loc.contains(' ') {
-                s.push_str(&format!(" @@\"{}\"", loc));
-            } else {
-                s.push_str(&format!(" @@{}", loc));
-            }
+            s.push_str(&format!(" @@{}", quote_value(loc)));
         }
         if let Some(u) = &self.url {
-            s.push_str(&format!(" url:{}", u));
+            s.push_str(&format!(" url:{}", quote_value(u)));
         }
         if let Some(g) = &self.geo {
-            s.push_str(&format!(" geo:{}", g));
+            s.push_str(&format!(" geo:{}", quote_value(g)));
         }
         if let Some(start) = self.dtstart {
             s.push_str(&format!(" ^{}", start.format("%Y-%m-%d")));
@@ -363,11 +380,7 @@ impl Task {
             s.push_str(&format!(" {}", pretty));
         }
         for cat in &self.categories {
-            if cat.contains(' ') {
-                s.push_str(&format!(" #\"{}\"", cat));
-            } else {
-                s.push_str(&format!(" #{}", cat));
-            }
+            s.push_str(&format!(" #{}", quote_value(cat)));
         }
         s
     }
@@ -407,7 +420,7 @@ impl Task {
             let mut consumed = 1;
             let token_lower = token.to_lowercase();
 
-            // 1. Recurrence: @every (5d / 5 days / two months)
+            // 1. Recurrence
             if (token == "rec:every" || token == "@every") && i + 1 < stream.len() {
                 let next_token_str = stream[i + 1].as_str();
                 let next_next = if i + 2 < stream.len() {
@@ -424,28 +437,27 @@ impl Task {
                         self.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
                         consumed = 1 + 1 + extra_consumed;
                     } else {
-                        summary_words.push(token.clone());
+                        summary_words.push(unescape(token));
                     }
                 } else if let Some(byday) = parse_weekday_code(next_token_str) {
                     self.rrule = Some(format!("FREQ=WEEKLY;BYDAY={}", byday));
                     consumed = 2;
                 } else {
-                    summary_words.push(token.clone());
+                    summary_words.push(unescape(token));
                 }
             }
             // 2. New Fields
             else if token.starts_with("@@") {
                 let val = strip_quotes(token.trim_start_matches("@@"));
                 if val.is_empty() {
-                    summary_words.push(token.clone());
+                    summary_words.push(unescape(token));
                 } else {
                     self.location = Some(val);
                 }
             } else if token_lower.starts_with("loc:") {
-                // FIX: Use slice based on length of "loc:" (4 chars) to preserve casing of value
                 let val = strip_quotes(&token[4..]);
                 if val.is_empty() {
-                    summary_words.push(token.clone());
+                    summary_words.push(unescape(token));
                 } else {
                     self.location = Some(val);
                 }
@@ -454,7 +466,7 @@ impl Task {
             } else if token.starts_with("[[") && token.ends_with("]]") {
                 self.url = Some(token[2..token.len() - 2].to_string());
             } else if token_lower.starts_with("geo:") {
-                let mut raw_val = token[4..].to_string(); // Skip "geo:"
+                let mut raw_val = token[4..].to_string();
                 if token.ends_with(',') && i + 1 < stream.len() {
                     let next_token = &stream[i + 1];
                     if next_token
@@ -475,9 +487,9 @@ impl Task {
                 {
                     self.geo = Some(raw_geo);
                 } else {
-                    summary_words.push(token.clone());
+                    summary_words.push(unescape(token));
                     if consumed == 2 {
-                        summary_words.push(stream[i + 1].clone());
+                        summary_words.push(unescape(&stream[i + 1]));
                     }
                 }
             } else if token_lower.starts_with("desc:") {
@@ -496,7 +508,7 @@ impl Task {
                 if let Ok(p) = token[1..].parse::<u8>() {
                     self.priority = p;
                 } else {
-                    summary_words.push(token.clone());
+                    summary_words.push(unescape(token));
                 }
             } else if token.starts_with('~') || token_lower.starts_with("est:") {
                 let val = strip_quotes(if let Some(stripped) = token.strip_prefix('~') {
@@ -507,7 +519,7 @@ impl Task {
                 if let Some(d) = parse_duration(&val) {
                     self.estimated_duration = Some(d);
                 } else {
-                    summary_words.push(token.clone());
+                    summary_words.push(unescape(token));
                 }
             }
             // 3. Dates (Multi-word)
@@ -521,8 +533,6 @@ impl Task {
                     .strip_prefix('^')
                     .or_else(|| token_lower.strip_prefix("start:"))
                 {
-                    // If start: prefix used, we need to strip 6 chars, if ^ used strip 1.
-                    // This logic was slightly flawed in previous iterations for mixed case start:
                     let clean_v = if let Some(stripped) = token.strip_prefix('^') {
                         stripped
                     } else {
@@ -590,7 +600,7 @@ impl Task {
                             self.due = Some(dt)
                         }
                     } else {
-                        summary_words.push(token.clone());
+                        summary_words.push(unescape(token));
                     }
                 }
             }
@@ -608,35 +618,32 @@ impl Task {
                     if !freq.is_empty() {
                         self.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
                     } else {
-                        summary_words.push(token.clone());
+                        summary_words.push(unescape(token));
                     }
                 } else if let Some(dt) = parse_smart_date(val, true) {
                     self.due = Some(dt);
                 } else if let Some(dt) = parse_weekday_date(val, true) {
                     self.due = Some(dt);
                 } else if let Some(_stripped) = token_lower.strip_prefix("due:") {
-                    // FIX: Handle nested @due: case (unlikely but safe)
-                    // If parsing "due:" stripped from token_lower, we use &token[4..] for value
                     let real_val = &token[4..];
                     if let Some(dt) = parse_smart_date(real_val, true) {
                         self.due = Some(dt);
                     } else if let Some(dt) = parse_weekday_date(real_val, true) {
                         self.due = Some(dt);
                     } else {
-                        summary_words.push(token.clone());
+                        summary_words.push(unescape(token));
                     }
                 } else {
-                    summary_words.push(token.clone());
+                    summary_words.push(unescape(token));
                 }
             } else if token_lower.strip_prefix("due:").is_some() {
-                // FIX: Case insensitive due:
                 let val = &token[4..];
                 if let Some(dt) = parse_smart_date(val, true) {
                     self.due = Some(dt);
                 } else if let Some(dt) = parse_weekday_date(val, true) {
                     self.due = Some(dt);
                 } else {
-                    summary_words.push(token.clone());
+                    summary_words.push(unescape(token));
                 }
             } else if let Some(_val) = token
                 .strip_prefix('^')
@@ -652,7 +659,7 @@ impl Task {
                 } else if let Some(dt) = parse_weekday_date(clean_val, false) {
                     self.dtstart = Some(dt);
                 } else {
-                    summary_words.push(token.clone());
+                    summary_words.push(unescape(token));
                 }
             } else if token_lower == "today" {
                 if let Some(dt) = parse_smart_date("today", true) {
@@ -663,7 +670,7 @@ impl Task {
                     self.due = Some(dt);
                 }
             } else {
-                summary_words.push(token.clone());
+                summary_words.push(unescape(token));
             }
             i += consumed;
         }
@@ -672,6 +679,47 @@ impl Task {
         self.categories.sort();
         self.categories.dedup();
     }
+}
+
+fn escape_summary(summary: &str) -> String {
+    let mut escaped_words = Vec::new();
+    let words = summary.split_whitespace(); // Simple split for escaping text
+
+    for word in words {
+        if is_special_token(word) {
+            escaped_words.push(format!("\\{}", word));
+        } else {
+            escaped_words.push(word.to_string());
+        }
+    }
+    escaped_words.join(" ")
+}
+
+fn is_special_token(word: &str) -> bool {
+    let lower = word.to_lowercase();
+    // 1. Sigils
+    if word.starts_with('@')
+        || word.starts_with('#')
+        || word.starts_with('!')
+        || word.starts_with('^')
+        || word.starts_with('~')
+    {
+        return true;
+    }
+    // 2. Keywords
+    if lower.starts_with("loc:")
+        || lower.starts_with("url:")
+        || lower.starts_with("geo:")
+        || lower.starts_with("desc:")
+        || lower.starts_with("due:")
+        || lower.starts_with("start:")
+        || lower.starts_with("rec:")
+        || lower.starts_with("est:")
+    {
+        return true;
+    }
+    // 3. Strict words
+    matches!(lower.as_str(), "today" | "tomorrow")
 }
 
 fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
@@ -695,7 +743,10 @@ fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
         }
 
         match c {
-            '\\' => escaped = true,
+            '\\' => {
+                escaped = true;
+                current.push('\\');
+            }
             '"' if !in_brace => {
                 in_quote = !in_quote;
                 current.push(c);
