@@ -749,6 +749,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_task(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_locations(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_tags(): Short
@@ -756,6 +758,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_calendars(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_config(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks(): Short
 
@@ -788,6 +792,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_status_cancelled(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_status_process(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_snooze_alarm(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_start_task(): Short
 
@@ -869,6 +875,12 @@ internal object UniffiLib {
         `uid`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_dismiss_alarm(
+        `ptr`: Long,
+        `taskUid`: RustBuffer.ByValue,
+        `alarmUid`: RustBuffer.ByValue,
+    ): Long
+
     external fun uniffi_cfait_fn_method_cfaitmobile_get_all_locations(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_all_tags(`ptr`: Long): Long
@@ -882,6 +894,8 @@ internal object UniffiLib {
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_next_global_alarm_time(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
         `ptr`: Long,
@@ -981,6 +995,13 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_set_status_process(
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_snooze_alarm(
+        `ptr`: Long,
+        `taskUid`: RustBuffer.ByValue,
+        `alarmUid`: RustBuffer.ByValue,
+        `minutes`: Int,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_start_task(
@@ -1249,6 +1270,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_task() != 55596.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm() != 19639.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_all_locations() != 18355.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1259,6 +1283,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_config() != 1475.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time() != 16148.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 2430.toShort()) {
@@ -1307,6 +1334,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_status_process() != 37852.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_snooze_alarm() != 54564.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_start_task() != 30334.toShort()) {
@@ -1633,6 +1663,26 @@ public object FfiConverterInt : FfiConverter<Int, Int> {
 /**
  * @suppress
  */
+public object FfiConverterLong : FfiConverter<Long, Long> {
+    override fun lift(value: Long): Long = value
+
+    override fun read(buf: ByteBuffer): Long = buf.getLong()
+
+    override fun lower(value: Long): Long = value
+
+    override fun allocationSize(value: Long) = 8UL
+
+    override fun write(
+        value: Long,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(value)
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterBoolean : FfiConverter<Boolean, Byte> {
     override fun lift(value: Byte): Boolean = value.toInt() != 0
 
@@ -1832,6 +1882,11 @@ public interface CfaitMobileInterface {
 
     suspend fun `deleteTask`(`uid`: kotlin.String)
 
+    suspend fun `dismissAlarm`(
+        `taskUid`: kotlin.String,
+        `alarmUid`: kotlin.String,
+    )
+
     suspend fun `getAllLocations`(): List<MobileLocation>
 
     suspend fun `getAllTags`(): List<MobileTag>
@@ -1839,6 +1894,12 @@ public interface CfaitMobileInterface {
     fun `getCalendars`(): List<MobileCalendar>
 
     fun `getConfig`(): MobileConfig
+
+    /**
+     * Used by Android WorkManager to schedule the next wakeup
+     * Returns: timestamp (seconds) of the very next alarm across ALL tasks
+     */
+    suspend fun `getNextGlobalAlarmTime`(): kotlin.Long?
 
     suspend fun `getViewTasks`(
         `filterTag`: kotlin.String?,
@@ -1897,6 +1958,12 @@ public interface CfaitMobileInterface {
     suspend fun `setStatusCancelled`(`uid`: kotlin.String)
 
     suspend fun `setStatusProcess`(`uid`: kotlin.String)
+
+    suspend fun `snoozeAlarm`(
+        `taskUid`: kotlin.String,
+        `alarmUid`: kotlin.String,
+        `minutes`: kotlin.UInt,
+    )
 
     suspend fun `startTask`(`uid`: kotlin.String)
 
@@ -2158,6 +2225,28 @@ open class CfaitMobile :
             MobileException.ErrorHandler,
         )
 
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `dismissAlarm`(
+        `taskUid`: kotlin.String,
+        `alarmUid`: kotlin.String,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_dismiss_alarm(
+                uniffiHandle,
+                FfiConverterString.lower(`taskUid`),
+                FfiConverterString.lower(`alarmUid`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        MobileException.ErrorHandler,
+    )
+
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `getAllLocations`(): List<MobileLocation> =
         uniffiRustCallAsync(
@@ -2214,6 +2303,27 @@ open class CfaitMobile :
                     )
                 }
             },
+        )
+
+    /**
+     * Used by Android WorkManager to schedule the next wakeup
+     * Returns: timestamp (seconds) of the very next alarm across ALL tasks
+     */
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `getNextGlobalAlarmTime`(): kotlin.Long? =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_next_global_alarm_time(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterOptionalLong.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
         )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -2496,6 +2606,30 @@ open class CfaitMobile :
             // Error FFI converter
             MobileException.ErrorHandler,
         )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `snoozeAlarm`(
+        `taskUid`: kotlin.String,
+        `alarmUid`: kotlin.String,
+        `minutes`: kotlin.UInt,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_snooze_alarm(
+                uniffiHandle,
+                FfiConverterString.lower(`taskUid`),
+                FfiConverterString.lower(`alarmUid`),
+                FfiConverterUInt.lower(`minutes`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        MobileException.ErrorHandler,
+    )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -2884,7 +3018,10 @@ data class MobileTask(
     var `isDone`: kotlin.Boolean,
     var `priority`: kotlin.UByte,
     var `dueDateIso`: kotlin.String?,
+    var `isAlldayDue`: kotlin.Boolean,
     var `startDateIso`: kotlin.String?,
+    var `isAlldayStart`: kotlin.Boolean,
+    var `hasAlarms`: kotlin.Boolean,
     var `durationMins`: kotlin.UInt?,
     var `calendarHref`: kotlin.String,
     var `categories`: List<kotlin.String>,
@@ -2916,7 +3053,10 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterBoolean.read(buf),
             FfiConverterUByte.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterOptionalUInt.read(buf),
             FfiConverterString.read(buf),
             FfiConverterSequenceString.read(buf),
@@ -2942,7 +3082,10 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterBoolean.allocationSize(value.`isDone`) +
                 FfiConverterUByte.allocationSize(value.`priority`) +
                 FfiConverterOptionalString.allocationSize(value.`dueDateIso`) +
+                FfiConverterBoolean.allocationSize(value.`isAlldayDue`) +
                 FfiConverterOptionalString.allocationSize(value.`startDateIso`) +
+                FfiConverterBoolean.allocationSize(value.`isAlldayStart`) +
+                FfiConverterBoolean.allocationSize(value.`hasAlarms`) +
                 FfiConverterOptionalUInt.allocationSize(value.`durationMins`) +
                 FfiConverterString.allocationSize(value.`calendarHref`) +
                 FfiConverterSequenceString.allocationSize(value.`categories`) +
@@ -2970,7 +3113,10 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterBoolean.write(value.`isDone`, buf)
         FfiConverterUByte.write(value.`priority`, buf)
         FfiConverterOptionalString.write(value.`dueDateIso`, buf)
+        FfiConverterBoolean.write(value.`isAlldayDue`, buf)
         FfiConverterOptionalString.write(value.`startDateIso`, buf)
+        FfiConverterBoolean.write(value.`isAlldayStart`, buf)
+        FfiConverterBoolean.write(value.`hasAlarms`, buf)
         FfiConverterOptionalUInt.write(value.`durationMins`, buf)
         FfiConverterString.write(value.`calendarHref`, buf)
         FfiConverterSequenceString.write(value.`categories`, buf)
@@ -3092,6 +3238,38 @@ public object FfiConverterOptionalUInt : FfiConverterRustBuffer<kotlin.UInt?> {
         } else {
             buf.put(1)
             FfiConverterUInt.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalLong : FfiConverterRustBuffer<kotlin.Long?> {
+    override fun read(buf: ByteBuffer): kotlin.Long? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterLong.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.Long?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterLong.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: kotlin.Long?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterLong.write(value, buf)
         }
     }
 }

@@ -1,4 +1,4 @@
-// File: src/gui/view/task_row.rs
+// File: ./src/gui/view/task_row.rs
 use crate::color_utils;
 use crate::gui::icon;
 use crate::gui::message::Message;
@@ -526,6 +526,20 @@ pub fn view_task_row<'a>(
 
         let build_tags = || -> Element<'a, Message> {
             let mut tags_row: iced::widget::Row<'_, Message> = row![].spacing(3);
+
+            // Check if any alarm is active (not acknowledged/snoozed logic handled in backend,
+            // but we can check list emptiness or property)
+            let has_active_alarm = task
+                .alarms
+                .iter()
+                .any(|a| a.acknowledged.is_none() && !a.is_snooze());
+
+            if has_active_alarm {
+                let bell_icon = icon::icon(icon::BELL)
+                    .size(12)
+                    .color(Color::from_rgb(1.0, 0.4, 0.0)); // Orange
+                tags_row = tags_row.push(container(bell_icon).padding(1));
+            }
 
             if is_blocked {
                 tags_row = tags_row.push(

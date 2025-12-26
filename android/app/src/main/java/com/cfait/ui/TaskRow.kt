@@ -1,5 +1,4 @@
-
-// File: android/app/src/main/java/com/cfait/ui/TaskRow.kt
+// File: ./android/app/src/main/java/com/cfait/ui/TaskRow.kt
 package com.cfait.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -72,6 +71,10 @@ fun TaskRow(
                 ) {
                     if (task.description.isNotEmpty()) {
                         NfIcon(NfIcons.INFO, 10.sp, Color.Gray)
+                    }
+
+                    if (task.hasAlarms) {
+                        NfIcon(NfIcons.BELL, 10.sp, Color(0xFFFF7043))
                     }
 
                     if (task.isBlocked) NfIcon(NfIcons.BLOCKED, 10.sp, MaterialTheme.colorScheme.error)

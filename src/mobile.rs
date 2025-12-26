@@ -62,6 +62,7 @@ pub enum MobileSyntaxType {
     Url,
     Geo,
     Description,
+    Reminder,
 }
 
 impl From<SyntaxType> for MobileSyntaxType {
@@ -78,6 +79,7 @@ impl From<SyntaxType> for MobileSyntaxType {
             SyntaxType::Url => MobileSyntaxType::Url,
             SyntaxType::Geo => MobileSyntaxType::Geo,
             SyntaxType::Description => MobileSyntaxType::Description,
+            SyntaxType::Reminder => MobileSyntaxType::Reminder,
             // Map new syntax types if added, e.g., Reminder
             _ => MobileSyntaxType::Text,
         }
@@ -811,9 +813,10 @@ impl CfaitMobile {
     ) -> Result<(), MobileError> {
         self.apply_store_mutation(task_uid, |store, id| {
             if let Some((task, _)) = store.get_task_mut(id)
-                && task.snooze_alarm(&alarm_uid, minutes) {
-                    return Some(task.clone());
-                }
+                && task.snooze_alarm(&alarm_uid, minutes)
+            {
+                return Some(task.clone());
+            }
             None
         })
         .await
@@ -826,9 +829,10 @@ impl CfaitMobile {
     ) -> Result<(), MobileError> {
         self.apply_store_mutation(task_uid, |store, id| {
             if let Some((task, _)) = store.get_task_mut(id)
-                && task.dismiss_alarm(&alarm_uid) {
-                    return Some(task.clone());
-                }
+                && task.dismiss_alarm(&alarm_uid)
+            {
+                return Some(task.clone());
+            }
             None
         })
         .await

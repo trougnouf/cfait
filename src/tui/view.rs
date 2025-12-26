@@ -355,6 +355,21 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             if !recur_str.is_empty() {
                 spans.push(Span::styled(recur_str, Style::default().fg(Color::Magenta)));
             }
+
+            // Check for active alarms
+            if t.alarms
+                .iter()
+                .any(|a| a.acknowledged.is_none() && !a.is_snooze())
+            {
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled(
+                    "(!)", // or use "\u{f0f3}" if using a nerd font patched terminal
+                    Style::default()
+                        .fg(Color::LightRed)
+                        .add_modifier(Modifier::BOLD),
+                ));
+            }
+
             if !due_str.is_empty() {
                 spans.push(Span::styled(due_str, Style::default().fg(Color::Blue)));
             }
@@ -521,6 +536,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         SyntaxType::Url => Style::default().fg(Color::Blue),
                         SyntaxType::Geo => Style::default().fg(Color::DarkGray),
                         SyntaxType::Description => Style::default().fg(Color::Gray),
+                        SyntaxType::Reminder => Style::default().fg(Color::LightRed),
                         _ => Style::default(),
                     };
                     input_spans.push(Span::styled(text, style));

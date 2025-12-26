@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/ui/Shared.kt
+// File: ./android/app/src/main/java/com/cfait/ui/Shared.kt
 package com.cfait.ui
 
 import androidx.compose.material3.MaterialTheme
@@ -86,6 +86,7 @@ object NfIcons {
     val MOUNTAINS = get(0xe2a6)
     val GLOBE = get(0xf0ac)
     val GLOBEMODEL = get(0xf08e9)
+    val BELL = get(0xf0f3)
 }
 
 @Composable
@@ -160,6 +161,7 @@ class SmartSyntaxTransformation(
     private val COLOR_LOCATION = Color(0xFFFFB300)
     private val COLOR_URL = Color(0xFF4FC3F7)
     private val COLOR_META = Color(0xFF757575)
+    private val COLOR_REMINDER = Color(0xFFFF7043)
 
     override fun filter(text: AnnotatedString): TransformedText {
         val raw = text.text
@@ -198,6 +200,7 @@ class SmartSyntaxTransformation(
                         MobileSyntaxType.URL -> COLOR_URL
                         MobileSyntaxType.GEO -> COLOR_META
                         MobileSyntaxType.DESCRIPTION -> COLOR_META
+                        MobileSyntaxType.REMINDER -> COLOR_REMINDER
                         else -> null
                     }
 

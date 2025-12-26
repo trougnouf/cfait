@@ -1,4 +1,4 @@
-// File: src/gui/icon.rs
+// File: ./src/gui/icon.rs
 use iced::Font;
 use iced::widget::{Text, text};
 
@@ -89,6 +89,9 @@ pub const COMPASS: char = '\u{ebd5}'; // nf-cod-compass
 pub const MOUNTAINS: char = '\u{e2a6}'; // nf-fae-mountains
 pub const GLOBE: char = '\u{f0ac}'; // nf-fa-globe
 pub const GLOBEMODEL: char = '\u{f08e9}'; // nf-md-globe_model
+
+// NEW
+pub const BELL: char = '\u{f0f3}'; // nf-fa-bell
 
 // NEW HEADER ICONS per request
 pub const CALENDARS_HEADER: char = '\u{f00f2}'; // nf-md-calendar_multiple_check

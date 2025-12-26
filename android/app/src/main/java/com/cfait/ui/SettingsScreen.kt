@@ -215,7 +215,7 @@ fun SettingsScreen(
                     )
                 }
                 Text(
-                    "Tasks due within this range are shown first.",
+                    "Tasks due within this range are shown before undated tasks.",
                     fontSize = 12.sp,
                     color = androidx.compose.ui.graphics.Color.Gray
                 )
@@ -257,7 +257,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = newAliasKey,
                         onValueChange = { newAliasKey = it },
-                        label = { Text("Key (e.g. #tag_a)") },
+                        label = { Text("Key (eg #tag_a)") },
                         modifier = Modifier.weight(1f),
                         placeholder = { Text("#tag_a") },
                     )
