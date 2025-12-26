@@ -741,9 +741,23 @@ impl Task {
         if let Some(d) = &self.due {
             s.push_str(&format!(" @{}", d.format_smart()));
         }
+
         if let Some(mins) = self.estimated_duration {
-            s.push_str(&format!(" ~{}m", mins));
+            if mins > 0 && mins % 525600 == 0 {
+                s.push_str(&format!(" ~{}y", mins / 525600));
+            } else if mins > 0 && mins % 43200 == 0 {
+                s.push_str(&format!(" ~{}mo", mins / 43200));
+            } else if mins > 0 && mins % 10080 == 0 {
+                s.push_str(&format!(" ~{}w", mins / 10080));
+            } else if mins > 0 && mins % 1440 == 0 {
+                s.push_str(&format!(" ~{}d", mins / 1440));
+            } else if mins > 0 && mins % 60 == 0 {
+                s.push_str(&format!(" ~{}h", mins / 60));
+            } else {
+                s.push_str(&format!(" ~{}m", mins));
+            }
         }
+
         if let Some(r) = &self.rrule {
             let pretty = prettify_recurrence(r);
             s.push_str(&format!(" {}", pretty));
