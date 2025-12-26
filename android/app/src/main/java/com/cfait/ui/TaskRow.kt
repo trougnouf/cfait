@@ -73,15 +73,21 @@ fun TaskRow(
                         NfIcon(NfIcons.INFO, 10.sp, Color.Gray)
                     }
 
+                    if (task.isBlocked) NfIcon(NfIcons.BLOCKED, 10.sp, MaterialTheme.colorScheme.error)
+
+                    // --- START MODIFICATION ---
+                    // Group Alarm and Due Date together
                     if (task.hasAlarms) {
                         NfIcon(NfIcons.BELL, 10.sp, Color(0xFFFF7043))
                     }
-
-                    if (task.isBlocked) NfIcon(NfIcons.BLOCKED, 10.sp, MaterialTheme.colorScheme.error)
                     if (!task.dueDateIso.isNullOrEmpty()) {
-                        NfIcon(NfIcons.CALENDAR, 10.sp, Color.Gray)
+                        if (!task.hasAlarms) { // Add calendar icon only if bell is not present to save space
+                            NfIcon(NfIcons.CALENDAR, 10.sp, Color.Gray)
+                        }
                         Text(task.dueDateIso!!.take(10), fontSize = 10.sp, color = Color.Gray)
                     }
+                    // --- END MODIFICATION ---
+
                     if (task.durationMins != null) {
                         Text(formatDuration(task.durationMins!!), fontSize = 10.sp, color = Color.Gray)
                     }
@@ -117,7 +123,12 @@ fun TaskRow(
                     }
 
                     task.categories.forEach { tag ->
-                        Text("#$tag", fontSize = 10.sp, color = getTagColor(tag), modifier = Modifier.padding(end = 2.dp))
+                        Text(
+                            "#$tag",
+                            fontSize = 10.sp,
+                            color = getTagColor(tag),
+                            modifier = Modifier.padding(end = 2.dp)
+                        )
                     }
                 }
             }
@@ -132,7 +143,12 @@ fun TaskRow(
             }
 
             Box {
-                IconButton(onClick = { expanded = true }, modifier = Modifier.size(24.dp)) { NfIcon(NfIcons.DOTS_CIRCLE, 16.sp) }
+                IconButton(onClick = { expanded = true }, modifier = Modifier.size(24.dp)) {
+                    NfIcon(
+                        NfIcons.DOTS_CIRCLE,
+                        16.sp
+                    )
+                }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     DropdownMenuItem(text = { Text("Edit") }, onClick = {
                         expanded = false
@@ -154,7 +170,12 @@ fun TaskRow(
                             expanded = false
                             onAction("playpause")
                         },
-                        leadingIcon = { NfIcon(if (task.statusString == "InProcess") NfIcons.PAUSE else NfIcons.PLAY, 16.sp) },
+                        leadingIcon = {
+                            NfIcon(
+                                if (task.statusString == "InProcess") NfIcons.PAUSE else NfIcons.PLAY,
+                                16.sp
+                            )
+                        },
                     )
                     if (task.statusString == "InProcess" || task.isPaused) {
                         DropdownMenuItem(text = { Text("Stop (Reset)") }, onClick = {

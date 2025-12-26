@@ -1,4 +1,4 @@
-// File: ./src/tui/view.rs
+// File: src/tui/view.rs
 use crate::color_utils;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::store::UNCATEGORIZED_ID;
@@ -312,7 +312,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             } else {
                 Style::default()
             };
-            let bracket_style = Style::default(); // Simplify for brevity
+            let bracket_style = Style::default();
 
             let full_symbol = t.checkbox_symbol();
             let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
@@ -342,10 +342,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 prefix_inner,
                 prefix_bracket_r,
                 prefix_blocked,
-                Span::styled(&t.summary, base_style),
+                Span::styled(t.summary.clone(), base_style),
             ];
 
-            // 1. Metadata: Duration, Recurrence, Due Date
+            // 1. Metadata: Duration, Recurrence
             if !dur_str.is_empty() {
                 spans.push(Span::styled(
                     format!(" {}", dur_str),
@@ -353,24 +353,35 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 ));
             }
             if !recur_str.is_empty() {
-                spans.push(Span::styled(recur_str, Style::default().fg(Color::Magenta)));
+                spans.push(Span::styled(
+                    recur_str.to_string(),
+                    Style::default().fg(Color::Magenta),
+                ));
             }
 
-            // Check for active alarms
+            // Alarm Indicator
             if t.alarms
                 .iter()
                 .any(|a| a.acknowledged.is_none() && !a.is_snooze())
             {
                 spans.push(Span::raw(" "));
                 spans.push(Span::styled(
-                    "(!)", // or use "\u{f0f3}" if using a nerd font patched terminal
+                    "🔔",
                     Style::default()
                         .fg(Color::LightRed)
                         .add_modifier(Modifier::BOLD),
                 ));
             }
 
+            // Due Date
             if !due_str.is_empty() {
+                if !spans
+                    .last()
+                    .map(|s| s.content.ends_with(' '))
+                    .unwrap_or(true)
+                {
+                    spans.push(Span::raw(" "));
+                }
                 spans.push(Span::styled(due_str, Style::default().fg(Color::Blue)));
             }
 
@@ -390,15 +401,17 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 )); // Web Check
             }
 
-            // 3. Location (Right side, @@ syntax)
+            // 3. Location
             if let Some(loc) = &t.location {
                 spans.push(Span::raw(" "));
-                spans.push(Span::styled("@@", Style::default().fg(Color::Yellow))); // Yellow/Amber for location
-                spans.push(Span::styled(loc, Style::default().fg(Color::Yellow)));
+                spans.push(Span::styled("@@", Style::default().fg(Color::Yellow)));
+                spans.push(Span::styled(
+                    loc.clone(),
+                    Style::default().fg(Color::Yellow),
+                ));
             }
 
-            // 4. Tags (Right side)
-            // ... [Tag hiding/alias logic] ...
+            // 4. Tags
             for cat in &t.categories {
                 let (r, g, b) = color_utils::generate_color(cat);
                 spans.push(Span::raw(" "));
@@ -607,6 +620,64 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .highlight_style(Style::default().bg(Color::Blue));
         f.render_widget(Clear, area);
         f.render_stateful_widget(popup, area, &mut state.move_selection_state);
+    }
+
+    // --- ALARM POPUP ---
+    if let Some((task, _alarm_uid)) = &state.active_alarm {
+        let area = centered_rect(60, 40, f.area());
+
+        let block = Block::default()
+            .title(" 🔔 REMINDER ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::LightRed))
+            .style(Style::default().bg(Color::DarkGray));
+
+        let mut lines = vec![
+            Line::from(""),
+            Line::from(vec![
+                Span::raw("Task: "),
+                Span::styled(
+                    task.summary.clone(),
+                    Style::default()
+                        .add_modifier(Modifier::BOLD)
+                        .fg(Color::White),
+                ),
+            ]),
+            Line::from(""),
+        ];
+
+        if !task.description.is_empty() {
+            lines.push(Line::from(Span::styled(
+                task.description.clone(),
+                Style::default().fg(Color::Gray),
+            )));
+            lines.push(Line::from(""));
+        }
+
+        lines.push(Line::from(vec![
+            Span::styled(
+                " [D] ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("Dismiss    "),
+            Span::styled(
+                " [S] ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("Snooze (10m)"),
+        ]));
+
+        let p = Paragraph::new(lines)
+            .block(block)
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true });
+
+        f.render_widget(Clear, area);
+        f.render_widget(p, area);
     }
 }
 

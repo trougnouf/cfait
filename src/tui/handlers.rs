@@ -50,6 +50,45 @@ pub async fn handle_key_event(
     state: &mut AppState,
     action_tx: &Sender<Action>,
 ) -> Option<Action> {
+    // --- ALARM INTERCEPTION ---
+    if let Some((task, alarm_uid)) = state.active_alarm.clone() {
+        match key.code {
+            KeyCode::Char('D') | KeyCode::Char('d') => {
+                if let Some((t, _)) = state.store.get_task_mut(&task.uid)
+                    && t.dismiss_alarm(&alarm_uid) {
+                        let t_clone = t.clone();
+                        // Update UI
+                        state.active_alarm = None;
+                        state.refresh_filtered_view();
+                        // Push update to backend
+                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                        // Push update to alarm actor
+                        if let Some(tx) = &state.alarm_actor_tx {
+                            let all = state.store.calendars.values().flatten().cloned().collect();
+                            let _ = tx.try_send(all);
+                        }
+                    }
+                return None;
+            }
+            KeyCode::Char('S') | KeyCode::Char('s') => {
+                if let Some((t, _)) = state.store.get_task_mut(&task.uid)
+                    && t.snooze_alarm(&alarm_uid, 10) {
+                        let t_clone = t.clone();
+                        state.active_alarm = None;
+                        state.refresh_filtered_view();
+                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                        if let Some(tx) = &state.alarm_actor_tx {
+                            let all = state.store.calendars.values().flatten().cloned().collect();
+                            let _ = tx.try_send(all);
+                        }
+                    }
+                return None;
+            }
+            _ => return None, // Block other input while alarm is ringing
+        }
+    }
+    // --------------------------
+
     match state.mode {
         InputMode::Creating => match key.code {
             KeyCode::Enter if !state.input_buffer.is_empty() => {

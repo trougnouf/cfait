@@ -10,10 +10,14 @@ pub mod view;
 use crate::config::{AppTheme, Config};
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
+use crate::system::spawn_alarm_actor;
+use iced::futures::SinkExt;
+use iced::futures::channel::mpsc::Sender;
+use iced::stream;
 use iced::{Element, Subscription, Task, Theme, font, window};
+use std::sync::Arc;
 
 pub fn run() -> iced::Result {
-    // Initialize the Tokio runtime managed in async_ops
     async_ops::init_runtime();
 
     iced::application(GuiApp::new, GuiApp::update, GuiApp::view)
@@ -21,11 +25,10 @@ pub fn run() -> iced::Result {
         .subscription(GuiApp::subscription)
         .theme(GuiApp::theme)
         .window(window::Settings {
-            decorations: false, // <--- Disable OS Top Bar
+            decorations: false,
             platform_specific: window::settings::PlatformSpecific {
                 #[cfg(target_os = "linux")]
                 application_id: String::from("cfait"),
-
                 ..Default::default()
             },
             ..Default::default()
@@ -33,17 +36,32 @@ pub fn run() -> iced::Result {
         .run()
 }
 
+// Helper function to satisfy Subscription::run fn pointer requirement
+fn alarm_stream() -> impl iced::futures::Stream<Item = Message> {
+    stream::channel(100, |mut output: Sender<Message>| async move {
+        let (gui_tx, mut gui_rx) = tokio::sync::mpsc::channel(10);
+        let actor_tx = spawn_alarm_actor(Some(gui_tx));
+        let _ = output.send(Message::InitAlarmActor(actor_tx)).await;
+
+        while let Some(msg) = gui_rx.recv().await {
+            let _ = output
+                .send(Message::AlarmSignalReceived(Arc::new(msg)))
+                .await;
+        }
+
+        std::future::pending::<()>().await;
+    })
+}
+
 impl GuiApp {
     fn new() -> (Self, Task<Message>) {
         (
             Self::default(),
             Task::batch(vec![
-                // Load config
                 Task::perform(
                     async { Config::load().map_err(|e| e.to_string()) },
                     Message::ConfigLoaded,
                 ),
-                // Load Font Bytes
                 font::load(icon::FONT_BYTES).map(|_| Message::FontLoaded(Ok(()))),
             ]),
         )
@@ -65,11 +83,8 @@ impl GuiApp {
                 Theme::custom(
                     "Rusty Dark",
                     iced::theme::Palette {
-                        // Custom Background (211e1e)
                         background: iced::Color::from_rgb8(0x21, 0x1e, 0x1e),
-                        // Custom Primary (Amber/Orange - matches sidebar highlight)
                         primary: iced::Color::from_rgb(1.0, 0.6, 0.0),
-                        // Keep the rest of the dark theme defaults
                         ..dark_palette
                     },
                 )
@@ -78,7 +93,9 @@ impl GuiApp {
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        subscription::subscription(self)
+        let subs = subscription::subscription(self);
+        let alarm_sub = Subscription::run(alarm_stream);
+        Subscription::batch(vec![subs, alarm_sub])
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {

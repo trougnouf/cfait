@@ -1,0 +1,85 @@
+# .github/ISSUE_TEMPLATE/bug.yml
+
+name: Bug Report
+about: Create a report to help improve Cfait.
+title: "Bug: "
+labels: [bug]
+body:
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what the bug is.
+      placeholder: "When I do X, Y happens unexpectedly."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: To Reproduce
+      description: Please provide the exact steps to reproduce the behavior.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '....'
+        3. Scroll down to '....'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: A clear and concise description of what you expected to happen.
+      placeholder: "The application should have done Z instead."
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: "### Environment"
+
+  - type: input
+    id: cfait-version
+    attributes:
+      label: Cfait Version
+      placeholder: "e.g., 0.3.14"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: Client
+      description: Which client were you using when the bug occurred?
+      options:
+        - GUI
+        - TUI
+        - Android
+      default: 0
+    validations:
+      required: true
+
+  - type: input
+    id: server
+    attributes:
+      label: Server
+      description: "If applicable, what server software and version are you using?"
+      placeholder: "e.g., Radicale 3.5.9, Nextcloud 32.0.3"
+    validations:
+      required: false
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating System
+      placeholder: "e.g., Arch Linux, Debian Linux 13, Android 16, Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context (optional)
+      description: Add any other context about the problem here. You can drag-and-drop screenshots, log files, or other relevant information.

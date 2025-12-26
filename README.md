@@ -10,6 +10,7 @@
   <a href="https://f-droid.org/packages/com.cfait/"><img src="https://img.shields.io/f-droid/v/com.cfait.svg" alt="F-Droid"></a>
   <a href="https://codeberg.org/trougnouf/cfait/actions"><img src="https://codeberg.org/trougnouf/cfait/badges/workflows/test.yml/badge.svg" alt="Test status"></a>
   <a href="https://codeberg.org/trougnouf/cfait/src/branch/main/LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-gray.svg" alt="License"></a>
+  <a href="https://liberapay.com/trougnouf/donate"><img src="https://img.shields.io/liberapay/patrons/trougnouf?label=donate" alt="Donate through Liberapay" /></a>
 </p>
 
 ---

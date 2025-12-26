@@ -18,16 +18,13 @@ use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-// FIX: Added mem for take()
 use std::mem;
+use std::sync::Arc;
 use tower_layer::Layer;
 use uuid::Uuid;
 
 #[cfg(not(target_os = "android"))]
 use rustls_native_certs;
-
-// FIX: No platform verifier import needed
 
 pub const GET_CTAG: PropertyName = PropertyName::new("http://calendarserver.org/ns/", "getctag");
 pub const APPLE_COLOR: PropertyName =
@@ -101,8 +98,6 @@ impl RustyClient {
 
             #[cfg(target_os = "android")]
             {
-                // FIX: Use bundled Mozilla roots via webpki-roots.
-                // This does not require JNI initialization or Context passing.
                 let mut root_store = rustls::RootCertStore::empty();
                 root_store.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
                 tls_config_builder
@@ -267,27 +262,21 @@ impl RustyClient {
         }
     }
 
-    /// Fetches a single task from the server by its HREF.
-    /// This is significantly faster than fetching the whole calendar for conflict resolution.
     async fn fetch_remote_task(&self, task_href: &str) -> Option<Task> {
         if let Some(client) = &self.client {
             let path_href = strip_host(task_href);
-            // We need the parent collection path for context, assume standard structure
             let parent_path = if let Some(idx) = path_href.rfind('/') {
                 &path_href[..=idx]
             } else {
                 "/"
             };
 
-            // Use Multiget to fetch just this one resource
             let req = GetCalendarResources::new(parent_path).with_hrefs(vec![path_href.clone()]);
 
             if let Ok(resp) = client.request(req).await
                 && let Some(item) = resp.resources.into_iter().next()
                 && let Ok(content) = item.content
             {
-                // We don't have the exact calendar_href here easily, but we can guess it's the parent.
-                // For conflict resolution, the UID/Summary/etc are what matter.
                 return Task::from_ics(
                     &content.data,
                     content.etag,
@@ -318,7 +307,6 @@ impl RustyClient {
         if let Some(client) = &self.client {
             let path_href = strip_host(calendar_href);
 
-            // Optimization: Filter out pending deletes to avoid unnecessary fetches/404s
             let pending_deletions = if apply_journal {
                 let journal = Journal::load();
                 let mut dels = HashSet::new();
@@ -387,7 +375,6 @@ impl RustyClient {
 
                 let res_href_stripped = strip_host(&resource.href);
 
-                // Optimization check using cache lookup
                 let should_skip = if let Some(cached) = cache_map.get(&res_href_stripped) {
                     pending_deletions.contains(&cached.uid)
                 } else {
@@ -417,10 +404,8 @@ impl RustyClient {
                 }
             }
 
-            // Tasks in cache but not on server (deleted on server)
             for (_href, task) in cache_map {
                 let is_unsynced = task.etag.is_empty() || task.href.is_empty();
-                // If it's unsynced (ghost), keep it. `apply_to_tasks` will prune it if invalid.
                 if is_unsynced {
                     final_tasks.push(task);
                 }
@@ -550,12 +535,10 @@ impl RustyClient {
         &self,
         task: &mut Task,
     ) -> Result<(Task, Option<Task>, Vec<String>), String> {
-        // --- START MERGE ---
         if task.status == TaskStatus::Completed && task.rrule.is_some() && task.advance_recurrence()
         {
             // Task Recycled
         }
-        // --- END MERGE ---
 
         if task.calendar_href == LOCAL_CALENDAR_HREF {
             let mut all = LocalStorage::load().map_err(|e| e.to_string())?;
@@ -627,7 +610,6 @@ impl RustyClient {
     }
 
     pub async fn sync_journal(&self) -> Result<Vec<String>, String> {
-        // --- FIX: Compact journal to merge redundant updates before syncing ---
         let _ = Journal::modify(|queue| {
             let mut tmp_j = Journal {
                 queue: mem::take(queue),
@@ -635,7 +617,6 @@ impl RustyClient {
             tmp_j.compact();
             *queue = tmp_j.queue;
         });
-        // ----------------------------------------------------------------------
 
         let client = self.client.as_ref().ok_or("Offline")?;
         let mut warnings = Vec::new();
@@ -678,10 +659,6 @@ impl RustyClient {
                         }
                         Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
                         | Err(WebDavError::PreconditionFailed(_)) => {
-                            // The resource already exists on the server.
-                            // This usually happens if a previous sync attempt succeeded
-                            // but the client timed out before receiving confirmation.
-                            // We treat this as success to unblock the journal queue.
                             warnings.push(format!(
                                 "Creation conflict: Task '{}' already exists on server. Mark as synced.",
                                 task.summary
@@ -779,30 +756,52 @@ impl RustyClient {
                         Err(e) => Err(format!("{:?}", e)),
                     }
                 }
-                Action::Move(task, new_cal) => match self.execute_move(task, new_cal).await {
-                    Ok(_) => {
-                        let filename = format!("{}.ics", task.uid);
-                        let new_href = if new_cal.ends_with('/') {
-                            format!("{}{}", new_cal, filename)
-                        } else {
-                            format!("{}/{}", new_cal, filename)
-                        };
-                        new_href_to_propagate = Some((task.href.clone(), new_href.clone()));
-                        path_for_refresh = Some(strip_host(&new_href));
+                Action::Move(task, new_cal) => {
+                    if &task.calendar_href == new_cal {
+                        warnings.push(format!("Skipping no-op move for task '{}'.", task.summary));
+                        path_for_refresh = None;
+                        new_href_to_propagate = None;
+                        new_etag_to_propagate = None;
                         Ok(())
-                    }
-                    Err(e) => {
-                        if e.contains("404") || e.contains("NotFound") || e.contains("403") {
-                            warnings.push(format!(
-                                "Move source missing for '{}', assuming success.",
-                                task.summary
-                            ));
-                            Ok(())
-                        } else {
-                            Err(e)
+                    } else {
+                        let mut move_res = self.execute_move(task, new_cal, false).await;
+
+                        if let Err(ref e) = move_res
+                            && (e.contains("412") || e.contains("PreconditionFailed")) {
+                                warnings.push(format!(
+                                    "Move collision for '{}'. Forcing overwrite.",
+                                    task.summary
+                                ));
+                                move_res = self.execute_move(task, new_cal, true).await;
+                            }
+
+                        match move_res {
+                            Ok(_) => {
+                                let filename = format!("{}.ics", task.uid);
+                                let new_href = if new_cal.ends_with('/') {
+                                    format!("{}{}", new_cal, filename)
+                                } else {
+                                    format!("{}/{}", new_cal, filename)
+                                };
+                                new_href_to_propagate = Some((task.href.clone(), new_href.clone()));
+                                path_for_refresh = Some(strip_host(&new_href));
+                                Ok(())
+                            }
+                            Err(e) => {
+                                if e.contains("404") || e.contains("NotFound") || e.contains("403")
+                                {
+                                    warnings.push(format!(
+                                        "Move source missing for '{}', assuming success.",
+                                        task.summary
+                                    ));
+                                    Ok(())
+                                } else {
+                                    Err(e)
+                                }
+                            }
                         }
                     }
-                },
+                }
             };
 
             match result {
@@ -924,7 +923,12 @@ impl RustyClient {
         None
     }
 
-    async fn execute_move(&self, task: &Task, new_calendar_href: &str) -> Result<(), String> {
+    async fn execute_move(
+        &self,
+        task: &Task,
+        new_calendar_href: &str,
+        overwrite: bool,
+    ) -> Result<(), String> {
         let client = self.client.as_ref().ok_or("Offline")?;
         let destination = if new_calendar_href.ends_with('/') {
             format!("{}{}.ics", new_calendar_href, task.uid)
@@ -952,7 +956,7 @@ impl RustyClient {
             .method("MOVE")
             .uri(source_uri)
             .header("Destination", absolute_destination)
-            .header("Overwrite", "F")
+            .header("Overwrite", if overwrite { "T" } else { "F" })
             .body(String::new())
             .map_err(|e| e.to_string())?;
         let (parts, _) = client

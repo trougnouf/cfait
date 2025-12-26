@@ -1,4 +1,4 @@
-// File: src/gui/view/mod.rs
+// File: ./src/gui/view/mod.rs
 use std::time::Duration;
 pub mod help;
 pub mod settings;
@@ -15,12 +15,15 @@ use crate::gui::view::sidebar::{view_sidebar_calendars, view_sidebar_categories}
 use crate::gui::view::task_row::view_task_row;
 use crate::storage::LOCAL_CALENDAR_HREF;
 
+use iced::alignment::Horizontal;
+// --- ADDED: Import for resize interaction ---
+use iced::mouse;
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{
     MouseArea, Space, button, column, container, row, scrollable, stack, svg, text, text_editor,
     tooltip,
 };
-use iced::{Color, Element, Length, Theme, mouse};
+use iced::{Color, Element, Length, Theme, Vector};
 
 /// Shared semantic color for Locations (Gray)
 //pub const COLOR_LOCATION: Color = Color::from_rgb(0.5, 0.55, 0.45);
@@ -49,7 +52,7 @@ pub fn tooltip_style(theme: &Theme) -> container::Style {
 }
 
 pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
-    match app.state {
+    let content = match app.state {
         AppState::Loading => container(text("Loading...").size(30))
             .width(Length::Fill)
             .height(Length::Fill)
@@ -59,20 +62,13 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         AppState::Onboarding | AppState::Settings => view_settings(app),
         AppState::Help => view_help(),
         AppState::Active => {
-            // ... [Layout logic] ...
-            const ITEM_HEIGHT_CAL: f32 = 44.0;
-            const ITEM_HEIGHT_TAG: f32 = 34.0;
-            const ITEM_HEIGHT_LOC: f32 = 34.0;
-            const SIDEBAR_CHROME: f32 = 110.0;
-            const LOGO_SPACE_REQUIRED: f32 = 140.0;
-
             let content_height = match app.sidebar_mode {
                 SidebarMode::Calendars => {
                     app.calendars
                         .iter()
                         .filter(|c| !app.disabled_calendars.contains(&c.href))
                         .count() as f32
-                        * ITEM_HEIGHT_CAL
+                        * 44.0
                 }
                 SidebarMode::Categories => {
                     app.store
@@ -83,34 +79,32 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                             &app.hidden_calendars,
                         )
                         .len() as f32
-                        * ITEM_HEIGHT_TAG
+                        * 34.0
                 }
                 SidebarMode::Locations => {
                     app.store
                         .get_all_locations(app.hide_completed, &app.hidden_calendars)
                         .len() as f32
-                        * ITEM_HEIGHT_LOC
+                        * 34.0
                 }
             };
-
-            let available_height = app.current_window_size.height - SIDEBAR_CHROME;
-            let show_logo_in_sidebar = (available_height - content_height) > LOGO_SPACE_REQUIRED;
-
+            let available_height = app.current_window_size.height - 110.0;
+            let show_logo = (available_height - content_height) > 140.0;
             let content_layout = row![
-                view_sidebar(app, show_logo_in_sidebar),
+                view_sidebar(app, show_logo),
                 iced::widget::rule::vertical(1),
-                container(view_main_content(app, !show_logo_in_sidebar))
+                container(view_main_content(app, !show_logo))
                     .width(Length::Fill)
                     .center_x(Length::Fill)
             ];
 
-            // ... [Resize Grips and Stack] ...
+            // --- RESTORED: Resizing Logic ---
             let main_container = container(content_layout)
                 .width(Length::Fill)
                 .height(Length::Fill);
 
-            let t = 6.0;
-            let c = 12.0;
+            let t = 6.0; // Thickness of edge grips
+            let c = 12.0; // Size of corner grips
 
             let n_grip = MouseArea::new(
                 container(text(""))
@@ -217,7 +211,141 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             ]
             .into()
         }
+    };
+
+    if app.ringing_tasks.is_empty() {
+        return content;
     }
+
+    // --- ALARM MODAL ---
+    let (task, alarm) = &app.ringing_tasks[0];
+
+    // Header
+    let icon_header = container(
+        icon::icon(icon::BELL)
+            .size(30)
+            .color(Color::from_rgb(1.0, 0.4, 0.0)),
+    )
+    .padding(5)
+    .center_x(Length::Fill);
+
+    let title = text("Reminder")
+        .size(24)
+        .font(iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..Default::default()
+        })
+        .width(Length::Fill)
+        .align_x(Horizontal::Center);
+
+    // Task Summary (Title)
+    let summary = text(&task.summary)
+        .size(18)
+        .width(Length::Fill)
+        .align_x(Horizontal::Center);
+
+    // Task Description (New)
+    let task_desc_content = if !task.description.is_empty() {
+        column![
+            text(&task.description)
+                .size(14)
+                .color(Color::from_rgb(0.9, 0.9, 0.9)),
+            Space::new().height(Length::Fixed(10.0))
+        ]
+    } else {
+        column![]
+    };
+
+    // Compact buttons
+    let snooze_btn = |label, mins| {
+        button(text(label).size(12))
+            .style(iced::widget::button::secondary)
+            .padding([6, 12])
+            .on_press(Message::SnoozeAlarm(
+                task.uid.clone(),
+                alarm.uid.clone(),
+                mins,
+            ))
+    };
+
+    let dismiss_btn = button(text("Dismiss").size(14).font(iced::Font {
+        weight: iced::font::Weight::Bold,
+        ..Default::default()
+    }))
+    .style(iced::widget::button::primary)
+    .padding([8, 16])
+    .on_press(Message::DismissAlarm(task.uid.clone(), alarm.uid.clone()));
+
+    let buttons = row![
+        snooze_btn("10m", 10),
+        snooze_btn("1h", 60),
+        snooze_btn("1d", 1440),
+        Space::new().width(Length::Fixed(10.0)),
+        dismiss_btn
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+
+    // Combine content into a scrollable area to handle dynamic sizes
+    let modal_content = scrollable(
+        column![
+            icon_header,
+            title,
+            summary,
+            Space::new().height(Length::Fixed(10.0)),
+            task_desc_content,
+            // Removed redundant alarm_info here
+            Space::new().height(Length::Fixed(20.0)),
+            buttons
+        ]
+        .spacing(5)
+        .align_x(iced::Alignment::Center),
+    )
+    .height(Length::Shrink); // Allow shrinking to content
+
+    let modal_card = container(modal_content)
+        .padding(20)
+        .width(Length::Fixed(380.0))
+        // Max height constraint to ensure it fits on screen even with huge descriptions
+        .max_height(500.0)
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                background: Some(
+                    Color {
+                        a: 0.95,
+                        ..palette.background.weak.color
+                    }
+                    .into(),
+                ),
+                border: iced::Border {
+                    color: palette.background.strong.color,
+                    width: 1.0,
+                    radius: 12.0.into(),
+                },
+                shadow: iced::Shadow {
+                    color: Color::BLACK.scale_alpha(0.5),
+                    offset: Vector::new(0.0, 4.0),
+                    blur_radius: 10.0,
+                },
+                ..Default::default()
+            }
+        });
+
+    // Overlay
+    stack![
+        content,
+        container(modal_card)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .style(|_| container::Style {
+                background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.6).into()),
+                ..Default::default()
+            })
+    ]
+    .into()
 }
 
 fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {

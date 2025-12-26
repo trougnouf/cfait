@@ -8,6 +8,7 @@ pub mod model;
 pub mod paths;
 pub mod storage;
 pub mod store;
+pub mod system;
 
 #[cfg(feature = "tui")]
 pub mod tui;

@@ -6,6 +6,8 @@ pub mod state;
 pub mod view;
 
 use crate::config;
+use crate::system::AlarmMessage; // Import AlarmMessage
+use crate::tui::action::AppEvent;
 use crate::tui::state::{AppState, InputMode};
 use crate::tui::view::draw;
 
@@ -98,6 +100,14 @@ pub async fn run() -> Result<()> {
     app_state.urgent_days = urgent_days;
     app_state.urgent_prio = urgent_prio;
 
+    // --- START ALARM ACTOR ---
+    let (gui_alarm_tx, mut gui_alarm_rx) = tokio::sync::mpsc::channel(10);
+    // Spawn the alarm system, giving it a channel to talk back to us
+    let alarm_actor_tx = crate::system::spawn_alarm_actor(Some(gui_alarm_tx));
+    // Store the handle so we can send task updates to it
+    app_state.alarm_actor_tx = Some(alarm_actor_tx.clone());
+    // -------------------------
+
     let (action_tx, action_rx) = mpsc::channel(10);
     let (event_tx, mut event_rx) = mpsc::channel(10);
 
@@ -118,10 +128,41 @@ pub async fn run() -> Result<()> {
 
         // A. Network Events
         if let Ok(event) = event_rx.try_recv() {
+            // If tasks loaded, handle event AND sync to alarm actor
+            let is_task_update = matches!(event, AppEvent::TasksLoaded(_));
+
             handlers::handle_app_event(&mut app_state, event, &default_cal);
+
+            if is_task_update
+                && let Some(tx) = &app_state.alarm_actor_tx {
+                    // Send ALL tasks to the alarm actor so it can calculate triggers
+                    let all_tasks: Vec<_> = app_state
+                        .store
+                        .calendars
+                        .values()
+                        .flatten()
+                        .cloned()
+                        .collect();
+
+                    // FIX: Spawn the send to prevent dropping updates if the channel is full.
+                    // try_send is risky in this loop because `event_rx` might process many updates quickly.
+                    let tx_clone = tx.clone();
+                    tokio::spawn(async move {
+                        let _ = tx_clone.send(all_tasks).await;
+                    });
+                }
         }
 
-        // B. Input Events
+        // B. Alarm Signals
+        // Check if the alarm actor sent a "Fire" message
+        if let Ok(AlarmMessage::Fire(t_uid, a_uid)) = gui_alarm_rx.try_recv() {
+            // Find the task in the store to display details
+            if let Some((task, _)) = app_state.store.get_task_mut(&t_uid) {
+                app_state.active_alarm = Some((task.clone(), a_uid));
+            }
+        }
+
+        // C. Input Events
         if crossterm::event::poll(Duration::from_millis(50))? {
             let event = event::read()?;
             match event {
@@ -139,15 +180,10 @@ pub async fn run() -> Result<()> {
                         }
                         let _ = action_tx.send(action).await;
                     }
-                    // Handle mode-specific transient state updates that don't produce Actions
-                    // (e.g. typing characters into buffer)
-                    // These are handled inside handle_key_event via direct state mutation,
-                    // but Quit needs explicit break.
                     if matches!(app_state.mode, InputMode::Normal)
                         && key.code == crossterm::event::KeyCode::Char('q')
                     {
                         // Double check redundant safety break if handler returned None
-                        // (Handler returns Action::Quit, dealt with above. This block is safe to skip)
                     }
                 }
                 _ => {}

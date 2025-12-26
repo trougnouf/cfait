@@ -7,6 +7,7 @@ pub mod view;
 
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
+use crate::system::AlarmMessage;
 use iced::Task;
 
 pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
@@ -96,6 +97,37 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SyncToggleComplete(_)
         | Message::TaskMoved(_)
         | Message::MigrationComplete(_) => network::handle(app, message),
+        Message::InitAlarmActor(tx) => {
+            app.alarm_tx = Some(tx.clone());
+            // Send initial load
+            if !app.tasks.is_empty() {
+                let _ = tx.try_send(app.tasks.clone());
+            }
+            Task::none()
+        }
+        Message::AlarmSignalReceived(msg) => {
+            match &*msg {
+                AlarmMessage::Fire(task_uid, alarm_uid) => {
+                    // Find task and alarm data to show in modal
+                    if let Some(task) = app.tasks.iter().find(|t| t.uid == *task_uid)
+                        && let Some(alarm) = task.alarms.iter().find(|a| a.uid == *alarm_uid) {
+                            app.ringing_tasks.push((task.clone(), alarm.clone()));
+                        }
+                }
+            }
+            Task::none()
+        }
+        Message::SnoozeAlarm(t_uid, a_uid, mins) => {
+            // Remove from modal stack
+            app.ringing_tasks.retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
+
+            // Perform Logic
+            tasks::handle(app, Message::SnoozeAlarm(t_uid, a_uid, mins))
+        }
+        Message::DismissAlarm(t_uid, a_uid) => {
+            app.ringing_tasks.retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
+            tasks::handle(app, Message::DismissAlarm(t_uid, a_uid))
+        }
     };
 
     update_placeholder(app);

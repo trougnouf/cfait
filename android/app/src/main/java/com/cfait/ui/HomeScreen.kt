@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/ui/HomeScreen.kt
+// File: ./android/app/src/main/java/com/cfait/ui/HomeScreen.kt
 package com.cfait.ui
 
 import android.content.ClipData

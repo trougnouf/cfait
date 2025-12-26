@@ -1,9 +1,9 @@
-// File: src/tui/state.rs
 use crate::model::{CalendarListEntry, Task};
 use crate::store::{FilterOptions, TaskStore};
 use crate::tui::action::SidebarMode;
 use ratatui::widgets::ListState;
 use std::collections::{HashMap, HashSet};
+use tokio::sync::mpsc; // Add import
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Focus {
@@ -67,6 +67,8 @@ pub struct AppState {
 
     // Track unsynced status
     pub unsynced_changes: bool,
+    pub alarm_actor_tx: Option<mpsc::Sender<Vec<Task>>>,
+    pub active_alarm: Option<(Task, String)>, // (Task, AlarmUID) to render popup
 }
 
 impl Default for AppState {
@@ -121,6 +123,8 @@ impl AppState {
             export_targets: Vec::new(),
 
             unsynced_changes: false, // Default false
+            alarm_actor_tx: None,
+            active_alarm: None,
         }
     }
 

@@ -3,7 +3,7 @@ use crate::color_utils;
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
-use crate::gui::view::COLOR_LOCATION; // Import the shared color
+use crate::gui::view::COLOR_LOCATION;
 use crate::model::Task as TodoTask;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -106,17 +106,50 @@ pub fn view_task_row<'a>(
         }
     };
 
-    let date_text: Element<'a, Message> = match &task.due {
-        Some(d) => container(
-            // Use reference
-            text(d.format_smart()) // Use format_smart
-                .size(14) // Use format_smart
-                .color(Color::from_rgb(0.5, 0.5, 0.5)),
-        )
-        .width(Length::Fixed(80.0))
-        .into(),
-        None => Space::new().width(Length::Fixed(0.0)).into(),
+    // --- START MODIFICATION ---
+
+    // Check for active alarm
+    let has_active_alarm = task
+        .alarms
+        .iter()
+        .any(|a| a.acknowledged.is_none() && !a.is_snooze());
+
+    // Build the date/alarm section
+    let date_and_alarm_section: Element<'a, Message> = {
+        let mut row_content = row![].spacing(5).align_y(iced::Alignment::Center);
+
+        if has_active_alarm {
+            let bell_icon = icon::icon(icon::BELL)
+                .size(14)
+                .color(Color::from_rgb(1.0, 0.4, 0.0));
+
+            row_content = row_content.push(
+                tooltip(
+                    container(bell_icon).padding(1),
+                    text("Active Alarm").size(12),
+                    tooltip::Position::Top,
+                )
+                .style(tooltip_style),
+            );
+        }
+
+        if let Some(d) = &task.due {
+            row_content = row_content.push(
+                text(d.format_smart())
+                    .size(14)
+                    .color(Color::from_rgb(0.5, 0.5, 0.5)),
+            );
+        }
+
+        container(row_content)
+            .width(Length::Shrink) // Shrink to fit content
+            .into()
     };
+
+    // The old date_text is now date_and_alarm_section
+    // We remove the old `date_text` variable declaration
+
+    // --- END MODIFICATION ---
 
     let has_desc = !task.description.is_empty();
     let has_valid_parent = task.parent_uid.as_ref().is_some_and(|uid| !uid.is_empty());
@@ -457,14 +490,14 @@ pub fn view_task_row<'a>(
         }
     });
 
+    // --- FIX has_metadata CHECK ---
     let has_metadata = !task.categories.is_empty()
         || task.rrule.is_some()
         || is_blocked
         || task.estimated_duration.is_some()
-        // --- NEW FIELDS ---
         || task.location.is_some()
         || task.url.is_some()
-        || task.geo.is_some();
+        || task.geo.is_some(); // Remove has_active_alarm from here, it's handled separately now
 
     let main_text_col = responsive(move |size| {
         let available_width = size.width;
@@ -525,21 +558,10 @@ pub fn view_task_row<'a>(
         }
 
         let build_tags = || -> Element<'a, Message> {
-            let mut tags_row: iced::widget::Row<'_, Message> = row![].spacing(3);
+            let mut tags_row: iced::widget::Row<'_, Message> =
+                row![].spacing(3).align_y(iced::Alignment::Center);
 
-            // Check if any alarm is active (not acknowledged/snoozed logic handled in backend,
-            // but we can check list emptiness or property)
-            let has_active_alarm = task
-                .alarms
-                .iter()
-                .any(|a| a.acknowledged.is_none() && !a.is_snooze());
-
-            if has_active_alarm {
-                let bell_icon = icon::icon(icon::BELL)
-                    .size(12)
-                    .color(Color::from_rgb(1.0, 0.4, 0.0)); // Orange
-                tags_row = tags_row.push(container(bell_icon).padding(1));
-            }
+            // The bell icon logic is REMOVED from here.
 
             if is_blocked {
                 tags_row = tags_row.push(
@@ -744,9 +766,15 @@ pub fn view_task_row<'a>(
     .width(Length::Fill)
     .height(Length::Shrink);
 
-    let row_main = row![indent, status_btn, main_text_col, date_text, actions]
-        .spacing(10)
-        .align_y(iced::Alignment::Center);
+    let row_main = row![
+        indent,
+        status_btn,
+        main_text_col,
+        date_and_alarm_section,
+        actions
+    ]
+    .spacing(10)
+    .align_y(iced::Alignment::Center);
 
     let task_button = button(row_main)
         .on_press(Message::ToggleDetails(task.uid.clone()))

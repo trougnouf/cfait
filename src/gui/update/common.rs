@@ -1,4 +1,3 @@
-// File: src/gui/update/common.rs
 use crate::config::Config;
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
@@ -32,6 +31,14 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         urgent_days: app.urgent_days,
         urgent_prio: app.urgent_prio,
     });
+    if let Some(tx) = &app.alarm_tx {
+        // We need to send the FULL list (store.calendars.values().flat_map), not just filtered view
+        // But for simplicity, let's just send the filtered list if that's what we have handy,
+        // OR better: construct full list. The actor needs ALL tasks to check alarms properly.
+        let all_tasks: Vec<crate::model::Task> =
+            app.store.calendars.values().flatten().cloned().collect();
+        let _ = tx.try_send(all_tasks);
+    }
 }
 
 pub fn save_config(app: &GuiApp) {

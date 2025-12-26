@@ -3184,6 +3184,7 @@ enum class MobileSyntaxType {
     URL,
     GEO,
     DESCRIPTION,
+    REMINDER,
     ;
 
     companion object

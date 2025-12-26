@@ -498,3 +498,88 @@ impl Task {
         earliest
     }
 }
+
+// --- MAIN IMPLEMENTATION ---
+
+impl Task {
+    pub fn to_smart_string(&self) -> String {
+        let mut s = super::parser::escape_summary(&self.summary);
+        if self.priority > 0 {
+            s.push_str(&format!(" !{}", self.priority));
+        }
+        if let Some(loc) = &self.location {
+            s.push_str(&format!(" @@{}", super::parser::quote_value(loc)));
+        }
+        if let Some(u) = &self.url {
+            s.push_str(&format!(" url:{}", super::parser::quote_value(u)));
+        }
+        if let Some(g) = &self.geo {
+            s.push_str(&format!(" geo:{}", super::parser::quote_value(g)));
+        }
+        if let Some(start) = &self.dtstart {
+            s.push_str(&format!(" ^{}", start.format_smart()));
+        }
+        if let Some(d) = &self.due {
+            s.push_str(&format!(" @{}", d.format_smart()));
+        }
+
+        if let Some(mins) = self.estimated_duration {
+            if mins > 0 && mins % 525600 == 0 {
+                s.push_str(&format!(" ~{}y", mins / 525600));
+            } else if mins > 0 && mins % 43200 == 0 {
+                s.push_str(&format!(" ~{}mo", mins / 43200));
+            } else if mins > 0 && mins % 10080 == 0 {
+                s.push_str(&format!(" ~{}w", mins / 10080));
+            } else if mins > 0 && mins % 1440 == 0 {
+                s.push_str(&format!(" ~{}d", mins / 1440));
+            } else if mins > 0 && mins % 60 == 0 {
+                s.push_str(&format!(" ~{}h", mins / 60));
+            } else {
+                s.push_str(&format!(" ~{}m", mins));
+            }
+        }
+
+        if let Some(r) = &self.rrule {
+            let pretty = super::parser::prettify_recurrence(r);
+            s.push_str(&format!(" {}", pretty));
+        }
+        // Re-construct smart reminders?
+        for alarm in &self.alarms {
+            if alarm.is_snooze() || alarm.acknowledged.is_some() {
+                continue;
+            } // Skip technical alarms
+            match alarm.trigger {
+                AlarmTrigger::Relative(offset) => {
+                    let mins = -offset;
+                    if mins > 0 {
+                        if mins % 10080 == 0 {
+                            s.push_str(&format!(" rem:{}w", mins / 10080));
+                        } else if mins % 1440 == 0 {
+                            s.push_str(&format!(" rem:{}d", mins / 1440));
+                        } else if mins % 60 == 0 {
+                            s.push_str(&format!(" rem:{}h", mins / 60));
+                        } else {
+                            s.push_str(&format!(" rem:{}m", mins));
+                        }
+                    } else {
+                        s.push_str(&format!(" rem:{}m", mins));
+                    }
+                }
+                AlarmTrigger::Absolute(dt) => {
+                    // Convert to local time string if possible, else skip complex reconstruct
+                    let local = dt.with_timezone(&Local);
+                    s.push_str(&format!(" rem:{}", local.format("%H:%M")));
+                }
+            }
+        }
+
+        for cat in &self.categories {
+            s.push_str(&format!(" #{}", super::parser::quote_value(cat)));
+        }
+        s
+    }
+
+    pub fn apply_smart_input(&mut self, input: &str, aliases: &HashMap<String, Vec<String>>) {
+        super::parser::apply_smart_input(self, input, aliases);
+    }
+}

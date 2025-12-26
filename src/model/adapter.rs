@@ -575,20 +575,19 @@ impl Task {
                                             AlarmTrigger::Absolute(Utc.from_utc_datetime(&dt));
                                     }
                                 } else {
-                                    // Simplistic relative duration parser for -PT15M
                                     let v_trim = val.trim();
                                     let is_neg = v_trim.starts_with('-');
-                                    // Find numeric part
-                                    let numeric: String =
-                                        v_trim.chars().filter(|c| c.is_numeric()).collect();
-                                    if let Ok(mins) = numeric.parse::<i32>() {
-                                        // Assume M if not specified, usually PT15M
-                                        alarm.trigger = AlarmTrigger::Relative(if is_neg {
-                                            -mins
-                                        } else {
-                                            mins
-                                        });
-                                    }
+                                    // Parse ISO8601 duration properly (handles W, D, H, M)
+                                    let abs_mins = parse_ics_duration(if is_neg {
+                                        &v_trim[1..]
+                                    } else {
+                                        v_trim
+                                    });
+                                    alarm.trigger = AlarmTrigger::Relative(if is_neg {
+                                        -abs_mins
+                                    } else {
+                                        abs_mins
+                                    });
                                 }
                             }
                             "ACKNOWLEDGED" => {
@@ -645,4 +644,60 @@ impl Task {
             raw_alarms: Vec::new(),
         })
     }
+}
+
+fn parse_ics_duration(val: &str) -> i32 {
+    let val = val.trim();
+    if val.is_empty() {
+        return 0;
+    }
+
+    let mut minutes = 0;
+    let mut digits = String::new();
+    let mut neg = false;
+
+    let mut chars = val.chars().peekable();
+    if let Some(&c) = chars.peek() {
+        if c == '-' {
+            neg = true;
+            chars.next();
+        } else if c == '+' {
+            chars.next();
+        }
+    }
+
+    // Consume 'P'
+    if let Some(&c) = chars.peek()
+        && c == 'P' {
+            chars.next();
+        }
+
+    let mut in_time = false;
+
+    for c in chars {
+        if c.is_ascii_digit() {
+            digits.push(c);
+        } else if c == 'T' {
+            in_time = true;
+        } else {
+            let amt = digits.parse::<i32>().unwrap_or(0);
+            digits.clear();
+            match c {
+                'W' => minutes += amt * 7 * 24 * 60,
+                'D' => minutes += amt * 24 * 60,
+                'H' => minutes += amt * 60,
+                'M' => {
+                    if in_time {
+                        minutes += amt;
+                    } else {
+                        // Month duration in iCal is rarely used/supported but technically possible
+                        minutes += amt * 30 * 24 * 60;
+                    }
+                }
+                'S' => {} // Ignore seconds for basic logic
+                _ => {}
+            }
+        }
+    }
+    if neg { -minutes } else { minutes }
 }

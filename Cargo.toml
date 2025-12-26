@@ -48,13 +48,12 @@ serde_json = "1.0"
 rustls-native-certs = "0.8"
 futures = "0.3"
 fs2 = "0.4"
-
-# --- AUTH FIX DEPS ---
 digest_auth = "0.3"
 base64 = "0.22"
 tower = { version = "0.5", features = ["util"] }
 tower-service = "0.3" # Explicitly add tower-service for the trait
 tower-layer = "0.3"   # And tower-layer for the Layer trait
+notify-rust = "4"
 
 # --- ANDROID / INTEROP ---
 uniffi = { version = "0.30", features = ["tokio", "build", "cli"], optional = true }

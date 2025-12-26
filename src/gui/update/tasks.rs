@@ -292,10 +292,47 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::SnoozeAlarm(t_uid, a_uid, mins) => {
+            // FIX: Removed 'mut' from 'task' binding
+            if let Some((task, _)) = app.store.get_task_mut(&t_uid)
+                && task.snooze_alarm(&a_uid, mins) {
+                    let t_clone = task.clone();
+                    refresh_filtered_tasks(app);
+
+                    if let Some(client) = &app.client {
+                        return Task::perform(
+                            async_update_wrapper(client.clone(), t_clone),
+                            Message::SyncSaved,
+                        );
+                    } else {
+                        handle_offline_update(app, t_clone);
+                    }
+                }
+            Task::none()
+        }
+        Message::DismissAlarm(t_uid, a_uid) => {
+            // FIX: Removed 'mut' from 'task' binding
+            if let Some((task, _)) = app.store.get_task_mut(&t_uid)
+                && task.dismiss_alarm(&a_uid) {
+                    let t_clone = task.clone();
+                    refresh_filtered_tasks(app);
+
+                    if let Some(client) = &app.client {
+                        return Task::perform(
+                            async_update_wrapper(client.clone(), t_clone),
+                            Message::SyncSaved,
+                        );
+                    } else {
+                        handle_offline_update(app, t_clone);
+                    }
+                }
+            Task::none()
+        }
         _ => Task::none(),
     }
 }
 
+// ... helper functions (handle_offline_update, etc.) unchanged ...
 fn handle_offline_update(app: &mut GuiApp, task: TodoTask) {
     app.unsynced_changes = true;
     if task.calendar_href == LOCAL_CALENDAR_HREF {
@@ -319,6 +356,7 @@ fn handle_offline_delete(app: &mut GuiApp, task: TodoTask) {
 }
 
 fn handle_submit(app: &mut GuiApp) -> Task<Message> {
+    // ... same as before ...
     let raw_text = app.input_value.text();
     let text_to_submit = raw_text.trim().to_string();
 
