@@ -504,12 +504,9 @@ impl TaskStore {
                     return false;
                 }
 
-                // Urgency/Cutoff Check using DateType
-                if let Some(limit) = options.cutoff_date
-                    && let Some(due) = &t.due
-                        && due.to_comparison_time() > limit {
-                            return false;
-                        }
+                // FIX: Removed hard filtering of tasks based on cutoff date.
+                // The sorting logic (`organize_hierarchy` -> `compare_with_cutoff`) handles
+                // pushing future tasks to the bottom/back of the list. We shouldn't hide them entirely.
 
                 if let Some(mins) = t.estimated_duration {
                     if let Some(min) = options.min_duration
