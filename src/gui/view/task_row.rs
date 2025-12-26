@@ -106,10 +106,11 @@ pub fn view_task_row<'a>(
         }
     };
 
-    let date_text: Element<'a, Message> = match task.due {
+    let date_text: Element<'a, Message> = match &task.due {
         Some(d) => container(
-            text(d.format("%Y-%m-%d").to_string())
-                .size(14)
+            // Use reference
+            text(d.format_smart()) // Use format_smart
+                .size(14) // Use format_smart
                 .color(Color::from_rgb(0.5, 0.5, 0.5)),
         )
         .width(Length::Fixed(80.0))

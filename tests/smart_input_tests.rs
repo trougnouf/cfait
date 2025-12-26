@@ -151,25 +151,22 @@ fn test_alias_preserves_sigils() {
 #[test]
 fn test_natural_date_parsing_in_keyword() {
     let aliases = HashMap::new();
-
-    // 1. Standard Case
     let t1 = Task::new("Meeting @in 2 weeks", &aliases);
-
-    let now = Local::now(); // Change Utc::now() to Local::now()
-
+    let now = Local::now();
     let expected = now + Duration::days(14);
 
     assert!(t1.due.is_some());
     let due = t1.due.unwrap();
-    // The test now correctly compares the local-based parse result
-    // with a local-based expectation.
-    assert_eq!(due.date_naive(), expected.date_naive());
 
-    // 2. "Start in" case
+    assert_eq!(due.to_date_naive(), expected.date_naive());
+
     let t2 = Task::new("Work ^in 3 days", &aliases);
     assert!(t2.dtstart.is_some());
     let start = t2.dtstart.unwrap();
-    assert_eq!(start.date_naive(), (now + Duration::days(3)).date_naive());
+    assert_eq!(
+        start.to_date_naive(),
+        (now + Duration::days(3)).date_naive()
+    );
 
     // 3. Edge Case: "in" used as a preposition (not a date)
     let t3 = Task::new("Turn report in", &aliases);

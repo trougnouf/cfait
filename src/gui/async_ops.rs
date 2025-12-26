@@ -47,7 +47,7 @@ pub async fn async_fetch_wrapper(
 ) -> Result<(String, Vec<TodoTask>), String> {
     let rt = get_runtime();
     rt.spawn(async move {
-        let tasks = client.get_tasks(&href).await.map_err(|e| e.to_string())?;
+        let tasks = client.get_tasks(&href).await.map_err(|e: String| e)?;
         Ok((href, tasks))
     })
     .await

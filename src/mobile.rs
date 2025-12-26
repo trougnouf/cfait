@@ -1,9 +1,9 @@
-// File: src/mobile.rs
+// File: ./src/mobile.rs
 use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::config::Config;
-use crate::model::Task;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
+use crate::model::{DateType, Task};
 use crate::paths::AppPaths;
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
@@ -78,6 +78,8 @@ impl From<SyntaxType> for MobileSyntaxType {
             SyntaxType::Url => MobileSyntaxType::Url,
             SyntaxType::Geo => MobileSyntaxType::Geo,
             SyntaxType::Description => MobileSyntaxType::Description,
+            // Map new syntax types if added, e.g., Reminder
+            _ => MobileSyntaxType::Text,
         }
     }
 }
@@ -98,7 +100,10 @@ pub struct MobileTask {
     pub is_done: bool,
     pub priority: u8,
     pub due_date_iso: Option<String>,
+    pub is_allday_due: bool, // NEW
     pub start_date_iso: Option<String>,
+    pub is_allday_start: bool, // NEW
+    pub has_alarms: bool,      // NEW: indicator for UI bell
     pub duration_mins: Option<u32>,
     pub calendar_href: String,
     pub categories: Vec<String>,
@@ -163,14 +168,34 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         .filter_map(|uid| store.get_summary(uid))
         .collect();
 
+    let (due_iso, due_allday) = match &t.due {
+        Some(DateType::AllDay(d)) => (Some(d.format("%Y-%m-%d").to_string()), true),
+        Some(DateType::Specific(dt)) => (Some(dt.to_rfc3339()), false),
+        None => (None, false),
+    };
+
+    let (start_iso, start_allday) = match &t.dtstart {
+        Some(DateType::AllDay(d)) => (Some(d.format("%Y-%m-%d").to_string()), true),
+        Some(DateType::Specific(dt)) => (Some(dt.to_rfc3339()), false),
+        None => (None, false),
+    };
+
+    let has_alarms = !t
+        .alarms
+        .iter()
+        .all(|a| a.acknowledged.is_some() || a.is_snooze());
+
     MobileTask {
         uid: t.uid.clone(),
         summary: t.summary.clone(),
         description: t.description.clone(),
         is_done: t.status.is_done(),
         priority: t.priority,
-        due_date_iso: t.due.map(|d| d.to_rfc3339()),
-        start_date_iso: t.dtstart.map(|d| d.to_rfc3339()),
+        due_date_iso: due_iso,
+        is_allday_due: due_allday,
+        start_date_iso: start_iso,
+        is_allday_start: start_allday,
+        has_alarms,
         duration_mins: t.estimated_duration,
         calendar_href: t.calendar_href.clone(),
         categories: t.categories.clone(),
@@ -777,6 +802,62 @@ impl CfaitMobile {
 
         Ok(format!("Successfully migrated {} tasks.", count))
     }
+
+    pub async fn snooze_alarm(
+        &self,
+        task_uid: String,
+        alarm_uid: String,
+        minutes: u32,
+    ) -> Result<(), MobileError> {
+        self.apply_store_mutation(task_uid, |store, id| {
+            if let Some((task, _)) = store.get_task_mut(id)
+                && task.snooze_alarm(&alarm_uid, minutes) {
+                    return Some(task.clone());
+                }
+            None
+        })
+        .await
+    }
+
+    pub async fn dismiss_alarm(
+        &self,
+        task_uid: String,
+        alarm_uid: String,
+    ) -> Result<(), MobileError> {
+        self.apply_store_mutation(task_uid, |store, id| {
+            if let Some((task, _)) = store.get_task_mut(id)
+                && task.dismiss_alarm(&alarm_uid) {
+                    return Some(task.clone());
+                }
+            None
+        })
+        .await
+    }
+
+    /// Used by Android WorkManager to schedule the next wakeup
+    /// Returns: timestamp (seconds) of the very next alarm across ALL tasks
+    pub async fn get_next_global_alarm_time(&self) -> Option<i64> {
+        let store = self.store.lock().await;
+        let mut global_earliest: Option<i64> = None;
+
+        for tasks in store.calendars.values() {
+            for task in tasks {
+                // Skip completed tasks? Usually yes for alarms.
+                if task.status.is_done() {
+                    continue;
+                }
+
+                if let Some(ts) = task.next_trigger_timestamp() {
+                    match global_earliest {
+                        Some(current) if ts < current => global_earliest = Some(ts),
+                        None => global_earliest = Some(ts),
+                        _ => {}
+                    }
+                }
+            }
+        }
+        global_earliest
+    }
 }
 
 impl CfaitMobile {
@@ -800,7 +881,7 @@ impl CfaitMobile {
 
         match fetch_result {
             Ok(results) => {
-                let mut fetched_hrefs = HashSet::new();
+                let mut fetched_hrefs: HashSet<String> = HashSet::new();
                 for (href, mut tasks) in results {
                     crate::journal::Journal::apply_to_tasks(&mut tasks, &href);
                     store.insert(href.clone(), tasks);

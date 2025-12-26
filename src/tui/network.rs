@@ -54,7 +54,7 @@ pub async fn run_network_actor(
     // ------------------------------------------------------------------
     // 1. CONNECT & SYNC
     // ------------------------------------------------------------------
-    let client = match RustyClient::new(&url, &user, &pass, allow_insecure) {
+    let client: RustyClient = match RustyClient::new(&url, &user, &pass, allow_insecure) {
         Ok(c) => c,
         Err(e) => {
             let _ = event_tx.send(AppEvent::Error(e)).await;
@@ -174,7 +174,7 @@ pub async fn run_network_actor(
                         if let Ok(t) = client.get_tasks(&href).await {
                             let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
                         }
-                        let s = if msgs.is_empty() {
+                        let s: String = if msgs.is_empty() {
                             "Created.".to_string()
                         } else {
                             msgs.join("; ")
@@ -190,7 +190,7 @@ pub async fn run_network_actor(
                 let href = task.calendar_href.clone();
                 match client.update_task(&mut task).await {
                     Ok(msgs) => {
-                        let s = if msgs.is_empty() {
+                        let s: String = if msgs.is_empty() {
                             "Saved.".to_string()
                         } else {
                             msgs.join("; ")
@@ -211,7 +211,7 @@ pub async fn run_network_actor(
 
                 match client.toggle_task(&mut task).await {
                     Ok((_, _, msgs)) => {
-                        let s = if msgs.is_empty() {
+                        let s: String = if msgs.is_empty() {
                             "Synced.".to_string()
                         } else {
                             msgs.join("; ")
@@ -233,7 +233,7 @@ pub async fn run_network_actor(
                 let href = task.calendar_href.clone();
                 match client.delete_task(&task).await {
                     Ok(msgs) => {
-                        let s = if msgs.is_empty() {
+                        let s: String = if msgs.is_empty() {
                             "Deleted.".to_string()
                         } else {
                             msgs.join("; ")
@@ -286,7 +286,7 @@ pub async fn run_network_actor(
             }
             Action::MarkInProcess(mut task) => match client.update_task(&mut task).await {
                 Ok(msgs) => {
-                    let s = if msgs.is_empty() {
+                    let s: String = if msgs.is_empty() {
                         "Saved.".to_string()
                     } else {
                         msgs.join("; ")
@@ -299,7 +299,7 @@ pub async fn run_network_actor(
             },
             Action::MarkCancelled(mut task) => match client.update_task(&mut task).await {
                 Ok(msgs) => {
-                    let s = if msgs.is_empty() {
+                    let s: String = if msgs.is_empty() {
                         "Saved.".to_string()
                     } else {
                         msgs.join("; ")
@@ -314,7 +314,7 @@ pub async fn run_network_actor(
                 let old_href = task.calendar_href.clone();
                 match client.move_task(&task, &new_href).await {
                     Ok((_, msgs)) => {
-                        let s = if msgs.is_empty() {
+                        let s: String = if msgs.is_empty() {
                             "Moved.".to_string()
                         } else {
                             msgs.join("; ")

@@ -1,9 +1,13 @@
 // File: src/model/item.rs
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use uuid::Uuid;
+
+fn default_uid() -> String {
+    Uuid::new_v4().to_string()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalendarListEntry {
@@ -33,6 +37,118 @@ pub struct RawProperty {
     pub params: Vec<(String, String)>,
 }
 
+// --- DATE TYPES ---
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value")]
+pub enum DateType {
+    AllDay(NaiveDate),
+    Specific(DateTime<Utc>),
+}
+
+impl DateType {
+    pub fn to_date_naive(&self) -> NaiveDate {
+        match self {
+            DateType::AllDay(d) => *d,
+            DateType::Specific(dt) => dt.date_naive(),
+        }
+    }
+
+    /// Returns the logical end of the event/deadline for comparison.
+    /// AllDay -> End of day (23:59:59). Specific -> Exact time.
+    pub fn to_comparison_time(&self) -> DateTime<Utc> {
+        match self {
+            DateType::AllDay(d) => d.and_hms_opt(23, 59, 59).unwrap().and_utc(),
+            DateType::Specific(dt) => *dt,
+        }
+    }
+
+    pub fn format_smart(&self) -> String {
+        match self {
+            DateType::AllDay(d) => d.format("%Y-%m-%d").to_string(),
+            DateType::Specific(dt) => dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        }
+    }
+}
+
+impl PartialOrd for DateType {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for DateType {
+    fn cmp(&self, other: &Self) -> Ordering {
+        let d1 = self.to_date_naive();
+        let d2 = other.to_date_naive();
+        match d1.cmp(&d2) {
+            Ordering::Equal => match (self, other) {
+                // Same day: Specific time comes BEFORE All Day (urgency)
+                (DateType::Specific(t1), DateType::Specific(t2)) => t1.cmp(t2),
+                (DateType::Specific(_), DateType::AllDay(_)) => Ordering::Less,
+                (DateType::AllDay(_), DateType::Specific(_)) => Ordering::Greater,
+                (DateType::AllDay(_), DateType::AllDay(_)) => Ordering::Equal,
+            },
+            ord => ord,
+        }
+    }
+}
+
+// --- ALARMS (RFC 9074) ---
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum AlarmTrigger {
+    Relative(i32),
+    Absolute(DateTime<Utc>),
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Alarm {
+    #[serde(default = "default_uid")]
+    pub uid: String, // RFC 9074 Section 4
+
+    pub action: String, // DISPLAY, AUDIO
+    pub trigger: AlarmTrigger,
+    pub description: Option<String>,
+
+    pub acknowledged: Option<DateTime<Utc>>, // RFC 9074 Section 6.1
+
+    pub related_to_uid: Option<String>, // RFC 9074 Section 5
+    pub relation_type: Option<String>,  // RFC 9074 Section 7.1 (SNOOZE)
+}
+
+impl Alarm {
+    pub fn new_relative(minutes_before: u32) -> Self {
+        Self {
+            uid: default_uid(),
+            action: "DISPLAY".to_string(),
+            trigger: AlarmTrigger::Relative(-(minutes_before as i32)),
+            description: None,
+            acknowledged: None,
+            related_to_uid: None,
+            relation_type: None,
+        }
+    }
+
+    pub fn new_absolute(dt: DateTime<Utc>) -> Self {
+        Self {
+            uid: default_uid(),
+            action: "DISPLAY".to_string(),
+            trigger: AlarmTrigger::Absolute(dt),
+            description: None,
+            acknowledged: None,
+            related_to_uid: None,
+            relation_type: None,
+        }
+    }
+
+    pub fn is_snooze(&self) -> bool {
+        self.relation_type.as_deref() == Some("SNOOZE")
+    }
+}
+
+// ----------------
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Task {
     pub uid: String,
@@ -40,8 +156,12 @@ pub struct Task {
     pub description: String,
     pub status: TaskStatus,
     pub estimated_duration: Option<u32>,
-    pub due: Option<DateTime<Utc>>,
-    pub dtstart: Option<DateTime<Utc>>,
+
+    pub due: Option<DateType>,
+    pub dtstart: Option<DateType>,
+    #[serde(default)]
+    pub alarms: Vec<Alarm>,
+
     pub priority: u8,
     pub percent_complete: Option<u8>,
     pub parent_uid: Option<String>,
@@ -76,6 +196,7 @@ impl Task {
             estimated_duration: None,
             due: None,
             dtstart: None,
+            alarms: Vec::new(),
             priority: 0,
             percent_complete: None,
             parent_uid: None,
@@ -146,21 +267,16 @@ impl Task {
     ) -> Ordering {
         let now = Utc::now();
 
-        // Helper to determine urgency
         let is_urgent = |t: &Task| -> bool {
             if t.status.is_done() {
                 return false;
             }
-
             let is_high_prio = t.priority > 0 && t.priority <= urgent_prio;
-
-            // Check if due date is within horizon (e.g., Now + 1 Day)
-            let is_due_soon = if let Some(due) = t.due {
-                due <= now + chrono::Duration::days(urgent_days as i64)
+            let is_due_soon = if let Some(due) = &t.due {
+                due.to_comparison_time() <= now + chrono::Duration::days(urgent_days as i64)
             } else {
                 false
             };
-
             is_high_prio || is_due_soon
         };
 
@@ -172,12 +288,20 @@ impl Task {
         let s1_done = self.status.is_done();
         let s2_done = other.status.is_done();
 
-        let s1_future = self.dtstart.map(|d| d > now).unwrap_or(false);
-        let s2_future = other.dtstart.map(|d| d > now).unwrap_or(false);
+        let s1_future = self
+            .dtstart
+            .as_ref()
+            .map(|d| d.to_comparison_time() > now)
+            .unwrap_or(false);
+        let s2_future = other
+            .dtstart
+            .as_ref()
+            .map(|d| d.to_comparison_time() > now)
+            .unwrap_or(false);
 
         let is_in_window = |t: &Task| -> bool {
-            match (t.due, cutoff) {
-                (Some(d), Some(limit)) => d <= limit,
+            match (&t.due, cutoff) {
+                (Some(d), Some(limit)) => d.to_comparison_time() <= limit,
                 (Some(_), None) => true,
                 (None, _) => false,
             }
@@ -192,20 +316,15 @@ impl Task {
             other.priority
         };
 
-        // NEW SORT ORDER:
-        // 1. Urgency (High Prio or Due Soon)
-        // 2. Active Status (InProcess)
-        // 3. Completion Status
-        // ... rest
         s2_urgent
-            .cmp(&s1_urgent) // True > False
+            .cmp(&s1_urgent)
             .then(s2_active.cmp(&s1_active))
             .then(s1_done.cmp(&s2_done))
             .then(s1_future.cmp(&s2_future))
             .then(s2_in.cmp(&s1_in))
             .then(p1.cmp(&p2))
-            .then_with(|| match (self.due, other.due) {
-                (Some(d1), Some(d2)) => d1.cmp(&d2),
+            .then_with(|| match (&self.due, &other.due) {
+                (Some(d1), Some(d2)) => d1.cmp(d2),
                 (Some(_), None) => Ordering::Less,
                 (None, Some(_)) => Ordering::Greater,
                 (None, None) => Ordering::Equal,
@@ -220,7 +339,8 @@ impl Task {
         urgent_days: u32,
         urgent_prio: u8,
     ) -> Vec<Task> {
-        let present_uids: HashSet<String> = tasks.iter().map(|t| t.uid.clone()).collect();
+        let present_uids: std::collections::HashSet<String> =
+            tasks.iter().map(|t| t.uid.clone()).collect();
         let mut children_map: HashMap<String, Vec<Task>> = HashMap::new();
         let mut roots: Vec<Task> = Vec::new();
 
@@ -244,7 +364,7 @@ impl Task {
         }
 
         let mut result = Vec::new();
-        let mut visited_uids = HashSet::new();
+        let mut visited_uids = std::collections::HashSet::new();
 
         for root in roots {
             Self::append_task_and_children(&root, &mut result, &children_map, 0, &mut visited_uids);
@@ -267,7 +387,7 @@ impl Task {
         result: &mut Vec<Task>,
         map: &HashMap<String, Vec<Task>>,
         depth: usize,
-        visited: &mut HashSet<String>,
+        visited: &mut std::collections::HashSet<String>,
     ) {
         if visited.contains(&task.uid) {
             return;
@@ -282,5 +402,93 @@ impl Task {
                 Self::append_task_and_children(child, result, map, depth + 1, visited);
             }
         }
+    }
+
+    pub fn dismiss_alarm(&mut self, alarm_uid: &str) -> bool {
+        if let Some(alarm) = self.alarms.iter_mut().find(|a| a.uid == alarm_uid) {
+            alarm.acknowledged = Some(Utc::now());
+            return true;
+        }
+        false
+    }
+
+    pub fn snooze_alarm(&mut self, alarm_uid: &str, minutes: u32) -> bool {
+        let now = Utc::now();
+        let mut new_alarm_opt = None;
+
+        if let Some(parent_alarm) = self.alarms.iter_mut().find(|a| a.uid == alarm_uid) {
+            parent_alarm.acknowledged = Some(now);
+
+            let trigger_time = now + chrono::Duration::minutes(minutes as i64);
+            let mut snooze = Alarm::new_absolute(trigger_time);
+
+            // Resolve root UID if this is already a snooze
+            let root_uid = if parent_alarm.is_snooze() {
+                parent_alarm
+                    .related_to_uid
+                    .clone()
+                    .unwrap_or(parent_alarm.uid.clone())
+            } else {
+                parent_alarm.uid.clone()
+            };
+
+            snooze.related_to_uid = Some(root_uid);
+            snooze.relation_type = Some("SNOOZE".to_string());
+            snooze.description = Some(format!("Snoozed for {}m", minutes));
+            snooze.action = parent_alarm.action.clone();
+
+            new_alarm_opt = Some(snooze);
+        }
+
+        // Clean up snoozed snoozes
+        self.alarms.retain(|a| {
+            if a.uid == alarm_uid && a.is_snooze() {
+                return false;
+            }
+            true
+        });
+
+        if let Some(new_alarm) = new_alarm_opt {
+            self.alarms.push(new_alarm);
+            return true;
+        }
+
+        false
+    }
+
+    pub fn next_trigger_timestamp(&self) -> Option<i64> {
+        let now = Utc::now();
+        let mut earliest: Option<i64> = None;
+
+        for alarm in &self.alarms {
+            if alarm.acknowledged.is_some() {
+                continue;
+            }
+
+            let trigger_dt = match alarm.trigger {
+                AlarmTrigger::Absolute(dt) => dt,
+                AlarmTrigger::Relative(mins) => {
+                    let anchor = if let Some(DateType::Specific(d)) = self.due {
+                        d
+                    } else if let Some(DateType::Specific(s)) = self.dtstart {
+                        s
+                    } else {
+                        continue;
+                    };
+                    anchor + chrono::Duration::minutes(mins as i64)
+                }
+            };
+
+            // Ignore stale alarms older than 24h
+            if trigger_dt > now || (now - trigger_dt).num_hours() < 24 {
+                let ts = trigger_dt.timestamp();
+                match earliest {
+                    Some(e) if ts < e => earliest = Some(ts),
+                    None => earliest = Some(ts),
+                    _ => {}
+                }
+            }
+        }
+        earliest
     }
 }

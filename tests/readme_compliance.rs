@@ -1,6 +1,6 @@
 // File: tests/readme_compliance.rs
 use cfait::model::Task;
-use chrono::{Local, Duration};
+use chrono::{Duration, Local};
 use std::collections::HashMap;
 
 fn parse(input: &str) -> Task {
@@ -28,12 +28,24 @@ fn readme_recurrence_presets() {
 #[test]
 fn readme_recurrence_custom() {
     // "@every 3 days", "@every 2 weeks"
-    assert_eq!(parse("@every 3 days").rrule, Some("FREQ=DAILY;INTERVAL=3".to_string()));
-    assert_eq!(parse("@every 2 weeks").rrule, Some("FREQ=WEEKLY;INTERVAL=2".to_string()));
+    assert_eq!(
+        parse("@every 3 days").rrule,
+        Some("FREQ=DAILY;INTERVAL=3".to_string())
+    );
+    assert_eq!(
+        parse("@every 2 weeks").rrule,
+        Some("FREQ=WEEKLY;INTERVAL=2".to_string())
+    );
 
     // Test the bug fix: English numbers
-    assert_eq!(parse("@every two months").rrule, Some("FREQ=MONTHLY;INTERVAL=2".to_string()));
-    assert_eq!(parse("@every one year").rrule, Some("FREQ=YEARLY;INTERVAL=1".to_string()));
+    assert_eq!(
+        parse("@every two months").rrule,
+        Some("FREQ=MONTHLY;INTERVAL=2".to_string())
+    );
+    assert_eq!(
+        parse("@every one year").rrule,
+        Some("FREQ=YEARLY;INTERVAL=1".to_string())
+    );
 }
 
 #[test]
@@ -45,31 +57,28 @@ fn readme_dates_keywords() {
 
 #[test]
 fn readme_dates_offsets() {
-    // "@2d", "^1w"
     let t1 = parse("Task @2d");
     let now = Local::now().date_naive();
     let expected = now + Duration::days(2);
-    // Note: 'due' creates End of Day time
-    assert_eq!(t1.due.unwrap().date_naive(), expected);
+    assert_eq!(t1.due.unwrap().to_date_naive(), expected); // Fixed
 
     let t2 = parse("Start ^1w");
     let expected_start = now + Duration::days(7);
-    assert_eq!(t2.dtstart.unwrap().date_naive(), expected_start);
+    assert_eq!(t2.dtstart.unwrap().to_date_naive(), expected_start); // Fixed
 }
 
 #[test]
 fn readme_dates_natural() {
-    // "@in 2 weeks", "^in 3 days"
     let t1 = parse("@in 2 weeks");
     let now = Local::now().date_naive();
-    assert_eq!(t1.due.unwrap().date_naive(), now + Duration::days(14));
+    assert_eq!(t1.due.unwrap().to_date_naive(), now + Duration::days(14)); // Fixed
 
     let t2 = parse("^in 3 days");
-    assert_eq!(t2.dtstart.unwrap().date_naive(), now + Duration::days(3));
+    assert_eq!(t2.dtstart.unwrap().to_date_naive(), now + Duration::days(3)); // Fixed
 
     // English variations
     let t3 = parse("@in two days");
-    assert_eq!(t3.due.unwrap().date_naive(), now + Duration::days(2));
+    assert_eq!(t3.due.unwrap().to_date_naive(), now + Duration::days(2)); // Fixed
 }
 
 #[test]
@@ -117,7 +126,10 @@ fn readme_location() {
 #[test]
 fn readme_tags_hierarchy() {
     let t = parse("#gardening:tree_planting");
-    assert!(t.categories.contains(&"gardening:tree_planting".to_string()));
+    assert!(
+        t.categories
+            .contains(&"gardening:tree_planting".to_string())
+    );
 }
 
 #[test]

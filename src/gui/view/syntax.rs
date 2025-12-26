@@ -1,4 +1,4 @@
-// File: src/gui/view/syntax.rs
+// File: ./src/gui/view/syntax.rs
 use crate::color_utils;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use iced::advanced::text::highlighter::{self, Highlighter};
@@ -88,6 +88,10 @@ impl Highlighter for SmartInputHighlighter {
                     },
                     SyntaxType::Description => highlighter::Format {
                         color: Some(Color::from_rgb(0.6, 0.0, 0.6)), // Dark Magenta
+                        font: None,
+                    },
+                    SyntaxType::Reminder => highlighter::Format {
+                        color: Some(Color::from_rgb(0.8, 0.4, 0.0)), // Orange-ish
                         font: None,
                     },
                 };

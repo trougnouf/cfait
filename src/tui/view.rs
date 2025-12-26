@@ -1,4 +1,4 @@
-// File: src/tui/view.rs
+// File: ./src/tui/view.rs
 use crate::color_utils;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::store::UNCATEGORIZED_ID;
@@ -319,7 +319,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             let due_str = t
                 .due
-                .map(|d| format!(" @{}", d.format("%Y-%m-%d")))
+                .as_ref()
+                .map(|d| format!(" @{}", d.format_smart()))
                 .unwrap_or_default();
             let dur_str = t.format_duration_short();
             let recur_str = if t.rrule.is_some() { " (R)" } else { "" };
@@ -520,6 +521,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         SyntaxType::Url => Style::default().fg(Color::Blue),
                         SyntaxType::Geo => Style::default().fg(Color::DarkGray),
                         SyntaxType::Description => Style::default().fg(Color::Gray),
+                        _ => Style::default(),
                     };
                     input_spans.push(Span::styled(text, style));
                 }

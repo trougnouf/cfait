@@ -1,4 +1,4 @@
-// File: src/tui/handlers.rs
+// File: ./src/tui/handlers.rs
 use crate::config::Config;
 use crate::model::{Task, TaskStatus, extract_inline_aliases, validate_alias_integrity};
 use crate::storage::LOCAL_CALENDAR_HREF;
@@ -181,7 +181,7 @@ pub async fn handle_key_event(
                     }
                 }
 
-                let target_uid = state
+                let target_uid: Option<String> = state
                     .editing_index
                     .and_then(|idx| state.tasks.get(idx).map(|t| t.uid.clone()));
 
@@ -216,7 +216,7 @@ pub async fn handle_key_event(
                 {
                     state.enter_char('\n');
                 } else {
-                    let target_uid = state
+                    let target_uid: Option<String> = state
                         .editing_index
                         .and_then(|idx| state.tasks.get(idx).map(|t| t.uid.clone()));
 

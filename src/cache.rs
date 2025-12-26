@@ -1,4 +1,4 @@
-// File: src/cache.rs
+// File: ./src/cache.rs
 use crate::model::{CalendarListEntry, Task};
 use crate::paths::AppPaths;
 use crate::storage::LocalStorage;
@@ -9,8 +9,8 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
-// Increment this whenever the Task struct changes (e.g., new fields like location)
-const CACHE_VERSION: u32 = 1;
+// Increment this whenever the Task struct changes (e.g., new fields like location) to invalidate old caches
+const CACHE_VERSION: u32 = 2;
 
 #[derive(Serialize, Deserialize)]
 struct CalendarCache {
@@ -61,34 +61,21 @@ impl Cache {
         {
             return LocalStorage::with_lock(&path, || {
                 let json = fs::read_to_string(&path)?;
+                // Try parsing the new versioned format first
                 if let Ok(cache) = serde_json::from_str::<CalendarCache>(&json) {
-                    // VERSION CHECK:
-                    // If the file is from v0.3.7, 'version' will be 0 (default).
-                    // Since CACHE_VERSION is 1, this check fails, and we fall through.
+                    // If versions match, use the cached data
                     if cache.version == CACHE_VERSION {
                         return Ok((cache.tasks, cache.sync_token));
                     }
                 }
-
-                // Fallback for older cache format (just array) - kept for safety,
-                // but effectively these will also be invalidated by the version logic above
-                // or simply treated as empty/invalid.
-                if let Ok(_tasks) = serde_json::from_str::<Vec<Task>>(&json) {
-                    // Logic decision: Do we accept raw arrays?
-                    // Since they definitely don't have the version field,
-                    // we should probably ignore them to enforce the new schema.
-                    // Returning empty forces a re-sync.
-                    return Ok((vec![], None));
-                }
-
-                // If version mismatch or parse error, return empty to trigger full sync
+                // If version mismatch or any parsing error occurs, treat cache as invalid
+                // to force a full re-sync.
                 Ok((vec![], None))
             });
         }
         Ok((vec![], None))
     }
 
-    // ... save_calendars and load_calendars remain unchanged ...
     pub fn save_calendars(cals: &[CalendarListEntry]) -> Result<()> {
         if let Some(path) = Self::get_calendars_path() {
             LocalStorage::with_lock(&path, || {

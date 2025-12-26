@@ -1,5 +1,5 @@
 // File: tests/logic_sorting.rs
-use cfait::model::{Task, TaskStatus};
+use cfait::model::{DateType, Task, TaskStatus};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 
@@ -83,10 +83,10 @@ fn test_sorting_due_dates() {
     let now = Utc::now();
 
     let mut t1 = task("Due Soon");
-    t1.due = Some(now + Duration::days(1));
+    t1.due = Some(DateType::Specific(now + Duration::days(1)));
 
     let mut t2 = task("Due Later");
-    t2.due = Some(now + Duration::days(5));
+    t2.due = Some(DateType::Specific(now + Duration::days(5)));
 
     let mut t3 = task("No Date");
     t3.due = None;

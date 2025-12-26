@@ -1,4 +1,4 @@
-// File: src/store.rs
+// File: ./src/store.rs
 use crate::cache::Cache;
 use crate::model::{Task, TaskStatus};
 use crate::storage::LocalStorage;
@@ -260,7 +260,7 @@ impl TaskStore {
         alias_key: &str,
         raw_values: &[String],
     ) -> Vec<Task> {
-        let mut uids_to_update = Vec::new();
+        let mut uids_to_update: Vec<String> = Vec::new();
         let alias_prefix = format!("{}:", alias_key);
 
         // 1. Identify tasks that match the alias (or are sub-tags of it)
@@ -503,6 +503,13 @@ impl TaskStore {
                 if !has_status_filter && t.status.is_done() && options.hide_completed_global {
                     return false;
                 }
+
+                // Urgency/Cutoff Check using DateType
+                if let Some(limit) = options.cutoff_date
+                    && let Some(due) = &t.due
+                        && due.to_comparison_time() > limit {
+                            return false;
+                        }
 
                 if let Some(mins) = t.estimated_duration {
                     if let Some(min) = options.min_duration

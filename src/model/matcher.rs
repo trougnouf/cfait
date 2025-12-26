@@ -1,3 +1,4 @@
+// File: ./src/model/matcher.rs
 // Handles logic for checking if a task matches a search query
 use crate::model::item::{Task, TaskStatus};
 use chrono::Local; // Changed from Utc
@@ -175,9 +176,10 @@ impl Task {
                 };
 
                 if let Some(target) = target_date {
-                    match self.dtstart {
+                    match &self.dtstart {
                         Some(dt) => {
-                            let t_date = dt.naive_utc().date();
+                            // FIX: Use helper method
+                            let t_date = dt.to_date_naive();
                             match op {
                                 "<" => {
                                     if t_date >= target {
@@ -254,9 +256,10 @@ impl Task {
                 };
 
                 if let Some(target) = target_date {
-                    match self.due {
+                    match &self.due {
                         Some(dt) => {
-                            let t_date = dt.naive_utc().date();
+                            // FIX: Use DateType helper
+                            let t_date = dt.to_date_naive();
                             match op {
                                 "<" => {
                                     if t_date >= target {
@@ -332,7 +335,10 @@ impl Task {
                     .iter()
                     .any(|c| c.to_lowercase().contains(part))
                 // FIX: Check location for plain text matches
-                && !self.location.as_deref().is_some_and(|l| l.to_lowercase().contains(part))
+                && !self
+                    .location
+                    .as_deref()
+                    .is_some_and(|l| l.to_lowercase().contains(part))
             {
                 return false;
             }

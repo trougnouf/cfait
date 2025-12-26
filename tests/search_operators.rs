@@ -1,6 +1,6 @@
 // File: tests/search_operators.rs
-use cfait::model::{Task, TaskStatus};
-use chrono::{Duration, Local};
+use cfait::model::{DateType, Task, TaskStatus}; // Added DateType import
+use chrono::{Duration, Local, Utc}; // Added Utc import
 use std::collections::HashMap;
 
 fn make_task() -> Task {
@@ -79,10 +79,16 @@ fn test_date_operators() {
     let now = Local::now();
 
     let mut overdue = make_task();
-    overdue.due = Some((now - Duration::days(5)).into());
+    // Explicit conversion
+    overdue.due = Some(DateType::Specific(
+        (now - Duration::days(5)).with_timezone(&Utc),
+    ));
 
     let mut future = make_task();
-    future.due = Some((now + Duration::days(5)).into());
+    // Explicit conversion
+    future.due = Some(DateType::Specific(
+        (now + Duration::days(5)).with_timezone(&Utc),
+    ));
 
     // @<today (Overdue)
     // Note: The matcher logic compares against today's date
