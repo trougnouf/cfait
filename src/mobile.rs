@@ -80,8 +80,6 @@ impl From<SyntaxType> for MobileSyntaxType {
             SyntaxType::Geo => MobileSyntaxType::Geo,
             SyntaxType::Description => MobileSyntaxType::Description,
             SyntaxType::Reminder => MobileSyntaxType::Reminder,
-            // Map new syntax types if added, e.g., Reminder
-            _ => MobileSyntaxType::Text,
         }
     }
 }

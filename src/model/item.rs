@@ -1,5 +1,5 @@
 // File: src/model/item.rs
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{DateTime, Local, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -50,7 +50,8 @@ impl DateType {
     pub fn to_date_naive(&self) -> NaiveDate {
         match self {
             DateType::AllDay(d) => *d,
-            DateType::Specific(dt) => dt.date_naive(),
+            // Convert to Local for date comparison to align with user expectation (e.g. "today")
+            DateType::Specific(dt) => dt.with_timezone(&Local).date_naive(),
         }
     }
 
@@ -66,7 +67,12 @@ impl DateType {
     pub fn format_smart(&self) -> String {
         match self {
             DateType::AllDay(d) => d.format("%Y-%m-%d").to_string(),
-            DateType::Specific(dt) => dt.format("%Y-%m-%d %H:%M").to_string(),
+            DateType::Specific(dt) => {
+                // FIX: Convert UTC to Local before formatting for display/edit string
+                dt.with_timezone(&Local)
+                    .format("%Y-%m-%d %H:%M")
+                    .to_string()
+            }
         }
     }
 }

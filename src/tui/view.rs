@@ -537,7 +537,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         SyntaxType::Geo => Style::default().fg(Color::DarkGray),
                         SyntaxType::Description => Style::default().fg(Color::Gray),
                         SyntaxType::Reminder => Style::default().fg(Color::LightRed),
-                        _ => Style::default(),
                     };
                     input_spans.push(Span::styled(text, style));
                 }
