@@ -62,7 +62,7 @@ uniffi_bindgen = { version = "0.30",  optional = true }
 
 
 # --- TUI ONLY (Optional) ---
-ratatui = { version = "0.29", optional = true }
+ratatui = { version = "0.30", optional = true }
 crossterm = { version = "0.29", optional = true }
 
 # --- GUI ONLY (Future) ---

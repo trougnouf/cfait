@@ -223,52 +223,53 @@ impl Task {
         // We use manual injection because the `icalendar` library's Alarm struct support
         // might not fully cover all RFC 9074 fields or custom properties easily via its builder.
         if !self.alarms.is_empty()
-            && let Some(idx) = ics.rfind("END:VTODO") {
-                let (start, end) = ics.split_at(idx);
-                let mut buffer = String::with_capacity(ics.len() + 1024);
-                buffer.push_str(start);
+            && let Some(idx) = ics.rfind("END:VTODO")
+        {
+            let (start, end) = ics.split_at(idx);
+            let mut buffer = String::with_capacity(ics.len() + 1024);
+            buffer.push_str(start);
 
-                for alarm in &self.alarms {
-                    buffer.push_str("BEGIN:VALARM\r\n");
-                    buffer.push_str(&format!("UID:{}\r\n", alarm.uid));
-                    buffer.push_str(&format!("ACTION:{}\r\n", alarm.action));
-                    if let Some(desc) = &alarm.description {
-                        buffer.push_str(&format!("DESCRIPTION:{}\r\n", desc));
-                    } else {
-                        buffer.push_str("DESCRIPTION:Reminder\r\n");
-                    }
-
-                    match alarm.trigger {
-                        AlarmTrigger::Relative(mins) => {
-                            let sign = if mins < 0 { "-" } else { "" };
-                            buffer.push_str(&format!("TRIGGER:{}PT{}M\r\n", sign, mins.abs()));
-                        }
-                        AlarmTrigger::Absolute(dt) => {
-                            buffer.push_str(&format!(
-                                "TRIGGER;VALUE=DATE-TIME:{}\r\n",
-                                dt.format("%Y%m%dT%H%M%SZ")
-                            ));
-                        }
-                    }
-
-                    if let Some(ack) = alarm.acknowledged {
-                        let ack_str: String = ack.format("%Y%m%dT%H%M%SZ").to_string();
-                        buffer.push_str(&format!("ACKNOWLEDGED:{}\r\n", ack_str));
-                    }
-
-                    if let Some(rel) = &alarm.related_to_uid {
-                        if let Some(rtype) = &alarm.relation_type {
-                            buffer.push_str(&format!("RELATED-TO;RELTYPE={}:{}\r\n", rtype, rel));
-                        } else {
-                            buffer.push_str(&format!("RELATED-TO:{}\r\n", rel));
-                        }
-                    }
-
-                    buffer.push_str("END:VALARM\r\n");
+            for alarm in &self.alarms {
+                buffer.push_str("BEGIN:VALARM\r\n");
+                buffer.push_str(&format!("UID:{}\r\n", alarm.uid));
+                buffer.push_str(&format!("ACTION:{}\r\n", alarm.action));
+                if let Some(desc) = &alarm.description {
+                    buffer.push_str(&format!("DESCRIPTION:{}\r\n", desc));
+                } else {
+                    buffer.push_str("DESCRIPTION:Reminder\r\n");
                 }
-                buffer.push_str(end);
-                ics = buffer;
+
+                match alarm.trigger {
+                    AlarmTrigger::Relative(mins) => {
+                        let sign = if mins < 0 { "-" } else { "" };
+                        buffer.push_str(&format!("TRIGGER:{}PT{}M\r\n", sign, mins.abs()));
+                    }
+                    AlarmTrigger::Absolute(dt) => {
+                        buffer.push_str(&format!(
+                            "TRIGGER;VALUE=DATE-TIME:{}\r\n",
+                            dt.format("%Y%m%dT%H%M%SZ")
+                        ));
+                    }
+                }
+
+                if let Some(ack) = alarm.acknowledged {
+                    let ack_str: String = ack.format("%Y%m%dT%H%M%SZ").to_string();
+                    buffer.push_str(&format!("ACKNOWLEDGED:{}\r\n", ack_str));
+                }
+
+                if let Some(rel) = &alarm.related_to_uid {
+                    if let Some(rtype) = &alarm.relation_type {
+                        buffer.push_str(&format!("RELATED-TO;RELTYPE={}:{}\r\n", rtype, rel));
+                    } else {
+                        buffer.push_str(&format!("RELATED-TO:{}\r\n", rel));
+                    }
+                }
+
+                buffer.push_str("END:VALARM\r\n");
             }
+            buffer.push_str(end);
+            ics = buffer;
+        }
 
         // Inject Raw Components
         if !self.raw_components.is_empty() {

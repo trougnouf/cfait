@@ -66,7 +66,7 @@ impl DateType {
     pub fn format_smart(&self) -> String {
         match self {
             DateType::AllDay(d) => d.format("%Y-%m-%d").to_string(),
-            DateType::Specific(dt) => dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            DateType::Specific(dt) => dt.format("%Y-%m-%d %H:%M").to_string(),
         }
     }
 }

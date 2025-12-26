@@ -1,4 +1,4 @@
-// File: ./src/cache.rs
+// File: src/cache.rs
 use crate::model::{CalendarListEntry, Task};
 use crate::paths::AppPaths;
 use crate::storage::LocalStorage;
