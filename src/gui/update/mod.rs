@@ -115,11 +115,36 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::AlarmSignalReceived(msg) => {
             match &*msg {
                 AlarmMessage::Fire(task_uid, alarm_uid) => {
-                    // Find task and alarm data to show in modal
-                    if let Some(task) = app.tasks.iter().find(|t| t.uid == *task_uid)
-                        && let Some(alarm) = task.alarms.iter().find(|a| a.uid == *alarm_uid) {
-                            app.ringing_tasks.push((task.clone(), alarm.clone()));
+                    // FIX: Look up in the full store, not the filtered app.tasks view.
+                    // The task might be hidden by filters but should still ring.
+                    if let Some((task, _)) = app.store.get_task_mut(task_uid) {
+                        // Check if alarm still exists (wasn't dismissed elsewhere)
+                        // For implicit alarms (which are not in task.alarms), we check if the synthetic ID implies validity
+                        let is_implicit = alarm_uid.starts_with("implicit_");
+                        let exists = is_implicit || task.alarms.iter().any(|a| a.uid == *alarm_uid);
+
+                        if exists {
+                            // We clone the task state at the moment of firing to show in the modal
+                            // We construct a synthetic Alarm object for the modal if it's implicit,
+                            // otherwise copy the real one.
+                            let alarm_obj = if let Some(a) = task.alarms.iter().find(|a| a.uid == *alarm_uid) {
+                                a.clone()
+                            } else {
+                                // Reconstruct basic info for implicit alarm so the modal doesn't crash
+                                crate::model::Alarm {
+                                    uid: alarm_uid.clone(),
+                                    action: "DISPLAY".to_string(),
+                                    trigger: crate::model::AlarmTrigger::Relative(0), // Dummy
+                                    description: Some(if alarm_uid.contains("due") { "Due now".to_string() } else { "Starting".to_string() }),
+                                    acknowledged: None,
+                                    related_to_uid: None,
+                                    relation_type: None,
+                                }
+                            };
+
+                            app.ringing_tasks.push((task.clone(), alarm_obj));
                         }
+                    }
                 }
             }
             Task::none()

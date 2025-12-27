@@ -3,11 +3,11 @@ use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::config::Config;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
-use crate::model::{DateType, Task};
+use crate::model::{AlarmTrigger, DateType, Task};
 use crate::paths::AppPaths;
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
-use chrono::NaiveTime;
+use chrono::{DateTime, Local, NaiveTime, Utc};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -143,6 +143,14 @@ pub struct MobileTag {
 pub struct MobileLocation {
     pub name: String,
     pub count: u32,
+}
+
+#[derive(uniffi::Record)]
+pub struct MobileAlarmInfo {
+    pub task_uid: String,
+    pub alarm_uid: String,
+    pub title: String,
+    pub body: String,
 }
 
 #[derive(uniffi::Record)]
@@ -881,6 +889,185 @@ impl CfaitMobile {
             }
         }
         global_earliest
+    }
+
+    /// Returns the timestamp (seconds) of the next alarm (explicit or implicit).
+    /// Used by Android to schedule AlarmManager.
+    pub fn get_next_alarm_timestamp(&self) -> Option<i64> {
+        let store = self.store.blocking_lock();
+        let config = Config::load().unwrap_or_default();
+        let default_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
+            .unwrap_or_else(|_| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+
+        let now = Utc::now();
+        let mut global_earliest: Option<i64> = None;
+
+        let check_ts = |ts: i64, current_earliest: &mut Option<i64>| {
+            if ts > now.timestamp() {
+                match current_earliest {
+                    Some(e) if ts < *e => *current_earliest = Some(ts),
+                    None => *current_earliest = Some(ts),
+                    _ => {}
+                }
+            }
+        };
+
+        for tasks in store.calendars.values() {
+            for task in tasks {
+                if task.status.is_done() {
+                    continue;
+                }
+
+                // 1. Explicit Alarms
+                if let Some(ts) = task.next_trigger_timestamp() {
+                    check_ts(ts, &mut global_earliest);
+                }
+
+                // 2. Implicit Alarms
+                if config.auto_reminders {
+                    // Only check if no active explicit alarms exist
+                    let has_active_explicit = task
+                        .alarms
+                        .iter()
+                        .any(|a| a.acknowledged.is_none() && !a.is_snooze());
+
+                    if !has_active_explicit {
+                        if let Some(due) = &task.due {
+                            let dt = match due {
+                                DateType::Specific(t) => *t,
+                                DateType::AllDay(d) => d
+                                    .and_time(default_time)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc),
+                            };
+                            // Only if not dismissed
+                            if !task.has_alarm_at(dt) {
+                                check_ts(dt.timestamp(), &mut global_earliest);
+                            }
+                        }
+                        if let Some(start) = &task.dtstart {
+                            let dt = match start {
+                                DateType::Specific(t) => *t,
+                                DateType::AllDay(d) => d
+                                    .and_time(default_time)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc),
+                            };
+                            if !task.has_alarm_at(dt) {
+                                check_ts(dt.timestamp(), &mut global_earliest);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        global_earliest
+    }
+
+    /// Called by Android when the AlarmManager wakes up.
+    /// Returns all alarms that should be firing NOW (with a small grace period).
+    pub fn get_firing_alarms(&self) -> Vec<MobileAlarmInfo> {
+        let store = self.store.blocking_lock();
+        let config = Config::load().unwrap_or_default();
+        let default_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
+            .unwrap_or_else(|_| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+
+        let now = Utc::now();
+        let mut results = Vec::new();
+
+        for tasks in store.calendars.values() {
+            for task in tasks {
+                if task.status.is_done() {
+                    continue;
+                }
+
+                // Check Explicit
+                for alarm in &task.alarms {
+                    if alarm.acknowledged.is_some() || alarm.is_snooze() {
+                        continue;
+                    }
+
+                    let trigger_dt = match alarm.trigger {
+                        AlarmTrigger::Absolute(dt) => dt,
+                        AlarmTrigger::Relative(mins) => {
+                            let anchor = if let Some(DateType::Specific(d)) = task.due {
+                                d
+                            } else if let Some(DateType::Specific(s)) = task.dtstart {
+                                s
+                            } else {
+                                continue;
+                            };
+                            anchor + chrono::Duration::minutes(mins as i64)
+                        }
+                    };
+
+                    // Fire if in past (within 1 hour grace to avoid old spam)
+                    if trigger_dt <= now && (now - trigger_dt).num_minutes() < 60 {
+                        results.push(MobileAlarmInfo {
+                            task_uid: task.uid.clone(),
+                            alarm_uid: alarm.uid.clone(),
+                            title: task.summary.clone(),
+                            body: alarm
+                                .description
+                                .clone()
+                                .unwrap_or_else(|| "Reminder".to_string()),
+                        });
+                    }
+                }
+
+                // Check Implicit
+                if config.auto_reminders {
+                    let has_active_explicit = task
+                        .alarms
+                        .iter()
+                        .any(|a| a.acknowledged.is_none() && !a.is_snooze());
+                    if !has_active_explicit {
+                        // Helper for check
+                        let mut check_implicit = |dt: DateTime<Utc>, desc: &str, type_key: &str| {
+                            if !task.has_alarm_at(dt) && dt <= now && (now - dt).num_minutes() < 60
+                            {
+                                let ts_str = dt.to_rfc3339();
+                                // Synthetic ID generation matching `system.rs`
+                                let synth_id =
+                                    format!("implicit_{}:|{}|{}", type_key, ts_str, task.uid);
+                                results.push(MobileAlarmInfo {
+                                    task_uid: task.uid.clone(),
+                                    alarm_uid: synth_id,
+                                    title: task.summary.clone(),
+                                    body: desc.to_string(),
+                                });
+                            }
+                        };
+
+                        if let Some(due) = &task.due {
+                            let dt = match due {
+                                DateType::Specific(t) => *t,
+                                DateType::AllDay(d) => d
+                                    .and_time(default_time)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc),
+                            };
+                            check_implicit(dt, "Due now", "due");
+                        }
+                        if let Some(start) = &task.dtstart {
+                            let dt = match start {
+                                DateType::Specific(t) => *t,
+                                DateType::AllDay(d) => d
+                                    .and_time(default_time)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc),
+                            };
+                            check_implicit(dt, "Task starting", "start");
+                        }
+                    }
+                }
+            }
+        }
+        results
     }
 }
 

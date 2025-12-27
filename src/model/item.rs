@@ -1,5 +1,5 @@
 // File: ./src/model/item.rs
-use chrono::{DateTime, Local, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, Duration, Local, NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -621,9 +621,20 @@ impl Task {
                     }
                 }
                 AlarmTrigger::Absolute(dt) => {
-                    // Convert to local time string if possible, else skip complex reconstruct
                     let local = dt.with_timezone(&Local);
-                    s.push_str(&format!(" rem:{}", local.format("%H:%M")));
+                    let now = Local::now();
+
+                    // Smart reconstruction: use keywords when possible
+                    if local.date_naive() == now.date_naive() {
+                        // Today: just show time
+                        s.push_str(&format!(" rem:{}", local.format("%H:%M")));
+                    } else if local.date_naive() == now.date_naive() + Duration::days(1) {
+                        // Tomorrow: use keyword
+                        s.push_str(&format!(" rem:tomorrow {}", local.format("%H:%M")));
+                    } else {
+                        // Other dates: use full date
+                        s.push_str(&format!(" rem:{}", local.format("%Y-%m-%d %H:%M")));
+                    }
                 }
             }
         }

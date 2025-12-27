@@ -454,7 +454,14 @@ fn is_date_unit_short(s: &str) -> bool {
     let lower = s.to_lowercase();
     matches!(
         lower.as_str(),
-        "d" | "day"
+        "m" | "min"
+            | "minute"
+            | "minutes"
+            | "h"
+            | "hour"
+            | "hours"
+            | "d"
+            | "day"
             | "days"
             | "w"
             | "week"
@@ -768,7 +775,9 @@ fn is_special_token(word: &str) -> bool {
     {
         return true;
     }
-    matches!(lower.as_str(), "today" | "tomorrow")
+    // FIX: Removed matches!(lower.as_str(), "today" | "tomorrow")
+    // Bare words should be treated as text.
+    false
 }
 
 pub fn apply_smart_input(
@@ -848,7 +857,37 @@ pub fn apply_smart_input(
                 if token.len() > 4 { &token[4..] } else { "" }
             };
 
-            if !clean_val.is_empty() {
+            // NEW: Handle "rem:in 5m" or "rem: in 5m"
+            if clean_val.eq_ignore_ascii_case("in") && i + consumed < stream.len() {
+                let next_str = &stream[i + consumed];
+                let next_next = if i + consumed + 1 < stream.len() {
+                    Some(stream[i + consumed + 1].as_str())
+                } else {
+                    None
+                };
+
+                // Reuse existing duration parser helper
+                if let Some((amt, unit, extra)) = parse_amount_and_unit(next_str, next_next, false)
+                {
+                    // 1. Calculate Duration in minutes
+                    let mins = match unit.as_str() {
+                        "d" | "day" | "days" => amt * 1440,
+                        "h" | "hour" | "hours" => amt * 60,
+                        _ => amt, // assume minutes for m/min or bare numbers
+                    };
+
+                    // 2. Create ABSOLUTE alarm (Now + Duration)
+                    let now = Local::now();
+                    let target = now + Duration::minutes(mins as i64);
+                    let target_utc = target.with_timezone(&Utc);
+
+                    task.alarms.push(Alarm::new_absolute(target_utc));
+
+                    consumed += 1 + extra; // Consume amount + unit tokens
+                } else {
+                    summary_words.push(unescape(token));
+                }
+            } else if !clean_val.is_empty() {
                 // A. Duration (rem:10m)
                 if let Some(d) = parse_duration(clean_val) {
                     task.alarms.push(Alarm::new_relative(d));
@@ -867,8 +906,11 @@ pub fn apply_smart_input(
                 else if let Some(d) = parse_smart_date(clean_val) {
                     // Look ahead for time
                     let mut time_part = None;
+
+                    // FIX: Check `i + consumed` (next token) for time string
                     if i + consumed < stream.len() {
-                        if let Some(t) = parse_time_string(&stream[i + consumed]) {
+                        let potential_time = &stream[i + consumed];
+                        if let Some(t) = parse_time_string(potential_time) {
                             time_part = Some(t);
                             consumed += 1;
                         }

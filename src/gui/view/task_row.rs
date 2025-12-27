@@ -112,7 +112,8 @@ pub fn view_task_row<'a>(
     let has_active_alarm = task
         .alarms
         .iter()
-        .any(|a| a.acknowledged.is_none() && !a.is_snooze());
+        // FIX: Removed `&& !a.is_snooze()`. A snooze is an active alarm.
+        .any(|a| a.acknowledged.is_none());
 
     // Build the date/alarm section
     let date_and_alarm_section: Element<'a, Message> = {

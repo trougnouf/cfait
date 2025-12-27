@@ -43,7 +43,9 @@ pub fn spawn_alarm_actor(ui_sender: Option<mpsc::Sender<AlarmMessage>>) -> mpsc:
 
                 // 1. Explicit Alarms
                 for alarm in &task.alarms {
-                    if alarm.acknowledged.is_none() && !alarm.is_snooze() {
+                    // FIX: Removed `&& !alarm.is_snooze()`.
+                    // Snoozed alarms are active alarms that need to fire.
+                    if alarm.acknowledged.is_none() {
                         check_list.push((alarm.clone(), false));
                     }
                 }
@@ -154,15 +156,10 @@ pub fn spawn_alarm_actor(ui_sender: Option<mpsc::Sender<AlarmMessage>>) -> mpsc:
                             // To support UI Modals for implicit, the Task model would need 'runtime_alarms'.
 
                             // 1. Notify UI (Skip for implicit to avoid lookup failure crash in UI)
-                            if !is_implicit {
-                                if let Some(ui_tx) = &ui_sender {
-                                    let _ = ui_tx
-                                        .send(AlarmMessage::Fire(
-                                            task.uid.clone(),
-                                            alarm.uid.clone(),
-                                        ))
-                                        .await;
-                                }
+                            if !is_implicit && let Some(ui_tx) = &ui_sender {
+                                let _ = ui_tx
+                                    .send(AlarmMessage::Fire(task.uid.clone(), alarm.uid.clone()))
+                                    .await;
                             }
 
                             // 2. OS Notification
@@ -204,12 +201,10 @@ pub fn spawn_alarm_actor(ui_sender: Option<mpsc::Sender<AlarmMessage>>) -> mpsc:
                     _ = sleep_until(deadline) => {}
                     Some(new_list) = rx.recv() => { tasks = new_list; }
                 }
+            } else if let Some(new_list) = rx.recv().await {
+                tasks = new_list;
             } else {
-                if let Some(new_list) = rx.recv().await {
-                    tasks = new_list;
-                } else {
-                    break;
-                }
+                break;
             }
         }
     });

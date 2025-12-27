@@ -317,7 +317,7 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = newAliasKey,
                         onValueChange = { newAliasKey = it },
-                        label = { Text("Key (eg #tag_a)") },
+                        label = { Text("Key (#tag_a)") },
                         modifier = Modifier.weight(1f),
                         placeholder = { Text("#tag_a") },
                     )

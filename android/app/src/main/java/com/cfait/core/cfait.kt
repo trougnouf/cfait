@@ -759,6 +759,10 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_config(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks(): Short
@@ -895,6 +899,16 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_firing_alarms(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_next_alarm_timestamp(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
     external fun uniffi_cfait_fn_method_cfaitmobile_get_next_global_alarm_time(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
@@ -965,6 +979,10 @@ internal object UniffiLib {
         `sortCutoffMonths`: RustBuffer.ByValue,
         `urgentDays`: Int,
         `urgentPrio`: Byte,
+        `autoReminders`: Byte,
+        `defaultReminderTime`: RustBuffer.ByValue,
+        `snoozeShort`: Int,
+        `snoozeLong`: Int,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
@@ -1285,6 +1303,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_config() != 1475.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms() != 21432.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp() != 53474.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time() != 16148.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1318,7 +1342,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_dependency() != 53808.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 22041.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 11549.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility() != 63556.toShort()) {
@@ -1896,6 +1920,18 @@ public interface CfaitMobileInterface {
     fun `getConfig`(): MobileConfig
 
     /**
+     * Called by Android when the AlarmManager wakes up.
+     * Returns all alarms that should be firing NOW (with a small grace period).
+     */
+    fun `getFiringAlarms`(): List<MobileAlarmInfo>
+
+    /**
+     * Returns the timestamp (seconds) of the next alarm (explicit or implicit).
+     * Used by Android to schedule AlarmManager.
+     */
+    fun `getNextAlarmTimestamp`(): kotlin.Long?
+
+    /**
      * Used by Android WorkManager to schedule the next wakeup
      * Returns: timestamp (seconds) of the very next alarm across ALL tasks
      */
@@ -1941,6 +1977,10 @@ public interface CfaitMobileInterface {
         `sortCutoffMonths`: kotlin.UInt?,
         `urgentDays`: kotlin.UInt,
         `urgentPrio`: kotlin.UByte,
+        `autoReminders`: kotlin.Boolean,
+        `defaultReminderTime`: kotlin.String,
+        `snoozeShort`: kotlin.UInt,
+        `snoozeLong`: kotlin.UInt,
     )
 
     fun `setCalendarVisibility`(
@@ -2306,6 +2346,38 @@ open class CfaitMobile :
         )
 
     /**
+     * Called by Android when the AlarmManager wakes up.
+     * Returns all alarms that should be firing NOW (with a small grace period).
+     */
+    override fun `getFiringAlarms`(): List<MobileAlarmInfo> =
+        FfiConverterSequenceTypeMobileAlarmInfo.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_firing_alarms(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Returns the timestamp (seconds) of the next alarm (explicit or implicit).
+     * Used by Android to schedule AlarmManager.
+     */
+    override fun `getNextAlarmTimestamp`(): kotlin.Long? =
+        FfiConverterOptionalLong.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_next_alarm_timestamp(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
      * Used by Android WorkManager to schedule the next wakeup
      * Returns: timestamp (seconds) of the very next alarm across ALL tasks
      */
@@ -2502,6 +2574,10 @@ open class CfaitMobile :
         `sortCutoffMonths`: kotlin.UInt?,
         `urgentDays`: kotlin.UInt,
         `urgentPrio`: kotlin.UByte,
+        `autoReminders`: kotlin.Boolean,
+        `defaultReminderTime`: kotlin.String,
+        `snoozeShort`: kotlin.UInt,
+        `snoozeLong`: kotlin.UInt,
     ) = callWithHandle {
         uniffiRustCallWithError(MobileException) { _status ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_save_config(
@@ -2515,6 +2591,10 @@ open class CfaitMobile :
                 FfiConverterOptionalUInt.lower(`sortCutoffMonths`),
                 FfiConverterUInt.lower(`urgentDays`),
                 FfiConverterUByte.lower(`urgentPrio`),
+                FfiConverterBoolean.lower(`autoReminders`),
+                FfiConverterString.lower(`defaultReminderTime`),
+                FfiConverterUInt.lower(`snoozeShort`),
+                FfiConverterUInt.lower(`snoozeLong`),
                 _status,
             )
         }
@@ -2795,6 +2875,46 @@ public object FfiConverterTypeCfaitMobile : FfiConverter<CfaitMobile, Long> {
     }
 }
 
+data class MobileAlarmInfo(
+    var `taskUid`: kotlin.String,
+    var `alarmUid`: kotlin.String,
+    var `title`: kotlin.String,
+    var `body`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileAlarmInfo : FfiConverterRustBuffer<MobileAlarmInfo> {
+    override fun read(buf: ByteBuffer): MobileAlarmInfo =
+        MobileAlarmInfo(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: MobileAlarmInfo) =
+        (
+            FfiConverterString.allocationSize(value.`taskUid`) +
+                FfiConverterString.allocationSize(value.`alarmUid`) +
+                FfiConverterString.allocationSize(value.`title`) +
+                FfiConverterString.allocationSize(value.`body`)
+        )
+
+    override fun write(
+        value: MobileAlarmInfo,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`taskUid`, buf)
+        FfiConverterString.write(value.`alarmUid`, buf)
+        FfiConverterString.write(value.`title`, buf)
+        FfiConverterString.write(value.`body`, buf)
+    }
+}
+
 data class MobileCalendar(
     var `name`: kotlin.String,
     var `href`: kotlin.String,
@@ -2854,6 +2974,10 @@ data class MobileConfig(
     var `sortCutoffMonths`: kotlin.UInt?,
     var `urgentDays`: kotlin.UInt,
     var `urgentPrio`: kotlin.UByte,
+    var `autoReminders`: kotlin.Boolean,
+    var `defaultReminderTime`: kotlin.String,
+    var `snoozeShort`: kotlin.UInt,
+    var `snoozeLong`: kotlin.UInt,
 ) {
     companion object
 }
@@ -2874,6 +2998,10 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterOptionalUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUByte.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
         )
 
     override fun allocationSize(value: MobileConfig) =
@@ -2887,7 +3015,11 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterSequenceString.allocationSize(value.`disabledCalendars`) +
                 FfiConverterOptionalUInt.allocationSize(value.`sortCutoffMonths`) +
                 FfiConverterUInt.allocationSize(value.`urgentDays`) +
-                FfiConverterUByte.allocationSize(value.`urgentPrio`)
+                FfiConverterUByte.allocationSize(value.`urgentPrio`) +
+                FfiConverterBoolean.allocationSize(value.`autoReminders`) +
+                FfiConverterString.allocationSize(value.`defaultReminderTime`) +
+                FfiConverterUInt.allocationSize(value.`snoozeShort`) +
+                FfiConverterUInt.allocationSize(value.`snoozeLong`)
         )
 
     override fun write(
@@ -2904,6 +3036,10 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterOptionalUInt.write(value.`sortCutoffMonths`, buf)
         FfiConverterUInt.write(value.`urgentDays`, buf)
         FfiConverterUByte.write(value.`urgentPrio`, buf)
+        FfiConverterBoolean.write(value.`autoReminders`, buf)
+        FfiConverterString.write(value.`defaultReminderTime`, buf)
+        FfiConverterUInt.write(value.`snoozeShort`, buf)
+        FfiConverterUInt.write(value.`snoozeLong`, buf)
     }
 }
 
@@ -3331,6 +3467,34 @@ public object FfiConverterSequenceString : FfiConverterRustBuffer<List<kotlin.St
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterString.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMobileAlarmInfo : FfiConverterRustBuffer<List<MobileAlarmInfo>> {
+    override fun read(buf: ByteBuffer): List<MobileAlarmInfo> {
+        val len = buf.getInt()
+        return List<MobileAlarmInfo>(len) {
+            FfiConverterTypeMobileAlarmInfo.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MobileAlarmInfo>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMobileAlarmInfo.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<MobileAlarmInfo>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMobileAlarmInfo.write(it, buf)
         }
     }
 }

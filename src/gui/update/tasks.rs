@@ -322,10 +322,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // reuse logic from parser or simple parsing
             let mins = if let Ok(n) = app.snooze_custom_input.parse::<u32>() {
                 n
-            } else if let Some(n) = crate::model::parser::parse_duration(&app.snooze_custom_input) {
-                n
             } else {
-                10 // Fallback
+                crate::model::parser::parse_duration(&app.snooze_custom_input).unwrap_or(10)
             };
             app.snooze_custom_input.clear();
 

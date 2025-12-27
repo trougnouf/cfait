@@ -1,15 +1,21 @@
 package com.cfait
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -20,6 +26,7 @@ import com.cfait.ui.HelpScreen
 import com.cfait.ui.HomeScreen
 import com.cfait.ui.SettingsScreen
 import com.cfait.ui.TaskDetailScreen
+import com.cfait.util.AlarmScheduler
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -53,6 +60,30 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
     val context = LocalContext.current
     var isLoading by remember { mutableStateOf(false) }
 
+    // --- Permission Request Logic ---
+    val launcher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            // Permission granted
+        } else {
+            // Permission denied
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                launcher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+    // -------------------------------
+
     fun refreshLists() {
         scope.launch {
             try {
@@ -73,6 +104,8 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
             try {
                 api.sync()
                 refreshLists()
+                // Schedule next alarm after sync
+                AlarmScheduler.scheduleNextAlarm(context, api)
             } catch (e: Exception) {
             }
             isLoading = false
@@ -97,7 +130,7 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
         }
     }
 
-    LaunchedEffect(Unit) { fastStart() }
+    LaunchedEffect("fastStart") { fastStart() }
 
     NavHost(navController, startDestination = "home") {
         composable("home") {
