@@ -257,9 +257,85 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
             }
         }
 
-        // 3. Reminders (rem:10m, rem:8am)
+        // 3. Reminders (rem:10m, rem:8am, rem:tomorrow 16:00, rem:in 5m)
         if matched_kind.is_none() && word_lower.starts_with("rem:") {
             matched_kind = Some(SyntaxType::Reminder);
+
+            let clean_val = if word.len() > 4 { &word[4..] } else { "" };
+
+            // Helper to skip whitespace and get next non-whitespace token
+            let find_next_token = |start_idx: usize| -> Option<usize> {
+                (start_idx..words.len()).find(|&idx| !words[idx].2.trim().is_empty())
+            };
+
+            // Check for "rem:in 5m" pattern
+            if clean_val.eq_ignore_ascii_case("in") {
+                if let Some(next_idx) = find_next_token(i + 1) {
+                    let next_token_str = words[next_idx].2.as_str();
+                    let next_next_idx = find_next_token(next_idx + 1);
+                    let next_next = next_next_idx.map(|idx| words[idx].2.as_str());
+
+                    if let Some((_, _, consumed)) =
+                        parse_amount_and_unit(next_token_str, next_next, false)
+                    {
+                        let last_idx = if consumed > 0 {
+                            next_next_idx.unwrap_or(next_idx)
+                        } else {
+                            next_idx
+                        };
+                        words_consumed = last_idx - i + 1;
+                    }
+                }
+            }
+            // Check for date keywords (rem:tomorrow, rem:today, etc.)
+            else if !clean_val.is_empty() && parse_smart_date(clean_val).is_some() {
+                // Look ahead for time (rem:tomorrow 16:00)
+                if let Some(next_idx) = find_next_token(i + 1)
+                    && is_time_format(&words[next_idx].2)
+                {
+                    words_consumed = next_idx - i + 1;
+                }
+            }
+            // Check for "rem: tomorrow 16:00" (space after colon)
+            else if clean_val.is_empty()
+                && let Some(next_idx) = find_next_token(i + 1)
+            {
+                let next_word = &words[next_idx].2;
+
+                // Check if next word is "in" for "rem: in 5m"
+                if next_word.eq_ignore_ascii_case("in") {
+                    if let Some(amount_idx) = find_next_token(next_idx + 1) {
+                        let next_token_str = words[amount_idx].2.as_str();
+                        let next_next_idx = find_next_token(amount_idx + 1);
+                        let next_next = next_next_idx.map(|idx| words[idx].2.as_str());
+
+                        if let Some((_, _, consumed)) =
+                            parse_amount_and_unit(next_token_str, next_next, false)
+                        {
+                            let last_idx = if consumed > 0 {
+                                next_next_idx.unwrap_or(amount_idx)
+                            } else {
+                                amount_idx
+                            };
+                            words_consumed = last_idx - i + 1;
+                        }
+                    }
+                }
+                // Check if next word is a date keyword
+                else if parse_smart_date(next_word).is_some() {
+                    words_consumed = next_idx - i + 1;
+                    // Look ahead for time
+                    if let Some(time_idx) = find_next_token(next_idx + 1)
+                        && is_time_format(&words[time_idx].2)
+                    {
+                        words_consumed = time_idx - i + 1;
+                    }
+                }
+                // Or just a duration/time
+                else if parse_duration(next_word).is_some() || is_time_format(next_word) {
+                    words_consumed = next_idx - i + 1;
+                }
+            }
         }
 
         // 4. Single tokens

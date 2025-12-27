@@ -197,3 +197,94 @@ fn test_syntax_highlighting_tokens_for_in_keyword() {
     let t = due_token.unwrap();
     assert_eq!(&input[t.start..t.end], "@in 2 days");
 }
+
+#[test]
+fn test_reminder_syntax_highlighting_with_time() {
+    // Test rem:tomorrow 16:00
+    let input = "test rem:tomorrow 16:00";
+    let tokens = tokenize_smart_input(input);
+
+    let reminder_token = tokens.iter().find(|t| t.kind == SyntaxType::Reminder);
+    assert!(
+        reminder_token.is_some(),
+        "Reminder token for 'rem:tomorrow 16:00' was not found"
+    );
+    let t = reminder_token.unwrap();
+    assert_eq!(
+        &input[t.start..t.end],
+        "rem:tomorrow 16:00",
+        "Reminder should include both date and time"
+    );
+}
+
+#[test]
+fn test_reminder_syntax_highlighting_with_full_date() {
+    // Test rem:2025-12-27 09:00
+    let input = "meeting rem:2025-12-27 09:00";
+    let tokens = tokenize_smart_input(input);
+
+    let reminder_token = tokens.iter().find(|t| t.kind == SyntaxType::Reminder);
+    assert!(
+        reminder_token.is_some(),
+        "Reminder token for 'rem:2025-12-27 09:00' was not found"
+    );
+    let t = reminder_token.unwrap();
+    assert_eq!(
+        &input[t.start..t.end],
+        "rem:2025-12-27 09:00",
+        "Reminder should include full date and time"
+    );
+}
+
+#[test]
+fn test_reminder_syntax_highlighting_rem_in() {
+    // Test rem:in 5m
+    let input = "Pizza rem:in 5m";
+    let tokens = tokenize_smart_input(input);
+
+    let reminder_token = tokens.iter().find(|t| t.kind == SyntaxType::Reminder);
+    assert!(
+        reminder_token.is_some(),
+        "Reminder token for 'rem:in 5m' was not found"
+    );
+    let t = reminder_token.unwrap();
+    assert_eq!(
+        &input[t.start..t.end],
+        "rem:in 5m",
+        "Reminder should include 'in' keyword and duration"
+    );
+}
+
+#[test]
+fn test_reminder_syntax_highlighting_with_space() {
+    // Test rem: tomorrow 16:00 (space after colon)
+    let input = "test rem: tomorrow 16:00";
+    let tokens = tokenize_smart_input(input);
+
+    let reminder_token = tokens.iter().find(|t| t.kind == SyntaxType::Reminder);
+    assert!(
+        reminder_token.is_some(),
+        "Reminder token for 'rem: tomorrow 16:00' was not found"
+    );
+    let t = reminder_token.unwrap();
+    assert_eq!(
+        &input[t.start..t.end],
+        "rem: tomorrow 16:00",
+        "Reminder with space after colon should include date and time"
+    );
+}
+
+#[test]
+fn test_reminder_syntax_highlighting_time_only() {
+    // Test rem:today (just time)
+    let input = "call rem:14:30";
+    let tokens = tokenize_smart_input(input);
+
+    let reminder_token = tokens.iter().find(|t| t.kind == SyntaxType::Reminder);
+    assert!(
+        reminder_token.is_some(),
+        "Reminder token for 'rem:14:30' was not found"
+    );
+    let t = reminder_token.unwrap();
+    assert_eq!(&input[t.start..t.end], "rem:14:30");
+}
