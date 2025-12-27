@@ -1,4 +1,5 @@
 // File: src/lib.rs
+pub mod alarm_index;
 pub mod cache;
 pub mod client;
 pub mod color_utils;

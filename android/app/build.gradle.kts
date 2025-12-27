@@ -136,6 +136,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.9.6")
 
+    // WorkManager for reliable background task execution
+    implementation("androidx.work:work-runtime-ktx:2.11.0")
+
     // Required for UniFFI
     implementation("net.java.dev.jna:jna:5.18.1@aar")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")

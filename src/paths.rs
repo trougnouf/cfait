@@ -86,4 +86,10 @@ impl AppPaths {
     pub fn get_local_task_path() -> Option<PathBuf> {
         Self::get_data_dir().ok().map(|p| p.join("local.json"))
     }
+
+    pub fn get_alarm_index_path() -> Option<PathBuf> {
+        Self::get_data_dir()
+            .ok()
+            .map(|p| p.join("alarm_index.json"))
+    }
 }

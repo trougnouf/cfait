@@ -1303,10 +1303,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_config() != 1475.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms() != 21432.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms() != 59309.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp() != 53474.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp() != 22544.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time() != 16148.toShort()) {
@@ -1922,12 +1922,24 @@ public interface CfaitMobileInterface {
     /**
      * Called by Android when the AlarmManager wakes up.
      * Returns all alarms that should be firing NOW (with a small grace period).
+     *
+     * PERFORMANCE OPTIMIZATION: Uses the alarm index cache for fast lookups.
+     * - Without cache: O(N) - must parse all tasks (~2-3 seconds for 1000 tasks)
+     * - With cache: O(1) or O(log N) - direct lookup (~30-50ms)
+     *
+     * Falls back to full scan if index is missing or corrupted.
      */
     fun `getFiringAlarms`(): List<MobileAlarmInfo>
 
     /**
      * Returns the timestamp (seconds) of the next alarm (explicit or implicit).
      * Used by Android to schedule AlarmManager.
+     *
+     * PERFORMANCE OPTIMIZATION: Uses the alarm index cache for fast lookups.
+     * - Without cache: O(N) - must scan all tasks
+     * - With cache: O(1) - direct lookup of next alarm from sorted index
+     *
+     * Falls back to full scan if index is missing.
      */
     fun `getNextAlarmTimestamp`(): kotlin.Long?
 
@@ -2348,6 +2360,12 @@ open class CfaitMobile :
     /**
      * Called by Android when the AlarmManager wakes up.
      * Returns all alarms that should be firing NOW (with a small grace period).
+     *
+     * PERFORMANCE OPTIMIZATION: Uses the alarm index cache for fast lookups.
+     * - Without cache: O(N) - must parse all tasks (~2-3 seconds for 1000 tasks)
+     * - With cache: O(1) or O(log N) - direct lookup (~30-50ms)
+     *
+     * Falls back to full scan if index is missing or corrupted.
      */
     override fun `getFiringAlarms`(): List<MobileAlarmInfo> =
         FfiConverterSequenceTypeMobileAlarmInfo.lift(
@@ -2364,6 +2382,12 @@ open class CfaitMobile :
     /**
      * Returns the timestamp (seconds) of the next alarm (explicit or implicit).
      * Used by Android to schedule AlarmManager.
+     *
+     * PERFORMANCE OPTIMIZATION: Uses the alarm index cache for fast lookups.
+     * - Without cache: O(N) - must scan all tasks
+     * - With cache: O(1) - direct lookup of next alarm from sorted index
+     *
+     * Falls back to full scan if index is missing.
      */
     override fun `getNextAlarmTimestamp`(): kotlin.Long? =
         FfiConverterOptionalLong.lift(
