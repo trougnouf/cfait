@@ -69,7 +69,7 @@ async fn test_ghost_is_pruned_even_when_ctag_matches() {
 
     let client = RustyClient::new(&url, "u", "p", true).unwrap();
 
-    let mut task = Task::new("Ghost", &HashMap::new());
+    let mut task = Task::new("Ghost", &HashMap::new(), None);
     task.uid = "ghost".to_string();
     task.href = format!("{}{}/ghost.ics", url, cal_path);
     task.calendar_href = full_cal_href.clone();
@@ -120,7 +120,7 @@ async fn test_pending_delete_suppresses_server_item() {
     let client = RustyClient::new(&url, "u", "p", true).unwrap();
     let full_cal_href = format!("{}{}", url, cal_path);
 
-    let mut task = Task::new("Zombie", &HashMap::new());
+    let mut task = Task::new("Zombie", &HashMap::new(), None);
     task.uid = task_uid.to_string();
     task.href = format!("{}{}", url, task_path);
     task.calendar_href = full_cal_href.clone();
@@ -174,7 +174,7 @@ async fn test_server_deletion_updates_cache() {
         .await;
     let client = RustyClient::new(&url, "u", "p", true).unwrap();
     let full_cal_href = format!("{}{}", url, cal_path);
-    let mut task = Task::new("Existing", &HashMap::new());
+    let mut task = Task::new("Existing", &HashMap::new(), None);
     task.uid = "existing".to_string();
     task.href = format!("{}{}/task.ics", url, cal_path);
     task.calendar_href = full_cal_href.clone();
@@ -216,7 +216,7 @@ async fn test_ghost_is_pruned_on_full_sync_with_ctag_mismatch() {
 
     let client = RustyClient::new(&url, "u", "p", true).unwrap();
 
-    let mut task = Task::new("Ghost", &HashMap::new());
+    let mut task = Task::new("Ghost", &HashMap::new(), None);
     task.uid = "ghost".to_string();
     task.href = format!("{}{}/ghost.ics", url, cal_path);
     task.calendar_href = full_cal_href.clone();

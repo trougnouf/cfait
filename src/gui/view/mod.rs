@@ -21,7 +21,7 @@ use iced::mouse;
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{
     MouseArea, Space, button, column, container, row, scrollable, stack, svg, text, text_editor,
-    tooltip,
+    text_input, tooltip,
 };
 use iced::{Color, Element, Length, Theme, Vector};
 
@@ -256,8 +256,21 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         column![]
     };
 
-    // Compact buttons
-    let snooze_btn = |label, mins| {
+    // --- BUTTONS ---
+
+    // Load config for presets
+    let (s1, s2) = if let Ok(cfg) = crate::config::Config::load() {
+        (cfg.snooze_short_mins, cfg.snooze_long_mins)
+    } else {
+        (15, 60)
+    };
+
+    let snooze_btn = |mins: u32| {
+        let label = if mins >= 60 {
+            format!("{}h", mins / 60)
+        } else {
+            format!("{}m", mins)
+        };
         button(text(label).size(12))
             .style(iced::widget::button::secondary)
             .padding([6, 12])
@@ -268,6 +281,28 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             ))
     };
 
+    // Custom Snooze Input
+    let custom_snooze_row = row![
+        text_input("Custom (30m, 2h)", &app.snooze_custom_input)
+            .on_input(Message::SnoozeCustomInput)
+            .on_submit(Message::SnoozeCustomSubmit(
+                task.uid.clone(),
+                alarm.uid.clone()
+            ))
+            .padding(5)
+            .size(12)
+            .width(Length::Fixed(100.0)),
+        button(icon::icon(icon::CHECK).size(12))
+            .style(iced::widget::button::secondary)
+            .padding(6)
+            .on_press(Message::SnoozeCustomSubmit(
+                task.uid.clone(),
+                alarm.uid.clone()
+            ))
+    ]
+    .spacing(5)
+    .align_y(iced::Alignment::Center);
+
     let dismiss_btn = button(text("Dismiss").size(14).font(iced::Font {
         weight: iced::font::Weight::Bold,
         ..Default::default()
@@ -276,15 +311,14 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
     .padding([8, 16])
     .on_press(Message::DismissAlarm(task.uid.clone(), alarm.uid.clone()));
 
-    let buttons = row![
-        snooze_btn("10m", 10),
-        snooze_btn("1h", 60),
-        snooze_btn("1d", 1440),
-        Space::new().width(Length::Fixed(10.0)),
+    let buttons = column![
+        row![snooze_btn(s1), snooze_btn(s2), custom_snooze_row]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
+        Space::new().height(10),
         dismiss_btn
     ]
-    .spacing(8)
-    .align_y(iced::Alignment::Center);
+    .align_x(iced::Alignment::Center);
 
     // Combine content into a scrollable area to handle dynamic sizes
     let modal_content = scrollable(

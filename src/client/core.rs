@@ -767,13 +767,14 @@ impl RustyClient {
                         let mut move_res = self.execute_move(task, new_cal, false).await;
 
                         if let Err(ref e) = move_res
-                            && (e.contains("412") || e.contains("PreconditionFailed")) {
-                                warnings.push(format!(
-                                    "Move collision for '{}'. Forcing overwrite.",
-                                    task.summary
-                                ));
-                                move_res = self.execute_move(task, new_cal, true).await;
-                            }
+                            && (e.contains("412") || e.contains("PreconditionFailed"))
+                        {
+                            warnings.push(format!(
+                                "Move collision for '{}'. Forcing overwrite.",
+                                task.summary
+                            ));
+                            move_res = self.execute_move(task, new_cal, true).await;
+                        }
 
                         match move_res {
                             Ok(_) => {
@@ -1041,7 +1042,7 @@ mod tests {
 
     #[test]
     fn test_three_way_merge_preserves_new_fields() {
-        let mut base = Task::new("Base Task", &HashMap::new());
+        let mut base = Task::new("Base Task", &HashMap::new(), None);
         base.location = Some("Old Loc".to_string());
         base.url = None;
 

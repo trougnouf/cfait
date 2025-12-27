@@ -4,7 +4,7 @@ use chrono::{Datelike, Duration, Local};
 use std::collections::HashMap;
 
 fn parse(input: &str) -> Task {
-    Task::new(input, &HashMap::new())
+    Task::new(input, &HashMap::new(), None)
 }
 
 // --- RECURRENCE TESTS ---
@@ -78,10 +78,13 @@ fn test_date_iso_explicit() {
 
 #[test]
 fn test_date_keywords() {
-    assert!(parse("Task today").due.is_some());
-    assert!(parse("Task tomorrow").due.is_some());
+    assert!(parse("Task today").due.is_none());
+    assert!(parse("Task tomorrow").due.is_none());
     assert!(parse("Task @today").due.is_some());
     assert!(parse("Task @tomorrow").due.is_some());
+    assert!(parse("Task ^tomorrow").dtstart.is_some());
+    assert!(!parse("Task rem:tomorrow").alarms.is_empty());
+    assert!(parse("Task @tomorrow").alarms.is_empty());
     assert!(parse("Task due:today").due.is_some());
     let t_wed = parse("Meeting @wednesday");
     assert!(t_wed.due.is_some());

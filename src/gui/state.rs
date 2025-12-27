@@ -1,3 +1,4 @@
+// File: src/gui/state.rs
 use crate::client::RustyClient;
 use crate::config::AppTheme;
 use crate::gui::icon;
@@ -111,6 +112,15 @@ pub struct GuiApp {
     pub urgent_prio: u8,
     pub alarm_tx: Option<mpsc::Sender<Vec<TodoTask>>>, // Send tasks to actor
     pub ringing_tasks: Vec<(TodoTask, Alarm)>,         // Stack of firing alarms
+
+    // Snooze Custom Input
+    pub snooze_custom_input: String,
+
+    // Config cache (New fields)
+    pub auto_reminders: bool,
+    pub default_reminder_time: String,
+    pub snooze_short_mins: u32,
+    pub snooze_long_mins: u32,
 }
 
 impl Default for GuiApp {
@@ -200,6 +210,13 @@ impl Default for GuiApp {
             urgent_prio: 1,
             alarm_tx: None,
             ringing_tasks: Vec::new(),
+            snooze_custom_input: String::new(),
+
+            // Default config values
+            auto_reminders: true,
+            default_reminder_time: "09:00".to_string(),
+            snooze_short_mins: 15,
+            snooze_long_mins: 60,
         }
     }
 }

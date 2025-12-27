@@ -32,7 +32,11 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ObSortMonthsChanged(_)
         | Message::ObUrgentDaysChanged(_)
         | Message::ObUrgentPrioChanged(_)
-        | Message::ThemeChanged(_) => settings::handle(app, message),
+        | Message::ThemeChanged(_)
+        | Message::SetAutoReminders(_)
+        | Message::SetDefaultReminderTime(_)
+        | Message::SetSnoozeShort(_)
+        | Message::SetSnoozeLong(_) => settings::handle(app, message),
 
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)
@@ -54,7 +58,10 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::MigrateLocalTo(_)
         | Message::StartTask(_)
         | Message::PauseTask(_)
-        | Message::StopTask(_) => tasks::handle(app, message),
+        | Message::StopTask(_)
+        | Message::SnoozeCustomInput(_) // ADD THIS
+        | Message::SnoozeCustomSubmit(_, _) // ADD THIS
+        => tasks::handle(app, message),
 
         Message::TabPressed(_)
         | Message::FocusInput

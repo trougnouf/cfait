@@ -4,6 +4,7 @@ use crate::model::{Task, TaskStatus, extract_inline_aliases, validate_alias_inte
 use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
 use crate::tui::state::{AppState, Focus, InputMode};
+use chrono::NaiveTime;
 use crossterm::event::{KeyCode, KeyEvent};
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
@@ -55,33 +56,35 @@ pub async fn handle_key_event(
         match key.code {
             KeyCode::Char('D') | KeyCode::Char('d') => {
                 if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                    && t.dismiss_alarm(&alarm_uid) {
-                        let t_clone = t.clone();
-                        // Update UI
-                        state.active_alarm = None;
-                        state.refresh_filtered_view();
-                        // Push update to backend
-                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                        // Push update to alarm actor
-                        if let Some(tx) = &state.alarm_actor_tx {
-                            let all = state.store.calendars.values().flatten().cloned().collect();
-                            let _ = tx.try_send(all);
-                        }
+                    && t.dismiss_alarm(&alarm_uid)
+                {
+                    let t_clone = t.clone();
+                    // Update UI
+                    state.active_alarm = None;
+                    state.refresh_filtered_view();
+                    // Push update to backend
+                    let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                    // Push update to alarm actor
+                    if let Some(tx) = &state.alarm_actor_tx {
+                        let all = state.store.calendars.values().flatten().cloned().collect();
+                        let _ = tx.try_send(all);
                     }
+                }
                 return None;
             }
             KeyCode::Char('S') | KeyCode::Char('s') => {
                 if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                    && t.snooze_alarm(&alarm_uid, 10) {
-                        let t_clone = t.clone();
-                        state.active_alarm = None;
-                        state.refresh_filtered_view();
-                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                        if let Some(tx) = &state.alarm_actor_tx {
-                            let all = state.store.calendars.values().flatten().cloned().collect();
-                            let _ = tx.try_send(all);
-                        }
+                    && t.snooze_alarm(&alarm_uid, 10)
+                {
+                    let t_clone = t.clone();
+                    state.active_alarm = None;
+                    state.refresh_filtered_view();
+                    let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                    if let Some(tx) = &state.alarm_actor_tx {
+                        let all = state.store.calendars.values().flatten().cloned().collect();
+                        let _ = tx.try_send(all);
                     }
+                }
                 return None;
             }
             _ => return None, // Block other input while alarm is ringing
@@ -167,7 +170,12 @@ pub async fn handle_key_event(
                     .or_else(|| state.calendars.first().map(|c| c.href.clone()));
 
                 if let Some(href) = target_href {
-                    let mut task = Task::new(&clean_input, &state.tag_aliases);
+                    // Load config to get time
+                    let config = Config::load().unwrap_or_default();
+                    let def_time =
+                        NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
+                    let mut task = Task::new(&clean_input, &state.tag_aliases, def_time);
                     task.calendar_href = href.clone();
                     task.parent_uid = state.creating_child_of.clone();
 
@@ -227,7 +235,10 @@ pub async fn handle_key_event(
                 if let Some(uid) = target_uid
                     && let Some((t, _)) = state.store.get_task_mut(&uid)
                 {
-                    t.apply_smart_input(&clean_input, &state.tag_aliases);
+                    let config = Config::load().unwrap_or_default();
+                    let def_time =
+                        NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+                    t.apply_smart_input(&clean_input, &state.tag_aliases, def_time);
                     let clone = t.clone();
                     state.refresh_filtered_view();
                     state.mode = InputMode::Normal;

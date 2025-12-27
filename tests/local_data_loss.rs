@@ -19,7 +19,7 @@ fn test_local_tasks_are_not_pruned_as_ghosts() {
 
     // 2. Create a "Local" task
     // Local tasks are stored on disk without an ETag.
-    let mut task = Task::new("Buy Milk", &HashMap::new());
+    let mut task = Task::new("Buy Milk", &HashMap::new(), None);
     task.uid = "local-uid-1".to_string();
     task.calendar_href = LOCAL_CALENDAR_HREF.to_string();
     task.href = String::new(); // Local tasks often have empty hrefs or "local://..."

@@ -4,7 +4,7 @@ use chrono::{Duration, Local};
 use std::collections::HashMap;
 
 fn parse(input: &str) -> Task {
-    Task::new(input, &HashMap::new())
+    Task::new(input, &HashMap::new(), None)
 }
 
 #[test]

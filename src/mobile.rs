@@ -7,6 +7,7 @@ use crate::model::{DateType, Task};
 use crate::paths::AppPaths;
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
+use chrono::NaiveTime;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -156,6 +157,10 @@ pub struct MobileConfig {
     pub sort_cutoff_months: Option<u32>,
     pub urgent_days: u32,
     pub urgent_prio: u8,
+    pub auto_reminders: bool,
+    pub default_reminder_time: String,
+    pub snooze_short: u32,
+    pub snooze_long: u32,
 }
 
 fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
@@ -312,6 +317,10 @@ impl CfaitMobile {
             sort_cutoff_months: c.sort_cutoff_months,
             urgent_days: c.urgent_days_horizon,
             urgent_prio: c.urgent_priority_threshold,
+            auto_reminders: c.auto_reminders,
+            default_reminder_time: c.default_reminder_time,
+            snooze_short: c.snooze_short_mins,
+            snooze_long: c.snooze_long_mins,
         }
     }
 
@@ -327,6 +336,10 @@ impl CfaitMobile {
         sort_cutoff_months: Option<u32>,
         urgent_days: u32,
         urgent_prio: u8,
+        auto_reminders: bool,
+        default_reminder_time: String,
+        snooze_short: u32,
+        snooze_long: u32,
     ) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
         c.url = url;
@@ -340,6 +353,10 @@ impl CfaitMobile {
         c.sort_cutoff_months = sort_cutoff_months;
         c.urgent_days_horizon = urgent_days;
         c.urgent_priority_threshold = urgent_prio;
+        c.auto_reminders = auto_reminders;
+        c.default_reminder_time = default_reminder_time;
+        c.snooze_short_mins = snooze_short;
+        c.snooze_long_mins = snooze_long;
         c.save().map_err(MobileError::from)
     }
 
@@ -582,9 +599,12 @@ impl CfaitMobile {
     }
 
     pub async fn add_task_smart(&self, input: String) -> Result<String, MobileError> {
-        let aliases = Config::load().unwrap_or_default().tag_aliases;
-        let mut task = Task::new(&input, &aliases);
         let config = Config::load().unwrap_or_default();
+
+        // Parse time from config
+        let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
+        let mut task = Task::new(&input, &config.tag_aliases, def_time);
         let target_href = config
             .default_calendar
             .clone()
@@ -661,10 +681,12 @@ impl CfaitMobile {
         uid: String,
         smart_input: String,
     ) -> Result<(), MobileError> {
-        let aliases = Config::load().unwrap_or_default().tag_aliases;
+        let config = Config::load().unwrap_or_default();
+        let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
         self.apply_store_mutation(uid, |t: &mut TaskStore, id: &str| {
             if let Some((task, _)) = t.get_task_mut(id) {
-                task.apply_smart_input(&smart_input, &aliases);
+                task.apply_smart_input(&smart_input, &config.tag_aliases, def_time);
                 Some(task.clone())
             } else {
                 None

@@ -8,7 +8,7 @@ use std::collections::HashMap;
 #[test]
 fn test_local_tasks_are_not_pruned_as_ghosts() {
     let mut tasks = vec![];
-    let mut t1 = Task::new("Local Task 1", &HashMap::new());
+    let mut t1 = Task::new("Local Task 1", &HashMap::new(), None);
     t1.calendar_href = LOCAL_CALENDAR_HREF.to_string();
     t1.etag = "".to_string();
     tasks.push(t1);
@@ -26,7 +26,7 @@ fn test_journal_compaction_squashes_updates() {
     let uid = "task-explosion";
 
     // Simulate the explosion: Create + 3 redundant updates
-    let mut t = Task::new("Base", &HashMap::new());
+    let mut t = Task::new("Base", &HashMap::new(), None);
     t.uid = uid.to_string();
     j.queue.push(Action::Create(t.clone()));
 

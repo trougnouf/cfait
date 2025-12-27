@@ -50,7 +50,7 @@ async fn test_move_propagates_href_to_pending_update() {
     let client = RustyClient::new(&url, "user", "pass", true).unwrap();
 
     // 5. Setup Journal
-    let mut task = Task::new("Task to Move", &HashMap::new());
+    let mut task = Task::new("Task to Move", &HashMap::new(), None);
     task.uid = task_uid.to_string();
     task.calendar_href = old_cal.to_string();
     task.href = old_href.clone();

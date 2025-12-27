@@ -57,6 +57,12 @@ pub fn save_config(app: &GuiApp) {
         theme: app.current_theme,
         urgent_days_horizon: app.urgent_days,
         urgent_priority_threshold: app.urgent_prio,
+
+        // NEW FIELDS
+        auto_reminders: app.auto_reminders,
+        default_reminder_time: app.default_reminder_time.clone(),
+        snooze_short_mins: app.snooze_short_mins,
+        snooze_long_mins: app.snooze_long_mins,
     }
     .save();
 }

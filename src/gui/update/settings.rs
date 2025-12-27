@@ -35,6 +35,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_urgent_days_input = app.urgent_days.to_string();
             app.ob_urgent_prio_input = app.urgent_prio.to_string();
 
+            // --- LOAD NEW FIELDS ---
+            app.auto_reminders = config.auto_reminders;
+            app.default_reminder_time = config.default_reminder_time.clone();
+            app.snooze_short_mins = config.snooze_short_mins;
+            app.snooze_long_mins = config.snooze_long_mins;
+
             let mut cached_cals = Cache::load_calendars().unwrap_or_default();
 
             if !cached_cals.iter().any(|c| c.href == LOCAL_CALENDAR_HREF) {
@@ -136,6 +142,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 theme: app.current_theme,
                 urgent_days_horizon: app.urgent_days,
                 urgent_priority_threshold: app.urgent_prio,
+                // NEW FIELDS
+                auto_reminders: app.auto_reminders,
+                default_reminder_time: app.default_reminder_time.clone(),
+                snooze_short_mins: app.snooze_short_mins,
+                snooze_long_mins: app.snooze_long_mins,
             });
 
             config_to_save.url = app.ob_url.clone();
@@ -150,6 +161,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             config_to_save.tag_aliases = app.tag_aliases.clone();
             config_to_save.sort_cutoff_months = app.sort_cutoff_months;
             config_to_save.theme = app.current_theme;
+            config_to_save.auto_reminders = app.auto_reminders;
+            config_to_save.default_reminder_time = app.default_reminder_time.clone();
+            config_to_save.snooze_short_mins = app.snooze_short_mins;
+            config_to_save.snooze_long_mins = app.snooze_long_mins;
 
             let _ = config_to_save.save();
 
@@ -204,6 +219,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 theme: app.current_theme,
                 urgent_days_horizon: app.urgent_days,
                 urgent_priority_threshold: app.urgent_prio,
+
+                // NEW FIELDS
+                auto_reminders: app.auto_reminders,
+                default_reminder_time: app.default_reminder_time.clone(),
+                snooze_short_mins: app.snooze_short_mins,
+                snooze_long_mins: app.snooze_long_mins,
             };
 
             let _ = config_to_save.save();
@@ -295,6 +316,34 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     save_config(app);
                     refresh_filtered_tasks(app);
                 }
+            }
+            Task::none()
+        }
+        Message::SetAutoReminders(val) => {
+            app.auto_reminders = val;
+            save_config(app);
+            Task::none()
+        }
+        Message::SetDefaultReminderTime(val) => {
+            app.default_reminder_time = val;
+            save_config(app);
+            Task::none()
+        }
+        Message::SetSnoozeShort(val) => {
+            if val.is_empty() {
+                // allow empty to clear
+            } else if let Ok(n) = val.trim().parse::<u32>() {
+                app.snooze_short_mins = n;
+                save_config(app);
+            }
+            Task::none()
+        }
+        Message::SetSnoozeLong(val) => {
+            if val.is_empty() {
+                // allow empty
+            } else if let Ok(n) = val.trim().parse::<u32>() {
+                app.snooze_long_mins = n;
+                save_config(app);
             }
             Task::none()
         }

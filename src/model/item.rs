@@ -1,5 +1,5 @@
-// File: src/model/item.rs
-use chrono::{DateTime, Local, NaiveDate, Utc};
+// File: ./src/model/item.rs
+use chrono::{DateTime, Local, NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -153,8 +153,6 @@ impl Alarm {
     }
 }
 
-// ----------------
-
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Task {
     pub uid: String,
@@ -193,7 +191,12 @@ pub struct Task {
 }
 
 impl Task {
-    pub fn new(input: &str, aliases: &HashMap<String, Vec<String>>) -> Self {
+    // Changed signature to accept default_time
+    pub fn new(
+        input: &str,
+        aliases: &HashMap<String, Vec<String>>,
+        default_reminder_time: Option<NaiveTime>,
+    ) -> Self {
         let mut task = Self {
             uid: Uuid::new_v4().to_string(),
             summary: String::new(),
@@ -221,8 +224,7 @@ impl Task {
             raw_alarms: Vec::new(),
             raw_components: Vec::new(),
         };
-        // The apply_smart_input implementation lives in the parser module.
-        task.apply_smart_input(input, aliases);
+        task.apply_smart_input(input, aliases, default_reminder_time);
         task
     }
 
@@ -497,6 +499,59 @@ impl Task {
         }
         earliest
     }
+
+    /// Checks if a specific absolute time is already covered by an existing alarm (active or acknowledged).
+    /// Used by the system actor to decide if an auto-reminder is needed.
+    pub fn has_alarm_at(&self, dt: DateTime<Utc>) -> bool {
+        self.alarms.iter().any(|a| match a.trigger {
+            AlarmTrigger::Absolute(t) => t == dt,
+            // We don't compare relative here because auto-reminders are calculated as absolute times
+            // by the system actor before checking.
+            _ => false,
+        })
+    }
+
+    /// Converts a synthetic implicit alarm into a real, acknowledged VALARM.
+    pub fn dismiss_implicit_alarm(&mut self, trigger_dt: DateTime<Utc>, description: String) {
+        // Double check we don't already have it
+        if self.has_alarm_at(trigger_dt) {
+            return;
+        }
+
+        let mut alarm = Alarm::new_absolute(trigger_dt);
+        alarm.description = Some(description);
+        alarm.acknowledged = Some(Utc::now());
+        self.alarms.push(alarm);
+    }
+
+    /// Converts a synthetic implicit alarm into a real snooze chain.
+    /// 1. Creates the "Original" alarm (acknowledged).
+    /// 2. Creates the "Snooze" alarm (active).
+    pub fn snooze_implicit_alarm(
+        &mut self,
+        trigger_dt: DateTime<Utc>,
+        description: String,
+        snooze_mins: u32,
+    ) {
+        // 1. Create the "ghost" original alarm so the snooze has a parent
+        let mut parent = Alarm::new_absolute(trigger_dt);
+        parent.description = Some(description);
+        parent.acknowledged = Some(Utc::now());
+
+        let parent_uid = parent.uid.clone();
+        self.alarms.push(parent);
+
+        // 2. Create the snooze
+        let now = Utc::now();
+        let next_trigger = now + chrono::Duration::minutes(snooze_mins as i64);
+
+        let mut snooze = Alarm::new_absolute(next_trigger);
+        snooze.related_to_uid = Some(parent_uid);
+        snooze.relation_type = Some("SNOOZE".to_string());
+        snooze.description = Some(format!("Snoozed for {}m", snooze_mins));
+
+        self.alarms.push(snooze);
+    }
 }
 
 // --- MAIN IMPLEMENTATION ---
@@ -579,7 +634,12 @@ impl Task {
         s
     }
 
-    pub fn apply_smart_input(&mut self, input: &str, aliases: &HashMap<String, Vec<String>>) {
-        super::parser::apply_smart_input(self, input, aliases);
+    pub fn apply_smart_input(
+        &mut self,
+        input: &str,
+        aliases: &HashMap<String, Vec<String>>,
+        default_reminder_time: Option<NaiveTime>,
+    ) {
+        super::parser::apply_smart_input(self, input, aliases, default_reminder_time);
     }
 }

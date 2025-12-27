@@ -434,7 +434,7 @@ mod tests {
     use std::collections::HashMap;
 
     fn dummy_task() -> Task {
-        Task::new("test", &HashMap::new())
+        Task::new("test", &HashMap::new(), None)
     }
 
     #[test]

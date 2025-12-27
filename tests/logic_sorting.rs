@@ -4,7 +4,7 @@ use chrono::{Duration, Utc};
 use std::collections::HashMap;
 
 fn task(summary: &str) -> Task {
-    Task::new(summary, &HashMap::new())
+    Task::new(summary, &HashMap::new(), None)
 }
 
 #[test]

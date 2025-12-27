@@ -284,12 +284,6 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                 matched_kind = Some(SyntaxType::Duration);
             } else if word.starts_with('#') {
                 matched_kind = Some(SyntaxType::Tag);
-            } else if word_lower == "today" || word_lower == "tomorrow" {
-                matched_kind = Some(SyntaxType::DueDate);
-                // Peek ahead for time
-                if i + 1 < words.len() && is_time_format(&words[i + 1].2) {
-                    words_consumed = 2;
-                }
             }
         }
 
@@ -592,7 +586,7 @@ pub fn prettify_recurrence(rrule: &str) -> String {
     }
 }
 
-fn parse_duration(val: &str) -> Option<u32> {
+pub fn parse_duration(val: &str) -> Option<u32> {
     let lower = val.to_lowercase();
     if let Some(n) = lower.strip_suffix("min") {
         return n.parse::<u32>().ok();
@@ -777,7 +771,12 @@ fn is_special_token(word: &str) -> bool {
     matches!(lower.as_str(), "today" | "tomorrow")
 }
 
-pub fn apply_smart_input(task: &mut Task, input: &str, aliases: &HashMap<String, Vec<String>>) {
+pub fn apply_smart_input(
+    task: &mut Task,
+    input: &str,
+    aliases: &HashMap<String, Vec<String>>,
+    default_reminder_time: Option<NaiveTime>,
+) {
     let mut summary_words = Vec::new();
     // Reset fields
     task.priority = 0;
@@ -838,19 +837,57 @@ pub fn apply_smart_input(task: &mut Task, input: &str, aliases: &HashMap<String,
                 summary_words.push(unescape(token));
             }
         }
-        // 2. Reminders (rem:)
+        // 2. Reminders (rem:) -> UPDATED LOGIC
         else if let Some(val) = token_lower.strip_prefix("rem:") {
-            if let Some(d) = parse_duration(val) {
-                task.alarms.push(Alarm::new_relative(d));
-            } else if let Some(t) = parse_time_string(val) {
-                // Absolute Time (Today at HH:MM)
-                let now = Local::now().date_naive();
-                let dt = now
-                    .and_time(t)
-                    .and_local_timezone(Local)
-                    .unwrap()
-                    .with_timezone(&Utc);
-                task.alarms.push(Alarm::new_absolute(dt));
+            let clean_val = if val.is_empty() && i + 1 < stream.len() {
+                // Handle "rem: 10m" (space after colon)
+                consumed += 1;
+                &stream[i + 1]
+            } else {
+                // Handle "rem:10m"
+                if token.len() > 4 { &token[4..] } else { "" }
+            };
+
+            if !clean_val.is_empty() {
+                // A. Duration (rem:10m)
+                if let Some(d) = parse_duration(clean_val) {
+                    task.alarms.push(Alarm::new_relative(d));
+                }
+                // B. Time Only (rem:8pm) -> Today at 8pm
+                else if let Some(t) = parse_time_string(clean_val) {
+                    let now = Local::now().date_naive();
+                    let dt = now
+                        .and_time(t)
+                        .and_local_timezone(Local)
+                        .unwrap()
+                        .with_timezone(&Utc);
+                    task.alarms.push(Alarm::new_absolute(dt));
+                }
+                // C. Date + Optional Time (rem:2025-12-27 12:30, rem:tomorrow 9am)
+                else if let Some(d) = parse_smart_date(clean_val) {
+                    // Look ahead for time
+                    let mut time_part = None;
+                    if i + consumed < stream.len() {
+                        if let Some(t) = parse_time_string(&stream[i + consumed]) {
+                            time_part = Some(t);
+                            consumed += 1;
+                        }
+                    }
+
+                    // USE CONFIG OR DEFAULT TO 08:00
+                    let fallback = default_reminder_time
+                        .unwrap_or_else(|| NaiveTime::from_hms_opt(8, 0, 0).unwrap());
+                    let t = time_part.unwrap_or(fallback);
+
+                    let dt = d
+                        .and_time(t)
+                        .and_local_timezone(Local)
+                        .unwrap()
+                        .with_timezone(&Utc);
+                    task.alarms.push(Alarm::new_absolute(dt));
+                } else {
+                    summary_words.push(unescape(token));
+                }
             } else {
                 summary_words.push(unescape(token));
             }
@@ -1087,11 +1124,6 @@ pub fn apply_smart_input(task: &mut Task, input: &str, aliases: &HashMap<String,
                 task.dtstart = Some(dt);
             } else {
                 summary_words.push(unescape(token));
-            }
-        } else if token_lower == "today" || token_lower == "tomorrow" {
-            if let Some(d) = parse_smart_date(&token_lower) {
-                let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
-                task.due = Some(dt);
             }
         } else {
             summary_words.push(unescape(token));

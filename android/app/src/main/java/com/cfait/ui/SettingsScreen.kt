@@ -40,6 +40,10 @@ fun SettingsScreen(
     var disabledSet by remember { mutableStateOf<Set<String>>(emptySet()) }
     var urgentDays by remember { mutableStateOf("1") }
     var urgentPrio by remember { mutableStateOf("1") }
+    var autoRemind by remember { mutableStateOf(true) }
+    var defTime by remember { mutableStateOf("09:00") }
+    var snoozeShort by remember { mutableStateOf("15") }
+    var snoozeLong by remember { mutableStateOf("60") }
 
     val scope = rememberCoroutineScope()
 
@@ -55,6 +59,10 @@ fun SettingsScreen(
         disabledSet = allCalendars.filter { it.isDisabled }.map { it.href }.toSet()
         urgentDays = cfg.urgentDays.toString()
         urgentPrio = cfg.urgentPrio.toString()
+        autoRemind = cfg.autoReminders
+        defTime = cfg.defaultReminderTime
+        snoozeShort = cfg.snoozeShort.toString()
+        snoozeLong = cfg.snoozeLong.toString()
     }
 
     LaunchedEffect(Unit) { reload() }
@@ -63,11 +71,14 @@ fun SettingsScreen(
         val sortInt = sortMonths.trim().toUIntOrNull()
         val daysInt = urgentDays.trim().toUIntOrNull() ?: 1u
         val prioInt = urgentPrio.trim().toUByteOrNull() ?: 1u
+        val sShort = snoozeShort.trim().toUIntOrNull() ?: 15u
+        val sLong = snoozeLong.trim().toUIntOrNull() ?: 60u
 
         api.saveConfig(
             url, user, pass, insecure, hideCompleted,
             disabledSet.toList(), sortInt,
-            daysInt, prioInt // <--- Pass new values
+            daysInt, prioInt,
+            autoRemind, defTime, sShort, sLong
         )
     }
 
@@ -219,6 +230,55 @@ fun SettingsScreen(
                     fontSize = 12.sp,
                     color = androidx.compose.ui.graphics.Color.Gray
                 )
+
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                Text(
+                    "Notifications",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = autoRemind, onCheckedChange = { autoRemind = it })
+                    Text("Auto-remind on Due/Start")
+                }
+                Text(
+                    "Only if no specific alarms are set.",
+                    fontSize = 12.sp,
+                    color = androidx.compose.ui.graphics.Color.Gray,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                    Text("Default time (HH:MM):", modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = defTime,
+                        onValueChange = { defTime = it },
+                        modifier = Modifier.width(100.dp),
+                        singleLine = true
+                    )
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                    Text("Snooze Presets (m):", modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = snoozeShort,
+                        onValueChange = { snoozeShort = it },
+                        modifier = Modifier.width(60.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    OutlinedTextField(
+                        value = snoozeLong,
+                        onValueChange = { snoozeLong = it },
+                        modifier = Modifier.width(60.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
             }
 

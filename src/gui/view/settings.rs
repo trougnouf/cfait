@@ -130,6 +130,43 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         Space::new().width(0).into()
     };
 
+    let notifications_ui: Element<_> = if is_settings {
+        column![
+            text("Notifications & Reminders").size(20),
+            checkbox(app.auto_reminders)
+                .label("Auto-remind on Start/Due dates (if no alarms set)")
+                .on_toggle(Message::SetAutoReminders),
+            row![
+                text("Default reminder time (HH:MM):").width(Length::Fixed(200.0)),
+                text_input("09:00", &app.default_reminder_time)
+                    .on_input(Message::SetDefaultReminderTime)
+                    .width(Length::Fixed(80.0))
+                    .padding(5)
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
+            text("Snooze Presets (minutes):").size(14),
+            row![
+                text("Short:"),
+                text_input("15", &app.snooze_short_mins.to_string())
+                    .on_input(Message::SetSnoozeShort)
+                    .width(Length::Fixed(60.0))
+                    .padding(5),
+                text("Long:"),
+                text_input("60", &app.snooze_long_mins.to_string())
+                    .on_input(Message::SetSnoozeLong)
+                    .width(Length::Fixed(60.0))
+                    .padding(5)
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
+        ]
+        .spacing(10)
+        .into()
+    } else {
+        Space::new().width(0).into()
+    };
+
     let aliases_ui: Element<_> = if is_settings {
         let mut list_col = column![text("Tag aliases").size(20)].spacing(10);
         for (key, vals) in &app.tag_aliases {
@@ -266,6 +303,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         // 2. Preferences
         picker,
         prefs,
+        notifications_ui,
         sorting_ui,
         aliases_ui,
         cal_mgmt_ui,

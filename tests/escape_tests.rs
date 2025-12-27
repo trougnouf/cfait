@@ -8,7 +8,7 @@ use std::collections::HashMap;
 #[test]
 fn test_escaped_location() {
     let aliases = HashMap::new();
-    let task = Task::new("\\@@home", &aliases);
+    let task = Task::new("\\@@home", &aliases, None);
     assert_eq!(task.summary, "@@home");
     assert!(task.location.is_none());
 }
@@ -16,7 +16,7 @@ fn test_escaped_location() {
 #[test]
 fn test_escaped_tag() {
     let aliases = HashMap::new();
-    let task = Task::new("\\#tag", &aliases);
+    let task = Task::new("\\#tag", &aliases, None);
     assert_eq!(task.summary, "#tag");
     assert!(task.categories.is_empty());
 }
@@ -24,7 +24,7 @@ fn test_escaped_tag() {
 #[test]
 fn test_escaped_date() {
     let aliases = HashMap::new();
-    let task = Task::new("\\@tomorrow", &aliases);
+    let task = Task::new("\\@tomorrow", &aliases, None);
     assert_eq!(task.summary, "@tomorrow");
     assert!(task.due.is_none());
 }
@@ -32,7 +32,7 @@ fn test_escaped_date() {
 #[test]
 fn test_escaped_start_date() {
     let aliases = HashMap::new();
-    let task = Task::new("\\^next week", &aliases);
+    let task = Task::new("\\^next week", &aliases, None);
     assert_eq!(task.summary, "^next week");
     assert!(task.dtstart.is_none());
 }
@@ -40,7 +40,7 @@ fn test_escaped_start_date() {
 #[test]
 fn test_escaped_keyword() {
     let aliases = HashMap::new();
-    let task = Task::new("\\loc:home", &aliases);
+    let task = Task::new("\\loc:home", &aliases, None);
     assert_eq!(task.summary, "loc:home");
     assert!(task.location.is_none());
 }
@@ -48,7 +48,7 @@ fn test_escaped_keyword() {
 #[test]
 fn test_escaped_strict_word() {
     let aliases = HashMap::new();
-    let task = Task::new("\\today", &aliases);
+    let task = Task::new("\\today", &aliases, None);
     assert_eq!(task.summary, "today");
     assert!(task.due.is_none());
 }
@@ -57,7 +57,7 @@ fn test_escaped_strict_word() {
 fn test_round_trip_escaping() {
     let aliases = HashMap::new();
     // Input is literal location string
-    let task = Task::new("\\@@home", &aliases);
+    let task = Task::new("\\@@home", &aliases, None);
     // Task summary should be literal "@@home" (stored without escape)
     assert_eq!(task.summary, "@@home");
     // Smart string should be escaped back to "\@@home" to preserve meaning during edit
@@ -67,7 +67,7 @@ fn test_round_trip_escaping() {
 #[test]
 fn test_mixed_escaping() {
     let aliases = HashMap::new();
-    let task = Task::new("Buy \\#milk #groceries", &aliases);
+    let task = Task::new("Buy \\#milk #groceries", &aliases, None);
     assert_eq!(task.summary, "Buy #milk");
     assert!(task.categories.contains(&"groceries".to_string()));
     assert!(!task.categories.contains(&"milk".to_string()));
@@ -79,7 +79,7 @@ fn test_quote_escaping_in_desc() {
     // Input: desc:"foo \" bar"
     // The parser should unescape the internal quote
     let input = r#"desc:"foo \" bar""#;
-    let task = Task::new(input, &aliases);
+    let task = Task::new(input, &aliases, None);
     assert_eq!(task.description, r#"foo " bar"#);
 
     // Note: to_smart_string() does not currently serialize the description field,
@@ -91,7 +91,7 @@ fn test_quote_escaping_in_location_round_trip() {
     let aliases = HashMap::new();
     // Input: loc:"New \"York\""
     let input = r#"loc:"New \"York\"""#;
-    let task = Task::new(input, &aliases);
+    let task = Task::new(input, &aliases, None);
     assert_eq!(task.location, Some(r#"New "York""#.to_string()));
 
     // Round trip: Should re-quote and escape

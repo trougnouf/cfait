@@ -63,7 +63,7 @@ async fn test_create_412_handled_gracefully() {
     let client = RustyClient::new(&url, "user", "pass", true).unwrap();
 
     // 3. Queue the Create Action
-    let mut task = Task::new("Stuck Task", &HashMap::new());
+    let mut task = Task::new("Stuck Task", &HashMap::new(), None);
     task.uid = task_uid.to_string();
     task.calendar_href = format!("{}/cal/", url);
     task.href = format!("{}{}", url, task_path);
@@ -114,7 +114,7 @@ async fn test_create_500_persists() {
 
     let client = RustyClient::new(&url, "user", "pass", true).unwrap();
 
-    let mut task = Task::new("Broken Task", &HashMap::new());
+    let mut task = Task::new("Broken Task", &HashMap::new(), None);
     task.uid = "broken-server".to_string();
     task.calendar_href = format!("{}/cal/", url);
     task.href = format!("{}{}", url, task_path);
@@ -158,7 +158,7 @@ async fn test_move_404_handled_gracefully() {
 
     let client = RustyClient::new(&url, "user", "pass", true).unwrap();
 
-    let mut task = Task::new("Moving Task", &HashMap::new());
+    let mut task = Task::new("Moving Task", &HashMap::new(), None);
     task.uid = "moving".to_string();
     task.href = format!("{}{}", url, old_path);
     task.calendar_href = format!("{}/cal1/", url);

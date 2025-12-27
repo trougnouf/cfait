@@ -11,11 +11,11 @@ fn make_store() -> TaskStore {
 fn test_filter_by_tag() {
     let mut store = make_store();
 
-    let mut t1 = Task::new("Work Task #work", &HashMap::new());
+    let mut t1 = Task::new("Work Task #work", &HashMap::new(), None);
     t1.uid = "1".to_string();
     t1.calendar_href = "cal1".to_string(); // Required for store index
 
-    let mut t2 = Task::new("Home Task #home", &HashMap::new());
+    let mut t2 = Task::new("Home Task #home", &HashMap::new(), None);
     t2.uid = "2".to_string();
     t2.calendar_href = "cal1".to_string();
 
@@ -52,7 +52,7 @@ fn test_filter_hierarchical_tags() {
     let mut store = make_store();
 
     // Tag: #dev:backend
-    let mut t1 = Task::new("Backend #dev:backend", &HashMap::new());
+    let mut t1 = Task::new("Backend #dev:backend", &HashMap::new(), None);
     t1.uid = "1".to_string();
     t1.calendar_href = "cal1".to_string();
     store.add_task(t1);
@@ -87,11 +87,11 @@ fn test_filter_hierarchical_tags() {
 fn test_hide_hidden_calendars() {
     let mut store = make_store();
 
-    let mut t1 = Task::new("Cal 1 Task", &HashMap::new());
+    let mut t1 = Task::new("Cal 1 Task", &HashMap::new(), None);
     t1.uid = "1".to_string();
     t1.calendar_href = "cal1".to_string();
 
-    let mut t2 = Task::new("Cal 2 Task", &HashMap::new());
+    let mut t2 = Task::new("Cal 2 Task", &HashMap::new(), None);
     t2.uid = "2".to_string();
     t2.calendar_href = "cal2".to_string();
 

@@ -21,6 +21,20 @@ fn default_urgent_prio() -> u8 {
     1
 } // !1
 
+// Add default helpers
+fn default_auto_remind() -> bool {
+    true
+}
+fn default_remind_time() -> String {
+    "08:00".to_string()
+}
+fn default_snooze_1() -> u32 {
+    15
+} // 15 min
+fn default_snooze_2() -> u32 {
+    60
+} // 1 hour
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum AppTheme {
     Dark,
@@ -68,6 +82,16 @@ pub struct Config {
     pub urgent_days_horizon: u32,
     #[serde(default = "default_urgent_prio")]
     pub urgent_priority_threshold: u8,
+
+    #[serde(default = "default_auto_remind")]
+    pub auto_reminders: bool,
+    #[serde(default = "default_remind_time")]
+    pub default_reminder_time: String, // Format "HH:MM"
+
+    #[serde(default = "default_snooze_1")]
+    pub snooze_short_mins: u32,
+    #[serde(default = "default_snooze_2")]
+    pub snooze_long_mins: u32,
 }
 
 impl Default for Config {
@@ -88,10 +112,14 @@ impl Default for Config {
             theme: AppTheme::default(),
             urgent_days_horizon: 1,
             urgent_priority_threshold: 1,
+
+            auto_reminders: true,
+            default_reminder_time: "08:00".to_string(),
+            snooze_short_mins: 15,
+            snooze_long_mins: 60,
         }
     }
 }
-// --------------------------------
 
 impl Config {
     pub fn load() -> Result<Self> {

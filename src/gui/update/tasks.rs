@@ -1,4 +1,4 @@
-// File: src/gui/update/tasks.rs
+// File: ./src/gui/update/tasks.rs
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{GuiApp, SidebarMode};
@@ -6,11 +6,28 @@ use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tas
 use crate::journal::{Action, Journal};
 use crate::model::{Task as TodoTask, extract_inline_aliases};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalStorage};
+use chrono::{DateTime, NaiveTime, Utc};
 use iced::Task;
 use iced::widget::operation;
 use iced::widget::scrollable::RelativeOffset;
 use iced::widget::text_editor;
 use std::collections::HashMap;
+
+// Helper to parse the packed implicit UID
+fn parse_implicit_id(alarm_uid: &str) -> Option<(DateTime<Utc>, String)> {
+    if alarm_uid.starts_with("implicit_") {
+        let parts: Vec<&str> = alarm_uid.split('|').collect();
+        if parts.len() >= 3 {
+            // parts[0] = "implicit_due:"
+            // parts[1] = ISO Date
+            // parts[2] = task_uid (redundant but safe)
+            if let Ok(dt) = DateTime::parse_from_rfc3339(parts[1]) {
+                return Some((dt.with_timezone(&Utc), parts[0].to_string()));
+            }
+        }
+    }
+    None
+}
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
@@ -292,13 +309,52 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::SnoozeCustomInput(val) => {
+            app.snooze_custom_input = val;
+            Task::none()
+        }
+        Message::SnoozeCustomSubmit(t_uid, a_uid) => {
+            // Remove from modal
+            app.ringing_tasks
+                .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
+
+            // Parse duration
+            // reuse logic from parser or simple parsing
+            let mins = if let Ok(n) = app.snooze_custom_input.parse::<u32>() {
+                n
+            } else if let Some(n) = crate::model::parser::parse_duration(&app.snooze_custom_input) {
+                n
+            } else {
+                10 // Fallback
+            };
+            app.snooze_custom_input.clear();
+
+            // Redirect to standard snooze handler
+            handle(app, Message::SnoozeAlarm(t_uid, a_uid, mins))
+        }
         Message::SnoozeAlarm(t_uid, a_uid, mins) => {
-            // FIX: Removed 'mut' from 'task' binding
-            if let Some((task, _)) = app.store.get_task_mut(&t_uid)
-                && task.snooze_alarm(&a_uid, mins) {
+            if let Some((task, _)) = app.store.get_task_mut(&t_uid) {
+                let mut changed = false;
+
+                // Case A: Implicit Alarm
+                if let Some((dt, prefix)) = parse_implicit_id(&a_uid) {
+                    let desc = if prefix.contains("due") {
+                        "Due now"
+                    } else {
+                        "Starting"
+                    }
+                    .to_string();
+                    task.snooze_implicit_alarm(dt, desc, mins);
+                    changed = true;
+                }
+                // Case B: Explicit Alarm
+                else if task.snooze_alarm(&a_uid, mins) {
+                    changed = true;
+                }
+
+                if changed {
                     let t_clone = task.clone();
                     refresh_filtered_tasks(app);
-
                     if let Some(client) = &app.client {
                         return Task::perform(
                             async_update_wrapper(client.clone(), t_clone),
@@ -308,15 +364,32 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         handle_offline_update(app, t_clone);
                     }
                 }
+            }
             Task::none()
         }
         Message::DismissAlarm(t_uid, a_uid) => {
-            // FIX: Removed 'mut' from 'task' binding
-            if let Some((task, _)) = app.store.get_task_mut(&t_uid)
-                && task.dismiss_alarm(&a_uid) {
+            if let Some((task, _)) = app.store.get_task_mut(&t_uid) {
+                let mut changed = false;
+
+                // Case A: Implicit Alarm
+                if let Some((dt, prefix)) = parse_implicit_id(&a_uid) {
+                    let desc = if prefix.contains("due") {
+                        "Due now"
+                    } else {
+                        "Starting"
+                    }
+                    .to_string();
+                    task.dismiss_implicit_alarm(dt, desc);
+                    changed = true;
+                }
+                // Case B: Explicit Alarm
+                else if task.dismiss_alarm(&a_uid) {
+                    changed = true;
+                }
+
+                if changed {
                     let t_clone = task.clone();
                     refresh_filtered_tasks(app);
-
                     if let Some(client) = &app.client {
                         return Task::perform(
                             async_update_wrapper(client.clone(), t_clone),
@@ -326,6 +399,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         handle_offline_update(app, t_clone);
                     }
                 }
+            }
             Task::none()
         }
         _ => Task::none(),
@@ -434,9 +508,13 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         }
     }
 
+    // Parse the config time stored in AppState
+    let config_time = NaiveTime::parse_from_str(&app.default_reminder_time, "%H:%M").ok();
+
     if let Some(edit_uid) = &app.editing_uid {
         if let Some((task, _)) = app.store.get_task_mut(edit_uid) {
-            task.apply_smart_input(&clean_input, &app.tag_aliases);
+            // PASS CONFIG TIME HERE
+            task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
             task.description = app.description_value.text();
             let task_copy = task.clone();
 
@@ -460,7 +538,8 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             }
         }
     } else if !clean_input.is_empty() {
-        let mut new_task = TodoTask::new(&clean_input, &app.tag_aliases);
+        // PASS CONFIG TIME HERE
+        let mut new_task = TodoTask::new(&clean_input, &app.tag_aliases, config_time);
         if let Some(parent) = &app.creating_child_of {
             new_task.parent_uid = Some(parent.clone());
             app.creating_child_of = None;

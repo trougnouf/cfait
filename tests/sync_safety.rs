@@ -60,7 +60,7 @@ async fn test_safety_resurrection_on_404() {
 
     let client = RustyClient::new(&url, "u", "p", true).unwrap();
 
-    let mut task = Task::new("Important Work", &HashMap::new());
+    let mut task = Task::new("Important Work", &HashMap::new(), None);
     task.uid = "important_task".to_string();
     task.href = format!("{}{}", url, task_path);
     task.calendar_href = format!("{}/cal/", url);
@@ -150,7 +150,7 @@ async fn test_safety_conflict_copy_on_hard_412() {
 
     let client = RustyClient::new(&url, "u", "p", true).unwrap();
 
-    let mut base_task = Task::new("Local Version", &HashMap::new());
+    let mut base_task = Task::new("Local Version", &HashMap::new(), None);
     base_task.uid = "conflict".to_string();
     base_task.href = format!("{}{}", url, task_path);
     base_task.calendar_href = format!("{}/cal/", url);

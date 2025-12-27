@@ -7,19 +7,19 @@ fn test_recurrence_presets() {
     let aliases = HashMap::new();
 
     // Test @daily
-    let t1 = Task::new("Standup @daily", &aliases);
+    let t1 = Task::new("Standup @daily", &aliases, None);
     assert_eq!(t1.rrule, Some("FREQ=DAILY".to_string()));
 
     // Test @weekly
-    let t2 = Task::new("Review @weekly", &aliases);
+    let t2 = Task::new("Review @weekly", &aliases, None);
     assert_eq!(t2.rrule, Some("FREQ=WEEKLY".to_string()));
 
     // Test @monthly
-    let t3 = Task::new("Pay bills @monthly", &aliases);
+    let t3 = Task::new("Pay bills @monthly", &aliases, None);
     assert_eq!(t3.rrule, Some("FREQ=MONTHLY".to_string()));
 
     // Test @yearly
-    let t4 = Task::new("Birthday @yearly", &aliases);
+    let t4 = Task::new("Birthday @yearly", &aliases, None);
     assert_eq!(t4.rrule, Some("FREQ=YEARLY".to_string()));
 }
 
@@ -28,16 +28,16 @@ fn test_recurrence_every_x_units() {
     let aliases = HashMap::new();
 
     // Test @every 3 days
-    let t1 = Task::new("Water plants @every 3 days", &aliases);
+    let t1 = Task::new("Water plants @every 3 days", &aliases, None);
     // Note: The parser implementation builds this string manually
     assert_eq!(t1.rrule, Some("FREQ=DAILY;INTERVAL=3".to_string()));
 
     // Test @every 2 weeks
-    let t2 = Task::new("Sprint Planning @every 2 weeks", &aliases);
+    let t2 = Task::new("Sprint Planning @every 2 weeks", &aliases, None);
     assert_eq!(t2.rrule, Some("FREQ=WEEKLY;INTERVAL=2".to_string()));
 
     // Test @every 6 months
-    let t3 = Task::new("Dentist @every 6 months", &aliases);
+    let t3 = Task::new("Dentist @every 6 months", &aliases, None);
     assert_eq!(t3.rrule, Some("FREQ=MONTHLY;INTERVAL=6".to_string()));
 }
 
@@ -47,7 +47,7 @@ fn test_recurrence_raw_input() {
 
     // Test manual raw input (e.g. pasting from advanced editor)
     // This ensures the parser doesn't treat "FREQ=..." as a text title
-    let t1 = Task::new("Complex Task rec:FREQ=MONTHLY;BYDAY=MO", &aliases);
+    let t1 = Task::new("Complex Task rec:FREQ=MONTHLY;BYDAY=MO", &aliases, None);
     assert_eq!(t1.rrule, Some("FREQ=MONTHLY;BYDAY=MO".to_string()));
 }
 
@@ -56,19 +56,19 @@ fn test_duration_units() {
     let aliases = HashMap::new();
 
     // Minutes
-    let t1 = Task::new("Quick task ~15m", &aliases);
+    let t1 = Task::new("Quick task ~15m", &aliases, None);
     assert_eq!(t1.estimated_duration, Some(15));
 
     // Hours
-    let t2 = Task::new("Deep work ~2h", &aliases);
+    let t2 = Task::new("Deep work ~2h", &aliases, None);
     assert_eq!(t2.estimated_duration, Some(120));
 
     // Days
-    let t3 = Task::new("Project ~3d", &aliases);
+    let t3 = Task::new("Project ~3d", &aliases, None);
     assert_eq!(t3.estimated_duration, Some(3 * 24 * 60));
 
     // Weeks
-    let t4 = Task::new("Sabbatical ~1w", &aliases);
+    let t4 = Task::new("Sabbatical ~1w", &aliases, None);
     assert_eq!(t4.estimated_duration, Some(7 * 24 * 60));
 }
 
@@ -77,11 +77,11 @@ fn test_start_date_syntax() {
     let aliases = HashMap::new();
 
     // Caret syntax
-    let t1 = Task::new("Future work ^tomorrow", &aliases);
+    let t1 = Task::new("Future work ^tomorrow", &aliases, None);
     assert!(t1.dtstart.is_some());
 
     // Explicit syntax
-    let t2 = Task::new("Future work start:tomorrow", &aliases);
+    let t2 = Task::new("Future work start:tomorrow", &aliases, None);
     assert!(t2.dtstart.is_some());
 
     assert_eq!(t1.dtstart, t2.dtstart);
@@ -92,7 +92,7 @@ fn test_prettify_round_trip() {
     let aliases = HashMap::new();
 
     // 1. Create a task with a raw RRULE (simulating loaded from disk)
-    let mut t = Task::new("Base", &aliases);
+    let mut t = Task::new("Base", &aliases, None);
     t.rrule = Some("FREQ=DAILY".to_string());
 
     // 2. Convert to smart string

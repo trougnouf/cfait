@@ -58,7 +58,7 @@ async fn test_sync_delete_404_is_success() {
     let client = RustyClient::new(&url, "u", "p", true).unwrap();
 
     // 3. Add Delete Action to Journal
-    let mut task = Task::new("T", &HashMap::new());
+    let mut task = Task::new("T", &HashMap::new(), None);
     // Note: client.rs uses strip_host, so we ensure the href implies the relative path
     task.href = format!("{}/cal/task.ics", url);
     task.etag = "\"123\"".to_string();
@@ -100,7 +100,7 @@ async fn test_sync_500_keeps_item_in_queue() {
     let client = RustyClient::new(&url, "u", "p", true).unwrap();
 
     // 3. Add Create Action
-    let mut task = Task::new("T", &HashMap::new());
+    let mut task = Task::new("T", &HashMap::new(), None);
     task.uid = "task".to_string();
     task.calendar_href = "/cal/".to_string();
     Journal::push(Action::Create(task)).unwrap();

@@ -40,7 +40,7 @@ async fn test_tui_toggle_task_does_not_revert_status() {
 
     // 3. Prepare the Action
     // The handler has already toggled this task to Completed in the UI
-    let mut task = Task::new("Toggle Me", &HashMap::new());
+    let mut task = Task::new("Toggle Me", &HashMap::new(), None);
     task.uid = "test-uid".to_string();
     task.status = TaskStatus::Completed;
     task.calendar_href = url.clone();

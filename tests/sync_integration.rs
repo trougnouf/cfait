@@ -47,7 +47,7 @@ async fn test_sync_recovers_from_412() {
     let client = RustyClient::new(&url, "user", "pass", true).unwrap();
 
     // 6. Setup Local State (Journal)
-    let mut task = Task::new("Local Title", &HashMap::new());
+    let mut task = Task::new("Local Title", &HashMap::new(), None);
     task.uid = task_uid.to_string();
     task.calendar_href = "/cal/".to_string();
     task.href = format!("/cal/{}.ics", task_uid);

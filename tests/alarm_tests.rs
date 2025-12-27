@@ -9,7 +9,7 @@ fn mock_aliases() -> HashMap<String, Vec<String>> {
 
 #[test]
 fn test_time_parsing_specific() {
-    let t = Task::new("Meeting @14:00", &mock_aliases());
+    let t = Task::new("Meeting @14:00", &mock_aliases(), None);
     match t.due {
         Some(DateType::Specific(dt)) => {
             let local = dt.with_timezone(&Local);
@@ -24,7 +24,7 @@ fn test_time_parsing_specific() {
 #[test]
 fn test_time_parsing_merge() {
     // "@tomorrow 2pm" -> Should be merged into one Specific DateType
-    let t = Task::new("Meeting @tomorrow 2pm", &mock_aliases());
+    let t = Task::new("Meeting @tomorrow 2pm", &mock_aliases(), None);
 
     match t.due {
         Some(DateType::Specific(dt)) => {
@@ -40,7 +40,7 @@ fn test_time_parsing_merge() {
 #[test]
 fn test_reminder_relative_anchor() {
     // Anchor to Due
-    let t = Task::new("Deadline @15:00 rem:30m", &mock_aliases());
+    let t = Task::new("Deadline @15:00 rem:30m", &mock_aliases(), None);
     assert_eq!(t.alarms.len(), 1);
 
     let alarm = &t.alarms[0];
@@ -62,7 +62,7 @@ fn test_reminder_relative_anchor() {
 
 #[test]
 fn test_reminder_absolute() {
-    let t = Task::new("Meds rem:8am", &mock_aliases());
+    let t = Task::new("Meds rem:8am", &mock_aliases(), None);
     assert_eq!(t.alarms.len(), 1);
 
     match t.alarms[0].trigger {
@@ -78,7 +78,7 @@ fn test_reminder_absolute() {
 #[test]
 fn test_reminder_no_anchor_ignored() {
     // Relative reminder with NO specific time -> Should effectively be ignored or not calc'd
-    let t = Task::new("Vague Task @tomorrow rem:10m", &mock_aliases());
+    let t = Task::new("Vague Task @tomorrow rem:10m", &mock_aliases(), None);
 
     // It is parsed into the list...
     assert_eq!(t.alarms.len(), 1);
@@ -93,7 +93,7 @@ fn test_reminder_no_anchor_ignored() {
 
 #[test]
 fn test_snooze_logic_rfc9074() {
-    let mut t = Task::new("Wake up rem:8am", &mock_aliases());
+    let mut t = Task::new("Wake up rem:8am", &mock_aliases(), None);
     let original_uid = t.alarms[0].uid.clone();
 
     // 1. Snooze
@@ -121,7 +121,7 @@ fn test_snooze_logic_rfc9074() {
 
 #[test]
 fn test_snooze_chain_cleanup() {
-    let mut t = Task::new("Wake up rem:8am", &mock_aliases());
+    let mut t = Task::new("Wake up rem:8am", &mock_aliases(), None);
     // Original alarm (rem:8am)
     let original_uid = t.alarms[0].uid.clone();
 
@@ -168,7 +168,7 @@ fn test_snooze_chain_cleanup() {
 #[test]
 fn test_ics_roundtrip_alarms() {
     // Create task with alarm
-    let t_in = Task::new("Ping @14:00 rem:15m", &mock_aliases());
+    let t_in = Task::new("Ping @14:00 rem:15m", &mock_aliases(), None);
     let ics = t_in.to_ics();
 
     // Validate ICS string contains VALARM

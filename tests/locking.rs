@@ -29,7 +29,7 @@ fn test_concurrent_journal_writes() {
         let handle = thread::spawn(move || {
             b.wait(); // Wait for everyone to be ready
 
-            let mut task = Task::new(&format!("Task {}", i), &HashMap::new());
+            let mut task = Task::new(&format!("Task {}", i), &HashMap::new(), None);
             task.uid = format!("uid-{}", i);
 
             // This calls Journal::push which does Lock -> Load -> Append -> Save -> Unlock

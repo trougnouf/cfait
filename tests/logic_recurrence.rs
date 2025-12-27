@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 // Helper to create a task due at Now + Offset days
 fn create_task_due_in_days(days: i64, recurrence: &str) -> Task {
-    let mut t = Task::new("Task", &HashMap::new());
+    let mut t = Task::new("Task", &HashMap::new(), None);
     // Use Utc directly as internal storage uses Utc
     let dt = Utc::now() + Duration::days(days);
     t.due = Some(DateType::Specific(dt));
@@ -146,7 +146,7 @@ fn test_complex_weekday_recurrence() {
 
 #[test]
 fn test_recurrence_preserves_time() {
-    let mut t = Task::new("Time Test", &HashMap::new());
+    let mut t = Task::new("Time Test", &HashMap::new(), None);
     let dt = Utc::now();
     t.due = Some(DateType::Specific(dt));
     t.rrule = Some("FREQ=DAILY".to_string());

@@ -1,3 +1,5 @@
+// ### File: `src/gui/message.rs`
+
 use crate::client::RustyClient;
 use crate::config::{AppTheme, Config};
 use crate::gui::state::{ResizeDirection, SidebarMode};
@@ -128,4 +130,12 @@ pub enum Message {
     AlarmSignalReceived(Arc<AlarmMessage>), // Arc to make it Clone-able easily
     SnoozeAlarm(String, String, u32),       // TaskUID, AlarmUID, Minutes
     DismissAlarm(String, String),           // TaskUID, AlarmUID
+    SnoozeCustomInput(String),
+    SnoozeCustomSubmit(String, String),
+
+    // Reminder & Snooze Settings
+    SetAutoReminders(bool),
+    SetDefaultReminderTime(String),
+    SetSnoozeShort(String),
+    SetSnoozeLong(String),
 }
