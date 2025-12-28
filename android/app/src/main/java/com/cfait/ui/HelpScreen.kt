@@ -69,9 +69,14 @@ fun HelpScreen(onBack: () -> Unit) {
                     listOf(
                         HelpItem("!1", "Priority high (1) to low (9)", "!1, !5, !9"),
                         HelpItem("#tag", "Add category. Use ':' for sub-tags.", "#work, #dev:backend"),
-                        HelpItem("#a=#b,#c,@@d", "Define/update alias inline.", "#tree_planting=#gardening,@@home"),
+                        HelpItem(
+                            "#a:=#b,#c,@@d",
+                            "Define/update alias inline (retroactive).",
+                            "#tree_planting:=#gardening,@@home"
+                        ),
                         HelpItem("~30m", "Estimated duration (m/h/d/w).", "~30m, ~1.5h, ~2d"),
                         HelpItem("@@loc", "Location. Quote for spaces.", "@@home, @@\"somewhere else\""),
+                        HelpItem("\\#text", "Escape special characters.", "\\#not-a-tag \\@not-a-date"),
                     ),
                 )
             }
@@ -83,9 +88,10 @@ fun HelpScreen(onBack: () -> Unit) {
                     listOf(
                         HelpItem("@date", "Due date. Deadline.", "@tomorrow, @2025-12-31"),
                         HelpItem("^date", "Start date. Hides until date.", "^next week, ^2025-01-01"),
-                        HelpItem("Offsets", "Add time from today.", "1d, 2w, 3mo, 4y"),
-                        HelpItem("@in", "Natural relative offset.", "@in 3 days, ^in 2 weeks"),
-                        HelpItem("Keywords", "Relative dates supported.", "today, tomorrow, next week"),
+                        HelpItem("Offsets", "Add time from today.", "1d, 2w, 3mo (optional: @2 weeks = @in 2 weeks)"),
+                        HelpItem("Weekdays", "Next occurrence (\"next\" optional).", "@friday = @next friday, @monday"),
+                        HelpItem("Next period", "Next week/month/year.", "@next week, @next month, @next year"),
+                        HelpItem("Keywords", "Relative dates supported.", "today, tomorrow"),
                     ),
                 )
             }
@@ -103,12 +109,28 @@ fun HelpScreen(onBack: () -> Unit) {
 
             item {
                 HelpSection(
-                    "Extra Fields",
+                    "Metadata",
                     NfIcons.INFO,
                     listOf(
-                        HelpItem("url:", "Attach Link.", "url:example.com"),
-                        HelpItem("geo:", "Coordinates.", "geo:53.046070, -121.105264"),
-                        HelpItem("desc:", "Append description.", "desc:\"See attachment\""),
+                        HelpItem("url:", "Attach a link.", "url:https://perdu.com"),
+                        HelpItem("geo:", "Coordinates (lat,long).", "geo:53.046070, -121.105264"),
+                        HelpItem("desc:", "Append description text.", "desc:\"Call back later\""),
+                        HelpItem("rem:10m", "Relative reminder (before due date).", "Adjusts if due date changes"),
+                        HelpItem(
+                            "rem:in 5m",
+                            "Relative from now (becomes absolute).",
+                            "rem:in 2h (5 min/2 hours from now)"
+                        ),
+                        HelpItem(
+                            "rem:next friday",
+                            "Next occurrence (becomes absolute).",
+                            "rem:next week, rem:next month"
+                        ),
+                        HelpItem(
+                            "rem:8am",
+                            "Absolute reminder (fixed time).",
+                            "rem:2025-01-20 9am, rem:2025-12-31 10:00"
+                        ),
                     ),
                 )
             }
@@ -118,21 +140,42 @@ fun HelpScreen(onBack: () -> Unit) {
                     "Search & Filtering",
                     NfIcons.SEARCH,
                     listOf(
-                        HelpItem("text", "Matches title/desc.", "buy cat food"),
-                        HelpItem("is:state", "Filter by state.", "is:done, is:active"),
-                        HelpItem("Operators", "Compare (<, >, <=, >=).", "~<20m, !<3 (high prio)"),
-                        HelpItem("Dates", "Filter timeframe.", "@<today (Overdue), ^>tomorrow"),
+                        HelpItem("text", "Matches summary or description.", "buy cat food"),
+                        HelpItem("#tag", "Filter by specific tag.", "#gardening"),
+                        HelpItem("is:status", "Filter by state.", "is:done, is:ongoing, is:active"),
+                        HelpItem(
+                            "Operators",
+                            "Compare values (<, >, <=, >=).",
+                            "~<20m (less than 20 min), !<4 (urgent)"
+                        ),
+                        HelpItem("  Dates", "Filter by timeframe.", "@<today (Overdue), ^>tomorrow"),
+                        HelpItem("  Priority", "Filter by priority range.", "!<3 (High prio), !>=5"),
+                        HelpItem("  Duration", "Filter by effort.", "~<15m (Quick tasks)"),
+                        HelpItem("  Location", "Filter by location.", "@@home"),
                     ),
                 )
             }
 
             item {
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
+                            alpha = 0.5f
+                        )
+                    )
+                ) {
                     Column(Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        ) {
                             NfIcon(NfIcons.HEART_HAND, 18.sp, Color(0xFFE57373))
                             Spacer(Modifier.width(8.dp))
-                            Text("Support Development", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text(
+                                "Support Development",
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
                         }
                         HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
                         Spacer(Modifier.height(8.dp))
@@ -165,7 +208,11 @@ fun HelpScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text("Cfait v${BuildConfig.VERSION_NAME} • GPL3", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                    Text(
+                        "Cfait v${BuildConfig.VERSION_NAME} • GPL3",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.Gray
+                    )
                     Text("Trougnouf (Benoit Brummer)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     Text(
                         text = "https://codeberg.org/trougnouf/cfait",

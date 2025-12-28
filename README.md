@@ -103,9 +103,12 @@ You don't need to click through menus to set the due/start date, length, priorit
 | **Recurrence** | `@` / `rec:` | How often the task repeats. |
 | **Duration** | `~` / `est:` | Estimated time to complete. |
 | **Tag** | `#` | Categories. Use `:` for hierarchy (e.g. `#gardening:tree_planting`). |
-| **Location** | `@@` / `loc:` | Where the task happens. (e.g. `@@home`, `@@"somewhere else"`. |
+| **Location** | `@@` / `loc:` | Where the task happens. (e.g. `@@home`, `@@"somewhere else"`). |
+| **Reminder** | `rem:` | Set an alarm/notification. (e.g. `rem:10m`, `rem:8am`, `rem:tomorrow 9am`). |
 
 You can also type url: (e.g. `url:https://www.trougnouf.com`), geo: (e.g. `geo:53.046070, -121.105264`), and desc: (e.g. `desc:"a description"` or `desc:{une description}`)
+
+**Escaping:** If you need to use special characters literally in your task summary (like `#`, `@`, `!`), prefix them with a backslash: `\#not-a-tag \@not-a-date`.
 
 ### Date & Time Formats
 You can use absolute ISO dates or natural language relative offsets.
@@ -113,7 +116,11 @@ You can use absolute ISO dates or natural language relative offsets.
 *   **Offsets:** `1d` (days), `1w` (weeks), `1mo` (months), `1y` (years).
     *   `@2d` = Due in 2 days.
     *   `^1w` = Start in 1 week.
-*   **Natural:** `@in 2 weeks`, `^in 3 days`
+    *   The word "in" is optional: `@2 weeks` works the same as `@in 2 weeks`
+*   **Weekdays:** `@friday`, `@monday`, etc. (or with "next": `@next friday`)
+    *   Both forms work identically - they always go to the **next** occurrence of that weekday
+*   **Next period:** `@next week`, `@next month`, `@next year`
+    *   Goes to the next occurrence of that time period
 
 ### Recurrence
 Recurrence rules determine when the next task is created after you complete the current one.
@@ -127,12 +134,26 @@ Supported units for `~` duration estimates: `m` (minutes), `h` (hours), `d` (day
 *   `~15m` (15 minutes)
 *   `~1.5h` (1 hour 30 minutes)
 
+### Reminders
+Set alarms to notify you about tasks. Reminders can be **relative** (recalculated when due date changes) or **absolute** (fixed time).
+*   **Relative (to due date):** `rem:10m` = 10 minutes before due date, `rem:1h` = 1 hour before due date
+    *   These automatically adjust if you change the task's due date
+*   **Relative (from now):** `rem:in 5m` = 5 minutes from now, `rem:in 2h` = 2 hours from now
+    *   Set as absolute time when task is created (doesn't adjust with due date)
+*   **Next occurrence:** `rem:next friday` = Next Friday at default time, `rem:next week` = 7 days from now
+    *   Set as absolute time at the next occurrence (doesn't adjust with due date)
+*   **Absolute (fixed time):** `rem:8am` = Today (2025-01-15) at 8am, `rem:2025-01-20 9am` = January 20th at 9am
+    *   These stay at the specified time regardless of due date changes
+*   **Date + Time:** `rem:2025-12-31 10:00` (Absolute: specific date and time)
+
 ### Examples
-> `"Buy cookies !1 @tomorrow #groceries"`
+> `"Buy cookies !1 @2025-01-16 #shopping rem:2025-01-16 8am"`
 >
-> `"Team meeting @daily ~1h #work"`
+> `"Exercise @daily ~30m #health rem:8am"`
 >
-> `"Update server certificates @2025-12-31 ^2025-12-01 @every 2 years"` (Due Dec 31, start working on it 1 month prior)
+> `"Update server certificates @2025-12-31 ^2025-12-01 @every 2 years rem:1w"` (Due Dec 31, start working on it 1 month prior, reminder 1 week before)
+>
+> `"Plant plum tree #tree_planting !3 ~2h"` and `"#tree_planting:=#gardening,@@home"`
 
 The syntax highlighting should visually let you know whether your statements are valid.
 
@@ -144,7 +165,7 @@ Define global shortcuts using `:=`. Aliases can inject tags, locations, prioriti
     *   Tags: `#tree_planting #gardening #fun`
     *   Location: "home"
 
-**Note:** If your alias contains spaces, `"`quote it`"` or `{`put it between brockets`}`, e.g. `#"tree planting":=#gardening` or `#gardening:=#{home improvement}` 
+**Note:** If your alias contains spaces, `"`quote it`"` or `{`put it between brockets`}`, e.g. `#"tree planting":=#gardening` or `#gardening:=#{home improvement}`. You can define aliases inline while creating tasks, but it's often clearer to define them separately.
 
 <a name="search--filtering"></a>
 ## 🔍 Search & Filtering

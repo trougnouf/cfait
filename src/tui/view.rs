@@ -53,9 +53,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     .fg(Color::Magenta)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(
-                " +/-:Priority  </>:Indent  y:Yank { b:Block  c:Child }  C:NewChild #alias=#tag,@@loc",
-            ),
+            Span::raw(" +/-:Priority  </>:Indent  y:Yank { b:Block  c:Child }  C:NewChild"),
+        ]),
+        Line::from(vec![
+            Span::styled("              ", Style::default()), // Indent alignment
+            Span::raw("#alias:=#tag,@@loc (Define alias inline, retroactive)"),
         ]),
         Line::from(vec![
             Span::styled(
