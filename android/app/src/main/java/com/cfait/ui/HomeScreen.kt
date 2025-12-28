@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/ui/HomeScreen.kt
+// File: android/app/src/main/java/com/cfait/ui/HomeScreen.kt
 package com.cfait.ui
 
 import android.content.ClipData
@@ -48,6 +48,7 @@ fun HomeScreen(
     isLoading: Boolean,
     hasUnsynced: Boolean,
     autoScrollUid: String? = null,
+    refreshTick: Long, // FIX: Added parameter
     onGlobalRefresh: () -> Unit,
     onSettings: () -> Unit,
     onTaskClick: (String) -> Unit,
@@ -63,34 +64,20 @@ fun HomeScreen(
     var isPullRefreshing by remember { mutableStateOf(false) }
     var filterLocation by rememberSaveable { mutableStateOf<String?>(null) }
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
-    // RANDOM LOCATION ICON LOGIC
-    val locationTabIcon =
-        rememberSaveable {
-            val icons =
-                listOf(
-                    NfIcons.LOCATION,
-                    NfIcons.LOCATION,
-                    NfIcons.LOCATION,
-                    NfIcons.EARTH_ASIA,
-                    NfIcons.EARTH_AMERICAS,
-                    NfIcons.EARTH_AFRICA,
-                    NfIcons.EARTH_GENERIC,
-                    NfIcons.PLANET,
-                    NfIcons.GALAXY,
-                    NfIcons.ISLAND,
-                    NfIcons.COMPASS,
-                    NfIcons.MOUNTAINS,
-                    NfIcons.GLOBE,
-                    NfIcons.GLOBEMODEL,
-                )
-            icons.random()
-        }
 
-    // --- New Calculation ---
-    val enabledCalendarCount =
-        remember(calendars) {
-            calendars.count { !it.isDisabled }
-        }
+    val locationTabIcon = rememberSaveable {
+        val icons = listOf(
+            NfIcons.LOCATION, NfIcons.EARTH_ASIA, NfIcons.EARTH_AMERICAS,
+            NfIcons.EARTH_AFRICA, NfIcons.EARTH_GENERIC, NfIcons.PLANET,
+            NfIcons.GALAXY, NfIcons.ISLAND, NfIcons.COMPASS,
+            NfIcons.MOUNTAINS, NfIcons.GLOBE, NfIcons.GLOBEMODEL,
+        )
+        icons.random()
+    }
+
+    val enabledCalendarCount = remember(calendars) {
+        calendars.count { !it.isDisabled }
+    }
 
     LaunchedEffect(hasUnsynced) { localHasUnsynced = hasUnsynced }
 
@@ -127,10 +114,9 @@ fun HomeScreen(
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
-    val calColorMap =
-        remember(calendars) {
-            calendars.associate { it.href to (it.color?.let { hex -> parseHexColor(hex) } ?: Color.Gray) }
-        }
+    val calColorMap = remember(calendars) {
+        calendars.associate { it.href to (it.color?.let { hex -> parseHexColor(hex) } ?: Color.Gray) }
+    }
 
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
 
@@ -143,6 +129,12 @@ fun HomeScreen(
         }
     }
 
+    // Add refreshTick to LaunchedEffect keys to force task reload
+    LaunchedEffect(searchQuery, filterTag, filterLocation, isLoading, calendars, tags, locations, refreshTick) {
+        updateTaskList()
+    }
+
+    // ... rest of the file unchanged ...
     val handleRefresh = {
         scope.launch {
             isManualSyncing = true
@@ -181,10 +173,6 @@ fun HomeScreen(
                 isPullRefreshing = false
             }
         }
-    }
-
-    LaunchedEffect(searchQuery, filterTag, filterLocation, isLoading, calendars, tags, locations) {
-        updateTaskList()
     }
 
     LaunchedEffect(autoScrollUid, tasks) {
@@ -791,8 +779,6 @@ fun HomeScreen(
                     }
                 }
 
-                // Prevent the PullToRefreshBox from showing its own spinner by hardcoding refreshing to false.
-                // The actual logic is handled via the onRefresh callback which triggers the top bar spinner.
                 PullToRefreshBox(
                     isRefreshing = false,
                     onRefresh = { handlePullRefresh() },

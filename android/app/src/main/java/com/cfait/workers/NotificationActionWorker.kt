@@ -1,18 +1,14 @@
+// File: android/app/src/main/java/com/cfait/workers/NotificationActionWorker.kt
 package com.cfait.workers
 
 import android.content.Context
+import android.content.Intent
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.cfait.core.CfaitMobile
+import com.cfait.CfaitApplication
 import com.cfait.util.AlarmScheduler
 
-/**
- * WorkManager-based worker for handling notification actions (snooze/dismiss).
- *
- * This ensures that actions triggered from notifications are processed reliably,
- * even if the app process is dead or under memory pressure.
- */
 class NotificationActionWorker(
     private val context: Context,
     params: WorkerParameters
@@ -24,6 +20,7 @@ class NotificationActionWorker(
         const val KEY_ALARM_UID = "alarm_uid"
         const val ACTION_SNOOZE = "SNOOZE"
         const val ACTION_DISMISS = "DISMISS"
+        const val BROADCAST_REFRESH = "com.cfait.REFRESH_UI"
     }
 
     override suspend fun doWork(): Result {
@@ -37,45 +34,40 @@ class NotificationActionWorker(
                 return Result.failure()
             }
 
-            Log.d("CfaitNotificationAction", "Processing action: $action for task: $taskUid, alarm: $alarmUid")
+            Log.d("CfaitNotificationAction", "Processing action: $action for task: $taskUid")
 
-            // Initialize the Rust backend
-            val api = CfaitMobile(context.filesDir.absolutePath)
-            api.loadFromCache()
+            // FIX: Use the singleton API instance from Application
+            val app = context.applicationContext as CfaitApplication
+            val api = app.api
 
-            Log.d("CfaitNotificationAction", "Before action: next alarm timestamp = ${api.getNextAlarmTimestamp()}")
+            // Note: We do NOT call api.loadFromCache() here because the singleton
+            // is already initialized in Application.onCreate().
 
-            // Process the action
             when (action) {
                 ACTION_SNOOZE -> {
-                    // Snooze for 15 minutes
-                    Log.d("CfaitNotificationAction", "Calling snoozeAlarm...")
                     api.snoozeAlarm(taskUid, alarmUid, 15u)
-                    Log.d("CfaitNotificationAction", "Alarm snoozed for 15 minutes")
+                    Log.d("CfaitNotificationAction", "Alarm snoozed")
                 }
 
                 ACTION_DISMISS -> {
-                    Log.d("CfaitNotificationAction", "Calling dismissAlarm...")
                     api.dismissAlarm(taskUid, alarmUid)
                     Log.d("CfaitNotificationAction", "Alarm dismissed")
                 }
 
-                else -> {
-                    Log.w("CfaitNotificationAction", "Unknown action: $action")
-                    return Result.failure()
-                }
+                else -> return Result.failure()
             }
 
-            Log.d("CfaitNotificationAction", "After action: next alarm timestamp = ${api.getNextAlarmTimestamp()}")
-
-            // Reschedule alarms since we've modified the alarm state
+            // Reschedule next alarm
             AlarmScheduler.scheduleNextAlarm(context, api)
 
-            Log.d("CfaitNotificationAction", "Action completed successfully")
+            // FIX: Notify the UI (if active) that data has changed
+            val intent = Intent(BROADCAST_REFRESH)
+            intent.setPackage(context.packageName) // Restrict to own app
+            context.sendBroadcast(intent)
+
             Result.success()
         } catch (e: Exception) {
-            Log.e("CfaitNotificationAction", "Error processing notification action", e)
-            // Retry to ensure the action isn't lost
+            Log.e("CfaitNotificationAction", "Error", e)
             Result.retry()
         }
     }

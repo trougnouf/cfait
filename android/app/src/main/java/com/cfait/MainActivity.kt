@@ -1,6 +1,11 @@
+// File: android/app/src/main/java/com/cfait/MainActivity.kt
 package com.cfait
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -53,27 +58,21 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
     val navController = rememberNavController()
     var calendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
     var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
-    var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) } // <--- Added
+    var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) }
     var defaultCalHref by remember { mutableStateOf<String?>(null) }
     var hasUnsynced by remember { mutableStateOf(false) }
-
-    // State to trigger scrolling in HomeScreen
     var autoScrollUid by remember { mutableStateOf<String?>(null) }
+
+    // FIX: Add a version counter to force UI updates even if data lists look identical
+    var refreshTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var isLoading by remember { mutableStateOf(false) }
 
-    // --- Permission Request Logic ---
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { isGranted: Boolean ->
-        if (isGranted) {
-            // Permission granted
-        } else {
-            // Permission denied
-        }
-    }
+    ) { }
 
     LaunchedEffect(Unit) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -86,26 +85,43 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
             }
         }
     }
-    // -------------------------------
 
     fun refreshLists() {
-        android.util.Log.d("CfaitMain", "refreshLists() called - will schedule alarms")
+        android.util.Log.d("CfaitMain", "refreshLists() called")
         scope.launch {
             try {
+                // FIX: Update tick first to ensure downstream effects trigger
+                refreshTick = System.currentTimeMillis()
+
                 calendars = api.getCalendars()
                 tags = api.getAllTags()
-                locations = api.getAllLocations() // <--- Fetch locations
+                locations = api.getAllLocations()
                 defaultCalHref = api.getConfig().defaultCalendar
                 hasUnsynced = api.hasUnsyncedChanges()
-
-                // [FIX ADDED] Schedule the next alarm whenever the data changes
-                // This handles Add, Edit, Delete, Toggle, and Sync scenarios.
-                android.util.Log.d("CfaitMain", "About to call scheduleNextAlarm from refreshLists")
                 AlarmScheduler.scheduleNextAlarm(context, api)
-
             } catch (e: Exception) {
                 android.util.Log.e("CfaitMain", "Exception in refreshLists", e)
             }
+        }
+    }
+
+    DisposableEffect(Unit) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == "com.cfait.REFRESH_UI") {
+                    android.util.Log.d("CfaitMain", "Received REFRESH_UI broadcast")
+                    refreshLists()
+                }
+            }
+        }
+        val filter = IntentFilter("com.cfait.REFRESH_UI")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(receiver, filter)
+        }
+        onDispose {
+            context.unregisterReceiver(receiver)
         }
     }
 
@@ -117,30 +133,19 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                 api.sync()
                 refreshLists()
 
-                // 1. Schedule the next *future* alarm
-                AlarmScheduler.scheduleNextAlarm(context, api)
-
-                // 2. Immediately check for alarms that should be firing *now*
-                // (or were missed in the last 2 hours).
                 val request = OneTimeWorkRequestBuilder<AlarmWorker>().build()
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     "cfait_manual_check",
                     ExistingWorkPolicy.KEEP,
                     request
                 )
-
             } catch (e: Exception) {
             }
             isLoading = false
         }
     }
 
-    // This runs in the NavHost scope, so it survives screen transitions
-    fun saveTaskInBackground(
-        uid: String,
-        smart: String,
-        desc: String,
-    ) {
+    fun saveTaskInBackground(uid: String, smart: String, desc: String) {
         scope.launch {
             try {
                 api.updateTaskSmart(uid, smart)
@@ -161,11 +166,12 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                 api = api,
                 calendars = calendars,
                 tags = tags,
-                locations = locations, // <--- Pass locations
+                locations = locations,
                 defaultCalHref = defaultCalHref,
                 isLoading = isLoading,
                 hasUnsynced = hasUnsynced,
                 autoScrollUid = autoScrollUid,
+                refreshTick = refreshTick, // FIX: Pass the tick
                 onGlobalRefresh = { fastStart() },
                 onSettings = { navController.navigate("settings") },
                 onTaskClick = { uid -> navController.navigate("detail/$uid") },
@@ -185,7 +191,6 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                     },
                     onSave = { smart, desc ->
                         saveTaskInBackground(uid, smart, desc)
-                        // Trigger scroll on return
                         autoScrollUid = uid
                         navController.popBackStack()
                         refreshLists()
