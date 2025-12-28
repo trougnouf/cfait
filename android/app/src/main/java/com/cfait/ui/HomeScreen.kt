@@ -111,6 +111,8 @@ fun HomeScreen(
     var showExportDialog by remember { mutableStateOf(false) }
     var yankedUid by remember { mutableStateOf<String?>(null) }
     val yankedTask = remember(tasks, yankedUid) { tasks.find { it.uid == yankedUid } }
+    var creatingChildUid by remember { mutableStateOf<String?>(null) }
+    val creatingChildTask = remember(tasks, creatingChildUid) { tasks.find { it.uid == creatingChildUid } }
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
@@ -236,6 +238,12 @@ fun HomeScreen(
                 activeOpCount++
                 try {
                     val newUid = api.addTaskSmart(text)
+
+                    if (creatingChildUid != null) {
+                        api.setParent(newUid, creatingChildUid!!)
+                        creatingChildUid = null
+                    }
+
                     onDataChanged()
                     lastSyncFailed = false
                     try {
@@ -261,6 +269,12 @@ fun HomeScreen(
     ) {
         if (action == "move") {
             taskToMove = task
+            return
+        }
+
+        if (action == "create_child") {
+            creatingChildUid = task.uid
+            yankedUid = null
             return
         }
 
@@ -708,7 +722,29 @@ fun HomeScreen(
             },
             bottomBar = {
                 Column {
-                    if (yankedTask != null) {
+                    if (creatingChildTask != null) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                NfIcon(NfIcons.CHILD, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "New subtask for: ${creatingChildTask.summary}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                IconButton(
+                                    onClick = { creatingChildUid = null },
+                                    modifier = Modifier.size(24.dp),
+                                ) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer) }
+                            }
+                        }
+                    } else if (yankedTask != null) {
                         Surface(
                             color = MaterialTheme.colorScheme.secondaryContainer,
                             modifier = Modifier.fillMaxWidth()

@@ -154,6 +154,7 @@ fun TaskRow(
                         expanded = false
                         onClick(task.uid)
                     }, leadingIcon = { NfIcon(NfIcons.EDIT, 16.sp) })
+
                     DropdownMenuItem(
                         text = {
                             Text(
@@ -197,6 +198,15 @@ fun TaskRow(
                             onAction("yank")
                         }, leadingIcon = { NfIcon(NfIcons.LINK, 16.sp) })
                     }
+
+                    DropdownMenuItem(
+                        text = { Text("Create subtask") },
+                        onClick = {
+                            expanded = false
+                            onAction("create_child")
+                        },
+                        leadingIcon = { NfIcon(NfIcons.CHILD, 16.sp) }
+                    )
 
                     if (enabledCalendarCount > 1) {
                         DropdownMenuItem(text = { Text("Move") }, onClick = {
