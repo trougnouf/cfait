@@ -103,6 +103,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     // --- 1. Prepare Details Text ---
     let mut full_details = String::new();
     if let Some(task) = state.get_selected_task() {
+        // Always show full title at the beginning
+        if !task.summary.is_empty() {
+            full_details.push_str(&task.summary);
+            full_details.push_str("\n\n");
+        }
+
         if !task.description.is_empty() {
             full_details.push_str(&task.description);
             full_details.push_str("\n\n");
@@ -428,25 +434,25 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let prefix_bracket_r = Span::styled("]", bracket_style);
             let prefix_blocked = Span::raw(if is_blocked { " [B] " } else { " " });
 
-            // Build Title
-            let mut spans = vec![
-                prefix_indent,
-                prefix_bracket_l,
-                prefix_inner,
-                prefix_bracket_r,
-                prefix_blocked,
-                Span::styled(t.summary.clone(), base_style),
-            ];
+            // Calculate prefix width
+            let prefix_width = if state.active_cal_href.is_some() {
+                t.depth * 2 + 6 // indent + "[ ] " + " " or " [B] "
+            } else {
+                6 // "[ ] " + " " or " [B] "
+            };
+
+            // Build metadata spans (without title)
+            let mut metadata_spans = Vec::new();
 
             // 1. Metadata: Duration, Recurrence
             if !dur_str.is_empty() {
-                spans.push(Span::styled(
+                metadata_spans.push(Span::styled(
                     format!(" {}", dur_str),
                     Style::default().fg(Color::DarkGray),
                 ));
             }
             if !recur_str.is_empty() {
-                spans.push(Span::styled(
+                metadata_spans.push(Span::styled(
                     recur_str.to_string(),
                     Style::default().fg(Color::Magenta),
                 ));
@@ -457,8 +463,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 .iter()
                 .any(|a| a.acknowledged.is_none() && !a.is_snooze())
             {
-                spans.push(Span::raw(" "));
-                spans.push(Span::styled(
+                metadata_spans.push(Span::raw(" "));
+                metadata_spans.push(Span::styled(
                     "🔔",
                     Style::default()
                         .fg(Color::LightRed)
@@ -468,34 +474,31 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             // Due Date
             if !due_str.is_empty() {
-                if !spans
+                if !metadata_spans
                     .last()
                     .map(|s| s.content.ends_with(' '))
                     .unwrap_or(true)
                 {
-                    spans.push(Span::raw(" "));
+                    metadata_spans.push(Span::raw(" "));
                 }
-                spans.push(Span::styled(due_str, Style::default().fg(Color::Blue)));
+                metadata_spans.push(Span::styled(due_str, Style::default().fg(Color::Blue)));
             }
 
             // 2. NEW: URL & Geo Indicators
             if t.geo.is_some() {
-                spans.push(Span::raw(" "));
-                spans.push(Span::styled(
+                metadata_spans.push(Span::raw(" "));
+                metadata_spans.push(Span::styled(
                     "\u{ee69}",
                     Style::default().fg(Color::LightBlue),
                 )); // Map Dot
             }
             if t.url.is_some() {
-                spans.push(Span::raw(" "));
-                spans.push(Span::styled(
+                metadata_spans.push(Span::raw(" "));
+                metadata_spans.push(Span::styled(
                     "\u{f0789}",
                     Style::default().fg(Color::LightBlue),
                 )); // Web Check
             }
-
-            // Calculate left side width (title + metadata)
-            let left_width: usize = spans.iter().map(|s| s.content.chars().count()).sum();
 
             // Build right side spans (tags and location)
             let mut right_spans = Vec::new();
@@ -529,17 +532,56 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 }
             }
 
-            // Calculate right side width and add padding
+            // Calculate widths
+            let metadata_width: usize = metadata_spans
+                .iter()
+                .map(|s| s.content.chars().count())
+                .sum();
+            let right_width: usize = right_spans.iter().map(|s| s.content.chars().count()).sum();
+
+            // Calculate available width for title
+            let reserved_width = prefix_width + metadata_width + right_width;
+            let available_for_title = if reserved_width + 10 < list_inner_width {
+                list_inner_width
+                    .saturating_sub(reserved_width)
+                    .saturating_sub(1)
+            } else {
+                30 // minimum
+            };
+
+            // Truncate title if necessary
+            let title_chars: Vec<char> = t.summary.chars().collect();
+            let display_title = if title_chars.len() > available_for_title {
+                let mut truncated = title_chars
+                    .iter()
+                    .take(available_for_title.saturating_sub(3))
+                    .collect::<String>();
+                truncated.push_str("...");
+                truncated
+            } else {
+                t.summary.clone()
+            };
+
+            // Build final spans
+            let mut spans = vec![
+                prefix_indent,
+                prefix_bracket_l,
+                prefix_inner,
+                prefix_bracket_r,
+                prefix_blocked,
+                Span::styled(display_title, base_style),
+            ];
+            spans.extend(metadata_spans);
+
+            // Add padding and right-aligned content
             if !right_spans.is_empty() {
-                let right_width: usize =
-                    right_spans.iter().map(|s| s.content.chars().count()).sum();
+                let left_width: usize = spans.iter().map(|s| s.content.chars().count()).sum();
                 let total_content = left_width + right_width;
 
                 if total_content < list_inner_width {
                     let padding = list_inner_width - total_content;
                     spans.push(Span::raw(" ".repeat(padding)));
                 } else {
-                    // If it doesn't fit, just add a space separator
                     spans.push(Span::raw(" "));
                 }
 
