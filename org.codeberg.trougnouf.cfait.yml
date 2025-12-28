@@ -1,0 +1,75 @@
+app-id: org.codeberg.trougnouf.cfait
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+
+command: cfait-gui
+finish-args:
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --socket=pulseaudio
+  - --share=ipc
+
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+  env:
+    CARGO_HOME: /run/build/cfait/cargo
+    SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+
+modules:
+  - name: cfait
+    buildsystem: simple
+    build-commands:
+      # 1. Setup Cargo Config
+      # We manually configure cargo to use the sources downloaded by the generator
+      - mkdir -p .cargo
+      - |
+        cat > .cargo/config.toml << EOF
+        [source.crates-io]
+        replace-with = "vendored-sources"
+
+        [source.vendored-sources]
+        directory = "cargo/vendor"
+        EOF
+
+      # 2. Build
+      - cargo --offline fetch --manifest-path Cargo.toml --verbose
+      - cargo build --offline --release --features gui
+
+      # 3. Install Binaries
+      - install -D -m 755 target/release/cfait /app/bin/cfait
+      - install -D -m 755 target/release/gui /app/bin/cfait-gui
+
+      # 4. Install Assets
+      - install -D -m 644 assets/cfait.svg /app/share/icons/hicolor/scalable/apps/org.codeberg.trougnouf.cfait.svg
+      - install -D -m 644 assets/cfait.desktop /app/share/applications/org.codeberg.trougnouf.cfait.desktop
+      # Note: We install the metainfo from the local file source below
+      - install -D -m 644 org.codeberg.trougnouf.cfait.metainfo.xml /app/share/metainfo/org.codeberg.trougnouf.cfait.metainfo.xml
+
+      # 5. Fix Desktop File
+      - sed -i 's/Exec=cfait-gui/Exec=cfait-gui/g' /app/share/applications/org.codeberg.trougnouf.cfait.desktop
+      - sed -i 's/Icon=cfait/Icon=org.codeberg.trougnouf.cfait/g' /app/share/applications/org.codeberg.trougnouf.cfait.desktop
+
+    sources:
+      - type: git
+        url: https://codeberg.org/trougnouf/cfait.git
+        tag: v0.3.13
+        commit: fa131df5b0443e976545dadf90bd1088fe820a97
+        # Flathub Bot Configuration
+        x-checker-data:
+          type: git
+          tag-pattern: ^v([\d.]+)$
+
+      # Include the generated YAML.
+      # This avoids the "Unknown source type cargo" error on older/mismatched builders.
+      - type: include
+        path: cargo-sources.yml
+
+      # Load metainfo from the git repo (so it gets the version update from the script)
+      - type: file
+        path: assets/org.codeberg.trougnouf.cfait.metainfo.xml
+        dest-filename: org.codeberg.trougnouf.cfait.metainfo.xml

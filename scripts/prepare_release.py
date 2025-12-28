@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-import sys
+import datetime
+import os
 import re
 import subprocess
-import os
+import sys
 
 
 def main():
@@ -40,36 +41,78 @@ def main():
     print(f"✅ Updated version_code to {version_code} in Cargo.toml")
 
     # 4. UPDATE MAIN CHANGELOG.MD
-    # We use --tag so git-cliff treats the current "unreleased" changes as belonging to this new version
     print("📝 Updating CHANGELOG.md...")
     subprocess.run(
         ["git-cliff", "--tag", version_string, "--output", "CHANGELOG.md"], check=True
     )
 
     # 5. GENERATE FASTLANE CHANGELOG
-    # F-Droid expects: fastlane/metadata/android/en-US/changelogs/{version_code}.txt
     fastlane_dir = "fastlane/metadata/android/en-US/changelogs"
     os.makedirs(fastlane_dir, exist_ok=True)
     fastlane_file = os.path.join(fastlane_dir, f"{version_code}.txt")
 
     print(f"📝 Generating Fastlane changelog: {fastlane_file}")
-
-    # Generate just the body for the current release
     changelog_body = subprocess.check_output(
         ["git-cliff", "--tag", version_string, "--unreleased", "--strip", "header"],
         text=True,
     )
-
-    # Clean up the output for the app store (remove HTML comments used for sorting)
-    # e.g. "<!-- 0 -->🚀 Features" -> "🚀 Features"
     clean_body = re.sub(r"<!-- \d+ -->", "", changelog_body).strip()
 
     with open(fastlane_file, "w") as f:
         f.write(clean_body)
 
-    # 6. STAGE THE NEW FILE FOR GIT
-    # This ensures cargo-release includes the new .txt file in the release commit
-    subprocess.run(["git", "add", fastlane_file], check=True)
+    # --- NEW FLATPAK STEPS ---
+
+    # 6. GENERATE FLATPAK SOURCES (cargo-sources.yml)
+    # Using the system-installed flatpak-cargo-generator
+    print("📦 Generating Flatpak cargo sources (YAML)...")
+    try:
+        # We output to YAML because it's robust across flatpak-builder versions
+        subprocess.run(
+            ["flatpak-cargo-generator", "Cargo.lock", "-o", "cargo-sources.yml"],
+            check=True,
+        )
+    except FileNotFoundError:
+        print("Error: flatpak-cargo-generator not found in PATH.")
+        sys.exit(1)
+
+    # 7. UPDATE METAINFO.XML RELEASES
+    metainfo_path = "assets/org.codeberg.trougnouf.cfait.metainfo.xml"
+    print(f"📝 Updating Metainfo: {metainfo_path}")
+
+    today = datetime.date.today().isoformat()
+    release_tag = f'    <release version="{version_string}" date="{today}"/>'
+
+    with open(metainfo_path, "r") as f:
+        xml_content = f.read()
+
+    # Insert the new release tag after <releases>
+    # This regex looks for <releases> and appends our new tag right after it
+    if "<releases>" in xml_content:
+        xml_content = xml_content.replace("<releases>", f"<releases>\n{release_tag}")
+    else:
+        # Fallback if <releases> doesn't exist, insert before </component>
+        xml_content = xml_content.replace(
+            "</component>", f"  <releases>\n{release_tag}\n  </releases>\n</component>"
+        )
+
+    with open(metainfo_path, "w") as f:
+        f.write(xml_content)
+
+    # 8. STAGE ALL FILES FOR GIT
+    # cargo-release will commit these
+    subprocess.run(
+        [
+            "git",
+            "add",
+            fastlane_file,
+            "cargo-sources.yml",
+            metainfo_path,
+            "Cargo.toml",
+            "CHANGELOG.md",
+        ],
+        check=True,
+    )
 
 
 if __name__ == "__main__":
