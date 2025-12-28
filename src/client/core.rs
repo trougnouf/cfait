@@ -672,11 +672,20 @@ impl RustyClient {
                 Action::Update(task) => {
                     let path = strip_host(&task.href);
                     let ics_string = task.to_ics();
+
+                    // Handle placeholder ETag by treating it as empty (unconditional update if server allows,
+                    // or standard If-Match if we had a real etag)
+                    let etag_val = if task.etag == "pending_refresh" {
+                        ""
+                    } else {
+                        &task.etag
+                    };
+
                     match client
                         .request(PutResource::new(&path).update(
                             ics_string,
                             "text/calendar; charset=utf-8; component=VTODO",
-                            &task.etag,
+                            etag_val,
                         ))
                         .await
                     {
@@ -740,10 +749,19 @@ impl RustyClient {
                 }
                 Action::Delete(task) => {
                     let path = strip_host(&task.href);
-                    match client
-                        .request(Delete::new(&path).with_etag(&task.etag))
-                        .await
-                    {
+
+                    // FIX: Split logic to avoid type mismatch in Delete builder
+                    let resp = if !task.etag.is_empty() && task.etag != "pending_refresh" {
+                        // Conditional Delete
+                        client
+                            .request(Delete::new(&path).with_etag(&task.etag))
+                            .await
+                    } else {
+                        // Unconditional Delete (Force)
+                        client.request(Delete::new(&path).force()).await
+                    };
+
+                    match resp {
                         Ok(_) => Ok(()),
                         Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => Ok(()),
                         Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED)) => {

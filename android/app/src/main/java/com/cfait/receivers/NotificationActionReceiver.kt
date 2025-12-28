@@ -8,20 +8,9 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import com.cfait.workers.NotificationActionWorker
 
-/**
- * BroadcastReceiver that handles notification action clicks (Snooze/Dismiss).
- *
- * This receiver immediately:
- * 1. Cancels the notification to provide instant user feedback
- * 2. Delegates the actual work to WorkManager for reliable execution
- *
- * This ensures the alarm state is properly updated even if the app process
- * is killed or under memory pressure.
- */
 class NotificationActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val taskUid = intent.getStringExtra("T_UID")
@@ -36,7 +25,11 @@ class NotificationActionReceiver : BroadcastReceiver() {
         Log.d("CfaitNotificationAction", "Received action: $action for alarm: $alarmUid")
 
         // Immediately dismiss the notification to provide instant user feedback
-        NotificationManagerCompat.from(context).cancel(alarmUid.hashCode())
+        try {
+            NotificationManagerCompat.from(context).cancel(alarmUid.hashCode())
+        } catch (e: SecurityException) {
+            // Can happen on some devices if permission revoked
+        }
 
         // Prepare input data for the worker
         val inputData = Data.Builder()
@@ -46,13 +39,13 @@ class NotificationActionReceiver : BroadcastReceiver() {
             .build()
 
         // Create a work request with the action data
+        // FIX: Removed setExpedited() to prevent crashes on Android 12+ when
+        // getForegroundInfo() is not implemented. Standard priority is sufficient here.
         val workRequest = OneTimeWorkRequestBuilder<NotificationActionWorker>()
             .setInputData(inputData)
-            .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
 
         // Enqueue the work
-        // Use unique work name to prevent duplicate processing
         WorkManager.getInstance(context).enqueueUniqueWork(
             "cfait_notification_action_${alarmUid}",
             ExistingWorkPolicy.REPLACE,

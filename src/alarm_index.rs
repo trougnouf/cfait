@@ -254,7 +254,7 @@ impl AlarmIndex {
     pub fn get_firing_alarms(&self) -> Vec<AlarmIndexEntry> {
         let now = Utc::now();
         let now_ms = now.timestamp_millis();
-        let grace_period_ms = 60 * 60 * 1000; // 60 minutes in milliseconds
+        let grace_period_ms = 2 * 60 * 60 * 1000; // 120 minutes in milliseconds
 
         self.alarms
             .iter()
@@ -272,10 +272,30 @@ impl AlarmIndex {
     pub fn get_next_alarm_timestamp(&self) -> Option<u64> {
         let now_ms = Utc::now().timestamp_millis();
 
-        self.alarms
+        #[cfg(target_os = "android")]
+        log::debug!(
+            "get_next_alarm_timestamp: checking {} alarms, now_ms={}",
+            self.alarms.len(),
+            now_ms
+        );
+
+        let result = self
+            .alarms
             .iter()
             .find(|alarm| alarm.trigger_ms > now_ms)
-            .map(|alarm| (alarm.trigger_ms / 1000) as u64)
+            .map(|alarm| (alarm.trigger_ms / 1000) as u64);
+
+        #[cfg(target_os = "android")]
+        match result {
+            Some(ts) => log::debug!(
+                "get_next_alarm_timestamp: found next alarm at timestamp {} (in {} seconds)",
+                ts,
+                (ts as i64) - (now_ms / 1000)
+            ),
+            None => log::debug!("get_next_alarm_timestamp: no future alarms found"),
+        }
+
+        result
     }
 
     /// Returns the number of alarms in the index.
@@ -292,7 +312,7 @@ impl AlarmIndex {
     /// This helps keep the index file small over time.
     pub fn prune_old_alarms(&mut self) {
         let now_ms = Utc::now().timestamp_millis();
-        let grace_period_ms = 60 * 60 * 1000; // 60 minutes
+        let grace_period_ms = 2 * 60 * 60 * 1000; // 120 minutes
 
         self.alarms
             .retain(|alarm| now_ms - alarm.trigger_ms < grace_period_ms);

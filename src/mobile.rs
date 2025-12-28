@@ -632,12 +632,23 @@ impl CfaitMobile {
     }
 
     pub async fn add_task_smart(&self, input: String) -> Result<String, MobileError> {
+        #[cfg(target_os = "android")]
+        log::debug!("add_task_smart() called with input: '{}'", input);
+
         let config = Config::load().unwrap_or_default();
 
         // Parse time from config
         let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
         let mut task = Task::new(&input, &config.tag_aliases, def_time);
+
+        #[cfg(target_os = "android")]
+        log::debug!(
+            "Created task: uid={}, summary='{}', has_alarms={}",
+            task.uid,
+            task.summary,
+            !task.alarms.is_empty()
+        );
         let target_href = config
             .default_calendar
             .clone()
@@ -652,8 +663,19 @@ impl CfaitMobile {
         if let Some(client) = &*guard
             && client.create_task(&mut task).await.is_ok()
         {
+            // FIX: Assign a placeholder etag to prevent ghost pruning.
+            if task.etag.is_empty() {
+                task.etag = "pending_refresh".to_string();
+            }
+
             self.store.lock().await.update_or_add_task(task.clone());
             network_success = true;
+
+            #[cfg(target_os = "android")]
+            log::debug!(
+                "Task {} created on network, assigned placeholder etag to prevent ghost pruning",
+                task.uid
+            );
         }
 
         if !network_success {
@@ -669,8 +691,14 @@ impl CfaitMobile {
         }
 
         // Rebuild alarm index after adding task
+        #[cfg(target_os = "android")]
+        log::debug!("Rebuilding alarm index after adding task {}", task.uid);
+
         let store = self.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
+
+        #[cfg(target_os = "android")]
+        log::debug!("Alarm index rebuilt. Returning task uid: {}", task.uid);
 
         Ok(task.uid)
     }
@@ -883,11 +911,27 @@ impl CfaitMobile {
         alarm_uid: String,
         minutes: u32,
     ) -> Result<(), MobileError> {
-        self.apply_store_mutation(task_uid, |store, id| {
-            if let Some((task, _)) = store.get_task_mut(id)
-                && task.snooze_alarm(&alarm_uid, minutes)
-            {
-                return Some(task.clone());
+        self.apply_store_mutation(task_uid.clone(), |store, id| {
+            if let Some((task, _)) = store.get_task_mut(id) {
+                // Check for implicit alarm
+                if alarm_uid.starts_with("implicit_") {
+                    let parts: Vec<&str> = alarm_uid.split('|').collect();
+                    if parts.len() >= 2
+                        && let Ok(dt) = DateTime::parse_from_rfc3339(parts[1]) {
+                            let utc_dt = dt.with_timezone(&Utc);
+                            let desc = if alarm_uid.contains("implicit_due") {
+                                "Due now"
+                            } else {
+                                "Starting"
+                            };
+                            task.snooze_implicit_alarm(utc_dt, desc.to_string(), minutes);
+                            return Some(task.clone());
+                        }
+                }
+
+                if task.snooze_alarm(&alarm_uid, minutes) {
+                    return Some(task.clone());
+                }
             }
             None
         })
@@ -905,19 +949,68 @@ impl CfaitMobile {
         task_uid: String,
         alarm_uid: String,
     ) -> Result<(), MobileError> {
-        self.apply_store_mutation(task_uid, |store, id| {
-            if let Some((task, _)) = store.get_task_mut(id)
-                && task.dismiss_alarm(&alarm_uid)
-            {
-                return Some(task.clone());
+        #[cfg(target_os = "android")]
+        log::debug!(
+            "dismiss_alarm called: task_uid={}, alarm_uid={}",
+            task_uid,
+            alarm_uid
+        );
+
+        self.apply_store_mutation(task_uid.clone(), |store, id| {
+            if let Some((task, _)) = store.get_task_mut(id) {
+                #[cfg(target_os = "android")]
+                log::debug!(
+                    "Found task '{}' with {} alarms before dismiss",
+                    task.summary,
+                    task.alarms.len()
+                );
+
+                // Implicit Alarm Handling
+                if alarm_uid.starts_with("implicit_") {
+                    let parts: Vec<&str> = alarm_uid.split('|').collect();
+                    if parts.len() >= 2
+                        && let Ok(dt) = DateTime::parse_from_rfc3339(parts[1]) {
+                            let utc_dt = dt.with_timezone(&Utc);
+                            let desc = if alarm_uid.contains("implicit_due") {
+                                "Due now"
+                            } else {
+                                "Starting"
+                            };
+                            task.dismiss_implicit_alarm(utc_dt, desc.to_string());
+                            #[cfg(target_os = "android")]
+                            log::debug!("Dismissed implicit alarm: {}", alarm_uid);
+                            return Some(task.clone());
+                        }
+                }
+
+                if task.dismiss_alarm(&alarm_uid) {
+                    #[cfg(target_os = "android")]
+                    log::debug!(
+                        "Successfully dismissed explicit alarm, task now has {} alarms",
+                        task.alarms.len()
+                    );
+                    return Some(task.clone());
+                } else {
+                    #[cfg(target_os = "android")]
+                    log::warn!("dismiss_alarm returned false - alarm not found or not dismissible");
+                }
+            } else {
+                #[cfg(target_os = "android")]
+                log::warn!("Task {} not found in store during dismiss", id);
             }
             None
         })
         .await?;
 
         // Rebuild alarm index after dismissing alarm
+        #[cfg(target_os = "android")]
+        log::debug!("Rebuilding alarm index after dismissing alarm");
+
         let store = self.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
+
+        #[cfg(target_os = "android")]
+        log::debug!("dismiss_alarm completed successfully");
 
         Ok(())
     }
@@ -958,8 +1051,8 @@ impl CfaitMobile {
     pub fn get_next_alarm_timestamp(&self) -> Option<i64> {
         // Try in-memory cache first (avoids disk read)
         let cached = self.alarm_index_cache.blocking_lock();
-        if let Some(ref index) = *cached {
-            if !index.is_empty() {
+        if let Some(ref index) = *cached
+            && !index.is_empty() {
                 if let Some(timestamp) = index.get_next_alarm_timestamp() {
                     #[cfg(target_os = "android")]
                     log::debug!("Next alarm timestamp from cached index: {}", timestamp);
@@ -970,7 +1063,6 @@ impl CfaitMobile {
                     return None;
                 }
             }
-        }
         drop(cached);
 
         // Fallback: Load from disk if cache miss
@@ -1076,8 +1168,8 @@ impl CfaitMobile {
     pub fn get_firing_alarms(&self) -> Vec<MobileAlarmInfo> {
         // Try in-memory cache first (avoids disk read)
         let cached = self.alarm_index_cache.blocking_lock();
-        if let Some(ref index) = *cached {
-            if !index.is_empty() {
+        if let Some(ref index) = *cached
+            && !index.is_empty() {
                 #[cfg(target_os = "android")]
                 log::debug!(
                     "Using cached alarm index for fast lookup ({} alarms indexed)",
@@ -1103,7 +1195,6 @@ impl CfaitMobile {
                     return Vec::new();
                 }
             }
-        }
         drop(cached);
 
         // Fallback: Load from disk if cache miss
@@ -1175,8 +1266,8 @@ impl CfaitMobile {
                         }
                     };
 
-                    // Fire if in past (within 1 hour grace to avoid old spam)
-                    if trigger_dt <= now && (now - trigger_dt).num_minutes() < 60 {
+                    // Fire if in past (within 2 hours grace to avoid old spam)
+                    if trigger_dt <= now && (now - trigger_dt).num_minutes() < 120 {
                         results.push(MobileAlarmInfo {
                             task_uid: task.uid.clone(),
                             alarm_uid: alarm.uid.clone(),
@@ -1198,7 +1289,7 @@ impl CfaitMobile {
                     if !has_active_explicit {
                         // Helper for check
                         let mut check_implicit = |dt: DateTime<Utc>, desc: &str, type_key: &str| {
-                            if !task.has_alarm_at(dt) && dt <= now && (now - dt).num_minutes() < 60
+                            if !task.has_alarm_at(dt) && dt <= now && (now - dt).num_minutes() < 120
                             {
                                 let ts_str = dt.to_rfc3339();
                                 // Synthetic ID generation matching `system.rs`
@@ -1317,9 +1408,15 @@ impl CfaitMobile {
                         store.insert(cal.href.clone(), cached);
                     }
                 }
+                // Even on error, we must rebuild index for whatever data we loaded from cache
+                self.rebuild_alarm_index_sync(&store);
                 return Err(MobileError::from(e));
             }
         }
+
+        // [FIX ADDED] Rebuild the alarm index now that the store is updated
+        self.rebuild_alarm_index_sync(&store);
+
         Ok(warning_from_fallback.unwrap_or_else(|| "Connected".to_string()))
     }
 
@@ -1340,9 +1437,22 @@ impl CfaitMobile {
         if let Some(client) = &*client_guard
             && client.update_task(&mut task_for_net).await.is_ok()
         {
+            // FIX: Assign a placeholder etag to prevent ghost pruning.
+            // Similar to add_task_smart, we need to ensure the task has a non-empty etag
+            // to survive ghost pruning when AlarmWorker creates a fresh CfaitMobile instance.
+            if task_for_net.etag.is_empty() {
+                task_for_net.etag = "pending_refresh".to_string();
+            }
+
             let mut store = self.store.lock().await;
             store.update_or_add_task(task_for_net.clone());
             network_success = true;
+
+            #[cfg(target_os = "android")]
+            log::debug!(
+                "Task {} updated on network, assigned placeholder etag to prevent ghost pruning",
+                task_for_net.uid
+            );
         }
 
         if !network_success {

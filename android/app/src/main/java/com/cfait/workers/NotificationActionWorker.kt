@@ -43,15 +43,19 @@ class NotificationActionWorker(
             val api = CfaitMobile(context.filesDir.absolutePath)
             api.loadFromCache()
 
+            Log.d("CfaitNotificationAction", "Before action: next alarm timestamp = ${api.getNextAlarmTimestamp()}")
+
             // Process the action
             when (action) {
                 ACTION_SNOOZE -> {
                     // Snooze for 15 minutes
+                    Log.d("CfaitNotificationAction", "Calling snoozeAlarm...")
                     api.snoozeAlarm(taskUid, alarmUid, 15u)
                     Log.d("CfaitNotificationAction", "Alarm snoozed for 15 minutes")
                 }
 
                 ACTION_DISMISS -> {
+                    Log.d("CfaitNotificationAction", "Calling dismissAlarm...")
                     api.dismissAlarm(taskUid, alarmUid)
                     Log.d("CfaitNotificationAction", "Alarm dismissed")
                 }
@@ -61,6 +65,8 @@ class NotificationActionWorker(
                     return Result.failure()
                 }
             }
+
+            Log.d("CfaitNotificationAction", "After action: next alarm timestamp = ${api.getNextAlarmTimestamp()}")
 
             // Reschedule alarms since we've modified the alarm state
             AlarmScheduler.scheduleNextAlarm(context, api)

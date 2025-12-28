@@ -19,6 +19,9 @@ import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.cfait.core.MobileCalendar
 import com.cfait.core.MobileLocation
 import com.cfait.core.MobileTag
@@ -27,6 +30,7 @@ import com.cfait.ui.HomeScreen
 import com.cfait.ui.SettingsScreen
 import com.cfait.ui.TaskDetailScreen
 import com.cfait.util.AlarmScheduler
+import com.cfait.workers.AlarmWorker
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -85,6 +89,7 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
     // -------------------------------
 
     fun refreshLists() {
+        android.util.Log.d("CfaitMain", "refreshLists() called - will schedule alarms")
         scope.launch {
             try {
                 calendars = api.getCalendars()
@@ -92,7 +97,14 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                 locations = api.getAllLocations() // <--- Fetch locations
                 defaultCalHref = api.getConfig().defaultCalendar
                 hasUnsynced = api.hasUnsyncedChanges()
+
+                // [FIX ADDED] Schedule the next alarm whenever the data changes
+                // This handles Add, Edit, Delete, Toggle, and Sync scenarios.
+                android.util.Log.d("CfaitMain", "About to call scheduleNextAlarm from refreshLists")
+                AlarmScheduler.scheduleNextAlarm(context, api)
+
             } catch (e: Exception) {
+                android.util.Log.e("CfaitMain", "Exception in refreshLists", e)
             }
         }
     }
@@ -104,8 +116,19 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
             try {
                 api.sync()
                 refreshLists()
-                // Schedule next alarm after sync
+
+                // 1. Schedule the next *future* alarm
                 AlarmScheduler.scheduleNextAlarm(context, api)
+
+                // 2. Immediately check for alarms that should be firing *now*
+                // (or were missed in the last 2 hours).
+                val request = OneTimeWorkRequestBuilder<AlarmWorker>().build()
+                WorkManager.getInstance(context).enqueueUniqueWork(
+                    "cfait_manual_check",
+                    ExistingWorkPolicy.KEEP,
+                    request
+                )
+
             } catch (e: Exception) {
             }
             isLoading = false
