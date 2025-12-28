@@ -179,12 +179,12 @@ impl Task {
         if let Some(p_uid) = &self.parent_uid {
             let p_uid_str: String = p_uid.as_str().into();
             let prop = icalendar::Property::new("RELATED-TO", &p_uid_str);
-            todo.append_property(prop);
+            todo.append_multi_property(prop);
         }
         for dep_uid in &self.dependencies {
             let mut prop = icalendar::Property::new("RELATED-TO", dep_uid);
             prop.add_parameter("RELTYPE", "DEPENDS-ON");
-            todo.append_property(prop);
+            todo.append_multi_property(prop);
         }
 
         // Unmapped
@@ -463,40 +463,53 @@ impl Task {
         categories.dedup();
 
         // Relations
+        // Manual parsing required because icalendar parser may dedup properties with same key
         let mut parent_uid = None;
         let mut dependencies = Vec::new();
 
-        // Check single RELATED-TO
-        if let Some(prop) = todo.properties().get("RELATED-TO") {
-            let is_dep = prop
-                .params()
-                .get("RELTYPE")
-                .map(|p| p.value() == "DEPENDS-ON")
-                .unwrap_or(false);
-            let val = prop.value().to_string();
-            if is_dep {
-                dependencies.push(val);
-            } else {
-                parent_uid = Some(val);
+        let unfolded = icalendar::parser::unfold(raw_ics);
+        let mut in_vtodo = false;
+        let mut in_valarm = false;
+
+        for line in unfolded.lines() {
+            let line = line.trim();
+            if line == "BEGIN:VTODO" {
+                in_vtodo = true;
+                continue;
             }
-        }
-        // Check multi RELATED-TO
-        if let Some(props) = todo.multi_properties().get("RELATED-TO") {
-            for prop in props {
-                let is_dep = prop
-                    .params()
-                    .get("RELTYPE")
-                    .map(|p| p.value() == "DEPENDS-ON")
-                    .unwrap_or(false);
-                let val = prop.value().to_string();
-                if is_dep {
-                    if !dependencies.contains(&val) {
-                        dependencies.push(val);
+            if line == "END:VTODO" {
+                in_vtodo = false;
+                continue;
+            }
+            if line == "BEGIN:VALARM" {
+                in_valarm = true;
+                continue;
+            }
+            if line == "END:VALARM" {
+                in_valarm = false;
+                continue;
+            }
+
+            // Only process properties inside VTODO but NOT inside nested VALARM
+            if in_vtodo && !in_valarm && line.starts_with("RELATED-TO")
+                && let Some((raw_key, val)) = line.split_once(':') {
+                    let parts: Vec<&str> = raw_key.split(';').collect();
+                    let mut is_dep = false;
+                    for param in parts.iter().skip(1) {
+                        if param.contains("RELTYPE") && param.contains("DEPENDS-ON") {
+                            is_dep = true;
+                        }
                     }
-                } else {
-                    parent_uid = Some(val);
+
+                    let value = val.trim().to_string();
+                    if is_dep {
+                        if !dependencies.contains(&value) {
+                            dependencies.push(value);
+                        }
+                    } else {
+                        parent_uid = Some(value);
+                    }
                 }
-            }
         }
 
         // Unmapped
@@ -668,9 +681,10 @@ fn parse_ics_duration(val: &str) -> i32 {
 
     // Consume 'P'
     if let Some(&c) = chars.peek()
-        && c == 'P' {
-            chars.next();
-        }
+        && c == 'P'
+    {
+        chars.next();
+    }
 
     let mut in_time = false;
 
