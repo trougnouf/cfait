@@ -47,14 +47,9 @@ impl TaskStore {
         self.calendars.entry(href).or_default().push(task);
     }
 
-    /// Updates an existing task or adds it if missing.
-    /// Maintains index and persists to cache.
     pub fn update_or_add_task(&mut self, task: Task) {
         let href = task.calendar_href.clone();
-
-        // Ensure index is up to date
         self.index.insert(task.uid.clone(), href.clone());
-
         let list = self.calendars.entry(href.clone()).or_default();
 
         if let Some(idx) = list.iter().position(|t| t.uid == task.uid) {
@@ -63,7 +58,6 @@ impl TaskStore {
             list.push(task);
         }
 
-        // Persist logic
         if href == crate::storage::LOCAL_CALENDAR_HREF {
             let _ = LocalStorage::save(list);
         } else {
@@ -77,17 +71,13 @@ impl TaskStore {
         self.index.clear();
     }
 
-    // --- Core Logic Helpers ---
-
     pub fn get_task_mut(&mut self, uid: &str) -> Option<(&mut Task, String)> {
         let href = self.index.get(uid)?.clone();
-
         if let Some(tasks) = self.calendars.get_mut(&href)
             && let Some(task) = tasks.iter_mut().find(|t| t.uid == uid)
         {
             return Some((task, href));
         }
-
         self.index.remove(uid);
         None
     }
@@ -95,11 +85,9 @@ impl TaskStore {
     pub fn toggle_task(&mut self, uid: &str) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
             if task.status == TaskStatus::Completed {
-                // Unchecking: Back to NeedsAction, Clear Progress
                 task.status = TaskStatus::NeedsAction;
                 task.percent_complete = None;
             } else {
-                // Checking: Completed, 100% Progress
                 task.status = TaskStatus::Completed;
                 task.percent_complete = Some(100);
             }
@@ -120,12 +108,9 @@ impl TaskStore {
         None
     }
 
-    // --- PAUSE / STOP / START HELPERS ---
-
     pub fn set_status_in_process(&mut self, uid: &str) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
             task.status = TaskStatus::InProcess;
-            // Optionally ensure percent_complete is > 0 to imply started, but not strictly required
             return Some(task.clone());
         }
         None
@@ -134,8 +119,6 @@ impl TaskStore {
     pub fn pause_task(&mut self, uid: &str) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
             task.status = TaskStatus::NeedsAction;
-            // To be "Paused", percent must be > 0.
-            // If it's currently 0 or missing, set it to 50% as a default "in progress" marker.
             let current = task.percent_complete.unwrap_or(0);
             if current == 0 {
                 task.percent_complete = Some(50);
@@ -148,13 +131,11 @@ impl TaskStore {
     pub fn stop_task(&mut self, uid: &str) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
             task.status = TaskStatus::NeedsAction;
-            task.percent_complete = None; // Explicitly clear progress to un-pause
+            task.percent_complete = None;
             return Some(task.clone());
         }
         None
     }
-
-    // ------------------------------------
 
     pub fn change_priority(&mut self, uid: &str, delta: i8) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
@@ -182,14 +163,11 @@ impl TaskStore {
 
     pub fn delete_task(&mut self, uid: &str) -> Option<(Task, String)> {
         let href = self.index.get(uid)?.clone();
-
         if let Some(tasks) = self.calendars.get_mut(&href)
             && let Some(idx) = tasks.iter().position(|t| t.uid == uid)
         {
             let task = tasks.remove(idx);
             self.index.remove(uid);
-
-            // Persist the change to the correct storage (cache or local)
             if href == crate::storage::LOCAL_CALENDAR_HREF {
                 let _ = LocalStorage::save(tasks);
             } else {
@@ -232,14 +210,11 @@ impl TaskStore {
     pub fn move_task(&mut self, uid: &str, target_href: String) -> Option<Task> {
         if let Some((mut task, old_href)) = self.delete_task(uid) {
             if old_href == target_href {
-                self.add_task(task); // Put it back
+                self.add_task(task);
                 return None;
             }
-
             task.calendar_href = target_href.clone();
             self.add_task(task.clone());
-
-            // Persist the change to the NEW calendar's storage
             if target_href == crate::storage::LOCAL_CALENDAR_HREF {
                 if let Some(local_tasks) = self.calendars.get(&target_href) {
                     let _ = LocalStorage::save(local_tasks);
@@ -248,13 +223,11 @@ impl TaskStore {
                 let (_, token) = Cache::load(&target_href).unwrap_or((vec![], None));
                 let _ = Cache::save(&target_href, target_list, token);
             }
-
             return Some(task);
         }
         None
     }
 
-    // --- FIX: Intelligent Alias Application ---
     pub fn apply_alias_retroactively(
         &mut self,
         alias_key: &str,
@@ -263,7 +236,6 @@ impl TaskStore {
         let mut uids_to_update: Vec<String> = Vec::new();
         let alias_prefix = format!("{}:", alias_key);
 
-        // 1. Identify tasks that match the alias (or are sub-tags of it)
         for tasks in self.calendars.values() {
             for task in tasks {
                 let has_alias_or_child = task
@@ -272,10 +244,8 @@ impl TaskStore {
                     .any(|cat| cat == alias_key || cat.starts_with(&alias_prefix));
 
                 if has_alias_or_child {
-                    // Check if we actually need to change anything to avoid spurious updates
                     let mut needs_update = false;
                     for val in raw_values {
-                        // Check logic mirrors the update logic below
                         if let Some(tag) = val.strip_prefix('#') {
                             let clean = crate::model::parser::strip_quotes(tag);
                             if !task.categories.contains(&clean) {
@@ -296,7 +266,6 @@ impl TaskStore {
                             break;
                         }
                     }
-
                     if needs_update {
                         uids_to_update.push(task.uid.clone());
                     }
@@ -308,13 +277,11 @@ impl TaskStore {
             return Vec::new();
         }
 
-        // 2. Modify
         let mut modified_tasks = Vec::new();
         for uid in uids_to_update {
             if let Some((task, _)) = self.get_task_mut(&uid) {
                 for val in raw_values {
                     if let Some(tag) = val.strip_prefix('#') {
-                        // FIX: Strip quotes and hash before storing
                         let clean = crate::model::parser::strip_quotes(tag);
                         if !task.categories.contains(&clean) {
                             task.categories.push(clean);
@@ -331,26 +298,19 @@ impl TaskStore {
                         task.url = Some(crate::model::parser::strip_quotes(url));
                     } else if let Some(geo) = val.strip_prefix("geo:") {
                         task.geo = Some(crate::model::parser::strip_quotes(geo));
-                    } else if let Some(_d) = val.strip_prefix('~') {
-                        // Basic duration handling for aliases if needed
-                    } else {
-                        // Fallback: If no sigil, treat as tag to be safe (legacy support)
-                        if !task.categories.contains(val) {
-                            task.categories.push(val.clone());
-                        }
+                    } else if val.starts_with('~') || val.starts_with("est:") {
+                        // Duration handling if needed in future
+                    } else if !task.categories.contains(val) {
+                        task.categories.push(val.clone());
                     }
                 }
-
                 task.categories.sort();
                 task.categories.dedup();
                 modified_tasks.push(task.clone());
             }
         }
-
         modified_tasks
     }
-
-    // --- Read/Filter Logic ---
 
     pub fn get_all_categories(
         &self,
@@ -378,7 +338,6 @@ impl TaskStore {
                     }
                 } else {
                     for cat in &task.categories {
-                        // Handle hierarchy: gaming:coop -> gaming, gaming:coop
                         let parts: Vec<&str> = cat.split(':').collect();
                         let mut current_hierarchy = String::with_capacity(cat.len());
 
@@ -387,9 +346,7 @@ impl TaskStore {
                                 current_hierarchy.push(':');
                             }
                             current_hierarchy.push_str(part);
-
                             present_tags.insert(current_hierarchy.clone());
-
                             if is_active {
                                 *active_counts.entry(current_hierarchy.clone()).or_insert(0) += 1;
                             }
@@ -400,7 +357,6 @@ impl TaskStore {
         }
 
         let mut result = Vec::new();
-
         for tag in present_tags {
             let count = *active_counts.get(&tag).unwrap_or(&0);
             let should_show = if hide_fully_completed_tags {
@@ -408,7 +364,6 @@ impl TaskStore {
             } else {
                 true
             };
-
             if should_show {
                 result.push((tag, count));
             }
@@ -433,7 +388,7 @@ impl TaskStore {
         result
     }
 
-    // --- NEW: Location Aggregation ---
+    // --- CHANGED: Location Aggregation (Hierarchy Support) ---
     pub fn get_all_locations(
         &self,
         hide_completed: bool,
@@ -450,7 +405,17 @@ impl TaskStore {
                     continue;
                 }
                 if let Some(loc) = &task.location {
-                    *counts.entry(loc.clone()).or_insert(0) += 1;
+                    // Split the location string to handle hierarchy (e.g. "home:kitchen")
+                    let parts: Vec<&str> = loc.split(':').collect();
+                    let mut current_hierarchy = String::with_capacity(loc.len());
+
+                    for (i, part) in parts.iter().enumerate() {
+                        if i > 0 {
+                            current_hierarchy.push(':');
+                        }
+                        current_hierarchy.push_str(part);
+                        *counts.entry(current_hierarchy.clone()).or_insert(0) += 1;
+                    }
                 }
             }
         }
@@ -504,10 +469,6 @@ impl TaskStore {
                     return false;
                 }
 
-                // FIX: Removed hard filtering of tasks based on cutoff date.
-                // The sorting logic (`organize_hierarchy` -> `compare_with_cutoff`) handles
-                // pushing future tasks to the bottom/back of the list. We shouldn't hide them entirely.
-
                 if let Some(mins) = t.estimated_duration {
                     if let Some(min) = options.min_duration
                         && mins < min
@@ -526,7 +487,6 @@ impl TaskStore {
                 if !options.selected_categories.is_empty() {
                     let filter_uncategorized =
                         options.selected_categories.contains(UNCATEGORIZED_ID);
-
                     let check_match = |task_cat: &str, selected: &str| -> bool {
                         if task_cat == selected {
                             return true;
@@ -581,10 +541,20 @@ impl TaskStore {
                     }
                 }
 
-                // --- NEW: Location Filtering ---
+                // --- CHANGED: Location Filtering (Hierarchy Support) ---
                 if !options.selected_locations.is_empty() {
                     if let Some(loc) = &t.location {
-                        if !options.selected_locations.contains(loc) {
+                        let mut hit = false;
+                        for sel in options.selected_locations {
+                            // Match exact string OR hierarchical child (starts with "sel:")
+                            if loc == sel
+                                || (loc.starts_with(sel) && loc.chars().nth(sel.len()) == Some(':'))
+                            {
+                                hit = true;
+                                break;
+                            }
+                        }
+                        if !hit {
                             return false;
                         }
                     } else {

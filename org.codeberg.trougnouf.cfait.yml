@@ -58,7 +58,7 @@ modules:
       - type: git
         url: https://codeberg.org/trougnouf/cfait.git
         tag: v0.3.13
-        commit: fa131df5b0443e976545dadf90bd1088fe820a97
+        commit: 643f777ab9fbea767fe481723f708e077b94cc29
         # Flathub Bot Configuration
         x-checker-data:
           type: git
