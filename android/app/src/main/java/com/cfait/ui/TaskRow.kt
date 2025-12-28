@@ -31,13 +31,16 @@ fun TaskRow(
     onClick: (String) -> Unit,
     yankedUid: String?,
     enabledCalendarCount: Int,
+    // New parameters for inheritance hiding
+    parentCategories: List<String> = emptyList(),
+    parentLocation: String? = null
 ) {
     val startPadding = (task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
     val textColor = getTaskTextColor(task.priority.toInt(), task.isDone, isDark)
     val highlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
     val containerColor = if (expanded) highlightColor else MaterialTheme.colorScheme.surface
-    val uriHandler = LocalUriHandler.current // Get handler
+    val uriHandler = LocalUriHandler.current
 
     Card(
         modifier =
@@ -75,25 +78,21 @@ fun TaskRow(
 
                     if (task.isBlocked) NfIcon(NfIcons.BLOCKED, 10.sp, MaterialTheme.colorScheme.error)
 
-                    // --- START MODIFICATION ---
-                    // Group Alarm and Due Date together
                     if (task.hasAlarms) {
                         NfIcon(NfIcons.BELL, 10.sp, Color(0xFFFF7043))
                     }
                     if (!task.dueDateIso.isNullOrEmpty()) {
-                        if (!task.hasAlarms) { // Add calendar icon only if bell is not present to save space
+                        if (!task.hasAlarms) {
                             NfIcon(NfIcons.CALENDAR, 10.sp, Color.Gray)
                         }
                         Text(task.dueDateIso!!.take(10), fontSize = 10.sp, color = Color.Gray)
                     }
-                    // --- END MODIFICATION ---
 
                     if (task.durationMins != null) {
                         Text(formatDuration(task.durationMins!!), fontSize = 10.sp, color = Color.Gray)
                     }
                     if (task.isRecurring) NfIcon(NfIcons.REPEAT, 10.sp, Color.Gray)
 
-                    // Geo Link
                     if (task.geo != null) {
                         IconButton(
                             onClick = { uriHandler.openUri("geo:${task.geo}") },
@@ -103,8 +102,8 @@ fun TaskRow(
                         }
                     }
 
-                    // Location Text
-                    if (task.location != null) {
+                    // Location Text - Only show if different from parent
+                    if (task.location != null && task.location != parentLocation) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val locationColor = Color(0xFFFFB300)
                             Text("@@", fontSize = 10.sp, color = locationColor, fontWeight = FontWeight.Bold)
@@ -112,7 +111,6 @@ fun TaskRow(
                         }
                     }
 
-                    // URL Link
                     if (task.url != null) {
                         IconButton(
                             onClick = { uriHandler.openUri(task.url!!) },
@@ -122,13 +120,16 @@ fun TaskRow(
                         }
                     }
 
+                    // Categories - Only show if not present in parent
                     task.categories.forEach { tag ->
-                        Text(
-                            "#$tag",
-                            fontSize = 10.sp,
-                            color = getTagColor(tag),
-                            modifier = Modifier.padding(end = 2.dp)
-                        )
+                        if (!parentCategories.contains(tag)) {
+                            Text(
+                                "#$tag",
+                                fontSize = 10.sp,
+                                color = getTagColor(tag),
+                                modifier = Modifier.padding(end = 2.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -231,6 +232,7 @@ fun TaskRow(
     }
 }
 
+// ... TaskCheckbox and CompactTagRow remain unchanged ...
 @Composable
 fun TaskCheckbox(
     task: MobileTask,

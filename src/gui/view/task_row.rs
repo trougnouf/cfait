@@ -37,6 +37,22 @@ pub fn view_task_row<'a>(
     let indent_size = if show_indent { task.depth * 12 } else { 0 };
     let indent = Space::new().width(Length::Fixed(indent_size as f32));
 
+    // Pre-calculate parent info for inheritance hiding
+    let (parent_tags, parent_location) = if show_indent && let Some(p_uid) = &task.parent_uid {
+        let mut p_cats = HashSet::new();
+        let mut p_loc = None;
+        if let Some(href) = app.store.index.get(p_uid)
+            && let Some(list) = app.store.calendars.get(href)
+            && let Some(p) = list.iter().find(|t| t.uid == *p_uid)
+        {
+            p_cats = p.categories.iter().cloned().collect();
+            p_loc = p.location.clone();
+        }
+        (p_cats, p_loc)
+    } else {
+        (HashSet::new(), None)
+    };
+
     let action_style = |theme: &Theme, status: button::Status| -> button::Style {
         let palette = theme.extended_palette();
         let base = button::Style {
@@ -106,14 +122,8 @@ pub fn view_task_row<'a>(
         }
     };
 
-    // --- START MODIFICATION ---
-
     // Check for active alarm
-    let has_active_alarm = task
-        .alarms
-        .iter()
-        // FIX: Removed `&& !a.is_snooze()`. A snooze is an active alarm.
-        .any(|a| a.acknowledged.is_none());
+    let has_active_alarm = task.alarms.iter().any(|a| a.acknowledged.is_none());
 
     // Build the date/alarm section
     let date_and_alarm_section: Element<'a, Message> = {
@@ -146,11 +156,6 @@ pub fn view_task_row<'a>(
             .width(Length::Shrink) // Shrink to fit content
             .into()
     };
-
-    // The old date_text is now date_and_alarm_section
-    // We remove the old `date_text` variable declaration
-
-    // --- END MODIFICATION ---
 
     let has_desc = !task.description.is_empty();
     let has_valid_parent = task.parent_uid.as_ref().is_some_and(|uid| !uid.is_empty());
@@ -491,32 +496,19 @@ pub fn view_task_row<'a>(
         }
     });
 
-    // --- FIX has_metadata CHECK ---
     let has_metadata = !task.categories.is_empty()
         || task.rrule.is_some()
         || is_blocked
         || task.estimated_duration.is_some()
         || task.location.is_some()
         || task.url.is_some()
-        || task.geo.is_some(); // Remove has_active_alarm from here, it's handled separately now
+        || task.geo.is_some();
 
     let main_text_col = responsive(move |size| {
         let available_width = size.width;
         let mut tags_width = 0.0;
 
-        let mut tags_to_hide: HashSet<String> = if show_indent && let Some(p_uid) = &task.parent_uid
-        {
-            let mut p_cats = HashSet::new();
-            if let Some(href) = app.store.index.get(p_uid)
-                && let Some(list) = app.store.calendars.get(href)
-                && let Some(p) = list.iter().find(|t| t.uid == *p_uid)
-            {
-                p_cats = p.categories.iter().cloned().collect();
-            }
-            p_cats
-        } else {
-            HashSet::new()
-        };
+        let mut tags_to_hide = parent_tags.clone();
 
         for cat in &task.categories {
             let mut search = cat.as_str();
@@ -545,7 +537,10 @@ pub fn view_task_row<'a>(
                 }
             }
             if let Some(l) = &task.location {
-                tags_width += (l.len() as f32 * 7.0) + 25.0;
+                // Hide location if identical to parent
+                if parent_location.as_ref() != Some(l) {
+                    tags_width += (l.len() as f32 * 7.0) + 25.0;
+                }
             }
             if task.estimated_duration.is_some() {
                 tags_width += 50.0;
@@ -561,8 +556,6 @@ pub fn view_task_row<'a>(
         let build_tags = || -> Element<'a, Message> {
             let mut tags_row: iced::widget::Row<'_, Message> =
                 row![].spacing(3).align_y(iced::Alignment::Center);
-
-            // The bell icon logic is REMOVED from here.
 
             if is_blocked {
                 tags_row = tags_row.push(
@@ -621,37 +614,42 @@ pub fn view_task_row<'a>(
                 );
             }
 
-            // --- COLORED LOCATION PILL (Moved Here) ---
+            // --- COLORED LOCATION PILL ---
             if let Some(loc) = &task.location {
-                let text_color = Color::WHITE; // White text on gray bg
+                // Only show if different from parent
+                if parent_location.as_ref() != Some(loc) {
+                    let text_color = Color::WHITE; // White text on gray bg
 
-                let loc_btn = button(text(format!("@@{}", loc)).size(12).color(text_color))
-                    .style(move |_theme, status| {
-                        let base = button::Style {
-                            background: Some(COLOR_LOCATION.into()),
-                            text_color,
-                            border: iced::Border {
-                                radius: 4.0.into(),
-                                ..Default::default()
-                            },
-                            ..button::Style::default()
-                        };
-                        match status {
-                            button::Status::Hovered | button::Status::Pressed => button::Style {
+                    let loc_btn = button(text(format!("@@{}", loc)).size(12).color(text_color))
+                        .style(move |_theme, status| {
+                            let base = button::Style {
+                                background: Some(COLOR_LOCATION.into()),
+                                text_color,
                                 border: iced::Border {
-                                    color: Color::BLACK.scale_alpha(0.2),
-                                    width: 1.0,
                                     radius: 4.0.into(),
+                                    ..Default::default()
                                 },
-                                ..base
-                            },
-                            _ => base,
-                        }
-                    })
-                    .padding(3)
-                    .on_press(Message::JumpToLocation(loc.clone()));
+                                ..button::Style::default()
+                            };
+                            match status {
+                                button::Status::Hovered | button::Status::Pressed => {
+                                    button::Style {
+                                        border: iced::Border {
+                                            color: Color::BLACK.scale_alpha(0.2),
+                                            width: 1.0,
+                                            radius: 4.0.into(),
+                                        },
+                                        ..base
+                                    }
+                                }
+                                _ => base,
+                            }
+                        })
+                        .padding(3)
+                        .on_press(Message::JumpToLocation(loc.clone()));
 
-                tags_row = tags_row.push(loc_btn);
+                    tags_row = tags_row.push(loc_btn);
+                }
             }
             // ----------------------------------------
 

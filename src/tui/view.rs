@@ -1,4 +1,4 @@
-// File: src/tui/view.rs
+// File: ./src/tui/view.rs
 use crate::color_utils;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::store::UNCATEGORIZED_ID;
@@ -12,6 +12,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
+use std::collections::HashSet;
 
 pub fn draw(f: &mut Frame, state: &mut AppState) {
     let full_help_text = vec![
@@ -308,6 +309,24 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .tasks
         .iter()
         .map(|t| {
+            // Determine parent attributes to hide redundancy (tags and location)
+            let (parent_tags, parent_location) = if state.active_cal_href.is_some()
+                && let Some(p_uid) = &t.parent_uid
+            {
+                let mut p_tags = HashSet::new();
+                let mut p_loc = None;
+                if let Some(href) = state.store.index.get(p_uid)
+                    && let Some(list) = state.store.calendars.get(href)
+                    && let Some(p) = list.iter().find(|pt| pt.uid == *p_uid)
+                {
+                    p_tags = p.categories.iter().cloned().collect();
+                    p_loc = p.location.clone();
+                }
+                (p_tags, p_loc)
+            } else {
+                (HashSet::new(), None)
+            };
+
             let is_blocked = state.store.is_blocked(t);
             let base_style = if is_blocked {
                 Style::default().fg(Color::DarkGray)
@@ -403,28 +422,31 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 )); // Web Check
             }
 
-            // 3. Location
-            if let Some(loc) = &t.location {
-                spans.push(Span::raw(" "));
-                spans.push(Span::styled("@@", Style::default().fg(Color::Yellow)));
-                spans.push(Span::styled(
-                    loc.clone(),
-                    Style::default().fg(Color::Yellow),
-                ));
-            }
+            // 3. Location (Hide if same as parent)
+            if let Some(loc) = &t.location
+                && parent_location.as_ref() != Some(loc) {
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled("@@", Style::default().fg(Color::Yellow)));
+                    spans.push(Span::styled(
+                        loc.clone(),
+                        Style::default().fg(Color::Yellow),
+                    ));
+                }
 
-            // 4. Tags
+            // 4. Tags (Hide if same as parent)
             for cat in &t.categories {
-                let (r, g, b) = color_utils::generate_color(cat);
-                spans.push(Span::raw(" "));
-                spans.push(Span::styled(
-                    format!("#{}", cat),
-                    Style::default().fg(Color::Rgb(
-                        (r * 255.0) as u8,
-                        (g * 255.0) as u8,
-                        (b * 255.0) as u8,
-                    )),
-                ));
+                if !parent_tags.contains(cat) {
+                    let (r, g, b) = color_utils::generate_color(cat);
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled(
+                        format!("#{}", cat),
+                        Style::default().fg(Color::Rgb(
+                            (r * 255.0) as u8,
+                            (g * 255.0) as u8,
+                            (b * 255.0) as u8,
+                        )),
+                    ));
+                }
             }
 
             ListItem::new(Line::from(spans))

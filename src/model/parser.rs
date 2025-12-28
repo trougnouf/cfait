@@ -32,8 +32,8 @@ pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<Strin
     let mut new_aliases = HashMap::new();
 
     for (_, _, token) in parts {
-        if token.contains(":=") && !token.starts_with('\\') {
-            if let Some((left, right)) = token.split_once(":=") {
+        if token.contains(":=") && !token.starts_with('\\')
+            && let Some((left, right)) = token.split_once(":=") {
                 let mut key = String::new();
                 let mut is_valid = false;
 
@@ -72,7 +72,6 @@ pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<Strin
                     }
                 }
             }
-        }
         cleaned_words.push(token);
     }
     (cleaned_words.join(" "), new_aliases)

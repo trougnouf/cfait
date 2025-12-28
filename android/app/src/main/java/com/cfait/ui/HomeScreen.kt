@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/ui/HomeScreen.kt
+// File: ./android/app/src/main/java/com/cfait/ui/HomeScreen.kt
 package com.cfait.ui
 
 import android.content.ClipData
@@ -48,7 +48,7 @@ fun HomeScreen(
     isLoading: Boolean,
     hasUnsynced: Boolean,
     autoScrollUid: String? = null,
-    refreshTick: Long, // FIX: Added parameter
+    refreshTick: Long,
     onGlobalRefresh: () -> Unit,
     onSettings: () -> Unit,
     onTaskClick: (String) -> Unit,
@@ -120,6 +120,9 @@ fun HomeScreen(
         calendars.associate { it.href to (it.color?.let { hex -> parseHexColor(hex) } ?: Color.Gray) }
     }
 
+    // Build a map for quick parent lookup
+    val taskMap = remember(tasks) { tasks.associateBy { it.uid } }
+
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
 
     fun updateTaskList() {
@@ -131,12 +134,10 @@ fun HomeScreen(
         }
     }
 
-    // Add refreshTick to LaunchedEffect keys to force task reload
     LaunchedEffect(searchQuery, filterTag, filterLocation, isLoading, calendars, tags, locations, refreshTick) {
         updateTaskList()
     }
 
-    // ... rest of the file unchanged ...
     val handleRefresh = {
         scope.launch {
             isManualSyncing = true
@@ -486,7 +487,7 @@ fun HomeScreen(
                         Tab(
                             selected = sidebarTab == 2,
                             onClick = { sidebarTab = 2 },
-                            icon = { NfIcon(locationTabIcon) }, // <--- UPDATED HERE
+                            icon = { NfIcon(locationTabIcon) },
                         )
                     }
                     LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -827,6 +828,12 @@ fun HomeScreen(
                     ) {
                         items(tasks, key = { it.uid }) { task ->
                             val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+
+                            // Resolve parent info for inheritance hiding
+                            val parent = task.parentUid?.let { taskMap[it] }
+                            val pCats = parent?.categories ?: emptyList()
+                            val pLoc = parent?.location
+
                             TaskRow(
                                 task = task,
                                 calColor = calColor,
@@ -836,6 +843,8 @@ fun HomeScreen(
                                 onClick = onTaskClick,
                                 yankedUid = yankedUid,
                                 enabledCalendarCount = enabledCalendarCount,
+                                parentCategories = pCats,
+                                parentLocation = pLoc
                             )
                         }
                     }
