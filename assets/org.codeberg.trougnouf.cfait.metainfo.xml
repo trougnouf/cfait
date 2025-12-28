@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8" ?>
 <component type="desktop-application">
   <id>org.codeberg.trougnouf.cfait</id>
   <name>Cfait</name>
@@ -13,21 +13,29 @@
     </p>
     <p><strong>Key Features:</strong></p>
     <ul>
-      <li><strong>Syncs Everywhere:</strong> Compatible with Nextcloud, iCloud, Radicale, and other standard CalDAV servers.</li>
-      <li><strong>Offline First:</strong> Optimistic UI updates mean you never wait for a server response.</li>
-      <li><strong>Smart Input:</strong> Typing "Buy cat food !1 @tomorrow" automatically sets priority and due date.</li>
-      <li><strong>Productivity:</strong> GTD Workflow, Sub-tasks, Dependencies, and Tags.</li>
+      <li><strong
+                >Syncs Everywhere:</strong> Compatible with Nextcloud, iCloud, Radicale, and other standard CalDAV servers.</li>
+      <li><strong
+                >Offline First:</strong> Optimistic UI updates mean you never wait for a server response.</li>
+      <li><strong
+                >Smart Input:</strong> Typing "Buy cat food !1 @tomorrow" automatically sets priority and due date.</li>
+      <li><strong
+                >Productivity:</strong> GTD Workflow, Sub-tasks, Dependencies, and Tags.</li>
     </ul>
   </description>
 
-  <launchable type="desktop-id">org.codeberg.trougnouf.cfait.desktop</launchable>
+  <launchable
+        type="desktop-id"
+    >org.codeberg.trougnouf.cfait.desktop</launchable>
 
   <screenshots>
     <screenshot type="default">
-      <image>https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.13_screenshot_(GUI).png</image>
+      <image
+            >https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.13_screenshot_(GUI).png</image>
     </screenshot>
     <screenshot>
-      <image>https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.3_screenshot_(TUI).png</image>
+      <image
+            >https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.13_screenshot_(TUI).png</image>
       <caption>The Terminal User Interface</caption>
     </screenshot>
   </screenshots>
@@ -36,9 +44,9 @@
   <url type="bugtracker">https://codeberg.org/trougnouf/cfait/issues</url>
   <url type="vcs-browser">https://codeberg.org/trougnouf/cfait</url>
 
-  <content_rating type="oars-1.1"/>
+  <content_rating type="oars-1.1" />
 
   <releases>
-    <release version="0.3.13" date="2025-12-28"/>
+    <release version="0.3.13" date="2025-12-28" />
   </releases>
 </component>
