@@ -107,7 +107,7 @@ fn test_integrity_validation() {
     assert!(res.is_err());
     assert_eq!(
         res.unwrap_err(),
-        "Circular dependency: '#b' leads back to itself."
+        "Circular dependency: 'b' leads back to itself."
     );
 
     // Self reference

@@ -32,20 +32,45 @@ pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<Strin
     let mut new_aliases = HashMap::new();
 
     for (_, _, token) in parts {
-        if token.starts_with('#')
-            && token.contains(":=")
-            && let Some((left, right)) = token.split_once(":=")
-        {
-            let key = strip_quotes(left.trim_start_matches('#'));
-            let tags: Vec<String> = right
-                .split(',')
-                .map(|t| t.trim().to_string())
-                .filter(|t| !t.is_empty())
-                .collect();
-            if !key.is_empty() && !tags.is_empty() {
-                new_aliases.insert(key, tags);
-                cleaned_words.push(left.to_string());
-                continue;
+        if token.contains(":=") && !token.starts_with('\\') {
+            if let Some((left, right)) = token.split_once(":=") {
+                let mut key = String::new();
+                let mut is_valid = false;
+
+                // Case 1: Tag Alias (#tag:=...)
+                if left.starts_with('#') {
+                    key = strip_quotes(left.trim_start_matches('#'));
+                    is_valid = !key.is_empty();
+                }
+                // Case 2: Location Alias (@@loc:=... or loc:loc:=...)
+                else if left.starts_with("@@") || left.to_lowercase().starts_with("loc:") {
+                    let raw = if left.starts_with("@@") {
+                        left.trim_start_matches("@@")
+                    } else {
+                        &left[4..]
+                    };
+                    let clean = strip_quotes(raw);
+                    if !clean.is_empty() {
+                        // Store location aliases with prefix to distinguish from tags
+                        key = format!("@@{}", clean);
+                        is_valid = true;
+                    }
+                }
+
+                if is_valid {
+                    let tags: Vec<String> = right
+                        .split(',')
+                        .map(|t| t.trim().to_string())
+                        .filter(|t| !t.is_empty())
+                        .collect();
+
+                    if !tags.is_empty() {
+                        new_aliases.insert(key, tags);
+                        // Keep the key part in the description as the 'primary' value
+                        cleaned_words.push(left.to_string());
+                        continue;
+                    }
+                }
             }
         }
         cleaned_words.push(token);
@@ -58,24 +83,35 @@ pub fn validate_alias_integrity(
     new_values: &[String],
     current_aliases: &HashMap<String, Vec<String>>,
 ) -> Result<(), String> {
+    // 1. Normalize values into Keys (strip #, keep @@, check hierarchy)
+    fn to_key(val: &str) -> Option<String> {
+        if val.starts_with('#') {
+            Some(strip_quotes(val.trim_start_matches('#')))
+        } else if val.starts_with("@@") {
+            Some(format!("@@{}", strip_quotes(val.trim_start_matches("@@"))))
+        } else if val.to_lowercase().starts_with("loc:") {
+            Some(format!("@@{}", strip_quotes(&val[4..])))
+        } else {
+            None
+        }
+    }
+
+    // 2. Check immediate self-reference
     if new_values
         .iter()
-        .any(|v| strip_quotes(v.trim_start_matches('#')) == new_key)
+        .any(|v| to_key(v).as_deref() == Some(new_key))
     {
-        return Err(format!("Alias '#{}' cannot refer to itself.", new_key));
+        return Err(format!("Alias '{}' cannot refer to itself.", new_key));
     }
-    let mut stack: Vec<String> = new_values
-        .iter()
-        .filter(|t| t.starts_with('#'))
-        .map(|t| strip_quotes(t.trim_start_matches('#')))
-        .collect();
 
+    // 3. DFS Traversal to find cycles
+    let mut stack: Vec<String> = new_values.iter().filter_map(|v| to_key(v)).collect();
     let mut visited_path = HashSet::new();
 
     while let Some(current_ref) = stack.pop() {
         if current_ref == new_key {
             return Err(format!(
-                "Circular dependency: '#{}' leads back to itself.",
+                "Circular dependency: '{}' leads back to itself.",
                 new_key
             ));
         }
@@ -84,13 +120,36 @@ pub fn validate_alias_integrity(
         }
         visited_path.insert(current_ref.clone());
 
-        if let Some(children) = current_aliases.get(&current_ref) {
-            for child in children {
-                if child.starts_with('#') {
-                    stack.push(strip_quotes(child.trim_start_matches('#')));
+        // --- HIERARCHY LOGIC START ---
+        // We must mimic the runtime parser: if exact key missing, try parent key.
+        let mut search = current_ref.as_str();
+        loop {
+            if let Some(children) = current_aliases.get(search) {
+                // Found a definition! Add its children to stack.
+                for child in children {
+                    if let Some(k) = to_key(child) {
+                        stack.push(k);
+                    }
                 }
+                // In runtime, we stop after finding the first match in the hierarchy.
+                // We must mirror that behavior here.
+                break;
+            }
+
+            // Fallback: Try stripping the last segment (e.g., "A:B" -> "A")
+            if let Some(idx) = search.rfind(':') {
+                // Safety: Don't split inside the "@@" prefix if it's a location
+                // e.g. "@@Home:Kitchen" -> "@@Home" (OK)
+                // e.g. "@@:Kitchen" -> "@@" (Valid Key? Yes, theoretically)
+                if search.starts_with("@@") && idx < 2 {
+                    break;
+                }
+                search = &search[..idx];
+            } else {
+                break;
             }
         }
+        // --- HIERARCHY LOGIC END ---
     }
     Ok(())
 }
@@ -499,23 +558,49 @@ fn collect_alias_expansions(
     visited: &mut HashSet<String>,
 ) -> Vec<String> {
     let mut results = Vec::new();
+    let mut search_key: Option<String> = None;
+
+    // 1. Tag Lookup
     if token.starts_with('#') {
-        let key = strip_quotes(token.trim_start_matches('#'));
+        search_key = Some(strip_quotes(token.trim_start_matches('#')));
+    }
+    // 2. Location Lookup
+    else if token.starts_with("@@") || token.to_lowercase().starts_with("loc:") {
+        let raw = if token.starts_with("@@") {
+            token.trim_start_matches("@@")
+        } else {
+            &token[4..]
+        };
+        let clean = strip_quotes(raw);
+        if !clean.is_empty() {
+            search_key = Some(format!("@@{}", clean));
+        }
+    }
+
+    if let Some(key) = search_key {
         let mut search = key.as_str();
         let mut found_values = None;
         let mut matched_key = String::new();
+
         loop {
             if let Some(vals) = aliases.get(search) {
                 found_values = Some(vals);
                 matched_key = search.to_string();
                 break;
             }
+
+            // Handle hierarchy (tag:subtag or @@loc:subloc)
             if let Some(idx) = search.rfind(':') {
-                search = &search[..idx];
+                if idx > 0 {
+                    search = &search[..idx];
+                } else {
+                    break;
+                }
             } else {
                 break;
             }
         }
+
         if let Some(values) = found_values {
             if visited.contains(&matched_key) {
                 return results;
@@ -987,10 +1072,11 @@ pub fn apply_smart_input(
                     let mut time = default_reminder_time
                         .unwrap_or_else(|| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
                     if i + consumed < stream.len()
-                        && let Some(t) = parse_time_string(&stream[i + consumed]) {
-                            time = t;
-                            consumed += 1;
-                        }
+                        && let Some(t) = parse_time_string(&stream[i + consumed])
+                    {
+                        time = t;
+                        consumed += 1;
+                    }
 
                     let local_dt = target_date
                         .and_time(time)

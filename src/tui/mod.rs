@@ -38,8 +38,8 @@ pub async fn run() -> Result<()> {
         println!();
         println!("SMART INPUT SYNTAX:");
         println!("    !1-9              Priority (1=highest, 9=lowest)");
-        println!("    #tag              Add category/tag");
-        println!("    @@location        Add location");
+        println!("    #tag              Add category/tag (supports hierarchy: #work:project)");
+        println!("    @@location        Add location (supports hierarchy: @@home:office)");
         println!("    @date             Set due date (@tomorrow, @2d, @next friday)");
         println!("    ^date             Set start date (^next week, ^2025-01-01)");
         println!("    ~duration         Set duration (~30m, ~1.5h)");
@@ -47,7 +47,8 @@ pub async fn run() -> Result<()> {
         println!("    @friday           Next weekday (@friday = @next friday)");
         println!("    @next X           Next week/month/year (@next week, @next month)");
         println!("    \"in\" optional     @2 weeks = @in 2 weeks (the word \"in\" is optional)");
-        println!("    #alias:=#tags     Define alias inline (retroactive)");
+        println!("    #alias:=#tags     Define tag alias inline (retroactive)");
+        println!("    @@alias:=#tags    Define location alias (@@aldi:=#groceries,#shopping)");
         println!("    url:              Attach URL");
         println!("    geo:              Add coordinates");
         println!("    desc:             Add description");
@@ -60,8 +61,9 @@ pub async fn run() -> Result<()> {
         println!("EXAMPLES:");
         println!("    Buy cookies !1 @2025-01-16 #shopping rem:2025-01-16 8am");
         println!("    Exercise @daily ~30m #health rem:8am");
-        println!("    Plant plum tree #tree_planting !3 ~2h");
+        println!("    Plant plum tree #tree_planting !3 ~2h @@home:garden");
         println!("    #tree_planting:=#gardening,@@home");
+        println!("    @@aldi:=#groceries,#shopping (location alias)");
         println!();
         println!("MORE INFO:");
         println!("    Repository: https://codeberg.org/trougnouf/cfait");

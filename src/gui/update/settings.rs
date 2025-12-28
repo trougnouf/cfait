@@ -275,11 +275,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     .collect();
 
                 if !tags.is_empty() {
-                    let key = app
-                        .alias_input_key
-                        .trim()
-                        .trim_start_matches('#')
-                        .to_string();
+                    // Normalize key input for consistency with parser
+                    let raw_key = app.alias_input_key.trim();
+                    let key = if raw_key.starts_with("@@") {
+                        raw_key.to_string()
+                    } else if raw_key.to_lowercase().starts_with("loc:") {
+                        format!("@@{}", raw_key[4..].trim())
+                    } else {
+                        raw_key.trim_start_matches('#').to_string()
+                    };
 
                     // --- VALIDATION ADDED HERE ---
                     match validate_alias_integrity(&key, &tags, &app.tag_aliases) {

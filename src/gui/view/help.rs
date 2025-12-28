@@ -34,10 +34,11 @@ pub fn view_help() -> Element<'static, Message> {
             crate::gui::icon::TAG,
             vec![
                 entry("!1", "Priority High (1) to Low (9)", "!1, !5, !9"),
-                entry("#tag", "Add category. Use ':' for sub-tags.", "#work, #dev:backend"),
-                entry("@@loc", "Location. Quote if containing spaces.", "@@home, @@\"somewhere else\""),
+                entry("#tag", "Add category. Use ':' for sub-tags.", "#work, #dev:backend, #work:project:urgent"),
+                entry("@@loc", "Location. Supports hierarchy with ':'.", "@@home, @@home:office, @@store:aldi:downtown"),
                 entry("~30m", "Estimated Duration (m/h/d/w).", "~30m, ~1.5h, ~2d"),
-                entry("#a:=#b,#c,@@d", "Define alias inline (Retroactive).", "#tree_planting:=#gardening,@@home"),
+                entry("#a:=#b,#c,@@d", "Define tag alias inline (Retroactive).", "#tree_planting:=#gardening,@@home"),
+                entry("@@a:=#b,#c", "Define location alias (Retroactive).", "@@aldi:=#groceries,#shopping"),
                 entry("\\#text", "Escape special characters.", "\\#not-a-tag \\@not-a-date"),
             ]
         ),
@@ -93,7 +94,7 @@ pub fn view_help() -> Element<'static, Message> {
                 entry("  Dates", "Filter by timeframe.", "@<today (Overdue), ^>tomorrow"),
                 entry("  Priority", "Filter by priority range.", "!<3 (High prio), !>=5"),
                 entry("  Duration", "Filter by effort.", "~<15m (Quick tasks)"),
-                entry("  Location", "Filter by location.", "@@home"),
+                entry("  Location", "Filter by location (matches sub-locations).", "@@home, @@store:aldi"),
             ]
         ),
 

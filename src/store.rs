@@ -234,14 +234,34 @@ impl TaskStore {
         raw_values: &[String],
     ) -> Vec<Task> {
         let mut uids_to_update: Vec<String> = Vec::new();
-        let alias_prefix = format!("{}:", alias_key);
+
+        let is_location_alias = alias_key.starts_with("@@");
+
+        // Prepare prefix for hierarchy check
+        // For tags: "tag" -> "tag:"
+        // For locs: "@@loc" -> "loc:" (we check against clean value)
+        let (clean_key, alias_prefix) = if is_location_alias {
+            let clean = alias_key.trim_start_matches("@@");
+            (clean, format!("{}:", clean))
+        } else {
+            (alias_key, format!("{}:", alias_key))
+        };
 
         for tasks in self.calendars.values() {
             for task in tasks {
-                let has_alias_or_child = task
-                    .categories
-                    .iter()
-                    .any(|cat| cat == alias_key || cat.starts_with(&alias_prefix));
+                let has_alias_or_child = if is_location_alias {
+                    // Check Location field
+                    if let Some(loc) = &task.location {
+                        loc == clean_key || loc.starts_with(&alias_prefix)
+                    } else {
+                        false
+                    }
+                } else {
+                    // Check Categories
+                    task.categories
+                        .iter()
+                        .any(|cat| cat == clean_key || cat.starts_with(&alias_prefix))
+                };
 
                 if has_alias_or_child {
                     let mut needs_update = false;

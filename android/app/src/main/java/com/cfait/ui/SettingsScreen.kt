@@ -314,11 +314,15 @@ fun SettingsScreen(
 
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
-                Text("Tag aliases", fontWeight = FontWeight.Bold)
+                Text("Aliases", fontWeight = FontWeight.Bold)
             }
             items(aliases.keys.toList()) { key ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                    Text("#$key", fontWeight = FontWeight.Bold, modifier = Modifier.width(80.dp))
+                    Text(
+                        if (key.startsWith("@@")) key else "#$key",
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.width(80.dp)
+                    )
                     Text("→", modifier = Modifier.padding(horizontal = 8.dp))
                     Text(aliases[key]?.joinToString(", ") ?: "", modifier = Modifier.weight(1f))
                     IconButton(onClick = {
@@ -334,9 +338,9 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = newAliasKey,
                         onValueChange = { newAliasKey = it },
-                        label = { Text("Key (#tag_a)") },
+                        label = { Text("Key (#tag or @@loc)") },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("#tag_a") },
+                        placeholder = { Text("#tag or @@loc") },
                     )
                     Spacer(Modifier.width(8.dp))
                     OutlinedTextField(

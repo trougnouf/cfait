@@ -68,14 +68,27 @@ fun HelpScreen(onBack: () -> Unit) {
                     NfIcons.TAG,
                     listOf(
                         HelpItem("!1", "Priority high (1) to low (9)", "!1, !5, !9"),
-                        HelpItem("#tag", "Add category. Use ':' for sub-tags.", "#work, #dev:backend"),
+                        HelpItem(
+                            "#tag",
+                            "Add category. Use ':' for sub-tags.",
+                            "#work, #dev:backend, #work:project:urgent"
+                        ),
                         HelpItem(
                             "#a:=#b,#c,@@d",
-                            "Define/update alias inline (retroactive).",
+                            "Define/update tag alias inline (retroactive).",
                             "#tree_planting:=#gardening,@@home"
                         ),
+                        HelpItem(
+                            "@@a:=#b,#c",
+                            "Define/update location alias (retroactive).",
+                            "@@aldi:=#groceries,#shopping"
+                        ),
                         HelpItem("~30m", "Estimated duration (m/h/d/w).", "~30m, ~1.5h, ~2d"),
-                        HelpItem("@@loc", "Location. Quote for spaces.", "@@home, @@\"somewhere else\""),
+                        HelpItem(
+                            "@@loc",
+                            "Location. Supports hierarchy with ':'.",
+                            "@@home, @@home:office, @@store:aldi:downtown"
+                        ),
                         HelpItem("\\#text", "Escape special characters.", "\\#not-a-tag \\@not-a-date"),
                     ),
                 )
@@ -151,7 +164,7 @@ fun HelpScreen(onBack: () -> Unit) {
                         HelpItem("  Dates", "Filter by timeframe.", "@<today (Overdue), ^>tomorrow"),
                         HelpItem("  Priority", "Filter by priority range.", "!<3 (High prio), !>=5"),
                         HelpItem("  Duration", "Filter by effort.", "~<15m (Quick tasks)"),
-                        HelpItem("  Location", "Filter by location.", "@@home"),
+                        HelpItem("  Location", "Filter by location (matches sub-locations).", "@@home, @@store:aldi"),
                     ),
                 )
             }

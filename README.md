@@ -45,10 +45,10 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 ## ✨ Features
 
 *   **Smart Input:** Type your tasks naturally. `Buy cookies @tomorrow @@bakery !1` is parsed instantly into a high-priority task due tomorrow at the bakery.
-*   **Hierarchical Tags:** Organize deeply with tags like `#dev:cfait` or `#cooking:cookies`.
+*   **Hierarchical Tags & Locations:** Organize deeply with tags like `#dev:cfait` or `#cooking:cookies`, and locations like `@@home:office` or `@@store:aldi:downtown`.
 *   **Dependencies:** Block tasks until others are done. You can create parent/child tasks or loose dependencies <small>(RFC9253)</small>.
 *   **Recurrence:** Powerful repetition rules for habits and recurrent tasks.
-*   **Inline Aliases:** Define shortcuts on the fly; typing `#gardening:=#fun,@@home` applies the alias and location immediately and saves it for future use.
+*   **Inline Aliases:** Define shortcuts on the fly; typing `#gardening:=#fun,@@home` or `@@aldi:=#groceries,#shopping` applies the alias immediately and saves it for future use (retroactive).
 *   **Cross-Platform:** Runs on Linux, Android, and Windows. (Probably on MacOS too.)
 
 <a name="screenshots"></a>
@@ -103,7 +103,7 @@ You don't need to click through menus to set the due/start date, length, priorit
 | **Recurrence** | `@` / `rec:` | How often the task repeats. |
 | **Duration** | `~` / `est:` | Estimated time to complete. |
 | **Tag** | `#` | Categories. Use `:` for hierarchy (e.g. `#gardening:tree_planting`). |
-| **Location** | `@@` / `loc:` | Where the task happens. (e.g. `@@home`, `@@"somewhere else"`). |
+| **Location** | `@@` / `loc:` | Where the task happens. Supports hierarchy like tags (e.g. `@@home:office`, `@@store:aldi:downtown`). |
 | **Reminder** | `rem:` | Set an notification. (e.g. `rem:10m`, `rem:8am`, `rem:tomorrow 9:00`). |
 
 You can also type url: (e.g. `url:https://www.trougnouf.com`), geo: (e.g. `geo:53.046070, -121.105264`), and desc: (e.g. `desc:"a description"` or `desc:{une description}`)
@@ -158,14 +158,27 @@ Set alarms to notify you about tasks. Reminders can be **relative** (recalculate
 The syntax highlighting should visually let you know whether your statements are valid.
 
 ### Aliases (Templates)
-Define global shortcuts using `:=`. Aliases can inject tags, locations, priorities, or text. This applies to the past, present, and future tasks. (It may take some time to update all affected tasks.)
-*   **Define:** `#tree_planting:=#gardening` and `#gardening:=#fun,@@home`
-*   **Subsequent use:** Typing `Plant plum tree #tree_planting !3 ~1h` expands to:
-    *   Summary: "Plant plum tree" (priority: 3, estimated time: 1 hour)
-    *   Tags: `#tree_planting #gardening #fun`
-    *   Location: "home"
+Define global shortcuts using `:=`. Aliases can inject tags, locations, priorities, or other properties. This applies to the past, present, and future tasks. (It may take some time to update all affected tasks.)
 
-**Note:** If your alias contains spaces, `"`quote it`"` or `{`put it between brockets`}`, e.g. `#"tree planting":=#gardening` or `#gardening:=#{home improvement}`. You can define aliases inline while creating tasks, but it's often clearer to define them separately.
+**Tag Aliases:**
+*   **Define:** `#tree_planting:=#gardening,@@home,!3`
+*   **Use:** Typing `Plant plum tree #tree_planting ~1h` expands to:
+    *   Tags: `#tree_planting #gardening`
+    *   Location: "home"
+    *   Priority: 3
+
+**Location Aliases:**
+*   **Define:** `@@aldi:=#groceries,#shopping` or `loc:aldi:=#groceries,#shopping`
+*   **Use:** Typing `Buy milk @@aldi` expands to:
+    *   Location: "aldi"
+    *   Tags: `#groceries #shopping`
+
+**Hierarchical Aliases:**
+Both tags and locations support hierarchy. Child locations/tags automatically inherit parent aliases.
+*   `#gardening:tree_planting` → matches both `#gardening:tree_planting` and parent `#gardening` aliases
+*   `@@store:aldi:downtown` → matches `@@store:aldi:downtown`, `@@store:aldi`, and parent `@@store` aliases
+
+**Note:** If your alias contains spaces, `"`quote it`"` or `{`put it between brockets`}`, e.g. `#"tree planting":=#gardening` or `@@"somewhere else":=#location`. You can define aliases inline while creating tasks, but it's often clearer to define them separately in Settings.
 
 <a name="search--filtering"></a>
 ## 🔍 Search & Filtering
@@ -186,7 +199,10 @@ The search bar isn't just for text. You can use operators (`<`, `>`, `<=`, `>=`)
     *   `~>2h` (Long tasks)
 *   **Tags:**
     *   `#gardening` (Contains this tag)
-*   **Location:** `@@home` (matches location field)
+    *   `#work:project` (Matches tag or any sub-tag like `#work:project:urgent`)
+*   **Location:** 
+    *   `@@home` (Matches location field)
+    *   `@@store:aldi` (Matches location or any sub-location like `@@store:aldi:downtown`)
 
 You can combine them: `!<4 ~<1h #gardening` (high priority gardening task that takes less than an hour).
 
@@ -221,6 +237,8 @@ If you are using the Terminal interface, here are the essentials (*Press `?` ins
 *   `Enter`: Toggle filter / Select calendar
 *   `Space`: Toggle visibility (show/hide layer)
 *   `*`: Isolate (hide all others)
+
+**Note:** The sidebar shows hierarchical tags and locations. For example, if you have tasks with `#work:project:urgent` and `#work:meeting`, they'll be organized under the `#work` parent in the sidebar.
 
 The GUI also supports `/` for search and `a` for adding tasks.
 

@@ -172,7 +172,12 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         for (key, vals) in &app.tag_aliases {
             let val_str = vals.join(", ");
             let row_item = row![
-                text(format!("#{}", key)).width(Length::FillPortion(1)),
+                text(if key.starts_with("@@") {
+                    key.to_string()
+                } else {
+                    format!("#{}", key)
+                })
+                .width(Length::FillPortion(1)),
                 text("->").width(Length::Fixed(20.0)),
                 text(val_str).width(Length::FillPortion(2)),
                 button(icon::icon(icon::CROSS).size(12))
@@ -185,7 +190,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             list_col = list_col.push(row_item);
         }
         let input_row = row![
-            text_input("Alias (#cfait)", &app.alias_input_key)
+            text_input("Alias (#tag or @@loc)", &app.alias_input_key)
                 .on_input(Message::AliasKeyInput)
                 .padding(5)
                 .width(Length::FillPortion(1)),
