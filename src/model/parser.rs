@@ -1,4 +1,4 @@
-// File: src/model/parser.rs
+// File: ./src/model/parser.rs
 use crate::model::{Alarm, DateType, Task};
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, Utc};
 use std::collections::{HashMap, HashSet};
@@ -257,20 +257,31 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
             }
         }
 
-        // 3. Reminders (rem:10m, rem:8am, rem:tomorrow 16:00, rem:in 5m)
+        // 3. Reminders (rem:10m, rem:in 5m, rem:next friday)
         if matched_kind.is_none() && word_lower.starts_with("rem:") {
             matched_kind = Some(SyntaxType::Reminder);
 
             let clean_val = if word.len() > 4 { &word[4..] } else { "" };
 
-            // Helper to skip whitespace and get next non-whitespace token
+            // Helper to skip whitespace and get next non-whitespace token index
             let find_next_token = |start_idx: usize| -> Option<usize> {
                 (start_idx..words.len()).find(|&idx| !words[idx].2.trim().is_empty())
             };
 
-            // Check for "rem:in 5m" pattern
-            if clean_val.eq_ignore_ascii_case("in") {
-                if let Some(next_idx) = find_next_token(i + 1) {
+            // CASE A: "rem:in 5m" or "rem: in 5m"
+            if clean_val.eq_ignore_ascii_case("in")
+                || (clean_val.is_empty()
+                    && find_next_token(i + 1)
+                        .map(|idx| words[idx].2.eq_ignore_ascii_case("in"))
+                        .unwrap_or(false))
+            {
+                // If "rem:" was separate from "in", consume "in"
+                let mut offset = 0;
+                if clean_val.is_empty() {
+                    offset = 1;
+                }
+
+                if let Some(next_idx) = find_next_token(i + 1 + offset) {
                     let next_token_str = words[next_idx].2.as_str();
                     let next_next_idx = find_next_token(next_idx + 1);
                     let next_next = next_next_idx.map(|idx| words[idx].2.as_str());
@@ -287,7 +298,34 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                     }
                 }
             }
-            // Check for date keywords (rem:tomorrow, rem:today, etc.)
+            // CASE B: "rem:next friday" or "rem: next friday"
+            else if clean_val.eq_ignore_ascii_case("next")
+                || (clean_val.is_empty()
+                    && find_next_token(i + 1)
+                        .map(|idx| words[idx].2.eq_ignore_ascii_case("next"))
+                        .unwrap_or(false))
+            {
+                let mut offset = 0;
+                if clean_val.is_empty() {
+                    offset = 1;
+                }
+
+                if let Some(next_idx) = find_next_token(i + 1 + offset) {
+                    let next_word = &words[next_idx].2;
+                    // Check if next word is a weekday or unit
+                    if parse_weekday_code(next_word).is_some() || is_date_unit_full(next_word) {
+                        words_consumed = next_idx - i + 1;
+
+                        // Look ahead for time (e.g., rem:next friday 9am)
+                        if let Some(time_idx) = find_next_token(next_idx + 1)
+                            && is_time_format(&words[time_idx].2)
+                        {
+                            words_consumed = time_idx - i + 1;
+                        }
+                    }
+                }
+            }
+            // CASE C: "rem:tomorrow", "rem:2025...", "rem:10m"
             else if !clean_val.is_empty() && parse_smart_date(clean_val).is_some() {
                 // Look ahead for time (rem:tomorrow 16:00)
                 if let Some(next_idx) = find_next_token(i + 1)
@@ -296,43 +334,19 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                     words_consumed = next_idx - i + 1;
                 }
             }
-            // Check for "rem: tomorrow 16:00" (space after colon)
+            // CASE D: Space after colon (rem: tomorrow)
             else if clean_val.is_empty()
                 && let Some(next_idx) = find_next_token(i + 1)
             {
                 let next_word = &words[next_idx].2;
-
-                // Check if next word is "in" for "rem: in 5m"
-                if next_word.eq_ignore_ascii_case("in") {
-                    if let Some(amount_idx) = find_next_token(next_idx + 1) {
-                        let next_token_str = words[amount_idx].2.as_str();
-                        let next_next_idx = find_next_token(amount_idx + 1);
-                        let next_next = next_next_idx.map(|idx| words[idx].2.as_str());
-
-                        if let Some((_, _, consumed)) =
-                            parse_amount_and_unit(next_token_str, next_next, false)
-                        {
-                            let last_idx = if consumed > 0 {
-                                next_next_idx.unwrap_or(amount_idx)
-                            } else {
-                                amount_idx
-                            };
-                            words_consumed = last_idx - i + 1;
-                        }
-                    }
-                }
-                // Check if next word is a date keyword
-                else if parse_smart_date(next_word).is_some() {
+                if parse_smart_date(next_word).is_some() {
                     words_consumed = next_idx - i + 1;
-                    // Look ahead for time
                     if let Some(time_idx) = find_next_token(next_idx + 1)
                         && is_time_format(&words[time_idx].2)
                     {
                         words_consumed = time_idx - i + 1;
                     }
-                }
-                // Or just a duration/time
-                else if parse_duration(next_word).is_some() || is_time_format(next_word) {
+                } else if parse_duration(next_word).is_some() || is_time_format(next_word) {
                     words_consumed = next_idx - i + 1;
                 }
             }
@@ -851,8 +865,6 @@ fn is_special_token(word: &str) -> bool {
     {
         return true;
     }
-    // FIX: Removed matches!(lower.as_str(), "today" | "tomorrow")
-    // Bare words should be treated as text.
     false
 }
 
@@ -922,7 +934,7 @@ pub fn apply_smart_input(
                 summary_words.push(unescape(token));
             }
         }
-        // 2. Reminders (rem:) -> UPDATED LOGIC
+        // 2. Reminders (rem:)
         else if let Some(val) = token_lower.strip_prefix("rem:") {
             let clean_val = if val.is_empty() && i + 1 < stream.len() {
                 // Handle "rem: 10m" (space after colon)
@@ -948,6 +960,7 @@ pub fn apply_smart_input(
                     // 1. Calculate Duration in minutes
                     let mins = match unit.as_str() {
                         "d" | "day" | "days" => amt * 1440,
+                        "w" | "week" | "weeks" => amt * 10080,
                         "h" | "hour" | "hours" => amt * 60,
                         _ => amt, // assume minutes for m/min or bare numbers
                     };
@@ -960,6 +973,32 @@ pub fn apply_smart_input(
                     task.alarms.push(Alarm::new_absolute(target_utc));
 
                     consumed += 1 + extra; // Consume amount + unit tokens
+                } else {
+                    summary_words.push(unescape(token));
+                }
+            }
+            // NEW: Handle "rem:next friday" or "rem: next friday"
+            else if clean_val.eq_ignore_ascii_case("next") && i + consumed < stream.len() {
+                let next_str = &stream[i + consumed];
+                if let Some(target_date) = parse_next_date(next_str) {
+                    consumed += 1;
+
+                    // Look ahead for time (e.g. rem:next friday 2pm)
+                    let mut time = default_reminder_time
+                        .unwrap_or_else(|| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+                    if i + consumed < stream.len()
+                        && let Some(t) = parse_time_string(&stream[i + consumed]) {
+                            time = t;
+                            consumed += 1;
+                        }
+
+                    let local_dt = target_date
+                        .and_time(time)
+                        .and_local_timezone(Local)
+                        .unwrap()
+                        .with_timezone(&Utc);
+
+                    task.alarms.push(Alarm::new_absolute(local_dt));
                 } else {
                     summary_words.push(unescape(token));
                 }
@@ -983,7 +1022,6 @@ pub fn apply_smart_input(
                     // Look ahead for time
                     let mut time_part = None;
 
-                    // FIX: Check `i + consumed` (next token) for time string
                     if i + consumed < stream.len() {
                         let potential_time = &stream[i + consumed];
                         if let Some(t) = parse_time_string(potential_time) {
