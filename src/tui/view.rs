@@ -409,7 +409,29 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let base_style = if is_blocked {
                 Style::default().fg(Color::DarkGray)
             } else {
-                Style::default()
+                // Priority Gradient: Red (Hot) -> Yellow (Normal) -> Purple/Slate (Cold)
+                match t.priority {
+                    // 1: Critical -> Red
+                    1 => Style::default().fg(Color::Red),
+                    // 2: Urgent -> Orange-Red
+                    2 => Style::default().fg(Color::Rgb(255, 69, 0)),
+                    // 3: High -> Dark Orange
+                    3 => Style::default().fg(Color::Rgb(255, 140, 0)),
+                    // 4: Med-High -> Amber/Gold
+                    4 => Style::default().fg(Color::Rgb(255, 190, 0)),
+                    // 5: Normal -> Yellow
+                    5 => Style::default().fg(Color::Yellow),
+                    // 6: Med-Low -> Pale Goldenrod / Khaki (Desaturating)
+                    6 => Style::default().fg(Color::Rgb(238, 232, 170)),
+                    // 7: Low -> Light Slate Gray
+                    7 => Style::default().fg(Color::Rgb(176, 196, 222)),
+                    // 8: Very Low -> Slate Gray
+                    8 => Style::default().fg(Color::Rgb(112, 128, 144)),
+                    // 9: Minimal -> Dark Slate Gray
+                    9 => Style::default().fg(Color::Rgb(47, 79, 79)),
+                    // 0 or unset: Default (no color modification)
+                    _ => Style::default(),
+                }
             };
             let bracket_style = Style::default();
 
