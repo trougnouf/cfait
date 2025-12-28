@@ -101,97 +101,17 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .split(v_chunks[0]);
 
     // --- 1. Prepare Details Text ---
+    // We'll build this after rendering the task list so we know if the title was truncated
     let mut full_details = String::new();
-    if let Some(task) = state.get_selected_task() {
-        // Always show full title at the beginning
-        if !task.summary.is_empty() {
-            full_details.push_str(&task.summary);
-            full_details.push_str("\n\n");
-        }
+    let mut selected_task_was_truncated = false;
 
-        if !task.description.is_empty() {
-            full_details.push_str(&task.description);
-            full_details.push_str("\n\n");
-        }
-
-        // Render extra fields
-        if let Some(url) = &task.url {
-            full_details.push_str(&format!("URL: {}\n", url));
-        }
-        if let Some(geo) = &task.geo {
-            full_details.push_str(&format!("Geo: {}\n", geo));
-        }
-        if let Some(loc) = &task.location {
-            full_details.push_str(&format!("Location: {}\n", loc));
-        }
-        if !full_details.is_empty() {
-            full_details.push('\n');
-        }
-
-        if !task.dependencies.is_empty() {
-            full_details.push_str("[Blocked By]:\n");
-            for dep_uid in &task.dependencies {
-                let name = state
-                    .store
-                    .get_summary(dep_uid)
-                    .unwrap_or_else(|| "Unknown task".to_string());
-                let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
-                let check = if is_done { "[x]" } else { "[ ]" };
-                full_details.push_str(&format!(" {} {}\n", check, name));
-            }
-        }
-
-        // Outgoing relations (this task → others)
-        if !task.related_to.is_empty() {
-            full_details.push_str("[Related To]:\n");
-            for related_uid in &task.related_to {
-                let name = state
-                    .store
-                    .get_summary(related_uid)
-                    .unwrap_or_else(|| "Unknown task".to_string());
-                full_details.push_str(&format!(" → {}\n", name));
-            }
-        }
-
-        // Incoming relations (others → this task)
-        let incoming_related = state.store.get_tasks_related_to(&task.uid);
-        if !incoming_related.is_empty() {
-            full_details.push_str("[Related From]:\n");
-            for (_related_uid, related_name) in incoming_related {
-                full_details.push_str(&format!(" ← {}\n", related_name));
-            }
-        }
-    }
-    if full_details.is_empty() {
-        full_details = "No details.".to_string();
-    }
-
-    // --- 2. Calculate Dynamic Height ---
-    let details_width = h_chunks[1].width.saturating_sub(2); // subtract borders
-    let mut required_lines: u16 = 0;
-
-    if details_width > 0 {
-        for line in full_details.lines() {
-            let line_len = line.chars().count() as u16;
-            if line_len == 0 {
-                required_lines += 1;
-            } else {
-                required_lines += line_len.div_ceil(details_width);
-            }
-        }
-    }
-
-    let calculated_height = required_lines + 2;
-    let available_height = v_chunks[0].height;
-    let max_details_height = available_height / 2;
-    let final_details_height = calculated_height.clamp(3, max_details_height);
-
-    // --- 3. Dynamic Layout ---
+    // --- 2. Dynamic Layout (before rendering tasks so we know the width) ---
+    // Use a default height for now, will be updated after task rendering
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Min(0),                       // Task list takes remaining space
-            Constraint::Length(final_details_height), // Details takes only what it needs
+            Constraint::Min(0),     // Task list takes remaining space
+            Constraint::Length(10), // Initial placeholder height
         ])
         .split(h_chunks[1]);
 
@@ -335,7 +255,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     let task_items: Vec<ListItem> = state
         .tasks
         .iter()
-        .map(|t| {
+        .enumerate()
+        .map(|(idx, t)| {
             // Determine parent attributes to hide redundancy (tags and location)
             let (parent_tags, parent_location) = if state.active_cal_href.is_some()
                 && let Some(p_uid) = &t.parent_uid
@@ -573,16 +494,21 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             // Truncate title if necessary
             let title_chars: Vec<char> = t.summary.chars().collect();
-            let display_title = if title_chars.len() > available_for_title {
+            let (display_title, is_truncated) = if title_chars.len() > available_for_title {
                 let mut truncated = title_chars
                     .iter()
                     .take(available_for_title.saturating_sub(3))
                     .collect::<String>();
                 truncated.push_str("...");
-                truncated
+                (truncated, true)
             } else {
-                t.summary.clone()
+                (t.summary.clone(), false)
             };
+
+            // Track if the selected task was truncated
+            if is_truncated && Some(idx) == state.list_state.selected() {
+                selected_task_was_truncated = true;
+            }
 
             // Build final spans
             let mut spans = vec![
@@ -614,7 +540,101 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         })
         .collect();
 
+    // Now build the details with truncation information
+    if let Some(task) = state.get_selected_task() {
+        // Only show title if it was truncated in the list
+        if selected_task_was_truncated && !task.summary.is_empty() {
+            full_details.push_str(&task.summary);
+            full_details.push_str("\n\n");
+        }
+
+        if !task.description.is_empty() {
+            full_details.push_str(&task.description);
+            full_details.push_str("\n\n");
+        }
+
+        // Render extra fields
+        if let Some(url) = &task.url {
+            full_details.push_str(&format!("URL: {}\n", url));
+        }
+        if let Some(geo) = &task.geo {
+            full_details.push_str(&format!("Geo: {}\n", geo));
+        }
+        if let Some(loc) = &task.location {
+            full_details.push_str(&format!("Location: {}\n", loc));
+        }
+        if !full_details.is_empty() {
+            full_details.push('\n');
+        }
+
+        if !task.dependencies.is_empty() {
+            full_details.push_str("[Blocked By]:\n");
+            for dep_uid in &task.dependencies {
+                let name = state
+                    .store
+                    .get_summary(dep_uid)
+                    .unwrap_or_else(|| "Unknown task".to_string());
+                let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
+                let check = if is_done { "[x]" } else { "[ ]" };
+                full_details.push_str(&format!(" {} {}\n", check, name));
+            }
+        }
+
+        // Outgoing relations (this task → others)
+        if !task.related_to.is_empty() {
+            full_details.push_str("[Related To]:\n");
+            for related_uid in &task.related_to {
+                let name = state
+                    .store
+                    .get_summary(related_uid)
+                    .unwrap_or_else(|| "Unknown task".to_string());
+                full_details.push_str(&format!(" → {}\n", name));
+            }
+        }
+
+        // Incoming relations (others → this task)
+        let incoming_related = state.store.get_tasks_related_to(&task.uid);
+        if !incoming_related.is_empty() {
+            full_details.push_str("[Related From]:\n");
+            for (_related_uid, related_name) in incoming_related {
+                full_details.push_str(&format!(" ← {}\n", related_name));
+            }
+        }
+    }
+    if full_details.is_empty() {
+        full_details = "No details.".to_string();
+    }
+
     let active_count = state.tasks.iter().filter(|t| !t.status.is_done()).count();
+
+    // --- Calculate Dynamic Height for Details ---
+    let details_width = h_chunks[1].width.saturating_sub(2); // subtract borders
+    let mut required_lines: u16 = 0;
+
+    if details_width > 0 {
+        for line in full_details.lines() {
+            let line_len = line.chars().count() as u16;
+            if line_len == 0 {
+                required_lines += 1;
+            } else {
+                required_lines += line_len.div_ceil(details_width);
+            }
+        }
+    }
+
+    let calculated_height = required_lines + 2;
+    let available_height = v_chunks[0].height;
+    let max_details_height = available_height / 2;
+    let final_details_height = calculated_height.clamp(3, max_details_height);
+
+    // Re-calculate layout with correct details height
+    let main_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(0),                       // Task list takes remaining space
+            Constraint::Length(final_details_height), // Details takes calculated height
+        ])
+        .split(h_chunks[1]);
 
     let mut title = if state.loading {
         " Tasks (Loading...) ".to_string()
