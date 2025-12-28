@@ -215,9 +215,12 @@ pub fn view_task_row<'a>(
     let has_desc = !task.description.is_empty();
     let has_valid_parent = task.parent_uid.as_ref().is_some_and(|uid| !uid.is_empty());
     let has_deps = !task.dependencies.is_empty();
+    let has_related = !task.related_to.is_empty();
+    let has_incoming_related = !app.store.get_tasks_related_to(&task.uid).is_empty();
 
     // Determine if we should show the hand cursor (has content details)
-    let has_content_to_show = has_desc || has_valid_parent || has_deps;
+    let has_content_to_show =
+        has_desc || has_valid_parent || has_deps || has_related || has_incoming_related;
 
     let is_expanded = app.expanded_tasks.contains(&task.uid);
 
@@ -277,6 +280,20 @@ pub fn view_task_row<'a>(
                 tooltip(
                     child_btn,
                     text("Make child").size(12),
+                    tooltip::Position::Top,
+                )
+                .style(tooltip_style)
+                .delay(Duration::from_millis(700)),
+            );
+            let related_btn =
+                button(icon::icon(icon::random_related_icon(&task.uid, yanked)).size(14))
+                    .style(action_style)
+                    .padding(4)
+                    .on_press(Message::AddRelatedTo(task.uid.clone()));
+            actions = actions.push(
+                tooltip(
+                    related_btn,
+                    text("Related to").size(12),
                     tooltip::Position::Top,
                 )
                 .style(tooltip_style)
@@ -945,6 +962,77 @@ pub fn view_task_row<'a>(
                 .spacing(5)
                 .align_y(iced::Alignment::Center);
                 details_col = details_col.push(dep_row);
+            }
+        }
+
+        // Outgoing relations (this task → others)
+        if !task.related_to.is_empty() {
+            details_col = details_col.push(
+                text("[Related To]:")
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.8)),
+            );
+            for related_uid in &task.related_to {
+                let name = app
+                    .store
+                    .get_summary(related_uid)
+                    .unwrap_or_else(|| "Unknown task".to_string());
+                let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
+                    .style(button::danger)
+                    .padding(2)
+                    .on_press(Message::RemoveRelatedTo(
+                        task.uid.clone(),
+                        related_uid.clone(),
+                    ));
+                let related_row = row![
+                    icon::icon(icon::random_related_icon(&task.uid, related_uid)).size(12),
+                    text(name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)),
+                    tooltip(
+                        remove_related_btn,
+                        text("Remove relation").size(12),
+                        tooltip::Position::Top
+                    )
+                    .style(tooltip_style)
+                    .delay(Duration::from_millis(700))
+                ]
+                .spacing(5)
+                .align_y(iced::Alignment::Center);
+                details_col = details_col.push(related_row);
+            }
+        }
+
+        // Incoming relations (others → this task)
+        let incoming_related = app.store.get_tasks_related_to(&task.uid);
+        if !incoming_related.is_empty() {
+            details_col = details_col.push(
+                text("[Related From]:")
+                    .size(12)
+                    .color(Color::from_rgb(0.8, 0.6, 0.8)),
+            );
+            for (related_uid, related_name) in incoming_related {
+                let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
+                    .style(button::danger)
+                    .padding(2)
+                    .on_press(Message::RemoveRelatedTo(
+                        related_uid.clone(),
+                        task.uid.clone(),
+                    ));
+                let related_row = row![
+                    icon::icon(icon::random_related_icon(&task.uid, &related_uid)).size(12),
+                    text(related_name)
+                        .size(12)
+                        .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                    tooltip(
+                        remove_related_btn,
+                        text("Remove relation").size(12),
+                        tooltip::Position::Top
+                    )
+                    .style(tooltip_style)
+                    .delay(Duration::from_millis(700))
+                ]
+                .spacing(5)
+                .align_y(iced::Alignment::Center);
+                details_col = details_col.push(related_row);
             }
         }
 

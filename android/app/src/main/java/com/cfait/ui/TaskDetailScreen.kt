@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import com.cfait.core.CfaitMobile
 import com.cfait.core.MobileCalendar
 import com.cfait.core.MobileTask
+import com.cfait.core.MobileRelatedTask
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -145,6 +146,87 @@ fun TaskDetailScreen(
                         NfIcon(NfIcons.BLOCKED, 12.sp, androidx.compose.ui.graphics.Color.Gray)
                         Spacer(Modifier.width(4.dp))
                         Text(name, fontSize = 14.sp)
+                    }
+                }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
+
+            if (task!!.relatedToNames.isNotEmpty()) {
+                Text(
+                    "Related to:",
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+
+                val relatedPairs = task!!.relatedToNames.zip(task!!.relatedToUids)
+
+                relatedPairs.forEach { (name, relatedUid) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier =
+                            Modifier
+                                .padding(vertical = 2.dp)
+                                .clickable {
+                                    scope.launch {
+                                        api.removeRelatedTo(task!!.uid, relatedUid)
+                                        reload()
+                                    }
+                                },
+                    ) {
+                        NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.width(8.dp))
+                        NfIcon(
+                            getRandomRelatedIcon(task!!.uid, relatedUid),
+                            12.sp,
+                            androidx.compose.ui.graphics.Color.Gray
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(name, fontSize = 14.sp)
+                    }
+                }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
+
+            var incomingRelated by remember { mutableStateOf<List<MobileRelatedTask>>(emptyList()) }
+
+            LaunchedEffect(task) {
+                incomingRelated = if (task != null) {
+                    api.getTasksRelatedTo(task!!.uid)
+                } else {
+                    emptyList()
+                }
+            }
+            if (incomingRelated.isNotEmpty()) {
+                Text(
+                    "Related from:",
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+
+                incomingRelated.forEach { relatedTask ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier =
+                            Modifier
+                                .padding(vertical = 2.dp)
+                                .clickable {
+                                    scope.launch {
+                                        api.removeRelatedTo(relatedTask.uid, task!!.uid)
+                                        reload()
+                                    }
+                                },
+                    ) {
+                        NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
+                        Spacer(Modifier.width(8.dp))
+                        NfIcon(
+                            getRandomRelatedIcon(task!!.uid, relatedTask.uid),
+                            12.sp,
+                            androidx.compose.ui.graphics.Color.Gray
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(relatedTask.summary, fontSize = 14.sp)
                     }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))

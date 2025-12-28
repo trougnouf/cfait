@@ -85,9 +85,11 @@ pub enum Message {
     ClearYank,
     StartCreateChild(String),
     AddDependency(String),
+    AddRelatedTo(String),
     MakeChild(String),
     RemoveParent(String),
     RemoveDependency(String, String),
+    RemoveRelatedTo(String, String),
 
     AliasKeyInput(String),
     AliasValueInput(String),

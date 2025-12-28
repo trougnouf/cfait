@@ -230,6 +230,7 @@ If you are using the Terminal interface, here are the essentials (*Press `?` ins
 *   `y`: **Yank** task ID (Copy)
 *   `b`: Mark selection as **Blocked** by yanked task
 *   `c`: Make selection a **Child** of yanked task
+*   `l`: **Link** selection as **Related** to yanked task
 *   `>` / `<`: Indent / Outdent (visual depth)
 *   `+` / `-`: Adjust Priority
 

@@ -54,7 +54,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     .fg(Color::Magenta)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(" +/-:Priority  </>:Indent  y:Yank { b:Block  c:Child }  C:NewChild"),
+            Span::raw(" +/-:Priority  </>:Indent  y:Yank { b:Block  c:Child  l:Link }  C:NewChild"),
         ]),
         Line::from(vec![
             Span::styled("              ", Style::default()), // Indent alignment
@@ -132,6 +132,27 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
                 let check = if is_done { "[x]" } else { "[ ]" };
                 full_details.push_str(&format!(" {} {}\n", check, name));
+            }
+        }
+
+        // Outgoing relations (this task → others)
+        if !task.related_to.is_empty() {
+            full_details.push_str("[Related To]:\n");
+            for related_uid in &task.related_to {
+                let name = state
+                    .store
+                    .get_summary(related_uid)
+                    .unwrap_or_else(|| "Unknown task".to_string());
+                full_details.push_str(&format!(" → {}\n", name));
+            }
+        }
+
+        // Incoming relations (others → this task)
+        let incoming_related = state.store.get_tasks_related_to(&task.uid);
+        if !incoming_related.is_empty() {
+            full_details.push_str("[Related From]:\n");
+            for (_related_uid, related_name) in incoming_related {
+                full_details.push_str(&format!(" ← {}\n", related_name));
             }
         }
     }

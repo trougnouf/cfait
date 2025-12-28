@@ -87,6 +87,26 @@ object NfIcons {
     val GLOBE = get(0xf0ac)
     val GLOBEMODEL = get(0xf08e9)
     val BELL = get(0xf0f3)
+    val RELATED_FEMALE_FEMALE = get(0xf0a5a)
+    val RELATED_MALE_MALE = get(0xf0a5e)
+    val RELATED_MALE_FEMALE = get(0xf02e8)
+}
+
+fun getRandomRelatedIcon(uid1: String, uid2: String): String {
+    // Sort UIDs to ensure consistent ordering regardless of direction
+    val (first, second) = if (uid1 < uid2) {
+        Pair(uid1, uid2)
+    } else {
+        Pair(uid2, uid1)
+    }
+
+    // Hash the sorted pair
+    val hash = (first + second).fold(0) { acc, c -> (acc * 31 + c.code) and 0x7FFFFFFF }
+    return when (hash % 3) {
+        0 -> NfIcons.RELATED_FEMALE_FEMALE
+        1 -> NfIcons.RELATED_MALE_MALE
+        else -> NfIcons.RELATED_MALE_FEMALE
+    }
 }
 
 @Composable

@@ -521,6 +521,26 @@ pub async fn handle_key_event(
                     }
                 }
             }
+            KeyCode::Char('l') => {
+                let data = if let Some(yanked) = &state.yanked_uid {
+                    state
+                        .get_selected_task()
+                        .map(|current| (current.uid.clone(), yanked.clone()))
+                } else {
+                    None
+                };
+
+                if let Some((curr_uid, yanked_uid)) = data {
+                    if curr_uid == yanked_uid {
+                        state.message = "Cannot relate to self!".to_string();
+                    } else if let Some(updated) = state.store.add_related_to(&curr_uid, yanked_uid)
+                    {
+                        state.yanked_uid = None;
+                        state.refresh_filtered_view();
+                        return Some(Action::UpdateTask(updated));
+                    }
+                }
+            }
             KeyCode::Char('.') | KeyCode::Char('>') => {
                 if state.active_focus == Focus::Main
                     && let Some(idx) = state.list_state.selected()

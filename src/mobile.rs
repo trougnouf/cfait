@@ -117,6 +117,8 @@ pub struct MobileTask {
     pub status_string: String,
     pub blocked_by_names: Vec<String>,
     pub blocked_by_uids: Vec<String>,
+    pub related_to_uids: Vec<String>,
+    pub related_to_names: Vec<String>,
     pub is_paused: bool,
     pub location: Option<String>,
     pub url: Option<String>,
@@ -138,6 +140,12 @@ pub struct MobileTag {
     pub name: String,
     pub count: u32,
     pub is_uncategorized: bool,
+}
+
+#[derive(uniffi::Record)]
+pub struct MobileRelatedTask {
+    pub uid: String,
+    pub summary: String,
 }
 
 #[derive(uniffi::Record)]
@@ -182,6 +190,12 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         .filter_map(|uid| store.get_summary(uid))
         .collect();
 
+    let related_to_names = t
+        .related_to
+        .iter()
+        .filter_map(|uid| store.get_summary(uid))
+        .collect();
+
     let (due_iso, due_allday) = match &t.due {
         Some(DateType::AllDay(d)) => (Some(d.format("%Y-%m-%d").to_string()), true),
         Some(DateType::Specific(dt)) => (Some(dt.to_rfc3339()), false),
@@ -221,6 +235,8 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         status_string: status_str,
         blocked_by_names,
         blocked_by_uids: t.dependencies.clone(),
+        related_to_uids: t.related_to.clone(),
+        related_to_names,
         is_paused: t.is_paused(),
         location: t.location.clone(),
         url: t.url.clone(),
@@ -416,6 +432,41 @@ impl CfaitMobile {
             store.set_parent(id, parent_uid)
         })
         .await
+    }
+
+    pub async fn add_related_to(
+        &self,
+        task_uid: String,
+        related_uid: String,
+    ) -> Result<(), MobileError> {
+        if task_uid == related_uid {
+            return Err(MobileError::from("Cannot relate to self"));
+        }
+        self.apply_store_mutation(task_uid, |store: &mut TaskStore, id: &str| {
+            store.add_related_to(id, related_uid)
+        })
+        .await
+    }
+
+    pub async fn remove_related_to(
+        &self,
+        task_uid: String,
+        related_uid: String,
+    ) -> Result<(), MobileError> {
+        self.apply_store_mutation(task_uid, |store: &mut TaskStore, id: &str| {
+            store.remove_related_to(id, &related_uid)
+        })
+        .await
+    }
+
+    /// Get all tasks that have a related_to link to the given task
+    pub async fn get_tasks_related_to(&self, uid: String) -> Vec<MobileRelatedTask> {
+        let store = self.store.lock().await;
+        store
+            .get_tasks_related_to(&uid)
+            .into_iter()
+            .map(|(uid, summary)| MobileRelatedTask { uid, summary })
+            .collect()
     }
 
     pub fn isolate_calendar(&self, href: String) -> Result<(), MobileError> {

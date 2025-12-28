@@ -186,6 +186,11 @@ impl Task {
             prop.add_parameter("RELTYPE", "DEPENDS-ON");
             todo.append_multi_property(prop);
         }
+        for related_uid in &self.related_to {
+            let mut prop = icalendar::Property::new("RELATED-TO", related_uid);
+            prop.add_parameter("RELTYPE", "SIBLING");
+            todo.append_multi_property(prop);
+        }
 
         // Unmapped
         for raw in &self.unmapped_properties {
@@ -466,6 +471,7 @@ impl Task {
         // Manual parsing required because icalendar parser may dedup properties with same key
         let mut parent_uid = None;
         let mut dependencies = Vec::new();
+        let mut related_to = Vec::new();
 
         let unfolded = icalendar::parser::unfold(raw_ics);
         let mut in_vtodo = false;
@@ -491,25 +497,37 @@ impl Task {
             }
 
             // Only process properties inside VTODO but NOT inside nested VALARM
-            if in_vtodo && !in_valarm && line.starts_with("RELATED-TO")
-                && let Some((raw_key, val)) = line.split_once(':') {
-                    let parts: Vec<&str> = raw_key.split(';').collect();
-                    let mut is_dep = false;
-                    for param in parts.iter().skip(1) {
-                        if param.contains("RELTYPE") && param.contains("DEPENDS-ON") {
+            if in_vtodo
+                && !in_valarm
+                && line.starts_with("RELATED-TO")
+                && let Some((raw_key, val)) = line.split_once(':')
+            {
+                let parts: Vec<&str> = raw_key.split(';').collect();
+                let mut is_dep = false;
+                let mut is_sibling = false;
+                for param in parts.iter().skip(1) {
+                    if param.contains("RELTYPE") {
+                        if param.contains("DEPENDS-ON") {
                             is_dep = true;
+                        } else if param.contains("SIBLING") {
+                            is_sibling = true;
                         }
-                    }
-
-                    let value = val.trim().to_string();
-                    if is_dep {
-                        if !dependencies.contains(&value) {
-                            dependencies.push(value);
-                        }
-                    } else {
-                        parent_uid = Some(value);
                     }
                 }
+
+                let value = val.trim().to_string();
+                if is_dep {
+                    if !dependencies.contains(&value) {
+                        dependencies.push(value);
+                    }
+                } else if is_sibling {
+                    if !related_to.contains(&value) {
+                        related_to.push(value);
+                    }
+                } else {
+                    parent_uid = Some(value);
+                }
+            }
         }
 
         // Unmapped
@@ -642,6 +660,7 @@ impl Task {
             percent_complete,
             parent_uid,
             dependencies,
+            related_to,
             etag,
             href,
             calendar_href,

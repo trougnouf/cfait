@@ -378,6 +378,13 @@ fun HomeScreen(
                             yankedUid = null
                         }
                     }
+
+                    "related" -> {
+                        if (yankedUid != null) {
+                            api.addRelatedTo(task.uid, yankedUid!!)
+                            yankedUid = null
+                        }
+                    }
                 }
                 updateTaskList()
                 onDataChanged()

@@ -196,6 +196,9 @@ fun TaskRow(
                 IconButton(onClick = { onAction("child") }, modifier = Modifier.size(32.dp)) {
                     NfIcon(NfIcons.CHILD, 18.sp, MaterialTheme.colorScheme.secondary)
                 }
+                IconButton(onClick = { onAction("related") }, modifier = Modifier.size(32.dp)) {
+                    NfIcon(getRandomRelatedIcon(task.uid, yankedUid), 18.sp, MaterialTheme.colorScheme.secondary)
+                }
             }
 
             Box {

@@ -11,6 +11,9 @@ pub const UNCATEGORIZED_ID: &str = ":::uncategorized:::";
 pub struct TaskStore {
     pub calendars: HashMap<String, Vec<Task>>,
     pub index: HashMap<String, String>,
+    /// Reverse index: TargetUID -> Vec<SourceUID> for related_to relationships
+    /// Allows O(1) lookup of "which tasks link to this task"
+    pub related_from_index: HashMap<String, Vec<String>>,
 }
 
 pub struct FilterOptions<'a> {
@@ -39,12 +42,14 @@ impl TaskStore {
             self.index.insert(task.uid.clone(), calendar_href.clone());
         }
         self.calendars.insert(calendar_href, tasks);
+        self.rebuild_relation_index();
     }
 
     pub fn add_task(&mut self, task: Task) {
         let href = task.calendar_href.clone();
         self.index.insert(task.uid.clone(), href.clone());
         self.calendars.entry(href).or_default().push(task);
+        self.rebuild_relation_index();
     }
 
     pub fn update_or_add_task(&mut self, task: Task) {
@@ -64,11 +69,14 @@ impl TaskStore {
             let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
             let _ = Cache::save(&href, list, token);
         }
+
+        self.rebuild_relation_index();
     }
 
     pub fn clear(&mut self) {
         self.calendars.clear();
         self.index.clear();
+        self.related_from_index.clear();
     }
 
     pub fn get_task_mut(&mut self, uid: &str) -> Option<(&mut Task, String)> {
@@ -174,6 +182,7 @@ impl TaskStore {
                 let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
                 let _ = Cache::save(&href, tasks, token);
             }
+            self.rebuild_relation_index();
             return Some((task, href));
         }
         None
@@ -205,6 +214,50 @@ impl TaskStore {
             return Some(task.clone());
         }
         None
+    }
+
+    pub fn add_related_to(&mut self, task_uid: &str, related_uid: String) -> Option<Task> {
+        let result = if let Some((task, _)) = self.get_task_mut(task_uid)
+            && !task.related_to.contains(&related_uid)
+        {
+            task.related_to.push(related_uid.clone());
+            Some(task.clone())
+        } else {
+            None
+        };
+
+        // Update reverse index after dropping the mutable borrow
+        if result.is_some() {
+            self.related_from_index
+                .entry(related_uid)
+                .or_default()
+                .push(task_uid.to_string());
+        }
+
+        result
+    }
+
+    pub fn remove_related_to(&mut self, task_uid: &str, related_uid: &str) -> Option<Task> {
+        let result = if let Some((task, _)) = self.get_task_mut(task_uid)
+            && let Some(pos) = task.related_to.iter().position(|r| r == related_uid)
+        {
+            task.related_to.remove(pos);
+            Some(task.clone())
+        } else {
+            None
+        };
+
+        // Update reverse index after dropping the mutable borrow
+        if result.is_some()
+            && let Some(sources) = self.related_from_index.get_mut(related_uid)
+        {
+            sources.retain(|uid| uid != task_uid);
+            if sources.is_empty() {
+                self.related_from_index.remove(related_uid);
+            }
+        }
+
+        result
     }
 
     pub fn move_task(&mut self, uid: &str, target_href: String) -> Option<Task> {
@@ -633,5 +686,46 @@ impl TaskStore {
             return Some(t.summary.clone());
         }
         None
+    }
+
+    /// Get all tasks that have a related_to link to the given task
+    /// Get all tasks that have a related_to link to the given task
+    /// Uses the reverse index for O(1) lookup instead of O(N) scan
+    pub fn get_tasks_related_to(&self, uid: &str) -> Vec<(String, String)> {
+        if let Some(source_uids) = self.related_from_index.get(uid) {
+            source_uids
+                .iter()
+                .filter_map(|source_uid| {
+                    self.get_summary(source_uid)
+                        .map(|summary| (source_uid.clone(), summary))
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Rebuild the reverse relation index from scratch
+    /// This is O(N) but only runs on data load/sync, not on every render
+    pub fn rebuild_relation_index(&mut self) {
+        self.related_from_index.clear();
+
+        // Collect all relationships first to avoid borrow checker issues
+        let mut relationships = Vec::new();
+        for tasks in self.calendars.values() {
+            for task in tasks {
+                for target in &task.related_to {
+                    relationships.push((target.clone(), task.uid.clone()));
+                }
+            }
+        }
+
+        // Build the reverse index
+        for (target, source) in relationships {
+            self.related_from_index
+                .entry(target)
+                .or_default()
+                .push(source);
+        }
     }
 }

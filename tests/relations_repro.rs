@@ -103,3 +103,61 @@ fn test_only_dependencies_no_parent() {
     assert!(parsed.dependencies.contains(&"blocker-a".to_string()));
     assert!(parsed.dependencies.contains(&"blocker-b".to_string()));
 }
+
+#[test]
+fn test_generic_related_to() {
+    let mut task = Task::new("Task with Generic Relations", &HashMap::new(), None);
+    task.related_to.push("related-1".to_string());
+    task.related_to.push("related-2".to_string());
+
+    let ics = task.to_ics();
+
+    // Verify all relations are present in ICS with SIBLING reltype
+    assert!(
+        ics.contains("RELATED-TO;RELTYPE=SIBLING:related-1"),
+        "Related-1 missing in ICS"
+    );
+    assert!(
+        ics.contains("RELATED-TO;RELTYPE=SIBLING:related-2"),
+        "Related-2 missing in ICS"
+    );
+
+    // Roundtrip
+    let parsed =
+        Task::from_ics(&ics, "etag".into(), "href".into(), "cal".into()).expect("Parse failed");
+
+    assert_eq!(parsed.related_to.len(), 2);
+    assert!(parsed.related_to.contains(&"related-1".to_string()));
+    assert!(parsed.related_to.contains(&"related-2".to_string()));
+}
+
+#[test]
+fn test_all_relationship_types() {
+    let mut task = Task::new("All Relations", &HashMap::new(), None);
+    task.parent_uid = Some("parent-x".to_string());
+    task.dependencies.push("blocker-y".to_string());
+    task.related_to.push("sibling-z".to_string());
+
+    let ics = task.to_ics();
+
+    // Verify all three types are present
+    assert!(ics.contains("RELATED-TO:parent-x"), "Parent missing");
+    assert!(
+        ics.contains("RELATED-TO;RELTYPE=DEPENDS-ON:blocker-y"),
+        "Dependency missing"
+    );
+    assert!(
+        ics.contains("RELATED-TO;RELTYPE=SIBLING:sibling-z"),
+        "Related-to missing"
+    );
+
+    // Roundtrip
+    let parsed =
+        Task::from_ics(&ics, "etag".into(), "href".into(), "cal".into()).expect("Parse failed");
+
+    assert_eq!(parsed.parent_uid, Some("parent-x".to_string()));
+    assert_eq!(parsed.dependencies.len(), 1);
+    assert!(parsed.dependencies.contains(&"blocker-y".to_string()));
+    assert_eq!(parsed.related_to.len(), 1);
+    assert!(parsed.related_to.contains(&"sibling-z".to_string()));
+}

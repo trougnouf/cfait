@@ -96,3 +96,31 @@ pub const BELL: char = '\u{f0f3}'; // nf-fa-bell
 // NEW HEADER ICONS per request
 pub const CALENDARS_HEADER: char = '\u{f00f2}'; // nf-md-calendar_multiple_check
 pub const TAGS_HEADER: char = '\u{f04fb}'; // nf-md-tag_multiple
+
+// RELATIONSHIP ICONS (for generic related-to with random selection)
+pub const RELATED_FEMALE_FEMALE: char = '\u{f0a5a}'; // nf-md-human_female_female
+pub const RELATED_MALE_MALE: char = '\u{f0a5e}'; // nf-md-human_male_male
+pub const RELATED_MALE_FEMALE: char = '\u{f02e8}'; // nf-md-human_male_female
+
+// Function to get a random relationship icon based on the relationship pair
+// Takes both UIDs to ensure both sides of the relationship see the same icon
+pub fn random_related_icon(uid1: &str, uid2: &str) -> char {
+    // Sort UIDs to ensure consistent ordering regardless of direction
+    let (first, second) = if uid1 < uid2 {
+        (uid1, uid2)
+    } else {
+        (uid2, uid1)
+    };
+
+    // Hash the sorted pair
+    let hash: u32 = first
+        .bytes()
+        .chain(second.bytes())
+        .fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32));
+
+    match hash % 3 {
+        0 => RELATED_FEMALE_FEMALE,
+        1 => RELATED_MALE_MALE,
+        _ => RELATED_MALE_FEMALE,
+    }
+}

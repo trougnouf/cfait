@@ -246,11 +246,46 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::RemoveRelatedTo(task_uid, related_uid) => {
+            if let Some(updated) = app.store.remove_related_to(&task_uid, &related_uid) {
+                app.selected_uid = Some(task_uid);
+                refresh_filtered_tasks(app);
+                if let Some(client) = &app.client {
+                    return Task::perform(
+                        async_update_wrapper(client.clone(), updated),
+                        Message::SyncSaved,
+                    );
+                } else {
+                    handle_offline_update(app, updated);
+                }
+            }
+            Task::none()
+        }
         Message::AddDependency(target_uid) => {
             let blocker_opt = app.yanked_uid.clone();
 
             if let Some(blocker_uid) = blocker_opt
                 && let Some(updated) = app.store.add_dependency(&target_uid, blocker_uid.clone())
+            {
+                app.selected_uid = Some(target_uid);
+                app.yanked_uid = None;
+                refresh_filtered_tasks(app);
+                if let Some(client) = &app.client {
+                    return Task::perform(
+                        async_update_wrapper(client.clone(), updated),
+                        Message::SyncSaved,
+                    );
+                } else {
+                    handle_offline_update(app, updated);
+                }
+            }
+            Task::none()
+        }
+        Message::AddRelatedTo(target_uid) => {
+            let related_opt = app.yanked_uid.clone();
+
+            if let Some(related_uid) = related_opt
+                && let Some(updated) = app.store.add_related_to(&target_uid, related_uid.clone())
             {
                 app.selected_uid = Some(target_uid);
                 app.yanked_uid = None;

@@ -1,6 +1,7 @@
 # Rust
 target/
 *.log
+build-dir
 
 # Android - Build Artifacts
 android/app/build/
