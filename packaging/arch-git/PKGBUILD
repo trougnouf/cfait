@@ -14,7 +14,7 @@ conflicts=("$_pkgname")
 source=("$_pkgname::git+$url.git")
 sha256sums=('SKIP')
 replaces=('rustycal' 'rustache' 'fairouille')
-options=('!lto')
+options=('!lto' '!strip' '!debug')
 provides=('cfait-tui' 'cfait-gui')
 
 pkgver() {
@@ -30,7 +30,7 @@ build() {
 
 package() {
   cd "$_pkgname"
-  
+
   install -Dm755 "target/release/cfait" "$pkgdir/usr/bin/cfait"
   install -Dm755 "target/release/gui" "$pkgdir/usr/bin/cfait-gui"
 

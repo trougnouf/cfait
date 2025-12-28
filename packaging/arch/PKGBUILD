@@ -8,7 +8,7 @@ url="https://codeberg.org/trougnouf/cfait"
 license=('GPL3')
 depends=('fontconfig' 'libx11' 'libxcursor' 'libxi' 'libxrandr' 'libxcb' 'vulkan-driver')
 makedepends=('cargo')
-options=('!lto')
+options=('!lto' '!strip' '!debug')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 replaces=('rustycal' 'rustache' 'fairouille')
@@ -23,7 +23,7 @@ build() {
 
 package() {
   cd "$pkgname-$pkgver"
-  
+
   install -Dm755 "$srcdir/target/release/cfait" "$pkgdir/usr/bin/cfait"
   install -Dm755 "$srcdir/target/release/gui" "$pkgdir/usr/bin/cfait-gui"
 
