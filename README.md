@@ -104,7 +104,7 @@ You don't need to click through menus to set the due/start date, length, priorit
 | **Duration** | `~` / `est:` | Estimated time to complete. |
 | **Tag** | `#` | Categories. Use `:` for hierarchy (e.g. `#gardening:tree_planting`). |
 | **Location** | `@@` / `loc:` | Where the task happens. (e.g. `@@home`, `@@"somewhere else"`). |
-| **Reminder** | `rem:` | Set an alarm/notification. (e.g. `rem:10m`, `rem:8am`, `rem:tomorrow 9am`). |
+| **Reminder** | `rem:` | Set an notification. (e.g. `rem:10m`, `rem:8am`, `rem:tomorrow 9:00`). |
 
 You can also type url: (e.g. `url:https://www.trougnouf.com`), geo: (e.g. `geo:53.046070, -121.105264`), and desc: (e.g. `desc:"a description"` or `desc:{une description}`)
 
