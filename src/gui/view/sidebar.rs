@@ -168,12 +168,7 @@ fn format_mins(m: u32) -> String {
 
 pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     // ... [setup] ...
-    let all_cats = app.store.get_all_categories(
-        app.hide_completed,
-        app.hide_fully_completed_tags,
-        &app.selected_categories,
-        &app.hidden_calendars,
-    );
+    let all_cats = &app.cached_categories;
     let has_selection = !app.selected_categories.is_empty();
 
     let clear_btn = if has_selection {
@@ -345,9 +340,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
 }
 
 pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
-    let all_locs = app
-        .store
-        .get_all_locations(app.hide_completed, &app.hidden_calendars);
+    let all_locs = &app.cached_locations;
 
     let has_selection = !app.selected_locations.is_empty();
 

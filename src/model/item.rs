@@ -356,7 +356,9 @@ impl Task {
 
         tasks.sort_by(|a, b| a.compare_with_cutoff(b, cutoff, urgent_days, urgent_prio));
 
-        for mut task in tasks.clone() {
+        // Consume tasks directly instead of cloning the entire vector
+        let total_tasks = tasks.len();
+        for mut task in tasks {
             let is_orphan = match &task.parent_uid {
                 Some(p_uid) => !present_uids.contains(p_uid),
                 None => true,
@@ -380,11 +382,15 @@ impl Task {
             Self::append_task_and_children(&root, &mut result, &children_map, 0, &mut visited_uids);
         }
 
-        if result.len() < tasks.len() {
-            for mut task in tasks {
-                if !visited_uids.contains(&task.uid) {
-                    task.depth = 0;
-                    result.push(task);
+        // Check for unvisited tasks (cycle detection)
+        if result.len() < total_tasks {
+            // Collect any remaining tasks from children_map that weren't visited
+            for tasks_vec in children_map.into_values() {
+                for mut task in tasks_vec {
+                    if !visited_uids.contains(&task.uid) {
+                        task.depth = 0;
+                        result.push(task);
+                    }
                 }
             }
         }

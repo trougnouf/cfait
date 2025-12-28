@@ -249,12 +249,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
 
             // AUTO-SCROLL LOGIC TAGS
-            let all_cats = app.store.get_all_categories(
-                app.hide_completed,
-                app.hide_fully_completed_tags,
-                &app.selected_categories,
-                &app.hidden_calendars,
-            );
+            // Use cached data (already updated by refresh_filtered_tasks)
+            let all_cats = &app.cached_categories;
 
             if let Some(index) = all_cats.iter().position(|(t, _)| t == &tag) {
                 let total = all_cats.len();
@@ -280,9 +276,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
 
             // AUTO-SCROLL LOGIC LOCATIONS
-            let all_locs = app
-                .store
-                .get_all_locations(app.hide_completed, &app.hidden_calendars);
+            // Use cached data (already updated by refresh_filtered_tasks)
+            let all_locs = &app.cached_locations;
 
             if let Some(index) = all_locs.iter().position(|(l, _)| l == &loc) {
                 let total = all_locs.len();

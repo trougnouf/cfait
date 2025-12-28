@@ -610,25 +610,20 @@ impl RustyClient {
     }
 
     pub async fn sync_journal(&self) -> Result<Vec<String>, String> {
-        let _ = Journal::modify(|queue| {
-            let mut tmp_j = Journal {
-                queue: mem::take(queue),
-            };
-            tmp_j.compact();
-            *queue = tmp_j.queue;
-        });
+        // Load and compact journal once at the start
+        let mut journal = Journal::load();
+        let mut tmp_j = Journal {
+            queue: mem::take(&mut journal.queue),
+        };
+        tmp_j.compact();
+        journal.queue = tmp_j.queue;
 
         let client = self.client.as_ref().ok_or("Offline")?;
         let mut warnings = Vec::new();
 
-        loop {
-            let next_action = {
-                let j = Journal::load();
-                if j.queue.is_empty() {
-                    return Ok(warnings);
-                }
-                j.queue[0].clone()
-            };
+        // Process actions in-memory
+        while !journal.queue.is_empty() {
+            let next_action = journal.queue[0].clone();
 
             let mut conflict_resolved_action = None;
             let mut new_etag_to_propagate: Option<String> = None;
@@ -832,77 +827,71 @@ impl RustyClient {
                         new_etag_to_propagate = Some(fetched);
                     }
 
-                    let commit_res = Journal::modify(|queue| {
-                        let should_remove = if let Some(head) = queue.first() {
-                            actions_match_identity(head, &next_action)
-                        } else {
-                            false
+                    // Update in-memory queue instead of writing to disk each time
+                    let should_remove = if let Some(head) = journal.queue.first() {
+                        actions_match_identity(head, &next_action)
+                    } else {
+                        false
+                    };
+
+                    if !should_remove {
+                        continue;
+                    }
+
+                    journal.queue.remove(0);
+
+                    if let Some(act) = conflict_resolved_action {
+                        journal.queue.insert(0, act);
+                    }
+
+                    if let Some(etag) = new_etag_to_propagate {
+                        let target_uid = match &next_action {
+                            Action::Create(t) | Action::Update(t) => t.uid.clone(),
+                            Action::Move(t, _) => t.uid.clone(),
+                            _ => String::new(),
                         };
-
-                        if !should_remove {
-                            return;
-                        }
-
-                        queue.remove(0);
-
-                        if let Some(act) = conflict_resolved_action {
-                            queue.insert(0, act);
-                        }
-
-                        if let Some(etag) = new_etag_to_propagate {
-                            let target_uid = match &next_action {
-                                Action::Create(t) | Action::Update(t) => t.uid.clone(),
-                                Action::Move(t, _) => t.uid.clone(),
-                                _ => String::new(),
-                            };
-                            if !target_uid.is_empty() {
-                                for item in queue.iter_mut() {
-                                    match item {
-                                        Action::Update(t) | Action::Delete(t) => {
-                                            if t.uid == target_uid {
-                                                t.etag = etag.clone();
-                                            }
-                                        }
-                                        Action::Move(t, _) => {
-                                            if t.uid == target_uid {
-                                                t.etag = etag.clone();
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                            }
-                        }
-
-                        if let Some((old_href, new_href)) = new_href_to_propagate {
-                            let target_uid = match &next_action {
-                                Action::Move(t, _) => t.uid.clone(),
-                                _ => String::new(),
-                            };
-                            for item in queue.iter_mut() {
+                        if !target_uid.is_empty() {
+                            for item in journal.queue.iter_mut() {
                                 match item {
                                     Action::Update(t) | Action::Delete(t) => {
-                                        if t.uid == target_uid || t.href == old_href {
-                                            t.href = new_href.clone();
-                                            if let Some(last_slash) = new_href.rfind('/') {
-                                                t.calendar_href =
-                                                    new_href[..=last_slash].to_string();
-                                            }
+                                        if t.uid == target_uid {
+                                            t.etag = etag.clone();
                                         }
                                     }
                                     Action::Move(t, _) => {
                                         if t.uid == target_uid {
-                                            t.href = new_href.clone();
+                                            t.etag = etag.clone();
                                         }
                                     }
                                     _ => {}
                                 }
                             }
                         }
-                    });
+                    }
 
-                    if let Err(e) = commit_res {
-                        return Err(e.to_string());
+                    if let Some((old_href, new_href)) = new_href_to_propagate {
+                        let target_uid = match &next_action {
+                            Action::Move(t, _) => t.uid.clone(),
+                            _ => String::new(),
+                        };
+                        for item in journal.queue.iter_mut() {
+                            match item {
+                                Action::Update(t) | Action::Delete(t) => {
+                                    if t.uid == target_uid || t.href == old_href {
+                                        t.href = new_href.clone();
+                                        if let Some(last_slash) = new_href.rfind('/') {
+                                            t.calendar_href = new_href[..=last_slash].to_string();
+                                        }
+                                    }
+                                }
+                                Action::Move(t, _) => {
+                                    if t.uid == target_uid {
+                                        t.href = new_href.clone();
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
                     }
                 }
                 Err(msg) => {
@@ -912,17 +901,28 @@ impl RustyClient {
                         || msg.contains("415")
                     {
                         warnings.push(format!("Fatal error on action: {}. Dropping.", msg));
-                        let _ = Journal::modify(|queue| {
-                            if !queue.is_empty() {
-                                queue.remove(0);
-                            }
-                        });
+                        // Remove the failed action from in-memory queue
+                        if !journal.queue.is_empty() {
+                            journal.queue.remove(0);
+                        }
                         continue;
                     }
+                    // Write current state before returning error
+                    let _ = Journal::modify(|queue| {
+                        *queue = journal.queue.clone();
+                    });
                     return Err(msg);
                 }
             }
         }
+
+        // Write final state to disk once at the end
+        Journal::modify(|queue| {
+            *queue = journal.queue;
+        })
+        .map_err(|e| e.to_string())?;
+
+        Ok(warnings)
     }
 
     async fn attempt_conflict_resolution(&self, local_task: &Task) -> Option<(Action, String)> {

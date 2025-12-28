@@ -70,23 +70,8 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                         .count() as f32
                         * 44.0
                 }
-                SidebarMode::Categories => {
-                    app.store
-                        .get_all_categories(
-                            app.hide_completed,
-                            app.hide_fully_completed_tags,
-                            &app.selected_categories,
-                            &app.hidden_calendars,
-                        )
-                        .len() as f32
-                        * 34.0
-                }
-                SidebarMode::Locations => {
-                    app.store
-                        .get_all_locations(app.hide_completed, &app.hidden_calendars)
-                        .len() as f32
-                        * 34.0
-                }
+                SidebarMode::Categories => app.cached_categories.len() as f32 * 34.0,
+                SidebarMode::Locations => app.cached_locations.len() as f32 * 34.0,
             };
             let available_height = app.current_window_size.height - 110.0;
             let show_logo = (available_height - content_height) > 140.0;

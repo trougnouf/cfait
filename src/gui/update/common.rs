@@ -8,6 +8,21 @@ use chrono::{Duration, Utc};
 use iced::Task;
 use iced::widget::{operation, scrollable::RelativeOffset};
 
+pub fn refresh_sidebar_cache(app: &mut GuiApp) {
+    // Cache categories
+    app.cached_categories = app.store.get_all_categories(
+        app.hide_completed,
+        app.hide_fully_completed_tags,
+        &app.selected_categories,
+        &app.hidden_calendars,
+    );
+
+    // Cache locations
+    app.cached_locations = app
+        .store
+        .get_all_locations(app.hide_completed, &app.hidden_calendars);
+}
+
 pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     let cutoff_date = if let Some(months) = app.sort_cutoff_months {
         let now = Utc::now();
@@ -32,6 +47,10 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         urgent_days: app.urgent_days,
         urgent_prio: app.urgent_prio,
     });
+
+    // Update sidebar cache after filtering
+    refresh_sidebar_cache(app);
+
     if let Some(tx) = &app.alarm_tx {
         // We need to send the FULL list (store.calendars.values().flat_map), not just filtered view
         // But for simplicity, let's just send the filtered list if that's what we have handy,

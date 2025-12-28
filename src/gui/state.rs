@@ -47,6 +47,10 @@ pub struct GuiApp {
     pub client: Option<RustyClient>,
     pub tag_aliases: HashMap<String, Vec<String>>,
 
+    // Cached Sidebar Data (computed once, not in view())
+    pub cached_categories: Vec<(String, usize)>,
+    pub cached_locations: Vec<(String, usize)>,
+
     // UI State
     pub sidebar_mode: SidebarMode,
     pub active_cal_href: Option<String>,
@@ -162,6 +166,9 @@ impl Default for GuiApp {
             calendars: vec![],
             client: None,
             tag_aliases: HashMap::new(),
+
+            cached_categories: Vec::new(),
+            cached_locations: Vec::new(),
 
             sidebar_mode: SidebarMode::Calendars,
             active_cal_href: None,
