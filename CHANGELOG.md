@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.3.13] - 2025-12-28
+
+### 🚀 Features
+
+- Add core logic for all-day/specific-time events, reminders, and alarm snoozing
+- Add reminder UI elements
+- Implement TUI and GUI notifications (rem:TIME), and fix(sync): robustly handle MOVE conflicts and no-op moves (otherwise journal could get stuck)
+- Implement configurable auto-reminders and fix parsing for rem:, today, and tomorrow
+- *(reminders)* Implement Android notifications, fix GUI snooze, enhance reminder parser (incl. rem:in TIME, relative to now)
+- *(android)* Migrate alarms to WorkManager and add alarm index cache
+- *(notifications)* GUI and TUI wait until 1st network sync attempt is done before firing notifications
+- *(android notifications)* Add two snooze options
+- *(android)* Add "Create subtask" action
+- Parse time units in snooze settings presets
+- *(parser)* Add rem:in ... and rem:next ...
+
+### 🐛 Bug Fixes
+
+- Invisible(->pushed back) tasks after cutoff date
+- Local time shift
+- *(android)* Working Android notifications, still need to fix Dismiss issue
+- *(android)* Dismissing reminders is taken into account right away
+- *(android)* Snooze
+
+### 📚 Documentation
+
+- Update documentation with due:datetime
+- Update GUI screenshot to v0.3.13
+
+### 🎨 Styling
+
+- Do not show timestamp for all-day tasks
+- Show appropriate time unit when editing a task
+- Properly syntax-highlight rem:date time
+- *(settings)* Move "Manage calendars" right below the connexion settings (Android & GUI)
+
+### ⚙️ Miscellaneous Tasks
+
+- Lint
+- Rm strip and debug from Arch packages
 ## [0.3.12] - 2025-12-24
 
 ### 🚀 Features
@@ -19,6 +59,7 @@
 
 - Remove dead code
 - Lint
+- Release cfait version 0.3.12
 ## [0.3.11] - 2025-12-24
 
 ### 🚜 Refactor
@@ -189,13 +230,6 @@
 
 ### ⚙️ Miscellaneous Tasks
 
-- Add Cargo.lock
-- *(android)* Rm i686-linux-android
-- *(fdroid)* Work on Reproducible Builds
-- *(fdroid)* Pin rust version for F-Droid build
-- *(fdroid)* Work on reproducible build (locked ndkVersion, RUSTFLAGS)
-- *(fdroid)* Strip dependenciesInfo
-- *(fdroid)* Set Android rust toolchain in rust_toolchain.toml
 - *(fdroid)* Simplify screenshot names
 - Prepare for release v0.3.3
 - Disable signed commit
@@ -216,6 +250,13 @@
 - *(android)* Generate static Android version number for F-Droid release
 - Release cfait version 0.3.2
 - Auto-generate changelogs (fastlane and CHANGELOG.md), backfill previous ones
+- Add Cargo.lock
+- *(android)* Rm i686-linux-android
+- *(fdroid)* Work on Reproducible Builds
+- *(fdroid)* Pin rust version for F-Droid build
+- *(fdroid)* Work on reproducible build (locked ndkVersion, RUSTFLAGS)
+- *(fdroid)* Strip dependenciesInfo
+- *(fdroid)* Set Android rust toolchain in rust_toolchain.toml
 ## [0.3.1] - 2025-12-17
 
 ### 🐛 Bug Fixes

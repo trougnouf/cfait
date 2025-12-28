@@ -1,0 +1,40 @@
+## [0.3.13] - 2025-12-28
+
+### 🚀 Features
+
+- Add core logic for all-day/specific-time events, reminders, and alarm snoozing
+- Add reminder UI elements
+- Implement TUI and GUI notifications (rem:TIME), and fix(sync): robustly handle MOVE conflicts and no-op moves (otherwise journal could get stuck)
+- Implement configurable auto-reminders and fix parsing for rem:, today, and tomorrow
+- *(reminders)* Implement Android notifications, fix GUI snooze, enhance reminder parser (incl. rem:in TIME, relative to now)
+- *(android)* Migrate alarms to WorkManager and add alarm index cache
+- *(notifications)* GUI and TUI wait until 1st network sync attempt is done before firing notifications
+- *(android notifications)* Add two snooze options
+- *(android)* Add "Create subtask" action
+- Parse time units in snooze settings presets
+- *(parser)* Add rem:in ... and rem:next ...
+
+### 🐛 Bug Fixes
+
+- Invisible(->pushed back) tasks after cutoff date
+- Local time shift
+- *(android)* Working Android notifications, still need to fix Dismiss issue
+- *(android)* Dismissing reminders is taken into account right away
+- *(android)* Snooze
+
+### 📚 Documentation
+
+- Update documentation with due:datetime
+- Update GUI screenshot to v0.3.13
+
+### 🎨 Styling
+
+- Do not show timestamp for all-day tasks
+- Show appropriate time unit when editing a task
+- Properly syntax-highlight rem:date time
+- *(settings)* Move "Manage calendars" right below the connexion settings (Android & GUI)
+
+### ⚙️ Miscellaneous Tasks
+
+- Lint
+- Rm strip and debug from Arch packages
