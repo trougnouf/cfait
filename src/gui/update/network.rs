@@ -8,6 +8,7 @@ use crate::gui::update::common::{refresh_filtered_tasks, save_config, scroll_to_
 use crate::journal::Journal;
 use crate::model::CalendarListEntry;
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME};
+use crate::system::SystemEvent;
 use iced::Task;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
@@ -115,6 +116,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             app.loading = false;
 
+            // Enable Alarms here!
+            if let Some(tx) = &app.alarm_tx {
+                let _ = tx.try_send(SystemEvent::EnableAlarms);
+            }
+
             let scroll_cmd = scroll_to_selected(app);
 
             if app.error_msg.is_none() {
@@ -129,6 +135,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::Loaded(Err(e)) => {
             app.error_msg = Some(format!("Connection Failed: {}", e));
+
+            // Fallback: If connection fails, we might still want alarms for offline data
+            // Or you can choose to keep them off until successful sync.
+            // Usually, offline mode should still alert.
+            if let Some(tx) = &app.alarm_tx {
+                let _ = tx.try_send(SystemEvent::EnableAlarms);
+            }
+
             app.state = AppState::Onboarding;
             app.loading = false;
             Task::none()

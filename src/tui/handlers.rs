@@ -2,6 +2,7 @@
 use crate::config::Config;
 use crate::model::{Task, TaskStatus, extract_inline_aliases, validate_alias_integrity};
 use crate::storage::LOCAL_CALENDAR_HREF;
+use crate::system::SystemEvent;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
 use crate::tui::state::{AppState, Focus, InputMode};
 use chrono::NaiveTime;
@@ -67,7 +68,7 @@ pub async fn handle_key_event(
                     // Push update to alarm actor
                     if let Some(tx) = &state.alarm_actor_tx {
                         let all = state.store.calendars.values().flatten().cloned().collect();
-                        let _ = tx.try_send(all);
+                        let _ = tx.try_send(SystemEvent::UpdateTasks(all));
                     }
                 }
                 return None;
@@ -82,7 +83,7 @@ pub async fn handle_key_event(
                     let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
                     if let Some(tx) = &state.alarm_actor_tx {
                         let all = state.store.calendars.values().flatten().cloned().collect();
-                        let _ = tx.try_send(all);
+                        let _ = tx.try_send(SystemEvent::UpdateTasks(all));
                     }
                 }
                 return None;

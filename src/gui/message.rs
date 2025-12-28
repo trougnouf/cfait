@@ -4,7 +4,7 @@ use crate::client::RustyClient;
 use crate::config::{AppTheme, Config};
 use crate::gui::state::{ResizeDirection, SidebarMode};
 use crate::model::{CalendarListEntry, Task as TodoTask};
-use crate::system::AlarmMessage;
+use crate::system::{AlarmMessage, SystemEvent};
 use iced::widget::text_editor;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -126,7 +126,7 @@ pub enum Message {
     OpenUrl(String),
     ObUrgentDaysChanged(String),
     ObUrgentPrioChanged(String),
-    InitAlarmActor(mpsc::Sender<Vec<TodoTask>>),
+    InitAlarmActor(mpsc::Sender<SystemEvent>),
     AlarmSignalReceived(Arc<AlarmMessage>), // Arc to make it Clone-able easily
     SnoozeAlarm(String, String, u32),       // TaskUID, AlarmUID, Minutes
     DismissAlarm(String, String),           // TaskUID, AlarmUID

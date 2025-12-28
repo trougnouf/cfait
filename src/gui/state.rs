@@ -4,6 +4,7 @@ use crate::config::AppTheme;
 use crate::gui::icon;
 use crate::model::{Alarm, CalendarListEntry, Task as TodoTask};
 use crate::store::TaskStore;
+use crate::system::SystemEvent;
 use iced::widget::text_editor;
 use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc;
@@ -110,8 +111,8 @@ pub struct GuiApp {
     pub ob_urgent_prio_input: String,
     pub urgent_days: u32,
     pub urgent_prio: u8,
-    pub alarm_tx: Option<mpsc::Sender<Vec<TodoTask>>>, // Send tasks to actor
-    pub ringing_tasks: Vec<(TodoTask, Alarm)>,         // Stack of firing alarms
+    pub alarm_tx: Option<mpsc::Sender<SystemEvent>>, // Send tasks to actor
+    pub ringing_tasks: Vec<(TodoTask, Alarm)>,       // Stack of firing alarms
 
     // Snooze Custom Input
     pub snooze_custom_input: String,

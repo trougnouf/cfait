@@ -3,6 +3,7 @@ use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
 use crate::store::FilterOptions;
+use crate::system::SystemEvent;
 use chrono::{Duration, Utc};
 use iced::Task;
 use iced::widget::{operation, scrollable::RelativeOffset};
@@ -37,7 +38,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         // OR better: construct full list. The actor needs ALL tasks to check alarms properly.
         let all_tasks: Vec<crate::model::Task> =
             app.store.calendars.values().flatten().cloned().collect();
-        let _ = tx.try_send(all_tasks);
+        let _ = tx.try_send(SystemEvent::UpdateTasks(all_tasks));
     }
 }
 

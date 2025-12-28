@@ -1,5 +1,6 @@
 use crate::model::{CalendarListEntry, Task};
 use crate::store::{FilterOptions, TaskStore};
+use crate::system::SystemEvent;
 use crate::tui::action::SidebarMode;
 use ratatui::widgets::ListState;
 use std::collections::{HashMap, HashSet};
@@ -67,7 +68,7 @@ pub struct AppState {
 
     // Track unsynced status
     pub unsynced_changes: bool,
-    pub alarm_actor_tx: Option<mpsc::Sender<Vec<Task>>>,
+    pub alarm_actor_tx: Option<mpsc::Sender<SystemEvent>>,
     pub active_alarm: Option<(Task, String)>, // (Task, AlarmUID) to render popup
 }
 

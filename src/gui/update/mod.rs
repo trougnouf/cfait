@@ -7,7 +7,7 @@ pub mod view;
 
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
-use crate::system::AlarmMessage;
+use crate::system::{AlarmMessage, SystemEvent};
 use iced::Task;
 
 pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
@@ -108,8 +108,10 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.alarm_tx = Some(tx.clone());
             // Send initial load
             if !app.tasks.is_empty() {
-                let _ = tx.try_send(app.tasks.clone());
+                let all = app.store.calendars.values().flatten().cloned().collect();
+                let _ = tx.try_send(SystemEvent::UpdateTasks(all));
             }
+            // Note: We do NOT send EnableAlarms here yet.
             Task::none()
         }
         Message::AlarmSignalReceived(msg) => {

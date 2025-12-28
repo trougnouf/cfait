@@ -6,7 +6,7 @@ pub mod state;
 pub mod view;
 
 use crate::config;
-use crate::system::AlarmMessage; // Import AlarmMessage
+use crate::system::{AlarmMessage, SystemEvent}; // Import AlarmMessage and SystemEvent
 use crate::tui::action::AppEvent;
 use crate::tui::state::{AppState, InputMode};
 use crate::tui::view::draw;
@@ -128,14 +128,14 @@ pub async fn run() -> Result<()> {
 
         // A. Network Events
         if let Ok(event) = event_rx.try_recv() {
-            // If tasks loaded, handle event AND sync to alarm actor
+            // Check for Sync Complete Status
+            let enable_alarms = matches!(event, AppEvent::Status(ref s) if s == "Ready.");
             let is_task_update = matches!(event, AppEvent::TasksLoaded(_));
 
             handlers::handle_app_event(&mut app_state, event, &default_cal);
 
-            if is_task_update
-                && let Some(tx) = &app_state.alarm_actor_tx {
-                    // Send ALL tasks to the alarm actor so it can calculate triggers
+            if let Some(tx) = &app_state.alarm_actor_tx {
+                if is_task_update {
                     let all_tasks: Vec<_> = app_state
                         .store
                         .calendars
@@ -143,14 +143,19 @@ pub async fn run() -> Result<()> {
                         .flatten()
                         .cloned()
                         .collect();
-
-                    // FIX: Spawn the send to prevent dropping updates if the channel is full.
-                    // try_send is risky in this loop because `event_rx` might process many updates quickly.
                     let tx_clone = tx.clone();
                     tokio::spawn(async move {
-                        let _ = tx_clone.send(all_tasks).await;
+                        let _ = tx_clone.send(SystemEvent::UpdateTasks(all_tasks)).await;
                     });
                 }
+
+                if enable_alarms {
+                    let tx_clone = tx.clone();
+                    tokio::spawn(async move {
+                        let _ = tx_clone.send(SystemEvent::EnableAlarms).await;
+                    });
+                }
+            }
         }
 
         // B. Alarm Signals
