@@ -18,8 +18,12 @@ class NotificationActionWorker(
         const val KEY_ACTION = "action"
         const val KEY_TASK_UID = "task_uid"
         const val KEY_ALARM_UID = "alarm_uid"
-        const val ACTION_SNOOZE = "SNOOZE"
+
+        // Define distinct actions
+        const val ACTION_SNOOZE_SHORT = "SNOOZE_SHORT"
+        const val ACTION_SNOOZE_LONG = "SNOOZE_LONG"
         const val ACTION_DISMISS = "DISMISS"
+
         const val BROADCAST_REFRESH = "com.cfait.REFRESH_UI"
     }
 
@@ -36,17 +40,23 @@ class NotificationActionWorker(
 
             Log.d("CfaitNotificationAction", "Processing action: $action for task: $taskUid")
 
-            // FIX: Use the singleton API instance from Application
             val app = context.applicationContext as CfaitApplication
             val api = app.api
 
-            // Note: We do NOT call api.loadFromCache() here because the singleton
-            // is already initialized in Application.onCreate().
+            // Fetch config to get the actual minutes for short/long snooze
+            val config = api.getConfig()
 
             when (action) {
-                ACTION_SNOOZE -> {
-                    api.snoozeAlarm(taskUid, alarmUid, 15u)
-                    Log.d("CfaitNotificationAction", "Alarm snoozed")
+                ACTION_SNOOZE_SHORT -> {
+                    val mins = config.snoozeShort
+                    api.snoozeAlarm(taskUid, alarmUid, mins)
+                    Log.d("CfaitNotificationAction", "Alarm snoozed for $mins minutes (Short)")
+                }
+
+                ACTION_SNOOZE_LONG -> {
+                    val mins = config.snoozeLong
+                    api.snoozeAlarm(taskUid, alarmUid, mins)
+                    Log.d("CfaitNotificationAction", "Alarm snoozed for $mins minutes (Long)")
                 }
 
                 ACTION_DISMISS -> {
@@ -54,15 +64,18 @@ class NotificationActionWorker(
                     Log.d("CfaitNotificationAction", "Alarm dismissed")
                 }
 
-                else -> return Result.failure()
+                else -> {
+                    Log.w("CfaitNotificationAction", "Unknown action: $action")
+                    return Result.failure()
+                }
             }
 
             // Reschedule next alarm
             AlarmScheduler.scheduleNextAlarm(context, api)
 
-            // FIX: Notify the UI (if active) that data has changed
+            // Notify UI
             val intent = Intent(BROADCAST_REFRESH)
-            intent.setPackage(context.packageName) // Restrict to own app
+            intent.setPackage(context.packageName)
             context.sendBroadcast(intent)
 
             Result.success()

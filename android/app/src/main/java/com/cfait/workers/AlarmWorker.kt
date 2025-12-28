@@ -27,16 +27,26 @@ class AlarmWorker(
         return try {
             Log.d("CfaitAlarmWorker", "Starting alarm processing")
 
-            // FIX: Use Singleton API
             val app = context.applicationContext as CfaitApplication
             val api = app.api
+
+            // Need config to get snooze durations for button labels
+            val config = api.getConfig()
 
             val firing = api.getFiringAlarms()
 
             if (firing.isNotEmpty()) {
                 Log.d("CfaitAlarmWorker", "Found ${firing.size} firing alarm(s)")
                 firing.forEach { alarm ->
-                    showNotification(context, alarm.title, alarm.body, alarm.taskUid, alarm.alarmUid)
+                    showNotification(
+                        context,
+                        alarm.title,
+                        alarm.body,
+                        alarm.taskUid,
+                        alarm.alarmUid,
+                        config.snoozeShort,
+                        config.snoozeLong
+                    )
                 }
             }
 
@@ -48,12 +58,25 @@ class AlarmWorker(
         }
     }
 
+    private fun formatMins(mins: UInt): String {
+        val m = mins.toInt()
+        return if (m >= 60) {
+            val h = m / 60
+            // Handle 1h, 1.5h, etc if you want, but simple int hours is usually enough for buttons
+            if (m % 60 == 0) "${h}h" else "${h}h ${m % 60}m"
+        } else {
+            "${m}m"
+        }
+    }
+
     private fun showNotification(
         context: Context,
         title: String,
         body: String,
         taskUid: String,
-        alarmUid: String
+        alarmUid: String,
+        shortMins: UInt,
+        longMins: UInt
     ) {
         if (ActivityCompat.checkSelfPermission(
                 context,
@@ -73,20 +96,37 @@ class AlarmWorker(
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val snoozeIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = "SNOOZE"
+        // 1. Snooze Short Action
+        val snoozeShortIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionWorker.ACTION_SNOOZE_SHORT
             putExtra("T_UID", taskUid)
             putExtra("A_UID", alarmUid)
         }
-        val snoozePending = PendingIntent.getBroadcast(
+        // Unique RequestCode: hash + "SS"
+        val snoozeShortPending = PendingIntent.getBroadcast(
             context,
-            (taskUid + "S").hashCode(),
-            snoozeIntent,
+            (taskUid + "SS").hashCode(),
+            snoozeShortIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        // 2. Snooze Long Action
+        val snoozeLongIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionWorker.ACTION_SNOOZE_LONG
+            putExtra("T_UID", taskUid)
+            putExtra("A_UID", alarmUid)
+        }
+        // Unique RequestCode: hash + "SL"
+        val snoozeLongPending = PendingIntent.getBroadcast(
+            context,
+            (taskUid + "SL").hashCode(),
+            snoozeLongIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // 3. Dismiss Action
         val dismissIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = "DISMISS"
+            action = NotificationActionWorker.ACTION_DISMISS
             putExtra("T_UID", taskUid)
             putExtra("A_UID", alarmUid)
         }
@@ -104,7 +144,9 @@ class AlarmWorker(
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(tapPending)
             .setAutoCancel(true)
-            .addAction(R.drawable.ic_launcher_foreground, "Snooze (15m)", snoozePending)
+            // Add 3 actions
+            .addAction(R.drawable.ic_launcher_foreground, "Snooze (${formatMins(shortMins)})", snoozeShortPending)
+            .addAction(R.drawable.ic_launcher_foreground, "Snooze (${formatMins(longMins)})", snoozeLongPending)
             .addAction(R.drawable.ic_launcher_foreground, "Dismiss", dismissPending)
             .build()
 
