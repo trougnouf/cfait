@@ -917,16 +917,17 @@ impl CfaitMobile {
                 if alarm_uid.starts_with("implicit_") {
                     let parts: Vec<&str> = alarm_uid.split('|').collect();
                     if parts.len() >= 2
-                        && let Ok(dt) = DateTime::parse_from_rfc3339(parts[1]) {
-                            let utc_dt = dt.with_timezone(&Utc);
-                            let desc = if alarm_uid.contains("implicit_due") {
-                                "Due now"
-                            } else {
-                                "Starting"
-                            };
-                            task.snooze_implicit_alarm(utc_dt, desc.to_string(), minutes);
-                            return Some(task.clone());
-                        }
+                        && let Ok(dt) = DateTime::parse_from_rfc3339(parts[1])
+                    {
+                        let utc_dt = dt.with_timezone(&Utc);
+                        let desc = if alarm_uid.contains("implicit_due") {
+                            "Due now"
+                        } else {
+                            "Starting"
+                        };
+                        task.snooze_implicit_alarm(utc_dt, desc.to_string(), minutes);
+                        return Some(task.clone());
+                    }
                 }
 
                 if task.snooze_alarm(&alarm_uid, minutes) {
@@ -969,18 +970,19 @@ impl CfaitMobile {
                 if alarm_uid.starts_with("implicit_") {
                     let parts: Vec<&str> = alarm_uid.split('|').collect();
                     if parts.len() >= 2
-                        && let Ok(dt) = DateTime::parse_from_rfc3339(parts[1]) {
-                            let utc_dt = dt.with_timezone(&Utc);
-                            let desc = if alarm_uid.contains("implicit_due") {
-                                "Due now"
-                            } else {
-                                "Starting"
-                            };
-                            task.dismiss_implicit_alarm(utc_dt, desc.to_string());
-                            #[cfg(target_os = "android")]
-                            log::debug!("Dismissed implicit alarm: {}", alarm_uid);
-                            return Some(task.clone());
-                        }
+                        && let Ok(dt) = DateTime::parse_from_rfc3339(parts[1])
+                    {
+                        let utc_dt = dt.with_timezone(&Utc);
+                        let desc = if alarm_uid.contains("implicit_due") {
+                            "Due now"
+                        } else {
+                            "Starting"
+                        };
+                        task.dismiss_implicit_alarm(utc_dt, desc.to_string());
+                        #[cfg(target_os = "android")]
+                        log::debug!("Dismissed implicit alarm: {}", alarm_uid);
+                        return Some(task.clone());
+                    }
                 }
 
                 if task.dismiss_alarm(&alarm_uid) {
@@ -1052,17 +1054,18 @@ impl CfaitMobile {
         // Try in-memory cache first (avoids disk read)
         let cached = self.alarm_index_cache.blocking_lock();
         if let Some(ref index) = *cached
-            && !index.is_empty() {
-                if let Some(timestamp) = index.get_next_alarm_timestamp() {
-                    #[cfg(target_os = "android")]
-                    log::debug!("Next alarm timestamp from cached index: {}", timestamp);
-                    return Some(timestamp as i64);
-                } else {
-                    #[cfg(target_os = "android")]
-                    log::debug!("No future alarms in cached index");
-                    return None;
-                }
+            && !index.is_empty()
+        {
+            if let Some(timestamp) = index.get_next_alarm_timestamp() {
+                #[cfg(target_os = "android")]
+                log::debug!("Next alarm timestamp from cached index: {}", timestamp);
+                return Some(timestamp as i64);
+            } else {
+                #[cfg(target_os = "android")]
+                log::debug!("No future alarms in cached index");
+                return None;
             }
+        }
         drop(cached);
 
         // Fallback: Load from disk if cache miss
@@ -1169,32 +1172,33 @@ impl CfaitMobile {
         // Try in-memory cache first (avoids disk read)
         let cached = self.alarm_index_cache.blocking_lock();
         if let Some(ref index) = *cached
-            && !index.is_empty() {
-                #[cfg(target_os = "android")]
-                log::debug!(
-                    "Using cached alarm index for fast lookup ({} alarms indexed)",
-                    index.len()
-                );
-                let firing = index.get_firing_alarms();
+            && !index.is_empty()
+        {
+            #[cfg(target_os = "android")]
+            log::debug!(
+                "Using cached alarm index for fast lookup ({} alarms indexed)",
+                index.len()
+            );
+            let firing = index.get_firing_alarms();
 
-                if !firing.is_empty() {
-                    #[cfg(target_os = "android")]
-                    log::info!("Found {} firing alarm(s) via cached index", firing.len());
-                    return firing
-                        .into_iter()
-                        .map(|entry| MobileAlarmInfo {
-                            task_uid: entry.task_uid,
-                            alarm_uid: entry.alarm_uid,
-                            title: entry.task_title,
-                            body: entry.description.unwrap_or_else(|| "Reminder".to_string()),
-                        })
-                        .collect();
-                } else {
-                    #[cfg(target_os = "android")]
-                    log::debug!("No firing alarms found in cached index");
-                    return Vec::new();
-                }
+            if !firing.is_empty() {
+                #[cfg(target_os = "android")]
+                log::info!("Found {} firing alarm(s) via cached index", firing.len());
+                return firing
+                    .into_iter()
+                    .map(|entry| MobileAlarmInfo {
+                        task_uid: entry.task_uid,
+                        alarm_uid: entry.alarm_uid,
+                        title: entry.task_title,
+                        body: entry.description.unwrap_or_else(|| "Reminder".to_string()),
+                    })
+                    .collect();
+            } else {
+                #[cfg(target_os = "android")]
+                log::debug!("No firing alarms found in cached index");
+                return Vec::new();
             }
+        }
         drop(cached);
 
         // Fallback: Load from disk if cache miss
@@ -1248,7 +1252,8 @@ impl CfaitMobile {
 
                 // Check Explicit
                 for alarm in &task.alarms {
-                    if alarm.acknowledged.is_some() || alarm.is_snooze() {
+                    // FIX: Do NOT filter out snoozes here.
+                    if alarm.acknowledged.is_some() {
                         continue;
                     }
 
@@ -1282,10 +1287,8 @@ impl CfaitMobile {
 
                 // Check Implicit
                 if config.auto_reminders {
-                    let has_active_explicit = task
-                        .alarms
-                        .iter()
-                        .any(|a| a.acknowledged.is_none() && !a.is_snooze());
+                    // FIX: Count snooze alarms as active so we don't double-fire
+                    let has_active_explicit = task.alarms.iter().any(|a| a.acknowledged.is_none());
                     if !has_active_explicit {
                         // Helper for check
                         let mut check_implicit = |dt: DateTime<Utc>, desc: &str, type_key: &str| {

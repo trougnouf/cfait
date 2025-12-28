@@ -137,8 +137,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.error_msg = Some(format!("Connection Failed: {}", e));
 
             // Fallback: If connection fails, we might still want alarms for offline data
-            // Or you can choose to keep them off until successful sync.
-            // Usually, offline mode should still alert.
             if let Some(tx) = &app.alarm_tx {
                 let _ = tx.try_send(SystemEvent::EnableAlarms);
             }
@@ -180,7 +178,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.loading = false;
             Task::none()
         }
-        Message::SyncSaved(Ok(updated)) => {
+        Message::SyncSaved(Ok(mut updated)) => {
+            // If the Sync succeeded (Journal entry removed) but we don't have a
+            // real ETag yet, we must set a placeholder. Otherwise, if the app restarts now,
+            // Cache::load -> Journal::apply will see an empty ETag and no Journal entry,
+            // and delete the task ("Ghost Pruning").
+            if updated.etag.is_empty() {
+                updated.etag = "pending_refresh".to_string();
+            }
+
             app.store.update_or_add_task(updated);
 
             app.unsynced_changes = !Journal::load().is_empty();
@@ -195,10 +201,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SyncToggleComplete(boxed_res) => match *boxed_res {
-            Ok((updated, created_opt)) => {
+            Ok((mut updated, created_opt)) => {
+                if updated.etag.is_empty() {
+                    updated.etag = "pending_refresh".to_string();
+                }
                 app.store.update_or_add_task(updated);
 
-                if let Some(created) = created_opt {
+                if let Some(mut created) = created_opt {
+                    if created.etag.is_empty() {
+                        created.etag = "pending_refresh".to_string();
+                    }
                     app.store.update_or_add_task(created);
                 }
                 refresh_filtered_tasks(app);
@@ -209,7 +221,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 Task::none()
             }
         },
-        Message::TaskMoved(Ok(new_task)) => {
+        Message::TaskMoved(Ok(mut new_task)) => {
+            if new_task.etag.is_empty() {
+                new_task.etag = "pending_refresh".to_string();
+            }
+
             if let Some(list) = app.store.calendars.get_mut(&new_task.calendar_href) {
                 if let Some(idx) = list.iter().position(|t| t.uid == new_task.uid) {
                     list[idx] = new_task.clone();

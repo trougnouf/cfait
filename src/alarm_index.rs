@@ -142,8 +142,10 @@ impl AlarmIndex {
 
                 // Process explicit alarms
                 for alarm in &task.alarms {
-                    // Skip acknowledged or snoozed alarms
-                    if alarm.acknowledged.is_some() || alarm.is_snooze() {
+                    // FIX: Do NOT skip snoozed alarms. A "snooze" alarm (relation_type=SNOOZE)
+                    // is a new active alarm that needs to fire.
+                    // Only skip alarms that have actually been acknowledged.
+                    if alarm.acknowledged.is_some() {
                         continue;
                     }
 
@@ -180,10 +182,9 @@ impl AlarmIndex {
 
                 // Process implicit alarms (auto-reminders)
                 if auto_reminders_enabled {
-                    let has_active_explicit = task
-                        .alarms
-                        .iter()
-                        .any(|a| a.acknowledged.is_none() && !a.is_snooze());
+                    // FIX: Ensure we count snooze alarms as active explicit alarms
+                    // to prevent implicit alarms from firing on top of a snooze.
+                    let has_active_explicit = task.alarms.iter().any(|a| a.acknowledged.is_none());
 
                     if !has_active_explicit {
                         // Helper to add implicit alarm
