@@ -714,15 +714,49 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             let prefix_span = Span::styled(prefix, Style::default().fg(color));
 
+            // --- HORIZONTAL SCROLLING FIX STARTS HERE ---
+
+            // 1. Calculate available width for the input text
+            // Width - 2 (borders) - prefix width - 1 (cursor spacing/padding)
+            let inner_width = footer_area.width.saturating_sub(2) as usize;
+            let prefix_width = prefix.chars().count();
+            let input_area_width = inner_width.saturating_sub(prefix_width).saturating_sub(1);
+
+            // 2. Determine Horizontal Scroll Offset
+            // If editing description, we allow wrapping (multiline).
+            // For single-line inputs, we scroll.
+            let (visible_text, scroll_offset) = if state.mode == InputMode::EditingDescription {
+                (state.input_buffer.clone(), 0)
+            } else {
+                let cursor = state.cursor_position;
+                if cursor >= input_area_width {
+                    // Shift the view so the cursor is at the end
+                    let offset = cursor - input_area_width + 1;
+                    let slice: String = state
+                        .input_buffer
+                        .chars()
+                        .skip(offset)
+                        .take(input_area_width)
+                        .collect();
+                    (slice, offset)
+                } else {
+                    // Start from 0, possibly truncate end if too long (though cursor is within bounds)
+                    let slice: String = state.input_buffer.chars().take(input_area_width).collect();
+                    (slice, 0)
+                }
+            };
+
             let mut input_spans = vec![prefix_span];
 
             if state.mode == InputMode::EditingDescription {
-                input_spans.push(Span::raw(&state.input_buffer));
+                input_spans.push(Span::raw(&visible_text));
             } else {
-                let tokens = tokenize_smart_input(&state.input_buffer);
+                // Tokenize the *visible* slice.
+                // Note: Truncated tokens might lose coloring, which is acceptable behavior during scrolling.
+                let tokens = tokenize_smart_input(&visible_text);
 
                 for token in tokens {
-                    let text = &state.input_buffer[token.start..token.end];
+                    let text = &visible_text[token.start..token.end];
                     let style = match token.kind {
                         SyntaxType::Priority => {
                             let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
@@ -765,17 +799,41 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let input = Paragraph::new(input_text)
                 .style(Style::default())
                 .block(Block::default().borders(Borders::ALL).title(title_str))
-                .wrap(Wrap { trim: false });
+                .wrap(Wrap { trim: false }); // Wrap is fine for Description, ignored for others due to slicing
 
             f.render_widget(input, footer_area);
 
-            // Cursor rendering
-            let cursor_x =
-                footer_area.x + 1 + prefix.chars().count() as u16 + state.cursor_position as u16;
-            f.set_cursor_position((
-                cursor_x.min(footer_area.x + footer_area.width - 2),
-                footer_area.y + 1,
-            ));
+            // 3. Render Cursor relative to Scroll Offset
+            if state.mode == InputMode::EditingDescription {
+                // Multiline cursor logic (simplified: ratatui handles multiline text well,
+                // but exact cursor placement on wrapped lines requires more complex logic.
+                // For now, we leave the existing simple logic or improve it if needed.
+                // The prompt specifically asked about the "long name" bug which is single line).
+                // Keep existing logic for Description for now:
+                let term_width = footer_area.width.saturating_sub(2) as usize;
+                if term_width > 0 {
+                    let x = (state.cursor_position % term_width) as u16;
+                    let y = (state.cursor_position / term_width) as u16;
+                    f.set_cursor_position((
+                        footer_area.x + 1 + prefix_width as u16 + x,
+                        footer_area.y + 1 + y,
+                    ));
+                }
+            } else {
+                // Single line sliding window cursor
+                let visual_cursor_offset = state.cursor_position.saturating_sub(scroll_offset);
+
+                let cursor_x = footer_area.x
+                    + 1 // Border
+                    + prefix_width as u16
+                    + visual_cursor_offset as u16;
+
+                f.set_cursor_position((
+                    cursor_x.min(footer_area.x + footer_area.width - 2),
+                    footer_area.y + 1,
+                ));
+            }
+            // --- HORIZONTAL SCROLLING FIX ENDS HERE ---
         }
         _ => {
             if state.show_full_help {

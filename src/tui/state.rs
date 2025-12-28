@@ -201,7 +201,15 @@ impl AppState {
         self.cursor_position = self.clamp_cursor(cursor_moved_right);
     }
     pub fn enter_char(&mut self, new_char: char) {
-        self.input_buffer.insert(self.cursor_position, new_char);
+        // Safe insertion for UTF-8 strings
+        let byte_index = self
+            .input_buffer
+            .char_indices()
+            .map(|(i, _)| i)
+            .nth(self.cursor_position)
+            .unwrap_or(self.input_buffer.len());
+
+        self.input_buffer.insert(byte_index, new_char);
         self.move_cursor_right();
     }
     pub fn delete_char(&mut self) {
