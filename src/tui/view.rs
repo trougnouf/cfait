@@ -1,6 +1,6 @@
 // File: ./src/tui/view.rs
 use crate::color_utils;
-use crate::model::parser::{SyntaxType, tokenize_smart_input};
+use crate::model::parser::{SyntaxType, strip_quotes, tokenize_smart_input};
 use crate::store::UNCATEGORIZED_ID;
 use crate::tui::action::SidebarMode;
 use crate::tui::state::{AppState, Focus, InputMode};
@@ -327,6 +327,57 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 (HashSet::new(), None)
             };
 
+            // --- ALIAS SHADOWING LOGIC START ---
+            let mut tags_to_hide = parent_tags.clone();
+            let mut loc_to_hide = parent_location.clone();
+
+            let mut process_expansions = |targets: &Vec<String>| {
+                for target in targets {
+                    if let Some(val) = target.strip_prefix('#') {
+                        tags_to_hide.insert(strip_quotes(val));
+                    } else if let Some(val) = target.strip_prefix("@@") {
+                        loc_to_hide = Some(strip_quotes(val));
+                    } else if target.to_lowercase().starts_with("loc:") {
+                        loc_to_hide = Some(strip_quotes(&target[4..]));
+                    }
+                }
+            };
+
+            // Check Categories
+            for cat in &t.categories {
+                if let Some(targets) = state.tag_aliases.get(cat) {
+                    process_expansions(targets);
+                }
+                // Check hierarchy
+                let mut search = cat.as_str();
+                while let Some(idx) = search.rfind(':') {
+                    search = &search[..idx];
+                    if let Some(targets) = state.tag_aliases.get(search) {
+                        process_expansions(targets);
+                    }
+                }
+            }
+
+            // Check Location
+            if let Some(loc) = &t.location {
+                let key = format!("@@{}", loc);
+                if let Some(targets) = state.tag_aliases.get(&key) {
+                    process_expansions(targets);
+                }
+                // Check hierarchy
+                let mut search = key.as_str();
+                while let Some(idx) = search.rfind(':') {
+                    if idx < 2 {
+                        break;
+                    } // Don't split @@
+                    search = &search[..idx];
+                    if let Some(targets) = state.tag_aliases.get(search) {
+                        process_expansions(targets);
+                    }
+                }
+            }
+            // --- ALIAS SHADOWING LOGIC END ---
+
             let is_blocked = state.store.is_blocked(t);
             let base_style = if is_blocked {
                 Style::default().fg(Color::DarkGray)
@@ -422,20 +473,21 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 )); // Web Check
             }
 
-            // 3. Location (Hide if same as parent)
+            // 3. Location (Hide if shadowed by alias)
             if let Some(loc) = &t.location
-                && parent_location.as_ref() != Some(loc) {
-                    spans.push(Span::raw(" "));
-                    spans.push(Span::styled("@@", Style::default().fg(Color::Yellow)));
-                    spans.push(Span::styled(
-                        loc.clone(),
-                        Style::default().fg(Color::Yellow),
-                    ));
-                }
+                && loc_to_hide.as_ref() != Some(loc)
+            {
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled("@@", Style::default().fg(Color::Yellow)));
+                spans.push(Span::styled(
+                    loc.clone(),
+                    Style::default().fg(Color::Yellow),
+                ));
+            }
 
-            // 4. Tags (Hide if same as parent)
+            // 4. Tags (Hide if shadowed by alias)
             for cat in &t.categories {
-                if !parent_tags.contains(cat) {
+                if !tags_to_hide.contains(cat) {
                     let (r, g, b) = color_utils::generate_color(cat);
                     spans.push(Span::raw(" "));
                     spans.push(Span::styled(

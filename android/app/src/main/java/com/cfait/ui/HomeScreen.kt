@@ -64,6 +64,7 @@ fun HomeScreen(
     var isPullRefreshing by remember { mutableStateOf(false) }
     var filterLocation by rememberSaveable { mutableStateOf<String?>(null) }
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
+    var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
 
     val locationTabIcon = rememberSaveable {
         val icons = listOf(
@@ -129,6 +130,8 @@ fun HomeScreen(
         scope.launch {
             try {
                 tasks = api.getViewTasks(filterTag, filterLocation, searchQuery)
+                // Load aliases
+                aliases = api.getConfig().tagAliases
             } catch (_: Exception) {
             }
         }
@@ -844,7 +847,8 @@ fun HomeScreen(
                                 yankedUid = yankedUid,
                                 enabledCalendarCount = enabledCalendarCount,
                                 parentCategories = pCats,
-                                parentLocation = pLoc
+                                parentLocation = pLoc,
+                                aliasMap = aliases
                             )
                         }
                     }

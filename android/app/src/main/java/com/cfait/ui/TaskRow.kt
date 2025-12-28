@@ -33,7 +33,8 @@ fun TaskRow(
     enabledCalendarCount: Int,
     // New parameters for inheritance hiding
     parentCategories: List<String> = emptyList(),
-    parentLocation: String? = null
+    parentLocation: String? = null,
+    aliasMap: Map<String, List<String>> = emptyMap()
 ) {
     val startPadding = (task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
@@ -41,6 +42,60 @@ fun TaskRow(
     val highlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
     val containerColor = if (expanded) highlightColor else MaterialTheme.colorScheme.surface
     val uriHandler = LocalUriHandler.current
+
+    // --- ALIAS SHADOWING LOGIC ---
+    // Calculate what to hide based on THIS task's own data + the alias map.
+    // 1. Start with parent inheritance
+    val hiddenTags = parentCategories.toMutableSet()
+    var hiddenLocation = parentLocation
+
+    fun processExpansions(targets: List<String>) {
+        targets.forEach { target ->
+            when {
+                target.startsWith("#") -> {
+                    hiddenTags.add(target.removePrefix("#").replace("\"", "").trim())
+                }
+
+                target.startsWith("@@") -> {
+                    hiddenLocation = target.removePrefix("@@").replace("\"", "").trim()
+                }
+
+                target.lowercase().startsWith("loc:") -> {
+                    hiddenLocation = target.substring(4).replace("\"", "").trim()
+                }
+            }
+        }
+    }
+
+    // Check Categories for Alias triggers
+    task.categories.forEach { cat ->
+        // Direct match
+        aliasMap[cat]?.let { processExpansions(it) }
+
+        // Hierarchy match (e.g. #work:project -> #work)
+        var search = cat
+        while (search.contains(':')) {
+            val idx = search.lastIndexOf(':')
+            search = search.substring(0, idx)
+            aliasMap[search]?.let { processExpansions(it) }
+        }
+    }
+
+    // Check Location for Alias triggers
+    task.location?.let { loc ->
+        val key = "@@$loc"
+        aliasMap[key]?.let { processExpansions(it) }
+
+        // Hierarchy match for location
+        var search = key
+        while (search.contains(':')) {
+            val idx = search.lastIndexOf(':')
+            if (idx < 2) break // Don't split @@
+            search = search.substring(0, idx)
+            aliasMap[search]?.let { processExpansions(it) }
+        }
+    }
+    // ----------------------------
 
     Card(
         modifier =
@@ -102,8 +157,8 @@ fun TaskRow(
                         }
                     }
 
-                    // Location Text - Only show if different from parent
-                    if (task.location != null && task.location != parentLocation) {
+                    // Location Text - Only show if not hidden by alias
+                    if (task.location != null && task.location != hiddenLocation) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val locationColor = Color(0xFFFFB300)
                             Text("@@", fontSize = 10.sp, color = locationColor, fontWeight = FontWeight.Bold)
@@ -120,9 +175,9 @@ fun TaskRow(
                         }
                     }
 
-                    // Categories - Only show if not present in parent
+                    // Categories - Only show if not hidden by alias
                     task.categories.forEach { tag ->
-                        if (!parentCategories.contains(tag)) {
+                        if (!hiddenTags.contains(tag)) {
                             Text(
                                 "#$tag",
                                 fontSize = 10.sp,

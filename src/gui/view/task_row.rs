@@ -5,6 +5,7 @@ use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
 use crate::gui::view::COLOR_LOCATION;
 use crate::model::Task as TodoTask;
+use crate::model::parser::strip_quotes;
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -52,6 +53,60 @@ pub fn view_task_row<'a>(
     } else {
         (HashSet::new(), None)
     };
+
+    // --- ALIAS SHADOWING LOGIC START ---
+    let mut hidden_tags = parent_tags.clone();
+    let mut hidden_location = parent_location.clone();
+
+    // Helper to process a list of raw expansion strings (e.g. ["#dev", "@@home"])
+    let process_expansions =
+        |targets: &Vec<String>, h_tags: &mut HashSet<String>, h_loc: &mut Option<String>| {
+            for target in targets {
+                if let Some(t) = target.strip_prefix('#') {
+                    h_tags.insert(strip_quotes(t));
+                } else if let Some(l) = target.strip_prefix("@@") {
+                    *h_loc = Some(strip_quotes(l));
+                } else if target.to_lowercase().starts_with("loc:") {
+                    *h_loc = Some(strip_quotes(&target[4..]));
+                }
+            }
+        };
+
+    // 1. Check what the current task's CATEGORIES imply
+    for cat in &task.categories {
+        // Direct lookup
+        if let Some(targets) = app.tag_aliases.get(cat) {
+            process_expansions(targets, &mut hidden_tags, &mut hidden_location);
+        }
+        // Hierarchy lookup (e.g. #work:project implies #work stuff)
+        let mut search = cat.as_str();
+        while let Some(idx) = search.rfind(':') {
+            search = &search[..idx];
+            if let Some(targets) = app.tag_aliases.get(search) {
+                process_expansions(targets, &mut hidden_tags, &mut hidden_location);
+            }
+        }
+    }
+
+    // 2. Check what the current task's LOCATION implies
+    if let Some(loc) = &task.location {
+        let key = format!("@@{}", loc);
+        if let Some(targets) = app.tag_aliases.get(&key) {
+            process_expansions(targets, &mut hidden_tags, &mut hidden_location);
+        }
+        // Hierarchy lookup for location (@@home:kitchen -> check @@home)
+        let mut search = key.as_str();
+        while let Some(idx) = search.rfind(':') {
+            if idx < 2 {
+                break;
+            } // Don't split @@
+            search = &search[..idx];
+            if let Some(targets) = app.tag_aliases.get(search) {
+                process_expansions(targets, &mut hidden_tags, &mut hidden_location);
+            }
+        }
+    }
+    // --- ALIAS SHADOWING LOGIC END ---
 
     let action_style = |theme: &Theme, status: button::Status| -> button::Style {
         let palette = theme.extended_palette();
@@ -508,23 +563,8 @@ pub fn view_task_row<'a>(
         let available_width = size.width;
         let mut tags_width = 0.0;
 
-        let mut tags_to_hide = parent_tags.clone();
-
-        for cat in &task.categories {
-            let mut search = cat.as_str();
-            loop {
-                if let Some(targets) = app.tag_aliases.get(search) {
-                    for t in targets {
-                        tags_to_hide.insert(t.clone());
-                    }
-                }
-                if let Some(idx) = search.rfind(':') {
-                    search = &search[..idx];
-                } else {
-                    break;
-                }
-            }
-        }
+        // Use the calculated hidden_tags from alias shadowing
+        let tags_to_hide = hidden_tags.clone();
 
         if has_metadata {
             if is_blocked {
@@ -537,8 +577,8 @@ pub fn view_task_row<'a>(
                 }
             }
             if let Some(l) = &task.location {
-                // Hide location if identical to parent
-                if parent_location.as_ref() != Some(l) {
+                // Hide location if implied by alias
+                if hidden_location.as_ref() != Some(l) {
                     tags_width += (l.len() as f32 * 7.0) + 25.0;
                 }
             }
@@ -616,8 +656,8 @@ pub fn view_task_row<'a>(
 
             // --- COLORED LOCATION PILL ---
             if let Some(loc) = &task.location {
-                // Only show if different from parent
-                if parent_location.as_ref() != Some(loc) {
+                // Only show if not hidden by alias
+                if hidden_location.as_ref() != Some(loc) {
                     let text_color = Color::WHITE; // White text on gray bg
 
                     let loc_btn = button(text(format!("@@{}", loc)).size(12).color(text_color))
