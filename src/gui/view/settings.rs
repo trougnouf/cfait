@@ -302,11 +302,11 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         }),
         // 2. Preferences
         picker,
+        cal_mgmt_ui,
         prefs,
         notifications_ui,
         sorting_ui,
         aliases_ui,
-        cal_mgmt_ui,
         // 3. Bottom Actions (Offline Mode for onboarding)
         offline_button_or_space,
     ]

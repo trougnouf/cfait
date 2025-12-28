@@ -176,7 +176,21 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
             }
 
+            item { Text("Manage calendars", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp)) }
+            items(allCalendars) { cal ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = !disabledSet.contains(cal.href), onCheckedChange = { enabled ->
+                        val newSet = disabledSet.toMutableSet()
+                        if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
+                        disabledSet = newSet
+                        saveToDisk()
+                    })
+                    Text(cal.name)
+                }
+            }
+
             item {
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
                     "Preferences",
                     fontWeight = FontWeight.Bold,
@@ -296,19 +310,6 @@ fun SettingsScreen(
                 }
 
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
-            }
-
-            item { Text("Manage calendars", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp)) }
-            items(allCalendars) { cal ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = !disabledSet.contains(cal.href), onCheckedChange = { enabled ->
-                        val newSet = disabledSet.toMutableSet()
-                        if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
-                        disabledSet = newSet
-                        saveToDisk()
-                    })
-                    Text(cal.name)
-                }
             }
 
             item {
