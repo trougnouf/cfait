@@ -14,15 +14,15 @@ fn format_duration_compact(mins: u32) -> String {
     if mins == 0 {
         return "".to_string();
     }
-    if mins % 525600 == 0 {
+    if mins.is_multiple_of(525600) {
         format!("{}y", mins / 525600)
-    } else if mins % 43200 == 0 {
+    } else if mins.is_multiple_of(43200) {
         format!("{}mo", mins / 43200)
-    } else if mins % 10080 == 0 {
+    } else if mins.is_multiple_of(10080) {
         format!("{}w", mins / 10080)
-    } else if mins % 1440 == 0 {
+    } else if mins.is_multiple_of(1440) {
         format!("{}d", mins / 1440)
-    } else if mins % 60 == 0 {
+    } else if mins.is_multiple_of(60) {
         format!("{}h", mins / 60)
     } else {
         format!("{}m", mins)
