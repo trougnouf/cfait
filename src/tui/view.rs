@@ -324,7 +324,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     f.render_stateful_widget(sidebar, h_chunks[0], &mut state.cal_state);
 
     // --- Task List Rendering ---
-    let _list_inner_width = main_chunks[0].width.saturating_sub(2) as usize;
+    let list_inner_width = main_chunks[0].width.saturating_sub(2) as usize;
 
     let task_items: Vec<ListItem> = state
         .tasks
@@ -494,13 +494,18 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 )); // Web Check
             }
 
+            // Calculate left side width (title + metadata)
+            let left_width: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+
+            // Build right side spans (tags and location)
+            let mut right_spans = Vec::new();
+
             // 3. Location (Hide if shadowed by alias)
             if let Some(loc) = &t.location
                 && loc_to_hide.as_ref() != Some(loc)
             {
-                spans.push(Span::raw(" "));
-                spans.push(Span::styled("@@", Style::default().fg(Color::Yellow)));
-                spans.push(Span::styled(
+                right_spans.push(Span::styled("@@", Style::default().fg(Color::Yellow)));
+                right_spans.push(Span::styled(
                     loc.clone(),
                     Style::default().fg(Color::Yellow),
                 ));
@@ -510,8 +515,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             for cat in &t.categories {
                 if !tags_to_hide.contains(cat) {
                     let (r, g, b) = color_utils::generate_color(cat);
-                    spans.push(Span::raw(" "));
-                    spans.push(Span::styled(
+                    if !right_spans.is_empty() {
+                        right_spans.push(Span::raw(" "));
+                    }
+                    right_spans.push(Span::styled(
                         format!("#{}", cat),
                         Style::default().fg(Color::Rgb(
                             (r * 255.0) as u8,
@@ -520,6 +527,23 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         )),
                     ));
                 }
+            }
+
+            // Calculate right side width and add padding
+            if !right_spans.is_empty() {
+                let right_width: usize =
+                    right_spans.iter().map(|s| s.content.chars().count()).sum();
+                let total_content = left_width + right_width;
+
+                if total_content < list_inner_width {
+                    let padding = list_inner_width - total_content;
+                    spans.push(Span::raw(" ".repeat(padding)));
+                } else {
+                    // If it doesn't fit, just add a space separator
+                    spans.push(Span::raw(" "));
+                }
+
+                spans.extend(right_spans);
             }
 
             ListItem::new(Line::from(spans))

@@ -237,9 +237,9 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     } else {
         let list = column(
             all_cats
-                .into_iter()
+                .iter()
                 .map(|(cat, count)| {
-                    let is_selected = app.selected_categories.contains(&cat);
+                    let is_selected = app.selected_categories.contains(cat.as_str());
                     let cat_clone_check = cat.clone();
                     let cat_clone_text = cat.clone();
                     let check = checkbox(is_selected)
@@ -248,7 +248,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                     let label_content: Element<'_, Message> = if cat == UNCATEGORIZED_ID {
                         text(format!("Uncategorized ({})", count)).size(16).into()
                     } else {
-                        let (r, g, b) = color_utils::generate_color(&cat);
+                        let (r, g, b) = color_utils::generate_color(cat);
                         let tag_color = Color::from_rgb(r, g, b);
                         rich_text![
                             span("#").color(tag_color),
@@ -390,9 +390,9 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
 
     let list = column(
         all_locs
-            .into_iter()
+            .iter()
             .map(|(loc, count)| {
-                let is_selected = app.selected_locations.contains(&loc);
+                let is_selected = app.selected_locations.contains(loc.as_str());
                 let loc_clone = loc.clone();
 
                 let check = checkbox(is_selected)

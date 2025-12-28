@@ -464,19 +464,19 @@ impl TaskStore {
     // --- CHANGED: Location Aggregation (Hierarchy Support) ---
     pub fn get_all_locations(
         &self,
-        hide_completed: bool,
+        _hide_completed: bool,
         hidden_calendars: &HashSet<String>,
     ) -> Vec<(String, usize)> {
-        let mut counts = HashMap::new();
+        let mut active_counts: HashMap<String, usize> = HashMap::new();
+        let mut present_locations: HashSet<String> = HashSet::new();
 
         for (href, tasks) in &self.calendars {
             if hidden_calendars.contains(href) {
                 continue;
             }
             for task in tasks {
-                if hide_completed && task.status.is_done() {
-                    continue;
-                }
+                let is_active = !task.status.is_done();
+
                 if let Some(loc) = &task.location {
                     // Split the location string to handle hierarchy (e.g. "home:kitchen")
                     let parts: Vec<&str> = loc.split(':').collect();
@@ -487,13 +487,24 @@ impl TaskStore {
                             current_hierarchy.push(':');
                         }
                         current_hierarchy.push_str(part);
-                        *counts.entry(current_hierarchy.clone()).or_insert(0) += 1;
+                        present_locations.insert(current_hierarchy.clone());
+                        if is_active {
+                            *active_counts.entry(current_hierarchy.clone()).or_insert(0) += 1;
+                        }
                     }
                 }
             }
         }
 
-        let mut result: Vec<_> = counts.into_iter().collect();
+        let mut result = Vec::new();
+        for loc in present_locations {
+            let count = *active_counts.get(&loc).unwrap_or(&0);
+            // Only show locations that have at least one active task
+            if count > 0 {
+                result.push((loc, count));
+            }
+        }
+
         result.sort_by(|a, b| a.0.cmp(&b.0));
         result
     }
