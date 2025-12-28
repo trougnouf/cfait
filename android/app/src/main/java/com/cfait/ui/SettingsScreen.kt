@@ -42,10 +42,24 @@ fun SettingsScreen(
     var urgentPrio by remember { mutableStateOf("1") }
     var autoRemind by remember { mutableStateOf(true) }
     var defTime by remember { mutableStateOf("09:00") }
-    var snoozeShort by remember { mutableStateOf("15") }
-    var snoozeLong by remember { mutableStateOf("60") }
+    var snoozeShort by remember { mutableStateOf("1h") }
+    var snoozeLong by remember { mutableStateOf("1d") }
 
     val scope = rememberCoroutineScope()
+
+    // Helper to format minutes for display on load
+    fun formatDuration(m: UInt): String {
+        val min = m.toInt()
+        return when {
+            min == 0 -> ""
+            min % 525600 == 0 -> "${min / 525600}y"
+            min % 43200 == 0 -> "${min / 43200}mo"
+            min % 10080 == 0 -> "${min / 10080}w"
+            min % 1440 == 0 -> "${min / 1440}d"
+            min % 60 == 0 -> "${min / 60}h"
+            else -> "${min}m"
+        }
+    }
 
     fun reload() {
         val cfg = api.getConfig()
@@ -61,8 +75,8 @@ fun SettingsScreen(
         urgentPrio = cfg.urgentPrio.toString()
         autoRemind = cfg.autoReminders
         defTime = cfg.defaultReminderTime
-        snoozeShort = cfg.snoozeShort.toString()
-        snoozeLong = cfg.snoozeLong.toString()
+        snoozeShort = formatDuration(cfg.snoozeShort)
+        snoozeLong = formatDuration(cfg.snoozeLong)
     }
 
     LaunchedEffect(Unit) { reload() }
@@ -71,8 +85,10 @@ fun SettingsScreen(
         val sortInt = sortMonths.trim().toUIntOrNull()
         val daysInt = urgentDays.trim().toUIntOrNull() ?: 1u
         val prioInt = urgentPrio.trim().toUByteOrNull() ?: 1u
-        val sShort = snoozeShort.trim().toUIntOrNull() ?: 15u
-        val sLong = snoozeLong.trim().toUIntOrNull() ?: 60u
+
+        // Use api.parseDurationString instead of toUIntOrNull
+        val sShort = api.parseDurationString(snoozeShort) ?: 60u
+        val sLong = api.parseDurationString(snoozeLong) ?: 1440u
 
         api.saveConfig(
             url, user, pass, insecure, hideCompleted,
@@ -261,21 +277,21 @@ fun SettingsScreen(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                    Text("Snooze Presets (m):", modifier = Modifier.weight(1f))
+                    Text("Snooze Presets:", modifier = Modifier.weight(1f))
                     OutlinedTextField(
                         value = snoozeShort,
                         onValueChange = { snoozeShort = it },
-                        modifier = Modifier.width(60.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
+                        modifier = Modifier.width(70.dp),
+                        singleLine = true,
+                        placeholder = { Text("1h") }
                     )
                     Spacer(Modifier.width(8.dp))
                     OutlinedTextField(
                         value = snoozeLong,
                         onValueChange = { snoozeLong = it },
-                        modifier = Modifier.width(60.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
+                        modifier = Modifier.width(70.dp),
+                        singleLine = true,
+                        placeholder = { Text("1d") }
                     )
                 }
 

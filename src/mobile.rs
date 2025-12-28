@@ -337,6 +337,10 @@ impl CfaitMobile {
         }
     }
 
+    pub fn parse_duration_string(&self, val: String) -> Option<u32> {
+        crate::model::parser::parse_duration(&val)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn save_config(
         &self,

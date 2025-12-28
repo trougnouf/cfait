@@ -5,9 +5,29 @@ use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tasks, save_config};
-use crate::model::parser::validate_alias_integrity; // New import
+use crate::model::parser::{parse_duration, validate_alias_integrity}; // Updated import
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalStorage};
 use iced::Task;
+
+// Helper to format minutes back to compact strings for the UI
+fn format_duration_compact(mins: u32) -> String {
+    if mins == 0 {
+        return "".to_string();
+    }
+    if mins % 525600 == 0 {
+        format!("{}y", mins / 525600)
+    } else if mins % 43200 == 0 {
+        format!("{}mo", mins / 43200)
+    } else if mins % 10080 == 0 {
+        format!("{}w", mins / 10080)
+    } else if mins % 1440 == 0 {
+        format!("{}d", mins / 1440)
+    } else if mins % 60 == 0 {
+        format!("{}h", mins / 60)
+    } else {
+        format!("{}m", mins)
+    }
+}
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
@@ -40,6 +60,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.default_reminder_time = config.default_reminder_time.clone();
             app.snooze_short_mins = config.snooze_short_mins;
             app.snooze_long_mins = config.snooze_long_mins;
+
+            // Initialize inputs with formatted strings
+            app.ob_snooze_short_input = format_duration_compact(config.snooze_short_mins);
+            app.ob_snooze_long_input = format_duration_compact(config.snooze_long_mins);
 
             let mut cached_cals = Cache::load_calendars().unwrap_or_default();
 
@@ -330,18 +354,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SetSnoozeShort(val) => {
-            if val.is_empty() {
-                // allow empty to clear
-            } else if let Ok(n) = val.trim().parse::<u32>() {
+            app.ob_snooze_short_input = val.clone(); // Allow user to type "1h"
+            if let Some(n) = parse_duration(&val) {
                 app.snooze_short_mins = n;
                 save_config(app);
+            } else if val.is_empty() {
+                // Optional: handle empty
             }
             Task::none()
         }
         Message::SetSnoozeLong(val) => {
-            if val.is_empty() {
-                // allow empty
-            } else if let Ok(n) = val.trim().parse::<u32>() {
+            app.ob_snooze_long_input = val.clone();
+            if let Some(n) = parse_duration(&val) {
                 app.snooze_long_mins = n;
                 save_config(app);
             }

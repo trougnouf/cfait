@@ -122,6 +122,10 @@ pub struct GuiApp {
     pub default_reminder_time: String,
     pub snooze_short_mins: u32,
     pub snooze_long_mins: u32,
+
+    // Settings input buffers for duration strings
+    pub ob_snooze_short_input: String,
+    pub ob_snooze_long_input: String,
 }
 
 impl Default for GuiApp {
@@ -216,8 +220,10 @@ impl Default for GuiApp {
             // Default config values
             auto_reminders: true,
             default_reminder_time: "09:00".to_string(),
-            snooze_short_mins: 15,
-            snooze_long_mins: 60,
+            snooze_short_mins: 60,
+            snooze_long_mins: 1440,
+            ob_snooze_short_input: "1h".to_string(),
+            ob_snooze_long_input: "1d".to_string(),
         }
     }
 }

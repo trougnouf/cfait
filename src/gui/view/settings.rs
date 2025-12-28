@@ -145,15 +145,15 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             ]
             .spacing(10)
             .align_y(iced::Alignment::Center),
-            text("Snooze Presets (minutes):").size(14),
+            text("Snooze Presets:").size(14),
             row![
                 text("Short:"),
-                text_input("15", &app.snooze_short_mins.to_string())
+                text_input("1h", &app.ob_snooze_short_input)
                     .on_input(Message::SetSnoozeShort)
                     .width(Length::Fixed(60.0))
                     .padding(5),
                 text("Long:"),
-                text_input("60", &app.snooze_long_mins.to_string())
+                text_input("1d", &app.ob_snooze_long_input)
                     .on_input(Message::SetSnoozeLong)
                     .width(Length::Fixed(60.0))
                     .padding(5)

@@ -777,6 +777,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_move_task(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_parse_duration_string(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_pause_task(): Short
@@ -944,6 +946,12 @@ internal object UniffiLib {
         `uid`: RustBuffer.ByValue,
         `newCalHref`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_parse_duration_string(
+        `ptr`: Long,
+        `val`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_parse_smart_string(
         `ptr`: Long,
@@ -1328,6 +1336,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_move_task() != 45551.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_parse_duration_string() != 37557.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string() != 44327.toShort()) {
@@ -1968,6 +1979,8 @@ public interface CfaitMobileInterface {
         `newCalHref`: kotlin.String,
     )
 
+    fun `parseDurationString`(`val`: kotlin.String): kotlin.UInt?
+
     fun `parseSmartString`(`input`: kotlin.String): List<MobileSyntaxToken>
 
     suspend fun `pauseTask`(`uid`: kotlin.String)
@@ -2520,6 +2533,19 @@ open class CfaitMobile :
         // Error FFI converter
         MobileException.ErrorHandler,
     )
+
+    override fun `parseDurationString`(`val`: kotlin.String): kotlin.UInt? =
+        FfiConverterOptionalUInt.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_parse_duration_string(
+                        it,
+                        FfiConverterString.lower(`val`),
+                        _status,
+                    )
+                }
+            },
+        )
 
     override fun `parseSmartString`(`input`: kotlin.String): List<MobileSyntaxToken> =
         FfiConverterSequenceTypeMobileSyntaxToken.lift(
