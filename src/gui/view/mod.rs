@@ -283,7 +283,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
     // Custom Snooze Input
     let custom_snooze_row = row![
-        text_input("Custom (30m, 2h)", &app.snooze_custom_input)
+        text_input("Custom (eg 30m)", &app.snooze_custom_input)
             .on_input(Message::SnoozeCustomInput)
             .on_submit(Message::SnoozeCustomSubmit(
                 task.uid.clone(),
