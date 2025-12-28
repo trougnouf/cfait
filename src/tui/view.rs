@@ -852,7 +852,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 let help_str = match state.active_focus {
                     Focus::Sidebar => "?:Help q:Quit Tab:Tasks ↵:Select Spc:Show/Hide *:All →:Iso",
                     Focus::Main => {
-                        "?:Help q:Quit Tab:Side a:Add e:Edit E:Details Spc:Done d:Del /:Find"
+                        if state.yanked_uid.is_some() {
+                            "YANK ACTIVE: b:Block c:Child l:Link (Esc:Clear)"
+                        } else {
+                            "?:Help q:Quit Tab:Side a:Add e:Edit E:Details Spc:Done d:Del y:Yank /:Find"
+                        }
                     }
                 };
                 let help = Paragraph::new(help_str).alignment(Alignment::Right).block(

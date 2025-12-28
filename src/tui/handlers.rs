@@ -351,7 +351,10 @@ pub async fn handle_key_event(
         InputMode::Normal => match key.code {
             KeyCode::Esc => {
                 let mut needs_refresh = false;
-                if !state.active_search_query.is_empty() {
+                if state.yanked_uid.is_some() {
+                    state.yanked_uid = None;
+                    state.message = "Yank cleared.".to_string();
+                } else if !state.active_search_query.is_empty() {
                     state.active_search_query.clear();
                     needs_refresh = true;
                 } else if !state.selected_categories.is_empty() {
