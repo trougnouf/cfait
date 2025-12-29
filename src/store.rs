@@ -541,10 +541,14 @@ impl TaskStore {
             }
         }
 
+        // Pre-calculate is:ready flag
+        let search_lower = options.search_term.to_lowercase();
+        let is_ready_mode = search_lower.contains("is:ready");
+        let now = Utc::now();
+
         let filtered: Vec<Task> = raw_tasks
             .into_iter()
             .filter(|t| {
-                let search_lower = options.search_term.to_lowercase();
                 let has_status_filter = search_lower.contains("is:done")
                     || search_lower.contains("is:active")
                     || search_lower.contains("is:ongoing");
@@ -552,6 +556,28 @@ impl TaskStore {
                 if !has_status_filter && t.status.is_done() && options.hide_completed_global {
                     return false;
                 }
+
+                // --- NEW: Work Mode (is:ready) Logic ---
+                if is_ready_mode {
+                    // 1. Must not be completed/cancelled
+                    if t.status.is_done() {
+                        return false;
+                    }
+
+                    // 2. Start Date must not be in the future
+                    if let Some(start) = &t.dtstart {
+                        // Use to_comparison_time to handle AllDay correctly vs Now
+                        if start.to_comparison_time() > now {
+                            return false;
+                        }
+                    }
+
+                    // 3. Must not be blocked by incomplete dependencies
+                    if self.is_blocked(t) {
+                        return false;
+                    }
+                }
+                // ----------------------------------------
 
                 if let Some(mins) = t.estimated_duration {
                     if let Some(min) = options.min_duration

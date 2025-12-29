@@ -89,12 +89,15 @@ pub fn view_help() -> Element<'static, Message> {
             vec![
                 entry("text", "Matches summary or description.", "buy cat food"),
                 entry("#tag", "Filter by specific tag.", "#gardening"),
+                entry("is:ready", "Work Mode - actionable tasks only.", "Not done, start date passed, not blocked"),
                 entry("is:status", "Filter by state.", "is:done, is:ongoing, is:active"),
                 entry("Operators", "Compare values (<, >, <=, >=).", "~<20m (less than 20 minutes), <!4 (urgent tasks)"),
-                entry("  Dates", "Filter by timeframe.", "@<today (Overdue), ^>tomorrow"),
+                entry("  Dates", "Filter by timeframe.", "@<today (Overdue), ^>1w (Start in 1+ weeks)"),
+                entry("  Date!", "Include unset dates with '!' suffix.", "@<today! (Overdue OR no due date)"),
                 entry("  Priority", "Filter by priority range.", "!<3 (High prio), !>=5"),
                 entry("  Duration", "Filter by effort.", "~<15m (Quick tasks)"),
                 entry("  Location", "Filter by location (matches sub-locations).", "@@home, @@store:aldi"),
+                entry("Combine", "Mix multiple filters.", "is:ready #work ~<1h (Actionable work tasks under 1 hour)"),
             ]
         ),
 

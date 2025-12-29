@@ -178,33 +178,53 @@ Both tags and locations support hierarchy. Child locations/tags automatically in
 *   `#gardening:tree_planting` → matches both `#gardening:tree_planting` and parent `#gardening` aliases
 *   `@@store:aldi:downtown` → matches `@@store:aldi:downtown`, `@@store:aldi`, and parent `@@store` aliases
 
-**Note:** If your alias contains spaces, `"`quote it`"` or `{`put it between brockets`}`, e.g. `#"tree planting":=#gardening` or `@@"somewhere else":=#location`. You can define aliases inline while creating tasks, but it's often clearer to define them separately in Settings.
+**Note:** If your alias contains spaces, `"`quote it`"` or `{`put it between brockets`}`, e.g. `#"tree planting":=#gardening` or `@@"somewhere else":=#location`. You can define aliases inline while creating tasks, as standalone statements, or in the Settings.
 
 <a name="search--filtering"></a>
 ## 🔍 Search & Filtering
 
 The search bar isn't just for text. You can use operators (`<`, `>`, `<=`, `>=`) to filter your list precisely.
 
-*   **Status:**
-    *   `is:done` / `is:active` / `is:ongoing`
-*   **Priority (`!`):**
-    *   `!<2` (Priority 1 only - Critical)
-    *   `!>=5` (Normal or lower priority)
-*   **Dates (`@` / `^`):**
-    *   `@<today` (Overdue tasks)
-    *   `@>tomorrow` (Due after tomorrow)
-    *   `@<=2d` (Due within the next 2 days)
-*   **Duration (`~`):**
-    *   `~<30m` (Quick tasks, less than 30 mins)
-    *   `~>2h` (Long tasks)
-*   **Tags:**
-    *   `#gardening` (Contains this tag)
-    *   `#work:project` (Matches tag or any sub-tag like `#work:project:urgent`)
-*   **Location:** 
-    *   `@@home` (Matches location field)
-    *   `@@store:aldi` (Matches location or any sub-location like `@@store:aldi:downtown`)
+### Status Filters
+*   **`is:ready`** - Shows only actionable tasks right now (not completed/cancelled, start date passed or not set, not blocked by dependencies)
+*   `is:done` / `is:active` / `is:ongoing`
+*   Combine with other filters: `is:ready #work`, `is:ready ~<1h`
 
-You can combine them: `!<4 ~<1h #gardening` (high priority gardening task that takes less than an hour).
+### Priority Filters (`!`)
+*   `!<2` (Priority 1 only - Critical)
+*   `!>=5` (Normal or lower priority)
+
+### Date Filters (`@` / `^`)
+Date filters now support **relative dates** for both due (`@`) and start (`^`) dates, plus a **"not set" operator** (`!`):
+
+*   **Overdue/Past:**
+    *   `@<today` (Overdue tasks)
+    *   `^<today` (Started before today)
+*   **Future:**
+    *   `@>tomorrow` (Due after tomorrow)
+    *   `^>1w` (Start more than 1 week from now)
+*   **Relative dates:**
+    *   `@<=2d` (Due within the next 2 days)
+    *   `^<5d` (Start within the next 5 days)
+*   **"Not Set" operator** (trailing `!`):
+    *   `@<today!` (Overdue OR no due date)
+    *   `^>1w!` (Start later than 1 week OR no start date)
+    *   `@<=2025-12-31!` (Due before Dec 31 OR no due date)
+
+### Duration Filters (`~`)
+*   `~<30m` (Quick tasks, less than 30 mins)
+*   `~>2h` (Long tasks)
+
+### Tag Filters
+*   `#gardening` (Contains this tag)
+*   `#work:project` (Matches tag or any sub-tag like `#work:project:urgent`)
+
+### Location Filters
+*   `@@home` (Matches location field)
+*   `@@store:aldi` (Matches location or any sub-location like `@@store:aldi:downtown`)
+
+### Combining Filters
+You can combine multiple filters: `is:ready !<4 ~<1h #gardening` (actionable high-priority gardening tasks under an hour).
 
 <a name="tui-keybindings"></a>
 ## 🎮 TUI Keybindings

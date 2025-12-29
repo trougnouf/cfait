@@ -1,7 +1,7 @@
 // File: ./src/model/matcher.rs
 // Handles logic for checking if a task matches a search query
 use crate::model::item::{Task, TaskStatus};
-use chrono::Local; // Changed from Utc
+use chrono::{Duration, Local, NaiveDate};
 
 impl Task {
     pub fn matches_search_term(&self, term: &str) -> bool {
@@ -145,153 +145,127 @@ impl Task {
                 }
             }
 
-            // START DATE FILTER (start:<2025-01-01, ^>today)
-            if part.starts_with("start:") || part.starts_with('^') {
-                let val_str = part
-                    .strip_prefix("start:")
-                    .or_else(|| part.strip_prefix('^'))
+            // --- REFACTORED DATE FILTERING (Fixes: Relative Start Date & Not Set logic) ---
+
+            // Helper for Date Logic
+            let check_date_filter = |prefix_char: char,
+                                     alt_prefix: &str,
+                                     task_date: Option<NaiveDate>|
+             -> Option<bool> {
+                if !part.starts_with(prefix_char) && !part.starts_with(alt_prefix) {
+                    return None;
+                }
+
+                let raw_val = part
+                    .strip_prefix(alt_prefix)
+                    .or_else(|| part.strip_prefix(prefix_char))
                     .unwrap();
 
-                let (op, date_str) = if let Some(s) = val_str.strip_prefix("<=") {
-                    ("<=", s)
-                } else if let Some(s) = val_str.strip_prefix(">=") {
-                    (">=", s)
-                } else if let Some(s) = val_str.strip_prefix('<') {
-                    ("<", s)
-                } else if let Some(s) = val_str.strip_prefix('>') {
-                    (">", s)
+                // 1. Handle "Not Set" Logic (trailing !)
+                // Syntax: ^>tomorrow! (Start > tomorrow OR Start is None)
+                let (val_str_full, include_none) = if let Some(stripped) = raw_val.strip_suffix('!')
+                {
+                    (stripped, true)
                 } else {
-                    ("=", val_str)
+                    (raw_val, false)
                 };
 
-                // Use LOCAL time
+                let (op, date_str) = if let Some(s) = val_str_full.strip_prefix("<=") {
+                    ("<=", s)
+                } else if let Some(s) = val_str_full.strip_prefix(">=") {
+                    (">=", s)
+                } else if let Some(s) = val_str_full.strip_prefix('<') {
+                    ("<", s)
+                } else if let Some(s) = val_str_full.strip_prefix('>') {
+                    (">", s)
+                } else {
+                    ("=", val_str_full)
+                };
+
                 let now = Local::now().date_naive();
-                // Reuse logic from 'parse_smart_date' conceptual equivalents or simple parsing
+
+                // Unified Relative Date Parsing
                 let target_date = if date_str == "today" {
                     Some(now)
                 } else if date_str == "tomorrow" {
-                    Some(now + chrono::Duration::days(1))
-                } else {
-                    chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d").ok()
-                };
-
-                if let Some(target) = target_date {
-                    match &self.dtstart {
-                        Some(dt) => {
-                            // FIX: Use helper method
-                            let t_date = dt.to_date_naive();
-                            match op {
-                                "<" => {
-                                    if t_date >= target {
-                                        return false;
-                                    }
-                                }
-                                ">" => {
-                                    if t_date <= target {
-                                        return false;
-                                    }
-                                }
-                                "<=" => {
-                                    if t_date > target {
-                                        return false;
-                                    }
-                                }
-                                ">=" => {
-                                    if t_date < target {
-                                        return false;
-                                    }
-                                }
-                                _ => {
-                                    if t_date != target {
-                                        return false;
-                                    }
-                                }
-                            }
-                        }
-                        None => return false, // Hide tasks with no start date if filtering by start
-                    }
-                    continue;
-                }
-            }
-
-            // 3. Due Date Filter (@<2025-01-01, @>today)
-            if part.starts_with('@') {
-                let (op, val_str) = if let Some(stripped) = part.strip_prefix("@<=") {
-                    ("<=", stripped)
-                } else if let Some(stripped) = part.strip_prefix("@>=") {
-                    (">=", stripped)
-                } else if let Some(stripped) = part.strip_prefix("@<") {
-                    ("<", stripped)
-                } else if let Some(stripped) = part.strip_prefix("@>") {
-                    (">", stripped)
-                } else if let Some(stripped) = part.strip_prefix('@') {
-                    ("=", stripped)
-                } else {
-                    continue;
-                };
-
-                // Parse Target Date using LOCAL time
-                let now = Local::now().date_naive();
-                let target_date = if val_str == "today" {
-                    Some(now)
-                } else if val_str == "tomorrow" {
-                    Some(now + chrono::Duration::days(1))
-                } else if let Ok(date) = chrono::NaiveDate::parse_from_str(val_str, "%Y-%m-%d") {
+                    Some(now + Duration::days(1))
+                } else if date_str == "yesterday" {
+                    Some(now - Duration::days(1))
+                } else if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
                     Some(date)
                 } else {
-                    // Try Relative Offsets (1d, 2w, 1mo)
-                    let offset = if let Some(n) = val_str.strip_suffix('d') {
+                    // Try Relative Offsets (1d, 2w, 1mo) - Now works for Start Date too!
+                    let offset = if let Some(n) = date_str.strip_suffix('d') {
                         n.parse::<i64>().ok()
-                    } else if let Some(n) = val_str.strip_suffix('w') {
+                    } else if let Some(n) = date_str.strip_suffix('w') {
                         n.parse::<i64>().ok().map(|w| w * 7)
-                    } else if let Some(n) = val_str.strip_suffix("mo") {
+                    } else if let Some(n) = date_str.strip_suffix("mo") {
                         n.parse::<i64>().ok().map(|m| m * 30)
-                    } else if let Some(n) = val_str.strip_suffix('y') {
+                    } else if let Some(n) = date_str.strip_suffix('y') {
                         n.parse::<i64>().ok().map(|y| y * 365)
                     } else {
                         None
                     };
-
-                    offset.map(|days| now + chrono::Duration::days(days))
+                    offset.map(|days| now + Duration::days(days))
                 };
 
                 if let Some(target) = target_date {
-                    match &self.due {
-                        Some(dt) => {
-                            // FIX: Use DateType helper
-                            let t_date = dt.to_date_naive();
-                            match op {
-                                "<" => {
-                                    if t_date >= target {
-                                        return false;
-                                    }
-                                }
-                                ">" => {
-                                    if t_date <= target {
-                                        return false;
-                                    }
-                                }
-                                "<=" => {
-                                    if t_date > target {
-                                        return false;
-                                    }
-                                }
-                                ">=" => {
-                                    if t_date < target {
-                                        return false;
-                                    }
-                                }
-                                _ => {
-                                    if t_date != target {
-                                        return false;
-                                    }
+                    match task_date {
+                        Some(t_date) => match op {
+                            "<" => {
+                                if t_date >= target {
+                                    return Some(false);
                                 }
                             }
+                            ">" => {
+                                if t_date <= target {
+                                    return Some(false);
+                                }
+                            }
+                            "<=" => {
+                                if t_date > target {
+                                    return Some(false);
+                                }
+                            }
+                            ">=" => {
+                                if t_date < target {
+                                    return Some(false);
+                                }
+                            }
+                            _ => {
+                                if t_date != target {
+                                    return Some(false);
+                                }
+                            }
+                        },
+                        None => {
+                            if !include_none {
+                                return Some(false);
+                            }
                         }
-                        None => return false, // Hide tasks with no date if filtering by date
                     }
-                    continue;
+                    return Some(true); // Passed check
                 }
+
+                None // Failed parsing, treat as text? or ignore
+            };
+
+            // Apply to Start Date (^ or start:)
+            let t_start = self.dtstart.as_ref().map(|d| d.to_date_naive());
+            if let Some(passed) = check_date_filter('^', "start:", t_start) {
+                if !passed {
+                    return false;
+                }
+                continue;
+            }
+
+            // Apply to Due Date (@ or due:)
+            let t_due = self.due.as_ref().map(|d| d.to_date_naive());
+            if let Some(passed) = check_date_filter('@', "due:", t_due) {
+                if !passed {
+                    return false;
+                }
+                continue;
             }
 
             // 2. Tag Filter (#work)
@@ -323,6 +297,13 @@ impl Task {
                 if self.status.is_done() {
                     return false;
                 }
+                continue;
+            }
+
+            // --- NEW: Work Mode / Ready Filter ---
+            // We return true here to "consume" the token so it doesn't fail text search.
+            // The actual logic is handled in TaskStore::filter because it requires dependency lookups.
+            if part == "is:ready" {
                 continue;
             }
 

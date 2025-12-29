@@ -70,6 +70,16 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             Span::raw(" /:Search  H:Hide Completed  1:Cal  2:Tag  3:Loc"),
         ]),
         Line::from(vec![
+            Span::styled("               ", Style::default()), // Indent alignment
+            Span::raw(
+                "is:ready (Work Mode: actionable tasks)  @<today (Overdue)  ^>1w (Start 1+ weeks)",
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("               ", Style::default()), // Indent alignment
+            Span::raw("@<today! (Overdue OR no due date)  is:ready #work ~<1h (Combine filters)"),
+        ]),
+        Line::from(vec![
             Span::styled(
                 " SIDEBAR ",
                 Style::default()

@@ -155,16 +155,31 @@ fun HelpScreen(onBack: () -> Unit) {
                     listOf(
                         HelpItem("text", "Matches summary or description.", "buy cat food"),
                         HelpItem("#tag", "Filter by specific tag.", "#gardening"),
+                        HelpItem(
+                            "is:ready",
+                            "Work Mode - actionable tasks only.",
+                            "Not done, start date passed, not blocked"
+                        ),
                         HelpItem("is:status", "Filter by state.", "is:done, is:ongoing, is:active"),
                         HelpItem(
                             "Operators",
                             "Compare values (<, >, <=, >=).",
                             "~<20m (less than 20 min), !<4 (urgent)"
                         ),
-                        HelpItem("  Dates", "Filter by timeframe.", "@<today (Overdue), ^>tomorrow"),
+                        HelpItem("  Dates", "Filter by timeframe.", "@<today (Overdue), ^>1w (Start 1+ weeks)"),
+                        HelpItem(
+                            "  Date!",
+                            "Include unset dates with '!' suffix.",
+                            "@<today! (Overdue OR no due date)"
+                        ),
                         HelpItem("  Priority", "Filter by priority range.", "!<3 (High prio), !>=5"),
                         HelpItem("  Duration", "Filter by effort.", "~<15m (Quick tasks)"),
                         HelpItem("  Location", "Filter by location (matches sub-locations).", "@@home, @@store:aldi"),
+                        HelpItem(
+                            "Combine",
+                            "Mix multiple filters.",
+                            "is:ready #work ~<1h (Actionable work tasks under 1 hour)"
+                        ),
                     ),
                 )
             }
