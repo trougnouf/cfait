@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.3.14] - 2025-12-29
+
+### 🚀 Features
+
+- Sub-locations (e.g. @@home:office, like sub-tags)
+- Location-based aliases (e.g. @@aldi:=#groceries)
+- Alias shadowing: not showing alias expansions in tasks list view
+- Add generic related-to relationships
+- *(tui)* Show yank and its actions in the main help bar
+
+### 🐛 Bug Fixes
+
+- Multiple relationships issue
+- *(tui)* Restore priority color in tasks list (regression)
+- *(tui)* Allow editing long titles with horizontal scrolling
+
+### 📚 Documentation
+
+- Fix reminder wording (not an alarm atm)
+- Update screenshots to upcoming v0.3.14
+
+### ⚡ Performance
+
+- Eliminate disk I/O on every action, excessive cloning in hierarchy, and redundant sidebar recalculation
+
+### 🎨 Styling
+
+- Don't show sub-task's location in the tasks list when it is the same as its parent's
+- *(tui)* Align tags to the right
+- *(tui)* If a task title is too long, truncate it... and repeat it in the description
+- *(tui)* Show title in the description only if it does not fit in the tasks list
+
+### ⚙️ Miscellaneous Tasks
+
+- Prepare for flathub release
 ## [0.3.13] - 2025-12-28
 
 ### 🚀 Features
@@ -40,6 +75,7 @@
 
 - Lint
 - Rm strip and debug from Arch packages
+- Release cfait version 0.3.13
 ## [0.3.12] - 2025-12-24
 
 ### 🚀 Features

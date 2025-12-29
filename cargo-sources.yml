@@ -8439,14 +8439,14 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
-        "url": "https://static.crates.io/crates/zmij/zmij-1.0.0.crate",
-        "sha256": "e6d6085d62852e35540689d1f97ad663e3971fc19cf5eceab364d62c646ea167",
-        "dest": "cargo/vendor/zmij-1.0.0"
+        "url": "https://static.crates.io/crates/zmij/zmij-1.0.2.crate",
+        "sha256": "0f4a4e8e9dc5c62d159f04fcdbe07f4c3fb710415aab4754bf11505501e3251d",
+        "dest": "cargo/vendor/zmij-1.0.2"
     },
     {
         "type": "inline",
-        "contents": "{\"package\": \"e6d6085d62852e35540689d1f97ad663e3971fc19cf5eceab364d62c646ea167\", \"files\": {}}",
-        "dest": "cargo/vendor/zmij-1.0.0",
+        "contents": "{\"package\": \"0f4a4e8e9dc5c62d159f04fcdbe07f4c3fb710415aab4754bf11505501e3251d\", \"files\": {}}",
+        "dest": "cargo/vendor/zmij-1.0.2",
         "dest-filename": ".cargo-checksum.json"
     },
     {
