@@ -34,7 +34,7 @@ pub fn view_task_row<'a>(
         Color::from_rgb(r, g, b)
     };
 
-    let show_indent = app.active_cal_href.is_some() && app.search_value.is_empty();
+    let show_indent = app.active_cal_href.is_some();
     let indent_size = if show_indent { task.depth * 12 } else { 0 };
     let indent = Space::new().width(Length::Fixed(indent_size as f32));
 
