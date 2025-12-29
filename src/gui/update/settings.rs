@@ -59,6 +59,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.auto_reminders = config.auto_reminders;
             app.default_reminder_time = config.default_reminder_time.clone();
             app.snooze_short_mins = config.snooze_short_mins;
+            app.create_events_for_tasks = config.create_events_for_tasks;
+            app.delete_events_on_completion = config.delete_events_on_completion;
             app.snooze_long_mins = config.snooze_long_mins;
 
             // Initialize inputs with formatted strings
@@ -171,6 +173,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 default_reminder_time: app.default_reminder_time.clone(),
                 snooze_short_mins: app.snooze_short_mins,
                 snooze_long_mins: app.snooze_long_mins,
+                create_events_for_tasks: app.create_events_for_tasks,
+                delete_events_on_completion: app.delete_events_on_completion,
             });
 
             config_to_save.url = app.ob_url.clone();
@@ -189,6 +193,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             config_to_save.default_reminder_time = app.default_reminder_time.clone();
             config_to_save.snooze_short_mins = app.snooze_short_mins;
             config_to_save.snooze_long_mins = app.snooze_long_mins;
+            config_to_save.create_events_for_tasks = app.create_events_for_tasks;
+            config_to_save.delete_events_on_completion = app.delete_events_on_completion;
 
             let _ = config_to_save.save();
 
@@ -249,6 +255,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 default_reminder_time: app.default_reminder_time.clone(),
                 snooze_short_mins: app.snooze_short_mins,
                 snooze_long_mins: app.snooze_long_mins,
+                create_events_for_tasks: app.create_events_for_tasks,
+                delete_events_on_completion: app.delete_events_on_completion,
             };
 
             let _ = config_to_save.save();
@@ -373,6 +381,68 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.snooze_long_mins = n;
                 save_config(app);
             }
+            Task::none()
+        }
+        Message::SetCreateEventsForTasks(val) => {
+            let was_disabled = !app.create_events_for_tasks;
+            app.create_events_for_tasks = val;
+            save_config(app);
+
+            // BACKFILL: Only trigger retroactive event creation when toggling ON
+            if val
+                && was_disabled
+                && let Some(client) = &app.client
+            {
+                // Collect all tasks from all calendars
+                let all_tasks: Vec<_> = app.store.calendars.values().flatten().cloned().collect();
+
+                return Task::perform(
+                    async_backfill_events_wrapper(client.clone(), all_tasks, val),
+                    Message::BackfillEventsComplete,
+                );
+            }
+            Task::none()
+        }
+        Message::SetDeleteEventsOnCompletion(val) => {
+            app.delete_events_on_completion = val;
+            save_config(app);
+            Task::none()
+        }
+        Message::DeleteAllCalendarEvents => {
+            if let Some(client) = &app.client {
+                app.deleting_events = true;
+
+                // Collect all tasks from all calendars
+                let all_tasks: Vec<_> = app.store.calendars.values().flatten().cloned().collect();
+
+                return Task::perform(
+                    async_backfill_events_wrapper(client.clone(), all_tasks, false),
+                    Message::BackfillEventsComplete,
+                );
+            }
+            Task::none()
+        }
+        Message::BackfillEventsComplete(Ok(count)) => {
+            app.deleting_events = false;
+
+            if count > 0 {
+                // Determine action based on whether events were created or deleted
+                // If setting is ON, we created. Otherwise we deleted.
+                let action = if app.create_events_for_tasks {
+                    "Created"
+                } else {
+                    "Deleted"
+                };
+                let plural = if count == 1 { "event" } else { "events" };
+                app.error_msg = Some(format!("✓ {} {} calendar {}", action, count, plural));
+            } else {
+                app.error_msg = Some("No events were created or deleted".to_string());
+            }
+            Task::none()
+        }
+        Message::BackfillEventsComplete(Err(e)) => {
+            app.deleting_events = false;
+            app.error_msg = Some(format!("Backfill error: {}", e));
             Task::none()
         }
         _ => Task::none(),

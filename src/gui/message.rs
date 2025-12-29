@@ -140,4 +140,8 @@ pub enum Message {
     SetDefaultReminderTime(String),
     SetSnoozeShort(String),
     SetSnoozeLong(String),
+    SetCreateEventsForTasks(bool),
+    SetDeleteEventsOnCompletion(bool),
+    DeleteAllCalendarEvents,
+    BackfillEventsComplete(Result<usize, String>),
 }

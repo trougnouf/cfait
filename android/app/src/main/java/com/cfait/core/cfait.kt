@@ -749,6 +749,10 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_connect(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_create_missing_calendar_events(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_delete_all_calendar_events(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_task(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm(): Short
@@ -888,6 +892,10 @@ internal object UniffiLib {
         `insecure`: Byte,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_create_missing_calendar_events(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_delete_all_calendar_events(`ptr`: Long): Long
+
     external fun uniffi_cfait_fn_method_cfaitmobile_delete_task(
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
@@ -1014,6 +1022,8 @@ internal object UniffiLib {
         `defaultReminderTime`: RustBuffer.ByValue,
         `snoozeShort`: Int,
         `snoozeLong`: Int,
+        `createEventsForTasks`: Byte,
+        `deleteEventsOnCompletion`: Byte,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
@@ -1319,6 +1329,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_connect() != 18164.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_missing_calendar_events() != 38126.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_all_calendar_events() != 62681.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_task() != 55596.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1385,7 +1401,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_related_to() != 5080.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 11549.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 40011.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility() != 63556.toShort()) {
@@ -1952,6 +1968,10 @@ public interface CfaitMobileInterface {
         `insecure`: kotlin.Boolean,
     ): kotlin.String
 
+    suspend fun `createMissingCalendarEvents`(): kotlin.UInt
+
+    suspend fun `deleteAllCalendarEvents`(): kotlin.UInt
+
     suspend fun `deleteTask`(`uid`: kotlin.String)
 
     suspend fun `dismissAlarm`(
@@ -2053,6 +2073,8 @@ public interface CfaitMobileInterface {
         `defaultReminderTime`: kotlin.String,
         `snoozeShort`: kotlin.UInt,
         `snoozeLong`: kotlin.UInt,
+        `createEventsForTasks`: kotlin.Boolean,
+        `deleteEventsOnCompletion`: kotlin.Boolean,
     )
 
     fun `setCalendarVisibility`(
@@ -2336,6 +2358,42 @@ open class CfaitMobile :
             { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
             { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `createMissingCalendarEvents`(): kotlin.UInt =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_missing_calendar_events(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_u32(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_u32(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_u32(future) },
+            // lift function
+            { FfiConverterUInt.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `deleteAllCalendarEvents`(): kotlin.UInt =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_delete_all_calendar_events(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_u32(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_u32(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_u32(future) },
+            // lift function
+            { FfiConverterUInt.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
@@ -2740,6 +2798,8 @@ open class CfaitMobile :
         `defaultReminderTime`: kotlin.String,
         `snoozeShort`: kotlin.UInt,
         `snoozeLong`: kotlin.UInt,
+        `createEventsForTasks`: kotlin.Boolean,
+        `deleteEventsOnCompletion`: kotlin.Boolean,
     ) = callWithHandle {
         uniffiRustCallWithError(MobileException) { _status ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_save_config(
@@ -2757,6 +2817,8 @@ open class CfaitMobile :
                 FfiConverterString.lower(`defaultReminderTime`),
                 FfiConverterUInt.lower(`snoozeShort`),
                 FfiConverterUInt.lower(`snoozeLong`),
+                FfiConverterBoolean.lower(`createEventsForTasks`),
+                FfiConverterBoolean.lower(`deleteEventsOnCompletion`),
                 _status,
             )
         }
@@ -3140,6 +3202,8 @@ data class MobileConfig(
     var `defaultReminderTime`: kotlin.String,
     var `snoozeShort`: kotlin.UInt,
     var `snoozeLong`: kotlin.UInt,
+    var `createEventsForTasks`: kotlin.Boolean,
+    var `deleteEventsOnCompletion`: kotlin.Boolean,
 ) {
     companion object
 }
@@ -3164,6 +3228,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterString.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
 
     override fun allocationSize(value: MobileConfig) =
@@ -3181,7 +3247,9 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterBoolean.allocationSize(value.`autoReminders`) +
                 FfiConverterString.allocationSize(value.`defaultReminderTime`) +
                 FfiConverterUInt.allocationSize(value.`snoozeShort`) +
-                FfiConverterUInt.allocationSize(value.`snoozeLong`)
+                FfiConverterUInt.allocationSize(value.`snoozeLong`) +
+                FfiConverterBoolean.allocationSize(value.`createEventsForTasks`) +
+                FfiConverterBoolean.allocationSize(value.`deleteEventsOnCompletion`)
         )
 
     override fun write(
@@ -3202,6 +3270,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterString.write(value.`defaultReminderTime`, buf)
         FfiConverterUInt.write(value.`snoozeShort`, buf)
         FfiConverterUInt.write(value.`snoozeLong`, buf)
+        FfiConverterBoolean.write(value.`createEventsForTasks`, buf)
+        FfiConverterBoolean.write(value.`deleteEventsOnCompletion`, buf)
     }
 }
 

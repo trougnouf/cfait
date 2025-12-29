@@ -79,6 +79,8 @@ pub fn view_help() -> Element<'static, Message> {
                 entry("rem:in 5m", "Relative from now (becomes absolute).", "rem:in 2h (5 min/2 hours from now)"),
                 entry("rem:next friday", "Next occurrence (becomes absolute).", "rem:next week, rem:next month"),
                 entry("rem:8am", "Absolute reminder (fixed time).", "rem:2025-01-20 9am, rem:2025-12-31 10:00"),
+                entry("+cal", "Force create calendar event.", "Overrides global setting"),
+                entry("-cal", "Prevent calendar event creation.", "Overrides global setting"),
             ]
         ),
 

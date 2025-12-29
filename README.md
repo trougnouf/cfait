@@ -32,6 +32,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
   - [⚙️ From Source (Rust)](#from-source-rust)
 - [⌨️ Smart Input Syntax](#smart-input-syntax)
 - [🔍 Search & Filtering](#search--filtering)
+- [📅 Calendar Events for Tasks](#calendar-events-for-tasks)
 - [🎮 TUI Keybindings](#tui-keybindings)
 - [🤗 Support](#support)
 - [🪩 Mirrors](#mirrors)
@@ -105,6 +106,7 @@ You don't need to click through menus to set the due/start date, length, priorit
 | **Tag** | `#` | Categories. Use `:` for hierarchy (e.g. `#gardening:tree_planting`). |
 | **Location** | `@@` / `loc:` | Where the task happens. Supports hierarchy like tags (e.g. `@@home:office`, `@@store:aldi:downtown`). |
 | **Reminder** | `rem:` | Set an notification. (e.g. `rem:10m`, `rem:8am`, `rem:tomorrow 9:00`). |
+| **Calendar Event** | `+cal` / `-cal` | Override calendar event creation (per-task). `+cal` forces event creation, `-cal` prevents it. |
 
 You can also type url: (e.g. `url:https://www.trougnouf.com`), geo: (e.g. `geo:53.046070, -121.105264`), and desc: (e.g. `desc:"a description"` or `desc:{une description}`)
 
@@ -225,6 +227,31 @@ Date filters now support **relative dates** for both due (`@`) and start (`^`) d
 
 ### Combining Filters
 You can combine multiple filters: `is:ready !<4 ~<1h #gardening` (actionable high-priority gardening tasks under an hour).
+
+<a name="calendar-events-for-tasks"></a>
+## 📅 Calendar Events for Tasks
+
+Cfait can automatically create calendar events (VEVENT) for tasks with dates, making them visible in any CalDAV calendar app.
+
+**Enable:** 
+- **GUI/Android:** Toggle "Create calendar events for tasks with dates" in Settings
+- **TUI:** Add `create_events_for_tasks = true` to `~/.config/cfait/config.toml`
+
+When you toggle this setting on, events will be retroactively created for all existing tasks with start and/or due dates.
+
+**Per-Task Control:** Use `+cal` to force enable or `-cal` to disable for specific tasks:
+```
+Playing Terraforming Mars ^tomorrow 2pm ~4h +cal
+Very private task @tomorrow -cal
+```
+
+**Behavior:**
+- Creates/updates events when tasks have dates
+- Events are always deleted (or moved) when tasks are deleted (or moved)
+- Optional: Delete events when tasks are completed or cancelled (toggle in Settings, default: keep)
+
+**Events Cleanup:**
+- Use the "Delete all calendar events" button in the GUI or Android Settings to remove all auto-generated events
 
 <a name="tui-keybindings"></a>
 ## 🎮 TUI Keybindings

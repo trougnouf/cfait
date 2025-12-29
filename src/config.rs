@@ -35,6 +35,14 @@ fn default_snooze_2() -> u32 {
     60
 } // 1 hour
 
+fn default_create_events() -> bool {
+    false
+}
+
+fn default_delete_events_on_completion() -> bool {
+    false
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum AppTheme {
     Dark,
@@ -92,6 +100,12 @@ pub struct Config {
     pub snooze_short_mins: u32,
     #[serde(default = "default_snooze_2")]
     pub snooze_long_mins: u32,
+
+    #[serde(default = "default_create_events")]
+    pub create_events_for_tasks: bool,
+
+    #[serde(default = "default_delete_events_on_completion")]
+    pub delete_events_on_completion: bool,
 }
 
 impl Default for Config {
@@ -112,11 +126,12 @@ impl Default for Config {
             theme: AppTheme::default(),
             urgent_days_horizon: 1,
             urgent_priority_threshold: 1,
-
             auto_reminders: true,
             default_reminder_time: "08:00".to_string(),
             snooze_short_mins: 15,
             snooze_long_mins: 60,
+            create_events_for_tasks: false,
+            delete_events_on_completion: false,
         }
     }
 }

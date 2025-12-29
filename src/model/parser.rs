@@ -32,46 +32,48 @@ pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<Strin
     let mut new_aliases = HashMap::new();
 
     for (_, _, token) in parts {
-        if token.contains(":=") && !token.starts_with('\\')
-            && let Some((left, right)) = token.split_once(":=") {
-                let mut key = String::new();
-                let mut is_valid = false;
+        if token.contains(":=")
+            && !token.starts_with('\\')
+            && let Some((left, right)) = token.split_once(":=")
+        {
+            let mut key = String::new();
+            let mut is_valid = false;
 
-                // Case 1: Tag Alias (#tag:=...)
-                if left.starts_with('#') {
-                    key = strip_quotes(left.trim_start_matches('#'));
-                    is_valid = !key.is_empty();
-                }
-                // Case 2: Location Alias (@@loc:=... or loc:loc:=...)
-                else if left.starts_with("@@") || left.to_lowercase().starts_with("loc:") {
-                    let raw = if left.starts_with("@@") {
-                        left.trim_start_matches("@@")
-                    } else {
-                        &left[4..]
-                    };
-                    let clean = strip_quotes(raw);
-                    if !clean.is_empty() {
-                        // Store location aliases with prefix to distinguish from tags
-                        key = format!("@@{}", clean);
-                        is_valid = true;
-                    }
-                }
-
-                if is_valid {
-                    let tags: Vec<String> = right
-                        .split(',')
-                        .map(|t| t.trim().to_string())
-                        .filter(|t| !t.is_empty())
-                        .collect();
-
-                    if !tags.is_empty() {
-                        new_aliases.insert(key, tags);
-                        // Keep the key part in the description as the 'primary' value
-                        cleaned_words.push(left.to_string());
-                        continue;
-                    }
+            // Case 1: Tag Alias (#tag:=...)
+            if left.starts_with('#') {
+                key = strip_quotes(left.trim_start_matches('#'));
+                is_valid = !key.is_empty();
+            }
+            // Case 2: Location Alias (@@loc:=... or loc:loc:=...)
+            else if left.starts_with("@@") || left.to_lowercase().starts_with("loc:") {
+                let raw = if left.starts_with("@@") {
+                    left.trim_start_matches("@@")
+                } else {
+                    &left[4..]
+                };
+                let clean = strip_quotes(raw);
+                if !clean.is_empty() {
+                    // Store location aliases with prefix to distinguish from tags
+                    key = format!("@@{}", clean);
+                    is_valid = true;
                 }
             }
+
+            if is_valid {
+                let tags: Vec<String> = right
+                    .split(',')
+                    .map(|t| t.trim().to_string())
+                    .filter(|t| !t.is_empty())
+                    .collect();
+
+                if !tags.is_empty() {
+                    new_aliases.insert(key, tags);
+                    // Keep the key part in the description as the 'primary' value
+                    cleaned_words.push(left.to_string());
+                    continue;
+                }
+            }
+        }
         cleaned_words.push(token);
     }
     (cleaned_words.join(" "), new_aliases)
@@ -1152,6 +1154,10 @@ pub fn apply_smart_input(
             task.url = Some(strip_quotes(&token[4..]));
         } else if token.starts_with("[[") && token.ends_with("]]") {
             task.url = Some(token[2..token.len() - 2].to_string());
+        } else if token == "+cal" {
+            task.create_event = Some(true);
+        } else if token == "-cal" {
+            task.create_event = Some(false);
         } else if token_lower.starts_with("geo:") {
             let mut raw_val = token[4..].to_string();
             if token.ends_with(',') && i + 1 < stream.len() {

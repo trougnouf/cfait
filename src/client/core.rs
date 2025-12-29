@@ -609,6 +609,120 @@ impl RustyClient {
         None
     }
 
+    /// Helper to sync the companion event for a task.
+    /// Creates/Updates the event when task has dates, or deletes it when task is done/has no dates.
+    /// Returns true if an event was created/updated or deleted, false if no action was taken.
+    async fn sync_companion_event(
+        &self,
+        task: &Task,
+        config_enabled: bool,
+        delete_on_completion: bool,
+        is_delete_intent: bool,
+    ) -> bool {
+        // Skip event operations for local calendar tasks (no server to sync to)
+        if task.calendar_href == LOCAL_CALENDAR_HREF {
+            return false;
+        }
+
+        // Determine if we should create events for this task
+        // Priority: task override > global config
+        let should_create_events = task.create_event.unwrap_or(config_enabled);
+
+        // Define the companion UID and Path
+        let event_uid = format!("evt-{}", task.uid);
+        let filename = format!("{}.ics", event_uid);
+
+        // Construct URI. Task href might be full URL or relative.
+        // We assume the event lives in the same calendar collection.
+        let cal_path = if task.calendar_href.ends_with('/') {
+            task.calendar_href.clone()
+        } else {
+            // Fallback: try to extract parent dir from href
+            let p = strip_host(&task.href);
+            if let Some(idx) = p.rfind('/') {
+                p[..=idx].to_string()
+            } else {
+                task.calendar_href.clone()
+            }
+        };
+
+        let event_path = format!("{}{}", strip_host(&cal_path), filename);
+        let client = match &self.client {
+            Some(c) => c,
+            None => return false,
+        };
+
+        // DECISION LOGIC:
+        // Delete Event if:
+        // 1. The action is explicitly DELETE (task deleted).
+        // 2. The task is Completed or Cancelled and delete_on_completion is enabled.
+        // 3. The task has no dates (removed scheduling).
+        // 4. The task shouldn't have events (!should_create_events).
+        //
+        // When delete_on_completion is disabled:
+        // - Cancelled tasks get STATUS:CANCELLED (event kept with cancelled status)
+        // - Completed tasks keep their events with STATUS:CONFIRMED
+
+        let should_delete = is_delete_intent
+            || (delete_on_completion && task.status.is_done())
+            || (task.due.is_none() && task.dtstart.is_none())
+            || !should_create_events; // Delete if this task shouldn't have events
+
+        if should_delete {
+            // Only count as success if we actually deleted something (not 404)
+            match client.request(Delete::new(&event_path).force()).await {
+                Ok(_) => return true, // Successfully deleted
+                Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => return false, // Didn't exist
+                Err(_) => return false, // Other error
+            }
+        } else {
+            // Create/Update Event
+            if let Some((_, ics_body)) = task.to_event_ics() {
+                // Try create first (If-None-Match: *) to avoid overwriting if we shouldn't (though here we want to).
+                // If it fails with 412 (Precondition Failed), it means it exists, so we fallback to Update (overwrite).
+                let create_req =
+                    PutResource::new(&event_path).create(ics_body.clone(), "text/calendar");
+
+                match client.request(create_req).await {
+                    Ok(_) => return true, // Successfully created
+                    Err(
+                        WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED)
+                        | WebDavError::PreconditionFailed(_),
+                    ) => {
+                        // Fallback to update (overwrite)
+                        let update_req =
+                            PutResource::new(&event_path).update(ics_body, "text/calendar", "");
+                        match client.request(update_req).await {
+                            Ok(_) => return true,   // Successfully updated
+                            Err(_) => return false, // Update failed
+                        }
+                    }
+                    Err(_) => return false, // Create failed (and not 412)
+                }
+            }
+        }
+        false // No action taken
+    }
+
+    /// Public wrapper to sync companion events for a task (used by backfill operations).
+    /// Returns Ok(true) if an event was created/deleted, Ok(false) if no action was taken.
+    pub async fn sync_task_companion_event(
+        &self,
+        task: &Task,
+        config_enabled: bool,
+    ) -> Result<bool, String> {
+        let config = Config::load().unwrap_or_default();
+        let action_taken = self
+            .sync_companion_event(
+                task,
+                config_enabled,
+                config.delete_events_on_completion,
+                false,
+            )
+            .await;
+        Ok(action_taken)
+    }
+
     pub async fn sync_journal(&self) -> Result<Vec<String>, String> {
         // Load and compact journal once at the start
         let mut journal = Journal::load();
@@ -620,6 +734,11 @@ impl RustyClient {
 
         let client = self.client.as_ref().ok_or("Offline")?;
         let mut warnings = Vec::new();
+
+        // Load config for the create_events_for_tasks flag
+        let config = Config::load().unwrap_or_default();
+        let events_enabled = config.create_events_for_tasks;
+        let delete_on_completion = config.delete_events_on_completion;
 
         // Process actions in-memory
         while !journal.queue.is_empty() {
@@ -650,6 +769,14 @@ impl RustyClient {
                             } else {
                                 path_for_refresh = Some(path.clone());
                             }
+                            // Sync companion event after successful task creation
+                            self.sync_companion_event(
+                                task,
+                                events_enabled,
+                                delete_on_completion,
+                                false,
+                            )
+                            .await;
                             Ok(())
                         }
                         Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
@@ -659,6 +786,14 @@ impl RustyClient {
                                 task.summary
                             ));
                             path_for_refresh = Some(path.clone());
+                            // Still sync companion event even on conflict
+                            self.sync_companion_event(
+                                task,
+                                events_enabled,
+                                delete_on_completion,
+                                false,
+                            )
+                            .await;
                             Ok(())
                         }
                         Err(e) => Err(format!("{:?}", e)),
@@ -690,6 +825,14 @@ impl RustyClient {
                             } else {
                                 path_for_refresh = Some(path.clone());
                             }
+                            // Sync companion event after successful task update
+                            self.sync_companion_event(
+                                task,
+                                events_enabled,
+                                delete_on_completion,
+                                false,
+                            )
+                            .await;
                             Ok(())
                         }
                         Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
@@ -699,6 +842,14 @@ impl RustyClient {
                             {
                                 warnings.push(msg);
                                 conflict_resolved_action = Some(resolution);
+                                // Sync companion event after conflict resolution
+                                self.sync_companion_event(
+                                    task,
+                                    events_enabled,
+                                    delete_on_completion,
+                                    false,
+                                )
+                                .await;
                                 Ok(())
                             } else {
                                 let msg = format!(
@@ -718,6 +869,14 @@ impl RustyClient {
                         }
                         Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
                             conflict_resolved_action = Some(Action::Create(task.clone()));
+                            // Sync companion event when converting update to create
+                            self.sync_companion_event(
+                                task,
+                                events_enabled,
+                                delete_on_completion,
+                                false,
+                            )
+                            .await;
                             Ok(())
                         }
                         Err(e) => {
@@ -757,13 +916,41 @@ impl RustyClient {
                     };
 
                     match resp {
-                        Ok(_) => Ok(()),
-                        Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => Ok(()),
+                        Ok(_) => {
+                            // Delete companion event when task is deleted
+                            self.sync_companion_event(
+                                task,
+                                events_enabled,
+                                delete_on_completion,
+                                true,
+                            )
+                            .await;
+                            Ok(())
+                        }
+                        Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
+                            // Also delete companion event even if task was already deleted
+                            self.sync_companion_event(
+                                task,
+                                events_enabled,
+                                delete_on_completion,
+                                true,
+                            )
+                            .await;
+                            Ok(())
+                        }
                         Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED)) => {
                             warnings.push(format!(
                                 "Conflict on delete task '{}'. Already modified/deleted.",
                                 task.summary
                             ));
+                            // Delete companion event even on conflict
+                            self.sync_companion_event(
+                                task,
+                                events_enabled,
+                                delete_on_completion,
+                                true,
+                            )
+                            .await;
                             Ok(())
                         }
                         Err(e) => Err(format!("{:?}", e)),
@@ -799,6 +986,41 @@ impl RustyClient {
                                 };
                                 new_href_to_propagate = Some((task.href.clone(), new_href.clone()));
                                 path_for_refresh = Some(strip_host(&new_href));
+
+                                // Move companion event too
+                                if events_enabled || task.create_event.is_some() {
+                                    let evt_uid = format!("evt-{}", task.uid);
+                                    let evt_filename = format!("{}.ics", evt_uid);
+
+                                    // Build old event path
+                                    let old_cal_path = if task.calendar_href.ends_with('/') {
+                                        task.calendar_href.clone()
+                                    } else {
+                                        format!("{}/", task.calendar_href)
+                                    };
+                                    let old_evt_path =
+                                        format!("{}{}", strip_host(&old_cal_path), evt_filename);
+
+                                    // Try to move the event (best effort, ignore errors)
+                                    if let Some(client) = &self.client {
+                                        // Delete from old location
+                                        let _ = client
+                                            .request(Delete::new(&old_evt_path).force())
+                                            .await;
+                                        // Create updated task with new calendar href to generate event in new location
+                                        let mut moved_task = task.clone();
+                                        moved_task.calendar_href = new_cal.clone();
+                                        moved_task.href = new_href.clone();
+                                        self.sync_companion_event(
+                                            &moved_task,
+                                            events_enabled,
+                                            delete_on_completion,
+                                            false,
+                                        )
+                                        .await;
+                                    }
+                                }
+
                                 Ok(())
                             }
                             Err(e) => {

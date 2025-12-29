@@ -189,6 +189,10 @@ pub struct Task {
     pub raw_alarms: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub raw_components: Vec<String>,
+
+    /// Per-task override for event creation (None = use global config)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub create_event: Option<bool>,
 }
 
 impl Task {
@@ -225,6 +229,7 @@ impl Task {
             sequence: 0,
             raw_alarms: Vec::new(),
             raw_components: Vec::new(),
+            create_event: None,
         };
         task.apply_smart_input(input, aliases, default_reminder_time);
         task
@@ -650,6 +655,12 @@ impl Task {
         for cat in &self.categories {
             s.push_str(&format!(" #{}", super::parser::quote_value(cat)));
         }
+
+        // Add event creation override if explicitly set
+        if let Some(create_event) = self.create_event {
+            s.push_str(if create_event { " +cal" } else { " -cal" });
+        }
+
         s
     }
 

@@ -1,6 +1,7 @@
 // File: android/app/src/main/java/com/cfait/ui/SettingsScreen.kt
 package com.cfait.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,12 +20,22 @@ import com.cfait.core.CfaitMobile
 import com.cfait.core.MobileCalendar
 import kotlinx.coroutines.launch
 
+private val busyMessages = listOf(
+    "Processing stuff", "BRB", "Be right back", "Working on things",
+    "Loading", "AFK", "Busy", "Processing things",
+    "Reticulating splines", "Swapping time streams",
+    "Defragmenting memories", "Sorting mental baggage", "Getting things done"
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     api: CfaitMobile,
     onBack: () -> Unit,
     onHelp: () -> Unit,
+    isCalendarBusy: Boolean,
+    onDeleteEvents: () -> Unit,
+    onCreateEvents: () -> Unit,
 ) {
     var url by remember { mutableStateOf("") }
     var user by remember { mutableStateOf("") }
@@ -44,6 +55,20 @@ fun SettingsScreen(
     var defTime by remember { mutableStateOf("09:00") }
     var snoozeShort by remember { mutableStateOf("1h") }
     var snoozeLong by remember { mutableStateOf("1d") }
+    var createEventsForTasks by remember { mutableStateOf(false) }
+    var deleteEventsOnCompletion by remember { mutableStateOf(false) }
+
+    // Track initial state to detect toggle transitions
+    var initialCreateEventsState by remember { mutableStateOf(false) }
+    var isInitialLoad by remember { mutableStateOf(true) }
+
+    // Random busy message that only changes when busy state begins
+    var currentBusyMessage by remember { mutableStateOf(busyMessages.first()) }
+    LaunchedEffect(isCalendarBusy) {
+        if (isCalendarBusy) {
+            currentBusyMessage = busyMessages.random()
+        }
+    }
 
     val scope = rememberCoroutineScope()
 
@@ -77,6 +102,14 @@ fun SettingsScreen(
         defTime = cfg.defaultReminderTime
         snoozeShort = formatDuration(cfg.snoozeShort)
         snoozeLong = formatDuration(cfg.snoozeLong)
+        createEventsForTasks = cfg.createEventsForTasks
+        deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
+
+        // Capture initial state on first load
+        if (isInitialLoad) {
+            initialCreateEventsState = cfg.createEventsForTasks
+            isInitialLoad = false
+        }
     }
 
     LaunchedEffect(Unit) { reload() }
@@ -94,7 +127,8 @@ fun SettingsScreen(
             url, user, pass, insecure, hideCompleted,
             disabledSet.toList(), sortInt,
             daysInt, prioInt,
-            autoRemind, defTime, sShort, sLong
+            autoRemind, defTime, sShort, sLong,
+            createEventsForTasks, deleteEventsOnCompletion
         )
     }
 
@@ -114,8 +148,19 @@ fun SettingsScreen(
     fun handleBack() {
         scope.launch {
             saveToDisk()
+
+            // If user enabled calendar events (transition from OFF to ON), trigger backfill
+            if (!initialCreateEventsState && createEventsForTasks) {
+                onCreateEvents()
+            }
+
             onBack()
         }
+    }
+
+    // Intercept system back gesture/button to save settings and trigger backfill
+    BackHandler {
+        handleBack()
     }
 
     Scaffold(
@@ -263,7 +308,7 @@ fun SettingsScreen(
 
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    "Notifications",
+                    "Notifications & Reminders",
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
@@ -310,6 +355,63 @@ fun SettingsScreen(
                 }
 
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                Text(
+                    "Calendar Integration",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = createEventsForTasks,
+                        onCheckedChange = { createEventsForTasks = it },
+                        enabled = !isCalendarBusy
+                    )
+                    Text("Create calendar events for tasks with dates")
+                }
+                Text(
+                    "Events will be retroactively created. Use +cal/-cal per task to override.",
+                    fontSize = 12.sp,
+                    color = androidx.compose.ui.graphics.Color.Gray,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                    Checkbox(
+                        checked = deleteEventsOnCompletion,
+                        onCheckedChange = { deleteEventsOnCompletion = it },
+                        enabled = !isCalendarBusy
+                    )
+                    Text("Delete events when tasks are completed")
+                }
+                Text(
+                    "Regardless, events are always deleted when tasks are deleted.",
+                    fontSize = 12.sp,
+                    color = androidx.compose.ui.graphics.Color.Gray,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+
+                Button(
+                    onClick = onDeleteEvents,
+                    modifier = Modifier.padding(top = 8.dp),
+                    enabled = !isCalendarBusy
+                ) {
+                    if (isCalendarBusy) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("$currentBusyMessage...")
+                        }
+                    } else {
+                        Text("Delete all calendar events")
+                    }
+                }
+
             }
 
             item {
@@ -348,7 +450,7 @@ fun SettingsScreen(
                         onValueChange = {
                             newAliasTags = it
                         },
-                        label = { Text("Values") },
+                        label = { Text("Value(s)") },
                         placeholder = { Text("@@loc, #tag_b, !1") },
                         modifier = Modifier.weight(1f),
                     )

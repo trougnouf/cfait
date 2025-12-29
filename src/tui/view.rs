@@ -58,7 +58,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         ]),
         Line::from(vec![
             Span::styled("              ", Style::default()), // Indent alignment
-            Span::raw("#alias:=#tag,@@loc (Define alias inline, retroactive)"),
+            Span::raw(
+                "#alias:=#tag,@@loc (Define alias inline, retroactive)  +cal/-cal (Force/prevent calendar event)",
+            ),
         ]),
         Line::from(vec![
             Span::styled(

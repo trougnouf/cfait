@@ -83,6 +83,8 @@ pub fn save_config(app: &GuiApp) {
         default_reminder_time: app.default_reminder_time.clone(),
         snooze_short_mins: app.snooze_short_mins,
         snooze_long_mins: app.snooze_long_mins,
+        create_events_for_tasks: app.create_events_for_tasks,
+        delete_events_on_completion: app.delete_events_on_completion,
     }
     .save();
 }

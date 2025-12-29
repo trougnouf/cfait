@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
@@ -69,6 +70,12 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var isLoading by remember { mutableStateOf(false) }
+
+    // Hoisted state for calendar event deletion (persists across navigation)
+    var isDeletingEvents by rememberSaveable { mutableStateOf(false) }
+
+    // Hoisted state for calendar event backfill (persists across navigation)
+    var isBackfilling by rememberSaveable { mutableStateOf(false) }
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -158,6 +165,47 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
         }
     }
 
+    fun handleDeleteEvents() {
+        if (isDeletingEvents) return
+        isDeletingEvents = true
+        scope.launch {
+            try {
+                val count = api.deleteAllCalendarEvents()
+                Toast.makeText(
+                    context,
+                    "Deleted $count calendar event${if (count == 1u) "" else "s"}",
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                isDeletingEvents = false
+            }
+        }
+    }
+
+    fun handleCreateMissingEvents() {
+        if (isBackfilling) return
+        isBackfilling = true
+        scope.launch {
+            try {
+                Toast.makeText(context, "Creating calendar events in background...", Toast.LENGTH_SHORT).show()
+
+                val count = api.createMissingCalendarEvents()
+
+                Toast.makeText(
+                    context,
+                    "Created $count missing calendar event${if (count == 1u) "" else "s"}",
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Backfill error: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                isBackfilling = false
+            }
+        }
+    }
+
     LaunchedEffect("fastStart") { fastStart() }
 
     NavHost(navController, startDestination = "home") {
@@ -206,7 +254,11 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                     refreshLists()
                 },
                 onHelp = { navController.navigate("help") },
+                isCalendarBusy = isLoading || isDeletingEvents || isBackfilling,
+                onDeleteEvents = { handleDeleteEvents() },
+                onCreateEvents = { handleCreateMissingEvents() }
             )
+
         }
         composable("help") {
             HelpScreen(onBack = { navController.popBackStack() })

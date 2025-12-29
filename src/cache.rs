@@ -9,8 +9,8 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
-// Increment this whenever the Task struct changes (e.g., new fields like location) to invalidate old caches
-const CACHE_VERSION: u32 = 2;
+// Increment this whenever the Task struct changes (e.g., new fields like create_event) to invalidate old caches
+const CACHE_VERSION: u32 = 3;
 
 #[derive(Serialize, Deserialize)]
 struct CalendarCache {

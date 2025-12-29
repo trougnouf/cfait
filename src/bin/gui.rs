@@ -32,11 +32,14 @@ fn main() -> iced::Result {
         println!("    rem:in 5m         Relative from now (becomes absolute)");
         println!("    rem:next friday   Next occurrence (becomes absolute)");
         println!("    rem:8am           Absolute reminder (fixed time)");
+        println!("    +cal              Force create calendar event (override global setting)");
+        println!("    -cal              Prevent calendar event creation (override global setting)");
         println!("    \\#text            Escape special characters");
         println!();
         println!("EXAMPLES:");
         println!("    Buy cookies !1 @2025-01-16 #shopping rem:2025-01-16 8am");
         println!("    Exercise @daily ~30m #health rem:8am");
+        println!("    Meeting @tomorrow 2pm ~1h +cal (force create calendar event)");
         println!("    Plant plum tree #tree_planting !3 ~2h @@home:garden");
         println!("    #tree_planting:=#gardening,@@home");
         println!("    @@aldi:=#groceries,#shopping (location alias)");

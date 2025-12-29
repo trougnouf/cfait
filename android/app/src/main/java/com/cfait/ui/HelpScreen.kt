@@ -144,6 +144,8 @@ fun HelpScreen(onBack: () -> Unit) {
                             "Absolute reminder (fixed time).",
                             "rem:2025-01-20 9am, rem:2025-12-31 10:00"
                         ),
+                        HelpItem("+cal", "Force calendar event creation.", "Task @tomorrow +cal"),
+                        HelpItem("-cal", "Prevent calendar event creation.", "Private task @tomorrow -cal"),
                     ),
                 )
             }

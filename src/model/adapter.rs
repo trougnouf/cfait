@@ -1,7 +1,7 @@
 // File: src/model/adapter.rs
 use crate::model::item::{Alarm, AlarmTrigger, DateType, RawProperty, Task, TaskStatus};
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
-use icalendar::{Calendar, CalendarComponent, Component, Todo, TodoStatus};
+use icalendar::{Calendar, CalendarComponent, Component, Event, Todo, TodoStatus};
 use rrule::RRuleSet;
 use std::str::FromStr;
 use uuid::Uuid;
@@ -31,6 +31,7 @@ const HANDLED_KEYS: &[&str] = &[
     "LOCATION",
     "URL",
     "GEO",
+    "X-CFAIT-CREATE-EVENT",
 ];
 
 impl Task {
@@ -192,6 +193,14 @@ impl Task {
             todo.append_multi_property(prop);
         }
 
+        // X-CFAIT-CREATE-EVENT property (per-task event creation override)
+        if let Some(create_event) = self.create_event {
+            todo.add_property(
+                "X-CFAIT-CREATE-EVENT",
+                if create_event { "TRUE" } else { "FALSE" },
+            );
+        }
+
         // Unmapped
         for raw in &self.unmapped_properties {
             let mut prop = icalendar::Property::new(&raw.key, &raw.value);
@@ -301,6 +310,156 @@ impl Task {
         ics
     }
 
+    /// Generates a VEVENT ICS string corresponding to this Task.
+    /// Returns None if the task implies no event (e.g. no dates set).
+    /// Returns (event_uid, ics_string) tuple.
+    pub fn to_event_ics(&self) -> Option<(String, String)> {
+        // If no due date and no start date, we can't place it on a calendar.
+        if self.due.is_none() && self.dtstart.is_none() {
+            return None;
+        }
+
+        // Deterministic UID for the event
+        let event_uid = format!("evt-{}", self.uid);
+
+        let mut event = Event::new();
+        event.add_property("UID", &event_uid);
+        event.summary(&self.summary);
+        event.timestamp(Utc::now());
+
+        // Build description with disclaimer
+        let mut event_desc = String::new();
+        event_desc.push_str("⚠️ This event was automatically created by Cfait from a task.\n");
+        event_desc
+            .push_str("It will be automatically updated/overwritten when the task changes, and it might get deleted when the task is completed or canceled.\n");
+        event_desc.push_str("Any changes made directly to this event will be lost.\n");
+        if !self.description.is_empty() {
+            event_desc.push('\n');
+            event_desc.push_str(&self.description);
+        }
+        event.description(&event_desc);
+        if let Some(loc) = &self.location {
+            event.add_property("LOCATION", loc);
+        }
+        if let Some(url) = &self.url {
+            event.add_property("URL", url);
+        }
+
+        // Logic to determine Start/End
+        // 1. If we have a specific DTSTART, that is the Event Start.
+        // 2. If no DTSTART, but we have DUE, infer Start based on Duration (or default 1h).
+        // 3. For spans > 7 days, create a single-day event on the due date.
+
+        let (start, end) = match (&self.dtstart, &self.due) {
+            // Case A: Both set - check for long spans
+            (Some(s), Some(d)) => {
+                // Calculate span duration
+                let span_days = match (s, d) {
+                    (DateType::AllDay(start_date), DateType::AllDay(end_date)) => {
+                        (*end_date - *start_date).num_days()
+                    }
+                    (DateType::Specific(start_dt), DateType::Specific(end_dt)) => {
+                        (*end_dt - *start_dt).num_days()
+                    }
+                    // Mixed types: extract dates and compare
+                    (DateType::AllDay(start_date), DateType::Specific(end_dt)) => {
+                        (end_dt.date_naive() - *start_date).num_days()
+                    }
+                    (DateType::Specific(start_dt), DateType::AllDay(end_date)) => {
+                        (*end_date - start_dt.date_naive()).num_days()
+                    }
+                };
+
+                // If span > 7 days, create single-day event on due date
+                if span_days > 7 {
+                    match d {
+                        DateType::AllDay(date) => {
+                            (DateType::AllDay(*date), DateType::AllDay(*date))
+                        }
+                        DateType::Specific(dt) => {
+                            // For timed due dates, create a 1-hour event
+                            (
+                                DateType::Specific(*dt - chrono::Duration::hours(1)),
+                                DateType::Specific(*dt),
+                            )
+                        }
+                    }
+                } else {
+                    // Normal span: use both dates
+                    (s.clone(), d.clone())
+                }
+            }
+
+            // Case B: Only Start set. End = Start + Estimated Duration (or 1h)
+            (Some(s), None) => {
+                let duration_mins = self.estimated_duration.unwrap_or(60) as i64;
+                match s {
+                    DateType::AllDay(d) => (DateType::AllDay(*d), DateType::AllDay(*d)), // All day single day
+                    DateType::Specific(dt) => (
+                        DateType::Specific(*dt),
+                        DateType::Specific(*dt + chrono::Duration::minutes(duration_mins)),
+                    ),
+                }
+            }
+
+            // Case C: Only Due set. Start = Due - Duration
+            (None, Some(d)) => {
+                let duration_mins = self.estimated_duration.unwrap_or(60) as i64;
+                match d {
+                    DateType::AllDay(date) => (DateType::AllDay(*date), DateType::AllDay(*date)),
+                    DateType::Specific(dt) => (
+                        DateType::Specific(*dt - chrono::Duration::minutes(duration_mins)),
+                        DateType::Specific(*dt),
+                    ),
+                }
+            }
+
+            (None, None) => return None, // Should be caught above
+        };
+
+        // Apply Start
+        match start {
+            DateType::AllDay(d) => {
+                let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
+                p.add_parameter("VALUE", "DATE");
+                event.append_property(p);
+            }
+            DateType::Specific(t) => {
+                event.add_property("DTSTART", t.format("%Y%m%dT%H%M%SZ").to_string());
+            }
+        }
+
+        // Apply End (or DTEND)
+        match end {
+            DateType::AllDay(d) => {
+                // For all-day events, DTEND is exclusive (day + 1)
+                let next_day = d + chrono::Duration::days(1);
+                let mut p =
+                    icalendar::Property::new("DTEND", next_day.format("%Y%m%d").to_string());
+                p.add_parameter("VALUE", "DATE");
+                event.append_property(p);
+            }
+            DateType::Specific(t) => {
+                event.add_property("DTEND", t.format("%Y%m%dT%H%M%SZ").to_string());
+            }
+        }
+
+        // Status Mapping
+        // Map task status to event status string
+        let status_str = match self.status {
+            TaskStatus::Cancelled => "CANCELLED",
+            TaskStatus::Completed => "CONFIRMED",
+            _ => "CONFIRMED",
+        };
+        event.add_property("STATUS", status_str);
+
+        // Wrap in Calendar
+        let mut calendar = Calendar::new();
+        calendar.push(event);
+
+        Some((event_uid, calendar.to_string()))
+    }
+
     pub fn from_ics(
         raw_ics: &str,
         etag: String,
@@ -366,6 +525,14 @@ impl Task {
         let location = get_prop("LOCATION");
         let url = get_prop("URL");
         let geo = get_prop("GEO").map(|s| s.replace(';', ","));
+
+        // Parse X-CFAIT-CREATE-EVENT property
+        let create_event =
+            get_prop("X-CFAIT-CREATE-EVENT").and_then(|v| match v.trim().to_uppercase().as_str() {
+                "TRUE" | "1" | "YES" => Some(true),
+                "FALSE" | "0" | "NO" => Some(false),
+                _ => None,
+            });
 
         let parse_date_type = |prop: &icalendar::Property| -> Option<DateType> {
             let val = prop.value();
@@ -674,6 +841,7 @@ impl Task {
             sequence,
             raw_components,
             raw_alarms: Vec::new(),
+            create_event,
         })
     }
 }

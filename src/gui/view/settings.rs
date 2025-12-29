@@ -160,6 +160,49 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             ]
             .spacing(10)
             .align_y(iced::Alignment::Center),
+            text("").size(5),
+            text("Calendar Integration").size(20),
+            {
+                let cb = checkbox(app.create_events_for_tasks)
+                    .label("Create calendar events (VEVENT) for tasks with dates");
+                if !app.deleting_events {
+                    cb.on_toggle(Message::SetCreateEventsForTasks)
+                } else {
+                    cb
+                }
+            },
+            text("Events will be retroactively created. Use +cal or -cal in task input to override per-task")
+                .size(12)
+                .color(Color::from_rgb(0.6, 0.6, 0.6)),
+            text("").size(5),
+            {
+                let cb = checkbox(app.delete_events_on_completion)
+                    .label("Delete events when tasks are completed");
+                if !app.deleting_events {
+                    cb.on_toggle(Message::SetDeleteEventsOnCompletion)
+                } else {
+                    cb
+                }
+            },
+            text("Regardless, events are always deleted when tasks are deleted.")
+                .size(12)
+                .color(Color::from_rgb(0.6, 0.6, 0.6)),
+            text("").size(5),
+            {
+                let btn = button("Delete all calendar events");
+                if !app.deleting_events {
+                    btn.on_press(Message::DeleteAllCalendarEvents)
+                } else {
+                    btn
+                }
+            },
+            if app.deleting_events {
+                text("Deleting events...")
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.6))
+            } else {
+                text("")
+            },
         ]
         .spacing(10)
         .into()

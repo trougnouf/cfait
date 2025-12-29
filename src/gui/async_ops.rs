@@ -112,3 +112,36 @@ pub async fn async_migrate_wrapper(
         .await
         .map_err(|e| e.to_string())?
 }
+
+/// Backfill calendar events for all tasks when the global setting is enabled.
+/// This is called when the user toggles the setting from OFF to ON.
+pub async fn async_backfill_events_wrapper(
+    client: RustyClient,
+    tasks: Vec<TodoTask>,
+    global_enabled: bool,
+) -> Result<usize, String> {
+    let rt = get_runtime();
+    rt.spawn(async move {
+        let mut count = 0;
+        for task in tasks {
+            // Only count tasks where events were actually created/deleted
+            // sync_task_companion_event returns Ok(true) if an event was PUT/DELETE'd
+            match client
+                .sync_task_companion_event(&task, global_enabled)
+                .await
+            {
+                Ok(true) => count += 1, // Event was created/deleted
+                Ok(false) => {}         // No action taken (no dates, completed, etc.)
+                Err(e) => {
+                    eprintln!(
+                        "Warning: Failed to backfill event for task {}: {}",
+                        task.uid, e
+                    );
+                }
+            }
+        }
+        Ok(count)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}

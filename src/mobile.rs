@@ -178,6 +178,8 @@ pub struct MobileConfig {
     pub default_reminder_time: String,
     pub snooze_short: u32,
     pub snooze_long: u32,
+    pub create_events_for_tasks: bool,
+    pub delete_events_on_completion: bool,
 }
 
 fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
@@ -350,6 +352,8 @@ impl CfaitMobile {
             default_reminder_time: c.default_reminder_time,
             snooze_short: c.snooze_short_mins,
             snooze_long: c.snooze_long_mins,
+            create_events_for_tasks: c.create_events_for_tasks,
+            delete_events_on_completion: c.delete_events_on_completion,
         }
     }
 
@@ -373,6 +377,8 @@ impl CfaitMobile {
         default_reminder_time: String,
         snooze_short: u32,
         snooze_long: u32,
+        create_events_for_tasks: bool,
+        delete_events_on_completion: bool,
     ) -> Result<(), MobileError> {
         let mut c = Config::load().unwrap_or_default();
         c.url = url;
@@ -390,7 +396,56 @@ impl CfaitMobile {
         c.default_reminder_time = default_reminder_time;
         c.snooze_short_mins = snooze_short;
         c.snooze_long_mins = snooze_long;
+        c.create_events_for_tasks = create_events_for_tasks;
+        c.delete_events_on_completion = delete_events_on_completion;
         c.save().map_err(MobileError::from)
+    }
+
+    pub async fn delete_all_calendar_events(&self) -> Result<u32, MobileError> {
+        let all_tasks: Vec<_> = {
+            let store = self.store.lock().await;
+            store.calendars.values().flatten().cloned().collect()
+        };
+
+        let client = {
+            let client_opt = self.client.lock().await;
+            client_opt
+                .as_ref()
+                .ok_or_else(|| MobileError::from("Offline"))?
+                .clone()
+        };
+
+        let mut count: u32 = 0;
+        for task in all_tasks {
+            if let Ok(true) = client.sync_task_companion_event(&task, false).await {
+                count += 1;
+            }
+        }
+        Ok(count)
+    }
+
+    pub async fn create_missing_calendar_events(&self) -> Result<u32, MobileError> {
+        let all_tasks: Vec<_> = {
+            let store = self.store.lock().await;
+            store.calendars.values().flatten().cloned().collect()
+        };
+
+        let client = {
+            let client_opt = self.client.lock().await;
+            client_opt
+                .as_ref()
+                .ok_or_else(|| MobileError::from("Offline"))?
+                .clone()
+        };
+
+        let mut count: u32 = 0;
+        for task in all_tasks {
+            // Pass 'true' to enable creation logic
+            if let Ok(true) = client.sync_task_companion_event(&task, true).await {
+                count += 1;
+            }
+        }
+        Ok(count)
     }
 
     pub async fn add_dependency(
