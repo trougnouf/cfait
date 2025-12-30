@@ -48,7 +48,6 @@ pub const CLEAR_ALL: char = '\u{eabf}'; // nf-cod-clear_all
 pub const MAP_PIN: char = '\u{f276}'; // nf-fa-map_pin
 pub const ELEVATOR_UP: char = '\u{f12c1}'; // nf-md-elevator_up
 
-// New Icons
 pub const SETTINGS_GEAR: char = '\u{e690}'; // nf-seti-settings
 pub const HELP_RHOMBUS: char = '\u{f0625}'; // nf-md-help_circle_outline
 pub const SEARCH_STOP: char = '\u{eb4e}'; // nf-cod-search_stop

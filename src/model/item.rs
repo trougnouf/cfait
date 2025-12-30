@@ -1,6 +1,6 @@
 // File: ./src/model/item.rs
 use chrono::{DateTime, Duration, Local, NaiveDate, NaiveTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -153,6 +153,31 @@ impl Alarm {
     }
 }
 
+/// Custom deserializer to handle migration from v3.12 (DateTime<Utc>) to v3.14 (DateType)
+/// This ensures backward compatibility with old local.json files that have date fields
+/// stored as simple DateTime<Utc> strings instead of the new DateType enum format.
+fn deserialize_date_option<'de, D>(deserializer: D) -> Result<Option<DateType>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum DateTypeOrLegacy {
+        // Matches new format: { "type": "...", "value": "..." }
+        New(DateType),
+        // Matches old format: "2024-01-01T12:00:00Z" string
+        Legacy(DateTime<Utc>),
+    }
+
+    let v: Option<DateTypeOrLegacy> = Option::deserialize(deserializer)?;
+    match v {
+        Some(DateTypeOrLegacy::New(d)) => Ok(Some(d)),
+        // Convert legacy DateTime<Utc> to DateType::Specific for backward compatibility
+        Some(DateTypeOrLegacy::Legacy(d)) => Ok(Some(DateType::Specific(d))),
+        None => Ok(None),
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Task {
     pub uid: String,
@@ -161,7 +186,9 @@ pub struct Task {
     pub status: TaskStatus,
     pub estimated_duration: Option<u32>,
 
+    #[serde(default, deserialize_with = "deserialize_date_option")]
     pub due: Option<DateType>,
+    #[serde(default, deserialize_with = "deserialize_date_option")]
     pub dtstart: Option<DateType>,
     #[serde(default)]
     pub alarms: Vec<Alarm>,
@@ -671,5 +698,365 @@ impl Task {
         default_reminder_time: Option<NaiveTime>,
     ) {
         super::parser::apply_smart_input(self, input, aliases, default_reminder_time);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_datetype_backward_compatibility_legacy_format() {
+        // Test that old v3.12 format (DateTime<Utc> string) can be deserialized
+        let legacy_json = r#"{
+            "uid": "test-uid",
+            "summary": "Test Task",
+            "description": "",
+            "status": "NeedsAction",
+            "estimated_duration": null,
+            "due": "2024-01-15T14:30:00Z",
+            "dtstart": "2024-01-10T09:00:00Z",
+            "alarms": [],
+            "priority": 0,
+            "percent_complete": null,
+            "parent_uid": null,
+            "dependencies": [],
+            "related_to": [],
+            "etag": "",
+            "href": "",
+            "calendar_href": "local://default",
+            "categories": [],
+            "depth": 0,
+            "rrule": null,
+            "location": null,
+            "url": null,
+            "geo": null,
+            "unmapped_properties": [],
+            "sequence": 0
+        }"#;
+
+        let task: Task =
+            serde_json::from_str(legacy_json).expect("Failed to deserialize legacy format");
+
+        // Verify that the legacy DateTime strings were converted to DateType::Specific
+        assert!(matches!(task.due, Some(DateType::Specific(_))));
+        assert!(matches!(task.dtstart, Some(DateType::Specific(_))));
+
+        // Verify the actual datetime values
+        if let Some(DateType::Specific(dt)) = task.due {
+            assert_eq!(dt.to_rfc3339(), "2024-01-15T14:30:00+00:00");
+        }
+        if let Some(DateType::Specific(dt)) = task.dtstart {
+            assert_eq!(dt.to_rfc3339(), "2024-01-10T09:00:00+00:00");
+        }
+    }
+
+    #[test]
+    fn test_datetype_backward_compatibility_new_format() {
+        // Test that new v3.14 format (DateType enum) still works
+        let new_json = r#"{
+            "uid": "test-uid",
+            "summary": "Test Task",
+            "description": "",
+            "status": "NeedsAction",
+            "estimated_duration": null,
+            "due": {"type": "Specific", "value": "2024-01-15T14:30:00Z"},
+            "dtstart": {"type": "AllDay", "value": "2024-01-10"},
+            "alarms": [],
+            "priority": 0,
+            "percent_complete": null,
+            "parent_uid": null,
+            "dependencies": [],
+            "related_to": [],
+            "etag": "",
+            "href": "",
+            "calendar_href": "local://default",
+            "categories": [],
+            "depth": 0,
+            "rrule": null,
+            "location": null,
+            "url": null,
+            "geo": null,
+            "unmapped_properties": [],
+            "sequence": 0
+        }"#;
+
+        let task: Task = serde_json::from_str(new_json).expect("Failed to deserialize new format");
+
+        // Verify the DateType enum variants
+        assert!(matches!(task.due, Some(DateType::Specific(_))));
+        assert!(matches!(task.dtstart, Some(DateType::AllDay(_))));
+
+        if let Some(DateType::Specific(dt)) = task.due {
+            assert_eq!(dt.to_rfc3339(), "2024-01-15T14:30:00+00:00");
+        }
+        if let Some(DateType::AllDay(date)) = task.dtstart {
+            assert_eq!(date.to_string(), "2024-01-10");
+        }
+    }
+
+    #[test]
+    fn test_datetype_backward_compatibility_null_values() {
+        // Test that null values still work
+        let null_json = r#"{
+            "uid": "test-uid",
+            "summary": "Test Task",
+            "description": "",
+            "status": "NeedsAction",
+            "estimated_duration": null,
+            "due": null,
+            "dtstart": null,
+            "alarms": [],
+            "priority": 0,
+            "percent_complete": null,
+            "parent_uid": null,
+            "dependencies": [],
+            "related_to": [],
+            "etag": "",
+            "href": "",
+            "calendar_href": "local://default",
+            "categories": [],
+            "depth": 0,
+            "rrule": null,
+            "location": null,
+            "url": null,
+            "geo": null,
+            "unmapped_properties": [],
+            "sequence": 0
+        }"#;
+
+        let task: Task =
+            serde_json::from_str(null_json).expect("Failed to deserialize null values");
+
+        assert!(task.due.is_none());
+        assert!(task.dtstart.is_none());
+    }
+
+    #[test]
+    fn test_datetype_backward_compatibility_mixed_formats() {
+        // Test mixing old and new formats in a task list (as would happen during migration)
+        let mixed_json = r#"[
+            {
+                "uid": "old-task",
+                "summary": "Old Task",
+                "description": "",
+                "status": "NeedsAction",
+                "estimated_duration": null,
+                "due": "2024-01-15T14:30:00Z",
+                "dtstart": null,
+                "alarms": [],
+                "priority": 0,
+                "percent_complete": null,
+                "parent_uid": null,
+                "dependencies": [],
+                "related_to": [],
+                "etag": "",
+                "href": "",
+                "calendar_href": "local://default",
+                "categories": [],
+                "depth": 0,
+                "rrule": null,
+                "location": null,
+                "url": null,
+                "geo": null,
+                "unmapped_properties": [],
+                "sequence": 0
+            },
+            {
+                "uid": "new-task",
+                "summary": "New Task",
+                "description": "",
+                "status": "NeedsAction",
+                "estimated_duration": null,
+                "due": {"type": "AllDay", "value": "2024-01-20"},
+                "dtstart": {"type": "Specific", "value": "2024-01-18T10:00:00Z"},
+                "alarms": [],
+                "priority": 0,
+                "percent_complete": null,
+                "parent_uid": null,
+                "dependencies": [],
+                "related_to": [],
+                "etag": "",
+                "href": "",
+                "calendar_href": "local://default",
+                "categories": [],
+                "depth": 0,
+                "rrule": null,
+                "location": null,
+                "url": null,
+                "geo": null,
+                "unmapped_properties": [],
+                "sequence": 0
+            }
+        ]"#;
+
+        let tasks: Vec<Task> =
+            serde_json::from_str(mixed_json).expect("Failed to deserialize mixed formats");
+
+        assert_eq!(tasks.len(), 2);
+
+        // Old task should have legacy format converted to Specific
+        assert!(matches!(tasks[0].due, Some(DateType::Specific(_))));
+        assert!(tasks[0].dtstart.is_none());
+
+        // New task should preserve its DateType variants
+        assert!(matches!(tasks[1].due, Some(DateType::AllDay(_))));
+        assert!(matches!(tasks[1].dtstart, Some(DateType::Specific(_))));
+    }
+
+    #[test]
+    fn test_real_world_upgrade_scenario() {
+        // Simulate a real upgrade from v3.12 to v3.14
+        // This test writes a v3.12 format file, then reads it back using v3.14 deserializer
+        use std::fs;
+        use std::io::Write;
+
+        let temp_dir = std::env::temp_dir().join("cfait_test_upgrade_scenario");
+        let _ = fs::create_dir_all(&temp_dir);
+        let file_path = temp_dir.join("local_v312.json");
+
+        // Simulate v3.12 local.json file with multiple tasks
+        let v312_content = r#"[
+  {
+    "uid": "legacy-task-1",
+    "summary": "Buy groceries",
+    "description": "Milk, eggs, bread",
+    "status": "NeedsAction",
+    "estimated_duration": 30,
+    "due": "2024-02-15T18:00:00Z",
+    "dtstart": null,
+    "alarms": [],
+    "priority": 5,
+    "percent_complete": null,
+    "parent_uid": null,
+    "dependencies": [],
+    "related_to": [],
+    "etag": "abc123",
+    "href": "task-1.ics",
+    "calendar_href": "local://default",
+    "categories": ["personal", "shopping"],
+    "depth": 0,
+    "rrule": null,
+    "location": null,
+    "url": null,
+    "geo": null,
+    "unmapped_properties": [],
+    "sequence": 0
+  },
+  {
+    "uid": "legacy-task-2",
+    "summary": "Dentist appointment",
+    "description": "",
+    "status": "NeedsAction",
+    "estimated_duration": null,
+    "due": "2024-03-10T14:30:00Z",
+    "dtstart": "2024-03-10T14:30:00Z",
+    "alarms": [],
+    "priority": 0,
+    "percent_complete": null,
+    "parent_uid": null,
+    "dependencies": [],
+    "related_to": [],
+    "etag": "def456",
+    "href": "task-2.ics",
+    "calendar_href": "local://default",
+    "categories": [],
+    "depth": 0,
+    "rrule": null,
+    "location": "Dr. Smith's Office",
+    "url": null,
+    "geo": null,
+    "unmapped_properties": [],
+    "sequence": 0
+  },
+  {
+    "uid": "legacy-task-3",
+    "summary": "Completed task",
+    "description": "This was already done",
+    "status": "Completed",
+    "estimated_duration": null,
+    "due": null,
+    "dtstart": null,
+    "alarms": [],
+    "priority": 0,
+    "percent_complete": 100,
+    "parent_uid": null,
+    "dependencies": [],
+    "related_to": [],
+    "etag": "ghi789",
+    "href": "task-3.ics",
+    "calendar_href": "local://default",
+    "categories": [],
+    "depth": 0,
+    "rrule": null,
+    "location": null,
+    "url": null,
+    "geo": null,
+    "unmapped_properties": [],
+    "sequence": 0
+  }
+]"#;
+
+        // Write v3.12 format file
+        let mut file = fs::File::create(&file_path).expect("Failed to create test file");
+        file.write_all(v312_content.as_bytes())
+            .expect("Failed to write test file");
+        drop(file);
+
+        // Now read it back using v3.14 deserializer (this simulates the upgrade)
+        let json = fs::read_to_string(&file_path).expect("Failed to read test file");
+        let tasks: Vec<Task> = serde_json::from_str(&json)
+            .expect("Failed to deserialize v3.12 format - upgrade simulation failed!");
+
+        // Verify all tasks were loaded successfully
+        assert_eq!(tasks.len(), 3, "All three tasks should be loaded");
+
+        // Verify first task (with due date)
+        assert_eq!(tasks[0].summary, "Buy groceries");
+        assert!(matches!(tasks[0].due, Some(DateType::Specific(_))));
+        assert!(tasks[0].dtstart.is_none());
+        assert_eq!(tasks[0].estimated_duration, Some(30));
+        assert_eq!(tasks[0].categories, vec!["personal", "shopping"]);
+
+        // Verify second task (with both due and dtstart)
+        assert_eq!(tasks[1].summary, "Dentist appointment");
+        assert!(matches!(tasks[1].due, Some(DateType::Specific(_))));
+        assert!(matches!(tasks[1].dtstart, Some(DateType::Specific(_))));
+        assert_eq!(tasks[1].location, Some("Dr. Smith's Office".to_string()));
+
+        // Verify third task (completed, no dates)
+        assert_eq!(tasks[2].summary, "Completed task");
+        assert_eq!(tasks[2].status, TaskStatus::Completed);
+        assert!(tasks[2].due.is_none());
+        assert!(tasks[2].dtstart.is_none());
+        assert_eq!(tasks[2].percent_complete, Some(100));
+
+        // Now save it back in v3.14 format (simulate normal operation after upgrade)
+        let v314_json = serde_json::to_string_pretty(&tasks).expect("Failed to serialize");
+        let v314_path = temp_dir.join("local_v314.json");
+        fs::write(&v314_path, v314_json).expect("Failed to write v3.14 format");
+
+        // Verify the new format can still be read
+        let reloaded_json = fs::read_to_string(&v314_path).expect("Failed to read v3.14 file");
+        let reloaded_tasks: Vec<Task> =
+            serde_json::from_str(&reloaded_json).expect("Failed to deserialize v3.14 format");
+
+        assert_eq!(
+            reloaded_tasks.len(),
+            3,
+            "All tasks should survive the round-trip"
+        );
+        assert_eq!(reloaded_tasks[0].summary, "Buy groceries");
+        assert_eq!(reloaded_tasks[1].summary, "Dentist appointment");
+        assert_eq!(reloaded_tasks[2].summary, "Completed task");
+
+        // Verify that the new format uses the DateType enum structure
+        assert!(
+            reloaded_json.contains(r#""type":"#),
+            "v3.14 format should contain DateType enum structure"
+        );
+
+        // Cleanup
+        let _ = fs::remove_dir_all(temp_dir);
     }
 }

@@ -589,9 +589,23 @@ impl CfaitMobile {
     pub fn load_from_cache(&self) {
         let mut store = self.store.blocking_lock();
         store.clear();
-        if let Ok(mut local) = LocalStorage::load() {
-            crate::journal::Journal::apply_to_tasks(&mut local, LOCAL_CALENDAR_HREF);
-            store.insert(LOCAL_CALENDAR_HREF.to_string(), local);
+        match LocalStorage::load() {
+            Ok(mut local) => {
+                crate::journal::Journal::apply_to_tasks(&mut local, LOCAL_CALENDAR_HREF);
+                store.insert(LOCAL_CALENDAR_HREF.to_string(), local);
+            }
+            Err(e) => {
+                #[cfg(target_os = "android")]
+                log::error!(
+                    "Failed to load local.json - this may indicate data corruption or format incompatibility: {}",
+                    e
+                );
+                #[cfg(not(target_os = "android"))]
+                eprintln!(
+                    "Failed to load local.json - this may indicate data corruption or format incompatibility: {}",
+                    e
+                );
+            }
         }
         if let Ok(cals) = Cache::load_calendars() {
             for cal in cals {
@@ -1514,9 +1528,23 @@ impl CfaitMobile {
         let mut store = self.store.lock().await;
         store.clear();
 
-        if let Ok(mut local) = LocalStorage::load() {
-            crate::journal::Journal::apply_to_tasks(&mut local, LOCAL_CALENDAR_HREF);
-            store.insert(LOCAL_CALENDAR_HREF.to_string(), local);
+        match LocalStorage::load() {
+            Ok(mut local) => {
+                crate::journal::Journal::apply_to_tasks(&mut local, LOCAL_CALENDAR_HREF);
+                store.insert(LOCAL_CALENDAR_HREF.to_string(), local);
+            }
+            Err(e) => {
+                #[cfg(target_os = "android")]
+                log::error!(
+                    "Failed to load local.json - this may indicate data corruption or format incompatibility: {}",
+                    e
+                );
+                #[cfg(not(target_os = "android"))]
+                eprintln!(
+                    "Failed to load local.json - this may indicate data corruption or format incompatibility: {}",
+                    e
+                );
+            }
         }
 
         match fetch_result {
