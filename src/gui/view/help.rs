@@ -2,6 +2,7 @@
 use crate::gui::message::Message;
 use iced::widget::{Space, button, column, container, row, scrollable, svg, text, text_input};
 use iced::{Color, Element, Length, Theme};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // --- STYLE CONSTANTS ---
 const COL_ACCENT: Color = Color::from_rgb(0.4, 0.7, 1.0); // Soft Blue
@@ -10,8 +11,20 @@ const COL_MUTED: Color = Color::from_rgb(0.6, 0.6, 0.6); // Grey
 const COL_CARD_BG: Color = Color::from_rgb(0.15, 0.15, 0.17); // Slightly lighter than pure black
 
 pub fn view_help() -> Element<'static, Message> {
+    // Randomize icon based on current time (choose between 3 icons)
+    let icon_choice = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| (d.as_secs() % 3) as u8)
+        .unwrap_or(0);
+
+    let help_icon = match icon_choice {
+        0 => crate::gui::icon::HELP_ICON_QUESTION,
+        1 => crate::gui::icon::HELP_ICON_ROBOT,
+        _ => crate::gui::icon::HELP_ICON_ROBOT_HELP,
+    };
+
     let title = row![
-        svg(svg::Handle::from_memory(crate::gui::icon::HELP_ICON))
+        svg(svg::Handle::from_memory(help_icon))
             .width(Length::Fixed(84.0)) // 168 / 2 for smooth rendering at half native size
             .height(Length::Fixed(32.0)) // 64 / 2 for smooth rendering at half native size
             .content_fit(iced::ContentFit::Contain),

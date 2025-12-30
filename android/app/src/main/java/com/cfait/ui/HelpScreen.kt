@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.cfait.BuildConfig
 import com.cfait.R
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,13 +52,20 @@ fun HelpScreen(onBack: () -> Unit) {
         }
     }
 
+    // Randomize icon (choose between 3 icons)
+    val helpIconRes = when (Random.nextInt(3)) {
+        0 -> R.drawable.nf_cod_question_breeze_face_hugs
+        1 -> R.drawable.nf_md_robot_confused_breeze_face_hugs
+        else -> R.drawable.nf_md_robot_confused_help_breeze_face_hugs
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Image(
-                            painter = painterResource(id = R.drawable.nf_cod_question_face_hugs__9c86d2),
+                            painter = painterResource(id = helpIconRes),
                             contentDescription = null,
                             modifier = Modifier.width(52.5.dp).height(20.dp)
                         )
