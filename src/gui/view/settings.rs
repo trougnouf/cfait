@@ -187,7 +187,6 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             text("Regardless, events are always deleted when tasks are deleted.")
                 .size(12)
                 .color(Color::from_rgb(0.6, 0.6, 0.6)),
-            text("").size(5),
             {
                 let btn = button("Delete all calendar events");
                 if !app.deleting_events {
@@ -203,6 +202,24 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             } else {
                 text("")
             },
+            iced::widget::rule::horizontal(1),
+            text("").size(5),
+            text("Data Management").size(20),
+            button(
+                row![
+                    icon::icon(icon::EXPORT).size(16),
+                    text("Export Local Tasks (.ics)")
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center)
+            )
+            .padding(10)
+            .width(Length::Fill)
+            .style(button::secondary)
+            .on_press(Message::ExportLocalIcs),
+            text("").size(5),
+            iced::widget::rule::horizontal(1),
+            text("").size(5),
         ]
         .spacing(10)
         .into()

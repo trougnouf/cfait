@@ -757,6 +757,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_export_local_ics(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_locations(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_tags(): Short
@@ -906,6 +908,11 @@ internal object UniffiLib {
         `taskUid`: RustBuffer.ByValue,
         `alarmUid`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_export_local_ics(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_all_locations(`ptr`: Long): Long
 
@@ -1339,6 +1346,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm() != 19639.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_export_local_ics() != 16928.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_all_locations() != 18355.toShort()) {
@@ -1979,6 +1989,8 @@ public interface CfaitMobileInterface {
         `alarmUid`: kotlin.String,
     )
 
+    fun `exportLocalIcs`(): kotlin.String
+
     suspend fun `getAllLocations`(): List<MobileLocation>
 
     suspend fun `getAllTags`(): List<MobileTag>
@@ -2438,6 +2450,19 @@ open class CfaitMobile :
         // Error FFI converter
         MobileException.ErrorHandler,
     )
+
+    @Throws(MobileException::class)
+    override fun `exportLocalIcs`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCallWithError(MobileException) { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_export_local_ics(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `getAllLocations`(): List<MobileLocation> =

@@ -33,6 +33,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 - [⌨️ Smart Input Syntax](#smart-input-syntax)
 - [🔍 Search & Filtering](#search--filtering)
 - [📅 Calendar Events for Tasks](#calendar-events-for-tasks)
+- [💾 Export & Backup](#export-backup)
 - [🎮 TUI Keybindings](#tui-keybindings)
 - [🤗 Support](#support)
 - [🪩 Mirrors](#mirrors)
@@ -252,6 +253,37 @@ Very private task @tomorrow -cal
 
 **Events Cleanup:**
 - Use the "Delete all calendar events" button in the GUI or Android Settings to remove all auto-generated events
+
+<a name="export-backup"></a>
+## 💾 Export & Backup
+
+Export your local tasks to standard `.ics` (iCalendar) format for backup or sharing with other applications.
+
+**TUI (Command Line):**
+```bash
+# Export to file
+cfait export > backup.ics
+
+# View export content
+cfait export
+
+# Pipe to other tools
+cfait export | grep 'SUMMARY'
+```
+
+**GUI (Desktop):**
+1. Open Settings (gear icon)
+2. Scroll to "Data Management" section
+3. Click "Export Local Tasks (.ics)"
+4. Choose save location in file dialog
+
+**Android:**
+1. Open Settings
+2. Scroll to "Data Management" section  
+3. Tap "Export Local Tasks (.ics)"
+4. Choose where to save/share (Google Drive, Email, Files, etc.)
+
+The exported `.ics` any CalDAV-compatible application.
 
 <a name="tui-keybindings"></a>
 ## 🎮 TUI Keybindings

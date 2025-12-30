@@ -1,6 +1,7 @@
 // File: android/app/src/main/java/com/cfait/ui/SettingsScreen.kt
 package com.cfait.ui
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,14 +12,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import com.cfait.core.CfaitMobile
 import com.cfait.core.MobileCalendar
 import kotlinx.coroutines.launch
+import java.io.File
 
 private val busyMessages = listOf(
     "Processing stuff", "BRB", "Be right back", "Working on things",
@@ -412,6 +416,62 @@ fun SettingsScreen(
                     }
                 }
 
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                Text(
+                    "Data Management",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                // Export Button
+                val context = LocalContext.current
+                Button(
+                    onClick = {
+                        try {
+                            // 1. Generate ICS string from Rust
+                            val icsContent = api.exportLocalIcs()
+
+                            // 2. Write to cache file
+                            val file = File(context.cacheDir, "cfait_local_backup.ics")
+                            file.writeText(icsContent)
+
+                            // 3. Get URI via FileProvider
+                            val uri = FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                file
+                            )
+
+                            // 4. Launch Share Sheet
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/calendar"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+
+                            val shareIntent = Intent.createChooser(intent, "Export Backup")
+                            context.startActivity(shareIntent)
+
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Export failed: ${e.message}",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondary
+                    )
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onSecondary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Export Local Tasks (.ics)")
+                    }
+                }
             }
 
             item {

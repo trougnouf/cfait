@@ -144,4 +144,6 @@ pub enum Message {
     SetDeleteEventsOnCompletion(bool),
     DeleteAllCalendarEvents,
     BackfillEventsComplete(Result<usize, String>),
+    ExportLocalIcs,
+    ExportSaved(Result<std::path::PathBuf, String>),
 }

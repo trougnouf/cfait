@@ -306,6 +306,11 @@ impl CfaitMobile {
         !crate::journal::Journal::load().is_empty()
     }
 
+    pub fn export_local_ics(&self) -> Result<String, MobileError> {
+        let tasks = LocalStorage::load().map_err(|e| MobileError::from(e.to_string()))?;
+        Ok(LocalStorage::to_ics_string(&tasks))
+    }
+
     pub fn parse_smart_string(&self, input: String) -> Vec<MobileSyntaxToken> {
         let tokens = tokenize_smart_input(&input);
 

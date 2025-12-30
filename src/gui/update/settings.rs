@@ -445,6 +445,58 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.error_msg = Some(format!("Backfill error: {}", e));
             Task::none()
         }
+        Message::ExportLocalIcs => {
+            // 1. Load tasks
+            let tasks_result = LocalStorage::load();
+
+            Task::perform(
+                async move {
+                    let tasks = tasks_result.map_err(|e| e.to_string())?;
+                    let ics_content = LocalStorage::to_ics_string(&tasks);
+
+                    // 2. Open File Dialog (Async)
+                    let file_handle = rfd::AsyncFileDialog::new()
+                        .add_filter("Calendar", &["ics"])
+                        .set_file_name("cfait_backup.ics")
+                        .save_file()
+                        .await;
+
+                    if let Some(handle) = file_handle {
+                        let path = handle.path().to_path_buf();
+                        // 3. Write file
+                        #[cfg(not(target_arch = "wasm32"))]
+                        {
+                            use tokio::io::AsyncWriteExt;
+                            let mut file = tokio::fs::File::create(&path)
+                                .await
+                                .map_err(|e| e.to_string())?;
+                            file.write_all(ics_content.as_bytes())
+                                .await
+                                .map_err(|e| e.to_string())?;
+                        }
+                        Ok(path)
+                    } else {
+                        // User cancelled
+                        Err("Export cancelled".to_string())
+                    }
+                },
+                Message::ExportSaved,
+            )
+        }
+        Message::ExportSaved(Ok(path)) => {
+            app.error_msg = Some(format!(
+                "Exported to: {:?}",
+                path.file_name().unwrap_or_default()
+            ));
+            Task::none()
+        }
+        Message::ExportSaved(Err(e)) => {
+            // Don't show error if user just cancelled
+            if e != "Export cancelled" {
+                app.error_msg = Some(format!("Export failed: {}", e));
+            }
+            Task::none()
+        }
         _ => Task::none(),
     }
 }

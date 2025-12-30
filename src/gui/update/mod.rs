@@ -40,7 +40,9 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetCreateEventsForTasks(_)
         | Message::SetDeleteEventsOnCompletion(_)
         | Message::DeleteAllCalendarEvents
-        | Message::BackfillEventsComplete(_) => settings::handle(app, message),
+        | Message::BackfillEventsComplete(_)
+        | Message::ExportLocalIcs
+        | Message::ExportSaved(_) => settings::handle(app, message),
 
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)
