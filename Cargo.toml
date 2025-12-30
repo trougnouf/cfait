@@ -21,6 +21,13 @@ exclude = [
     "about.toml",
     "cliff.toml",
     "RUST_DEPENDENCIES.html",
+    "android/*",
+    "fastlane/*",
+    "org.codeberg.trougnouf.cfait.yml",
+    "scripts/*",
+    "cargo-sources.yml",
+    "LICENSES/*",
+    "secrets/*"
 ]
 
 [lib]

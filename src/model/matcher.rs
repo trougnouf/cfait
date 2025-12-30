@@ -300,7 +300,7 @@ impl Task {
                 continue;
             }
 
-            // --- NEW: Work Mode / Ready Filter ---
+            // --- Work Mode / Ready Filter ---
             // We return true here to "consume" the token so it doesn't fail text search.
             // The actual logic is handled in TaskStore::filter because it requires dependency lookups.
             if part == "is:ready" {

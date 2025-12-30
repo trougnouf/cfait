@@ -1031,7 +1031,7 @@ pub fn apply_smart_input(
                 if token.len() > 4 { &token[4..] } else { "" }
             };
 
-            // NEW: Handle "rem:in 5m" or "rem: in 5m"
+            // Handle "rem:in 5m" or "rem: in 5m"
             if clean_val.eq_ignore_ascii_case("in") && i + consumed < stream.len() {
                 let next_str = &stream[i + consumed];
                 let next_next = if i + consumed + 1 < stream.len() {
@@ -1063,7 +1063,7 @@ pub fn apply_smart_input(
                     summary_words.push(unescape(token));
                 }
             }
-            // NEW: Handle "rem:next friday" or "rem: next friday"
+            // Handle "rem:next friday" or "rem: next friday"
             else if clean_val.eq_ignore_ascii_case("next") && i + consumed < stream.len() {
                 let next_str = &stream[i + consumed];
                 if let Some(target_date) = parse_next_date(next_str) {

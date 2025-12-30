@@ -718,7 +718,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         }
     }
 
-    // NEW: Location Jump Button
+    // Location Jump Button
     if app.search_value.starts_with("@@") || app.search_value.starts_with("loc:") {
         let raw = if app.search_value.starts_with("@@") {
             app.search_value.trim_start_matches("@@")

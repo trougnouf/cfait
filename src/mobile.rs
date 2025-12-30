@@ -105,8 +105,8 @@ pub struct MobileTask {
     pub due_date_iso: Option<String>,
     pub is_allday_due: bool, // NEW
     pub start_date_iso: Option<String>,
-    pub is_allday_start: bool, // NEW
-    pub has_alarms: bool,      // NEW: indicator for UI bell
+    pub is_allday_start: bool,
+    pub has_alarms: bool, // indicator for UI bell
     pub duration_mins: Option<u32>,
     pub calendar_href: String,
     pub categories: Vec<String>,

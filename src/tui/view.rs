@@ -439,7 +439,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 metadata_spans.push(Span::styled(due_str, Style::default().fg(Color::Blue)));
             }
 
-            // 2. NEW: URL & Geo Indicators
+            // 2. URL & Geo Indicators
             if t.geo.is_some() {
                 metadata_spans.push(Span::raw(" "));
                 metadata_spans.push(Span::styled(
