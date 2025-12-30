@@ -53,6 +53,7 @@ fun HomeScreen(
     onSettings: () -> Unit,
     onTaskClick: (String) -> Unit,
     onDataChanged: () -> Unit,
+    onMigrateLocal: (String) -> Unit,
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -454,20 +455,9 @@ fun HomeScreen(
                                 leadingContent = { NfIcon(NfIcons.CALENDAR, 16.sp) },
                                 modifier =
                                     Modifier.clickable {
-                                        scope.launch {
-                                            try {
-                                                val msg = api.migrateLocalTo(cal.href)
-                                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                                showExportDialog = false
-                                                onGlobalRefresh()
-                                            } catch (e: Exception) {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Export failed: ${e.message}",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            }
-                                        }
+                                        // UPDATED LOGIC: Delegate to WorkManager via MainActivity
+                                        onMigrateLocal(cal.href)
+                                        showExportDialog = false
                                     },
                             )
                         }

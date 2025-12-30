@@ -19,14 +19,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.cfait.core.MobileCalendar
 import com.cfait.core.MobileLocation
@@ -37,6 +39,8 @@ import com.cfait.ui.SettingsScreen
 import com.cfait.ui.TaskDetailScreen
 import com.cfait.util.AlarmScheduler
 import com.cfait.workers.AlarmWorker
+import com.cfait.workers.CalendarSyncWorker
+import com.cfait.workers.CalendarMigrationWorker
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -57,25 +61,66 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
     val navController = rememberNavController()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // Data State
     var calendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
     var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
     var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) }
     var defaultCalHref by remember { mutableStateOf<String?>(null) }
     var hasUnsynced by remember { mutableStateOf(false) }
     var autoScrollUid by remember { mutableStateOf<String?>(null) }
-
-    // FIX: Add a version counter to force UI updates even if data lists look identical
     var refreshTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
-
-    val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     var isLoading by remember { mutableStateOf(false) }
 
-    // Hoisted state for calendar event deletion (persists across navigation)
-    var isDeletingEvents by rememberSaveable { mutableStateOf(false) }
+    // --- WORK MANAGER OBSERVATION ---
+    val workManager = WorkManager.getInstance(context)
 
-    // Hoisted state for calendar event backfill (persists across navigation)
-    var isBackfilling by rememberSaveable { mutableStateOf(false) }
+    // Observe the specific unique work we queue for calendar sync
+    val calendarWorkInfo by workManager
+        .getWorkInfosForUniqueWorkLiveData(CalendarSyncWorker.UNIQUE_WORK_NAME)
+        .observeAsState()
+
+    val currentWorkInfo = calendarWorkInfo?.firstOrNull()
+    val isCalendarSyncRunning =
+        currentWorkInfo?.state == WorkInfo.State.RUNNING || currentWorkInfo?.state == WorkInfo.State.ENQUEUED
+
+    // React to completion to show Toasts
+    LaunchedEffect(currentWorkInfo?.state) {
+        if (currentWorkInfo?.state == WorkInfo.State.SUCCEEDED) {
+            val msg = currentWorkInfo.outputData.getString(CalendarSyncWorker.OUTPUT_MESSAGE)
+            if (msg != null) {
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            }
+        } else if (currentWorkInfo?.state == WorkInfo.State.FAILED) {
+            val msg = currentWorkInfo.outputData.getString(CalendarSyncWorker.OUTPUT_MESSAGE) ?: "Unknown error"
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    // --- OBSERVE MIGRATION WORKER ---
+    val migrationWorkInfo by workManager
+        .getWorkInfosForUniqueWorkLiveData(CalendarMigrationWorker.UNIQUE_WORK_NAME)
+        .observeAsState()
+
+    val currentMigration = migrationWorkInfo?.firstOrNull()
+
+    // Show toast when migration finishes
+    LaunchedEffect(currentMigration?.state) {
+        if (currentMigration?.state == WorkInfo.State.SUCCEEDED) {
+            val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
+            Toast.makeText(context, msg ?: "Migration complete", Toast.LENGTH_LONG).show()
+            // Force refresh UI to show tasks in their new location
+            val intent = Intent("com.cfait.REFRESH_UI")
+            intent.setPackage(context.packageName)
+            context.sendBroadcast(intent)
+        } else if (currentMigration?.state == WorkInfo.State.FAILED) {
+            val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
+            Toast.makeText(context, msg ?: "Migration failed", Toast.LENGTH_LONG).show()
+        }
+    }
+    // --------------------------------
 
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -97,9 +142,7 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
         android.util.Log.d("CfaitMain", "refreshLists() called")
         scope.launch {
             try {
-                // FIX: Update tick first to ensure downstream effects trigger
                 refreshTick = System.currentTimeMillis()
-
                 calendars = api.getCalendars()
                 tags = api.getAllTags()
                 locations = api.getAllLocations()
@@ -139,7 +182,6 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
             try {
                 api.sync()
                 refreshLists()
-
                 val request = OneTimeWorkRequestBuilder<AlarmWorker>().build()
                 WorkManager.getInstance(context).enqueueUniqueWork(
                     "cfait_manual_check",
@@ -165,45 +207,46 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
         }
     }
 
+    // Updated Action: Use WorkManager
     fun handleDeleteEvents() {
-        if (isDeletingEvents) return
-        isDeletingEvents = true
-        scope.launch {
-            try {
-                val count = api.deleteAllCalendarEvents()
-                Toast.makeText(
-                    context,
-                    "Deleted $count calendar event${if (count == 1u) "" else "s"}",
-                    Toast.LENGTH_LONG
-                ).show()
-            } catch (e: Exception) {
-                Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-            } finally {
-                isDeletingEvents = false
-            }
-        }
+        val workRequest = OneTimeWorkRequestBuilder<CalendarSyncWorker>()
+            .setInputData(Data.Builder().putString(CalendarSyncWorker.KEY_MODE, CalendarSyncWorker.MODE_DELETE).build())
+            .build()
+
+        workManager.enqueueUniqueWork(
+            CalendarSyncWorker.UNIQUE_WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
+            workRequest
+        )
+        Toast.makeText(context, "Deleting events in background...", Toast.LENGTH_SHORT).show()
     }
 
+    // Updated Action: Use WorkManager
     fun handleCreateMissingEvents() {
-        if (isBackfilling) return
-        isBackfilling = true
-        scope.launch {
-            try {
-                Toast.makeText(context, "Creating calendar events in background...", Toast.LENGTH_SHORT).show()
+        val workRequest = OneTimeWorkRequestBuilder<CalendarSyncWorker>()
+            .setInputData(Data.Builder().putString(CalendarSyncWorker.KEY_MODE, CalendarSyncWorker.MODE_CREATE).build())
+            .build()
 
-                val count = api.createMissingCalendarEvents()
+        workManager.enqueueUniqueWork(
+            CalendarSyncWorker.UNIQUE_WORK_NAME,
+            ExistingWorkPolicy.REPLACE, // Restart if clicked again
+            workRequest
+        )
+        Toast.makeText(context, "Creating events in background...", Toast.LENGTH_SHORT).show()
+    }
 
-                Toast.makeText(
-                    context,
-                    "Created $count missing calendar event${if (count == 1u) "" else "s"}",
-                    Toast.LENGTH_LONG
-                ).show()
-            } catch (e: Exception) {
-                Toast.makeText(context, "Backfill error: ${e.message}", Toast.LENGTH_LONG).show()
-            } finally {
-                isBackfilling = false
-            }
-        }
+    // DEFINE MIGRATION ACTION HANDLER
+    fun handleMigration(targetHref: String) {
+        val workRequest = OneTimeWorkRequestBuilder<CalendarMigrationWorker>()
+            .setInputData(Data.Builder().putString(CalendarMigrationWorker.KEY_TARGET_HREF, targetHref).build())
+            .build()
+
+        workManager.enqueueUniqueWork(
+            CalendarMigrationWorker.UNIQUE_WORK_NAME,
+            ExistingWorkPolicy.KEEP, // Don't run two migrations at once
+            workRequest
+        )
+        Toast.makeText(context, "Migrating tasks in background...", Toast.LENGTH_SHORT).show()
     }
 
     LaunchedEffect("fastStart") { fastStart() }
@@ -219,11 +262,12 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                 isLoading = isLoading,
                 hasUnsynced = hasUnsynced,
                 autoScrollUid = autoScrollUid,
-                refreshTick = refreshTick, // FIX: Pass the tick
+                refreshTick = refreshTick,
                 onGlobalRefresh = { fastStart() },
                 onSettings = { navController.navigate("settings") },
                 onTaskClick = { uid -> navController.navigate("detail/$uid") },
                 onDataChanged = { refreshLists() },
+                onMigrateLocal = { targetHref -> handleMigration(targetHref) }
             )
         }
         composable("detail/{uid}") { backStackEntry ->
@@ -254,11 +298,10 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                     refreshLists()
                 },
                 onHelp = { navController.navigate("help") },
-                isCalendarBusy = isLoading || isDeletingEvents || isBackfilling,
+                isCalendarBusy = isLoading || isCalendarSyncRunning, // Bound to WorkManager status
                 onDeleteEvents = { handleDeleteEvents() },
                 onCreateEvents = { handleCreateMissingEvents() }
             )
-
         }
         composable("help") {
             HelpScreen(onBack = { navController.popBackStack() })

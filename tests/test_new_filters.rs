@@ -1,8 +1,9 @@
+// File: tests/test_new_filters.rs
 // Test file for new filter features: relative start dates, "not set" operator, and is:ready
 
 use cfait::model::item::{Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
-use chrono::{Duration, Local};
+use chrono::{Datelike, Duration, Local};
 use std::collections::HashSet;
 
 #[test]
@@ -78,6 +79,11 @@ fn test_not_set_operator_with_exclamation() {
 #[test]
 fn test_not_set_operator_with_due_date() {
     let aliases = std::collections::HashMap::new();
+    let now = Local::now().date_naive();
+    // Dynamic future date to ensure test stability
+    let future_year = now.year() + 2;
+    let filter = format!("@<{}-01-01", future_year);
+    let filter_not_set = format!("{}!", filter);
 
     // Task with no due date
     let no_due = Task::new("Task without due", &aliases, None);
@@ -86,12 +92,12 @@ fn test_not_set_operator_with_due_date() {
     let has_due = Task::new("Task @tomorrow", &aliases, None);
 
     // Without "!" - tasks with no date should be filtered out
-    assert!(!no_due.matches_search_term("@<2025-12-31"));
-    assert!(has_due.matches_search_term("@<2025-12-31"));
+    assert!(!no_due.matches_search_term(&filter));
+    assert!(has_due.matches_search_term(&filter));
 
     // With "!" - tasks with no date should pass the filter
-    assert!(no_due.matches_search_term("@<2025-12-31!"));
-    assert!(has_due.matches_search_term("@<2025-12-31!"));
+    assert!(no_due.matches_search_term(&filter_not_set));
+    assert!(has_due.matches_search_term(&filter_not_set));
 }
 
 #[test]

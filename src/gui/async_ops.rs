@@ -2,6 +2,7 @@
 use crate::client::RustyClient;
 use crate::config::Config;
 use crate::model::{CalendarListEntry, Task as TodoTask};
+use futures::stream::{self, StreamExt};
 use std::sync::OnceLock;
 use tokio::runtime::Runtime;
 
@@ -122,24 +123,32 @@ pub async fn async_backfill_events_wrapper(
 ) -> Result<usize, String> {
     let rt = get_runtime();
     rt.spawn(async move {
-        let mut count = 0;
-        for task in tasks {
-            // Only count tasks where events were actually created/deleted
-            // sync_task_companion_event returns Ok(true) if an event was PUT/DELETE'd
-            match client
-                .sync_task_companion_event(&task, global_enabled)
-                .await
-            {
-                Ok(true) => count += 1, // Event was created/deleted
-                Ok(false) => {}         // No action taken (no dates, completed, etc.)
-                Err(e) => {
-                    eprintln!(
-                        "Warning: Failed to backfill event for task {}: {}",
-                        task.uid, e
-                    );
+        // NEW CONCURRENT LOGIC
+        let futures = tasks.into_iter().map(|task| {
+            let c = client.clone();
+            async move {
+                match c.sync_task_companion_event(&task, global_enabled).await {
+                    Ok(true) => 1,
+                    Ok(false) => 0,
+                    Err(e) => {
+                        eprintln!(
+                            "Warning: Failed to backfill event for task {}: {}",
+                            task.uid, e
+                        );
+                        0
+                    }
                 }
             }
-        }
+        });
+
+        // Run 8 concurrent requests
+        let count = stream::iter(futures)
+            .buffer_unordered(8)
+            .collect::<Vec<usize>>()
+            .await
+            .iter()
+            .sum();
+
         Ok(count)
     })
     .await

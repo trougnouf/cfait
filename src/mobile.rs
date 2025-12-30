@@ -9,6 +9,7 @@ use crate::paths::AppPaths;
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
 use chrono::{DateTime, Local, NaiveTime, Utc};
+use futures::stream::{self, StreamExt};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -415,12 +416,25 @@ impl CfaitMobile {
                 .clone()
         };
 
-        let mut count: u32 = 0;
-        for task in all_tasks {
-            if let Ok(true) = client.sync_task_companion_event(&task, false).await {
-                count += 1;
+        // NEW CONCURRENT LOGIC
+        let futures = all_tasks.into_iter().map(|task| {
+            let c = client.clone();
+            async move {
+                match c.sync_task_companion_event(&task, false).await {
+                    Ok(true) => 1,
+                    _ => 0,
+                }
             }
-        }
+        });
+
+        // Run 8 concurrent requests
+        let count = stream::iter(futures)
+            .buffer_unordered(8)
+            .collect::<Vec<u32>>()
+            .await
+            .iter()
+            .sum();
+
         Ok(count)
     }
 
@@ -438,13 +452,25 @@ impl CfaitMobile {
                 .clone()
         };
 
-        let mut count: u32 = 0;
-        for task in all_tasks {
-            // Pass 'true' to enable creation logic
-            if let Ok(true) = client.sync_task_companion_event(&task, true).await {
-                count += 1;
+        // NEW CONCURRENT LOGIC
+        let futures = all_tasks.into_iter().map(|task| {
+            let c = client.clone();
+            async move {
+                match c.sync_task_companion_event(&task, true).await {
+                    Ok(true) => 1,
+                    _ => 0,
+                }
             }
-        }
+        });
+
+        // Run 8 concurrent requests
+        let count = stream::iter(futures)
+            .buffer_unordered(8)
+            .collect::<Vec<u32>>()
+            .await
+            .iter()
+            .sum();
+
         Ok(count)
     }
 
