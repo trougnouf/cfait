@@ -327,16 +327,16 @@ impl Task {
         event.summary(&self.summary);
         event.timestamp(Utc::now());
 
-        // Build description with disclaimer
+        // Build description with task description first, then disclaimer
         let mut event_desc = String::new();
+        if !self.description.is_empty() {
+            event_desc.push_str(&self.description);
+            event_desc.push_str("\n\n");
+        }
         event_desc.push_str("⚠️ This event was automatically created by Cfait from a task.\n");
         event_desc
             .push_str("It will be automatically updated/overwritten when the task changes, and it might get deleted when the task is completed or canceled.\n");
         event_desc.push_str("Any changes made directly to this event will be lost.\n");
-        if !self.description.is_empty() {
-            event_desc.push('\n');
-            event_desc.push_str(&self.description);
-        }
         event.description(&event_desc);
         if let Some(loc) = &self.location {
             event.add_property("LOCATION", loc);

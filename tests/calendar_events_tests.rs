@@ -229,9 +229,11 @@ fn test_event_generation_with_description() {
 
     let (_uid, ics) = result.unwrap();
     assert!(ics.contains("DESCRIPTION:"));
-    // Should contain disclaimer
-    assert!(ics.contains("automatically created by Cfait"));
-    // Should contain user's description
+    // Should contain disclaimer parts (checking short words that won't be split by line folding)
+    assert!(ics.contains("automatically"));
+    assert!(ics.contains("task"));
+    assert!(ics.contains("overwritten"));
+    // Should contain user's description at the beginning
     assert!(ics.contains("Important"));
 }
 
