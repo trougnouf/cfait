@@ -1,6 +1,6 @@
 // File: ./src/gui/view/help.rs
 use crate::gui::message::Message;
-use iced::widget::{Space, button, column, container, row, scrollable, text, text_input};
+use iced::widget::{Space, button, column, container, row, scrollable, svg, text, text_input};
 use iced::{Color, Element, Length, Theme};
 
 // --- STYLE CONSTANTS ---
@@ -11,11 +11,10 @@ const COL_CARD_BG: Color = Color::from_rgb(0.15, 0.15, 0.17); // Slightly lighte
 
 pub fn view_help() -> Element<'static, Message> {
     let title = row![
-        crate::gui::icon::icon(crate::gui::icon::HELP_RHOMBUS)
-            .size(28)
-            .style(|_: &Theme| text::Style {
-                color: Some(COL_ACCENT)
-            }),
+        svg(svg::Handle::from_memory(crate::gui::icon::HELP_ICON))
+            .width(Length::Fixed(84.0)) // 168 / 2 for smooth rendering at half native size
+            .height(Length::Fixed(32.0)) // 64 / 2 for smooth rendering at half native size
+            .content_fit(iced::ContentFit::Contain),
         text("Help & About")
             .size(28)
             .style(|_: &Theme| text::Style {

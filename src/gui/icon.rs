@@ -7,6 +7,8 @@ pub const FONT: Font = Font::with_name("Symbols Nerd Font");
 
 // Load the Logo
 pub const LOGO: &[u8] = include_bytes!("../../assets/cfait.svg");
+// Load the Help Icon (21:8 ratio)
+pub const HELP_ICON: &[u8] = include_bytes!("../../assets/nf-cod-question+face-hugs_#66B3FF.svg");
 
 pub fn icon<'a>(codepoint: char) -> Text<'a> {
     text(codepoint.to_string()).font(FONT)
