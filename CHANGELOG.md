@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0] - 2025-12-30
+
+### 🚀 Features
+
+- *(search)* Add work mode ("is:ready") suggested by Martin Stut, relative start time ("^<2d"), or not set (append !, e.g. "^<2d!")
+- Calendar integration
+- Export local store to ics
+
+### 🐛 Bug Fixes
+
+- *(Local)* Add migration path to avoid catastrophic data loss (reported by montherlant)
+
+### ⚡ Performance
+
+- *(calendars, migration)* Implement concurrent calendar sync with Android WorkManager support
+
+### 🎨 Styling
+
+- *(gui)* Show dependency tree even in search mode
+- *(calendar)* Event description <- put task description before managed event warning
 ## [0.3.14] - 2025-12-29
 
 ### 🚀 Features
@@ -35,6 +55,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Prepare for flathub release
+- Release cfait version 0.3.14
 ## [0.3.13] - 2025-12-28
 
 ### 🚀 Features
