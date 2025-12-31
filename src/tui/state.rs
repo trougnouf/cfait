@@ -21,6 +21,7 @@ pub enum InputMode {
     EditingDescription,
     Moving,
     Exporting,
+    Snoozing,
 }
 
 pub struct AppState {
@@ -51,6 +52,11 @@ pub struct AppState {
 
     pub urgent_days: u32,
     pub urgent_prio: u8,
+
+    // Snooze configuration
+    pub snooze_short_mins: u32,
+    pub snooze_long_mins: u32,
+
     // Input Buffers
     pub input_buffer: String,
     pub active_search_query: String, // Holds the committed search term
@@ -108,6 +114,9 @@ impl AppState {
             sort_cutoff_months: Some(2),
             urgent_days: 1,
             urgent_prio: 1,
+
+            snooze_short_mins: 60,
+            snooze_long_mins: 1440,
 
             input_buffer: String::new(),
             active_search_query: String::new(),

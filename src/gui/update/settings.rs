@@ -5,29 +5,9 @@ use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tasks, save_config};
-use crate::model::parser::{parse_duration, validate_alias_integrity}; // Updated import
+use crate::model::parser::{format_duration_compact, parse_duration, validate_alias_integrity}; // Updated import
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalStorage};
 use iced::Task;
-
-// Helper to format minutes back to compact strings for the UI
-fn format_duration_compact(mins: u32) -> String {
-    if mins == 0 {
-        return "".to_string();
-    }
-    if mins.is_multiple_of(525600) {
-        format!("{}y", mins / 525600)
-    } else if mins.is_multiple_of(43200) {
-        format!("{}mo", mins / 43200)
-    } else if mins.is_multiple_of(10080) {
-        format!("{}w", mins / 10080)
-    } else if mins.is_multiple_of(1440) {
-        format!("{}d", mins / 1440)
-    } else if mins.is_multiple_of(60) {
-        format!("{}h", mins / 60)
-    } else {
-        format!("{}m", mins)
-    }
-}
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {

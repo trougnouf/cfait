@@ -29,11 +29,11 @@ fn default_remind_time() -> String {
     "08:00".to_string()
 }
 fn default_snooze_1() -> u32 {
-    15
-} // 15 min
-fn default_snooze_2() -> u32 {
     60
 } // 1 hour
+fn default_snooze_2() -> u32 {
+    1440
+} // 1 day
 
 fn default_create_events() -> bool {
     false
@@ -128,8 +128,8 @@ impl Default for Config {
             urgent_priority_threshold: 1,
             auto_reminders: true,
             default_reminder_time: "08:00".to_string(),
-            snooze_short_mins: 15,
-            snooze_long_mins: 60,
+            snooze_short_mins: 60,
+            snooze_long_mins: 1440,
             create_events_for_tasks: false,
             delete_events_on_completion: false,
         }

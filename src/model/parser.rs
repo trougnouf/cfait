@@ -790,6 +790,25 @@ pub fn parse_duration(val: &str) -> Option<u32> {
     None
 }
 
+pub fn format_duration_compact(mins: u32) -> String {
+    if mins == 0 {
+        return "".to_string();
+    }
+    if mins.is_multiple_of(525600) {
+        format!("{}y", mins / 525600)
+    } else if mins.is_multiple_of(43200) {
+        format!("{}mo", mins / 43200)
+    } else if mins.is_multiple_of(10080) {
+        format!("{}w", mins / 10080)
+    } else if mins.is_multiple_of(1440) {
+        format!("{}d", mins / 1440)
+    } else if mins.is_multiple_of(60) {
+        format!("{}h", mins / 60)
+    } else {
+        format!("{}m", mins)
+    }
+}
+
 fn parse_recurrence(val: &str) -> Option<String> {
     match val.to_lowercase().as_str() {
         "daily" => Some("FREQ=DAILY".to_string()),

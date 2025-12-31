@@ -103,6 +103,8 @@ pub async fn run() -> Result<()> {
         disabled_calendars,
         urgent_days,
         urgent_prio,
+        snooze_short_mins,
+        snooze_long_mins,
     ) = match config_result {
         Ok(cfg) => (
             cfg.url,
@@ -118,6 +120,8 @@ pub async fn run() -> Result<()> {
             cfg.disabled_calendars,
             cfg.urgent_days_horizon,
             cfg.urgent_priority_threshold,
+            cfg.snooze_short_mins,
+            cfg.snooze_long_mins,
         ),
         Err(_) => {
             let path_str =
@@ -144,6 +148,8 @@ pub async fn run() -> Result<()> {
     app_state.disabled_calendars = disabled_calendars.into_iter().collect();
     app_state.urgent_days = urgent_days;
     app_state.urgent_prio = urgent_prio;
+    app_state.snooze_short_mins = snooze_short_mins;
+    app_state.snooze_long_mins = snooze_long_mins;
 
     // --- START ALARM ACTOR ---
     let (gui_alarm_tx, mut gui_alarm_rx) = tokio::sync::mpsc::channel(10);

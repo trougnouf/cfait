@@ -933,22 +933,60 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             lines.push(Line::from(""));
         }
 
-        lines.push(Line::from(vec![
-            Span::styled(
-                " [D] ",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("Dismiss    "),
-            Span::styled(
-                " [S] ",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("Snooze (10m)"),
-        ]));
+        // Format snooze presets
+        let short_label = crate::model::parser::format_duration_compact(state.snooze_short_mins);
+        let long_label = crate::model::parser::format_duration_compact(state.snooze_long_mins);
+
+        if state.mode == InputMode::Snoozing {
+            // Show custom snooze input
+            lines.push(Line::from(vec![
+                Span::styled(
+                    " Custom snooze: ",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(&state.input_buffer),
+                Span::styled(" █", Style::default().fg(Color::Yellow)),
+            ]));
+            lines.push(Line::from(""));
+            lines.push(Line::from(vec![
+                Span::raw("Enter duration (e.g., 30m, 2h, 1d) or "),
+                Span::styled("[Esc]", Style::default().fg(Color::Yellow)),
+                Span::raw(" to cancel"),
+            ]));
+        } else {
+            lines.push(Line::from(vec![
+                Span::styled(
+                    " [d] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("Dismiss    "),
+                Span::styled(
+                    " [1] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(format!("Snooze {}    ", short_label)),
+                Span::styled(
+                    " [2] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(format!("Snooze {}    ", long_label)),
+                Span::styled(
+                    " [s] ",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("Custom"),
+            ]));
+        }
 
         let p = Paragraph::new(lines)
             .block(block)

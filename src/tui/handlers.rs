@@ -1,5 +1,6 @@
 // File: ./src/tui/handlers.rs
 use crate::config::Config;
+use crate::model::parser::parse_duration;
 use crate::model::{Task, TaskStatus, extract_inline_aliases, validate_alias_integrity};
 use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::system::SystemEvent;
@@ -54,41 +55,69 @@ pub async fn handle_key_event(
 ) -> Option<Action> {
     // --- ALARM INTERCEPTION ---
     if let Some((task, alarm_uid)) = state.active_alarm.clone() {
-        match key.code {
-            KeyCode::Char('D') | KeyCode::Char('d') => {
-                if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                    && t.dismiss_alarm(&alarm_uid)
-                {
-                    let t_clone = t.clone();
-                    // Update UI
-                    state.active_alarm = None;
-                    state.refresh_filtered_view();
-                    // Push update to backend
-                    let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                    // Push update to alarm actor
-                    if let Some(tx) = &state.alarm_actor_tx {
-                        let all = state.store.calendars.values().flatten().cloned().collect();
-                        let _ = tx.try_send(SystemEvent::UpdateTasks(all));
+        // If in Snoozing mode, let the input handler deal with it
+        if state.mode == InputMode::Snoozing {
+            // Fall through to normal input handling below
+        } else {
+            match key.code {
+                KeyCode::Char('D') | KeyCode::Char('d') => {
+                    if let Some((t, _)) = state.store.get_task_mut(&task.uid)
+                        && t.dismiss_alarm(&alarm_uid)
+                    {
+                        let t_clone = t.clone();
+                        // Update UI
+                        state.active_alarm = None;
+                        state.refresh_filtered_view();
+                        // Push update to backend
+                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                        // Push update to alarm actor
+                        if let Some(tx) = &state.alarm_actor_tx {
+                            let all = state.store.calendars.values().flatten().cloned().collect();
+                            let _ = tx.try_send(SystemEvent::UpdateTasks(all));
+                        }
                     }
+                    return None;
                 }
-                return None;
-            }
-            KeyCode::Char('S') | KeyCode::Char('s') => {
-                if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                    && t.snooze_alarm(&alarm_uid, 10)
-                {
-                    let t_clone = t.clone();
-                    state.active_alarm = None;
-                    state.refresh_filtered_view();
-                    let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                    if let Some(tx) = &state.alarm_actor_tx {
-                        let all = state.store.calendars.values().flatten().cloned().collect();
-                        let _ = tx.try_send(SystemEvent::UpdateTasks(all));
+                KeyCode::Char('1') => {
+                    // Snooze short preset
+                    if let Some((t, _)) = state.store.get_task_mut(&task.uid)
+                        && t.snooze_alarm(&alarm_uid, state.snooze_short_mins)
+                    {
+                        let t_clone = t.clone();
+                        state.active_alarm = None;
+                        state.refresh_filtered_view();
+                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                        if let Some(tx) = &state.alarm_actor_tx {
+                            let all = state.store.calendars.values().flatten().cloned().collect();
+                            let _ = tx.try_send(SystemEvent::UpdateTasks(all));
+                        }
                     }
+                    return None;
                 }
-                return None;
+                KeyCode::Char('2') => {
+                    // Snooze long preset
+                    if let Some((t, _)) = state.store.get_task_mut(&task.uid)
+                        && t.snooze_alarm(&alarm_uid, state.snooze_long_mins)
+                    {
+                        let t_clone = t.clone();
+                        state.active_alarm = None;
+                        state.refresh_filtered_view();
+                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                        if let Some(tx) = &state.alarm_actor_tx {
+                            let all = state.store.calendars.values().flatten().cloned().collect();
+                            let _ = tx.try_send(SystemEvent::UpdateTasks(all));
+                        }
+                    }
+                    return None;
+                }
+                KeyCode::Char('S') | KeyCode::Char('s') => {
+                    // Enter custom snooze mode
+                    state.mode = InputMode::Snoozing;
+                    state.reset_input();
+                    return None;
+                }
+                _ => return None, // Block other input while alarm is ringing
             }
-            _ => return None, // Block other input while alarm is ringing
         }
     }
     // --------------------------
@@ -293,6 +322,51 @@ pub async fn handle_key_event(
             KeyCode::Backspace => state.delete_char(),
             KeyCode::Left => state.move_cursor_left(),
             KeyCode::Right => state.move_cursor_right(),
+            _ => {}
+        },
+        InputMode::Snoozing => match key.code {
+            KeyCode::Enter if !state.input_buffer.is_empty() => {
+                // Parse custom snooze duration
+                if let Some(mins) = parse_duration(&state.input_buffer) {
+                    if let Some((task, alarm_uid)) = state.active_alarm.clone()
+                        && let Some((t, _)) = state.store.get_task_mut(&task.uid)
+                            && t.snooze_alarm(&alarm_uid, mins)
+                        {
+                            let t_clone = t.clone();
+                            state.active_alarm = None;
+                            state.mode = InputMode::Normal;
+                            state.reset_input();
+                            state.refresh_filtered_view();
+                            let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                            if let Some(tx) = &state.alarm_actor_tx {
+                                let all =
+                                    state.store.calendars.values().flatten().cloned().collect();
+                                let _ = tx.try_send(SystemEvent::UpdateTasks(all));
+                            }
+                        }
+                } else {
+                    state.message = format!("Invalid duration: '{}'", state.input_buffer);
+                }
+                return None;
+            }
+            KeyCode::Esc => {
+                state.mode = InputMode::Normal;
+                state.reset_input();
+                // Return to alarm display
+                return None;
+            }
+            KeyCode::Char(c) => {
+                state.enter_char(c);
+            }
+            KeyCode::Backspace => {
+                state.delete_char();
+            }
+            KeyCode::Left => {
+                state.move_cursor_left();
+            }
+            KeyCode::Right => {
+                state.move_cursor_right();
+            }
             _ => {}
         },
         InputMode::Searching => match key.code {
