@@ -293,7 +293,7 @@ fun HomeScreen(
                             }
 
                             "cancel" -> {
-                                t.copy(statusString = "Cancelled", isDone = false)
+                                t.copy(statusString = "Cancelled", isDone = true)
                             }
 
                             "playpause" -> {

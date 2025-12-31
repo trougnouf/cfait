@@ -302,10 +302,10 @@ fun TaskCheckbox(
     val isPaused = task.isPaused
     val bgColor =
         when {
-            isDone -> Color(0xFF009900)
+            status == "Cancelled" -> Color(0xFF4D3333)
             status == "InProcess" -> Color(0xFF99CC99)
             isPaused -> Color(0xFFFFD54F)
-            status == "Cancelled" -> Color(0xFF4D3333)
+            isDone -> Color(0xFF009900)
             else -> Color.Transparent
         }
     Box(
@@ -320,14 +320,14 @@ fun TaskCheckbox(
                 },
         contentAlignment = Alignment.Center,
     ) {
-        if (isDone) {
-            NfIcon(NfIcons.CHECK, 12.sp, Color.White)
+        if (status == "Cancelled") {
+            Box(Modifier.offset(y = (-1).dp)) { NfIcon(NfIcons.CROSS, 12.sp, Color.White) }
         } else if (status == "InProcess") {
             Box(Modifier.offset(y = (-2).dp)) { NfIcon(NfIcons.PLAY, 10.sp, Color.White) }
         } else if (isPaused) {
             NfIcon(NfIcons.PAUSE, 10.sp, Color.Black)
-        } else if (status == "Cancelled") {
-            NfIcon(NfIcons.CROSS, 12.sp, Color.White)
+        } else if (isDone) {
+            NfIcon(NfIcons.CHECK, 12.sp, Color.White)
         }
     }
 }
