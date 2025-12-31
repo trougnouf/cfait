@@ -546,7 +546,9 @@ impl TaskStore {
         let is_ready_mode = search_lower.contains("is:ready");
         let now = Utc::now();
 
-        let filtered: Vec<Task> = raw_tasks
+        // Pass 1: Filter by everything EXCEPT the search text match
+        // This creates a pool of "Candidate Tasks" that satisfy calendar, status, tag, and logic filters.
+        let visible_candidates: Vec<Task> = raw_tasks
             .into_iter()
             .filter(|t| {
                 let has_status_filter = search_lower.contains("is:done")
@@ -557,7 +559,7 @@ impl TaskStore {
                     return false;
                 }
 
-                // --- NEW: Work Mode (is:ready) Logic ---
+                // --- Work Mode (is:ready) Logic ---
                 if is_ready_mode {
                     // 1. Must not be completed/cancelled
                     if t.status.is_done() {
@@ -672,15 +674,64 @@ impl TaskStore {
                     }
                 }
 
-                if !options.search_term.is_empty() {
-                    return t.matches_search_term(options.search_term);
-                }
+                // NOTE: We do NOT filter by text search here yet.
+                // We keep all tasks that satisfy the "properties" filters.
                 true
             })
             .collect();
 
+        // Pass 2: Apply Search with Hierarchy Expansion
+        let final_tasks = if options.search_term.is_empty() {
+            visible_candidates
+        } else {
+            // Build parent->children index for the visible set to allow efficient traversal
+            let mut children_map: HashMap<String, Vec<String>> = HashMap::new();
+            for t in &visible_candidates {
+                if let Some(p) = &t.parent_uid {
+                    children_map
+                        .entry(p.clone())
+                        .or_default()
+                        .push(t.uid.clone());
+                }
+            }
+
+            let mut matched_uids = HashSet::new();
+            let mut queue = Vec::new();
+
+            // Find Explicit Matches
+            for t in &visible_candidates {
+                if t.matches_search_term(options.search_term) && matched_uids.insert(t.uid.clone())
+                {
+                    queue.push(t.uid.clone());
+                }
+            }
+
+            // Expand to Descendants (Implicit Matches)
+            // If parent matched, include all children recursively
+            let mut idx = 0;
+            while idx < queue.len() {
+                let current_uid = queue[idx].clone();
+                idx += 1;
+
+                if let Some(children) = children_map.get(&current_uid) {
+                    for child_uid in children {
+                        // Add child if not already added
+                        if matched_uids.insert(child_uid.clone()) {
+                            queue.push(child_uid.clone());
+                        }
+                    }
+                }
+            }
+
+            // Filter the candidate list to only include matched UIDs
+            visible_candidates
+                .into_iter()
+                .filter(|t| matched_uids.contains(&t.uid))
+                .collect()
+        };
+
         Task::organize_hierarchy(
-            filtered,
+            final_tasks,
             options.cutoff_date,
             options.urgent_days,
             options.urgent_prio,
