@@ -32,6 +32,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
   - [⚙️ From Source (Rust)](#from-source-rust)
 - [⌨️ Smart Input Syntax](#smart-input-syntax)
 - [🔍 Search & Filtering](#search--filtering)
+- [📊 Task Sorting](#task-sorting)
 - [📅 Calendar Events for Tasks](#calendar-events-for-tasks)
 - [💾 Export & Backup](#export-backup)
 - [🎮 TUI Keybindings](#tui-keybindings)
@@ -228,6 +229,24 @@ Date filters now support **relative dates** for both due (`@`) and start (`^`) d
 
 ### Combining Filters
 You can combine multiple filters: `is:ready !<4 ~<1h #gardening` (actionable high-priority gardening tasks under an hour).
+
+<a name="task-sorting"></a>
+## 📊 Task Sorting
+
+Cfait organizes tasks in the following order:
+
+1. **🔴 Urgent tasks** (priority ≤ 1 by default)
+2. **⏰ Due soon** (due today or tomorrow by default)
+3. **▶️ Ongoing tasks** (status: in-process)
+4. **📅 Standard tasks** (within sorting cutoff) - Sorted by due date, then priority
+5. **📋 Remaining tasks** (outside cutoff or no date) - Sorted by priority, then name
+6. **🔮 Future tasks** (start date not yet reached)
+7. **✅ Done/Cancelled** - Completed or cancelled tasks
+
+**Notes:**
+- Priority 0 (unset) is treated as priority 5 (medium)
+- Future start dates move tasks to rank 6, even if they have urgent priority
+- Thresholds for "urgent", "due soon", and "cutoff" are configurable in settings
 
 <a name="calendar-events-for-tasks"></a>
 ## 📅 Calendar Events for Tasks

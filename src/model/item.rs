@@ -1,4 +1,3 @@
-// File: ./src/model/item.rs
 use chrono::{DateTime, Duration, Local, NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
@@ -309,70 +308,127 @@ impl Task {
     ) -> Ordering {
         let now = Utc::now();
 
-        let is_urgent = |t: &Task| -> bool {
+        // Helper: Treat Priority 0 (Unset) as 5 (Medium) for comparison
+        let normalize_prio = |p: u8| if p == 0 { 5 } else { p };
+
+        // Helper: Determine the sorting Rank (1-7)
+        // 1: Urgent (priority <= urgent_prio)
+        // 2: Due Soon (due within urgent_days)
+        // 3: Ongoing (InProcess)
+        // 4: Remaining (Inside Cutoff, sorted by due date)
+        // 5: Remaining (Outside Cutoff/No Date, sorted by priority)
+        // 6: Future Start
+        // 7: Done/Cancelled
+        let get_rank = |t: &Task| -> u8 {
             if t.status.is_done() {
-                return false;
+                return 7;
             }
-            let is_high_prio = t.priority > 0 && t.priority <= urgent_prio;
-            let is_due_soon = if let Some(due) = &t.due {
-                due.to_comparison_time() <= now + chrono::Duration::days(urgent_days as i64)
-            } else {
-                false
-            };
-            is_high_prio || is_due_soon
-        };
 
-        let s1_urgent = is_urgent(self);
-        let s2_urgent = is_urgent(other);
-
-        let s1_active = self.status == TaskStatus::InProcess;
-        let s2_active = other.status == TaskStatus::InProcess;
-        let s1_done = self.status.is_done();
-        let s2_done = other.status.is_done();
-
-        let s1_future = self
-            .dtstart
-            .as_ref()
-            .map(|d| d.to_comparison_time() > now)
-            .unwrap_or(false);
-        let s2_future = other
-            .dtstart
-            .as_ref()
-            .map(|d| d.to_comparison_time() > now)
-            .unwrap_or(false);
-
-        let is_in_window = |t: &Task| -> bool {
-            match (&t.due, cutoff) {
-                (Some(d), Some(limit)) => d.to_comparison_time() <= limit,
-                (Some(_), None) => true,
-                (None, _) => false,
+            // Check Future Start (Excludes from 1-5)
+            if let Some(start) = &t.dtstart
+                && start.to_comparison_time() > now
+            {
+                return 6;
             }
-        };
-        let s1_in = is_in_window(self);
-        let s2_in = is_in_window(other);
 
-        let p1 = if self.priority == 0 { 5 } else { self.priority };
-        let p2 = if other.priority == 0 {
+            // 1: Urgent (Priority threshold)
+            if t.priority > 0 && t.priority <= urgent_prio {
+                return 1;
+            }
+
+            // 2: Due Soon (Date threshold)
+            if let Some(due) = &t.due
+                && due.to_comparison_time() <= now + chrono::Duration::days(urgent_days as i64)
+            {
+                return 2;
+            }
+
+            // 3: Ongoing
+            if t.status == TaskStatus::InProcess {
+                return 3;
+            }
+
+            // 4: Remaining (Inside Cutoff)
+            if let Some(due) = &t.due {
+                if let Some(limit) = cutoff {
+                    if due.to_comparison_time() <= limit {
+                        return 4;
+                    }
+                } else {
+                    // If no cutoff, all dated tasks are essentially "inside cutoff"
+                    return 4;
+                }
+            }
+
+            // 5: Remaining (Outside Cutoff or No Date)
             5
-        } else {
-            other.priority
         };
 
-        s2_urgent
-            .cmp(&s1_urgent)
-            .then(s2_active.cmp(&s1_active))
-            .then(s1_done.cmp(&s2_done))
-            .then(s1_future.cmp(&s2_future))
-            .then(s2_in.cmp(&s1_in))
-            .then(p1.cmp(&p2))
-            .then_with(|| match (&self.due, &other.due) {
-                (Some(d1), Some(d2)) => d1.cmp(d2),
+        let rank_self = get_rank(self);
+        let rank_other = get_rank(other);
+
+        if rank_self != rank_other {
+            return rank_self.cmp(&rank_other);
+        }
+
+        // Helper: Sort dates, putting None last
+        let compare_dates = |d1: &Option<DateType>, d2: &Option<DateType>| -> Ordering {
+            match (d1, d2) {
+                (Some(a), Some(b)) => a.cmp(b),
                 (Some(_), None) => Ordering::Less,
                 (None, Some(_)) => Ordering::Greater,
                 (None, None) => Ordering::Equal,
-            })
-            .then(other.is_paused().cmp(&self.is_paused()))
-            .then(self.summary.cmp(&other.summary))
+            }
+        };
+
+        // Tie-breaking within ranks
+        match rank_self {
+            1 => {
+                // Urgent: Priority -> Due -> Name
+                normalize_prio(self.priority)
+                    .cmp(&normalize_prio(other.priority))
+                    .then_with(|| compare_dates(&self.due, &other.due))
+            }
+            2 => {
+                // Due Soon: Due -> Priority -> Name
+                compare_dates(&self.due, &other.due)
+                    .then(normalize_prio(self.priority).cmp(&normalize_prio(other.priority)))
+            }
+            3 => {
+                // Ongoing: Priority -> Due -> Name
+                normalize_prio(self.priority)
+                    .cmp(&normalize_prio(other.priority))
+                    .then_with(|| compare_dates(&self.due, &other.due))
+            }
+            4 => {
+                // Inside Cutoff: Due -> Priority -> Name
+                compare_dates(&self.due, &other.due)
+                    .then(normalize_prio(self.priority).cmp(&normalize_prio(other.priority)))
+            }
+            5 => {
+                // Outside Cutoff: Priority -> Name -> Due
+                normalize_prio(self.priority)
+                    .cmp(&normalize_prio(other.priority))
+                    .then_with(|| self.summary.cmp(&other.summary))
+                    .then_with(|| compare_dates(&self.due, &other.due))
+            }
+            6 => {
+                // Future: Start Date -> Priority -> Name
+                // Compare start dates for future tasks
+                let s1 = self.dtstart.as_ref().map(|d| d.to_comparison_time());
+                let s2 = other.dtstart.as_ref().map(|d| d.to_comparison_time());
+                s1.cmp(&s2)
+                    .then(normalize_prio(self.priority).cmp(&normalize_prio(other.priority)))
+            }
+            _ => {
+                // Done/Other: Priority -> Due -> Name
+                normalize_prio(self.priority)
+                    .cmp(&normalize_prio(other.priority))
+                    .then_with(|| compare_dates(&self.due, &other.due))
+            }
+        }
+        .then(other.is_paused().cmp(&self.is_paused()))
+        .then_with(|| self.summary.cmp(&other.summary))
     }
 
     pub fn organize_hierarchy(
@@ -899,164 +955,629 @@ mod tests {
         assert!(matches!(tasks[0].due, Some(DateType::Specific(_))));
         assert!(tasks[0].dtstart.is_none());
 
-        // New task should preserve its DateType variants
+        // New task should have DateType variants preserved
         assert!(matches!(tasks[1].due, Some(DateType::AllDay(_))));
         assert!(matches!(tasks[1].dtstart, Some(DateType::Specific(_))));
     }
 
     #[test]
     fn test_real_world_upgrade_scenario() {
-        // Simulate a real upgrade from v3.12 to v3.14
-        // This test writes a v3.12 format file, then reads it back using v3.14 deserializer
-        use std::fs;
-        use std::io::Write;
+        // Simulates a real upgrade: local.json written by v3.12, read by v3.14
+        // User has tasks with DateTime<Utc> strings, we migrate them to DateType on load
+        let v312_local_json = r#"{
+            "tasks": [
+                {
+                    "uid": "task-1",
+                    "summary": "Finish report",
+                    "description": "Important deadline",
+                    "status": "NeedsAction",
+                    "estimated_duration": 120,
+                    "due": "2024-02-01T17:00:00Z",
+                    "dtstart": null,
+                    "alarms": [],
+                    "priority": 1,
+                    "percent_complete": null,
+                    "parent_uid": null,
+                    "dependencies": [],
+                    "related_to": [],
+                    "etag": "abc123",
+                    "href": "local://task-1",
+                    "calendar_href": "local://default",
+                    "categories": ["work"],
+                    "depth": 0,
+                    "rrule": null,
+                    "location": null,
+                    "url": null,
+                    "geo": null,
+                    "unmapped_properties": [],
+                    "sequence": 1
+                },
+                {
+                    "uid": "task-2",
+                    "summary": "Dentist appointment",
+                    "description": "",
+                    "status": "NeedsAction",
+                    "estimated_duration": null,
+                    "due": "2024-02-05T10:30:00Z",
+                    "dtstart": "2024-02-05T09:00:00Z",
+                    "alarms": [],
+                    "priority": 0,
+                    "percent_complete": null,
+                    "parent_uid": null,
+                    "dependencies": [],
+                    "related_to": [],
+                    "etag": "def456",
+                    "href": "local://task-2",
+                    "calendar_href": "local://default",
+                    "categories": ["health"],
+                    "depth": 0,
+                    "rrule": null,
+                    "location": "Main Street Dental",
+                    "url": null,
+                    "geo": null,
+                    "unmapped_properties": [],
+                    "sequence": 0
+                }
+            ]
+        }"#;
 
-        let temp_dir = std::env::temp_dir().join("cfait_test_upgrade_scenario");
-        let _ = fs::create_dir_all(&temp_dir);
-        let file_path = temp_dir.join("local_v312.json");
+        #[derive(Deserialize)]
+        struct LocalData {
+            tasks: Vec<Task>,
+        }
 
-        // Simulate v3.12 local.json file with multiple tasks
-        let v312_content = r#"[
-  {
-    "uid": "legacy-task-1",
-    "summary": "Buy groceries",
-    "description": "Milk, eggs, bread",
-    "status": "NeedsAction",
-    "estimated_duration": 30,
-    "due": "2024-02-15T18:00:00Z",
-    "dtstart": null,
-    "alarms": [],
-    "priority": 5,
-    "percent_complete": null,
-    "parent_uid": null,
-    "dependencies": [],
-    "related_to": [],
-    "etag": "abc123",
-    "href": "task-1.ics",
-    "calendar_href": "local://default",
-    "categories": ["personal", "shopping"],
-    "depth": 0,
-    "rrule": null,
-    "location": null,
-    "url": null,
-    "geo": null,
-    "unmapped_properties": [],
-    "sequence": 0
-  },
-  {
-    "uid": "legacy-task-2",
-    "summary": "Dentist appointment",
-    "description": "",
-    "status": "NeedsAction",
-    "estimated_duration": null,
-    "due": "2024-03-10T14:30:00Z",
-    "dtstart": "2024-03-10T14:30:00Z",
-    "alarms": [],
-    "priority": 0,
-    "percent_complete": null,
-    "parent_uid": null,
-    "dependencies": [],
-    "related_to": [],
-    "etag": "def456",
-    "href": "task-2.ics",
-    "calendar_href": "local://default",
-    "categories": [],
-    "depth": 0,
-    "rrule": null,
-    "location": "Dr. Smith's Office",
-    "url": null,
-    "geo": null,
-    "unmapped_properties": [],
-    "sequence": 0
-  },
-  {
-    "uid": "legacy-task-3",
-    "summary": "Completed task",
-    "description": "This was already done",
-    "status": "Completed",
-    "estimated_duration": null,
-    "due": null,
-    "dtstart": null,
-    "alarms": [],
-    "priority": 0,
-    "percent_complete": 100,
-    "parent_uid": null,
-    "dependencies": [],
-    "related_to": [],
-    "etag": "ghi789",
-    "href": "task-3.ics",
-    "calendar_href": "local://default",
-    "categories": [],
-    "depth": 0,
-    "rrule": null,
-    "location": null,
-    "url": null,
-    "geo": null,
-    "unmapped_properties": [],
-    "sequence": 0
-  }
-]"#;
+        let data: LocalData =
+            serde_json::from_str(v312_local_json).expect("Failed to deserialize v3.12 local.json");
 
-        // Write v3.12 format file
-        let mut file = fs::File::create(&file_path).expect("Failed to create test file");
-        file.write_all(v312_content.as_bytes())
-            .expect("Failed to write test file");
-        drop(file);
+        assert_eq!(data.tasks.len(), 2);
 
-        // Now read it back using v3.14 deserializer (this simulates the upgrade)
-        let json = fs::read_to_string(&file_path).expect("Failed to read test file");
-        let tasks: Vec<Task> = serde_json::from_str(&json)
-            .expect("Failed to deserialize v3.12 format - upgrade simulation failed!");
+        // Task 1: due should be migrated to DateType::Specific
+        let task1 = &data.tasks[0];
+        assert_eq!(task1.summary, "Finish report");
+        assert!(matches!(task1.due, Some(DateType::Specific(_))));
+        if let Some(DateType::Specific(dt)) = task1.due {
+            assert_eq!(dt.to_rfc3339(), "2024-02-01T17:00:00+00:00");
+        }
+        assert!(task1.dtstart.is_none());
 
-        // Verify all tasks were loaded successfully
-        assert_eq!(tasks.len(), 3, "All three tasks should be loaded");
+        // Task 2: both due and dtstart should be migrated
+        let task2 = &data.tasks[1];
+        assert_eq!(task2.summary, "Dentist appointment");
+        assert!(matches!(task2.due, Some(DateType::Specific(_))));
+        assert!(matches!(task2.dtstart, Some(DateType::Specific(_))));
+        if let Some(DateType::Specific(dt)) = task2.due {
+            assert_eq!(dt.to_rfc3339(), "2024-02-05T10:30:00+00:00");
+        }
+        if let Some(DateType::Specific(dt)) = task2.dtstart {
+            assert_eq!(dt.to_rfc3339(), "2024-02-05T09:00:00+00:00");
+        }
 
-        // Verify first task (with due date)
-        assert_eq!(tasks[0].summary, "Buy groceries");
-        assert!(matches!(tasks[0].due, Some(DateType::Specific(_))));
-        assert!(tasks[0].dtstart.is_none());
-        assert_eq!(tasks[0].estimated_duration, Some(30));
-        assert_eq!(tasks[0].categories, vec!["personal", "shopping"]);
+        // Now test serialization - should write new format
+        let serialized =
+            serde_json::to_string_pretty(&data.tasks[0]).expect("Failed to serialize task");
 
-        // Verify second task (with both due and dtstart)
-        assert_eq!(tasks[1].summary, "Dentist appointment");
-        assert!(matches!(tasks[1].due, Some(DateType::Specific(_))));
-        assert!(matches!(tasks[1].dtstart, Some(DateType::Specific(_))));
-        assert_eq!(tasks[1].location, Some("Dr. Smith's Office".to_string()));
+        // The serialized format should be the new DateType format (with proper spacing)
+        assert!(serialized.contains(r#""type": "Specific"#));
+        assert!(serialized.contains(r#""value": "2024-02-01T17:00:00Z"#));
 
-        // Verify third task (completed, no dates)
-        assert_eq!(tasks[2].summary, "Completed task");
-        assert_eq!(tasks[2].status, TaskStatus::Completed);
-        assert!(tasks[2].due.is_none());
-        assert!(tasks[2].dtstart.is_none());
-        assert_eq!(tasks[2].percent_complete, Some(100));
+        // Test round-trip: serialize and deserialize again
+        let task1_roundtrip: Task =
+            serde_json::from_str(&serialized).expect("Failed to deserialize after round-trip");
+        assert_eq!(task1_roundtrip.summary, "Finish report");
+        assert!(matches!(task1_roundtrip.due, Some(DateType::Specific(_))));
+    }
 
-        // Now save it back in v3.14 format (simulate normal operation after upgrade)
-        let v314_json = serde_json::to_string_pretty(&tasks).expect("Failed to serialize");
-        let v314_path = temp_dir.join("local_v314.json");
-        fs::write(&v314_path, v314_json).expect("Failed to write v3.14 format");
+    // Test the new rank-based sorting
+    #[test]
+    fn test_sorting_rank1_urgent_priority() {
+        let now = Utc::now();
+        let urgent_days = 1;
+        let urgent_prio = 1;
 
-        // Verify the new format can still be read
-        let reloaded_json = fs::read_to_string(&v314_path).expect("Failed to read v3.14 file");
-        let reloaded_tasks: Vec<Task> =
-            serde_json::from_str(&reloaded_json).expect("Failed to deserialize v3.14 format");
+        let urgent_task = Task {
+            uid: "urgent".to_string(),
+            summary: "Urgent task".to_string(),
+            priority: 1,
+            status: TaskStatus::NeedsAction,
+            due: Some(DateType::Specific(now + chrono::Duration::days(5))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
 
+        let normal_task = Task {
+            uid: "normal".to_string(),
+            summary: "Normal task".to_string(),
+            priority: 3,
+            status: TaskStatus::NeedsAction,
+            due: Some(DateType::Specific(now + chrono::Duration::days(2))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        // Urgent (rank 1) should come before normal (rank 4)
         assert_eq!(
-            reloaded_tasks.len(),
-            3,
-            "All tasks should survive the round-trip"
+            urgent_task.compare_with_cutoff(&normal_task, None, urgent_days, urgent_prio),
+            Ordering::Less
         );
-        assert_eq!(reloaded_tasks[0].summary, "Buy groceries");
-        assert_eq!(reloaded_tasks[1].summary, "Dentist appointment");
-        assert_eq!(reloaded_tasks[2].summary, "Completed task");
+    }
 
-        // Verify that the new format uses the DateType enum structure
-        assert!(
-            reloaded_json.contains(r#""type":"#),
-            "v3.14 format should contain DateType enum structure"
+    #[test]
+    fn test_sorting_rank2_due_soon() {
+        let now = Utc::now();
+        let urgent_days = 1;
+        let urgent_prio = 1;
+
+        let due_soon = Task {
+            uid: "due_soon".to_string(),
+            summary: "Due soon".to_string(),
+            priority: 3,
+            status: TaskStatus::NeedsAction,
+            due: Some(DateType::Specific(now + chrono::Duration::hours(12))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        let due_later = Task {
+            uid: "due_later".to_string(),
+            summary: "Due later".to_string(),
+            priority: 3,
+            status: TaskStatus::NeedsAction,
+            due: Some(DateType::Specific(now + chrono::Duration::days(5))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        // Due soon (rank 2) should come before due later (rank 4)
+        assert_eq!(
+            due_soon.compare_with_cutoff(&due_later, None, urgent_days, urgent_prio),
+            Ordering::Less
         );
+    }
 
-        // Cleanup
-        let _ = fs::remove_dir_all(temp_dir);
+    #[test]
+    fn test_sorting_rank3_ongoing() {
+        let now = Utc::now();
+        let urgent_days = 1;
+        let urgent_prio = 1;
+
+        let ongoing = Task {
+            uid: "ongoing".to_string(),
+            summary: "Ongoing task".to_string(),
+            priority: 5,
+            status: TaskStatus::InProcess,
+            due: Some(DateType::Specific(now + chrono::Duration::days(5))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        let not_started = Task {
+            uid: "not_started".to_string(),
+            summary: "Not started".to_string(),
+            priority: 3,
+            status: TaskStatus::NeedsAction,
+            due: Some(DateType::Specific(now + chrono::Duration::days(3))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        // Ongoing (rank 3) should come before not started (rank 4)
+        assert_eq!(
+            ongoing.compare_with_cutoff(&not_started, None, urgent_days, urgent_prio),
+            Ordering::Less
+        );
+    }
+
+    #[test]
+    fn test_sorting_rank4_sorted_by_due_date() {
+        let now = Utc::now();
+        let cutoff = now + chrono::Duration::days(30);
+        let urgent_days = 1;
+        let urgent_prio = 1;
+
+        let due_earlier = Task {
+            uid: "earlier".to_string(),
+            summary: "Due earlier".to_string(),
+            priority: 5,
+            status: TaskStatus::NeedsAction,
+            due: Some(DateType::Specific(now + chrono::Duration::days(10))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        let due_later = Task {
+            uid: "later".to_string(),
+            summary: "Due later".to_string(),
+            priority: 3, // Higher priority, but should still be sorted by date in rank 4
+            status: TaskStatus::NeedsAction,
+            due: Some(DateType::Specific(now + chrono::Duration::days(20))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        // Both in rank 4, should be sorted by due date (earlier first)
+        assert_eq!(
+            due_earlier.compare_with_cutoff(&due_later, Some(cutoff), urgent_days, urgent_prio),
+            Ordering::Less
+        );
+    }
+
+    #[test]
+    fn test_sorting_rank5_sorted_by_priority_then_name() {
+        let now = Utc::now();
+        let cutoff = now + chrono::Duration::days(30);
+        let urgent_days = 1;
+        let urgent_prio = 1;
+
+        let high_prio = Task {
+            uid: "high".to_string(),
+            summary: "Z task".to_string(),
+            priority: 3,
+            status: TaskStatus::NeedsAction,
+            due: Some(DateType::Specific(now + chrono::Duration::days(60))), // Outside cutoff
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        let low_prio = Task {
+            uid: "low".to_string(),
+            summary: "A task".to_string(),
+            priority: 5,
+            status: TaskStatus::NeedsAction,
+            due: Some(DateType::Specific(now + chrono::Duration::days(50))), // Outside cutoff
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        // Both in rank 5 (outside cutoff), should be sorted by priority first
+        assert_eq!(
+            high_prio.compare_with_cutoff(&low_prio, Some(cutoff), urgent_days, urgent_prio),
+            Ordering::Less
+        );
+    }
+
+    #[test]
+    fn test_sorting_rank6_future_start() {
+        let now = Utc::now();
+        let urgent_days = 1;
+        let urgent_prio = 1;
+
+        let future_start = Task {
+            uid: "future".to_string(),
+            summary: "Future task".to_string(),
+            priority: 1, // Even urgent priority doesn't matter if start is in future
+            status: TaskStatus::NeedsAction,
+            due: Some(DateType::Specific(now + chrono::Duration::days(10))),
+            dtstart: Some(DateType::Specific(now + chrono::Duration::days(5))),
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        let normal_task = Task {
+            uid: "normal".to_string(),
+            summary: "Normal task".to_string(),
+            priority: 5,
+            status: TaskStatus::NeedsAction,
+            due: Some(DateType::Specific(now + chrono::Duration::days(15))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        // Normal task (rank 4) should come before future start (rank 6)
+        assert_eq!(
+            normal_task.compare_with_cutoff(&future_start, None, urgent_days, urgent_prio),
+            Ordering::Less
+        );
+    }
+
+    #[test]
+    fn test_sorting_rank7_done_tasks() {
+        let now = Utc::now();
+        let urgent_days = 1;
+        let urgent_prio = 1;
+
+        let done_task = Task {
+            uid: "done".to_string(),
+            summary: "Done task".to_string(),
+            priority: 1,
+            status: TaskStatus::Completed,
+            due: Some(DateType::Specific(now + chrono::Duration::days(1))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        let normal_task = Task {
+            uid: "normal".to_string(),
+            summary: "Normal task".to_string(),
+            priority: 5,
+            status: TaskStatus::NeedsAction,
+            due: Some(DateType::Specific(now + chrono::Duration::days(30))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        // Normal task (rank 4/5) should come before done task (rank 7)
+        assert_eq!(
+            normal_task.compare_with_cutoff(&done_task, None, urgent_days, urgent_prio),
+            Ordering::Less
+        );
     }
 }
