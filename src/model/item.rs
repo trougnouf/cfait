@@ -426,7 +426,6 @@ impl Task {
                     .then_with(|| compare_dates(&self.due, &other.due))
             }
         }
-        .then(other.is_paused().cmp(&self.is_paused()))
         .then_with(|| self.summary.cmp(&other.summary))
     }
 
