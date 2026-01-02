@@ -553,6 +553,7 @@ impl TaskStore {
             .filter(|t| {
                 let has_status_filter = search_lower.contains("is:done")
                     || search_lower.contains("is:active")
+                    || search_lower.contains("is:started")
                     || search_lower.contains("is:ongoing");
 
                 if !has_status_filter && t.status.is_done() && options.hide_completed_global {

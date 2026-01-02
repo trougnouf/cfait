@@ -314,7 +314,7 @@ impl Task {
         // Helper: Determine the sorting Rank (1-7)
         // 1: Urgent (priority <= urgent_prio)
         // 2: Due Soon (due within urgent_days)
-        // 3: Ongoing (InProcess)
+        // 3: Started (InProcess)
         // 4: Remaining (Inside Cutoff, sorted by due date)
         // 5: Remaining (Outside Cutoff/No Date, sorted by priority)
         // 6: Future Start
@@ -343,7 +343,7 @@ impl Task {
                 return 2;
             }
 
-            // 3: Ongoing
+            // 3: Started
             if t.status == TaskStatus::InProcess {
                 return 3;
             }
@@ -395,10 +395,9 @@ impl Task {
                     .then(normalize_prio(self.priority).cmp(&normalize_prio(other.priority)))
             }
             3 => {
-                // Ongoing: Priority -> Due -> Name
-                normalize_prio(self.priority)
-                    .cmp(&normalize_prio(other.priority))
-                    .then_with(|| compare_dates(&self.due, &other.due))
+                // Started: Due -> Priority -> Name
+                compare_dates(&self.due, &other.due)
+                    .then(normalize_prio(self.priority).cmp(&normalize_prio(other.priority)))
             }
             4 => {
                 // Inside Cutoff: Due -> Priority -> Name
@@ -1215,14 +1214,14 @@ mod tests {
     }
 
     #[test]
-    fn test_sorting_rank3_ongoing() {
+    fn test_sorting_rank3_started() {
         let now = Utc::now();
         let urgent_days = 1;
         let urgent_prio = 1;
 
-        let ongoing = Task {
-            uid: "ongoing".to_string(),
-            summary: "Ongoing task".to_string(),
+        let started = Task {
+            uid: "started".to_string(),
+            summary: "Started task".to_string(),
             priority: 5,
             status: TaskStatus::InProcess,
             due: Some(DateType::Specific(now + chrono::Duration::days(5))),
@@ -1280,9 +1279,87 @@ mod tests {
             create_event: None,
         };
 
-        // Ongoing (rank 3) should come before not started (rank 4)
+        // Started (rank 3) should come before not started (rank 4)
         assert_eq!(
-            ongoing.compare_with_cutoff(&not_started, None, urgent_days, urgent_prio),
+            started.compare_with_cutoff(&not_started, None, urgent_days, urgent_prio),
+            Ordering::Less
+        );
+    }
+
+    #[test]
+    fn test_sorting_rank3_started_within_rank() {
+        let now = Utc::now();
+        let urgent_days = 1;
+        let urgent_prio = 1;
+
+        let started_due_soon = Task {
+            uid: "started_soon".to_string(),
+            summary: "Started due soon".to_string(),
+            priority: 5,
+            status: TaskStatus::InProcess,
+            due: Some(DateType::Specific(now + chrono::Duration::days(3))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        let started_due_later = Task {
+            uid: "started_later".to_string(),
+            summary: "Started due later".to_string(),
+            priority: 3, // Higher priority, but should still be sorted by date
+            status: TaskStatus::InProcess,
+            due: Some(DateType::Specific(now + chrono::Duration::days(10))),
+            dtstart: None,
+            alarms: vec![],
+            description: String::new(),
+            estimated_duration: None,
+            percent_complete: None,
+            parent_uid: None,
+            dependencies: vec![],
+            related_to: vec![],
+            etag: String::new(),
+            href: String::new(),
+            calendar_href: String::new(),
+            categories: vec![],
+            depth: 0,
+            rrule: None,
+            location: None,
+            url: None,
+            geo: None,
+            unmapped_properties: vec![],
+            sequence: 0,
+            raw_alarms: vec![],
+            raw_components: vec![],
+            create_event: None,
+        };
+
+        // Within rank 3, should sort by due date first (earlier before later)
+        assert_eq!(
+            started_due_soon.compare_with_cutoff(
+                &started_due_later,
+                None,
+                urgent_days,
+                urgent_prio
+            ),
             Ordering::Less
         );
     }

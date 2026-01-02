@@ -287,7 +287,10 @@ impl Task {
                 }
                 continue;
             }
-            if part == "is:ongoing" || part == "is:process" {
+            if part == "is:started"
+                // TODO(2026-01-02): Remove "is:ongoing" alias in a future version (deprecated, use "is:started")
+                || part == "is:ongoing"
+            {
                 if self.status != TaskStatus::InProcess {
                     return false;
                 }

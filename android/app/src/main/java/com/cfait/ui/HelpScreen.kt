@@ -183,7 +183,7 @@ fun HelpScreen(onBack: () -> Unit) {
                             "Work Mode - actionable tasks only.",
                             "Not done, start date passed, not blocked"
                         ),
-                        HelpItem("is:status", "Filter by state.", "is:done, is:ongoing, is:active"),
+                        HelpItem("is:status", "Filter by state.", "is:done, is:started, is:active"),
                         HelpItem(
                             "Operators",
                             "Compare values (<, >, <=, >=).",

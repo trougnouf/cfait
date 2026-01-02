@@ -104,7 +104,7 @@ pub fn view_help() -> Element<'static, Message> {
                 entry("text", "Matches summary or description.", "buy cat food"),
                 entry("#tag", "Filter by specific tag.", "#gardening"),
                 entry("is:ready", "Work Mode - actionable tasks only.", "Not done, start date passed, not blocked"),
-                entry("is:status", "Filter by state.", "is:done, is:ongoing, is:active"),
+                entry("is:status", "Filter by state.", "is:done, is:started, is:active"),
                 entry("Operators", "Compare values (<, >, <=, >=).", "~<20m (less than 20 minutes), <!4 (urgent tasks)"),
                 entry("  Dates", "Filter by timeframe.", "@<today (Overdue), ^>1w (Start in 1+ weeks)"),
                 entry("  Date!", "Include unset dates with '!' suffix.", "@<today! (Overdue OR no due date)"),

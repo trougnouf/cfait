@@ -15,8 +15,8 @@ fn test_status_filters() {
     let mut done = make_task();
     done.status = TaskStatus::Completed;
 
-    let mut ongoing = make_task();
-    ongoing.status = TaskStatus::InProcess;
+    let mut started = make_task();
+    started.status = TaskStatus::InProcess;
 
     // is:done
     assert!(!active.matches_search_term("is:done"));
@@ -24,11 +24,15 @@ fn test_status_filters() {
 
     // is:active (Should match NeedsAction and InProcess, but NOT Completed)
     assert!(active.matches_search_term("is:active"));
-    assert!(ongoing.matches_search_term("is:active"));
+    assert!(started.matches_search_term("is:active"));
     assert!(!done.matches_search_term("is:active"));
 
-    // is:ongoing
-    assert!(ongoing.matches_search_term("is:ongoing"));
+    // is:started
+    assert!(started.matches_search_term("is:started"));
+    assert!(!active.matches_search_term("is:started"));
+
+    // is:ongoing (legacy alias for is:started)
+    assert!(started.matches_search_term("is:ongoing"));
     assert!(!active.matches_search_term("is:ongoing"));
 }
 

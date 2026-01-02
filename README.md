@@ -191,7 +191,7 @@ The search bar isn't just for text. You can use operators (`<`, `>`, `<=`, `>=`)
 
 ### Status Filters
 *   **`is:ready`** - Shows only actionable tasks right now (not completed/cancelled, start date passed or not set, not blocked by dependencies)
-*   `is:done` / `is:active` / `is:ongoing`
+*   `is:done` / `is:active` / `is:started`
 *   Combine with other filters: `is:ready #work`, `is:ready ~<1h`
 
 ### Priority Filters (`!`)
@@ -237,11 +237,13 @@ Cfait organizes tasks in the following order:
 
 1. **🔴 Urgent tasks** (priority ≤ 1 by default)
 2. **⏰ Due soon** (due today or tomorrow by default)
-3. **▶️ Ongoing tasks** (status: in-process)
+3. **▶️ Started tasks** (status: in-process) - Sorted by due date, then priority
 4. **📅 Standard tasks** (within sorting cutoff) - Sorted by due date, then priority
 5. **📋 Remaining tasks** (outside cutoff or no date) - Sorted by priority, then name
 6. **🔮 Future tasks** (start date not yet reached)
 7. **✅ Done/Cancelled** - Completed or cancelled tasks
+
+**Within each rank:** Tasks sort by priority → due date → name (except ranks 2, 3 & 4 which sort by due date first).
 
 **Notes:**
 - Priority 0 (unset) is treated as priority 5 (medium)
