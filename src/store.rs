@@ -63,8 +63,8 @@ impl TaskStore {
             list.push(task);
         }
 
-        if href == crate::storage::LOCAL_CALENDAR_HREF {
-            let _ = LocalStorage::save(list);
+        if href.starts_with("local://") {
+            let _ = LocalStorage::save_for_href(&href, list);
         } else {
             let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
             let _ = Cache::save(&href, list, token);
@@ -77,6 +77,16 @@ impl TaskStore {
         self.calendars.clear();
         self.index.clear();
         self.related_from_index.clear();
+    }
+
+    pub fn remove(&mut self, calendar_href: &str) {
+        // Remove all tasks from this calendar from the index
+        if let Some(tasks) = self.calendars.remove(calendar_href) {
+            for task in tasks {
+                self.index.remove(&task.uid);
+            }
+        }
+        self.rebuild_relation_index();
     }
 
     pub fn get_task_mut(&mut self, uid: &str) -> Option<(&mut Task, String)> {
@@ -176,8 +186,8 @@ impl TaskStore {
         {
             let task = tasks.remove(idx);
             self.index.remove(uid);
-            if href == crate::storage::LOCAL_CALENDAR_HREF {
-                let _ = LocalStorage::save(tasks);
+            if href.starts_with("local://") {
+                let _ = LocalStorage::save_for_href(&href, tasks);
             } else {
                 let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
                 let _ = Cache::save(&href, tasks, token);
@@ -268,9 +278,9 @@ impl TaskStore {
             }
             task.calendar_href = target_href.clone();
             self.add_task(task.clone());
-            if target_href == crate::storage::LOCAL_CALENDAR_HREF {
+            if target_href.starts_with("local://") {
                 if let Some(local_tasks) = self.calendars.get(&target_href) {
-                    let _ = LocalStorage::save(local_tasks);
+                    let _ = LocalStorage::save_for_href(&target_href, local_tasks);
                 }
             } else if let Some(target_list) = self.calendars.get(&target_href) {
                 let (_, token) = Cache::load(&target_href).unwrap_or((vec![], None));

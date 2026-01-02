@@ -5,7 +5,7 @@ use crate::gui::state::{GuiApp, SidebarMode};
 use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tasks, save_config};
 use crate::journal::{Action, Journal};
 use crate::model::{Task as TodoTask, extract_inline_aliases};
-use crate::storage::{LOCAL_CALENDAR_HREF, LocalStorage};
+use crate::storage::LocalStorage;
 use chrono::{DateTime, NaiveTime, Utc};
 use iced::Task;
 use iced::widget::operation;
@@ -325,8 +325,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::MigrateLocalTo(target_href) => {
-            if let Some(local_tasks) = app.store.calendars.get(LOCAL_CALENDAR_HREF) {
+        Message::MigrateLocalTo(source_href, target_href) => {
+            if let Some(local_tasks) = app.store.calendars.get(&source_href) {
                 let tasks_to_move = local_tasks.clone();
                 if tasks_to_move.is_empty() {
                     return Task::none();
@@ -442,9 +442,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 // ... helper functions (handle_offline_update, etc.) unchanged ...
 fn handle_offline_update(app: &mut GuiApp, task: TodoTask) {
     app.unsynced_changes = true;
-    if task.calendar_href == LOCAL_CALENDAR_HREF {
+    if task.calendar_href.starts_with("local://") {
         if let Some(list) = app.store.calendars.get(&task.calendar_href) {
-            let _ = LocalStorage::save(list);
+            let _ = LocalStorage::save_for_href(&task.calendar_href, list);
         }
     } else {
         let _ = Journal::push(Action::Update(task));
@@ -453,9 +453,9 @@ fn handle_offline_update(app: &mut GuiApp, task: TodoTask) {
 
 fn handle_offline_delete(app: &mut GuiApp, task: TodoTask) {
     app.unsynced_changes = true;
-    if task.calendar_href == LOCAL_CALENDAR_HREF {
+    if task.calendar_href.starts_with("local://") {
         if let Some(list) = app.store.calendars.get(&task.calendar_href) {
-            let _ = LocalStorage::save(list);
+            let _ = LocalStorage::save_for_href(&task.calendar_href, list);
         }
     } else {
         let _ = Journal::push(Action::Delete(task));
@@ -618,10 +618,10 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
                 return Task::batch(retroactive_sync_batch);
             } else {
-                if new_task.calendar_href == LOCAL_CALENDAR_HREF {
-                    if let Ok(mut local) = LocalStorage::load() {
+                if new_task.calendar_href.starts_with("local://") {
+                    if let Ok(mut local) = LocalStorage::load_for_href(&new_task.calendar_href) {
                         local.push(new_task.clone());
-                        let _ = LocalStorage::save(&local);
+                        let _ = LocalStorage::save_for_href(&new_task.calendar_href, &local);
                     }
                 } else {
                     let _ = Journal::push(Action::Create(new_task.clone()));

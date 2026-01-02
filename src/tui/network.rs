@@ -2,8 +2,7 @@
 // New file: Encapsulates the network actor logic
 use crate::cache::Cache;
 use crate::client::RustyClient;
-use crate::model::CalendarListEntry;
-use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalStorage};
+use crate::storage::{LocalCalendarRegistry, LocalStorage};
 use crate::tui::action::{Action, AppEvent};
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -20,13 +19,13 @@ pub async fn run_network_actor(
     // 0. LOAD CACHE IMMEDIATELY
     // ------------------------------------------------------------------
     if let Ok(mut cached_cals) = Cache::load_calendars() {
-        let local_cal = CalendarListEntry {
-            name: LOCAL_CALENDAR_NAME.to_string(),
-            href: LOCAL_CALENDAR_HREF.to_string(),
-            color: None,
-        };
-        if !cached_cals.iter().any(|c| c.href == LOCAL_CALENDAR_HREF) {
-            cached_cals.push(local_cal);
+        // Load local registry and merge
+        if let Ok(locals) = LocalCalendarRegistry::load() {
+            for loc in locals {
+                if !cached_cals.iter().any(|c| c.href == loc.href) {
+                    cached_cals.push(loc);
+                }
+            }
         }
 
         let _ = event_tx
@@ -34,14 +33,13 @@ pub async fn run_network_actor(
             .await;
 
         let mut cached_tasks = Vec::new();
-        if let Ok(local_t) = LocalStorage::load() {
-            cached_tasks.push((LOCAL_CALENDAR_HREF.to_string(), local_t));
-        }
-
+        // Load tasks for all local calendars
         for cal in &cached_cals {
-            if cal.href != LOCAL_CALENDAR_HREF
-                && let Ok((tasks, _)) = Cache::load(&cal.href)
-            {
+            if cal.href.starts_with("local://") {
+                if let Ok(tasks) = LocalStorage::load_for_href(&cal.href) {
+                    cached_tasks.push((cal.href.clone(), tasks));
+                }
+            } else if let Ok((tasks, _)) = Cache::load(&cal.href) {
                 cached_tasks.push((cal.href.clone(), tasks));
             }
         }
@@ -95,12 +93,14 @@ pub async fn run_network_actor(
         }
     };
 
-    let local_cal = CalendarListEntry {
-        name: LOCAL_CALENDAR_NAME.to_string(),
-        href: LOCAL_CALENDAR_HREF.to_string(),
-        color: None,
-    };
-    calendars.push(local_cal);
+    // Merge locals again after network discovery
+    if let Ok(locals) = LocalCalendarRegistry::load() {
+        for loc in locals {
+            if !calendars.iter().any(|c| c.href == loc.href) {
+                calendars.push(loc);
+            }
+        }
+    }
 
     let _ = event_tx
         .send(AppEvent::CalendarsLoaded(calendars.clone()))
@@ -113,9 +113,11 @@ pub async fn run_network_actor(
     // Load tasks again with validated calendars list
     let mut cached_results = Vec::new();
     for cal in &calendars {
-        if cal.href != LOCAL_CALENDAR_HREF
-            && let Ok((tasks, _)) = Cache::load(&cal.href)
-        {
+        if cal.href.starts_with("local://") {
+            if let Ok(tasks) = LocalStorage::load_for_href(&cal.href) {
+                cached_results.push((cal.href.clone(), tasks));
+            }
+        } else if let Ok((tasks, _)) = Cache::load(&cal.href) {
             cached_results.push((cal.href.clone(), tasks));
         }
     }
@@ -261,12 +263,14 @@ pub async fn run_network_actor(
                     }
                 };
 
-                let local_cal = CalendarListEntry {
-                    name: LOCAL_CALENDAR_NAME.to_string(),
-                    href: LOCAL_CALENDAR_HREF.to_string(),
-                    color: None,
-                };
-                calendars.push(local_cal);
+                // Merge local calendars from registry
+                if let Ok(locals) = LocalCalendarRegistry::load() {
+                    for loc in locals {
+                        if !calendars.iter().any(|c| c.href == loc.href) {
+                            calendars.push(loc);
+                        }
+                    }
+                }
 
                 let _ = event_tx
                     .send(AppEvent::CalendarsLoaded(calendars.clone()))
@@ -338,12 +342,14 @@ pub async fn run_network_actor(
                     }
                 }
             }
-            Action::MigrateLocal(target_href) => {
-                if let Ok(local_tasks) = LocalStorage::load() {
+            Action::MigrateLocal(source_href, target_href) => {
+                // Export from specified local calendar to target CalDAV calendar
+                if let Ok(local_tasks) = LocalStorage::load_for_href(&source_href) {
                     let _ = event_tx
                         .send(AppEvent::Status(format!(
-                            "Exporting {} tasks...",
-                            local_tasks.len()
+                            "Exporting {} tasks from {}...",
+                            local_tasks.len(),
+                            source_href
                         )))
                         .await;
                     match client.migrate_tasks(local_tasks, &target_href).await {
@@ -351,12 +357,10 @@ pub async fn run_network_actor(
                             let _ = event_tx
                                 .send(AppEvent::Status(format!("Exported {} tasks.", count)))
                                 .await;
-                            if let Ok(t1) = client.get_tasks(LOCAL_CALENDAR_HREF).await {
+                            // Reload source local calendar
+                            if let Ok(t1) = client.get_tasks(&source_href).await {
                                 let _ = event_tx
-                                    .send(AppEvent::TasksLoaded(vec![(
-                                        LOCAL_CALENDAR_HREF.to_string(),
-                                        t1,
-                                    )]))
+                                    .send(AppEvent::TasksLoaded(vec![(source_href.clone(), t1)]))
                                     .await;
                             }
                             if let Ok(t2) = client.get_tasks(&target_href).await {

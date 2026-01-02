@@ -6,13 +6,14 @@ use crate::config::Config;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::model::{AlarmTrigger, DateType, Task};
 use crate::paths::AppPaths;
-use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalStorage};
+use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
 use chrono::{DateTime, Local, NaiveTime, Utc};
 use futures::stream::{self, StreamExt};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 #[cfg(target_os = "android")]
 use android_logger::Config as LogConfig;
@@ -306,8 +307,9 @@ impl CfaitMobile {
         !crate::journal::Journal::load().is_empty()
     }
 
-    pub fn export_local_ics(&self) -> Result<String, MobileError> {
-        let tasks = LocalStorage::load().map_err(|e| MobileError::from(e.to_string()))?;
+    pub fn export_local_ics(&self, calendar_href: String) -> Result<String, MobileError> {
+        let tasks = LocalStorage::load_for_href(&calendar_href)
+            .map_err(|e| MobileError::from(e.to_string()))?;
         Ok(LocalStorage::to_ics_string(&tasks))
     }
 
@@ -596,28 +598,37 @@ impl CfaitMobile {
     pub fn load_from_cache(&self) {
         let mut store = self.store.blocking_lock();
         store.clear();
-        match LocalStorage::load() {
-            Ok(mut local) => {
-                crate::journal::Journal::apply_to_tasks(&mut local, LOCAL_CALENDAR_HREF);
-                store.insert(LOCAL_CALENDAR_HREF.to_string(), local);
-            }
-            Err(e) => {
-                #[cfg(target_os = "android")]
-                log::error!(
-                    "Failed to load local.json - this may indicate data corruption or format incompatibility: {}",
-                    e
-                );
-                #[cfg(not(target_os = "android"))]
-                eprintln!(
-                    "Failed to load local.json - this may indicate data corruption or format incompatibility: {}",
-                    e
-                );
+
+        // Load all local calendars
+        if let Ok(locals) = LocalCalendarRegistry::load() {
+            for loc in locals {
+                match LocalStorage::load_for_href(&loc.href) {
+                    Ok(mut tasks) => {
+                        crate::journal::Journal::apply_to_tasks(&mut tasks, &loc.href);
+                        store.insert(loc.href, tasks);
+                    }
+                    Err(e) => {
+                        #[cfg(target_os = "android")]
+                        log::error!(
+                            "Failed to load {} - this may indicate data corruption or format incompatibility: {}",
+                            loc.href,
+                            e
+                        );
+                        #[cfg(not(target_os = "android"))]
+                        eprintln!(
+                            "Failed to load {} - this may indicate data corruption or format incompatibility: {}",
+                            loc.href, e
+                        );
+                    }
+                }
             }
         }
+
+        // Load remote calendars
         if let Ok(cals) = Cache::load_calendars() {
             for cal in cals {
-                if cal.href == LOCAL_CALENDAR_HREF {
-                    continue;
+                if cal.href.starts_with("local://") {
+                    continue; // Skip locals, already loaded from registry
                 }
                 if let Ok((mut tasks, _)) = Cache::load(&cal.href) {
                     crate::journal::Journal::apply_to_tasks(&mut tasks, &cal.href);
@@ -673,19 +684,26 @@ impl CfaitMobile {
         let config = Config::load().unwrap_or_default();
         let disabled_set: HashSet<String> = config.disabled_calendars.iter().cloned().collect();
         let mut result = Vec::new();
-        let local_href = LOCAL_CALENDAR_HREF.to_string();
-        result.push(MobileCalendar {
-            name: LOCAL_CALENDAR_NAME.to_string(),
-            href: local_href.clone(),
-            color: None,
-            is_visible: !config.hidden_calendars.contains(&local_href),
-            is_local: true,
-            is_disabled: false,
-        });
+
+        // Load local registry
+        if let Ok(locals) = LocalCalendarRegistry::load() {
+            for loc in locals {
+                result.push(MobileCalendar {
+                    name: loc.name,
+                    href: loc.href.clone(),
+                    color: loc.color,
+                    is_visible: !config.hidden_calendars.contains(&loc.href),
+                    is_local: true,
+                    is_disabled: disabled_set.contains(&loc.href),
+                });
+            }
+        }
+
+        // Load remote calendars
         if let Ok(cals) = crate::cache::Cache::load_calendars() {
             for c in cals {
-                if c.href == LOCAL_CALENDAR_HREF {
-                    continue;
+                if c.href.starts_with("local://") {
+                    continue; // Skip locals, already added from registry
                 }
                 result.push(MobileCalendar {
                     name: c.name,
@@ -836,10 +854,11 @@ impl CfaitMobile {
         }
 
         if !network_success {
-            if task.calendar_href == LOCAL_CALENDAR_HREF {
-                let mut all = LocalStorage::load().unwrap_or_default();
+            if task.calendar_href.starts_with("local://") {
+                let mut all = LocalStorage::load_for_href(&task.calendar_href).unwrap_or_default();
                 all.push(task.clone());
-                LocalStorage::save(&all).map_err(MobileError::from)?;
+                LocalStorage::save_for_href(&task.calendar_href, &all)
+                    .map_err(MobileError::from)?;
             } else {
                 crate::journal::Journal::push(crate::journal::Action::Create(task.clone()))
                     .map_err(MobileError::from)?;
@@ -964,11 +983,12 @@ impl CfaitMobile {
         }
 
         if !network_success {
-            if task_for_net.calendar_href == LOCAL_CALENDAR_HREF {
-                let mut local = LocalStorage::load().unwrap_or_default();
+            if task_for_net.calendar_href.starts_with("local://") {
+                let cal_href = task_for_net.calendar_href.clone();
+                let mut local = LocalStorage::load_for_href(&cal_href).unwrap_or_default();
                 if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
                     local[idx] = task_for_net;
-                    LocalStorage::save(&local).map_err(MobileError::from)?;
+                    LocalStorage::save_for_href(&cal_href, &local).map_err(MobileError::from)?;
                 }
             } else {
                 crate::journal::Journal::push(crate::journal::Action::Update(task_for_net))
@@ -1000,7 +1020,7 @@ impl CfaitMobile {
             network_success = true;
         }
 
-        if !network_success && new_cal_href != LOCAL_CALENDAR_HREF {
+        if !network_success && !new_cal_href.starts_with("local://") {
             crate::journal::Journal::push(crate::journal::Action::Move(updated_task, new_cal_href))
                 .map_err(MobileError::from)?;
         }
@@ -1028,7 +1048,7 @@ impl CfaitMobile {
             network_success = true;
         }
 
-        if !network_success && href != LOCAL_CALENDAR_HREF {
+        if !network_success && !href.starts_with("local://") {
             crate::journal::Journal::push(crate::journal::Action::Delete(task))
                 .map_err(MobileError::from)?;
         }
@@ -1042,6 +1062,7 @@ impl CfaitMobile {
 
     pub async fn migrate_local_to(
         &self,
+        source_calendar_href: String,
         target_calendar_href: String,
     ) -> Result<String, MobileError> {
         let client_guard = self.client.lock().await;
@@ -1049,7 +1070,8 @@ impl CfaitMobile {
             .as_ref()
             .ok_or(MobileError::from("Client not connected"))?;
 
-        let local_tasks = LocalStorage::load().map_err(|e| MobileError::from(e.to_string()))?;
+        let local_tasks = LocalStorage::load_for_href(&source_calendar_href)
+            .map_err(|e| MobileError::from(e.to_string()))?;
         if local_tasks.is_empty() {
             return Ok("No local tasks to migrate.".to_string());
         }
@@ -1060,6 +1082,85 @@ impl CfaitMobile {
             .map_err(MobileError::from)?;
 
         Ok(format!("Successfully migrated {} tasks.", count))
+    }
+
+    pub async fn create_local_calendar(
+        &self,
+        name: String,
+        color: Option<String>,
+    ) -> Result<String, MobileError> {
+        let mut locals =
+            LocalCalendarRegistry::load().map_err(|e| MobileError::from(e.to_string()))?;
+
+        let id = Uuid::new_v4().to_string();
+        let href = format!("local://{}", id);
+
+        let new_cal = crate::model::CalendarListEntry {
+            name,
+            href: href.clone(),
+            color,
+        };
+
+        locals.push(new_cal);
+        LocalCalendarRegistry::save(&locals).map_err(|e| MobileError::from(e.to_string()))?;
+
+        // Update in-memory store
+        let mut store = self.store.lock().await;
+        store.insert(href.clone(), vec![]);
+
+        Ok(href)
+    }
+
+    pub async fn update_local_calendar(
+        &self,
+        href: String,
+        name: String,
+        color: Option<String>,
+    ) -> Result<(), MobileError> {
+        let mut locals =
+            LocalCalendarRegistry::load().map_err(|e| MobileError::from(e.to_string()))?;
+
+        if let Some(cal) = locals.iter_mut().find(|c| c.href == href) {
+            cal.name = name;
+            cal.color = color;
+            LocalCalendarRegistry::save(&locals).map_err(|e| MobileError::from(e.to_string()))?;
+
+            // Note: We don't need to update the Store for name/color changes as those are metadata,
+            // but we might want to trigger a refresh in the UI.
+            return Ok(());
+        }
+
+        Err(MobileError::from("Calendar not found"))
+    }
+
+    pub async fn delete_local_calendar(&self, href: String) -> Result<(), MobileError> {
+        if href == LOCAL_CALENDAR_HREF {
+            return Err(MobileError::from("Cannot delete default local calendar"));
+        }
+
+        let mut locals =
+            LocalCalendarRegistry::load().map_err(|e| MobileError::from(e.to_string()))?;
+
+        if let Some(idx) = locals.iter().position(|c| c.href == href) {
+            locals.remove(idx);
+            LocalCalendarRegistry::save(&locals).map_err(|e| MobileError::from(e.to_string()))?;
+
+            // Remove data file
+            if let Some(path) = LocalStorage::get_path_for_href(&href) {
+                let _ = std::fs::remove_file(path);
+            }
+
+            // Update in-memory store
+            let mut store = self.store.lock().await;
+            store.remove(&href);
+
+            // Rebuild alarm index to remove alarms from deleted calendar
+            self.rebuild_alarm_index_sync(&store);
+
+            return Ok(());
+        }
+
+        Err(MobileError::from("Calendar not found"))
     }
 
     pub async fn snooze_alarm(
@@ -1535,22 +1636,28 @@ impl CfaitMobile {
         let mut store = self.store.lock().await;
         store.clear();
 
-        match LocalStorage::load() {
-            Ok(mut local) => {
-                crate::journal::Journal::apply_to_tasks(&mut local, LOCAL_CALENDAR_HREF);
-                store.insert(LOCAL_CALENDAR_HREF.to_string(), local);
-            }
-            Err(e) => {
-                #[cfg(target_os = "android")]
-                log::error!(
-                    "Failed to load local.json - this may indicate data corruption or format incompatibility: {}",
-                    e
-                );
-                #[cfg(not(target_os = "android"))]
-                eprintln!(
-                    "Failed to load local.json - this may indicate data corruption or format incompatibility: {}",
-                    e
-                );
+        // Load all local calendars
+        if let Ok(locals) = LocalCalendarRegistry::load() {
+            for loc in locals {
+                match LocalStorage::load_for_href(&loc.href) {
+                    Ok(mut tasks) => {
+                        crate::journal::Journal::apply_to_tasks(&mut tasks, &loc.href);
+                        store.insert(loc.href, tasks);
+                    }
+                    Err(e) => {
+                        #[cfg(target_os = "android")]
+                        log::error!(
+                            "Failed to load {} - this may indicate data corruption or format incompatibility: {}",
+                            loc.href,
+                            e
+                        );
+                        #[cfg(not(target_os = "android"))]
+                        eprintln!(
+                            "Failed to load {} - this may indicate data corruption or format incompatibility: {}",
+                            loc.href, e
+                        );
+                    }
+                }
             }
         }
 
@@ -1563,7 +1670,7 @@ impl CfaitMobile {
                     fetched_hrefs.insert(href);
                 }
                 for cal in &cals {
-                    if cal.href != LOCAL_CALENDAR_HREF
+                    if !cal.href.starts_with("local://")
                         && !fetched_hrefs.contains(&cal.href)
                         && let Ok((mut cached, _)) = crate::cache::Cache::load(&cal.href)
                     {
@@ -1574,7 +1681,7 @@ impl CfaitMobile {
             }
             Err(e) => {
                 for cal in &cals {
-                    if cal.href != LOCAL_CALENDAR_HREF
+                    if !cal.href.starts_with("local://")
                         && !store.calendars.contains_key(&cal.href)
                         && let Ok((mut cached, _)) = crate::cache::Cache::load(&cal.href)
                     {
@@ -1630,11 +1737,12 @@ impl CfaitMobile {
         }
 
         if !network_success {
-            if task_for_net.calendar_href == LOCAL_CALENDAR_HREF {
-                let mut local = LocalStorage::load().unwrap_or_default();
+            if task_for_net.calendar_href.starts_with("local://") {
+                let cal_href = task_for_net.calendar_href.clone();
+                let mut local = LocalStorage::load_for_href(&cal_href).unwrap_or_default();
                 if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
                     local[idx] = task_for_net;
-                    LocalStorage::save(&local).map_err(MobileError::from)?;
+                    LocalStorage::save_for_href(&cal_href, &local).map_err(MobileError::from)?;
                 }
             } else {
                 crate::journal::Journal::push(crate::journal::Action::Update(task_for_net))

@@ -7,7 +7,7 @@ use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{refresh_filtered_tasks, save_config, scroll_to_selected};
 use crate::journal::Journal;
 use crate::model::CalendarListEntry;
-use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME};
+use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalCalendarRegistry};
 use crate::system::SystemEvent;
 use iced::Task;
 
@@ -35,13 +35,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             app.unsynced_changes = !Journal::load().is_empty();
 
-            let local_entry = CalendarListEntry {
-                name: LOCAL_CALENDAR_NAME.to_string(),
-                href: LOCAL_CALENDAR_HREF.to_string(),
-                color: None,
-            };
+            // Merge all local calendars from registry with network calendars
+            let local_cals = LocalCalendarRegistry::load().unwrap_or_default();
 
+            // Add all local calendars that aren't already in the list
+            for local_cal in local_cals {
+                if !cals.iter().any(|c| c.href == local_cal.href) {
+                    cals.push(local_cal);
+                }
+            }
+
+            // Ensure default local calendar is always present
             if !cals.iter().any(|c| c.href == LOCAL_CALENDAR_HREF) {
+                let local_entry = CalendarListEntry {
+                    name: LOCAL_CALENDAR_NAME.to_string(),
+                    href: LOCAL_CALENDAR_HREF.to_string(),
+                    color: None,
+                };
                 cals.push(local_entry);
             }
 
@@ -50,18 +60,21 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // Clear store to rebuild from fresh network/cache state
             app.store.clear();
 
-            // 1. Load Local
-            if let Ok(mut local_t) = crate::gui::async_ops::get_runtime()
-                .block_on(async { client.get_tasks(LOCAL_CALENDAR_HREF).await })
-            {
-                // Apply Journal (replays Creates/Updates/Deletes correctly)
-                Journal::apply_to_tasks(&mut local_t, LOCAL_CALENDAR_HREF);
-                app.store.insert(LOCAL_CALENDAR_HREF.to_string(), local_t);
+            // 1. Load all local calendars
+            for cal in &app.calendars {
+                if cal.href.starts_with("local://")
+                    && let Ok(mut local_t) = crate::gui::async_ops::get_runtime()
+                        .block_on(async { client.get_tasks(&cal.href).await })
+                {
+                    // Apply Journal (replays Creates/Updates/Deletes correctly)
+                    Journal::apply_to_tasks(&mut local_t, &cal.href);
+                    app.store.insert(cal.href.clone(), local_t);
+                }
             }
 
-            // 2. Load Caches
+            // 2. Load Caches for remote calendars
             for cal in &app.calendars {
-                if cal.href == LOCAL_CALENDAR_HREF {
+                if cal.href.starts_with("local://") {
                     continue;
                 }
                 if let Ok((mut cached_tasks, _)) = Cache::load(&cal.href) {

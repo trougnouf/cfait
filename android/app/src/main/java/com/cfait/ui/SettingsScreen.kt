@@ -3,6 +3,8 @@ package com.cfait.ui
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -12,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -418,59 +421,87 @@ fun SettingsScreen(
 
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    "Data Management",
+                    "Local Calendars",
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
                 )
 
-                // Export Button
+                // Filter local calendars from the state we already have
+                val localCals = allCalendars.filter { it.isLocal }
+
+                // Capture context outside the lambda
                 val context = LocalContext.current
+
+                localCals.forEach { cal ->
+                    LocalCalendarEditor(
+                        cal = cal,
+                        onUpdate = { name, color ->
+                            scope.launch {
+                                try {
+                                    api.updateLocalCalendar(cal.href, name, color)
+                                    reload()
+                                } catch (e: Exception) {
+                                    status = "Error: ${e.message}"
+                                }
+                            }
+                        },
+                        onDelete = {
+                            scope.launch {
+                                try {
+                                    api.deleteLocalCalendar(cal.href)
+                                    reload()
+                                } catch (e: Exception) {
+                                    status = "Error: ${e.message}"
+                                }
+                            }
+                        },
+                        onExport = {
+                            try {
+                                val icsContent = api.exportLocalIcs(cal.href)
+                                val calId = cal.href.removePrefix("local://")
+                                val file = File(context.cacheDir, "cfait_${calId}.ics")
+                                file.writeText(icsContent)
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    file
+                                )
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/calendar"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                val shareIntent = Intent.createChooser(intent, "Export ${cal.name}")
+                                context.startActivity(shareIntent)
+                            } catch (e: Exception) {
+                                status = "Export Error: ${e.message}"
+                            }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+
                 Button(
                     onClick = {
-                        try {
-                            // 1. Generate ICS string from Rust
-                            val icsContent = api.exportLocalIcs()
-
-                            // 2. Write to cache file
-                            val file = File(context.cacheDir, "cfait_local_backup.ics")
-                            file.writeText(icsContent)
-
-                            // 3. Get URI via FileProvider
-                            val uri = FileProvider.getUriForFile(
-                                context,
-                                "${context.packageName}.fileprovider",
-                                file
-                            )
-
-                            // 4. Launch Share Sheet
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/calendar"
-                                putExtra(Intent.EXTRA_STREAM, uri)
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        scope.launch {
+                            try {
+                                api.createLocalCalendar("New Calendar", null)
+                                reload()
+                            } catch (e: Exception) {
+                                status = "Error: ${e.message}"
                             }
-
-                            val shareIntent = Intent.createChooser(intent, "Export Backup")
-                            context.startActivity(shareIntent)
-
-                        } catch (e: Exception) {
-                            android.widget.Toast.makeText(
-                                context,
-                                "Export failed: ${e.message}",
-                                android.widget.Toast.LENGTH_LONG
-                            ).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondary
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onSecondary)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Export Local Tasks (.ics)")
-                    }
+                    NfIcon(NfIcons.ADD, 16.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Create New Local Calendar")
                 }
             }
 
@@ -532,6 +563,122 @@ fun SettingsScreen(
                     }) { NfIcon(NfIcons.ADD) }
                 }
                 Spacer(Modifier.height(32.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun LocalCalendarEditor(
+    cal: MobileCalendar,
+    onUpdate: (String, String?) -> Unit,
+    onDelete: () -> Unit,
+    onExport: () -> Unit
+) {
+    var name by remember { mutableStateOf(cal.name) }
+    var color by remember { mutableStateOf(cal.color) }
+
+    // Debounce name updates or save on focus loss could be complex,
+    // so we provide a "Save" icon button for explicit updates if name changes.
+    val hasChanges = name != cal.name || color != cal.color
+    val isDefault = cal.href == "local://default"
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Row 1: Name and Actions
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    modifier = Modifier.weight(1f),
+                    singleLine = true
+                )
+
+                if (hasChanges) {
+                    IconButton(onClick = { onUpdate(name, color) }) {
+                        NfIcon(NfIcons.CHECK, 20.sp, MaterialTheme.colorScheme.primary)
+                    }
+                }
+
+                IconButton(onClick = onExport) {
+                    NfIcon(NfIcons.EXPORT, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                if (!isDefault) {
+                    IconButton(onClick = onDelete) {
+                        NfIcon(NfIcons.DELETE, 20.sp, MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Row 2: Color Picker
+            Text(
+                "Color:",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            ColorPickerRow(
+                selectedColor = color,
+                onColorSelected = {
+                    color = it
+                    // Auto-save color changes immediately for better UX
+                    onUpdate(name, it)
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun ColorPickerRow(
+    selectedColor: String?,
+    onColorSelected: (String?) -> Unit
+) {
+    val colors = listOf(
+        null to "None",
+        "#FF4444" to "Red",
+        "#FF8800" to "Orange",
+        "#FFD700" to "Yellow",
+        "#66BB6A" to "Green",
+        "#42A5F5" to "Blue",
+        "#AB47BC" to "Purple",
+        "#9E9E9E" to "Gray"
+    )
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        colors.forEach { (hex, _) ->
+            val isSelected = selectedColor == hex
+            val colorVal = if (hex == null) Color.Transparent else parseHexColor(hex)
+
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(colorVal, androidx.compose.foundation.shape.CircleShape)
+                    .border(
+                        width = if (isSelected) 2.dp else 1.dp,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                        shape = androidx.compose.foundation.shape.CircleShape
+                    )
+                    .clickable { onColorSelected(hex) },
+                contentAlignment = Alignment.Center
+            ) {
+                if (hex == null) {
+                    // slash for none
+                    NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.onSurfaceVariant)
+                } else if (isSelected) {
+                    NfIcon(NfIcons.CHECK, 16.sp, Color.White)
+                }
             }
         }
     }

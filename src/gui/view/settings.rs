@@ -3,9 +3,13 @@ use crate::config::AppTheme;
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
+use crate::storage::LOCAL_CALENDAR_HREF;
 
 use iced::widget::{Space, button, checkbox, column, container, row, scrollable, text, text_input};
 use iced::{Color, Element, Length};
+
+#[cfg(feature = "gui")]
+use iced_aw::color_picker;
 
 pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     let is_settings = matches!(app.state, AppState::Settings);
@@ -205,18 +209,58 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             iced::widget::rule::horizontal(1),
             text("").size(5),
             text("Data Management").size(20),
-            button(
-                row![
-                    icon::icon(icon::EXPORT).size(16),
-                    text("Export Local Tasks (.ics)")
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center)
-            )
-            .padding(10)
-            .width(Length::Fill)
-            .style(button::secondary)
-            .on_press(Message::ExportLocalIcs),
+            {
+                // Create export options for each local calendar
+                let local_calendars: Vec<_> = app
+                    .calendars
+                    .iter()
+                    .filter(|c| c.href.starts_with("local://"))
+                    .collect();
+
+                if local_calendars.len() == 1 {
+                    // Single local calendar - simple button
+                    let href = local_calendars[0].href.clone();
+                    Element::from(button(
+                        row![
+                            icon::icon(icon::EXPORT).size(16),
+                            text("Export Local Tasks (.ics)")
+                        ]
+                        .spacing(10)
+                        .align_y(iced::Alignment::Center)
+                    )
+                    .padding(10)
+                    .width(Length::Fill)
+                    .style(button::secondary)
+                    .on_press(Message::ExportLocalIcs(href)))
+                } else {
+                    // Multiple local calendars - show options
+                    let mut col = column![
+                        text("Export Local Calendar to .ics file:")
+                            .size(14)
+                            .color(Color::from_rgb(0.7, 0.7, 0.7))
+                    ]
+                    .spacing(5);
+
+                    for cal in local_calendars {
+                        col = col.push(
+                            button(
+                                row![
+                                    icon::icon(icon::EXPORT).size(14),
+                                    text(&cal.name).size(14)
+                                ]
+                                .spacing(8)
+                                .align_y(iced::Alignment::Center)
+                            )
+                            .padding(8)
+                            .width(Length::Fill)
+                            .style(button::secondary)
+                            .on_press(Message::ExportLocalIcs(cal.href.clone()))
+                        );
+                    }
+
+                    col.into()
+                }
+            },
             text("").size(5),
             iced::widget::rule::horizontal(1),
             text("").size(5),
@@ -305,6 +349,104 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         Space::new().width(0).into()
     };
 
+    // --- Local Calendar Management UI ---
+    let local_cal_ui: Element<_> = if is_settings {
+        let mut local_cal_col = column![
+            text("Local Calendars").size(20),
+            text("Manage your offline calendars here.")
+                .size(12)
+                .color(Color::from_rgb(0.6, 0.6, 0.6)),
+        ]
+        .spacing(10);
+
+        for cal in &app.local_cals_editing {
+            let href = cal.href.clone();
+            let is_default = href == LOCAL_CALENDAR_HREF;
+
+            let name_input = text_input("Name", &cal.name)
+                .on_input(move |s| Message::LocalCalendarNameChanged(href.clone(), s))
+                .padding(5)
+                .width(Length::Fill);
+
+            // Color Button logic
+            let current_color = cal
+                .color
+                .as_ref()
+                .and_then(|h| crate::color_utils::parse_hex_to_floats(h))
+                .map(|(r, g, b)| Color::from_rgb(r, g, b))
+                .unwrap_or(Color::from_rgb(0.5, 0.5, 0.5));
+
+            let color_btn = button(
+                container(text(" "))
+                    .width(Length::Fixed(20.0))
+                    .height(Length::Fixed(20.0))
+                    .style(move |_| container::Style {
+                        background: Some(current_color.into()),
+                        border: iced::Border {
+                            radius: 10.0.into(),
+                            width: 1.0,
+                            color: Color::from_rgb(0.5, 0.5, 0.5),
+                        },
+                        ..Default::default()
+                    }),
+            )
+            .padding(0)
+            .on_press(Message::OpenColorPicker(cal.href.clone(), current_color));
+
+            // Wrap in ColorPicker if active
+            let color_widget: Element<_> =
+                if app.color_picker_active_href.as_ref() == Some(&cal.href) {
+                    color_picker::ColorPicker::new(
+                        true,
+                        current_color,
+                        color_btn,
+                        Message::CancelColorPicker,
+                        Message::SubmitColorPicker,
+                    )
+                    .into()
+                } else {
+                    color_btn.into()
+                };
+
+            let delete_btn: Element<_> = if !is_default {
+                let h = cal.href.clone();
+                button(icon::icon(icon::TRASH).size(14))
+                    .style(button::danger)
+                    .padding(5)
+                    .on_press(Message::DeleteLocalCalendar(h))
+                    .into()
+            } else {
+                Space::new().width(Length::Fixed(24.0)).into()
+            };
+
+            local_cal_col = local_cal_col.push(
+                row![name_input, color_widget, delete_btn]
+                    .spacing(10)
+                    .align_y(iced::Alignment::Center),
+            );
+        }
+
+        local_cal_col = local_cal_col.push(
+            button("Add Local Calendar")
+                .style(button::secondary)
+                .on_press(Message::AddLocalCalendar),
+        );
+
+        container(local_cal_col)
+            .padding(10)
+            .style(|_| container::Style {
+                border: iced::Border {
+                    radius: 6.0.into(),
+                    width: 1.0,
+                    color: Color::from_rgba(0.5, 0.5, 0.5, 0.2),
+                },
+                ..Default::default()
+            })
+            .into()
+    } else {
+        Space::new().width(0).into()
+    };
+
     // Connection Button (Moved inside form)
     let save_connect_btn = button(if is_settings {
         "Save & Connect"
@@ -368,6 +510,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         // 2. Preferences
         picker,
         cal_mgmt_ui,
+        local_cal_ui,
         prefs,
         notifications_ui,
         sorting_ui,

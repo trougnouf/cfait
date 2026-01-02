@@ -102,7 +102,7 @@ pub enum Message {
 
     TaskMoved(Result<TodoTask, String>),
     ObSubmitOffline,
-    MigrateLocalTo(String),
+    MigrateLocalTo(String, String), // (source_calendar_href, target_calendar_href)
 
     MigrationComplete(Result<usize, String>),
     FontLoaded(Result<(), String>),
@@ -144,6 +144,14 @@ pub enum Message {
     SetDeleteEventsOnCompletion(bool),
     DeleteAllCalendarEvents,
     BackfillEventsComplete(Result<usize, String>),
-    ExportLocalIcs,
+    ExportLocalIcs(String), // calendar_href
     ExportSaved(Result<std::path::PathBuf, String>),
+
+    // Local Calendar Management
+    AddLocalCalendar,
+    DeleteLocalCalendar(String),              // href
+    LocalCalendarNameChanged(String, String), // href, new_name
+    OpenColorPicker(String, iced::Color),     // href, initial_color
+    CancelColorPicker,
+    SubmitColorPicker(iced::Color),
 }

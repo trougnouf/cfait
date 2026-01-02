@@ -53,7 +53,7 @@ fun HomeScreen(
     onSettings: () -> Unit,
     onTaskClick: (String) -> Unit,
     onDataChanged: () -> Unit,
-    onMigrateLocal: (String) -> Unit,
+    onMigrateLocal: (String, String) -> Unit, // (sourceHref, targetHref)
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -110,7 +110,9 @@ fun HomeScreen(
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
     var newTaskText by remember { mutableStateOf("") }
-    var showExportDialog by remember { mutableStateOf(false) }
+    var showExportSourceDialog by remember { mutableStateOf(false) }
+    var showExportDestDialog by remember { mutableStateOf(false) }
+    var exportSourceHref by remember { mutableStateOf<String?>(null) }
     var yankedUid by remember { mutableStateOf<String?>(null) }
     val yankedTask = remember(tasks, yankedUid) { tasks.find { it.uid == yankedUid } }
     var creatingChildUid by remember { mutableStateOf<String?>(null) }
@@ -401,6 +403,7 @@ fun HomeScreen(
     }
 
     val remoteCals = remember(calendars) { calendars.filter { !it.isLocal && !it.isDisabled } }
+    val localCals = remember(calendars) { calendars.filter { it.isLocal && !it.isDisabled } }
 
     if (taskToMove != null) {
         val targetCals =
@@ -441,13 +444,57 @@ fun HomeScreen(
         )
     }
 
-    if (showExportDialog) {
+    // Step 1: Select source local calendar
+    if (showExportSourceDialog) {
         AlertDialog(
-            onDismissRequest = { showExportDialog = false },
-            title = { Text("Export local tasks") },
+            onDismissRequest = { showExportSourceDialog = false },
+            title = { Text("Export: Select source calendar") },
             text = {
                 Column {
-                    Text("Select a destination calendar:", fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    Text(
+                        "Select which local calendar to export:",
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    LazyColumn {
+                        items(localCals) { cal ->
+                            ListItem(
+                                headlineContent = { Text(cal.name) },
+                                leadingContent = { NfIcon(NfIcons.CALENDAR, 16.sp) },
+                                modifier =
+                                    Modifier.clickable {
+                                        exportSourceHref = cal.href
+                                        showExportSourceDialog = false
+                                        showExportDestDialog = true
+                                    },
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showExportSourceDialog = false }) { Text("Cancel") } },
+        )
+    }
+
+    // Step 2: Select destination remote calendar
+    if (showExportDestDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showExportDestDialog = false
+                exportSourceHref = null
+            },
+            title = { Text("Export: Select destination") },
+            text = {
+                Column {
+                    exportSourceHref?.let { sourceHref ->
+                        val sourceName = localCals.find { it.href == sourceHref }?.name ?: "Local"
+                        Text(
+                            "Exporting from: $sourceName",
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                    Text("Select destination calendar:", fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
                     LazyColumn {
                         items(remoteCals) { cal ->
                             ListItem(
@@ -455,16 +502,26 @@ fun HomeScreen(
                                 leadingContent = { NfIcon(NfIcons.CALENDAR, 16.sp) },
                                 modifier =
                                     Modifier.clickable {
-                                        // UPDATED LOGIC: Delegate to WorkManager via MainActivity
-                                        onMigrateLocal(cal.href)
-                                        showExportDialog = false
+                                        exportSourceHref?.let { sourceHref ->
+                                            // Pass both source and destination to migration
+                                            onMigrateLocal(sourceHref, cal.href)
+                                        }
+                                        showExportDestDialog = false
+                                        exportSourceHref = null
                                     },
                             )
                         }
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showExportDialog = false }) { Text("Cancel") } },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExportDestDialog = false
+                    exportSourceHref = null
+                }) {
+                    Text("Cancel")
+                }
+            },
         )
     }
 
@@ -804,7 +861,7 @@ fun HomeScreen(
                 val activeIsLocal = calendars.find { it.href == defaultCalHref }?.isLocal == true
                 if (activeIsLocal && remoteCals.isNotEmpty()) {
                     FilledTonalButton(
-                        onClick = { showExportDialog = true },
+                        onClick = { showExportSourceDialog = true },
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                         colors =
                             ButtonDefaults.filledTonalButtonColors(

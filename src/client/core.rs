@@ -5,7 +5,7 @@ use crate::client::cert::NoVerifier;
 use crate::config::Config;
 use crate::journal::{Action, Journal};
 use crate::model::{CalendarListEntry, Task, TaskStatus};
-use crate::storage::{LOCAL_CALENDAR_HREF, LocalStorage};
+use crate::storage::LocalStorage;
 
 use libdav::caldav::{FindCalendarHomeSet, FindCalendars, GetCalendarResources};
 use libdav::dav::{Delete, GetProperty, ListResources, PutResource};
@@ -294,8 +294,9 @@ impl RustyClient {
         calendar_href: &str,
         apply_journal: bool,
     ) -> Result<Vec<Task>, String> {
-        if calendar_href == LOCAL_CALENDAR_HREF {
-            let mut tasks = LocalStorage::load().map_err(|e| e.to_string())?;
+        if calendar_href.starts_with("local://") {
+            let mut tasks =
+                LocalStorage::load_for_href(calendar_href).map_err(|e| e.to_string())?;
             if apply_journal {
                 Journal::apply_to_tasks(&mut tasks, calendar_href);
             }
@@ -483,10 +484,11 @@ impl RustyClient {
     }
 
     pub async fn create_task(&self, task: &mut Task) -> Result<Vec<String>, String> {
-        if task.calendar_href == LOCAL_CALENDAR_HREF {
-            let mut all = LocalStorage::load().map_err(|e| e.to_string())?;
+        if task.calendar_href.starts_with("local://") {
+            let mut all =
+                LocalStorage::load_for_href(&task.calendar_href).map_err(|e| e.to_string())?;
             all.push(task.clone());
-            LocalStorage::save(&all).map_err(|e| e.to_string())?;
+            LocalStorage::save_for_href(&task.calendar_href, &all).map_err(|e| e.to_string())?;
             return Ok(vec![]);
         }
 
@@ -506,11 +508,13 @@ impl RustyClient {
     pub async fn update_task(&self, task: &mut Task) -> Result<Vec<String>, String> {
         task.sequence += 1;
 
-        if task.calendar_href == LOCAL_CALENDAR_HREF {
-            let mut all = LocalStorage::load().map_err(|e| e.to_string())?;
+        if task.calendar_href.starts_with("local://") {
+            let mut all =
+                LocalStorage::load_for_href(&task.calendar_href).map_err(|e| e.to_string())?;
             if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
                 all[idx] = task.clone();
-                LocalStorage::save(&all).map_err(|e| e.to_string())?;
+                LocalStorage::save_for_href(&task.calendar_href, &all)
+                    .map_err(|e| e.to_string())?;
             }
             return Ok(vec![]);
         }
@@ -520,10 +524,11 @@ impl RustyClient {
     }
 
     pub async fn delete_task(&self, task: &Task) -> Result<Vec<String>, String> {
-        if task.calendar_href == LOCAL_CALENDAR_HREF {
-            let mut all = LocalStorage::load().map_err(|e| e.to_string())?;
+        if task.calendar_href.starts_with("local://") {
+            let mut all =
+                LocalStorage::load_for_href(&task.calendar_href).map_err(|e| e.to_string())?;
             all.retain(|t| t.uid != task.uid);
-            LocalStorage::save(&all).map_err(|e| e.to_string())?;
+            LocalStorage::save_for_href(&task.calendar_href, &all).map_err(|e| e.to_string())?;
             return Ok(vec![]);
         }
 
@@ -540,12 +545,13 @@ impl RustyClient {
             // Task Recycled
         }
 
-        if task.calendar_href == LOCAL_CALENDAR_HREF {
-            let mut all = LocalStorage::load().map_err(|e| e.to_string())?;
+        if task.calendar_href.starts_with("local://") {
+            let mut all =
+                LocalStorage::load_for_href(&task.calendar_href).map_err(|e| e.to_string())?;
             if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
                 all[idx] = task.clone();
             }
-            LocalStorage::save(&all).map_err(|e| e.to_string())?;
+            LocalStorage::save_for_href(&task.calendar_href, &all).map_err(|e| e.to_string())?;
             return Ok((task.clone(), None, vec![]));
         }
 
@@ -558,7 +564,7 @@ impl RustyClient {
         task: &Task,
         new_calendar_href: &str,
     ) -> Result<(Task, Vec<String>), String> {
-        if task.calendar_href == LOCAL_CALENDAR_HREF {
+        if task.calendar_href.starts_with("local://") {
             let mut new_task = task.clone();
             new_task.calendar_href = new_calendar_href.to_string();
             new_task.href = String::new();
@@ -620,7 +626,7 @@ impl RustyClient {
         is_delete_intent: bool,
     ) -> bool {
         // Skip event operations for local calendar tasks (no server to sync to)
-        if task.calendar_href == LOCAL_CALENDAR_HREF {
+        if task.calendar_href.starts_with("local://") {
             return false;
         }
 

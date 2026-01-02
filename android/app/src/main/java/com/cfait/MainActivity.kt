@@ -236,9 +236,14 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
     }
 
     // DEFINE MIGRATION ACTION HANDLER
-    fun handleMigration(targetHref: String) {
+    fun handleMigration(sourceHref: String, targetHref: String) {
         val workRequest = OneTimeWorkRequestBuilder<CalendarMigrationWorker>()
-            .setInputData(Data.Builder().putString(CalendarMigrationWorker.KEY_TARGET_HREF, targetHref).build())
+            .setInputData(
+                Data.Builder()
+                    .putString(CalendarMigrationWorker.KEY_SOURCE_HREF, sourceHref)
+                    .putString(CalendarMigrationWorker.KEY_TARGET_HREF, targetHref)
+                    .build()
+            )
             .build()
 
         workManager.enqueueUniqueWork(
@@ -267,7 +272,7 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                 onSettings = { navController.navigate("settings") },
                 onTaskClick = { uid -> navController.navigate("detail/$uid") },
                 onDataChanged = { refreshLists() },
-                onMigrateLocal = { targetHref -> handleMigration(targetHref) }
+                onMigrateLocal = { sourceHref, targetHref -> handleMigration(sourceHref, targetHref) }
             )
         }
         composable("detail/{uid}") { backStackEntry ->

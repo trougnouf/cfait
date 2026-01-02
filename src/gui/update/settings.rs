@@ -6,12 +6,16 @@ use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tasks, save_config};
 use crate::model::parser::{format_duration_compact, parse_duration, validate_alias_integrity}; // Updated import
-use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalStorage};
+use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use iced::Task;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::ConfigLoaded(Ok(config)) => {
+            // Load Local Calendars from registry
+            let locals = LocalCalendarRegistry::load().unwrap_or_default();
+            app.local_cals_editing = locals.clone();
+
             // ... [Same loading logic as before] ...
             app.hidden_calendars = config.hidden_calendars.clone().into_iter().collect();
             app.disabled_calendars = config.disabled_calendars.clone().into_iter().collect();
@@ -49,26 +53,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             let mut cached_cals = Cache::load_calendars().unwrap_or_default();
 
-            if !cached_cals.iter().any(|c| c.href == LOCAL_CALENDAR_HREF) {
-                cached_cals.push(crate::model::CalendarListEntry {
-                    name: LOCAL_CALENDAR_NAME.to_string(),
-                    href: LOCAL_CALENDAR_HREF.to_string(),
-                    color: None,
-                });
+            // Merge locals into main calendar list
+            for loc in locals {
+                if !cached_cals.iter().any(|c| c.href == loc.href) {
+                    cached_cals.push(loc);
+                }
             }
             app.calendars = cached_cals;
 
             app.store.clear();
 
-            if let Ok(local_tasks) = LocalStorage::load() {
-                app.store
-                    .insert(LOCAL_CALENDAR_HREF.to_string(), local_tasks);
-            }
-
+            // Load data for all calendars
             for cal in &app.calendars {
-                if cal.href != LOCAL_CALENDAR_HREF
-                    && let Ok((tasks, _)) = Cache::load(&cal.href)
-                {
+                if cal.href.starts_with("local://") {
+                    if let Ok(tasks) = LocalStorage::load_for_href(&cal.href) {
+                        app.store.insert(cal.href.clone(), tasks);
+                    }
+                } else if let Ok((tasks, _)) = Cache::load(&cal.href) {
                     app.store.insert(cal.href.clone(), tasks);
                 }
             }
@@ -127,6 +128,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ObSubmit => {
+            // Sync `calendars` list with modified `local_cals_editing`
+            app.calendars.retain(|c| !c.href.starts_with("local://"));
+            app.calendars.extend(app.local_cals_editing.clone());
+
             if app.ob_sort_months_input.trim().is_empty() {
                 app.sort_cutoff_months = None;
             } else if let Ok(n) = app.ob_sort_months_input.trim().parse::<u32>() {
@@ -205,7 +210,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::CancelSettings => {
+            // Sync `calendars` list with modified `local_cals_editing`
+            app.calendars.retain(|c| !c.href.starts_with("local://"));
+            app.calendars.extend(app.local_cals_editing.clone());
+
             save_config(app);
+            refresh_filtered_tasks(app);
             app.state = AppState::Active;
             Task::none()
         }
@@ -425,19 +435,24 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.error_msg = Some(format!("Backfill error: {}", e));
             Task::none()
         }
-        Message::ExportLocalIcs => {
-            // 1. Load tasks
-            let tasks_result = LocalStorage::load();
+        Message::ExportLocalIcs(calendar_href) => {
+            // 1. Load tasks from specified calendar
+            let tasks_result = LocalStorage::load_for_href(&calendar_href);
+            let cal_name = calendar_href.clone();
 
             Task::perform(
                 async move {
                     let tasks = tasks_result.map_err(|e| e.to_string())?;
                     let ics_content = LocalStorage::to_ics_string(&tasks);
 
+                    // Extract calendar name/id for filename
+                    let cal_id = cal_name.strip_prefix("local://").unwrap_or("backup");
+                    let filename = format!("cfait_{}.ics", cal_id);
+
                     // 2. Open File Dialog (Async)
                     let file_handle = rfd::AsyncFileDialog::new()
                         .add_filter("Calendar", &["ics"])
-                        .set_file_name("cfait_backup.ics")
+                        .set_file_name(&filename)
                         .save_file()
                         .await;
 
@@ -477,6 +492,95 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::AddLocalCalendar => {
+            use uuid::Uuid;
+            let id = Uuid::new_v4().to_string();
+            let new_cal = crate::model::CalendarListEntry {
+                name: "New Calendar".to_string(),
+                href: format!("local://{}", id),
+                color: None,
+            };
+            app.local_cals_editing.push(new_cal.clone());
+
+            // Auto-save registry
+            let _ = LocalCalendarRegistry::save(&app.local_cals_editing);
+
+            // Also add to main calendar list
+            if !app.calendars.iter().any(|c| c.href == new_cal.href) {
+                app.calendars.push(new_cal.clone());
+            }
+
+            // Initialize empty task list for this calendar
+            app.store.insert(new_cal.href.clone(), vec![]);
+
+            refresh_filtered_tasks(app);
+            Task::none()
+        }
+        Message::DeleteLocalCalendar(href) => {
+            // Don't delete default
+            if href == LOCAL_CALENDAR_HREF {
+                return Task::none();
+            }
+
+            if let Some(idx) = app.local_cals_editing.iter().position(|c| c.href == href) {
+                app.local_cals_editing.remove(idx);
+                let _ = LocalCalendarRegistry::save(&app.local_cals_editing);
+
+                // Also remove from main calendar list
+                app.calendars.retain(|c| c.href != href);
+                app.store.remove(&href);
+
+                // Delete data file
+                if let Some(path) = LocalStorage::get_path_for_href(&href) {
+                    let _ = std::fs::remove_file(path);
+                }
+
+                refresh_filtered_tasks(app);
+            }
+            Task::none()
+        }
+        Message::LocalCalendarNameChanged(href, name) => {
+            if let Some(cal) = app.local_cals_editing.iter_mut().find(|c| c.href == href) {
+                cal.name = name.clone();
+                let _ = LocalCalendarRegistry::save(&app.local_cals_editing);
+
+                // Also update in main calendar list
+                if let Some(main_cal) = app.calendars.iter_mut().find(|c| c.href == href) {
+                    main_cal.name = name;
+                }
+            }
+            Task::none()
+        }
+        Message::OpenColorPicker(href, current) => {
+            app.color_picker_active_href = Some(href);
+            app.temp_color = current;
+            Task::none()
+        }
+        Message::CancelColorPicker => {
+            app.color_picker_active_href = None;
+            Task::none()
+        }
+        Message::SubmitColorPicker(color) => {
+            if let Some(href) = &app.color_picker_active_href.clone()
+                && let Some(cal) = app.local_cals_editing.iter_mut().find(|c| c.href == *href)
+            {
+                // Convert color to hex
+                let r = (color.r * 255.0) as u8;
+                let g = (color.g * 255.0) as u8;
+                let b = (color.b * 255.0) as u8;
+                let hex = format!("#{:02X}{:02X}{:02X}", r, g, b);
+                cal.color = Some(hex.clone());
+                let _ = LocalCalendarRegistry::save(&app.local_cals_editing);
+
+                // Also update in main calendar list
+                if let Some(main_cal) = app.calendars.iter_mut().find(|c| c.href == *href) {
+                    main_cal.color = Some(hex);
+                }
+            }
+            app.color_picker_active_href = None;
+            Task::none()
+        }
+
         _ => Task::none(),
     }
 }

@@ -14,7 +14,26 @@ async fn main() -> Result<()> {
 
     // CLI Command: cfait export
     if args.len() > 1 && args[1] == "export" {
-        let tasks = LocalStorage::load()?;
+        // Check for --calendar flag
+        let calendar_id = if args.len() > 3 && args[2] == "--calendar" {
+            Some(args[3].clone())
+        } else {
+            None
+        };
+
+        let tasks = if let Some(cal_id) = calendar_id {
+            // Export specific calendar
+            let href = if cal_id == "default" {
+                "local://default".to_string()
+            } else {
+                format!("local://{}", cal_id)
+            };
+            LocalStorage::load_for_href(&href)?
+        } else {
+            // Export default calendar for backward compatibility
+            LocalStorage::load()?
+        };
+
         let ics = LocalStorage::to_ics_string(&tasks);
         println!("{}", ics);
         return Ok(());
@@ -31,13 +50,16 @@ fn print_help() {
     );
     println!();
     println!("USAGE:");
-    println!("    cfait              Start interactive TUI");
-    println!("    cfait export       Export local tasks as .ics file to stdout");
-    println!("    cfait --help       Show this help message");
+    println!("    cfait                               Start interactive TUI");
+    println!("    cfait export [--calendar <id>]      Export local tasks as .ics file to stdout");
+    println!("    cfait --help                        Show this help message");
     println!();
     println!("EXPORT COMMAND:");
-    println!("    cfait export > backup.ics           Save tasks to file");
-    println!("    cfait export | grep 'SUMMARY'       Filter output");
+    println!("    cfait export                              Export default local calendar");
+    println!("    cfait export --calendar <id>              Export specific local calendar");
+    println!("    cfait export > backup.ics                 Save tasks to file");
+    println!("    cfait export --calendar my-cal > my.ics   Export specific calendar to file");
+    println!("    cfait export | grep 'SUMMARY'             Filter output");
     println!();
     println!("KEYBINDINGS:");
     println!("    Press '?' inside the app for full interactive help");

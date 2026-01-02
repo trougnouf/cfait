@@ -749,9 +749,13 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_connect(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_create_local_calendar(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_create_missing_calendar_events(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_all_calendar_events(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_delete_local_calendar(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_task(): Short
 
@@ -820,6 +824,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_sync(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_toggle_task(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_update_local_calendar(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_update_task_description(): Short
 
@@ -894,9 +900,20 @@ internal object UniffiLib {
         `insecure`: Byte,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_create_local_calendar(
+        `ptr`: Long,
+        `name`: RustBuffer.ByValue,
+        `color`: RustBuffer.ByValue,
+    ): Long
+
     external fun uniffi_cfait_fn_method_cfaitmobile_create_missing_calendar_events(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_delete_all_calendar_events(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_delete_local_calendar(
+        `ptr`: Long,
+        `href`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_delete_task(
         `ptr`: Long,
@@ -911,6 +928,7 @@ internal object UniffiLib {
 
     external fun uniffi_cfait_fn_method_cfaitmobile_export_local_ics(
         `ptr`: Long,
+        `calendarHref`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -970,6 +988,7 @@ internal object UniffiLib {
 
     external fun uniffi_cfait_fn_method_cfaitmobile_migrate_local_to(
         `ptr`: Long,
+        `sourceCalendarHref`: RustBuffer.ByValue,
         `targetCalendarHref`: RustBuffer.ByValue,
     ): Long
 
@@ -1085,6 +1104,13 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_toggle_task(
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_update_local_calendar(
+        `ptr`: Long,
+        `href`: RustBuffer.ByValue,
+        `name`: RustBuffer.ByValue,
+        `color`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_update_task_description(
@@ -1336,10 +1362,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_connect() != 18164.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_local_calendar() != 36689.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_missing_calendar_events() != 38126.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_all_calendar_events() != 62681.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_local_calendar() != 44036.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_task() != 55596.toShort()) {
@@ -1348,7 +1380,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm() != 19639.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_export_local_ics() != 16928.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_export_local_ics() != 58944.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_all_locations() != 18355.toShort()) {
@@ -1387,7 +1419,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_load_from_cache() != 57452.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_migrate_local_to() != 62773.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_migrate_local_to() != 28037.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_move_task() != 45551.toShort()) {
@@ -1442,6 +1474,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_task() != 2169.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_update_local_calendar() != 34777.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_update_task_description() != 59710.toShort()) {
@@ -1978,9 +2013,16 @@ public interface CfaitMobileInterface {
         `insecure`: kotlin.Boolean,
     ): kotlin.String
 
+    suspend fun `createLocalCalendar`(
+        `name`: kotlin.String,
+        `color`: kotlin.String?,
+    ): kotlin.String
+
     suspend fun `createMissingCalendarEvents`(): kotlin.UInt
 
     suspend fun `deleteAllCalendarEvents`(): kotlin.UInt
+
+    suspend fun `deleteLocalCalendar`(`href`: kotlin.String)
 
     suspend fun `deleteTask`(`uid`: kotlin.String)
 
@@ -1989,7 +2031,7 @@ public interface CfaitMobileInterface {
         `alarmUid`: kotlin.String,
     )
 
-    fun `exportLocalIcs`(): kotlin.String
+    fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String
 
     suspend fun `getAllLocations`(): List<MobileLocation>
 
@@ -2046,7 +2088,10 @@ public interface CfaitMobileInterface {
 
     fun `loadFromCache`()
 
-    suspend fun `migrateLocalTo`(`targetCalendarHref`: kotlin.String): kotlin.String
+    suspend fun `migrateLocalTo`(
+        `sourceCalendarHref`: kotlin.String,
+        `targetCalendarHref`: kotlin.String,
+    ): kotlin.String
 
     suspend fun `moveTask`(
         `uid`: kotlin.String,
@@ -2118,6 +2163,12 @@ public interface CfaitMobileInterface {
     suspend fun `sync`(): kotlin.String
 
     suspend fun `toggleTask`(`uid`: kotlin.String)
+
+    suspend fun `updateLocalCalendar`(
+        `href`: kotlin.String,
+        `name`: kotlin.String,
+        `color`: kotlin.String?,
+    )
 
     suspend fun `updateTaskDescription`(
         `uid`: kotlin.String,
@@ -2376,6 +2427,29 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `createLocalCalendar`(
+        `name`: kotlin.String,
+        `color`: kotlin.String?,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_local_calendar(
+                    uniffiHandle,
+                    FfiConverterString.lower(`name`),
+                    FfiConverterOptionalString.lower(`color`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `createMissingCalendarEvents`(): kotlin.UInt =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -2406,6 +2480,25 @@ open class CfaitMobile :
             { future -> UniffiLib.ffi_cfait_rust_future_free_u32(future) },
             // lift function
             { FfiConverterUInt.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `deleteLocalCalendar`(`href`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_delete_local_calendar(
+                    uniffiHandle,
+                    FfiConverterString.lower(`href`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
@@ -2452,12 +2545,13 @@ open class CfaitMobile :
     )
 
     @Throws(MobileException::class)
-    override fun `exportLocalIcs`(): kotlin.String =
+    override fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String =
         FfiConverterString.lift(
             callWithHandle {
                 uniffiRustCallWithError(MobileException) { _status ->
                     UniffiLib.uniffi_cfait_fn_method_cfaitmobile_export_local_ics(
                         it,
+                        FfiConverterString.lower(`calendarHref`),
                         _status,
                     )
                 }
@@ -2668,11 +2762,15 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `migrateLocalTo`(`targetCalendarHref`: kotlin.String): kotlin.String =
+    override suspend fun `migrateLocalTo`(
+        `sourceCalendarHref`: kotlin.String,
+        `targetCalendarHref`: kotlin.String,
+    ): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_migrate_local_to(
                     uniffiHandle,
+                    FfiConverterString.lower(`sourceCalendarHref`),
                     FfiConverterString.lower(`targetCalendarHref`),
                 )
             },
@@ -3034,6 +3132,30 @@ open class CfaitMobile :
             // Error FFI converter
             MobileException.ErrorHandler,
         )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `updateLocalCalendar`(
+        `href`: kotlin.String,
+        `name`: kotlin.String,
+        `color`: kotlin.String?,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_update_local_calendar(
+                uniffiHandle,
+                FfiConverterString.lower(`href`),
+                FfiConverterString.lower(`name`),
+                FfiConverterOptionalString.lower(`color`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        MobileException.ErrorHandler,
+    )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")

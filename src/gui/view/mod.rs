@@ -13,7 +13,6 @@ use crate::gui::view::help::view_help;
 use crate::gui::view::settings::view_settings;
 use crate::gui::view::sidebar::{view_sidebar_calendars, view_sidebar_categories};
 use crate::gui::view::task_row::view_task_row;
-use crate::storage::LOCAL_CALENDAR_HREF;
 
 use iced::alignment::Horizontal;
 // --- ADDED: Import for resize interaction ---
@@ -653,37 +652,49 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     let header_drag_area = MouseArea::new(header_row).on_press(Message::WindowDragged);
 
-    let mut export_ui: Element<'_, Message> = row![].into();
-    if app.active_cal_href.as_deref() == Some(LOCAL_CALENDAR_HREF) {
-        let targets: Vec<_> = app
-            .calendars
-            .iter()
-            .filter(|c| c.href != LOCAL_CALENDAR_HREF && !app.disabled_calendars.contains(&c.href))
-            .collect();
-        if !targets.is_empty() {
-            let mut row = row![
-                text("Export to:")
-                    .size(14)
-                    .color(Color::from_rgb(0.5, 0.5, 0.5))
-            ]
-            .spacing(5)
-            .align_y(iced::Alignment::Center);
-            for cal in targets {
-                row = row.push(
-                    iced::widget::button(text(&cal.name).size(12))
-                        .style(iced::widget::button::secondary)
-                        .padding(5)
-                        .on_press(Message::MigrateLocalTo(cal.href.clone())),
-                );
-            }
-            export_ui = container(row)
-                .padding(iced::Padding {
-                    left: 10.0,
-                    bottom: 5.0,
-                    ..Default::default()
+    // If viewing any local calendar, show export-to-caldav button bar
+    let export_ui: Element<'_, Message>;
+    if let Some(active_href) = &app.active_cal_href {
+        if active_href.starts_with("local://") {
+            let targets: Vec<_> = app
+                .calendars
+                .iter()
+                .filter(|c| {
+                    !c.href.starts_with("local://") && !app.disabled_calendars.contains(&c.href)
                 })
-                .into();
+                .collect();
+            if !targets.is_empty() {
+                let mut row = row![
+                    text("Export to:")
+                        .size(14)
+                        .color(Color::from_rgb(0.5, 0.5, 0.5))
+                ]
+                .spacing(5)
+                .align_y(iced::Alignment::Center);
+                for cal in targets {
+                    let source_href = active_href.clone();
+                    row = row.push(
+                        iced::widget::button(text(&cal.name).size(12))
+                            .style(iced::widget::button::secondary)
+                            .padding(5)
+                            .on_press(Message::MigrateLocalTo(source_href, cal.href.clone())),
+                    );
+                }
+                export_ui = container(row)
+                    .padding(iced::Padding {
+                        left: 10.0,
+                        bottom: 5.0,
+                        ..Default::default()
+                    })
+                    .into();
+            } else {
+                export_ui = container(text("")).into();
+            }
+        } else {
+            export_ui = container(text("")).into();
         }
+    } else {
+        export_ui = container(text("")).into();
     }
 
     let input_area = view_input_area(app);

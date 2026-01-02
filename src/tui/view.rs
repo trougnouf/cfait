@@ -901,6 +901,49 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         f.render_stateful_widget(popup, area, &mut state.move_selection_state);
     }
 
+    if state.mode == InputMode::SelectingExportSource {
+        let area = centered_rect(60, 50, f.area());
+        let items: Vec<ListItem> = state
+            .export_source_calendars
+            .iter()
+            .map(|c| ListItem::new(c.name.as_str()))
+            .collect();
+        let popup = List::new(items)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" Export: Select Source Local Calendar "),
+            )
+            .highlight_style(Style::default().bg(Color::Blue));
+        f.render_widget(Clear, area);
+        f.render_stateful_widget(popup, area, &mut state.export_source_selection_state);
+    }
+
+    if state.mode == InputMode::Exporting {
+        let area = centered_rect(60, 50, f.area());
+        let items: Vec<ListItem> = state
+            .export_targets
+            .iter()
+            .map(|c| ListItem::new(c.name.as_str()))
+            .collect();
+
+        let title = if let Some(idx) = state.export_source_selection_state.selected() {
+            if let Some(source) = state.export_source_calendars.get(idx) {
+                format!(" Export '{}' To ", source.name)
+            } else {
+                " Export: Select Destination ".to_string()
+            }
+        } else {
+            " Export: Select Destination ".to_string()
+        };
+
+        let popup = List::new(items)
+            .block(Block::default().borders(Borders::ALL).title(title))
+            .highlight_style(Style::default().bg(Color::Blue));
+        f.render_widget(Clear, area);
+        f.render_stateful_widget(popup, area, &mut state.export_selection_state);
+    }
+
     // --- ALARM POPUP ---
     if let Some((task, _alarm_uid)) = &state.active_alarm {
         let area = centered_rect(60, 40, f.area());

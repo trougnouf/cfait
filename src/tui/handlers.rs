@@ -330,20 +330,19 @@ pub async fn handle_key_event(
                 if let Some(mins) = parse_duration(&state.input_buffer) {
                     if let Some((task, alarm_uid)) = state.active_alarm.clone()
                         && let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                            && t.snooze_alarm(&alarm_uid, mins)
-                        {
-                            let t_clone = t.clone();
-                            state.active_alarm = None;
-                            state.mode = InputMode::Normal;
-                            state.reset_input();
-                            state.refresh_filtered_view();
-                            let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                            if let Some(tx) = &state.alarm_actor_tx {
-                                let all =
-                                    state.store.calendars.values().flatten().cloned().collect();
-                                let _ = tx.try_send(SystemEvent::UpdateTasks(all));
-                            }
+                        && t.snooze_alarm(&alarm_uid, mins)
+                    {
+                        let t_clone = t.clone();
+                        state.active_alarm = None;
+                        state.mode = InputMode::Normal;
+                        state.reset_input();
+                        state.refresh_filtered_view();
+                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                        if let Some(tx) = &state.alarm_actor_tx {
+                            let all = state.store.calendars.values().flatten().cloned().collect();
+                            let _ = tx.try_send(SystemEvent::UpdateTasks(all));
                         }
+                    }
                 } else {
                     state.message = format!("Invalid duration: '{}'", state.input_buffer);
                 }
@@ -645,20 +644,20 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('X') => {
-                if state.active_cal_href.as_deref() == Some(LOCAL_CALENDAR_HREF) {
-                    state.export_targets = state
-                        .calendars
-                        .iter()
-                        .filter(|c| {
-                            c.href != LOCAL_CALENDAR_HREF
-                                && !state.disabled_calendars.contains(&c.href)
-                        })
-                        .cloned()
-                        .collect();
-                    if !state.export_targets.is_empty() {
-                        state.export_selection_state.select(Some(0));
-                        state.mode = InputMode::Exporting;
-                    }
+                // Step 1: Select source local calendar
+                state.export_source_calendars = state
+                    .calendars
+                    .iter()
+                    .filter(|c| {
+                        c.href.starts_with("local://")
+                            && !state.disabled_calendars.contains(&c.href)
+                    })
+                    .cloned()
+                    .collect();
+                if !state.export_source_calendars.is_empty() {
+                    state.export_source_selection_state.select(Some(0));
+                    state.mode = InputMode::SelectingExportSource;
+                    state.message = "Select source local calendar to export from.".to_string();
                 }
             }
             KeyCode::Char('M') => {
@@ -890,6 +889,42 @@ pub async fn handle_key_event(
             }
             _ => {}
         },
+        InputMode::SelectingExportSource => match key.code {
+            KeyCode::Esc => {
+                state.mode = InputMode::Normal;
+                state.message = String::new();
+            }
+            KeyCode::Down | KeyCode::Char('j') => state.next_export_source(),
+            KeyCode::Up | KeyCode::Char('k') => state.previous_export_source(),
+            KeyCode::Enter => {
+                if let Some(idx) = state.export_source_selection_state.selected()
+                    && let Some(source) = state.export_source_calendars.get(idx)
+                {
+                    // Step 2: Now select destination remote calendar
+                    state.export_targets = state
+                        .calendars
+                        .iter()
+                        .filter(|c| {
+                            !c.href.starts_with("local://")
+                                && !state.disabled_calendars.contains(&c.href)
+                        })
+                        .cloned()
+                        .collect();
+                    if !state.export_targets.is_empty() {
+                        state.export_selection_state.select(Some(0));
+                        state.mode = InputMode::Exporting;
+                        state.message = format!(
+                            "Exporting from '{}'. Select destination calendar.",
+                            source.name
+                        );
+                    } else {
+                        state.mode = InputMode::Normal;
+                        state.message = "No remote calendars available for export.".to_string();
+                    }
+                }
+            }
+            _ => {}
+        },
         InputMode::Exporting => match key.code {
             KeyCode::Esc => {
                 state.mode = InputMode::Normal;
@@ -898,12 +933,16 @@ pub async fn handle_key_event(
             KeyCode::Down | KeyCode::Char('j') => state.next_export_target(),
             KeyCode::Up | KeyCode::Char('k') => state.previous_export_target(),
             KeyCode::Enter => {
-                if let Some(idx) = state.export_selection_state.selected()
-                    && let Some(target) = state.export_targets.get(idx)
+                if let Some(source_idx) = state.export_source_selection_state.selected()
+                    && let Some(source) = state.export_source_calendars.get(source_idx)
+                    && let Some(target_idx) = state.export_selection_state.selected()
+                    && let Some(target) = state.export_targets.get(target_idx)
                 {
-                    let href = target.href.clone();
+                    let source_href = source.href.clone();
+                    let target_href = target.href.clone();
                     state.mode = InputMode::Normal;
-                    return Some(Action::MigrateLocal(href));
+                    state.message = String::new();
+                    return Some(Action::MigrateLocal(source_href, target_href));
                 }
             }
             _ => {}

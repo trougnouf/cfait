@@ -20,6 +20,7 @@ pub enum InputMode {
     Editing,
     EditingDescription,
     Moving,
+    SelectingExportSource,
     Exporting,
     Snoozing,
 }
@@ -64,6 +65,8 @@ pub struct AppState {
     pub editing_index: Option<usize>,
     pub move_selection_state: ListState,
     pub move_targets: Vec<CalendarListEntry>,
+    pub export_source_selection_state: ListState,
+    pub export_source_calendars: Vec<CalendarListEntry>,
     pub export_selection_state: ListState,
     pub export_targets: Vec<CalendarListEntry>,
 
@@ -129,6 +132,8 @@ impl AppState {
             show_full_help: false,
 
             tag_aliases: HashMap::new(),
+            export_source_selection_state: ListState::default(),
+            export_source_calendars: Vec::new(),
             export_selection_state: ListState::default(),
             export_targets: Vec::new(),
 
@@ -411,6 +416,40 @@ impl AppState {
         };
         self.move_selection_state.select(Some(i));
     }
+    pub fn next_export_source(&mut self) {
+        if self.export_source_calendars.is_empty() {
+            return;
+        }
+        let i = match self.export_source_selection_state.selected() {
+            Some(i) => {
+                if i >= self.export_source_calendars.len() - 1 {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            None => 0,
+        };
+        self.export_source_selection_state.select(Some(i));
+    }
+
+    pub fn previous_export_source(&mut self) {
+        if self.export_source_calendars.is_empty() {
+            return;
+        }
+        let i = match self.export_source_selection_state.selected() {
+            Some(i) => {
+                if i == 0 {
+                    self.export_source_calendars.len() - 1
+                } else {
+                    i - 1
+                }
+            }
+            None => 0,
+        };
+        self.export_source_selection_state.select(Some(i));
+    }
+
     pub fn next_export_target(&mut self) {
         if self.export_targets.is_empty() {
             return;

@@ -1,15 +1,14 @@
 // File: ./src/storage.rs
-use crate::model::Task;
+use crate::model::{CalendarListEntry, Task};
 use crate::paths::AppPaths;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 // --- Android Specific Imports ---
-#[cfg(target_os = "android")]
-use std::collections::HashMap;
 #[cfg(target_os = "android")]
 use std::sync::Arc;
 
@@ -20,6 +19,7 @@ use fs2::FileExt;
 // Constants for identification
 pub const LOCAL_CALENDAR_HREF: &str = "local://default";
 pub const LOCAL_CALENDAR_NAME: &str = "Local";
+pub const LOCAL_REGISTRY_FILENAME: &str = "local_calendars.json";
 
 // Increment this when making breaking changes to the Task struct serialization format
 // Version history:
@@ -39,9 +39,10 @@ struct LocalStorageData {
 #[cfg(target_os = "android")]
 static ANDROID_FILE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> = OnceLock::new();
 
-/// Tracks whether the last load operation succeeded.
+/// Tracks whether the last load operation succeeded for each calendar.
 /// This prevents data loss by blocking saves when we couldn't load the existing data.
-static LOAD_STATE: OnceLock<Mutex<LoadState>> = OnceLock::new();
+/// Key is the calendar href (e.g., "local://default", "local://<uuid>")
+static LOAD_STATE_MAP: OnceLock<Mutex<HashMap<String, LoadState>>> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LoadState {
@@ -54,26 +55,296 @@ enum LoadState {
 }
 
 impl LoadState {
-    fn get() -> LoadState {
-        *LOAD_STATE
-            .get_or_init(|| Mutex::new(LoadState::Uninitialized))
-            .lock()
+    fn get(href: &str) -> LoadState {
+        let map = LOAD_STATE_MAP.get_or_init(|| Mutex::new(HashMap::new()));
+        *map.lock()
             .unwrap()
+            .get(href)
+            .unwrap_or(&LoadState::Uninitialized)
     }
 
-    fn set(state: LoadState) {
-        *LOAD_STATE
-            .get_or_init(|| Mutex::new(LoadState::Uninitialized))
-            .lock()
-            .unwrap() = state;
+    fn set(href: &str, state: LoadState) {
+        let map = LOAD_STATE_MAP.get_or_init(|| Mutex::new(HashMap::new()));
+        map.lock().unwrap().insert(href.to_string(), state);
+    }
+}
+
+/// Registry for managing multiple local calendars
+pub struct LocalCalendarRegistry;
+
+impl LocalCalendarRegistry {
+    fn get_path() -> Option<PathBuf> {
+        AppPaths::get_data_dir()
+            .ok()
+            .map(|p| p.join(LOCAL_REGISTRY_FILENAME))
+    }
+
+    /// Load all local calendars from the registry
+    pub fn load() -> Result<Vec<CalendarListEntry>> {
+        let mut cals = vec![];
+
+        // Ensure default local calendar always exists
+        let default_cal = CalendarListEntry {
+            name: LOCAL_CALENDAR_NAME.to_string(),
+            href: LOCAL_CALENDAR_HREF.to_string(),
+            color: None,
+        };
+
+        if let Some(path) = Self::get_path()
+            && path.exists()
+            && let Ok(content) = LocalStorage::with_lock(&path, || Ok(fs::read_to_string(&path)?))
+            && let Ok(registry) = serde_json::from_str::<Vec<CalendarListEntry>>(&content)
+        {
+            cals = registry;
+        }
+
+        // Ensure default is present if missing (or empty registry)
+        if !cals.iter().any(|c| c.href == LOCAL_CALENDAR_HREF) {
+            cals.insert(0, default_cal);
+        }
+
+        Ok(cals)
+    }
+
+    /// Save all local calendars to the registry
+    pub fn save(calendars: &[CalendarListEntry]) -> Result<()> {
+        if let Some(path) = Self::get_path() {
+            LocalStorage::with_lock(&path, || {
+                let json = serde_json::to_string_pretty(calendars)?;
+                LocalStorage::atomic_write(&path, json)?;
+                Ok(())
+            })?;
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod registry_tests {
+    use super::*;
+    use serial_test::serial;
+
+    // RAII guard to restore CFAIT_TEST_DIR after test
+    struct TestDirGuard {
+        original_value: Option<String>,
+        temp_dir: std::path::PathBuf,
+    }
+
+    impl TestDirGuard {
+        fn new(test_name: &str) -> Self {
+            let original_value = std::env::var("CFAIT_TEST_DIR").ok();
+            let temp_dir = std::env::temp_dir().join(format!(
+                "cfait_test_{}_{}",
+                test_name,
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            let _ = fs::create_dir_all(&temp_dir);
+
+            // Clear load state map BEFORE setting new directory to prevent test interference
+            if let Some(map) = LOAD_STATE_MAP.get() {
+                map.lock().unwrap().clear();
+            }
+
+            unsafe {
+                std::env::set_var("CFAIT_TEST_DIR", &temp_dir);
+            }
+
+            Self {
+                original_value,
+                temp_dir,
+            }
+        }
+    }
+
+    impl Drop for TestDirGuard {
+        fn drop(&mut self) {
+            // Clean up temp directory
+            let _ = fs::remove_dir_all(&self.temp_dir);
+
+            // Restore original CFAIT_TEST_DIR or remove if it wasn't set
+            unsafe {
+                match &self.original_value {
+                    Some(val) => std::env::set_var("CFAIT_TEST_DIR", val),
+                    None => std::env::remove_var("CFAIT_TEST_DIR"),
+                }
+            }
+
+            // Clear load state map again to prevent leaking state to next test
+            if let Some(map) = LOAD_STATE_MAP.get() {
+                map.lock().unwrap().clear();
+            }
+        }
+    }
+
+    fn create_test_task(uid: &str, summary: &str, calendar_href: &str) -> Task {
+        let mut task = Task::new(summary, &std::collections::HashMap::new(), None);
+        task.uid = uid.to_string();
+        task.calendar_href = calendar_href.to_string();
+        task
+    }
+
+    #[test]
+    #[serial]
+    fn test_multi_calendar_save_and_load() {
+        let _guard = TestDirGuard::new("multi_save_load");
+
+        // Create registry with multiple calendars
+        let cal1 = CalendarListEntry {
+            name: "Work".to_string(),
+            href: "local://work".to_string(),
+            color: Some("#FF0000".to_string()),
+        };
+        let cal2 = CalendarListEntry {
+            name: "Personal".to_string(),
+            href: "local://personal".to_string(),
+            color: Some("#00FF00".to_string()),
+        };
+
+        let registry = vec![cal1.clone(), cal2.clone()];
+        LocalCalendarRegistry::save(&registry).unwrap();
+
+        // Create tasks for each calendar
+        let task1 = create_test_task("task1", "Work task", "local://work");
+        let task2 = create_test_task("task2", "Personal task", "local://personal");
+
+        // Save to different calendars
+        LocalStorage::save_for_href("local://work", std::slice::from_ref(&task1)).unwrap();
+        LocalStorage::save_for_href("local://personal", std::slice::from_ref(&task2)).unwrap();
+
+        // Load and verify each calendar independently
+        let loaded_work = LocalStorage::load_for_href("local://work").unwrap();
+        assert_eq!(loaded_work.len(), 1);
+        assert_eq!(loaded_work[0].uid, "task1");
+        assert_eq!(loaded_work[0].summary, "Work task");
+
+        let loaded_personal = LocalStorage::load_for_href("local://personal").unwrap();
+        assert_eq!(loaded_personal.len(), 1);
+        assert_eq!(loaded_personal[0].uid, "task2");
+        assert_eq!(loaded_personal[0].summary, "Personal task");
+
+        // Verify registry persists (may include default local calendar)
+        let loaded_registry = LocalCalendarRegistry::load().unwrap();
+        assert!(loaded_registry.len() >= 2);
+        assert!(loaded_registry.iter().any(|c| c.href == "local://work"));
+        assert!(loaded_registry.iter().any(|c| c.href == "local://personal"));
+    }
+
+    #[test]
+    #[serial]
+    fn test_multi_calendar_isolation() {
+        let _guard = TestDirGuard::new("multi_isolation");
+
+        // Create two calendars with tasks
+        let task1 = create_test_task("task1", "Calendar A task", "local://cal-a");
+        let task2 = create_test_task("task2", "Calendar B task", "local://cal-b");
+
+        LocalStorage::save_for_href("local://cal-a", std::slice::from_ref(&task1)).unwrap();
+        LocalStorage::save_for_href("local://cal-b", std::slice::from_ref(&task2)).unwrap();
+
+        // Modify calendar A
+        let mut cal_a_tasks = LocalStorage::load_for_href("local://cal-a").unwrap();
+        let task3 = create_test_task("task3", "Another A task", "local://cal-a");
+        cal_a_tasks.push(task3);
+        LocalStorage::save_for_href("local://cal-a", &cal_a_tasks).unwrap();
+
+        // Verify calendar B is unchanged
+        let cal_b_tasks = LocalStorage::load_for_href("local://cal-b").unwrap();
+        assert_eq!(cal_b_tasks.len(), 1);
+        assert_eq!(cal_b_tasks[0].uid, "task2");
+
+        // Verify calendar A has two tasks
+        let cal_a_tasks = LocalStorage::load_for_href("local://cal-a").unwrap();
+        assert_eq!(cal_a_tasks.len(), 2);
+    }
+
+    #[test]
+    #[serial]
+    fn test_multi_calendar_default_compatibility() {
+        let _guard = TestDirGuard::new("multi_compat");
+
+        // Create task using old API (default calendar)
+        let task = create_test_task("default-task", "Default task", LOCAL_CALENDAR_HREF);
+
+        LocalStorage::save(std::slice::from_ref(&task)).unwrap();
+
+        // Verify it's accessible via both APIs
+        let loaded_old = LocalStorage::load().unwrap();
+        let loaded_new = LocalStorage::load_for_href(LOCAL_CALENDAR_HREF).unwrap();
+
+        assert_eq!(loaded_old.len(), 1);
+        assert_eq!(loaded_new.len(), 1);
+        assert_eq!(loaded_old[0].uid, loaded_new[0].uid);
+    }
+
+    #[test]
+    #[serial]
+    fn test_multi_calendar_independent_operations() {
+        let _guard = TestDirGuard::new("multi_independent");
+
+        // Create calendar A with one task
+        let task_a = create_test_task("task-a", "Task A", "local://cal-a");
+        LocalStorage::save_for_href("local://cal-a", std::slice::from_ref(&task_a)).unwrap();
+
+        // Create calendar B with one task
+        let task_b = create_test_task("task-b", "Task B", "local://cal-b");
+        LocalStorage::save_for_href("local://cal-b", std::slice::from_ref(&task_b)).unwrap();
+
+        // Verify both calendars work independently
+        let loaded_a = LocalStorage::load_for_href("local://cal-a").unwrap();
+        assert_eq!(loaded_a.len(), 1);
+        assert_eq!(loaded_a[0].uid, "task-a");
+
+        let loaded_b = LocalStorage::load_for_href("local://cal-b").unwrap();
+        assert_eq!(loaded_b.len(), 1);
+        assert_eq!(loaded_b[0].uid, "task-b");
+
+        // Update calendar A - should not affect calendar B
+        let mut tasks_a = loaded_a;
+        let task_a2 = create_test_task("task-a2", "Task A2", "local://cal-a");
+        tasks_a.push(task_a2);
+        LocalStorage::save_for_href("local://cal-a", &tasks_a).unwrap();
+
+        // Verify calendar A has 2 tasks
+        let reloaded_a = LocalStorage::load_for_href("local://cal-a").unwrap();
+        assert_eq!(reloaded_a.len(), 2);
+
+        // Verify calendar B still has 1 task (unchanged)
+        let reloaded_b = LocalStorage::load_for_href("local://cal-b").unwrap();
+        assert_eq!(reloaded_b.len(), 1);
+        assert_eq!(reloaded_b[0].uid, "task-b");
     }
 }
 
 pub struct LocalStorage;
 
 impl LocalStorage {
+    /// Returns the file path for a given local calendar href.
+    /// local://default -> local.json
+    /// local://<uuid>  -> local_<safe_uuid>.json
+    pub fn get_path_for_href(href: &str) -> Option<PathBuf> {
+        if href == LOCAL_CALENDAR_HREF {
+            AppPaths::get_local_task_path()
+        } else if href.starts_with("local://") {
+            let id = href.trim_start_matches("local://");
+            // Sanitize the ID to only allow alphanumeric and hyphens
+            let safe_id: String = id
+                .chars()
+                .filter(|c| c.is_alphanumeric() || *c == '-')
+                .collect();
+            AppPaths::get_data_dir()
+                .ok()
+                .map(|p| p.join(format!("local_{}.json", safe_id)))
+        } else {
+            None
+        }
+    }
+
+    /// Legacy method for backward compatibility (redirects to default)
     pub fn get_path() -> Option<PathBuf> {
-        AppPaths::get_local_task_path()
+        Self::get_path_for_href(LOCAL_CALENDAR_HREF)
     }
 
     /// Generates a single VCALENDAR string containing all provided tasks as VTODO components.
@@ -85,13 +356,14 @@ impl LocalStorage {
             let full_ics = task.to_ics();
             // Extract the VTODO block from the full VCALENDAR string generated by the model
             if let Some(start) = full_ics.find("BEGIN:VTODO")
-                && let Some(end_idx) = full_ics.rfind("END:VTODO") {
-                    // Extract up to and including END:VTODO
-                    // "END:VTODO" is 9 chars long
-                    let vtodo = &full_ics[start..end_idx + 9];
-                    output.push_str(vtodo);
-                    output.push_str("\r\n");
-                }
+                && let Some(end_idx) = full_ics.rfind("END:VTODO")
+            {
+                // Extract up to and including END:VTODO
+                // "END:VTODO" is 9 chars long
+                let vtodo = &full_ics[start..end_idx + 9];
+                output.push_str(vtodo);
+                output.push_str("\r\n");
+            }
         }
 
         output.push_str("END:VCALENDAR");
@@ -168,7 +440,84 @@ impl LocalStorage {
         Ok(())
     }
 
-    /// Save tasks to local.json
+    /// Load tasks from a specific file path (Internal)
+    fn load_from_path(path: &Path, href: &str) -> Result<Vec<Task>> {
+        if !path.exists() {
+            LoadState::set(href, LoadState::Success);
+            return Ok(vec![]);
+        }
+        let result = Self::with_lock(path, || {
+            let json = fs::read_to_string(path)?;
+
+            // Try to parse as versioned format first
+            let tasks = if let Ok(data) = serde_json::from_str::<LocalStorageData>(&json) {
+                // Versioned format detected
+                if data.version == LOCAL_STORAGE_VERSION {
+                    // Current version, use directly
+                    data.tasks
+                } else {
+                    // Old version, migrate
+                    Self::migrate_to_current(data.version, &json)?
+                }
+            } else {
+                // No version field or parsing failed - assume v1 (unversioned)
+                #[cfg(target_os = "android")]
+                log::info!("No version found in {}, assuming v1 format", href);
+                #[cfg(not(target_os = "android"))]
+                eprintln!("No version found in {}, assuming v1 format", href);
+
+                Self::migrate_v1_to_v2(&json)?
+            };
+
+            Ok(tasks)
+        });
+
+        match &result {
+            Ok(_) => LoadState::set(href, LoadState::Success),
+            Err(_) => LoadState::set(href, LoadState::Failed),
+        }
+        result
+    }
+
+    /// Save tasks to a specific file path (Internal)
+    fn save_to_path(path: &Path, href: &str, tasks: &[Task]) -> Result<()> {
+        if !Self::can_save_href(href) {
+            return Err(anyhow::anyhow!(
+                "Cannot save {}: previous load failed. This prevents overwriting data that couldn't be read.",
+                href
+            ));
+        }
+        Self::with_lock(path, || {
+            let data = LocalStorageData {
+                version: LOCAL_STORAGE_VERSION,
+                tasks: tasks.to_vec(),
+            };
+            let json = serde_json::to_string_pretty(&data)?;
+            Self::atomic_write(path, json)?;
+            Ok(())
+        })
+    }
+
+    /// Public load method handling any local href
+    pub fn load_for_href(href: &str) -> Result<Vec<Task>> {
+        if let Some(path) = Self::get_path_for_href(href) {
+            Self::load_from_path(&path, href)
+        } else {
+            // Unknown scheme, return empty
+            Ok(vec![])
+        }
+    }
+
+    /// Public save method handling any local href
+    pub fn save_for_href(href: &str, tasks: &[Task]) -> Result<()> {
+        if let Some(path) = Self::get_path_for_href(href) {
+            Self::save_to_path(&path, href, tasks)
+        } else {
+            Err(anyhow::anyhow!("Invalid local href: {}", href))
+        }
+    }
+
+    /// Save tasks to local.json (default calendar)
     ///
     /// # Data Loss Prevention
     /// This function checks `LoadState` before saving. If the last `load()` failed,
@@ -177,16 +526,10 @@ impl LocalStorage {
     ///
     /// To force a save (e.g., after manual data recovery), call `force_save()` instead.
     pub fn save(tasks: &[Task]) -> Result<()> {
-        if !Self::can_save() {
-            return Err(anyhow::anyhow!(
-                "Cannot save: previous load failed. This prevents overwriting data that couldn't be read. \
-                 Check logs for deserialization errors. Use force_save() if you're certain you want to overwrite."
-            ));
-        }
-        Self::force_save(tasks)
+        Self::save_for_href(LOCAL_CALENDAR_HREF, tasks)
     }
 
-    /// Force save tasks to local.json, bypassing load state check.
+    /// Force save tasks to local.json (default calendar), bypassing load state check.
     ///
     /// # WARNING
     /// This bypasses the data loss prevention check. Only use this if:
@@ -312,56 +655,10 @@ impl LocalStorage {
     /// - Version 2: Current format with DateType enum → loads directly
     /// - Future versions: Additional migrations applied as needed
     pub fn load() -> Result<Vec<Task>> {
-        if let Some(path) = Self::get_path() {
-            if !path.exists() {
-                LoadState::set(LoadState::Success);
-                return Ok(vec![]);
-            }
-            let result = Self::with_lock(&path, || {
-                let json = fs::read_to_string(&path)?;
-
-                // Try to parse as versioned format first
-                let tasks = if let Ok(data) = serde_json::from_str::<LocalStorageData>(&json) {
-                    // Versioned format detected
-                    if data.version == LOCAL_STORAGE_VERSION {
-                        // Current version, use directly
-                        data.tasks
-                    } else {
-                        // Old version, migrate
-                        Self::migrate_to_current(data.version, &json)?
-                    }
-                } else {
-                    // No version field or parsing failed - assume v1 (unversioned)
-                    #[cfg(target_os = "android")]
-                    log::info!("No version found in local.json, assuming v1 format");
-                    #[cfg(not(target_os = "android"))]
-                    eprintln!("No version found in local.json, assuming v1 format");
-
-                    Self::migrate_v1_to_v2(&json)?
-                };
-
-                Ok(tasks)
-            });
-
-            match &result {
-                Ok(_) => {
-                    LoadState::set(LoadState::Success);
-                    // If migration occurred, save with new version
-                    // This is safe because LoadState is Success
-                    if let Ok(tasks) = &result {
-                        let _ = Self::save(tasks); // Best effort, don't fail load if save fails
-                    }
-                }
-                Err(_) => LoadState::set(LoadState::Failed),
-            }
-
-            return result;
-        }
-        LoadState::set(LoadState::Success);
-        Ok(vec![])
+        Self::load_for_href(LOCAL_CALENDAR_HREF)
     }
 
-    /// Check if the last load operation succeeded.
+    /// Check if the last load operation succeeded for the default calendar.
     ///
     /// Returns `true` if:
     /// - Load succeeded
@@ -370,7 +667,19 @@ impl LocalStorage {
     /// Returns `false` if:
     /// - Load failed (deserialization error, corruption, etc.)
     pub fn can_save() -> bool {
-        match LoadState::get() {
+        Self::can_save_href(LOCAL_CALENDAR_HREF)
+    }
+
+    /// Check if the last load operation succeeded for a specific calendar.
+    ///
+    /// Returns `true` if:
+    /// - Load succeeded
+    /// - No load has been attempted yet (Uninitialized state)
+    ///
+    /// Returns `false` if:
+    /// - Load failed (deserialization error, corruption, etc.)
+    pub fn can_save_href(href: &str) -> bool {
+        match LoadState::get(href) {
             LoadState::Uninitialized => true, // Allow save if never loaded
             LoadState::Success => true,
             LoadState::Failed => false,
@@ -439,39 +748,46 @@ mod tests {
     #[test]
     fn test_load_state_mechanism() {
         // Test the LoadState mechanism directly without file I/O
+        let test_href = "local://test";
 
         // Start uninitialized - should allow save
-        LoadState::set(LoadState::Uninitialized);
-        assert_eq!(LoadState::get(), LoadState::Uninitialized);
+        LoadState::set(test_href, LoadState::Uninitialized);
+        assert_eq!(LoadState::get(test_href), LoadState::Uninitialized);
         assert!(
-            LocalStorage::can_save(),
+            LocalStorage::can_save_href(test_href),
             "Should allow save when uninitialized"
         );
 
         // Simulate successful load
-        LoadState::set(LoadState::Success);
-        assert_eq!(LoadState::get(), LoadState::Success);
+        LoadState::set(test_href, LoadState::Success);
+        assert_eq!(LoadState::get(test_href), LoadState::Success);
         assert!(
-            LocalStorage::can_save(),
+            LocalStorage::can_save_href(test_href),
             "Should allow save after successful load"
         );
 
         // Simulate failed load
-        LoadState::set(LoadState::Failed);
-        assert_eq!(LoadState::get(), LoadState::Failed);
+        LoadState::set(test_href, LoadState::Failed);
+        assert_eq!(LoadState::get(test_href), LoadState::Failed);
         assert!(
-            !LocalStorage::can_save(),
+            !LocalStorage::can_save_href(test_href),
             "Should NOT allow save after failed load"
         );
 
-        // Reset for other tests
-        LoadState::set(LoadState::Uninitialized);
+        // Test independence: another calendar should not be affected
+        let other_href = "local://other";
+        assert_eq!(LoadState::get(other_href), LoadState::Uninitialized);
+        assert!(
+            LocalStorage::can_save_href(other_href),
+            "Other calendar should be unaffected"
+        );
     }
 
     #[test]
     fn test_save_blocked_after_failed_load() {
         // Directly test that save() returns an error when LoadState is Failed
-        LoadState::set(LoadState::Failed);
+        let test_href = LOCAL_CALENDAR_HREF;
+        LoadState::set(test_href, LoadState::Failed);
 
         let tasks = vec![];
         let save_result = LocalStorage::save(&tasks);
@@ -487,15 +803,13 @@ mod tests {
                 .contains("previous load failed"),
             "Error message should explain why save was blocked"
         );
-
-        // Reset
-        LoadState::set(LoadState::Uninitialized);
     }
 
     #[test]
     fn test_force_save_bypasses_load_state() {
         // force_save should work even when LoadState is Failed
-        LoadState::set(LoadState::Failed);
+        let test_href = LOCAL_CALENDAR_HREF;
+        LoadState::set(test_href, LoadState::Failed);
 
         let temp_dir = std::env::temp_dir().join("cfait_test_force_save");
         let _ = fs::create_dir_all(&temp_dir);
@@ -512,7 +826,6 @@ mod tests {
 
         // Cleanup
         let _ = fs::remove_dir_all(temp_dir);
-        LoadState::set(LoadState::Uninitialized);
     }
 
     #[test]
@@ -709,7 +1022,8 @@ mod tests {
         fs::write(&file_path, v1_content).unwrap();
 
         // Simulate load with migration
-        LoadState::set(LoadState::Uninitialized);
+        let test_href = "local://test-migration";
+        LoadState::set(test_href, LoadState::Uninitialized);
         let json = fs::read_to_string(&file_path).unwrap();
 
         // Parse as v1 and migrate
@@ -740,7 +1054,6 @@ mod tests {
 
         // Cleanup
         let _ = fs::remove_dir_all(temp_dir);
-        LoadState::set(LoadState::Uninitialized);
     }
 
     #[test]

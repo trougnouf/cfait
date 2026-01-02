@@ -105,6 +105,11 @@ pub struct GuiApp {
     pub ob_default_cal: Option<String>,
     pub ob_sort_months_input: String,
     pub ob_insecure: bool,
+
+    // Local Calendar Management
+    pub local_cals_editing: Vec<CalendarListEntry>,
+    pub color_picker_active_href: Option<String>,
+    pub temp_color: iced::Color,
     pub scrollable_id: iced::widget::Id,
     pub sidebar_scrollable_id: iced::widget::Id,
 
@@ -214,6 +219,10 @@ impl Default for GuiApp {
             ob_pass: String::new(),
             ob_default_cal: None,
             ob_insecure: false,
+
+            local_cals_editing: vec![],
+            color_picker_active_href: None,
+            temp_color: iced::Color::WHITE,
             scrollable_id: iced::widget::Id::unique(),
             sidebar_scrollable_id: iced::widget::Id::unique(),
 

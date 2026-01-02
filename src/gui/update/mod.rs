@@ -41,8 +41,14 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetDeleteEventsOnCompletion(_)
         | Message::DeleteAllCalendarEvents
         | Message::BackfillEventsComplete(_)
-        | Message::ExportLocalIcs
-        | Message::ExportSaved(_) => settings::handle(app, message),
+        | Message::ExportLocalIcs(_)
+        | Message::ExportSaved(_)
+        | Message::AddLocalCalendar
+        | Message::DeleteLocalCalendar(_)
+        | Message::LocalCalendarNameChanged(_, _)
+        | Message::OpenColorPicker(_, _)
+        | Message::CancelColorPicker
+        | Message::SubmitColorPicker(_) => settings::handle(app, message),
 
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)
@@ -63,7 +69,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::AddDependency(_)
         | Message::AddRelatedTo(_)
         | Message::MoveTask(_, _)
-        | Message::MigrateLocalTo(_)
+        | Message::MigrateLocalTo(_, _)
         | Message::StartTask(_)
         | Message::PauseTask(_)
         | Message::StopTask(_)
