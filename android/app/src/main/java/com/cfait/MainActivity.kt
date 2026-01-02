@@ -292,6 +292,10 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
                         navController.popBackStack()
                         refreshLists()
                     },
+                    onNavigate = { targetUid ->
+                        // Navigate to same screen with new UID
+                        navController.navigate("detail/$targetUid")
+                    }
                 )
             }
         }

@@ -947,10 +947,17 @@ pub fn view_task_row<'a>(
                     .style(button::danger)
                     .padding(2)
                     .on_press(Message::RemoveDependency(task.uid.clone(), dep_uid.clone()));
-                let dep_row = row![
+                let name_btn = button(
                     text(format!("{} {}", check, name))
                         .size(12)
                         .color(Color::from_rgb(0.6, 0.6, 0.6)),
+                )
+                .style(button::text)
+                .padding(0)
+                .on_press(Message::JumpToTask(dep_uid.clone()));
+
+                let dep_row = row![
+                    name_btn,
                     tooltip(
                         remove_dep_btn,
                         text("Remove dependency").size(12),
@@ -984,9 +991,14 @@ pub fn view_task_row<'a>(
                         task.uid.clone(),
                         related_uid.clone(),
                     ));
+                let name_btn = button(text(name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
+                    .style(button::text)
+                    .padding(0)
+                    .on_press(Message::JumpToTask(related_uid.clone()));
+
                 let related_row = row![
                     icon::icon(icon::random_related_icon(&task.uid, related_uid)).size(12),
-                    text(name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)),
+                    name_btn,
                     tooltip(
                         remove_related_btn,
                         text("Remove relation").size(12),
@@ -1017,11 +1029,18 @@ pub fn view_task_row<'a>(
                         related_uid.clone(),
                         task.uid.clone(),
                     ));
-                let related_row = row![
-                    icon::icon(icon::random_related_icon(&task.uid, &related_uid)).size(12),
+                let name_btn = button(
                     text(related_name)
                         .size(12)
                         .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                )
+                .style(button::text)
+                .padding(0)
+                .on_press(Message::JumpToTask(related_uid.clone()));
+
+                let related_row = row![
+                    icon::icon(icon::random_related_icon(&task.uid, &related_uid)).size(12),
+                    name_btn,
                     tooltip(
                         remove_related_btn,
                         text("Remove relation").size(12),

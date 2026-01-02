@@ -99,6 +99,7 @@ pub enum Message {
 
     JumpToTag(String),
     JumpToLocation(String), // <--- NEW
+    JumpToTask(String),     // <--- NEW
 
     TaskMoved(Result<TodoTask, String>),
     ObSubmitOffline,

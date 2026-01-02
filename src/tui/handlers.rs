@@ -703,6 +703,48 @@ pub async fn handle_key_event(
                 state.hide_completed = !state.hide_completed;
                 state.refresh_filtered_view();
             }
+            KeyCode::Char('L') => {
+                // Enter relationship browsing mode to navigate to linked tasks
+                if let Some(task) = state.get_selected_task() {
+                    let mut items = Vec::new();
+
+                    // Add blocked-by dependencies
+                    for dep_uid in &task.dependencies {
+                        let name = state
+                            .store
+                            .get_summary(dep_uid)
+                            .unwrap_or_else(|| "Unknown task".to_string());
+                        let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
+                        let check = if is_done { "[x]" } else { "[ ]" };
+                        items.push((dep_uid.clone(), format!("⬆ {} {}", check, name)));
+                    }
+
+                    // Add outgoing relations
+                    for related_uid in &task.related_to {
+                        let name = state
+                            .store
+                            .get_summary(related_uid)
+                            .unwrap_or_else(|| "Unknown task".to_string());
+                        items.push((related_uid.clone(), format!("→ {}", name)));
+                    }
+
+                    // Add incoming relations
+                    let incoming_related = state.store.get_tasks_related_to(&task.uid);
+                    for (related_uid, related_name) in incoming_related {
+                        items.push((related_uid, format!("← {}", related_name)));
+                    }
+
+                    if !items.is_empty() {
+                        state.relationship_items = items;
+                        state.relationship_selection_state.select(Some(0));
+                        state.mode = InputMode::RelationshipBrowsing;
+                        state.message =
+                            "Select task to jump to (Enter) or Esc to cancel".to_string();
+                    } else {
+                        state.message = "No related tasks to browse.".to_string();
+                    }
+                }
+            }
             KeyCode::Char('*') => {
                 if state.active_focus == Focus::Sidebar {
                     match state.sidebar_mode {
@@ -943,6 +985,65 @@ pub async fn handle_key_event(
                     state.mode = InputMode::Normal;
                     state.message = String::new();
                     return Some(Action::MigrateLocal(source_href, target_href));
+                }
+            }
+            _ => {}
+        },
+        InputMode::RelationshipBrowsing => match key.code {
+            KeyCode::Esc => {
+                state.mode = InputMode::Normal;
+                state.message = String::new();
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let len = state.relationship_items.len();
+                if len > 0 {
+                    let current = state.relationship_selection_state.selected().unwrap_or(0);
+                    let next = if current >= len - 1 { 0 } else { current + 1 };
+                    state.relationship_selection_state.select(Some(next));
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                let len = state.relationship_items.len();
+                if len > 0 {
+                    let current = state.relationship_selection_state.selected().unwrap_or(0);
+                    let prev = if current == 0 { len - 1 } else { current - 1 };
+                    state.relationship_selection_state.select(Some(prev));
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(idx) = state.relationship_selection_state.selected()
+                    && let Some((target_uid, _)) = state.relationship_items.get(idx)
+                {
+                    // Jump to the target task
+                    let target_uid = target_uid.clone();
+
+                    // Find which calendar this task belongs to
+                    if let Some(href) = state.store.index.get(&target_uid).cloned() {
+                        // Clear filters that might hide the task
+                        state.active_search_query.clear();
+                        state.selected_categories.clear();
+                        state.selected_locations.clear();
+
+                        // Switch calendar if needed and unhide
+                        if state.active_cal_href.as_ref() != Some(&href) {
+                            state.active_cal_href = Some(href.clone());
+                            state.hidden_calendars.remove(&href);
+                        }
+
+                        state.refresh_filtered_view();
+
+                        // Find and select the target task in the list
+                        if let Some(task_idx) = state.tasks.iter().position(|t| t.uid == target_uid)
+                        {
+                            state.list_state.select(Some(task_idx));
+                        }
+
+                        state.mode = InputMode::Normal;
+                        state.message = "Jumped to task".to_string();
+                    } else {
+                        state.message = "Task not found".to_string();
+                        state.mode = InputMode::Normal;
+                    }
                 }
             }
             _ => {}

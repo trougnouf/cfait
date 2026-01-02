@@ -23,6 +23,7 @@ pub enum InputMode {
     SelectingExportSource,
     Exporting,
     Snoozing,
+    RelationshipBrowsing, // NEW: For navigating through task relationships
 }
 
 pub struct AppState {
@@ -74,6 +75,10 @@ pub struct AppState {
     pub creating_child_of: Option<String>,
     pub show_full_help: bool,
     pub tag_aliases: HashMap<String, Vec<String>>,
+
+    // Relationship browsing state
+    pub relationship_items: Vec<(String, String)>, // (uid, display_name)
+    pub relationship_selection_state: ListState,
 
     // Track unsynced status
     pub unsynced_changes: bool,
@@ -136,6 +141,9 @@ impl AppState {
             export_source_calendars: Vec::new(),
             export_selection_state: ListState::default(),
             export_targets: Vec::new(),
+
+            relationship_items: Vec::new(),
+            relationship_selection_state: ListState::default(),
 
             unsynced_changes: false, // Default false
             alarm_actor_tx: None,

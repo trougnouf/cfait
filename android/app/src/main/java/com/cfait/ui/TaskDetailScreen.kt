@@ -31,6 +31,7 @@ fun TaskDetailScreen(
     calendars: List<MobileCalendar>,
     onBack: () -> Unit,
     onSave: (String, String) -> Unit,
+    onNavigate: (String) -> Unit,
 ) {
     var task by remember { mutableStateOf<MobileTask?>(null) }
     val scope = rememberCoroutineScope()
@@ -141,21 +142,34 @@ fun TaskDetailScreen(
                 blockedPairs.forEach { (name, blockerUid) ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier =
-                            Modifier
-                                .padding(vertical = 2.dp)
-                                .clickable {
-                                    scope.launch {
-                                        api.removeDependency(task!!.uid, blockerUid)
-                                        reload()
-                                    }
-                                },
+                        modifier = Modifier.padding(vertical = 2.dp)
                     ) {
-                        NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
+                        // DELETE BUTTON
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    api.removeDependency(task!!.uid, blockerUid)
+                                    reload()
+                                }
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
+                        }
+
                         Spacer(Modifier.width(8.dp))
-                        NfIcon(NfIcons.BLOCKED, 12.sp, androidx.compose.ui.graphics.Color.Gray)
-                        Spacer(Modifier.width(4.dp))
-                        Text(name, fontSize = 14.sp)
+
+                        // NAVIGATION AREA
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable { onNavigate(blockerUid) }
+                                .padding(4.dp)
+                        ) {
+                            NfIcon(NfIcons.BLOCKED, 12.sp, androidx.compose.ui.graphics.Color.Gray)
+                            Spacer(Modifier.width(4.dp))
+                            Text(name, fontSize = 14.sp)
+                        }
                     }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -174,25 +188,38 @@ fun TaskDetailScreen(
                 relatedPairs.forEach { (name, relatedUid) ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier =
-                            Modifier
-                                .padding(vertical = 2.dp)
-                                .clickable {
-                                    scope.launch {
-                                        api.removeRelatedTo(task!!.uid, relatedUid)
-                                        reload()
-                                    }
-                                },
+                        modifier = Modifier.padding(vertical = 2.dp)
                     ) {
-                        NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
+                        // DELETE BUTTON
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    api.removeRelatedTo(task!!.uid, relatedUid)
+                                    reload()
+                                }
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
+                        }
+
                         Spacer(Modifier.width(8.dp))
-                        NfIcon(
-                            getRandomRelatedIcon(task!!.uid, relatedUid),
-                            12.sp,
-                            androidx.compose.ui.graphics.Color.Gray
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(name, fontSize = 14.sp)
+
+                        // NAVIGATION AREA
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable { onNavigate(relatedUid) }
+                                .padding(4.dp)
+                        ) {
+                            NfIcon(
+                                getRandomRelatedIcon(task!!.uid, relatedUid),
+                                12.sp,
+                                androidx.compose.ui.graphics.Color.Gray
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(name, fontSize = 14.sp)
+                        }
                     }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -218,25 +245,38 @@ fun TaskDetailScreen(
                 incomingRelated.forEach { relatedTask ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier =
-                            Modifier
-                                .padding(vertical = 2.dp)
-                                .clickable {
-                                    scope.launch {
-                                        api.removeRelatedTo(relatedTask.uid, task!!.uid)
-                                        reload()
-                                    }
-                                },
+                        modifier = Modifier.padding(vertical = 2.dp)
                     ) {
-                        NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
+                        // DELETE BUTTON
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    api.removeRelatedTo(relatedTask.uid, task!!.uid)
+                                    reload()
+                                }
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
+                        }
+
                         Spacer(Modifier.width(8.dp))
-                        NfIcon(
-                            getRandomRelatedIcon(task!!.uid, relatedTask.uid),
-                            12.sp,
-                            androidx.compose.ui.graphics.Color.Gray
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(relatedTask.summary, fontSize = 14.sp)
+
+                        // NAVIGATION AREA
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable { onNavigate(relatedTask.uid) }
+                                .padding(4.dp)
+                        ) {
+                            NfIcon(
+                                getRandomRelatedIcon(task!!.uid, relatedTask.uid),
+                                12.sp,
+                                androidx.compose.ui.graphics.Color.Gray
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(relatedTask.summary, fontSize = 14.sp)
+                        }
                     }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))

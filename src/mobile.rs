@@ -1695,7 +1695,7 @@ impl CfaitMobile {
             }
         }
 
-        // [FIX ADDED] Rebuild the alarm index now that the store is updated
+        // Rebuild the alarm index now that the store is updated
         self.rebuild_alarm_index_sync(&store);
 
         Ok(warning_from_fallback.unwrap_or_else(|| "Connected".to_string()))

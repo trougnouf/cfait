@@ -2,7 +2,7 @@
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp, ResizeDirection, SidebarMode};
-use crate::gui::update::common::{refresh_filtered_tasks, save_config};
+use crate::gui::update::common::{refresh_filtered_tasks, save_config, scroll_to_selected};
 use iced::widget::operation;
 use iced::{Task, window};
 
@@ -293,6 +293,49 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
             }
 
+            Task::none()
+        }
+        Message::JumpToTask(uid) => {
+            // 1. Find which calendar this task belongs to
+            if let Some(href) = app.store.index.get(&uid).cloned() {
+                // 2. If it's in a hidden or different active calendar, switch to it
+                let mut needs_refresh = false;
+
+                if app.active_cal_href.as_ref() != Some(&href) {
+                    app.active_cal_href = Some(href.clone());
+                    // Ensure it's not hidden
+                    if app.hidden_calendars.contains(&href) {
+                        app.hidden_calendars.remove(&href);
+                        save_config(app);
+                    }
+                    needs_refresh = true;
+                }
+
+                // 3. Clear filters that might hide the task
+                if !app.search_value.is_empty() {
+                    app.search_value.clear();
+                    needs_refresh = true;
+                }
+                if !app.selected_categories.is_empty() {
+                    app.selected_categories.clear();
+                    needs_refresh = true;
+                }
+                if !app.selected_locations.is_empty() {
+                    app.selected_locations.clear();
+                    needs_refresh = true;
+                }
+
+                if needs_refresh {
+                    refresh_filtered_tasks(app);
+                }
+
+                // 4. Select and Expand
+                app.selected_uid = Some(uid.clone());
+                app.expanded_tasks.insert(uid.clone()); // Auto-expand details
+
+                // 5. Scroll
+                return scroll_to_selected(app);
+            }
             Task::none()
         }
         Message::OpenUrl(target) => {

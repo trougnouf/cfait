@@ -41,7 +41,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(" a:Add  e:Edit Title  E:Edit Desc  d:Delete  Space:Toggle Done"),
+            Span::raw(
+                " a:Add  e:Edit Title  E:Edit Desc  d:Delete  Space:Toggle Done  L:Jump to Related",
+            ),
         ]),
         Line::from(vec![
             Span::styled("       ", Style::default()), // Indent alignment
@@ -942,6 +944,25 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .highlight_style(Style::default().bg(Color::Blue));
         f.render_widget(Clear, area);
         f.render_stateful_widget(popup, area, &mut state.export_selection_state);
+    }
+
+    // --- RELATIONSHIP BROWSING POPUP ---
+    if state.mode == InputMode::RelationshipBrowsing {
+        let area = centered_rect(70, 60, f.area());
+        let items: Vec<ListItem> = state
+            .relationship_items
+            .iter()
+            .map(|(_, display_name)| ListItem::new(display_name.as_str()))
+            .collect();
+        let popup = List::new(items)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(" Jump to Related Task "),
+            )
+            .highlight_style(Style::default().bg(Color::Blue).fg(Color::White));
+        f.render_widget(Clear, area);
+        f.render_stateful_widget(popup, area, &mut state.relationship_selection_state);
     }
 
     // --- ALARM POPUP ---

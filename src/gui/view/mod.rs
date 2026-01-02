@@ -15,7 +15,7 @@ use crate::gui::view::sidebar::{view_sidebar_calendars, view_sidebar_categories}
 use crate::gui::view::task_row::view_task_row;
 
 use iced::alignment::Horizontal;
-// --- ADDED: Import for resize interaction ---
+// --- Import for resize interaction ---
 use iced::mouse;
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{

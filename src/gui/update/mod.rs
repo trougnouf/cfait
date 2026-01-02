@@ -88,7 +88,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CategoryToggled(_)
         | Message::LocationToggled(_)
         | Message::ClearAllTags
-        | Message::ClearAllLocations // <--- ADDED
+        | Message::ClearAllLocations
         | Message::CategoryMatchModeChanged(_)
         | Message::ToggleHideCompleted(_)
         | Message::ToggleHideFullyCompletedTags(_)
@@ -107,7 +107,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ResizeStart(_)
         | Message::WindowResized(_)
         | Message::JumpToTag(_)
-        | Message::JumpToLocation(_) // <--- ADDED
+        | Message::JumpToLocation(_)
+        | Message::JumpToTask(_)
         | Message::OpenUrl(_) => view::handle(app, message),
 
         Message::Refresh
