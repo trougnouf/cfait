@@ -1,4 +1,4 @@
-// File: src/model/adapter.rs
+// File: ./src/model/adapter.rs
 use crate::model::item::{Alarm, AlarmTrigger, DateType, RawProperty, Task, TaskStatus};
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
 use icalendar::{Calendar, CalendarComponent, Component, Event, Todo, TodoStatus};
@@ -32,6 +32,7 @@ const HANDLED_KEYS: &[&str] = &[
     "URL",
     "GEO",
     "X-CFAIT-CREATE-EVENT",
+    "EXDATE",
 ];
 
 impl Task {
@@ -45,7 +46,32 @@ impl Task {
         };
 
         let dtstart_str = seed_dt_utc.format("%Y%m%dT%H%M%SZ").to_string();
-        let rrule_string = format!("DTSTART:{}\nRRULE:{}", dtstart_str, rule_str);
+        let mut rrule_string = format!("DTSTART:{}\nRRULE:{}", dtstart_str, rule_str);
+
+        // NEW: Add EXDATEs
+        if !self.exdates.is_empty() {
+            for ex in &self.exdates {
+                match ex {
+                    DateType::AllDay(d) => {
+                        // rrule crate requires consistent types or might handle both.
+                        // Standard iCal: DTSTART type defines recurrence set type.
+                        // If DTSTART is DATE-TIME, EXDATE should be DATE-TIME.
+                        // If seed_dt_utc is derived as Specific (DateTime), we should probably format EXDATE as DateTime too if possible?
+                        // Actually `DateType::AllDay` converts to 00:00 UTC in `seed_dt_utc`.
+                        // If we feed EXDATE as DATE, rrule crate might complain if DTSTART is DATE-TIME.
+                        // Let's try to match format.
+                        // But `ex` is what it is.
+                        // Let's output as is.
+                        rrule_string
+                            .push_str(&format!("\nEXDATE;VALUE=DATE:{}\n", d.format("%Y%m%d")));
+                    }
+                    DateType::Specific(dt) => {
+                        rrule_string
+                            .push_str(&format!("\nEXDATE:{}\n", dt.format("%Y%m%dT%H%M%SZ")));
+                    }
+                }
+            }
+        }
 
         if let Ok(rrule_set) = RRuleSet::from_str(&rrule_string) {
             let now = Utc::now();
@@ -175,6 +201,23 @@ impl Task {
         if let Some(rrule) = &self.rrule {
             let rrule_str: String = rrule.as_str().into();
             todo.add_property("RRULE", &rrule_str);
+        }
+
+        // NEW: EXDATE
+        for ex in &self.exdates {
+            match ex {
+                DateType::AllDay(d) => {
+                    let mut p = icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
+                    p.add_parameter("VALUE", "DATE");
+                    todo.append_multi_property(p);
+                }
+                DateType::Specific(dt) => {
+                    todo.append_multi_property(icalendar::Property::new(
+                        "EXDATE",
+                        dt.format("%Y%m%dT%H%M%SZ").to_string(),
+                    ));
+                }
+            }
         }
 
         if let Some(p_uid) = &self.parent_uid {
@@ -564,6 +607,41 @@ impl Task {
         let dtstart = todo.properties().get("DTSTART").and_then(parse_date_type);
         let rrule = get_prop("RRULE");
 
+        // NEW: Parse EXDATE
+        let mut exdates = Vec::new();
+        if let Some(multi_props) = todo.multi_properties().get("EXDATE") {
+            for prop in multi_props {
+                let is_date = prop
+                    .params()
+                    .get("VALUE")
+                    .map(|v| v.value() == "DATE")
+                    .unwrap_or(false);
+                let val_str = prop.value();
+                for part in val_str.split(',') {
+                    let part = part.trim();
+                    if part.is_empty() {
+                        continue;
+                    }
+
+                    if is_date || part.len() == 8 {
+                        if let Ok(d) = NaiveDate::parse_from_str(part, "%Y%m%d") {
+                            exdates.push(DateType::AllDay(d));
+                        }
+                    } else {
+                        // Try DATE-TIME
+                        let fmt = if part.ends_with('Z') {
+                            "%Y%m%dT%H%M%SZ"
+                        } else {
+                            "%Y%m%dT%H%M%S"
+                        };
+                        if let Ok(dt) = NaiveDateTime::parse_from_str(part, fmt) {
+                            exdates.push(DateType::Specific(Utc.from_utc_datetime(&dt)));
+                        }
+                    }
+                }
+            }
+        }
+
         let parse_dur = |val: &str| -> Option<u32> {
             let mut minutes = 0;
             let mut num_buf = String::new();
@@ -823,6 +901,7 @@ impl Task {
             due,
             dtstart,
             alarms,
+            exdates,
             priority,
             percent_complete,
             parent_uid,

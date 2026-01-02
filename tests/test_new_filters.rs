@@ -115,7 +115,8 @@ fn test_is_ready_token_consumed() {
 fn test_is_ready_filters_future_start_dates() {
     let mut store = TaskStore::new();
     let aliases = std::collections::HashMap::new();
-    let now = Local::now().date_naive();
+    // Use UTC to avoid timezone issues where "yesterday" in local time is still "today" in UTC
+    let now = chrono::Utc::now().date_naive();
 
     // Task with future start date
     let mut future = Task::new(
@@ -128,11 +129,11 @@ fn test_is_ready_filters_future_start_dates() {
     );
     future.calendar_href = "cal1".to_string();
 
-    // Task with past start date
+    // Task with past start date (2 days ago to avoid timezone edge cases)
     let mut past = Task::new(
         &format!(
             "Past Task ^{}",
-            (now - Duration::days(1)).format("%Y-%m-%d")
+            (now - Duration::days(2)).format("%Y-%m-%d")
         ),
         &aliases,
         None,

@@ -137,6 +137,11 @@ fun HelpScreen(onBack: () -> Unit) {
                     listOf(
                         HelpItem("@daily", "Quick presets.", "@daily, @weekly, @monthly"),
                         HelpItem("@every X", "Custom intervals.", "@every 3 days, @every 2 weeks"),
+                        HelpItem("@every <day>", "Specific weekdays.", "@every monday, @every monday,wednesday,friday"),
+                        HelpItem("until", "End date for recurrence.", "@daily until 2025-12-31"),
+                        HelpItem("except", "Skip specific dates.", "except 2025-12-25,2026-01-01"),
+                        HelpItem("except day", "Exclude weekdays.", "except mo,tue or except saturdays,sundays"),
+                        HelpItem("except month", "Exclude months.", "except oct,nov,dec or except march"),
                     ),
                 )
             }

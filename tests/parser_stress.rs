@@ -309,3 +309,136 @@ fn test_recurrence_mixed_casing_and_spacing() {
     let t = parse("Bill @every 2 Months");
     assert_eq!(t.rrule, Some("FREQ=MONTHLY;INTERVAL=2".to_string()));
 }
+
+// --- RECURRENCE EXTENSIONS TESTS (until/except) ---
+
+#[test]
+fn test_until_stress_variations() {
+    // Various formats for until
+    let t1 = parse("@daily until 2025-12-31");
+    assert!(t1.rrule.as_ref().unwrap().contains("UNTIL=20251231"));
+
+    let t2 = parse("@weekly UNTIL 2025-06-30");
+    assert!(t2.rrule.as_ref().unwrap().contains("UNTIL=20250630"));
+
+    let t3 = parse("@every 3 days Until 2026-01-01");
+    assert!(t3.rrule.as_ref().unwrap().contains("UNTIL=20260101"));
+
+    // Until with tomorrow
+    let t4 = parse("@daily until tomorrow");
+    assert!(t4.rrule.as_ref().unwrap().contains("UNTIL="));
+
+    // Until with offset
+    let t5 = parse("@weekly until 30d");
+    assert!(t5.rrule.as_ref().unwrap().contains("UNTIL="));
+}
+
+#[test]
+fn test_except_stress_variations() {
+    use cfait::model::DateType;
+
+    // Single except
+    let t1 = parse("@daily except 2025-01-15");
+    assert_eq!(t1.exdates.len(), 1);
+    assert!(matches!(t1.exdates[0], DateType::AllDay(_)));
+
+    // Multiple excepts
+    let t2 = parse("@weekly except 2025-01-15 except 2025-02-20 except 2025-03-10");
+    assert_eq!(t2.exdates.len(), 3);
+
+    // Except with natural dates
+    let t3 = parse("@daily except tomorrow");
+    assert_eq!(t3.exdates.len(), 1);
+
+    let t4 = parse("@weekly except 5d");
+    assert_eq!(t4.exdates.len(), 1);
+
+    // Case insensitive
+    let t5 = parse("@daily EXCEPT 2025-01-01");
+    assert_eq!(t5.exdates.len(), 1);
+
+    let t6 = parse("@daily Except 2025-02-02");
+    assert_eq!(t6.exdates.len(), 1);
+}
+
+#[test]
+fn test_until_and_except_combined_stress() {
+    // Complex combination
+    let t1 = parse("@daily until 2025-12-31 except 2025-12-25 except 2025-01-01");
+    assert!(t1.rrule.as_ref().unwrap().contains("UNTIL=20251231"));
+    assert_eq!(t1.exdates.len(), 2);
+
+    // With other metadata
+    let t2 =
+        parse("Meeting !1 @every monday until 2025-06-30 except 2025-03-10 #work @@office ~1h");
+    assert_eq!(t2.priority, 1);
+    assert!(t2.rrule.as_ref().unwrap().contains("FREQ=WEEKLY"));
+    assert!(t2.rrule.as_ref().unwrap().contains("BYDAY=MO"));
+    assert!(t2.rrule.as_ref().unwrap().contains("UNTIL=20250630"));
+    assert_eq!(t2.exdates.len(), 1);
+    assert!(t2.categories.contains(&"work".to_string()));
+    assert_eq!(t2.location, Some("office".to_string()));
+    assert_eq!(t2.estimated_duration, Some(60));
+}
+
+#[test]
+fn test_until_negative_cases() {
+    // Until without recurrence - should not create rrule
+    let t1 = parse("Wait until 2025-12-31");
+    assert!(t1.rrule.is_none());
+
+    // Until with invalid date - falls back to summary
+    let t2 = parse("@daily until not-a-date");
+    assert!(t2.summary.contains("until"));
+    assert!(t2.summary.contains("not-a-date"));
+
+    // Orphaned until
+    let t3 = parse("until");
+    assert_eq!(t3.summary, "until");
+}
+
+#[test]
+fn test_except_negative_cases() {
+    // Except without recurrence - should not create exdates
+    let t1 = parse("Everything except that");
+    assert_eq!(t1.exdates.len(), 0);
+    assert!(t1.summary.contains("except"));
+
+    // Except with invalid date - falls back to summary
+    let t2 = parse("@daily except invalid");
+    assert!(t2.summary.contains("except"));
+    assert!(t2.summary.contains("invalid"));
+
+    // Orphaned except
+    let t3 = parse("except");
+    assert_eq!(t3.summary, "except");
+}
+
+#[test]
+fn test_until_except_round_trip() {
+    use cfait::model::DateType;
+    use chrono::NaiveDate;
+
+    // Create task, convert to smart string, should preserve until
+    let t1 = parse("Daily @daily until 2025-12-31");
+    let smart1 = t1.to_smart_string();
+    assert!(smart1.contains("@daily"));
+    assert!(smart1.contains("until 2025-12-31"));
+
+    // Create task with exdate manually, convert to smart string
+    let mut t2 = parse("Task @weekly");
+    t2.exdates.push(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2025, 1, 15).unwrap(),
+    ));
+    let smart2 = t2.to_smart_string();
+    assert!(smart2.contains("@weekly"));
+    assert!(smart2.contains("except 2025-01-15"));
+
+    // Combined
+    let t3 = parse("Task @daily until 2025-12-31 except 2025-01-20 except 2025-02-15");
+    let smart3 = t3.to_smart_string();
+    assert!(smart3.contains("@daily"));
+    assert!(smart3.contains("until 2025-12-31"));
+    assert!(smart3.contains("except 2025-01-20"));
+    assert!(smart3.contains("except 2025-02-15"));
+}

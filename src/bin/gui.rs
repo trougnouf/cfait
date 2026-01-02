@@ -20,6 +20,12 @@ fn main() -> iced::Result {
         println!("    ^date             Set start date (^next week, ^2025-01-01)");
         println!("    ~duration         Set duration (~30m, ~1.5h)");
         println!("    @daily            Recurrence (@daily, @weekly, @every 3 days)");
+        println!("    until <date>      End date for recurrence (@daily until 2025-12-31)");
+        println!("    except <date>     Skip dates (@daily except 2025-12-25,2026-01-01)");
+        println!(
+            "    except <weekday>  Exclude weekdays (@daily except mo,tue or saturdays,sundays)"
+        );
+        println!("    except <month>    Exclude months (@monthly except oct,nov,dec)");
         println!("    @friday           Next weekday (@friday = @next friday)");
         println!("    @next X           Next week/month/year (@next week, @next month)");
         println!("    \"in\" optional     @2 weeks = @in 2 weeks (the word \"in\" is optional)");

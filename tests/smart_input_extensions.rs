@@ -126,3 +126,127 @@ fn test_inline_alias_definition() {
     assert!(values.contains(&"#fun".to_string()));
     assert!(values.contains(&"@@home".to_string()));
 }
+
+#[test]
+fn test_recurrence_with_until() {
+    let aliases = HashMap::new();
+
+    // Test until with preset recurrence
+    let t1 = Task::new("Daily standup @daily until 2025-12-31", &aliases, None);
+    assert!(t1.rrule.is_some());
+    let rrule1 = t1.rrule.unwrap();
+    assert!(rrule1.contains("FREQ=DAILY"));
+    assert!(rrule1.contains("UNTIL=20251231"));
+
+    // Test until with custom interval
+    let t2 = Task::new("Review @every 2 weeks until 2026-06-30", &aliases, None);
+    assert!(t2.rrule.is_some());
+    let rrule2 = t2.rrule.unwrap();
+    assert!(rrule2.contains("FREQ=WEEKLY"));
+    assert!(rrule2.contains("INTERVAL=2"));
+    assert!(rrule2.contains("UNTIL=20260630"));
+}
+
+#[test]
+fn test_recurrence_with_except() {
+    use cfait::model::DateType;
+    use chrono::NaiveDate;
+
+    let aliases = HashMap::new();
+
+    // Test single exception
+    let t1 = Task::new("Meeting @weekly except 2025-01-20", &aliases, None);
+    assert!(t1.rrule.is_some());
+    assert_eq!(t1.exdates.len(), 1);
+    match &t1.exdates[0] {
+        DateType::AllDay(date) => {
+            assert_eq!(*date, NaiveDate::from_ymd_opt(2025, 1, 20).unwrap());
+        }
+        _ => panic!("Expected AllDay date type"),
+    }
+
+    // Test multiple exceptions
+    let t2 = Task::new(
+        "Standup @daily except 2025-12-25 except 2026-01-01",
+        &aliases,
+        None,
+    );
+    assert_eq!(t2.exdates.len(), 2);
+}
+
+#[test]
+fn test_recurrence_with_until_and_except() {
+    let aliases = HashMap::new();
+
+    // Test combining until and except
+    let t = Task::new(
+        "Team sync @daily until 2025-12-31 except 2025-12-25",
+        &aliases,
+        None,
+    );
+
+    assert!(t.rrule.is_some());
+    let rrule = t.rrule.unwrap();
+    assert!(rrule.contains("FREQ=DAILY"));
+    assert!(rrule.contains("UNTIL=20251231"));
+
+    assert_eq!(t.exdates.len(), 1);
+}
+
+#[test]
+fn test_until_and_except_round_trip() {
+    use cfait::model::DateType;
+    use chrono::NaiveDate;
+
+    let aliases = HashMap::new();
+
+    // Create task with until
+    let input1 = "Task @weekly until 2025-12-31";
+    let t1 = Task::new(input1, &aliases, None);
+    let smart1 = t1.to_smart_string();
+    assert!(smart1.contains("@weekly"));
+    assert!(smart1.contains("until 2025-12-31"));
+
+    // Create task with except
+    let mut t2 = Task::new("Task @daily", &aliases, None);
+    t2.exdates.push(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2025, 1, 15).unwrap(),
+    ));
+    let smart2 = t2.to_smart_string();
+    assert!(smart2.contains("@daily"));
+    assert!(smart2.contains("except 2025-01-15"));
+
+    // Create task with both
+    let input3 = "Task @daily until 2025-12-31 except 2025-01-20";
+    let t3 = Task::new(input3, &aliases, None);
+    let smart3 = t3.to_smart_string();
+    assert!(smart3.contains("@daily"));
+    assert!(smart3.contains("until 2025-12-31"));
+    assert!(smart3.contains("except 2025-01-20"));
+}
+
+#[test]
+fn test_complex_task_with_recurrence_extensions() {
+    let aliases = HashMap::new();
+
+    // Test a complex real-world scenario
+    let input = "Team meeting !2 @2025-01-20 @every monday until 2025-12-31 except 2025-07-04 #work @@office ~1h rem:10m";
+    let t = Task::new(input, &aliases, None);
+
+    // Verify all components
+    assert_eq!(t.summary, "Team meeting");
+    assert_eq!(t.priority, 2);
+    assert!(t.due.is_some());
+    assert!(t.rrule.is_some());
+
+    let rrule = t.rrule.unwrap();
+    assert!(rrule.contains("FREQ=WEEKLY"));
+    assert!(rrule.contains("BYDAY=MO"));
+    assert!(rrule.contains("UNTIL=20251231"));
+
+    assert_eq!(t.exdates.len(), 1);
+    assert!(t.categories.contains(&"work".to_string()));
+    assert_eq!(t.location, Some("office".to_string()));
+    assert_eq!(t.estimated_duration, Some(60));
+    assert!(!t.alarms.is_empty());
+}

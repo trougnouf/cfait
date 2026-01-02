@@ -580,8 +580,8 @@ impl TaskStore {
 
                     // 2. Start Date must not be in the future
                     if let Some(start) = &t.dtstart {
-                        // Use to_comparison_time to handle AllDay correctly vs Now
-                        if start.to_comparison_time() > now {
+                        // Use to_start_comparison_time to handle AllDay correctly (start of day, not end)
+                        if start.to_start_comparison_time() > now {
                             return false;
                         }
                     }

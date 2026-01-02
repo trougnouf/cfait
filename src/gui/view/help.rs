@@ -122,6 +122,36 @@ pub fn view_help() -> Element<'static, Message> {
                     "@every 3 days, @every 2 weeks"
                 ),
                 entry(
+                    "@every <weekday>",
+                    "Specific weekdays (comma-separated).",
+                    "@every monday, @every monday,wednesday,friday"
+                ),
+                entry(
+                    "Auto-dates",
+                    "Recurrence without dates auto-sets start & due to first occurrence.",
+                    "@daily → today, @every monday → next Monday"
+                ),
+                entry(
+                    "until <date>",
+                    "End date for recurrence (inclusive).",
+                    "@daily until 2025-12-31, @every 2 weeks until 2026-06-30"
+                ),
+                entry(
+                    "except <date>",
+                    "Skip specific dates (comma-separated).",
+                    "@weekly except 2025-01-20, @daily except 2025-12-25,2026-01-01"
+                ),
+                entry(
+                    "except <weekday>",
+                    "Exclude weekdays (short/long/plural).",
+                    "@daily except mo,tue or @daily except saturdays,sundays"
+                ),
+                entry(
+                    "except <month>",
+                    "Exclude entire months (short/long).",
+                    "@monthly except oct,nov,dec or @weekly except march"
+                ),
+                entry(
                     "Note",
                     "Recurrence calculates next date based on Start Date if present, else Due Date.",
                     ""

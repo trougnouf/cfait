@@ -233,7 +233,36 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
             {
                 matched_kind = Some(SyntaxType::Recurrence);
                 words_consumed = 1 + 1 + consumed;
-            } else if parse_weekday_code(next_token_str).is_some() {
+            } else {
+                // Check for single weekday or comma-separated weekdays
+                let parts: Vec<&str> = next_token_str.split(',').map(|s| s.trim()).collect();
+                let all_weekdays = parts.iter().all(|part| parse_weekday_code(part).is_some());
+
+                if all_weekdays && !parts.is_empty() {
+                    matched_kind = Some(SyntaxType::Recurrence);
+                    words_consumed = 2;
+                }
+            }
+        } else if word == "@daily" || word == "@weekly" || word == "@monthly" || word == "@yearly" {
+            matched_kind = Some(SyntaxType::Recurrence);
+        }
+
+        // Check for until / except keywords (Recurrence extensions)
+        if matched_kind.is_none()
+            && (word_lower == "until" || word_lower == "except")
+            && i + 1 < words.len()
+        {
+            let next_token_str = words[i + 1].2.as_str();
+
+            // Check if it looks like a list of comma-separated values (dates, weekdays, months)
+            let is_list = next_token_str.contains(',')
+                || parse_smart_date(next_token_str).is_some()
+                || parse_weekday_code(next_token_str).is_some()
+                || parse_month_code(next_token_str).is_some()
+                || parse_weekday_date(next_token_str).is_some()
+                || parse_time_string(next_token_str).is_some();
+
+            if is_list {
                 matched_kind = Some(SyntaxType::Recurrence);
                 words_consumed = 2;
             }
@@ -715,58 +744,173 @@ fn parse_freq_from_unit(u: &str) -> &'static str {
     }
 }
 
+fn code_to_full_day(code: &str) -> &'static str {
+    match code {
+        "MO" => "monday",
+        "TU" => "tuesday",
+        "WE" => "wednesday",
+        "TH" => "thursday",
+        "FR" => "friday",
+        "SA" => "saturday",
+        "SU" => "sunday",
+        _ => "",
+    }
+}
+
+fn month_num_to_short_name(num: u32) -> &'static str {
+    match num {
+        1 => "jan",
+        2 => "feb",
+        3 => "mar",
+        4 => "apr",
+        5 => "may",
+        6 => "jun",
+        7 => "jul",
+        8 => "aug",
+        9 => "sep",
+        10 => "oct",
+        11 => "nov",
+        12 => "dec",
+        _ => "",
+    }
+}
+
 pub fn prettify_recurrence(rrule: &str) -> String {
-    match rrule {
-        "FREQ=DAILY" => "@daily".to_string(),
-        "FREQ=WEEKLY" => "@weekly".to_string(),
-        "FREQ=MONTHLY" => "@monthly".to_string(),
-        "FREQ=YEARLY" => "@yearly".to_string(),
-        _ => {
-            let mut freq = "";
-            let mut interval = "";
-            let mut byday = "";
+    let mut freq = "";
+    let mut interval = "";
+    let mut byday = "";
+    let mut bymonth = "";
+    let mut until = "";
 
-            for part in rrule.split(';') {
-                if let Some(v) = part.strip_prefix("FREQ=") {
-                    freq = v;
-                } else if let Some(v) = part.strip_prefix("INTERVAL=") {
-                    interval = v;
-                } else if let Some(v) = part.strip_prefix("BYDAY=") {
-                    byday = v;
-                }
-            }
-
-            if !byday.is_empty() && freq == "WEEKLY" {
-                let day_name = match byday {
-                    "MO" => "monday",
-                    "TU" => "tuesday",
-                    "WE" => "wednesday",
-                    "TH" => "thursday",
-                    "FR" => "friday",
-                    "SA" => "saturday",
-                    "SU" => "sunday",
-                    _ => "",
-                };
-                if !day_name.is_empty() {
-                    return format!("@every {}", day_name);
-                }
-            }
-
-            if !freq.is_empty() && !interval.is_empty() {
-                let unit = match freq {
-                    "DAILY" => "days",
-                    "WEEKLY" => "weeks",
-                    "MONTHLY" => "months",
-                    "YEARLY" => "years",
-                    _ => "",
-                };
-                if !unit.is_empty() {
-                    return format!("@every {} {}", interval, unit);
-                }
-            }
-            format!("rec:{}", rrule)
+    // Parse RRULE components
+    for part in rrule.split(';') {
+        if let Some(v) = part.strip_prefix("FREQ=") {
+            freq = v;
+        } else if let Some(v) = part.strip_prefix("INTERVAL=") {
+            interval = v;
+        } else if let Some(v) = part.strip_prefix("BYDAY=") {
+            byday = v;
+        } else if let Some(v) = part.strip_prefix("BYMONTH=") {
+            bymonth = v;
+        } else if let Some(v) = part.strip_prefix("UNTIL=") {
+            until = v;
         }
     }
+
+    // Format UNTIL if present
+    let mut until_str = String::new();
+    if !until.is_empty() {
+        let date_part = until.split('T').next().unwrap_or(until);
+        if date_part.len() >= 8 {
+            until_str = format!(
+                " until {}-{}-{}",
+                &date_part[0..4],
+                &date_part[4..6],
+                &date_part[6..8]
+            );
+        } else {
+            until_str = format!(" until {}", until);
+        }
+    }
+
+    // 1. Handle Weekday Logic (Inclusions vs Exclusions)
+    // Only apply if interval is 1 (standard) or empty
+    if freq == "WEEKLY" && !byday.is_empty() && (interval.is_empty() || interval == "1") {
+        let days: Vec<&str> = byday.split(',').collect();
+        let all_codes = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+
+        // A. Single Day -> @every monday
+        if days.len() == 1 {
+            let d_name = code_to_full_day(days[0]);
+            if !d_name.is_empty() {
+                return format!("@every {}{}", d_name, until_str);
+            }
+        }
+
+        // B. 2-3 Days -> @every monday,tuesday,wednesday
+        if days.len() >= 2 && days.len() <= 3 {
+            let day_names: Vec<String> = days
+                .iter()
+                .map(|code| code_to_full_day(code).to_string())
+                .filter(|name| !name.is_empty())
+                .collect();
+
+            if day_names.len() == days.len() {
+                return format!("@every {}{}", day_names.join(","), until_str);
+            }
+        }
+
+        // C. Majority Days (4+) -> @daily except ...
+        // If we have >= 4 days, listing exclusions is cleaner than listing inclusions
+        if days.len() >= 4 {
+            let missing: Vec<String> = all_codes
+                .iter()
+                .filter(|code| !days.contains(code))
+                .map(|code| code_to_full_day(code).to_string())
+                .collect();
+
+            if missing.is_empty() {
+                // All days present -> @daily
+                return format!("@daily{}", until_str);
+            } else {
+                // @daily except x,y
+                return format!("@daily{} except {}", until_str, missing.join(","));
+            }
+        }
+    }
+
+    // 2. Handle Month Logic (Exclusions only)
+    // Show except format whenever BYMONTH is present (more user-friendly than raw RRULE)
+    if freq == "MONTHLY" && !bymonth.is_empty() && (interval.is_empty() || interval == "1") {
+        let months: Vec<u32> = bymonth
+            .split(',')
+            .filter_map(|m| m.parse::<u32>().ok())
+            .collect();
+
+        let missing: Vec<String> = (1..=12)
+            .filter(|m| !months.contains(m))
+            .map(|m| month_num_to_short_name(m).to_string())
+            .collect();
+
+        if missing.is_empty() {
+            // All 12 months present -> @monthly
+            return format!("@monthly{}", until_str);
+        } else {
+            // 1-11 months excluded -> @monthly except x,y,z
+            return format!("@monthly{} except {}", until_str, missing.join(","));
+        }
+    }
+
+    // 3. Handle Custom Intervals (e.g. @every 3 days)
+    if !freq.is_empty() && !interval.is_empty() && interval != "1" {
+        let unit = match freq {
+            "DAILY" => "days",
+            "WEEKLY" => "weeks",
+            "MONTHLY" => "months",
+            "YEARLY" => "years",
+            _ => "",
+        };
+        if !unit.is_empty() {
+            return format!("@every {} {}{}", interval, unit, until_str);
+        }
+    }
+
+    // 4. Handle Standard Presets (@daily, @monthly...)
+    if !freq.is_empty() {
+        let base = match freq {
+            "DAILY" => "@daily",
+            "WEEKLY" => "@weekly",
+            "MONTHLY" => "@monthly",
+            "YEARLY" => "@yearly",
+            _ => "",
+        };
+        if !base.is_empty() {
+            return format!("{}{}", base, until_str);
+        }
+    }
+
+    // 5. Fallback to raw string
+    format!("rec:{}", rrule)
 }
 
 pub fn parse_duration(val: &str) -> Option<u32> {
@@ -854,13 +998,31 @@ fn parse_smart_date(val: &str) -> Option<NaiveDate> {
 
 fn parse_weekday_code(s: &str) -> Option<&'static str> {
     match s.to_lowercase().as_str() {
-        "mo" | "mon" | "monday" => Some("MO"),
-        "tu" | "tue" | "tuesday" => Some("TU"),
-        "we" | "wed" | "wednesday" => Some("WE"),
-        "th" | "thu" | "thursday" => Some("TH"),
-        "fr" | "fri" | "friday" => Some("FR"),
-        "sa" | "sat" | "saturday" => Some("SA"),
-        "su" | "sun" | "sunday" => Some("SU"),
+        "mo" | "mon" | "monday" | "mondays" => Some("MO"),
+        "tu" | "tue" | "tuesday" | "tuesdays" => Some("TU"),
+        "we" | "wed" | "wednesday" | "wednesdays" => Some("WE"),
+        "th" | "thu" | "thursday" | "thursdays" => Some("TH"),
+        "fr" | "fri" | "friday" | "fridays" => Some("FR"),
+        "sa" | "sat" | "saturday" | "saturdays" => Some("SA"),
+        "su" | "sun" | "sunday" | "sundays" => Some("SU"),
+        _ => None,
+    }
+}
+
+fn parse_month_code(s: &str) -> Option<u32> {
+    match s.to_lowercase().as_str() {
+        "jan" | "january" => Some(1),
+        "feb" | "february" => Some(2),
+        "mar" | "march" => Some(3),
+        "apr" | "april" => Some(4),
+        "may" => Some(5),
+        "jun" | "june" => Some(6),
+        "jul" | "july" => Some(7),
+        "aug" | "august" => Some(8),
+        "sep" | "sept" | "september" => Some(9),
+        "oct" | "october" => Some(10),
+        "nov" | "november" => Some(11),
+        "dec" | "december" => Some(12),
         _ => None,
     }
 }
@@ -912,6 +1074,58 @@ fn next_weekday(from: NaiveDate, target: chrono::Weekday) -> Option<NaiveDate> {
         d += Duration::days(1);
     }
     Some(d)
+}
+
+fn calculate_first_occurrence(rrule: &str, today: NaiveDate) -> NaiveDate {
+    // Parse RRULE to determine first occurrence date
+    let mut freq = "";
+    let mut byday = "";
+
+    for part in rrule.split(';') {
+        if let Some(v) = part.strip_prefix("FREQ=") {
+            freq = v;
+        } else if let Some(v) = part.strip_prefix("BYDAY=") {
+            byday = v;
+        }
+    }
+
+    // For WEEKLY with BYDAY, find the next occurrence of any listed day
+    if freq == "WEEKLY" && !byday.is_empty() {
+        let days: Vec<&str> = byday.split(',').collect();
+        let mut earliest: Option<NaiveDate> = None;
+
+        for day_code in days {
+            let weekday = match day_code {
+                "MO" => chrono::Weekday::Mon,
+                "TU" => chrono::Weekday::Tue,
+                "WE" => chrono::Weekday::Wed,
+                "TH" => chrono::Weekday::Thu,
+                "FR" => chrono::Weekday::Fri,
+                "SA" => chrono::Weekday::Sat,
+                "SU" => chrono::Weekday::Sun,
+                _ => continue,
+            };
+
+            // Check if today matches
+            if today.weekday() == weekday {
+                return today;
+            }
+
+            // Otherwise find next occurrence
+            if let Some(next) = next_weekday(today, weekday)
+                && (earliest.is_none() || next < earliest.unwrap())
+            {
+                earliest = Some(next);
+            }
+        }
+
+        if let Some(date) = earliest {
+            return date;
+        }
+    }
+
+    // For DAILY or other patterns, default to today
+    today
 }
 
 // Helper to look ahead for a time string and merge it
@@ -967,6 +1181,8 @@ fn is_special_token(word: &str) -> bool {
         || lower.starts_with("rec:")
         || lower.starts_with("est:")
         || lower.starts_with("rem:")
+        || lower.starts_with("until")
+        || lower.starts_with("except")
     {
         return true;
     }
@@ -991,6 +1207,7 @@ pub fn apply_smart_input(
     task.geo = None;
     task.categories.clear();
     task.alarms.clear(); // Reset alarms
+    task.exdates.clear(); // Reset exdates
 
     let user_tokens: Vec<String> = split_input_respecting_quotes(input)
         .into_iter()
@@ -1007,6 +1224,9 @@ pub fn apply_smart_input(
 
     let mut stream = background_tokens;
     stream.extend(user_tokens);
+
+    let mut blocked_weekdays = HashSet::new();
+    let mut blocked_months = HashSet::new();
 
     let mut i = 0;
     while i < stream.len() {
@@ -1032,8 +1252,61 @@ pub fn apply_smart_input(
                 } else {
                     summary_words.push(unescape(token));
                 }
-            } else if let Some(byday) = parse_weekday_code(next_token_str) {
-                task.rrule = Some(format!("FREQ=WEEKLY;BYDAY={}", byday));
+            } else {
+                // Try parsing as comma-separated weekdays
+                let parts: Vec<&str> = next_token_str.split(',').map(|s| s.trim()).collect();
+                let weekday_codes: Vec<String> = parts
+                    .iter()
+                    .filter_map(|part| parse_weekday_code(part).map(|s| s.to_string()))
+                    .collect();
+
+                if !weekday_codes.is_empty() && weekday_codes.len() == parts.len() {
+                    // All parts were valid weekdays
+                    task.rrule = Some(format!("FREQ=WEEKLY;BYDAY={}", weekday_codes.join(",")));
+                    consumed = 2;
+                } else {
+                    summary_words.push(unescape(token));
+                }
+            }
+        }
+        // Handle "until <date>"
+        else if token_lower == "until" && i + 1 < stream.len() {
+            // Parse date
+            let next_token = &stream[i + 1];
+            if let Some(d) = parse_smart_date(next_token) {
+                // Append UNTIL=... to rrule.
+                if let Some(mut rr) = task.rrule.take() {
+                    // Remove existing UNTIL if any
+                    if !rr.contains("UNTIL=") {
+                        rr.push_str(&format!(";UNTIL={}", d.format("%Y%m%d")));
+                    }
+                    task.rrule = Some(rr);
+                }
+                consumed = 2;
+            } else {
+                summary_words.push(unescape(token));
+            }
+        }
+        // Handle "except <list>"
+        else if token_lower == "except" && i + 1 < stream.len() {
+            let next_token = &stream[i + 1];
+            let parts: Vec<&str> = next_token.split(',').map(|s| s.trim()).collect();
+
+            let mut matched_any = false;
+            for part in parts {
+                if let Some(d) = parse_smart_date(part) {
+                    task.exdates.push(DateType::AllDay(d));
+                    matched_any = true;
+                } else if let Some(code) = parse_weekday_code(part) {
+                    blocked_weekdays.insert(code.to_string());
+                    matched_any = true;
+                } else if let Some(m) = parse_month_code(part) {
+                    blocked_months.insert(m);
+                    matched_any = true;
+                }
+            }
+
+            if matched_any {
                 consumed = 2;
             } else {
                 summary_words.push(unescape(token));
@@ -1397,7 +1670,56 @@ pub fn apply_smart_input(
         i += consumed;
     }
 
+    // Apply accumulated rule modifications
+    if (!blocked_weekdays.is_empty() || !blocked_months.is_empty())
+        && let Some(mut rrule) = task.rrule.take()
+    {
+        // Apply blocked weekdays (convert to inclusion)
+        if !blocked_weekdays.is_empty() {
+            // If FREQ=DAILY, construct WEEKLY logic
+            if rrule.contains("FREQ=DAILY") {
+                rrule = rrule.replace("FREQ=DAILY", "FREQ=WEEKLY");
+            }
+
+            // If we already have BYDAY (unlikely for simple presets), do nothing to avoid conflict
+            if !rrule.contains("BYDAY=") {
+                let all_days = vec!["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
+                let allowed: Vec<&str> = all_days
+                    .into_iter()
+                    .filter(|d| !blocked_weekdays.contains(*d))
+                    .collect();
+                if !allowed.is_empty() {
+                    rrule.push_str(&format!(";BYDAY={}", allowed.join(",")));
+                }
+            }
+        }
+
+        // Apply blocked months (convert to inclusion)
+        if !blocked_months.is_empty() && !rrule.contains("BYMONTH=") {
+            let allowed: Vec<String> = (1..=12)
+                .filter(|m| !blocked_months.contains(m))
+                .map(|m| m.to_string())
+                .collect();
+            if !allowed.is_empty() {
+                rrule.push_str(&format!(";BYMONTH={}", allowed.join(",")));
+            }
+        }
+        task.rrule = Some(rrule);
+    }
+
     task.summary = summary_words.join(" ");
     task.categories.sort();
     task.categories.dedup();
+
+    // If recurrence is set but no date is specified, auto-set both start and due to first occurrence
+    // This makes recurring tasks more intuitive: "@daily" means "due today, and every day after"
+    if let Some(ref rrule) = task.rrule
+        && task.dtstart.is_none()
+        && task.due.is_none()
+    {
+        let today = Local::now().date_naive();
+        let first_occurrence = calculate_first_occurrence(rrule, today);
+        task.dtstart = Some(DateType::AllDay(first_occurrence));
+        task.due = Some(DateType::AllDay(first_occurrence));
+    }
 }

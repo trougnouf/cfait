@@ -132,6 +132,25 @@ Recurrence rules determine when the next task is created after you complete the 
 *   **Custom:** `@every X unit`.
     *   `@every 3 days`
     *   `@every 2 weeks`
+*   **Specific weekdays:** `@every <weekday>` or `@every <weekday1>,<weekday2>,...`
+    *   `@every monday` (every Monday)
+    *   `@every monday,wednesday,friday` (Mon/Wed/Fri)
+    *   `@every tue,thu` (Tuesday and Thursday)
+    *   Supports short (`mo,tu`), abbreviated (`mon,tue`), or full names (`monday,tuesday`)
+*   **Auto-dates:** If you specify recurrence without any dates, both start and due dates are automatically set to the first occurrence.
+    *   `Morning routine @daily` → starts and is due today, repeats daily
+    *   `Yoga class @every monday` → starts and is due next Monday, repeats weekly
+    *   For `@daily`, `@weekly`, etc., the first occurrence is today
+    *   For `@every monday`, `@every monday,wednesday,friday`, etc., the first occurrence is the next matching day
+*   **End Date:** `until <date>` - Sets an end date for the recurrence (RRULE UNTIL). The end date is **inclusive** (the task will occur on that date).
+    *   `@daily until 2025-12-31` (repeats daily until December 31st)
+    *   `@every 2 weeks until 2026-06-30` (repeats every 2 weeks until June 30th)
+*   **Exception Dates:** `except <value>` - Skips specific occurrences.
+    *   **Specific dates:** `@weekly except 2025-01-20` (skips January 20th)
+    *   **Comma-separated dates:** `@daily except 2025-12-25,2026-01-01` (skips multiple dates)
+    *   **Weekdays:** `@daily except mo,tue` or `@daily except monday,tuesday` or `@daily except saturdays,sundays` (converts to weekly with allowed days)
+    *   **Months:** `@monthly except oct,nov,dec` or `@weekly except march` (excludes entire months)
+    *   **Mixed:** `@monthly except oct,november,dec,january` (short and long forms work together)
 
 ### Duration Units
 Supported units for `~` duration estimates: `m` (minutes), `h` (hours), `d` (days), `w` (weeks), `mo` (months), `y` (years).
@@ -156,6 +175,16 @@ Set alarms to notify you about tasks. Reminders can be **relative** (recalculate
 > `"Exercise @daily ~30m #health rem:8am"`
 >
 > `"Update server certificates @2025-12-31 ^2025-12-01 @every 2 years rem:1w"` (Due Dec 31, start working on it 1 month prior, reminder 1 week before)
+>
+> `"Water plants @every 3 days until 2025-06-30"` (Every 3 days until end of June)
+>
+> `"Practice handstands @daily except saturdays,sundays"` (Daily practice, weekdays only)
+>
+> `"Yoga class @every tue,thu until 2025-12-31"` (Tue/Thu classes until end of year)
+>
+> `"Water plants @@home @monthly except oct,nov,dec,jan,feb,mar"` (Monthly watering, skip winter months)
+>
+> `"Gardening @saturday @weekly except march"` (Saturday gardening, skip March entirely)
 >
 > `"Plant plum tree #tree_planting !3 ~2h"` and `"#tree_planting:=#gardening,@@home"`
 

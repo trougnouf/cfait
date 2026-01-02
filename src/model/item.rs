@@ -1,3 +1,4 @@
+// File: ./src/model/item.rs
 use chrono::{DateTime, Duration, Local, NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
@@ -55,10 +56,37 @@ impl DateType {
     }
 
     /// Returns the logical end of the event/deadline for comparison.
-    /// AllDay -> End of day (23:59:59). Specific -> Exact time.
+    /// AllDay -> End of day (23:59:59) in local timezone, converted to UTC.
+    /// Specific -> Exact time (already in UTC).
     pub fn to_comparison_time(&self) -> DateTime<Utc> {
         match self {
-            DateType::AllDay(d) => d.and_hms_opt(23, 59, 59).unwrap().and_utc(),
+            DateType::AllDay(d) => {
+                // Interpret the naive date as local time (since it was parsed from local input)
+                // then convert to UTC for comparison
+                d.and_hms_opt(23, 59, 59)
+                    .unwrap()
+                    .and_local_timezone(chrono::Local)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc)
+            }
+            DateType::Specific(dt) => *dt,
+        }
+    }
+
+    /// Returns the logical start of the event for comparison (used for start dates).
+    /// AllDay -> Start of day (00:00:00) in local timezone, converted to UTC.
+    /// Specific -> Exact time (already in UTC).
+    pub fn to_start_comparison_time(&self) -> DateTime<Utc> {
+        match self {
+            DateType::AllDay(d) => {
+                // Interpret the naive date as local time at midnight
+                // then convert to UTC for comparison
+                d.and_hms_opt(0, 0, 0)
+                    .unwrap()
+                    .and_local_timezone(chrono::Local)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc)
+            }
             DateType::Specific(dt) => *dt,
         }
     }
@@ -192,6 +220,9 @@ pub struct Task {
     #[serde(default)]
     pub alarms: Vec<Alarm>,
 
+    #[serde(default)]
+    pub exdates: Vec<DateType>,
+
     pub priority: u8,
     pub percent_complete: Option<u8>,
     pub parent_uid: Option<String>,
@@ -242,6 +273,7 @@ impl Task {
             due: None,
             dtstart: None,
             alarms: Vec::new(),
+            exdates: Vec::new(),
             priority: 0,
             percent_complete: None,
             parent_uid: None,
@@ -332,7 +364,7 @@ impl Task {
 
             // Check Future Start (Excludes from 1-5)
             if let Some(start) = &t.dtstart
-                && start.to_comparison_time() > now
+                && start.to_start_comparison_time() > now
             {
                 return 6;
             }
@@ -424,8 +456,8 @@ impl Task {
             6 => {
                 // Future: Start Date -> Priority -> Name
                 // Compare start dates for future tasks
-                let s1 = self.dtstart.as_ref().map(|d| d.to_comparison_time());
-                let s2 = other.dtstart.as_ref().map(|d| d.to_comparison_time());
+                let s1 = self.dtstart.as_ref().map(|d| d.to_start_comparison_time());
+                let s2 = other.dtstart.as_ref().map(|d| d.to_start_comparison_time());
                 s1.cmp(&s2)
                     .then(normalize_prio(self.priority).cmp(&normalize_prio(other.priority)))
             }
@@ -702,6 +734,12 @@ impl Task {
             let pretty = super::parser::prettify_recurrence(r);
             s.push_str(&format!(" {}", pretty));
         }
+
+        // Add exdates to smart string
+        for ex in &self.exdates {
+            s.push_str(&format!(" except {}", ex.format_smart()));
+        }
+
         // Re-construct smart reminders?
         for alarm in &self.alarms {
             if alarm.is_snooze() || alarm.acknowledged.is_some() {
@@ -1090,6 +1128,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(5))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1121,6 +1160,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(2))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1165,6 +1205,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::hours(12))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1196,6 +1237,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(5))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1240,6 +1282,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(5))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1271,6 +1314,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(3))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1315,6 +1359,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(3))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1346,6 +1391,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(10))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1396,6 +1442,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(10))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1427,6 +1474,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(20))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1472,6 +1520,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(60))), // Outside cutoff
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1503,6 +1552,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(50))), // Outside cutoff
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1547,6 +1597,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(10))),
             dtstart: Some(DateType::Specific(now + chrono::Duration::days(5))),
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1578,6 +1629,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(15))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1623,6 +1675,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(1))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
@@ -1654,6 +1707,7 @@ mod tests {
             due: Some(DateType::Specific(now + chrono::Duration::days(30))),
             dtstart: None,
             alarms: vec![],
+            exdates: vec![],
             description: String::new(),
             estimated_duration: None,
             percent_complete: None,
