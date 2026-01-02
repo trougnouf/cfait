@@ -519,11 +519,14 @@ fun HomeScreen(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
-                                    IconButton(onClick = {
-                                        api.setCalendarVisibility(cal.href, !cal.isVisible)
-                                        onDataChanged()
-                                        updateTaskList()
-                                    }) { NfIcon(iconChar, color = iconColor) }
+                                    IconButton(
+                                        onClick = {
+                                            api.setCalendarVisibility(cal.href, !cal.isVisible)
+                                            onDataChanged()
+                                            updateTaskList()
+                                        },
+                                        enabled = !isDefault
+                                    ) { NfIcon(iconChar, color = iconColor) }
                                     TextButton(
                                         onClick = {
                                             api.setDefaultCalendar(cal.href)

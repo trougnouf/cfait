@@ -577,7 +577,9 @@ impl CfaitMobile {
 
     pub fn set_default_calendar(&self, href: String) -> Result<(), MobileError> {
         let mut config = Config::load().unwrap_or_default();
-        config.default_calendar = Some(href);
+        config.default_calendar = Some(href.clone());
+        // Ensure the write calendar is always visible
+        config.hidden_calendars.retain(|h| h != &href);
         config.save().map_err(MobileError::from)
     }
 
