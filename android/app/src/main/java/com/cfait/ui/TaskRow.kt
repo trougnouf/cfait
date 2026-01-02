@@ -280,6 +280,20 @@ fun TaskRow(
                             onAction("cancel")
                         }, leadingIcon = { NfIcon(NfIcons.CROSS, 16.sp) })
                     }
+                    if (task.geo != null) {
+                        DropdownMenuItem(text = { Text("Open location") }, onClick = {
+                            expanded = false
+                            uriHandler.openUri("geo:${task.geo}")
+                        }, leadingIcon = { NfIcon(NfIcons.MAP_LOCATION_DOT, 16.sp) })
+                    }
+
+                    if (task.url != null) {
+                        DropdownMenuItem(text = { Text("Open link") }, onClick = {
+                            expanded = false
+                            uriHandler.openUri(task.url!!)
+                        }, leadingIcon = { NfIcon(NfIcons.WEB_CHECK, 16.sp) })
+                    }
+
                     DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, onClick = {
                         expanded = false
                         onAction("delete")

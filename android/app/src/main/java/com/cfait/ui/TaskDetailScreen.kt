@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -39,6 +40,7 @@ fun TaskDetailScreen(
     var description by remember { mutableStateOf("") }
     var showMoveDialog by remember { mutableStateOf(false) }
     val isDark = isSystemInDarkTheme()
+    val uriHandler = LocalUriHandler.current
 
     val enabledCalendarCount =
         remember(calendars) {
@@ -94,6 +96,16 @@ fun TaskDetailScreen(
                 title = { Text("Edit task") },
                 navigationIcon = { IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) } },
                 actions = {
+                    if (task!!.geo != null) {
+                        IconButton(onClick = { uriHandler.openUri("geo:${task!!.geo}") }) {
+                            NfIcon(NfIcons.MAP_LOCATION_DOT, 20.sp)
+                        }
+                    }
+                    if (task!!.url != null) {
+                        IconButton(onClick = { uriHandler.openUri(task!!.url!!) }) {
+                            NfIcon(NfIcons.WEB_CHECK, 20.sp)
+                        }
+                    }
                     if (enabledCalendarCount > 1) {
                         TextButton(onClick = { showMoveDialog = true }) { Text("Move") }
                     }
