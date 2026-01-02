@@ -1,4 +1,4 @@
-// File: src/gui/view/settings.rs
+// File: ./src/gui/view/settings.rs
 use crate::config::AppTheme;
 use crate::gui::icon;
 use crate::gui::message::Message;
@@ -521,17 +521,24 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     .spacing(20)
     .max_width(500);
 
-    let content = column![title_row, error, form]
+    let scrollable_content = column![error, form]
         .spacing(20)
         .align_x(iced::Alignment::Center);
 
-    container(scrollable(
-        container(content)
-            .width(Length::Fill)
-            .padding(20)
-            .center_x(Length::Fill),
-    ))
+    let main_col = column![
+        container(title_row).padding(20),
+        scrollable(
+            container(scrollable_content)
+                .width(Length::Fill)
+                .padding(20)
+                .center_x(Length::Fill),
+        )
+    ]
     .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+    .height(Length::Fill);
+
+    container(main_col)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }

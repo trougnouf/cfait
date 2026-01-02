@@ -23,7 +23,12 @@ pub fn view_help() -> Element<'static, Message> {
         _ => crate::gui::icon::HELP_ICON_ROBOT_HELP,
     };
 
+    let back_btn = button(crate::gui::icon::icon(crate::gui::icon::ARROW_LEFT).size(24))
+        .style(iced::widget::button::text)
+        .on_press(Message::CloseHelp);
+
     let title = row![
+        back_btn,
         svg(svg::Handle::from_memory(help_icon))
             .width(Length::Fixed(84.0)) // 168 / 2 for smooth rendering at half native size
             .height(Length::Fixed(32.0)) // 64 / 2 for smooth rendering at half native size
@@ -38,64 +43,134 @@ pub fn view_help() -> Element<'static, Message> {
     .align_y(iced::Alignment::Center);
 
     let content = column![
-        title,
-
         // 1. FUNDAMENTALS
         help_card(
             "Organization",
             crate::gui::icon::TAG,
             vec![
                 entry("!1", "Priority High (1) to Low (9)", "!1, !5, !9"),
-                entry("#tag", "Add category. Use ':' for sub-tags.", "#work, #dev:backend, #work:project:urgent"),
-                entry("@@loc", "Location. Supports hierarchy with ':'.", "@@home, @@home:office, @@store:aldi:downtown"),
+                entry(
+                    "#tag",
+                    "Add category. Use ':' for sub-tags.",
+                    "#work, #dev:backend, #work:project:urgent"
+                ),
+                entry(
+                    "@@loc",
+                    "Location. Supports hierarchy with ':'.",
+                    "@@home, @@home:office, @@store:aldi:downtown"
+                ),
                 entry("~30m", "Estimated Duration (m/h/d/w).", "~30m, ~1.5h, ~2d"),
-                entry("#a:=#b,#c,@@d", "Define tag alias inline (Retroactive).", "#tree_planting:=#gardening,@@home"),
-                entry("@@a:=#b,#c", "Define location alias (Retroactive).", "@@aldi:=#groceries,#shopping"),
-                entry("\\#text", "Escape special characters.", "\\#not-a-tag \\@not-a-date"),
+                entry(
+                    "#a:=#b,#c,@@d",
+                    "Define tag alias inline (Retroactive).",
+                    "#tree_planting:=#gardening,@@home"
+                ),
+                entry(
+                    "@@a:=#b,#c",
+                    "Define location alias (Retroactive).",
+                    "@@aldi:=#groceries,#shopping"
+                ),
+                entry(
+                    "\\#text",
+                    "Escape special characters.",
+                    "\\#not-a-tag \\@not-a-date"
+                ),
             ]
         ),
-
         // 2. TIMELINE
         help_card(
             "Timeline & Scheduling",
             crate::gui::icon::CALENDAR,
             vec![
-                entry("@date", "Due Date. Deadline for the task.", "@tomorrow, @2025-12-31"),
+                entry(
+                    "@date",
+                    "Due Date. Deadline for the task.",
+                    "@tomorrow, @2025-12-31"
+                ),
                 entry("^date", "Start Date (Defer until).", "^next week, ^2025-01-01"),
-                entry("Offsets", "Add time from today.", "1d, 2w, 3mo (optional: @2 weeks = @in 2 weeks)"),
-                entry("Weekdays", "Next occurrence (\"next\" is optional).", "@friday = @next friday, @monday"),
-                entry("Next period", "Next week/month/year.", "@next week, @next month, @next year"),
+                entry(
+                    "Offsets",
+                    "Add time from today.",
+                    "1d, 2w, 3mo (optional: @2 weeks = @in 2 weeks)"
+                ),
+                entry(
+                    "Weekdays",
+                    "Next occurrence (\"next\" is optional).",
+                    "@friday = @next friday, @monday"
+                ),
+                entry(
+                    "Next period",
+                    "Next week/month/year.",
+                    "@next week, @next month, @next year"
+                ),
                 entry("Keywords", "Relative dates supported.", "today, tomorrow"),
             ]
         ),
-
         // 3. RECURRENCE
         help_card(
             "Recurrence",
             crate::gui::icon::REPEAT,
             vec![
-                entry("@daily", "Quick presets.", "@daily, @weekly, @monthly, @yearly"),
-                entry("@every X", "Custom intervals.", "@every 3 days, @every 2 weeks"),
-                entry("Note", "Recurrence calculates next date based on Start Date if present, else Due Date.", ""),
+                entry(
+                    "@daily",
+                    "Quick presets.",
+                    "@daily, @weekly, @monthly, @yearly"
+                ),
+                entry(
+                    "@every X",
+                    "Custom intervals.",
+                    "@every 3 days, @every 2 weeks"
+                ),
+                entry(
+                    "Note",
+                    "Recurrence calculates next date based on Start Date if present, else Due Date.",
+                    ""
+                ),
             ]
         ),
-
         help_card(
             "Metadata",
             crate::gui::icon::INFO,
             vec![
                 entry("url:", "Attach a link.", "url:https://perdu.com"),
-                entry("geo:", "Coordinates (lat,long).", "geo:53.046070, -121.105264"),
+                entry(
+                    "geo:",
+                    "Coordinates (lat,long).",
+                    "geo:53.046070, -121.105264"
+                ),
                 entry("desc:", "Append description text.", "desc:\"Call back later\""),
-                entry("rem:10m", "Relative reminder (before due date).", "Adjusts if due date changes"),
-                entry("rem:in 5m", "Relative from now (becomes absolute).", "rem:in 2h (5 min/2 hours from now)"),
-                entry("rem:next friday", "Next occurrence (becomes absolute).", "rem:next week, rem:next month"),
-                entry("rem:8am", "Absolute reminder (fixed time).", "rem:2025-01-20 9am, rem:2025-12-31 10:00"),
-                entry("+cal", "Force create calendar event.", "Overrides global setting"),
-                entry("-cal", "Prevent calendar event creation.", "Overrides global setting"),
+                entry(
+                    "rem:10m",
+                    "Relative reminder (before due date).",
+                    "Adjusts if due date changes"
+                ),
+                entry(
+                    "rem:in 5m",
+                    "Relative from now (becomes absolute).",
+                    "rem:in 2h (5 min/2 hours from now)"
+                ),
+                entry(
+                    "rem:next friday",
+                    "Next occurrence (becomes absolute).",
+                    "rem:next week, rem:next month"
+                ),
+                entry(
+                    "rem:8am",
+                    "Absolute reminder (fixed time).",
+                    "rem:2025-01-20 9am, rem:2025-12-31 10:00"
+                ),
+                entry(
+                    "+cal",
+                    "Force create calendar event.",
+                    "Overrides global setting"
+                ),
+                entry(
+                    "-cal",
+                    "Prevent calendar event creation.",
+                    "Overrides global setting"
+                ),
             ]
         ),
-
         // 4. POWER SEARCH
         help_card(
             "Search & Filtering",
@@ -103,32 +178,73 @@ pub fn view_help() -> Element<'static, Message> {
             vec![
                 entry("text", "Matches summary or description.", "buy cat food"),
                 entry("#tag", "Filter by specific tag.", "#gardening"),
-                entry("is:ready", "Work Mode - actionable tasks only.", "Not done, start date passed, not blocked"),
-                entry("is:status", "Filter by state.", "is:done, is:started, is:active"),
-                entry("Operators", "Compare values (<, >, <=, >=).", "~<20m (less than 20 minutes), <!4 (urgent tasks)"),
-                entry("  Dates", "Filter by timeframe.", "@<today (Overdue), ^>1w (Start in 1+ weeks)"),
-                entry("  Date!", "Include unset dates with '!' suffix.", "@<today! (Overdue OR no due date)"),
-                entry("  Priority", "Filter by priority range.", "!<3 (High prio), !>=5"),
+                entry(
+                    "is:ready",
+                    "Work Mode - actionable tasks only.",
+                    "Not done, start date passed, not blocked"
+                ),
+                entry(
+                    "is:status",
+                    "Filter by state.",
+                    "is:done, is:started, is:active, is:blocked, is:ready"
+                ),
+                entry(
+                    "Operators",
+                    "Compare values (<, >, <=, >=).",
+                    "~<20m (less than 20 minutes), <!4 (urgent tasks)"
+                ),
+                entry(
+                    "  Dates",
+                    "Filter by timeframe.",
+                    "@<today (Overdue), ^>1w (Start in 1+ weeks)"
+                ),
+                entry(
+                    "  Date!",
+                    "Include unset dates with '!' suffix.",
+                    "@<today! (Overdue OR no due date)"
+                ),
+                entry(
+                    "  Priority",
+                    "Filter by priority range.",
+                    "!<3 (High prio), !>=5"
+                ),
                 entry("  Duration", "Filter by effort.", "~<15m (Quick tasks)"),
-                entry("  Location", "Filter by location (matches sub-locations).", "@@home, @@store:aldi"),
-                entry("Combine", "Mix multiple filters.", "is:ready #work ~<1h (Actionable work tasks under 1 hour)"),
+                entry(
+                    "  Location",
+                    "Filter by location (matches sub-locations).",
+                    "@@home, @@store:aldi"
+                ),
+                entry(
+                    "Combine",
+                    "Mix multiple filters.",
+                    "is:ready #work ~<1h (Actionable work tasks under 1 hour)"
+                ),
             ]
         ),
-
         help_card(
             "Tips",
             crate::gui::icon::INFO,
             vec![
-                entry("Escape", "Use \\ to treat special chars as text.", "Buy \\#tag literally"),
-                entry("Quotes", "Use \" \" or { } for values with spaces.", "@@\"my office\""),
+                entry(
+                    "Escape",
+                    "Use \\ to treat special chars as text.",
+                    "Buy \\#tag literally"
+                ),
+                entry(
+                    "Quotes",
+                    "Use \" \" or { } for values with spaces.",
+                    "@@\"my office\""
+                ),
                 entry("Next dates", "Use natural language.", "@next monday, @next week"),
-                entry("Reminders", "rem:10m (before due) vs rem:next friday.", "rem:in 5m (from now), rem:8am (absolute)"),
+                entry(
+                    "Reminders",
+                    "rem:10m (before due) vs rem:next friday.",
+                    "rem:in 5m (from now), rem:8am (absolute)"
+                ),
             ]
         ),
-
         // 5. SUPPORT
         support_card(),
-
         // FOOTER
         container(
             column![
@@ -142,15 +258,26 @@ pub fn view_help() -> Element<'static, Message> {
                 .width(Length::Fixed(200.0))
                 .style(iced::widget::button::primary)
                 .on_press(Message::CloseHelp),
-
-                text(format!("Cfait v{} \u{2022} GPL3 \u{2022} Trougnouf (Benoit Brummer)", env!("CARGO_PKG_VERSION")))
-                     .size(12)
-                     .style(|_: &Theme| text::Style { color: Some(COL_MUTED) }),
-
-                button(text("https://codeberg.org/trougnouf/cfait").size(12).style(|_: &Theme| text::Style { color: Some(COL_ACCENT) }))
-                    .padding(0)
-                    .style(iced::widget::button::text)
-                    .on_press(Message::OpenUrl("https://codeberg.org/trougnouf/cfait".to_string()))
+                text(format!(
+                    "Cfait v{} \u{2022} GPL3 \u{2022} Trougnouf (Benoit Brummer)",
+                    env!("CARGO_PKG_VERSION")
+                ))
+                .size(12)
+                .style(|_: &Theme| text::Style {
+                    color: Some(COL_MUTED)
+                }),
+                button(
+                    text("https://codeberg.org/trougnouf/cfait")
+                        .size(12)
+                        .style(|_: &Theme| text::Style {
+                            color: Some(COL_ACCENT)
+                        })
+                )
+                .padding(0)
+                .style(iced::widget::button::text)
+                .on_press(Message::OpenUrl(
+                    "https://codeberg.org/trougnouf/cfait".to_string()
+                ))
             ]
             .spacing(15)
             .align_x(iced::Alignment::Center)
@@ -163,12 +290,15 @@ pub fn view_help() -> Element<'static, Message> {
     .padding(20)
     .max_width(800);
 
-    scrollable(
-        container(content)
-            .width(Length::Fill)
-            .center_x(Length::Fill),
-    )
-    .height(Length::Fill)
+    column![
+        container(title).padding(20),
+        scrollable(
+            container(content)
+                .width(Length::Fill)
+                .center_x(Length::Fill),
+        )
+        .height(Length::Fill)
+    ]
     .into()
 }
 
