@@ -219,6 +219,11 @@ pub struct Task {
     /// Per-task override for event creation (None = use global config)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub create_event: Option<bool>,
+
+    /// Transient field used for sorting. Not saved to disk.
+    /// Set to true if task is blocked (by dependencies or #blocked tag).
+    #[serde(skip)]
+    pub is_blocked: bool,
 }
 
 impl Task {
@@ -256,6 +261,7 @@ impl Task {
             raw_alarms: Vec::new(),
             raw_components: Vec::new(),
             create_event: None,
+            is_blocked: false,
         };
         task.apply_smart_input(input, aliases, default_reminder_time);
         task
@@ -331,21 +337,25 @@ impl Task {
                 return 6;
             }
 
-            // 1: Urgent (Priority threshold)
-            if t.priority > 0 && t.priority <= urgent_prio {
-                return 1;
-            }
+            // Blocked tasks skip ranks 1-3 (Urgent, Due Soon, Started)
+            // They fall through to rank 4 or 5 based on their due date
+            if !t.is_blocked {
+                // 1: Urgent (Priority threshold)
+                if t.priority > 0 && t.priority <= urgent_prio {
+                    return 1;
+                }
 
-            // 2: Due Soon (Date threshold)
-            if let Some(due) = &t.due
-                && due.to_comparison_time() <= now + chrono::Duration::days(urgent_days as i64)
-            {
-                return 2;
-            }
+                // 2: Due Soon (Date threshold)
+                if let Some(due) = &t.due
+                    && due.to_comparison_time() <= now + chrono::Duration::days(urgent_days as i64)
+                {
+                    return 2;
+                }
 
-            // 3: Started
-            if t.status == TaskStatus::InProcess {
-                return 3;
+                // 3: Started
+                if t.status == TaskStatus::InProcess {
+                    return 3;
+                }
             }
 
             // 4: Remaining (Inside Cutoff)
@@ -1100,6 +1110,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
         let normal_task = Task {
@@ -1130,6 +1141,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
         // Urgent (rank 1) should come before normal (rank 4)
@@ -1173,6 +1185,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
         let due_later = Task {
@@ -1203,6 +1216,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
         // Due soon (rank 2) should come before due later (rank 4)
@@ -1246,6 +1260,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
         let not_started = Task {
@@ -1276,9 +1291,10 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
-        // Started (rank 3) should come before not started (rank 4)
+        // Started (rank 3) should come before normal (rank 4)
         assert_eq!(
             started.compare_with_cutoff(&not_started, None, urgent_days, urgent_prio),
             Ordering::Less
@@ -1319,6 +1335,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
         let started_due_later = Task {
@@ -1349,6 +1366,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
         // Within rank 3, should sort by due date first (earlier before later)
@@ -1398,6 +1416,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
         let due_later = Task {
@@ -1428,9 +1447,10 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
-        // Both in rank 4, should be sorted by due date (earlier first)
+        // Both in rank 4, should be sorted by due date first
         assert_eq!(
             due_earlier.compare_with_cutoff(&due_later, Some(cutoff), urgent_days, urgent_prio),
             Ordering::Less
@@ -1472,6 +1492,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
         let low_prio = Task {
@@ -1502,6 +1523,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
         // Both in rank 5 (outside cutoff), should be sorted by priority first
@@ -1545,6 +1567,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
         let normal_task = Task {
@@ -1575,8 +1598,10 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
+        // Future start (rank 6) should come after normal (rank 4)
         // Normal task (rank 4) should come before future start (rank 6)
         assert_eq!(
             normal_task.compare_with_cutoff(&future_start, None, urgent_days, urgent_prio),
@@ -1618,6 +1643,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
         let normal_task = Task {
@@ -1648,8 +1674,10 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            is_blocked: false,
         };
 
+        // Done (rank 7) should come after all others
         // Normal task (rank 4/5) should come before done task (rank 7)
         assert_eq!(
             normal_task.compare_with_cutoff(&done_task, None, urgent_days, urgent_prio),

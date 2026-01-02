@@ -49,7 +49,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 
 *   **Smart Input:** Type your tasks naturally. `Buy cookies @tomorrow @@bakery !1` is parsed instantly into a high-priority task due tomorrow at the bakery.
 *   **Hierarchical Tags & Locations:** Organize deeply with tags like `#dev:cfait` or `#cooking:cookies`, and locations like `@@home:office` or `@@store:aldi:downtown`.
-*   **Dependencies:** Block tasks until others are done. You can create parent/child tasks or loose dependencies <small>(RFC9253)</small>.
+*   **Dependencies:** Block tasks until others are done. You can create parent/child tasks or loose dependencies <small>(RFC9253)</small> (or manually block with `#blocked`).
 *   **Recurrence:** Powerful repetition rules for habits and recurrent tasks.
 *   **Inline Aliases:** Define shortcuts on the fly; typing `#gardening:=#fun,@@home` or `@@aldi:=#groceries,#shopping` applies the alias immediately and saves it for future use (retroactive).
 *   **Cross-Platform:** Runs on Linux, Android, and Windows. (Probably on MacOS too.)
@@ -190,7 +190,8 @@ Both tags and locations support hierarchy. Child locations/tags automatically in
 The search bar isn't just for text. You can use operators (`<`, `>`, `<=`, `>=`) to filter your list precisely.
 
 ### Status Filters
-*   **`is:ready`** - Shows only actionable tasks right now (not completed/cancelled, start date passed or not set, not blocked by dependencies)
+*   **`is:ready`** - Shows only actionable tasks right now (not completed/cancelled, start date passed or not set, or blocked)
+*   **`is:blocked`** - Shows only blocked tasks (blocked by dependencies or `#blocked` tag - excluded from urgent/due soon/started bins)
 *   `is:done` / `is:active` / `is:started`
 *   Combine with other filters: `is:ready #work`, `is:ready ~<1h`
 
@@ -199,7 +200,7 @@ The search bar isn't just for text. You can use operators (`<`, `>`, `<=`, `>=`)
 *   `!>=5` (Normal or lower priority)
 
 ### Date Filters (`@` / `^`)
-Date filters now support **relative dates** for both due (`@`) and start (`^`) dates, plus a **"not set" operator** (`!`):
+Date filters support **relative dates** for both due (`@`) and start (`^`) dates, plus a **"not set" operator** (`!`):
 
 *   **Overdue/Past:**
     *   `@<today` (Overdue tasks)

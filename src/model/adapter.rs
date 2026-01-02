@@ -842,6 +842,7 @@ impl Task {
             raw_components,
             raw_alarms: Vec::new(),
             create_event,
+            is_blocked: false,
         })
     }
 }

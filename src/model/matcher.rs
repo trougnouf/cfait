@@ -310,6 +310,13 @@ impl Task {
                 continue;
             }
 
+            // --- Blocked Filter ---
+            // Similar to is:ready, this is handled in TaskStore::filter because it requires dependency lookups.
+            // We consume the token here so it doesn't interfere with text search.
+            if part == "is:blocked" {
+                continue;
+            }
+
             // Standard Text Search
             // Explicitly search categories AND LOCATION for matches
             if !self.summary.to_lowercase().contains(part)

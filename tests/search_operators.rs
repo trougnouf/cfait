@@ -34,6 +34,11 @@ fn test_status_filters() {
     // is:ongoing (legacy alias for is:started)
     assert!(started.matches_search_term("is:ongoing"));
     assert!(!active.matches_search_term("is:ongoing"));
+
+    // is:ready and is:blocked are consumed by the matcher but actual logic is in TaskStore
+    // Here we just verify the tokens don't cause text match failures
+    assert!(active.matches_search_term("is:ready"));
+    assert!(active.matches_search_term("is:blocked"));
 }
 
 #[test]

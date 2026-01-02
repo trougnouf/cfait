@@ -551,9 +551,10 @@ impl TaskStore {
             }
         }
 
-        // Pre-calculate is:ready flag
+        // Pre-calculate is:ready and is:blocked flags
         let search_lower = options.search_term.to_lowercase();
         let is_ready_mode = search_lower.contains("is:ready");
+        let is_blocked_mode = search_lower.contains("is:blocked");
         let now = Utc::now();
 
         // Pass 1: Filter by everything EXCEPT the search text match
@@ -587,6 +588,14 @@ impl TaskStore {
 
                     // 3. Must not be blocked by incomplete dependencies
                     if self.is_blocked(t) {
+                        return false;
+                    }
+                }
+
+                // --- Blocked Mode (is:blocked) Logic ---
+                if is_blocked_mode {
+                    // Only show tasks that are blocked (by dependencies or #blocked tag)
+                    if !self.is_blocked(t) {
                         return false;
                     }
                 }
@@ -741,8 +750,17 @@ impl TaskStore {
                 .collect()
         };
 
+        // Populate the transient is_blocked field before sorting
+        let final_tasks_with_blocked = final_tasks
+            .into_iter()
+            .map(|mut t| {
+                t.is_blocked = self.is_blocked(&t);
+                t
+            })
+            .collect();
+
         Task::organize_hierarchy(
-            final_tasks,
+            final_tasks_with_blocked,
             options.cutoff_date,
             options.urgent_days,
             options.urgent_prio,
@@ -764,6 +782,12 @@ impl TaskStore {
     }
 
     pub fn is_blocked(&self, task: &Task) -> bool {
+        // Check for manual blocking via #blocked tag
+        if task.categories.contains(&"blocked".to_string()) {
+            return true;
+        }
+
+        // Check for dependency-based blocking
         if task.dependencies.is_empty() {
             return false;
         }
