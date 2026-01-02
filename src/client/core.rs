@@ -957,83 +957,73 @@ impl RustyClient {
                     }
                 }
                 Action::Move(task, new_cal) => {
-                    if &task.calendar_href == new_cal {
-                        warnings.push(format!("Skipping no-op move for task '{}'.", task.summary));
-                        path_for_refresh = None;
-                        new_href_to_propagate = None;
-                        new_etag_to_propagate = None;
-                        Ok(())
-                    } else {
-                        let mut move_res = self.execute_move(task, new_cal, false).await;
+                    let mut move_res = self.execute_move(task, new_cal, false).await;
 
-                        if let Err(ref e) = move_res
-                            && (e.contains("412") || e.contains("PreconditionFailed"))
-                        {
-                            warnings.push(format!(
-                                "Move collision for '{}'. Forcing overwrite.",
-                                task.summary
-                            ));
-                            move_res = self.execute_move(task, new_cal, true).await;
-                        }
+                    if let Err(ref e) = move_res
+                        && (e.contains("412") || e.contains("PreconditionFailed"))
+                    {
+                        warnings.push(format!(
+                            "Move collision for '{}'. Forcing overwrite.",
+                            task.summary
+                        ));
+                        move_res = self.execute_move(task, new_cal, true).await;
+                    }
 
-                        match move_res {
-                            Ok(_) => {
-                                let filename = format!("{}.ics", task.uid);
-                                let new_href = if new_cal.ends_with('/') {
-                                    format!("{}{}", new_cal, filename)
+                    match move_res {
+                        Ok(_) => {
+                            let filename = format!("{}.ics", task.uid);
+                            let new_href = if new_cal.ends_with('/') {
+                                format!("{}{}", new_cal, filename)
+                            } else {
+                                format!("{}/{}", new_cal, filename)
+                            };
+                            new_href_to_propagate = Some((task.href.clone(), new_href.clone()));
+                            path_for_refresh = Some(strip_host(&new_href));
+
+                            // Move companion event too
+                            if events_enabled || task.create_event.is_some() {
+                                let evt_uid = format!("evt-{}", task.uid);
+                                let evt_filename = format!("{}.ics", evt_uid);
+
+                                // Build old event path
+                                let old_cal_path = if task.calendar_href.ends_with('/') {
+                                    task.calendar_href.clone()
                                 } else {
-                                    format!("{}/{}", new_cal, filename)
+                                    format!("{}/", task.calendar_href)
                                 };
-                                new_href_to_propagate = Some((task.href.clone(), new_href.clone()));
-                                path_for_refresh = Some(strip_host(&new_href));
+                                let old_evt_path =
+                                    format!("{}{}", strip_host(&old_cal_path), evt_filename);
 
-                                // Move companion event too
-                                if events_enabled || task.create_event.is_some() {
-                                    let evt_uid = format!("evt-{}", task.uid);
-                                    let evt_filename = format!("{}.ics", evt_uid);
-
-                                    // Build old event path
-                                    let old_cal_path = if task.calendar_href.ends_with('/') {
-                                        task.calendar_href.clone()
-                                    } else {
-                                        format!("{}/", task.calendar_href)
-                                    };
-                                    let old_evt_path =
-                                        format!("{}{}", strip_host(&old_cal_path), evt_filename);
-
-                                    // Try to move the event (best effort, ignore errors)
-                                    if let Some(client) = &self.client {
-                                        // Delete from old location
-                                        let _ = client
-                                            .request(Delete::new(&old_evt_path).force())
-                                            .await;
-                                        // Create updated task with new calendar href to generate event in new location
-                                        let mut moved_task = task.clone();
-                                        moved_task.calendar_href = new_cal.clone();
-                                        moved_task.href = new_href.clone();
-                                        self.sync_companion_event(
-                                            &moved_task,
-                                            events_enabled,
-                                            delete_on_completion,
-                                            false,
-                                        )
-                                        .await;
-                                    }
+                                // Try to move the event (best effort, ignore errors)
+                                if let Some(client) = &self.client {
+                                    // Delete from old location
+                                    let _ =
+                                        client.request(Delete::new(&old_evt_path).force()).await;
+                                    // Create updated task with new calendar href to generate event in new location
+                                    let mut moved_task = task.clone();
+                                    moved_task.calendar_href = new_cal.clone();
+                                    moved_task.href = new_href.clone();
+                                    self.sync_companion_event(
+                                        &moved_task,
+                                        events_enabled,
+                                        delete_on_completion,
+                                        false,
+                                    )
+                                    .await;
                                 }
-
-                                Ok(())
                             }
-                            Err(e) => {
-                                if e.contains("404") || e.contains("NotFound") || e.contains("403")
-                                {
-                                    warnings.push(format!(
-                                        "Move source missing for '{}', assuming success.",
-                                        task.summary
-                                    ));
-                                    Ok(())
-                                } else {
-                                    Err(e)
-                                }
+
+                            Ok(())
+                        }
+                        Err(e) => {
+                            if e.contains("404") || e.contains("NotFound") || e.contains("403") {
+                                warnings.push(format!(
+                                    "Move source missing for '{}', assuming success.",
+                                    task.summary
+                                ));
+                                Ok(())
+                            } else {
+                                Err(e)
                             }
                         }
                     }
