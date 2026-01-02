@@ -6,12 +6,15 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cfait.core.CfaitMobile
@@ -110,6 +113,11 @@ fun TaskDetailScreen(
                 label = { Text("Task (smart syntax)") },
                 modifier = Modifier.fillMaxWidth(),
                 visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    onSave(smartInput, description)
+                }),
             )
             Text(
                 "Use !1, @date, #tag, ~duration",
