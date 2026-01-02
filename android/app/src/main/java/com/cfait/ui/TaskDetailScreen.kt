@@ -63,21 +63,23 @@ fun TaskDetailScreen(
     }
 
     if (showMoveDialog) {
+        val targetCals =
+            remember(calendars) {
+                calendars.filter { it.href != task!!.calendarHref && !it.isDisabled }
+            }
         AlertDialog(
             onDismissRequest = { showMoveDialog = false },
             title = { Text("Move to calendar") },
             text = {
                 LazyColumn {
-                    items(calendars) { cal ->
-                        if (cal.href != task!!.calendarHref) {
-                            TextButton(onClick = {
-                                scope.launch {
-                                    api.moveTask(uid, cal.href)
-                                    showMoveDialog = false
-                                    onBack()
-                                }
-                            }, modifier = Modifier.fillMaxWidth()) { Text(cal.name) }
-                        }
+                    items(targetCals) { cal ->
+                        TextButton(onClick = {
+                            scope.launch {
+                                api.moveTask(uid, cal.href)
+                                showMoveDialog = false
+                                onBack()
+                            }
+                        }, modifier = Modifier.fillMaxWidth()) { Text(cal.name) }
                     }
                 }
             },
