@@ -1,4 +1,8 @@
 // Caching mechanism for storing remote tasks locally.
+//
+// ⚠️ VERSION BUMP REQUIRED:
+// Changes to Task struct or its nested types (Alarm, DateType, etc.) require
+// incrementing CACHE_VERSION below to invalidate stale caches.
 use crate::model::{CalendarListEntry, Task};
 use crate::paths::AppPaths;
 use crate::storage::LocalStorage;
@@ -10,7 +14,7 @@ use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
 // Increment this whenever the Task struct changes (e.g., new fields like create_event) to invalidate old caches
-const CACHE_VERSION: u32 = 3;
+const CACHE_VERSION: u32 = 4;  // last update: added until and except in recurrence
 
 #[derive(Serialize, Deserialize)]
 struct CalendarCache {

@@ -17,6 +17,10 @@
 // For a typical user with 1000 tasks and 5 alarms/day:
 // - Saves ~2-3% battery per day
 // - Reduces notification delay from 2-3s to <100ms
+//
+// ⚠️ VERSION BUMP REQUIRED:
+// Changes to AlarmIndex or AlarmIndexEntry structs require incrementing
+// the version field in AlarmIndex::default() to invalidate stale indices.
 
 use crate::model::{AlarmTrigger, DateType, Task};
 use crate::paths::AppPaths;

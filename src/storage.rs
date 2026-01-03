@@ -1,4 +1,8 @@
 // Manages local file storage for tasks and calendars.
+//
+// ⚠️ VERSION BUMP REQUIRED:
+// Changes to Task struct or its nested types (Alarm, DateType, etc.) require
+// incrementing LOCAL_STORAGE_VERSION below to prevent data corruption.
 use crate::model::{CalendarListEntry, Task};
 use crate::paths::AppPaths;
 use anyhow::Result;

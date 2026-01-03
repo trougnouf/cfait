@@ -1,4 +1,9 @@
 // Implements the offline action journal for syncing changes.
+//
+// ⚠️ VERSION BUMP WARNING:
+// This module currently has NO versioning mechanism. Changes to the Journal
+// or Action enum structures may cause deserialization failures. Consider adding
+// versioning if breaking changes are needed (similar to cache.rs/storage.rs).
 use crate::model::Task;
 use crate::paths::AppPaths;
 use crate::storage::LocalStorage;

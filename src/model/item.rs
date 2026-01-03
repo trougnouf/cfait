@@ -1,4 +1,17 @@
 // Core data structures for Tasks, Alarms, and Calendars.
+//
+// ⚠️ VERSION BUMP REQUIRED:
+// Changes to the following structs/enums require bumping version constants:
+//
+// - Task, Alarm, AlarmTrigger, DateType, TaskStatus, RawProperty:
+//   → Bump CACHE_VERSION in src/cache.rs
+//   → Bump LOCAL_STORAGE_VERSION in src/storage.rs
+//
+// - AlarmIndexEntry-related changes:
+//   → Bump version field in AlarmIndex (src/alarm_index.rs)
+//
+// - CalendarListEntry:
+//   → May require versioning in cache/registry (currently unversioned)
 use chrono::{DateTime, Duration, Local, NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
