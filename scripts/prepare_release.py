@@ -99,7 +99,42 @@ def main():
     with open(metainfo_path, "w") as f:
         f.write(xml_content)
 
-    # 8. STAGE ALL FILES FOR GIT
+    # 8. UPDATE FLATPAK MANIFEST WITH NEW TAG AND COMMIT
+    flatpak_manifest = "org.codeberg.trougnouf.cfait.yml"
+    print(f"📝 Updating Flatpak manifest: {flatpak_manifest}")
+
+    # Get the current commit hash (this assumes we're tagging the current HEAD)
+    # Note: This runs before the actual git tag is created by cargo-release
+    # So we get the commit that will be tagged
+    try:
+        commit_hash = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True
+        ).strip()
+    except subprocess.CalledProcessError:
+        print("Error: Could not get git commit hash")
+        sys.exit(1)
+
+    with open(flatpak_manifest, "r") as f:
+        manifest_content = f.read()
+
+    # Update the tag field
+    manifest_content = re.sub(
+        r"(\s+tag:\s+)v[\d.]+", rf"\1v{version_string}", manifest_content
+    )
+
+    # Update the commit field
+    manifest_content = re.sub(
+        r"(\s+commit:\s+)[a-f0-9]{40}", rf"\1{commit_hash}", manifest_content
+    )
+
+    with open(flatpak_manifest, "w") as f:
+        f.write(manifest_content)
+
+    print(
+        f"✅ Updated Flatpak manifest to tag v{version_string}, commit {commit_hash[:8]}"
+    )
+
+    # 9. STAGE ALL FILES FOR GIT
     # cargo-release will commit these
     subprocess.run(
         [
@@ -108,6 +143,7 @@ def main():
             fastlane_file,
             "cargo-sources.yml",
             metainfo_path,
+            flatpak_manifest,
             "Cargo.toml",
             "CHANGELOG.md",
         ],
