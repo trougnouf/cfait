@@ -1,0 +1,34 @@
+## [0.4.1] - 2026-01-03
+
+### 🚀 Features
+
+- *(tui)* Implement custom snooze (and change default snooze durations from 15m,1h to 1h,1d)
+- Include sub-tasks in search results when parent matches
+- *(sorting)* Sort started tasks like standard tasks (due date then priority), replace is:ongoing with is:started
+- *(android)* Allow pressing enter to edit a task's title
+- *(local)* Support multiple local collections
+- Support manual #blocked tag, move blocked tasks away from bins 1,2,3
+- *(ui)* Click on a linked task to jump to it (GUI, TUI (L), Android)
+- *(gui)* Decouple exit button from scrollable area in settings and help
+- *(android)* Make url and geo icons more accessible (new action in tasks list and task details)
+- *(parser)* Parse "until" (date(time)) and "except" (date(time), month, year, comma-separated) in recurrence. Fix timezone issue.
+
+### 🐛 Bug Fixes
+
+- *(android)* Show canceled tasks with the correct checkbox (previously appeared as done)
+- *(priorities)* Per https://github.com/trougnouf/cfait/discussions/3
+- Move tasks between calendars
+- *(android)* Force visibility on write calendar
+- *(android)* No longer showing disabled calendars when moving a task from the description screen
+- *(sorting)* Treat paused tasks like unstarted tasks
+- *(parser)* Fix some parser recurrence edge cases
+
+### 🎨 Styling
+
+- *(help)* Add hugicon in help header (GUI, Android)
+- *(help)* Add more hugicons (GUI, Android)
+
+### ⚙️ Miscellaneous Tasks
+
+- Add 10" tablet screenshots, complete Cargo.toml exclude
+- Prepare for release v0.4.1
