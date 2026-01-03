@@ -20,11 +20,12 @@ modules:
       env:
         CARGO_HOME: /run/build/cfait/cargo
     build-commands:
-      # Build the binary
-      - cargo --offline build --release --verbose
-      # Install binary to /app/bin
+      # Build the TUI binary
+      - cargo --offline build --release --verbose --features tui
+      # Build the GUI binary
+      - cargo --offline build --release --verbose --features gui --bin gui
+      # Install binaries to /app/bin
       - install -Dm755 target/release/cfait -t /app/bin/
-      # Install GUI binary
       - install -Dm755 target/release/gui /app/bin/cfait-gui
       # Install desktop file and icons (fix Icon name to match app-id)
       - sed -i 's/Icon=cfait/Icon=org.codeberg.trougnouf.cfait/' assets/cfait.desktop
@@ -36,7 +37,7 @@ modules:
       # Application source
       - type: git
         url: https://codeberg.org/trougnouf/cfait
-        tag: v0.4.0
-        commit: c68edebefbfc47ef25debf00dd4f317548ae7194
+        tag: v0.4.1
+        commit: 3a381dc79048e585302f8fd0eca2a14f9fea52e9
       # Cargo dependencies
       - cargo-sources.yml
