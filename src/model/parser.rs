@@ -204,6 +204,7 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
 
     let mut cursor = 0;
     let mut i = 0;
+    let mut has_recurrence = false; // Track if we've seen a recurrence token
 
     while i < words.len() {
         let (start, end, word) = &words[i];
@@ -243,12 +244,28 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                     words_consumed = 2;
                 }
             }
-        } else if word == "@daily" || word == "@weekly" || word == "@monthly" || word == "@yearly" {
+        } else if word == "@daily"
+            || word == "@weekly"
+            || word == "@monthly"
+            || word == "@yearly"
+            || word == "rec:daily"
+            || word == "rec:weekly"
+            || word == "rec:monthly"
+            || word == "rec:yearly"
+        {
             matched_kind = Some(SyntaxType::Recurrence);
+            has_recurrence = true;
+        }
+
+        // Track if we just matched a recurrence token
+        if matched_kind == Some(SyntaxType::Recurrence) {
+            has_recurrence = true;
         }
 
         // Check for until / except keywords (Recurrence extensions)
+        // Only highlight if we've seen a recurrence token
         if matched_kind.is_none()
+            && has_recurrence
             && (word_lower == "until" || word_lower == "except")
             && i + 1 < words.len()
         {
@@ -820,7 +837,7 @@ pub fn prettify_recurrence(rrule: &str) -> String {
         let all_codes = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 
         // A. Single Day -> @every monday
-        if days.len() == 1 {
+        if days.len() == 1 && bymonth.is_empty() {
             let d_name = code_to_full_day(days[0]);
             if !d_name.is_empty() {
                 return format!("@every {}{}", d_name, until_str);
@@ -828,7 +845,7 @@ pub fn prettify_recurrence(rrule: &str) -> String {
         }
 
         // B. 2-3 Days -> @every monday,tuesday,wednesday
-        if days.len() >= 2 && days.len() <= 3 {
+        if days.len() >= 2 && days.len() <= 3 && bymonth.is_empty() {
             let day_names: Vec<String> = days
                 .iter()
                 .map(|code| code_to_full_day(code).to_string())
@@ -843,25 +860,49 @@ pub fn prettify_recurrence(rrule: &str) -> String {
         // C. Majority Days (4+) -> @daily except ...
         // If we have >= 4 days, listing exclusions is cleaner than listing inclusions
         if days.len() >= 4 {
-            let missing: Vec<String> = all_codes
+            let missing_days: Vec<String> = all_codes
                 .iter()
                 .filter(|code| !days.contains(code))
                 .map(|code| code_to_full_day(code).to_string())
                 .collect();
 
-            if missing.is_empty() {
-                // All days present -> @daily
-                return format!("@daily{}", until_str);
+            // Check if we also have month exclusions to combine
+            if !bymonth.is_empty() {
+                let months: Vec<u32> = bymonth
+                    .split(',')
+                    .filter_map(|m| m.parse::<u32>().ok())
+                    .collect();
+
+                let missing_months: Vec<String> = (1..=12)
+                    .filter(|m| !months.contains(m))
+                    .map(|m| month_num_to_short_name(m).to_string())
+                    .collect();
+
+                if !missing_months.is_empty() {
+                    // Combine both day and month exclusions
+                    let mut combined = missing_days;
+                    combined.extend(missing_months);
+                    return format!("@daily{} except {}", until_str, combined.join(","));
+                }
+            }
+
+            if missing_days.is_empty() {
+                // All days present -> @daily (or check month logic if bymonth present)
+                if bymonth.is_empty() {
+                    return format!("@daily{}", until_str);
+                }
+                // If bymonth is present, fall through to month logic section
             } else {
                 // @daily except x,y
-                return format!("@daily{} except {}", until_str, missing.join(","));
+                return format!("@daily{} except {}", until_str, missing_days.join(","));
             }
         }
     }
 
     // 2. Handle Month Logic (Exclusions only)
     // Show except format whenever BYMONTH is present (more user-friendly than raw RRULE)
-    if freq == "MONTHLY" && !bymonth.is_empty() && (interval.is_empty() || interval == "1") {
+    // Works for DAILY, WEEKLY, MONTHLY, and YEARLY frequencies
+    if !bymonth.is_empty() && (interval.is_empty() || interval == "1") {
         let months: Vec<u32> = bymonth
             .split(',')
             .filter_map(|m| m.parse::<u32>().ok())
@@ -873,11 +914,20 @@ pub fn prettify_recurrence(rrule: &str) -> String {
             .collect();
 
         if missing.is_empty() {
-            // All 12 months present -> @monthly
-            return format!("@monthly{}", until_str);
+            // All 12 months present -> use base frequency without except
+            // Continue to section 4 to handle the base frequency
         } else {
-            // 1-11 months excluded -> @monthly except x,y,z
-            return format!("@monthly{} except {}", until_str, missing.join(","));
+            // 1-11 months excluded -> @<freq> except x,y,z
+            let base = match freq {
+                "DAILY" => "@daily",
+                "WEEKLY" => "@weekly",
+                "MONTHLY" => "@monthly",
+                "YEARLY" => "@yearly",
+                _ => "",
+            };
+            if !base.is_empty() {
+                return format!("{}{} except {}", base, until_str, missing.join(","));
+            }
         }
     }
 
@@ -1080,18 +1130,37 @@ fn calculate_first_occurrence(rrule: &str, today: NaiveDate) -> NaiveDate {
     // Parse RRULE to determine first occurrence date
     let mut freq = "";
     let mut byday = "";
+    let mut bymonth = "";
 
     for part in rrule.split(';') {
         if let Some(v) = part.strip_prefix("FREQ=") {
             freq = v;
         } else if let Some(v) = part.strip_prefix("BYDAY=") {
             byday = v;
+        } else if let Some(v) = part.strip_prefix("BYMONTH=") {
+            bymonth = v;
         }
     }
 
     // For WEEKLY with BYDAY, find the next occurrence of any listed day
     if freq == "WEEKLY" && !byday.is_empty() {
         let days: Vec<&str> = byday.split(',').collect();
+
+        // Parse BYMONTH constraint if present
+        let allowed_months: Vec<u32> = if !bymonth.is_empty() {
+            bymonth
+                .split(',')
+                .filter_map(|m| m.parse::<u32>().ok())
+                .collect()
+        } else {
+            vec![]
+        };
+
+        // Helper to check if a date is in an allowed month
+        let is_month_allowed = |date: NaiveDate| -> bool {
+            allowed_months.is_empty() || allowed_months.contains(&date.month())
+        };
+
         let mut earliest: Option<NaiveDate> = None;
 
         for day_code in days {
@@ -1106,21 +1175,65 @@ fn calculate_first_occurrence(rrule: &str, today: NaiveDate) -> NaiveDate {
                 _ => continue,
             };
 
-            // Check if today matches
-            if today.weekday() == weekday {
+            // Check if today matches (both weekday AND month if BYMONTH is present)
+            if today.weekday() == weekday && is_month_allowed(today) {
                 return today;
             }
 
-            // Otherwise find next occurrence
-            if let Some(next) = next_weekday(today, weekday)
-                && (earliest.is_none() || next < earliest.unwrap())
-            {
-                earliest = Some(next);
+            // Otherwise find next occurrence of this weekday that's in an allowed month
+            let mut candidate = today;
+            for _ in 0..60 {
+                // Check up to ~8 weeks ahead to find valid occurrence
+                if let Some(next) = next_weekday(candidate, weekday) {
+                    if is_month_allowed(next) {
+                        if earliest.is_none() || next < earliest.unwrap() {
+                            earliest = Some(next);
+                        }
+                        break;
+                    }
+                    candidate = next;
+                } else {
+                    break;
+                }
             }
         }
 
         if let Some(date) = earliest {
             return date;
+        }
+    }
+
+    // For MONTHLY with BYMONTH, find the next occurrence in an allowed month
+    if (freq == "MONTHLY" || freq == "DAILY" || freq == "WEEKLY") && !bymonth.is_empty() {
+        let allowed_months: Vec<u32> = bymonth
+            .split(',')
+            .filter_map(|m| m.parse::<u32>().ok())
+            .collect();
+
+        if !allowed_months.is_empty() {
+            let current_month = today.month();
+
+            // Check if current month is allowed
+            if allowed_months.contains(&current_month) {
+                return today;
+            }
+
+            // Find next allowed month
+            let mut check_date = today;
+            for _ in 0..12 {
+                // Move to first day of next month
+                if check_date.month() == 12 {
+                    check_date = NaiveDate::from_ymd_opt(check_date.year() + 1, 1, 1).unwrap();
+                } else {
+                    check_date =
+                        NaiveDate::from_ymd_opt(check_date.year(), check_date.month() + 1, 1)
+                            .unwrap();
+                }
+
+                if allowed_months.contains(&check_date.month()) {
+                    return check_date;
+                }
+            }
         }
     }
 
@@ -1227,6 +1340,7 @@ pub fn apply_smart_input(
 
     let mut blocked_weekdays = HashSet::new();
     let mut blocked_months = HashSet::new();
+    let mut has_recurrence = false; // Track if we've seen a recurrence token
 
     let mut i = 0;
     while i < stream.len() {
@@ -1248,6 +1362,7 @@ pub fn apply_smart_input(
                 let freq = parse_freq_from_unit(&unit);
                 if !freq.is_empty() {
                     task.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
+                    has_recurrence = true;
                     consumed = 1 + 1 + extra_consumed;
                 } else {
                     summary_words.push(unescape(token));
@@ -1263,14 +1378,15 @@ pub fn apply_smart_input(
                 if !weekday_codes.is_empty() && weekday_codes.len() == parts.len() {
                     // All parts were valid weekdays
                     task.rrule = Some(format!("FREQ=WEEKLY;BYDAY={}", weekday_codes.join(",")));
+                    has_recurrence = true;
                     consumed = 2;
                 } else {
                     summary_words.push(unescape(token));
                 }
             }
         }
-        // Handle "until <date>"
-        else if token_lower == "until" && i + 1 < stream.len() {
+        // Handle "until <date>" - only if recurrence is already defined
+        else if has_recurrence && token_lower == "until" && i + 1 < stream.len() {
             // Parse date
             let next_token = &stream[i + 1];
             if let Some(d) = parse_smart_date(next_token) {
@@ -1287,8 +1403,8 @@ pub fn apply_smart_input(
                 summary_words.push(unescape(token));
             }
         }
-        // Handle "except <list>"
-        else if token_lower == "except" && i + 1 < stream.len() {
+        // Handle "except <list>" - only if recurrence is already defined
+        else if has_recurrence && token_lower == "except" && i + 1 < stream.len() {
             let next_token = &stream[i + 1];
             let parts: Vec<&str> = next_token.split(',').map(|s| s.trim()).collect();
 
@@ -1582,6 +1698,7 @@ pub fn apply_smart_input(
                     }
                 } else if let Some(rrule) = parse_recurrence(clean) {
                     task.rrule = Some(rrule);
+                    has_recurrence = true;
                 } else if let Some(d) = parse_weekday_date(clean) {
                     let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
                     if is_start {
@@ -1602,11 +1719,13 @@ pub fn apply_smart_input(
             // Recurrence, Date, or Weekday
             if let Some(rrule) = parse_recurrence(val) {
                 task.rrule = Some(rrule);
+                has_recurrence = true;
             } else if token.starts_with("rec:") {
                 if let Some((interval, unit, _)) = parse_amount_and_unit(val, None, false) {
                     let freq = parse_freq_from_unit(&unit);
                     if !freq.is_empty() {
                         task.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
+                        has_recurrence = true;
                     } else {
                         summary_words.push(unescape(token));
                     }

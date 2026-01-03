@@ -148,7 +148,7 @@ Recurrence rules determine when the next task is created after you complete the 
 *   **Exception Dates:** `except <value>` - Skips specific occurrences.
     *   **Specific dates:** `@weekly except 2025-01-20` (skips January 20th)
     *   **Comma-separated dates:** `@daily except 2025-12-25,2026-01-01` (skips multiple dates)
-    *   **Weekdays:** `@daily except mo,tue` or `@daily except monday,tuesday` or `@daily except saturdays,sundays` (converts to weekly with allowed days)
+    *   **Weekdays:** `@daily except mo,tue` or `@daily except monday,tuesday` or `@daily except saturdays,sundays`
     *   **Months:** `@monthly except oct,nov,dec` or `@weekly except march` (excludes entire months)
     *   **Mixed:** `@monthly except oct,november,dec,january` (short and long forms work together)
 

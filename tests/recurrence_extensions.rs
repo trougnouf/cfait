@@ -105,13 +105,13 @@ fn test_until_invalid_date_falls_back_to_summary() {
 
 #[test]
 fn test_until_without_recurrence_in_summary() {
-    // "until <date>" gets consumed even without recurrence (consumed = 2)
-    // So it won't appear in the summary
+    // "until <date>" is NOT consumed without a recurrence (new behavior)
+    // So it WILL appear in the summary
     let t = parse("Wait until 2025-12-31");
 
     assert!(t.rrule.is_none());
-    // "until 2025-12-31" is consumed but doesn't add to rrule since rrule is None
-    assert_eq!(t.summary, "Wait");
+    // "until 2025-12-31" stays in summary since there's no recurrence
+    assert_eq!(t.summary, "Wait until 2025-12-31");
 }
 
 #[test]
@@ -363,8 +363,8 @@ fn test_until_only_applies_to_existing_rrule() {
     // Should not have rrule
     assert!(parsed.rrule.is_none());
 
-    // "until 2025-12-31" is consumed but has no effect since there's no recurrence
-    assert_eq!(parsed.summary, "Task");
+    // "until 2025-12-31" stays in summary since there's no recurrence (new behavior)
+    assert_eq!(parsed.summary, "Task until 2025-12-31");
 }
 
 #[test]
