@@ -1,5 +1,5 @@
 // Tests for alarm snoozing and dismissal logic.
-use cfait::model::{Alarm, AlarmTrigger, DateType, Task};
+use cfait::model::{AlarmTrigger, DateType, Task};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
 

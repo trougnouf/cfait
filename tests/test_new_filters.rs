@@ -1,5 +1,5 @@
 // Tests for newer filter features (relative dates, etc.).
-use cfait::model::{DateType, Task, TaskStatus};
+use cfait::model::{Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
 use chrono::{Datelike, Duration, Local};
 use std::collections::HashSet;
