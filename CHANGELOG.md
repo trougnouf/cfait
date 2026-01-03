@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.2] - 2026-01-03
+
+### 🐛 Bug Fixes
+
+- *(parser)* Restore RFC5545 duration compliance (use custom tag for DUE+DURATION)
+
+### 💼 Other
+
+- Add filesystem permission for app data directory
+
+### ⚙️ Miscellaneous Tasks
+
+- Update Flatpak manifest for v0.4.1 release
+- Set GUI as default command for Flatpak
 ## [0.4.1] - 2026-01-03
 
 ### 🚀 Features
@@ -34,6 +48,7 @@
 
 - Add 10" tablet screenshots, complete Cargo.toml exclude
 - Prepare for release v0.4.1
+- Release cfait version 0.4.1
 ## [0.4.0] - 2025-12-30
 
 ### 🚀 Features

@@ -1,0 +1,14 @@
+## [0.4.2] - 2026-01-03
+
+### 🐛 Bug Fixes
+
+- *(parser)* Restore RFC5545 duration compliance (use custom tag for DUE+DURATION)
+
+### 💼 Other
+
+- Add filesystem permission for app data directory
+
+### ⚙️ Miscellaneous Tasks
+
+- Update Flatpak manifest for v0.4.1 release
+- Set GUI as default command for Flatpak
