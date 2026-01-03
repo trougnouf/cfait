@@ -11,6 +11,7 @@ finish-args:
   - --socket=wayland
   - --share=network
   - --device=dri
+  - --filesystem=xdg-data/cfait:create
 
 modules:
   - name: cfait
