@@ -192,8 +192,12 @@ impl Task {
         }
 
         if let Some(mins) = self.estimated_duration {
-            // Simplified duration format
-            todo.add_property("DURATION", format!("PT{}M", mins));
+            // RFC 5545: VTODO cannot contain both DUE and DURATION.
+            if self.due.is_some() {
+                todo.add_property("X-ESTIMATED-DURATION", format!("PT{}M", mins));
+            } else {
+                todo.add_property("DURATION", format!("PT{}M", mins));
+            }
         }
         if self.priority > 0 {
             todo.priority(self.priority.into());

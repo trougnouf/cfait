@@ -1,7 +1,7 @@
 ![Cfait -- Take control of your TODO list](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_featureGraphic_(hardcoded_text).svg)
 
 <p align="center">
-  <strong>Cfait is a powerful, fast and elegant task manager. (CalDAV and local)
+  <strong>Cfait is a powerful, fast and elegant task manager. (CalDAV and local, GUI and TUI)
 </strong>
 </p>
 
