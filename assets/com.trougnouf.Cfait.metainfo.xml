@@ -5,22 +5,23 @@
   <summary>Powerful, fast and elegant CalDAV task manager</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-only</project_license>
-  <developer_name>Benoit Brummer (Trougnouf)</developer_name>
+  <developer id="com.trougnouf">
+    <name>Benoit Brummer (Trougnouf)</name>
+  </developer>
 
   <description>
     <p>
       Cfait is designed for speed and stability using Rust. It puts you in control of your data with a local-first approach that syncs seamlessly across your devices via CalDAV.
     </p>
-    <p><strong>Key Features:</strong></p>
+    <p>Key Features:</p>
     <ul>
-      <li><strong
-                >Syncs Everywhere:</strong> Compatible with Nextcloud, iCloud, Radicale, and other standard CalDAV servers.</li>
-      <li><strong
-                >Offline First:</strong> Optimistic UI updates mean you never wait for a server response.</li>
-      <li><strong
-                >Smart Input:</strong> Typing "Buy cat food !1 @tomorrow" automatically sets priority and due date.</li>
-      <li><strong
-                >Productivity:</strong> GTD Workflow, Sub-tasks, Dependencies, and Tags.</li>
+      <li
+            >Syncs Everywhere: Compatible with Nextcloud, iCloud, Radicale, and other standard CalDAV servers.</li>
+      <li
+            >Offline First: Optimistic UI updates mean you never wait for a server response.</li>
+      <li
+            >Smart Input: Typing "Buy cat food !1 @tomorrow" automatically sets priority and due date.</li>
+      <li>Productivity: GTD Workflow, Sub-tasks, Dependencies, and Tags.</li>
     </ul>
   </description>
 
@@ -29,11 +30,12 @@
   <screenshots>
     <screenshot type="default">
       <image
-            >https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.13_screenshot_(GUI).png</image>
+            >https://commons.wikimedia.org/wiki/Special:Redirect/file/Cfait_task_manager_v0.3.14_screenshot_(GUI).png</image>
+      <caption>The Graphical User Interface</caption>
     </screenshot>
     <screenshot>
       <image
-            >https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.13_screenshot_(TUI).png</image>
+            >https://commons.wikimedia.org/wiki/Special:Redirect/file/Cfait_task_manager_v0.3.14_screenshot_(TUI).png</image>
       <caption>The Terminal User Interface</caption>
     </screenshot>
   </screenshots>
