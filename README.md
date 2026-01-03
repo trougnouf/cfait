@@ -1,7 +1,7 @@
 ![Cfait -- Take control of your TODO list](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_featureGraphic_(hardcoded_text).svg)
 
 <p align="center">
-  <strong>Cfait is a powerful, fast and elegant task manager. (CalDAV and local, GUI and TUI)
+  <strong>Cfait is a powerful, fast and elegant task manager. (CalDAV and local, GUI, TUI, and Android clients)
 </strong>
 </p>
 
@@ -15,7 +15,7 @@
 
 ---
 
-**Cfait** is a task manager for people who want speed, efficiency, and ownership of their data.
+**Cfait** is a task manager / TODO list for people who want speed, efficiency, and ownership of their data.
 
 It connects to any standard **CalDAV** server (Radicale, Xandikos, Baikal, Nextcloud, iCloud, etc.) so your tasks aren't locked inside a proprietary walled garden. It's written in **Rust**, meaning it starts instantly and handles large lists without stuttering.
 
