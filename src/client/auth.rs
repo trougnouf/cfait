@@ -1,4 +1,4 @@
-// File: ./src/client/auth.rs
+// Implements HTTP authentication logic (Basic/Digest) for the client.
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use digest_auth::{AuthContext, HttpMethod};
@@ -98,16 +98,17 @@ where
                 let context = AuthContext::new_with_method(&user, &pass, &uri, body_bytes, method);
 
                 if let Ok(mut prompt) = digest_auth::parse(auth_str)
-                    && let Ok(answer) = prompt.respond(&context) {
-                        let header_val = answer.to_string();
-                        let mut new_req = req_clone;
-                        if let Ok(val) = HeaderValue::from_str(&header_val) {
-                            new_req
-                                .headers_mut()
-                                .insert(http::header::AUTHORIZATION, val);
-                        }
-                        return inner.call(new_req).await;
+                    && let Ok(answer) = prompt.respond(&context)
+                {
+                    let header_val = answer.to_string();
+                    let mut new_req = req_clone;
+                    if let Ok(val) = HeaderValue::from_str(&header_val) {
+                        new_req
+                            .headers_mut()
+                            .insert(http::header::AUTHORIZATION, val);
                     }
+                    return inner.call(new_req).await;
+                }
             }
 
             Ok(response)

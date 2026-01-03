@@ -1,4 +1,4 @@
-// File: tests/parser_stress.rs
+// Stress tests for the smart input parser.
 use cfait::model::Task;
 use chrono::{Datelike, Duration, Local};
 use std::collections::HashMap;

@@ -1,3 +1,4 @@
+// General tests for search functionality.
 use cfait::model::Task;
 use std::collections::HashMap;
 

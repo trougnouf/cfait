@@ -1,3 +1,4 @@
+// Binary entry point for the TUI application.
 use anyhow::Result;
 use cfait::storage::LocalStorage;
 use std::env;

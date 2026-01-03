@@ -1,4 +1,4 @@
-// File: tests/search_operators.rs
+// Tests for search query operators.
 use cfait::model::{DateType, Task, TaskStatus}; // Added DateType import
 use chrono::{Duration, Local, Utc}; // Added Utc import
 use std::collections::HashMap;

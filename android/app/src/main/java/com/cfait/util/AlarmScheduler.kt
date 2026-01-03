@@ -1,3 +1,4 @@
+// Utility for scheduling Android AlarmManager events.
 package com.cfait.util
 
 import android.app.AlarmManager

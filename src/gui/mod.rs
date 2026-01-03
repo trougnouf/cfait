@@ -1,4 +1,4 @@
-// File: src/gui/mod.rs
+// Entry point and setup for the GUI application.
 pub mod async_ops;
 pub mod icon;
 pub mod message;

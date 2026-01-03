@@ -1,4 +1,4 @@
-// File: src/lib.rs
+// Crate root library declaration and module exports.
 pub mod alarm_index;
 pub mod cache;
 pub mod client;

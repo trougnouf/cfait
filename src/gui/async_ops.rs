@@ -1,4 +1,4 @@
-// File: ./src/gui/async_ops.rs
+// Asynchronous operations wrapper bridging sync GUI and async client.
 use crate::client::RustyClient;
 use crate::config::Config;
 use crate::model::{CalendarListEntry, Task as TodoTask};

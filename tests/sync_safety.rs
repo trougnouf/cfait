@@ -1,4 +1,4 @@
-// File: tests/sync_safety.rs
+// Safety tests for synchronization failures.
 use cfait::client::RustyClient;
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
@@ -17,14 +17,16 @@ fn setup_safety_env(suffix: &str) -> std::path::PathBuf {
         env::set_var("CFAIT_TEST_DIR", &temp_dir);
     }
     if let Some(p) = Journal::get_path()
-        && p.exists() {
-            let _ = fs::remove_file(p);
-        }
+        && p.exists()
+    {
+        let _ = fs::remove_file(p);
+    }
     if let Ok(cache_dir) = cfait::paths::AppPaths::get_cache_dir()
-        && cache_dir.exists() {
-            let _ = fs::remove_dir_all(&cache_dir);
-            let _ = fs::create_dir_all(&cache_dir);
-        }
+        && cache_dir.exists()
+    {
+        let _ = fs::remove_dir_all(&cache_dir);
+        let _ = fs::create_dir_all(&cache_dir);
+    }
     temp_dir
 }
 

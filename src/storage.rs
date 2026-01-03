@@ -1,4 +1,4 @@
-// File: ./src/storage.rs
+// Manages local file storage for tasks and calendars.
 use crate::model::{CalendarListEntry, Task};
 use crate::paths::AppPaths;
 use anyhow::Result;

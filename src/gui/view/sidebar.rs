@@ -1,3 +1,4 @@
+// Renders the sidebar (calendars, tags, locations) for the GUI.
 use super::tooltip_style;
 use crate::color_utils;
 use crate::gui::icon;

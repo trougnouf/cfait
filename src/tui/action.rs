@@ -1,4 +1,4 @@
-// File: src/tui/action.rs
+// Defines actions and events for TUI interaction and state updates.
 use crate::model::{CalendarListEntry, Task};
 
 #[derive(Debug, Clone, Copy, PartialEq)]

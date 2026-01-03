@@ -1,3 +1,4 @@
+// Regression tests for input parsing bugs.
 use cfait::model::{AlarmTrigger, Task};
 use chrono::{Local, Timelike};
 use std::collections::HashMap;

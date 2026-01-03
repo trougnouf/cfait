@@ -1,7 +1,5 @@
-// File: tests/test_new_filters.rs
-// Test file for new filter features: relative start dates, "not set" operator, and is:ready
-
-use cfait::model::item::{Task, TaskStatus};
+// Tests for newer filter features (relative dates, etc.).
+use cfait::model::{DateType, Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
 use chrono::{Datelike, Duration, Local};
 use std::collections::HashSet;

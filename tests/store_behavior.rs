@@ -1,4 +1,4 @@
-// File: tests/store_behavior.rs
+// Tests for task storage filtering logic.
 use cfait::model::Task;
 use cfait::store::{FilterOptions, TaskStore};
 use std::collections::{HashMap, HashSet};

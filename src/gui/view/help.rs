@@ -1,4 +1,4 @@
-// File: ./src/gui/view/help.rs
+// Renders the help screen overlay.
 use crate::gui::message::Message;
 use iced::widget::{Space, button, column, container, row, scrollable, svg, text, text_input};
 use iced::{Color, Element, Length, Theme};

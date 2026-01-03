@@ -1,4 +1,4 @@
-// File: ./src/gui/icon.rs
+// Manages SVG icons and font definitions for the GUI.
 use iced::Font;
 use iced::widget::{Text, text};
 

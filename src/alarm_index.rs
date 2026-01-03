@@ -1,6 +1,4 @@
-// File: src/alarm_index.rs
-//
-// Alarm Index Cache: A lightweight cache for fast alarm lookups.
+// Manages an optimized index for fast alarm lookups.
 //
 // This module provides a separate index file (alarm_index.json) that contains
 // only the essential information needed to determine which alarms should fire,

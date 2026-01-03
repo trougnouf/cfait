@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/workers/CalendarSyncWorker.kt
+// Worker for bulk calendar event operations.
 package com.cfait.workers
 
 import android.content.Context

@@ -1,4 +1,4 @@
-// File: ./tests/ghost_tasks.rs
+// Tests handling of "ghost" tasks in synchronization.
 use cfait::client::RustyClient;
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
@@ -18,9 +18,10 @@ fn setup_ghost_env(suffix: &str) -> std::path::PathBuf {
         env::set_var("CFAIT_TEST_DIR", &temp_dir);
     }
     if let Some(p) = Journal::get_path()
-        && p.exists() {
-            let _ = fs::remove_file(p);
-        }
+        && p.exists()
+    {
+        let _ = fs::remove_file(p);
+    }
     temp_dir
 }
 

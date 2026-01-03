@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/receivers/NotificationActionReceiver.kt
+// Android Receiver for handling notification actions (Snooze/Dismiss).
 package com.cfait.receivers
 
 import android.content.BroadcastReceiver

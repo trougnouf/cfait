@@ -1,4 +1,4 @@
-// File: ./tests/sync_integration.rs
+// Integration tests for sync workflows.
 use cfait::client::RustyClient;
 use cfait::journal::Action;
 use cfait::model::Task;
@@ -56,9 +56,10 @@ async fn test_sync_recovers_from_412() {
 
     // Clean any residual file in temp (unlikely, but safe)
     if let Some(p) = cfait::journal::Journal::get_path()
-        && p.exists() {
-            let _ = fs::remove_file(p);
-        }
+        && p.exists()
+    {
+        let _ = fs::remove_file(p);
+    }
 
     cfait::journal::Journal::push(Action::Update(task)).unwrap();
 

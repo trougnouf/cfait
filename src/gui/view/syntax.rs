@@ -1,4 +1,4 @@
-// File: ./src/gui/view/syntax.rs
+// Implements syntax highlighting for the smart input editor.
 use crate::color_utils;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use iced::advanced::text::highlighter::{self, Highlighter};

@@ -1,4 +1,4 @@
-// File: ./src/gui/view/task_row.rs
+// Renders individual task rows in the GUI.
 use crate::color_utils;
 use crate::gui::icon;
 use crate::gui::message::Message;

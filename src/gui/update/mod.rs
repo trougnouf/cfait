@@ -1,4 +1,4 @@
-// File: src/gui/update/mod.rs
+// Central message handler dispatching to specific update modules.
 pub mod common;
 pub mod network;
 pub mod settings;

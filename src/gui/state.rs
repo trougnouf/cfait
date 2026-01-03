@@ -1,4 +1,4 @@
-// File: src/gui/state.rs
+// Manages the application state for the GUI (Iced).
 use crate::client::RustyClient;
 use crate::config::AppTheme;
 use crate::gui::icon;

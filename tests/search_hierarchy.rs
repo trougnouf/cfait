@@ -1,4 +1,4 @@
-// File: tests/search_hierarchy.rs
+// Tests for search filtering with task hierarchy.
 use cfait::model::Task;
 use cfait::store::{FilterOptions, TaskStore};
 use std::collections::{HashMap, HashSet};

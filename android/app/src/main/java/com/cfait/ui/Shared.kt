@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/ui/Shared.kt
+// Shared Compose UI components and syntax highlighting logic.
 package com.cfait.ui
 
 import androidx.compose.material3.MaterialTheme

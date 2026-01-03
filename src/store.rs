@@ -1,4 +1,4 @@
-// File: ./src/store.rs
+// In-memory storage and filtering logic for tasks.
 use crate::cache::Cache;
 use crate::model::{Task, TaskStatus};
 use crate::storage::LocalStorage;

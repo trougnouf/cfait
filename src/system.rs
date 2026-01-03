@@ -1,4 +1,4 @@
-// File: ./src/system.rs
+// Background system actor for handling alarms and notifications.
 use crate::config::Config; // Import Config
 use crate::model::{Alarm, AlarmTrigger, DateType, Task}; // Import DateType
 use chrono::{Local, NaiveTime, Utc}; // Import Time helpers

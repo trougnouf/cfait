@@ -1,4 +1,4 @@
-// File: ./tests/journal_propagation.rs
+// Tests for journal action propagation logic.
 use cfait::client::RustyClient;
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
@@ -57,9 +57,10 @@ async fn test_move_propagates_href_to_pending_update() {
     task.etag = "\"orig-etag\"".to_string();
 
     if let Some(p) = Journal::get_path()
-        && p.exists() {
-            let _ = fs::remove_file(p);
-        }
+        && p.exists()
+    {
+        let _ = fs::remove_file(p);
+    }
 
     Journal::push(Action::Move(task.clone(), new_cal.to_string())).unwrap();
 

@@ -1,4 +1,4 @@
-// File: tests/calendar_events_tests.rs
+// Tests for calendar event generation logic.
 use cfait::model::{DateType, Task, TaskStatus};
 use chrono::{NaiveDate, TimeZone, Utc};
 use std::collections::HashMap;

@@ -1,4 +1,4 @@
-// File: ./tests/digest_auth.rs
+// Tests for HTTP Digest authentication.
 use cfait::client::RustyClient;
 use mockito::Server;
 

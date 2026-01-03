@@ -1,4 +1,4 @@
-// File: tests/alarm_tests.rs
+// Tests for basic alarm functionality.
 use cfait::model::{AlarmTrigger, DateType, Task};
 use chrono::{Duration, Local, Timelike};
 use std::collections::HashMap;

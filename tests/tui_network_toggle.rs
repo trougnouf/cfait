@@ -1,3 +1,4 @@
+// Integration tests for TUI network task toggling.
 use cfait::model::{Task, TaskStatus};
 use cfait::tui::action::{Action, AppEvent};
 use cfait::tui::network::run_network_actor;

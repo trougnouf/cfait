@@ -1,4 +1,4 @@
-// File: src/gui/subscription.rs
+// Handles event subscriptions (keyboard, window) for the GUI.
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use iced::{Subscription, event, keyboard, window};

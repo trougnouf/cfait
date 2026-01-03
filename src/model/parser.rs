@@ -1,4 +1,4 @@
-// File: ./src/model/parser.rs
+// Logic for parsing smart input strings into task properties.
 use crate::model::{Alarm, DateType, Task};
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, Utc};
 use std::collections::{HashMap, HashSet};

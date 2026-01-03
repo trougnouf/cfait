@@ -1,4 +1,4 @@
-// File: ./src/model/item.rs
+// Core data structures for Tasks, Alarms, and Calendars.
 use chrono::{DateTime, Duration, Local, NaiveDate, NaiveTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;

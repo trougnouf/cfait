@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/ui/TaskRow.kt
+// Compose UI component for rendering a single task row.
 package com.cfait.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi

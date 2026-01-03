@@ -1,4 +1,4 @@
-// File: ./src/tui/view.rs
+// Renders the Terminal User Interface (TUI) layout and widgets.
 use crate::color_utils;
 use crate::model::parser::{SyntaxType, strip_quotes, tokenize_smart_input};
 use crate::store::UNCATEGORIZED_ID;

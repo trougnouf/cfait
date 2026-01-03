@@ -1,4 +1,4 @@
-// File: tests/readme_compliance.rs
+// Tests ensuring compatibility with README examples.
 use cfait::model::Task;
 use chrono::{Duration, Local};
 use std::collections::HashMap;

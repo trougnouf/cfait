@@ -1,4 +1,4 @@
-// File: ./src/client/mod.rs
+// Module declaration exporting the CalDAV client components.
 pub mod auth;
 pub mod cert;
 pub mod core;

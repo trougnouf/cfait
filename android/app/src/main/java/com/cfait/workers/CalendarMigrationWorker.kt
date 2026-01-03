@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/workers/CalendarMigrationWorker.kt
+// Worker for migrating local calendars.
 package com.cfait.workers
 
 import android.content.Context

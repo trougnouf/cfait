@@ -1,4 +1,4 @@
-// File: src/tui/mod.rs
+// Entry point and main loop for the TUI application.
 pub mod action;
 pub mod handlers;
 pub mod network;

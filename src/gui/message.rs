@@ -1,4 +1,4 @@
-// ### File: `src/gui/message.rs`
+// Defines all messages used for the Elm architecture in the GUI.
 
 use crate::client::RustyClient;
 use crate::config::{AppTheme, Config};

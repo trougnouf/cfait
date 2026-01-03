@@ -1,4 +1,4 @@
-// File: tests/local_safety.rs
+// Safety tests for local storage operations.
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
 use cfait::storage::LOCAL_CALENDAR_HREF;

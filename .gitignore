@@ -31,3 +31,5 @@ android/app/src/main/res/font/
 # Local secrets directory (seen in your tree)
 secrets/
 *.keystore
+
+untracked/

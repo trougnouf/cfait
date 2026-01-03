@@ -1,4 +1,4 @@
-// File: tests/sync_create_conflict.rs
+// Tests handling of creation conflicts during sync.
 use cfait::client::RustyClient;
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
@@ -26,9 +26,10 @@ fn setup_env(suffix: &str) -> std::path::PathBuf {
 
     // Ensure clean state
     if let Some(p) = Journal::get_path()
-        && p.exists() {
-            let _ = fs::remove_file(p);
-        }
+        && p.exists()
+    {
+        let _ = fs::remove_file(p);
+    }
     temp_dir
 }
 

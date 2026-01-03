@@ -1,4 +1,4 @@
-// File: ./src/tui/handlers.rs
+// Handles keyboard input and system events for the TUI.
 use crate::config::Config;
 use crate::model::parser::parse_duration;
 use crate::model::{Task, TaskStatus, extract_inline_aliases, validate_alias_integrity};

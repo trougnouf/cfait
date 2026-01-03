@@ -1,3 +1,4 @@
+// Android Receiver for rescheduling alarms after device boot.
 package com.cfait.receivers
 
 import android.content.BroadcastReceiver

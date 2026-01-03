@@ -1,4 +1,4 @@
-// File: tests/smart_input_extensions.rs
+// Tests for additional smart input features.
 use cfait::model::Task;
 use std::collections::HashMap;
 

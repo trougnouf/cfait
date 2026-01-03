@@ -1,4 +1,4 @@
-// File: tests/logic_recurrence.rs
+// Tests for recurrence date calculation logic.
 use cfait::model::{DateType, Task, TaskStatus};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;

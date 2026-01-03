@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/ui/TaskDetailScreen.kt
+// Compose UI screen for editing task details.
 package com.cfait.ui
 
 import androidx.compose.foundation.clickable

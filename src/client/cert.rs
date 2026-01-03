@@ -1,4 +1,4 @@
-// File: ./src/client/cert.rs
+// Handles custom TLS certificate verification logic.
 use rustls;
 
 #[derive(Debug)]

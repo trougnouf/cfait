@@ -1,4 +1,4 @@
-// File: src/journal.rs
+// Implements the offline action journal for syncing changes.
 use crate::model::Task;
 use crate::paths::AppPaths;
 use crate::storage::LocalStorage;

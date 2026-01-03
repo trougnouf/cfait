@@ -1,4 +1,4 @@
-// File: ./src/model/mod.rs
+// Module declarations for the data model.
 pub mod adapter;
 pub mod item;
 pub mod matcher;

@@ -1,4 +1,4 @@
-// File: src/cache.rs
+// Caching mechanism for storing remote tasks locally.
 use crate::model::{CalendarListEntry, Task};
 use crate::paths::AppPaths;
 use crate::storage::LocalStorage;

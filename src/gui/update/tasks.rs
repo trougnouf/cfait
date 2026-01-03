@@ -1,4 +1,4 @@
-// File: ./src/gui/update/tasks.rs
+// Handles task manipulation messages in the GUI.
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{GuiApp, SidebarMode};

@@ -1,3 +1,4 @@
+// Common utility functions for GUI updates.
 use crate::config::Config;
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;

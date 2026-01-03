@@ -1,3 +1,4 @@
+// Manages the application state for the TUI.
 use crate::model::{CalendarListEntry, Task};
 use crate::store::{FilterOptions, TaskStore};
 use crate::system::SystemEvent;

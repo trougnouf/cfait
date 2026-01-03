@@ -1,4 +1,5 @@
-use cfait::model::item::{DateType, Task, TaskStatus};
+// Tests for sorting blocked tasks.
+use cfait::model::{DateType, Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
 use chrono::Utc;
 use std::collections::{HashMap, HashSet};

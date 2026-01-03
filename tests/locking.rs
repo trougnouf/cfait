@@ -1,4 +1,4 @@
-// File: ./tests/locking.rs
+// Tests for concurrency locking mechanisms.
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
 use std::collections::HashMap;

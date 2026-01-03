@@ -1,4 +1,4 @@
-// File: ./tests/sync_edge_cases.rs
+// Tests for synchronization edge cases.
 use cfait::client::RustyClient;
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
@@ -24,9 +24,10 @@ fn setup_env(suffix: &str) -> std::path::PathBuf {
 
     // Clean potential previous run
     if let Some(p) = Journal::get_path()
-        && p.exists() {
-            let _ = fs::remove_file(p);
-        }
+        && p.exists()
+    {
+        let _ = fs::remove_file(p);
+    }
     temp_dir
 }
 

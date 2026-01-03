@@ -1,4 +1,4 @@
-// File: src/gui/update/network.rs
+// Handles network sync and connectivity messages in the GUI.
 use crate::cache::Cache;
 use crate::config::Config;
 use crate::gui::async_ops::*;

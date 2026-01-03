@@ -1,5 +1,4 @@
-// File: ./src/tui/network.rs
-// New file: Encapsulates the network actor logic
+// Manages background network operations for the TUI.
 use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::storage::{LocalCalendarRegistry, LocalStorage};

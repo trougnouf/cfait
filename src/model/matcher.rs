@@ -1,5 +1,4 @@
-// File: ./src/model/matcher.rs
-// Handles logic for checking if a task matches a search query
+// Logic for checking if tasks match search queries.
 use crate::model::item::{Task, TaskStatus};
 use chrono::{Duration, Local, NaiveDate};
 

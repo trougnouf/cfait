@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/ui/SettingsScreen.kt
+// Compose UI screen for application settings.
 package com.cfait.ui
 
 import android.content.Intent

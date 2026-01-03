@@ -1,4 +1,4 @@
-// File: ./src/gui/view/mod.rs
+// Main view composition and layout logic for the GUI.
 use std::time::Duration;
 pub mod help;
 pub mod settings;

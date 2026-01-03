@@ -1,3 +1,5 @@
+// Manages platform-specific file paths and directory resolution.
+
 use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use std::env;

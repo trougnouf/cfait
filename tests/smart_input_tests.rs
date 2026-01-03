@@ -1,3 +1,4 @@
+// Tests for smart input processing.
 use cfait::model::{
     Task,
     parser::{SyntaxType, tokenize_smart_input},

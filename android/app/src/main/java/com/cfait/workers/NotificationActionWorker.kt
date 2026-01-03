@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/workers/NotificationActionWorker.kt
+// Worker handling background notification interactions.
 package com.cfait.workers
 
 import android.content.Context

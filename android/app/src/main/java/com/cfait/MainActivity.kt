@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/MainActivity.kt
+// Main Android Activity setting up the Compose UI.
 package com.cfait
 
 import android.Manifest

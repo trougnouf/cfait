@@ -1,4 +1,4 @@
-// File: ./src/model/adapter.rs
+// Adapter logic for converting between Task objects and iCalendar format.
 use crate::model::item::{Alarm, AlarmTrigger, DateType, RawProperty, Task, TaskStatus};
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
 use icalendar::{Calendar, CalendarComponent, Component, Event, Todo, TodoStatus};

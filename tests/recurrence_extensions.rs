@@ -1,4 +1,4 @@
-// File: tests/recurrence_extensions.rs
+// Tests for extended recurrence features (until/except).
 // Tests for "until" and "except" recurrence extensions
 
 use cfait::model::{DateType, Task};

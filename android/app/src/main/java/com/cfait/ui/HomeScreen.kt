@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/ui/HomeScreen.kt
+// Compose UI screen for the main task list.
 package com.cfait.ui
 
 import android.content.ClipData

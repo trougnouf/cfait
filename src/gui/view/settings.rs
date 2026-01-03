@@ -1,4 +1,4 @@
-// File: ./src/gui/view/settings.rs
+// Renders the settings and onboarding screens.
 use crate::config::AppTheme;
 use crate::gui::icon;
 use crate::gui::message::Message;

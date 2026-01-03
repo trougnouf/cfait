@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/ui/HelpScreen.kt
+// Compose UI screen for help documentation.
 package com.cfait.ui
 
 import android.content.ClipData

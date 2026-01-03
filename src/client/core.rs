@@ -1,4 +1,4 @@
-// File: src/client/core.rs
+// Core logic for CalDAV communication, sync, and task management.
 use crate::cache::Cache;
 use crate::client::auth::DynamicAuthLayer;
 use crate::client::cert::NoVerifier;

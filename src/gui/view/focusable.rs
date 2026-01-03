@@ -1,4 +1,4 @@
-// File: ./src/gui/view/focusable.rs
+// Custom widget wrapper to handle focus logic.
 use iced::advanced::layout;
 use iced::advanced::renderer;
 use iced::advanced::widget::{self, Operation, Tree};

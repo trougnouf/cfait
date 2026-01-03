@@ -1,4 +1,4 @@
-// File: src/gui/update/view.rs
+// Handles view/navigation-related messages in the GUI.
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp, ResizeDirection, SidebarMode};

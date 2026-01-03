@@ -1,4 +1,4 @@
-// File: ./android/app/src/main/java/com/cfait/CfaitApplication.kt
+// Android Application class initializing the Rust backend.
 package com.cfait
 
 import android.app.Application

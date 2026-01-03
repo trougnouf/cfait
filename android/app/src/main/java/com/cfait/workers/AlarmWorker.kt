@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/workers/AlarmWorker.kt
+// Background worker for processing firing alarms.
 package com.cfait.workers
 
 import android.Manifest

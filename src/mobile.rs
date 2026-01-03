@@ -1,4 +1,4 @@
-// File: ./src/mobile.rs
+// UniFFI interface for exposing core logic to mobile platforms (Android).
 use crate::alarm_index::AlarmIndex;
 use crate::cache::Cache;
 use crate::client::RustyClient;

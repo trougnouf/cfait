@@ -1,4 +1,4 @@
-// File: ./tests/escape_tests.rs
+// Tests for escaping special characters in input.
 use cfait::model::{
     Task,
     parser::{extract_inline_aliases, strip_quotes},

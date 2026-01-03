@@ -1,4 +1,4 @@
-// File: src/config.rs
+// Handles configuration loading, saving, and defaults.
 use crate::paths::AppPaths;
 use crate::storage::LocalStorage;
 use anyhow::Result;

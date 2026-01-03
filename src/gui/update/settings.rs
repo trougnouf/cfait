@@ -1,4 +1,4 @@
-// File: src/gui/update/settings.rs
+// Handles settings-related messages and updates in the GUI.
 use crate::cache::Cache;
 use crate::config::Config;
 use crate::gui::async_ops::*;

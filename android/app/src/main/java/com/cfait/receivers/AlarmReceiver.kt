@@ -1,3 +1,4 @@
+// Android BroadcastReceiver for handling system alarm events.
 package com.cfait.receivers
 
 import android.content.BroadcastReceiver

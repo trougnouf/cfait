@@ -1,4 +1,4 @@
-// File: ./src/color_utils.rs
+// Utilities for generating deterministic colors from strings.
 use std::hash::{Hash, Hasher};
 
 /// Generates a deterministic color tuple (r, g, b) in [0.0, 1.0] range based on the input string.

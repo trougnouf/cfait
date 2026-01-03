@@ -1,4 +1,4 @@
-// File: android/app/src/main/java/com/cfait/workers/BootWorker.kt
+// Background worker for rescheduling alarms on boot.
 package com.cfait.workers
 
 import android.content.Context
