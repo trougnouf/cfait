@@ -23,7 +23,7 @@ exclude = [
     "RUST_DEPENDENCIES.html",
     "android/*",
     "fastlane/*",
-    "org.codeberg.trougnouf.cfait.yml",
+    "com.trougnouf.Cfait.yml",
     "scripts/*",
     "cargo-sources.yml",
     "LICENSES/*",

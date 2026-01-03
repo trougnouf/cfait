@@ -77,7 +77,7 @@ def main():
         sys.exit(1)
 
     # 7. UPDATE METAINFO.XML RELEASES
-    metainfo_path = "assets/org.codeberg.trougnouf.cfait.metainfo.xml"
+    metainfo_path = "assets/com.trougnouf.Cfait.metainfo.xml"
     print(f"📝 Updating Metainfo: {metainfo_path}")
 
     today = datetime.date.today().isoformat()
@@ -100,7 +100,7 @@ def main():
         f.write(xml_content)
 
     # 8. UPDATE FLATPAK MANIFEST WITH NEW TAG AND COMMIT
-    flatpak_manifest = "org.codeberg.trougnouf.cfait.yml"
+    flatpak_manifest = "com.trougnouf.Cfait.yml"
     print(f"📝 Updating Flatpak manifest: {flatpak_manifest}")
 
     # Get the current commit hash (this assumes we're tagging the current HEAD)

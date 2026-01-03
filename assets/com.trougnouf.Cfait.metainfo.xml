@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<component type="desktop-application">
+  <id>com.trougnouf.Cfait</id>
+  <name>Cfait</name>
+  <summary>Powerful, fast and elegant CalDAV task manager</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <developer_name>Benoit Brummer (Trougnouf)</developer_name>
+
+  <description>
+    <p>
+      Cfait is designed for speed and stability using Rust. It puts you in control of your data with a local-first approach that syncs seamlessly across your devices via CalDAV.
+    </p>
+    <p><strong>Key Features:</strong></p>
+    <ul>
+      <li><strong
+                >Syncs Everywhere:</strong> Compatible with Nextcloud, iCloud, Radicale, and other standard CalDAV servers.</li>
+      <li><strong
+                >Offline First:</strong> Optimistic UI updates mean you never wait for a server response.</li>
+      <li><strong
+                >Smart Input:</strong> Typing "Buy cat food !1 @tomorrow" automatically sets priority and due date.</li>
+      <li><strong
+                >Productivity:</strong> GTD Workflow, Sub-tasks, Dependencies, and Tags.</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">com.trougnouf.Cfait.desktop</launchable>
+
+  <screenshots>
+    <screenshot type="default">
+      <image
+            >https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.13_screenshot_(GUI).png</image>
+    </screenshot>
+    <screenshot>
+      <image
+            >https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.3.13_screenshot_(TUI).png</image>
+      <caption>The Terminal User Interface</caption>
+    </screenshot>
+  </screenshots>
+
+  <url type="homepage">https://www.trougnouf.com</url>
+  <url type="bugtracker">https://codeberg.org/trougnouf/cfait/issues</url>
+  <url type="vcs-browser">https://codeberg.org/trougnouf/cfait</url>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.4.2" date="2026-01-03" />
+    <release version="0.4.1" date="2026-01-03" />
+    <release version="0.4.0" date="2025-12-30" />
+    <release version="0.3.14" date="2025-12-29" />
+    <release version="0.3.13" date="2025-12-28" />
+    <release version="0.3.12" date="2025-12-24" />
+    <release version="0.3.11" date="2025-12-24" />
+    <release version="0.3.10" date="2025-12-24" />
+    <release version="0.3.9" date="2025-12-23" />
+    <release version="0.3.8" date="2025-12-23" />
+    <release version="0.3.7" date="2025-12-21" />
+    <release version="0.3.6" date="2025-12-21" />
+    <release version="0.3.5" date="2025-12-20" />
+    <release version="0.3.4" date="2025-12-19" />
+    <release version="0.3.3" date="2025-12-19" />
+    <release version="0.3.2" date="2025-12-18" />
+    <release version="0.3.1" date="2025-12-17" />
+    <release version="0.3.0" date="2025-12-17" />
+    <release version="0.2.9" date="2025-12-08" />
+    <release version="0.2.8" date="2025-12-08" />
+    <release version="0.2.7" date="2025-12-06" />
+    <release version="0.2.5" date="2025-12-04" />
+    <release version="0.2.4" date="2025-12-03" />
+    <release version="0.2.3" date="2025-12-01" />
+    <release version="0.2.2" date="2025-11-29" />
+    <release version="0.2.1" date="2025-11-29" />
+    <release version="0.2.0" date="2025-11-27" />
+    <release version="0.1.9" date="2025-11-26" />
+    <release version="0.1.7" date="2025-11-25" />
+    <release version="0.1.6" date="2025-11-24" />
+    <release version="0.1.5" date="2025-11-22" />
+    <release version="0.1.4" date="2025-11-22" />
+    <release version="0.1.3" date="2025-11-22" />
+    <release version="0.1.2" date="2025-11-21" />
+    <release version="0.1.1" date="2025-11-21" />
+  </releases>
+</component>
