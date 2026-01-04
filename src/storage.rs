@@ -1204,4 +1204,237 @@ mod tests {
         // - v2 user: parse as v2 → apply v2→v3 migration → done
         // - v3 user: parse as v3 → no migration needed → done
     }
+
+    #[test]
+    fn test_backward_compatibility_missing_related_to_and_dependencies() {
+        // Test that tasks saved before v0.1.7 (no dependencies) and v0.3.14 (no related_to)
+        // can still be loaded. This simulates the actual user's issue.
+        let old_task_json = r#"[{
+    "uid": "old-task-uid",
+    "summary": "Old task without related_to or dependencies",
+    "description": "This task was created before those fields existed",
+    "status": "NeedsAction",
+    "estimated_duration": null,
+    "due": "2024-01-15T14:30:00Z",
+    "dtstart": null,
+    "alarms": [],
+    "priority": 5,
+    "percent_complete": null,
+    "parent_uid": null,
+    "etag": "abc123",
+    "href": "task1.ics",
+    "calendar_href": "local://default",
+    "categories": ["work"],
+    "depth": 0,
+    "rrule": null,
+    "location": null,
+    "url": null,
+    "geo": null,
+    "unmapped_properties": [],
+    "sequence": 0
+}]"#;
+
+        // This should not fail even though dependencies and related_to are missing
+        let result = LocalStorage::migrate_v1_to_v2(old_task_json);
+        assert!(
+            result.is_ok(),
+            "Should successfully load old tasks without dependencies/related_to fields. Error: {:?}",
+            result.err()
+        );
+
+        let tasks = result.unwrap();
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(
+            tasks[0].summary,
+            "Old task without related_to or dependencies"
+        );
+        assert_eq!(
+            tasks[0].dependencies.len(),
+            0,
+            "dependencies should default to empty vec"
+        );
+        assert_eq!(
+            tasks[0].related_to.len(),
+            0,
+            "related_to should default to empty vec"
+        );
+    }
+
+    #[test]
+    fn test_comprehensive_backward_compatibility() {
+        // This test ensures that tasks missing ANY optional field can still be loaded.
+        // It serves as documentation and protection against future backward compatibility breaks.
+        //
+        // When adding a new field to Task:
+        // 1. If it's Vec<T>, usize, u8, u32, etc. → add #[serde(default)]
+        // 2. If it's String and truly required → implement a migration
+        // 3. If it's String and optional → use Option<String>
+        // 4. Add the field to this test with its default value
+        //
+        // This test documents which fields MUST be present (the ones in the JSON below)
+        // and which fields can be missing (tested via assertions after deserialization).
+
+        let minimal_task_json = r#"[{
+    "uid": "minimal-task",
+    "summary": "Minimal task with only required fields",
+    "description": "",
+    "status": "NeedsAction",
+    "priority": 0,
+    "etag": "",
+    "href": "",
+    "calendar_href": "local://default"
+}]"#;
+
+        let result = LocalStorage::migrate_v1_to_v2(minimal_task_json);
+        assert!(
+            result.is_ok(),
+            "Should load task with only truly required fields. Error: {:?}",
+            result.err()
+        );
+
+        let tasks = result.unwrap();
+        assert_eq!(tasks.len(), 1);
+        let task = &tasks[0];
+
+        // Verify all optional fields got their defaults
+        assert_eq!(
+            task.estimated_duration, None,
+            "estimated_duration should default to None"
+        );
+        assert_eq!(task.due, None, "due should default to None");
+        assert_eq!(task.dtstart, None, "dtstart should default to None");
+        assert_eq!(task.alarms.len(), 0, "alarms should default to empty vec");
+        assert_eq!(task.exdates.len(), 0, "exdates should default to empty vec");
+        assert_eq!(
+            task.percent_complete, None,
+            "percent_complete should default to None"
+        );
+        assert_eq!(task.parent_uid, None, "parent_uid should default to None");
+        assert_eq!(
+            task.dependencies.len(),
+            0,
+            "dependencies should default to empty vec (added v0.1.7)"
+        );
+        assert_eq!(
+            task.related_to.len(),
+            0,
+            "related_to should default to empty vec (added v0.3.14)"
+        );
+        assert_eq!(
+            task.categories.len(),
+            0,
+            "categories should default to empty vec"
+        );
+        assert_eq!(task.depth, 0, "depth should default to 0");
+        assert_eq!(task.rrule, None, "rrule should default to None");
+        assert_eq!(task.location, None, "location should default to None");
+        assert_eq!(task.url, None, "url should default to None");
+        assert_eq!(task.geo, None, "geo should default to None");
+        assert_eq!(
+            task.unmapped_properties.len(),
+            0,
+            "unmapped_properties should default to empty vec"
+        );
+        assert_eq!(task.sequence, 0, "sequence should default to 0");
+        assert_eq!(
+            task.raw_alarms.len(),
+            0,
+            "raw_alarms should default to empty vec"
+        );
+        assert_eq!(
+            task.raw_components.len(),
+            0,
+            "raw_components should default to empty vec"
+        );
+        assert_eq!(
+            task.create_event, None,
+            "create_event should default to None"
+        );
+    }
+
+    #[test]
+    fn test_future_field_addition_pattern() {
+        // This test documents the pattern for safely adding new fields.
+        // It simulates what happens when someone adds a field in the future.
+
+        // Scenario: We're on v0.5.0 and want to add a new field "tags: Vec<String>"
+        // Following the documentation in Task struct, we add #[serde(default)] to it.
+
+        // Old task JSON from v0.4.2 (before hypothetical "tags" field)
+        let old_task = r#"[{
+    "uid": "old-task",
+    "summary": "Task from before tags field existed",
+    "description": "",
+    "status": "NeedsAction",
+    "priority": 5,
+    "dependencies": [],
+    "related_to": [],
+    "etag": "123",
+    "href": "task.ics",
+    "calendar_href": "local://default"
+}]"#;
+
+        // This should work because all Vec fields have #[serde(default)]
+        let result = LocalStorage::migrate_v1_to_v2(old_task);
+        assert!(
+            result.is_ok(),
+            "Old tasks should load even if new Vec fields are added with #[serde(default)]"
+        );
+
+        // The key insight: By consistently using #[serde(default)] on all Vec<T> fields,
+        // we avoid needing migrations for most field additions.
+    }
+
+    #[test]
+    fn test_option_fields_dont_need_serde_default() {
+        // This test PROVES that Option<T> fields do NOT need #[serde(default)]
+        // They automatically default to None when missing from JSON.
+        //
+        // This is a special case in serde - Option<T> has built-in default behavior.
+        // If this test passes, it proves the LLM's assessment was incorrect.
+
+        let json_without_optional_fields = r#"[{
+    "uid": "test-option-behavior",
+    "summary": "Task with NO optional String fields in JSON",
+    "description": "",
+    "status": "NeedsAction",
+    "priority": 0,
+    "etag": "",
+    "href": "",
+    "calendar_href": "local://default"
+}]"#;
+
+        // This JSON is missing: location, url, geo, parent_uid, percent_complete, etc.
+        // All of these are Option<T> fields WITHOUT #[serde(default)]
+        // If the LLM were correct, this would fail with "missing field" errors.
+        let result = LocalStorage::migrate_v1_to_v2(json_without_optional_fields);
+
+        assert!(
+            result.is_ok(),
+            "Option<T> fields should default to None without #[serde(default)]. Error: {:?}",
+            result.err()
+        );
+
+        let tasks = result.unwrap();
+        assert_eq!(tasks.len(), 1);
+        let task = &tasks[0];
+
+        // Verify all Option fields defaulted to None
+        assert_eq!(task.location, None, "location should be None");
+        assert_eq!(task.url, None, "url should be None");
+        assert_eq!(task.geo, None, "geo should be None");
+        assert_eq!(task.parent_uid, None, "parent_uid should be None");
+        assert_eq!(
+            task.percent_complete, None,
+            "percent_complete should be None"
+        );
+        assert_eq!(
+            task.estimated_duration, None,
+            "estimated_duration should be None"
+        );
+        assert_eq!(task.rrule, None, "rrule should be None");
+
+        // CONCLUSION: Option<T> does NOT need #[serde(default)]
+        // Adding it would be redundant and make the code less idiomatic.
+    }
 }

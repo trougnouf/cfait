@@ -218,6 +218,39 @@ where
     }
 }
 
+/// Task represents a single TODO/task item with full CalDAV support.
+///
+/// # Backward Compatibility Requirements
+///
+/// **CRITICAL**: This struct is serialized/deserialized for local storage.
+/// When adding new fields, you MUST follow these rules to prevent data loss:
+///
+/// 1. **ALL new Vec<T> fields MUST have `#[serde(default)]`**
+///    - Without it, old tasks without the field will fail to load
+///    - This was the cause of the "missing field related_to" bug in v0.4.2
+///
+/// 2. **ALL new primitive fields (u8, usize, etc.) MUST have `#[serde(default)]`**
+///    - Or use Option<T> if the field should truly be optional
+///
+/// 3. **New String fields should usually be Option<String>**
+///    - Only make them required if you're implementing a migration
+///
+/// 4. **Test backward compatibility when adding fields**:
+///    - See `test_backward_compatibility_missing_related_to_and_dependencies` in storage.rs
+///    - Create a JSON without your new field and verify it loads
+///
+/// 5. **Document when fields were added** in comments (helps with future migrations)
+///
+/// ## Migration Strategy
+///
+/// We use versioned storage (see `LocalStorageData` in storage.rs). When breaking changes
+/// are needed, increment `LOCAL_STORAGE_VERSION` and add a migration function.
+/// However, `#[serde(default)]` avoids most breaking changes.
+///
+/// ## History
+/// - v0.1.7: Added `dependencies` field (RFC 9253 DEPENDS-ON support)
+/// - v0.3.14: Added `related_to` field (generic RELATED-TO relationships)
+/// - v0.4.2: Fixed backward compatibility by adding #[serde(default)] to above fields
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Task {
     pub uid: String,
@@ -239,18 +272,23 @@ pub struct Task {
     pub priority: u8,
     pub percent_complete: Option<u8>,
     pub parent_uid: Option<String>,
+    #[serde(default)]
     pub dependencies: Vec<String>,
+    #[serde(default)]
     pub related_to: Vec<String>,
     pub etag: String,
     pub href: String,
     pub calendar_href: String,
+    #[serde(default)]
     pub categories: Vec<String>,
+    #[serde(default)]
     pub depth: usize,
     pub rrule: Option<String>,
 
     pub location: Option<String>,
     pub url: Option<String>,
     pub geo: Option<String>,
+    #[serde(default)]
     pub unmapped_properties: Vec<RawProperty>,
 
     #[serde(default)]
