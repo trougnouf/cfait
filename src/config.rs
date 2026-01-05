@@ -21,6 +21,10 @@ fn default_urgent_prio() -> u8 {
     1
 } // !1
 
+fn default_priority() -> u8 {
+    5
+} // Normal priority
+
 // Add default helpers
 fn default_auto_remind() -> bool {
     true
@@ -90,6 +94,8 @@ pub struct Config {
     pub urgent_days_horizon: u32,
     #[serde(default = "default_urgent_prio")]
     pub urgent_priority_threshold: u8,
+    #[serde(default = "default_priority")]
+    pub default_priority: u8,
 
     #[serde(default = "default_auto_remind")]
     pub auto_reminders: bool,
@@ -126,6 +132,7 @@ impl Default for Config {
             theme: AppTheme::default(),
             urgent_days_horizon: 1,
             urgent_priority_threshold: 1,
+            default_priority: 5,
             auto_reminders: true,
             default_reminder_time: "08:00".to_string(),
             snooze_short_mins: 60,

@@ -46,6 +46,7 @@ fn test_blocked_tasks_skip_urgent_rank() {
         include_unset_duration: true,
         urgent_days: 7,
         urgent_prio: 1,
+        default_priority: 5,
     };
 
     let filtered = store.filter(options);
@@ -106,6 +107,7 @@ fn test_blocked_tasks_skip_due_soon_rank() {
         include_unset_duration: true,
         urgent_days: 7,
         urgent_prio: 1,
+        default_priority: 5,
     };
 
     let filtered = store.filter(options);
@@ -162,6 +164,7 @@ fn test_blocked_tasks_skip_started_rank() {
         include_unset_duration: true,
         urgent_days: 7,
         urgent_prio: 1,
+        default_priority: 5,
     };
 
     let filtered = store.filter(options);
@@ -219,6 +222,7 @@ fn test_dependency_blocked_tasks_also_skip_ranks() {
         include_unset_duration: true,
         urgent_days: 7,
         urgent_prio: 1,
+        default_priority: 5,
     };
 
     let filtered = store.filter(options);
@@ -283,6 +287,7 @@ fn test_is_ready_filters_manually_blocked_tasks() {
         include_unset_duration: true,
         urgent_days: 7,
         urgent_prio: 5,
+        default_priority: 5,
     };
 
     let filtered = store.filter(options);
@@ -342,6 +347,7 @@ fn test_is_blocked_filter_shows_only_blocked() {
         include_unset_duration: true,
         urgent_days: 7,
         urgent_prio: 5,
+        default_priority: 5,
     };
 
     let filtered = store.filter(options);

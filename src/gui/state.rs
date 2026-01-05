@@ -118,8 +118,10 @@ pub struct GuiApp {
     pub current_window_size: iced::Size,
     pub ob_urgent_days_input: String,
     pub ob_urgent_prio_input: String,
+    pub ob_default_priority_input: String,
     pub urgent_days: u32,
     pub urgent_prio: u8,
+    pub default_priority: u8,
     pub alarm_tx: Option<mpsc::Sender<SystemEvent>>, // Send tasks to actor
     pub ringing_tasks: Vec<(TodoTask, Alarm)>,       // Stack of firing alarms
 
@@ -237,8 +239,10 @@ impl Default for GuiApp {
             current_window_size: iced::Size::new(800.0, 600.0),
             ob_urgent_days_input: "1".to_string(),
             ob_urgent_prio_input: "1".to_string(),
+            ob_default_priority_input: "5".to_string(),
             urgent_days: 1,
             urgent_prio: 1,
+            default_priority: 5,
             alarm_tx: None,
             ringing_tasks: Vec::new(),
             snooze_custom_input: String::new(),

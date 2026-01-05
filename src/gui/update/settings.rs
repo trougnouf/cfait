@@ -36,8 +36,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_default_cal = config.default_calendar.clone();
             app.urgent_days = config.urgent_days_horizon;
             app.urgent_prio = config.urgent_priority_threshold;
+            app.default_priority = config.default_priority;
             app.ob_urgent_days_input = app.urgent_days.to_string();
             app.ob_urgent_prio_input = app.urgent_prio.to_string();
+            app.ob_default_priority_input = app.default_priority.to_string();
 
             // --- LOAD NEW FIELDS ---
             app.auto_reminders = config.auto_reminders;
@@ -153,6 +155,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 theme: app.current_theme,
                 urgent_days_horizon: app.urgent_days,
                 urgent_priority_threshold: app.urgent_prio,
+                default_priority: app.default_priority,
                 // NEW FIELDS
                 auto_reminders: app.auto_reminders,
                 default_reminder_time: app.default_reminder_time.clone(),
@@ -239,6 +242,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 theme: app.current_theme,
                 urgent_days_horizon: app.urgent_days,
                 urgent_priority_threshold: app.urgent_prio,
+                default_priority: app.default_priority,
 
                 // NEW FIELDS
                 auto_reminders: app.auto_reminders,
@@ -339,6 +343,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.ob_urgent_prio_input = val.clone();
                 if let Ok(n) = val.trim().parse::<u8>() {
                     app.urgent_prio = n;
+                    save_config(app);
+                    refresh_filtered_tasks(app);
+                }
+            }
+            Task::none()
+        }
+        Message::ObDefaultPriorityChanged(val) => {
+            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
+                app.ob_default_priority_input = val.clone();
+                if let Ok(n) = val.trim().parse::<u8>()
+                    && (1..=9).contains(&n)
+                {
+                    app.default_priority = n;
                     save_config(app);
                     refresh_filtered_tasks(app);
                 }

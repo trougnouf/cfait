@@ -41,6 +41,7 @@ fn test_filter_by_tag() {
         include_unset_duration: true,
         urgent_days: 1,
         urgent_prio: 1,
+        default_priority: 5,
     });
 
     assert_eq!(results.len(), 1);
@@ -77,6 +78,7 @@ fn test_filter_hierarchical_tags() {
         include_unset_duration: true,
         urgent_days: 1,
         urgent_prio: 1,
+        default_priority: 5,
     });
 
     assert_eq!(results.len(), 1);
@@ -117,6 +119,7 @@ fn test_hide_hidden_calendars() {
         include_unset_duration: true,
         urgent_days: 1,
         urgent_prio: 1,
+        default_priority: 5,
     });
 
     assert_eq!(results.len(), 1);

@@ -394,11 +394,12 @@ impl Task {
         cutoff: Option<DateTime<Utc>>,
         urgent_days: u32,
         urgent_prio: u8,
+        default_priority: u8,
     ) -> Ordering {
         let now = Utc::now();
 
-        // Helper: Treat Priority 0 (Unset) as 5 (Medium) for comparison
-        let normalize_prio = |p: u8| if p == 0 { 5 } else { p };
+        // Helper: Treat Priority 0 (Unset) as default_priority for comparison
+        let normalize_prio = |p: u8| if p == 0 { default_priority } else { p };
 
         // Helper: Determine the sorting Rank (1-7)
         // 1: Urgent (priority <= urgent_prio)
@@ -527,13 +528,14 @@ impl Task {
         cutoff: Option<DateTime<Utc>>,
         urgent_days: u32,
         urgent_prio: u8,
+        default_priority: u8,
     ) -> Vec<Task> {
         let present_uids: std::collections::HashSet<String> =
             tasks.iter().map(|t| t.uid.clone()).collect();
         let mut children_map: HashMap<String, Vec<Task>> = HashMap::new();
         let mut roots: Vec<Task> = Vec::new();
 
-        tasks.sort_by(|a, b| a.compare_with_cutoff(b, cutoff, urgent_days, urgent_prio));
+        tasks.sort_by(|a, b| a.compare_with_cutoff(b, cutoff, urgent_days, urgent_prio, default_priority));
 
         // Consume tasks directly instead of cloning the entire vector
         let total_tasks = tasks.len();
@@ -1237,7 +1239,7 @@ mod tests {
 
         // Urgent (rank 1) should come before normal (rank 4)
         assert_eq!(
-            urgent_task.compare_with_cutoff(&normal_task, None, urgent_days, urgent_prio),
+            urgent_task.compare_with_cutoff(&normal_task, None, urgent_days, urgent_prio, 5),
             Ordering::Less
         );
     }
@@ -1314,7 +1316,7 @@ mod tests {
 
         // Due soon (rank 2) should come before due later (rank 4)
         assert_eq!(
-            due_soon.compare_with_cutoff(&due_later, None, urgent_days, urgent_prio),
+            due_soon.compare_with_cutoff(&due_later, None, urgent_days, urgent_prio, 5),
             Ordering::Less
         );
     }
@@ -1391,7 +1393,7 @@ mod tests {
 
         // Started (rank 3) should come before normal (rank 4)
         assert_eq!(
-            started.compare_with_cutoff(&not_started, None, urgent_days, urgent_prio),
+            started.compare_with_cutoff(&not_started, None, urgent_days, urgent_prio, 5),
             Ordering::Less
         );
     }
@@ -1472,7 +1474,8 @@ mod tests {
                 &started_due_later,
                 None,
                 urgent_days,
-                urgent_prio
+                urgent_prio,
+                5
             ),
             Ordering::Less
         );
@@ -1551,7 +1554,7 @@ mod tests {
 
         // Both in rank 4, should be sorted by due date first
         assert_eq!(
-            due_earlier.compare_with_cutoff(&due_later, Some(cutoff), urgent_days, urgent_prio),
+            due_earlier.compare_with_cutoff(&due_later, Some(cutoff), urgent_days, urgent_prio, 5),
             Ordering::Less
         );
     }
@@ -1629,7 +1632,7 @@ mod tests {
 
         // Both in rank 5 (outside cutoff), should be sorted by priority first
         assert_eq!(
-            high_prio.compare_with_cutoff(&low_prio, Some(cutoff), urgent_days, urgent_prio),
+            high_prio.compare_with_cutoff(&low_prio, Some(cutoff), urgent_days, urgent_prio, 5),
             Ordering::Less
         );
     }
@@ -1707,7 +1710,7 @@ mod tests {
         // Future start (rank 6) should come after normal (rank 4)
         // Normal task (rank 4) should come before future start (rank 6)
         assert_eq!(
-            normal_task.compare_with_cutoff(&future_start, None, urgent_days, urgent_prio),
+            normal_task.compare_with_cutoff(&future_start, None, urgent_days, urgent_prio, 5),
             Ordering::Less
         );
     }
@@ -1785,7 +1788,7 @@ mod tests {
         // Done (rank 7) should come after all others
         // Normal task (rank 4/5) should come before done task (rank 7)
         assert_eq!(
-            normal_task.compare_with_cutoff(&done_task, None, urgent_days, urgent_prio),
+            normal_task.compare_with_cutoff(&done_task, None, urgent_days, urgent_prio, 5),
             Ordering::Less
         );
     }

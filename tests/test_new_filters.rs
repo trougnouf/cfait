@@ -160,6 +160,7 @@ fn test_is_ready_filters_future_start_dates() {
         include_unset_duration: true,
         urgent_days: 7,
         urgent_prio: 5,
+        default_priority: 5,
     };
 
     let filtered = store.filter(options);
@@ -209,6 +210,7 @@ fn test_is_ready_filters_blocked_tasks() {
         include_unset_duration: true,
         urgent_days: 7,
         urgent_prio: 5,
+        default_priority: 5,
     };
 
     let filtered = store.filter(options);
@@ -264,6 +266,7 @@ fn test_is_ready_combines_with_other_filters() {
         include_unset_duration: true,
         urgent_days: 7,
         urgent_prio: 5,
+        default_priority: 5,
     };
 
     let filtered = store.filter(options);

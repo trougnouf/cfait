@@ -98,7 +98,21 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
 
     let sorting_ui: Element<_> = if is_settings {
         column![
-            text("Sorting priority cutoff (months):"),
+            text("Sorting").size(16),
+            row![
+                text("Default Priority (!):").width(Length::Fixed(150.0)),
+                text_input("5", &app.ob_default_priority_input)
+                    .on_input(Message::ObDefaultPriorityChanged)
+                    .width(Length::Fixed(60.0))
+                    .padding(5)
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
+            text("(Tasks without priority (0) sort as this value)")
+                .size(12)
+                .color(Color::from_rgb(0.6, 0.6, 0.6)),
+            Space::new().height(5),
+            text("Priority cutoff (months):"),
             text("(Tasks due within this range are shown first. Blank = all timed first)")
                 .size(12)
                 .color(Color::from_rgb(0.6, 0.6, 0.6)),
@@ -106,7 +120,6 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .on_input(Message::ObSortMonthsChanged)
                 .padding(10)
                 .width(Length::Fixed(100.0)),
-            // New Urgency UI
             Space::new().height(10),
             text("Urgency Rules (Shown at top):").size(16),
             row![

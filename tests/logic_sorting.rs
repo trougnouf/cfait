@@ -20,13 +20,13 @@ fn test_sorting_priority_basic() {
 
     // 1 < 9
     assert_eq!(
-        high.compare_with_cutoff(&low, None, 1, 1), // Pass defaults
+        high.compare_with_cutoff(&low, None, 1, 1, 5), // Pass defaults
         std::cmp::Ordering::Less
     );
 
     // 1 < 0 (High vs None/Normal)
     assert_eq!(
-        high.compare_with_cutoff(&none, None, 1, 1), // Pass defaults
+        high.compare_with_cutoff(&none, None, 1, 1, 5), // Pass defaults
         std::cmp::Ordering::Less
     );
 }
@@ -56,7 +56,7 @@ fn test_sorting_status_trumps_everything() {
     // Urgency check: Active (!9) -> False. Critical (!1) -> True.
     // Result: Critical < Active.
     assert_eq!(
-        critical.compare_with_cutoff(&active, None, 1, 1),
+        critical.compare_with_cutoff(&active, None, 1, 1, 5),
         std::cmp::Ordering::Less
     );
 }
@@ -73,7 +73,7 @@ fn test_sorting_completed_sinks() {
 
     // Todo should come FIRST (Less), Done should sink (Greater)
     assert_eq!(
-        todo.compare_with_cutoff(&done, None, 1, 1),
+        todo.compare_with_cutoff(&done, None, 1, 1, 5),
         std::cmp::Ordering::Less
     );
 }
@@ -93,13 +93,13 @@ fn test_sorting_due_dates() {
 
     // Soon < Later
     assert_eq!(
-        t1.compare_with_cutoff(&t2, None, 1, 1),
+        t1.compare_with_cutoff(&t2, None, 1, 1, 5),
         std::cmp::Ordering::Less
     );
 
     // Date < No Date
     assert_eq!(
-        t2.compare_with_cutoff(&t3, None, 1, 1),
+        t2.compare_with_cutoff(&t3, None, 1, 1, 5),
         std::cmp::Ordering::Less
     );
 }
@@ -117,7 +117,7 @@ fn test_hierarchy_organization() {
     let tasks = vec![child.clone(), parent.clone()];
 
     // This function rebuilds the visual list (flattened tree)
-    let organized = Task::organize_hierarchy(tasks, None, 1, 1);
+    let organized = Task::organize_hierarchy(tasks, None, 1, 1, 5);
 
     assert_eq!(organized.len(), 2);
     assert_eq!(organized[0].summary, "Parent");

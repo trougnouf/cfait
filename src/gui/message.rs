@@ -129,6 +129,7 @@ pub enum Message {
     OpenUrl(String),
     ObUrgentDaysChanged(String),
     ObUrgentPrioChanged(String),
+    ObDefaultPriorityChanged(String),
     InitAlarmActor(mpsc::Sender<SystemEvent>),
     AlarmSignalReceived(Arc<AlarmMessage>), // Arc to make it Clone-able easily
     SnoozeAlarm(String, String, u32),       // TaskUID, AlarmUID, Minutes

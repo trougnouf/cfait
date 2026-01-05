@@ -37,6 +37,7 @@ fn test_search_includes_non_matching_children() {
         include_unset_duration: true,
         urgent_days: 1,
         urgent_prio: 1,
+        default_priority: 5,
     });
 
     // 4. Assert
@@ -96,6 +97,7 @@ fn test_search_includes_deep_hierarchy() {
         include_unset_duration: true,
         urgent_days: 1,
         urgent_prio: 1,
+        default_priority: 5,
     });
 
     assert_eq!(results.len(), 3, "Whole subtree should be included");
@@ -139,6 +141,7 @@ fn test_child_match_does_not_force_parent_if_parent_does_not_match() {
         include_unset_duration: true,
         urgent_days: 1,
         urgent_prio: 1,
+        default_priority: 5,
     });
 
     // Should only contain the child
@@ -192,6 +195,7 @@ fn test_multiple_parents_with_children() {
         include_unset_duration: true,
         urgent_days: 1,
         urgent_prio: 1,
+        default_priority: 5,
     });
 
     // Should only contain parent1 and its child
@@ -242,6 +246,7 @@ fn test_sibling_match_only_includes_matching_sibling() {
         include_unset_duration: true,
         urgent_days: 1,
         urgent_prio: 1,
+        default_priority: 5,
     });
 
     // Should only contain child1 (the one that matches)
@@ -280,6 +285,7 @@ fn test_empty_search_shows_all_tasks() {
         include_unset_duration: true,
         urgent_days: 1,
         urgent_prio: 1,
+        default_priority: 5,
     });
 
     // Empty search should show all tasks
@@ -321,6 +327,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         include_unset_duration: true,
         urgent_days: 1,
         urgent_prio: 1,
+        default_priority: 5,
     });
 
     // Both should be included when hide_completed is false
@@ -341,6 +348,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         include_unset_duration: true,
         urgent_days: 1,
         urgent_prio: 1,
+        default_priority: 5,
     });
 
     // Only parent should be included when hide_completed is true
