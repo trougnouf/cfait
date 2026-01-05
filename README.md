@@ -66,6 +66,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 
 <a name="linux"></a>
 ### 🐧 Linux
+*   **Flatpak:** Available on [Flathub](https://flathub.org/apps/com.trougnouf.Cfait)
 *   **Arch Linux (AUR):** `yay -S cfait` (or `cfait-git`)
 *   **Debian/Ubuntu/Mint:** Download the `.deb` file from the [releases page](https://codeberg.org/trougnouf/cfait/releases). (Req. Ubuntu 24.04+ / Mint 22+ / Debian 13+)
 *   **Generic:** Download the pre-compiled `.tar.gz` binary tarball from the [releases page](https://codeberg.org/trougnouf/cfait/releases). (Req. `glibc 2.39`, e.g. Fedora 40+)
@@ -79,6 +80,10 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 <a name="windows"></a>
 ### 🪟 Windows
 *   Download the `.zip` archive from the [releases page](https://codeberg.org/trougnouf/cfait/releases). Contains both `cfait.exe` (TUI) and `cfait-gui.exe` (GUI).
+
+<a name="macos"></a>
+### 🍎 MacOS
+*   Download pre-compiled binaries provided by Martin Stut on https://static.stut.de/cfait-macos/
 
 <a name="from-source-rust"></a>
 ### ⚙️ From Source (Rust)
