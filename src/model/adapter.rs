@@ -134,6 +134,21 @@ impl Task {
         false
     }
 
+    /// Advances to the next recurrence while adding the current date to exdates.
+    /// This is used when canceling a single occurrence of a recurring task.
+    pub fn advance_recurrence_with_cancellation(&mut self) -> bool {
+        // Add current occurrence date to exdates before respawning
+        if let Some(current_date) = self.dtstart.as_ref().or(self.due.as_ref()) {
+            self.exdates.push(current_date.clone());
+        }
+
+        if let Some(next) = self.respawn() {
+            *self = next;
+            return true;
+        }
+        false
+    }
+
     pub fn to_ics(&self) -> String {
         let mut todo = Todo::new();
         todo.add_property("UID", &self.uid);

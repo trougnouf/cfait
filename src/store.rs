@@ -120,7 +120,12 @@ impl TaskStore {
             if task.status == status {
                 task.status = TaskStatus::NeedsAction;
             } else {
-                task.status = status;
+                // When cancelling a recurring task, advance to next occurrence
+                if status == TaskStatus::Cancelled && task.rrule.is_some() {
+                    task.advance_recurrence_with_cancellation();
+                } else {
+                    task.status = status;
+                }
             }
             return Some(task.clone());
         }
