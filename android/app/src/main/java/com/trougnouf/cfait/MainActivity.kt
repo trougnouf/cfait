@@ -1,5 +1,5 @@
 // Main Android Activity setting up the Compose UI.
-package com.cfait
+package com.trougnouf.cfait
 
 import android.Manifest
 import android.content.BroadcastReceiver
@@ -31,18 +31,18 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import com.cfait.core.MobileCalendar
-import com.cfait.core.MobileLocation
-import com.cfait.core.MobileTag
-import com.cfait.ui.HelpScreen
-import com.cfait.ui.HomeScreen
-import com.cfait.ui.IcsImportScreen
-import com.cfait.ui.SettingsScreen
-import com.cfait.ui.TaskDetailScreen
-import com.cfait.util.AlarmScheduler
-import com.cfait.workers.AlarmWorker
-import com.cfait.workers.CalendarSyncWorker
-import com.cfait.workers.CalendarMigrationWorker
+import com.trougnouf.cfait.core.MobileCalendar
+import com.trougnouf.cfait.core.MobileLocation
+import com.trougnouf.cfait.core.MobileTag
+import com.trougnouf.cfait.ui.HelpScreen
+import com.trougnouf.cfait.ui.HomeScreen
+import com.trougnouf.cfait.ui.IcsImportScreen
+import com.trougnouf.cfait.ui.SettingsScreen
+import com.trougnouf.cfait.ui.TaskDetailScreen
+import com.trougnouf.cfait.util.AlarmScheduler
+import com.trougnouf.cfait.workers.AlarmWorker
+import com.trougnouf.cfait.workers.CalendarSyncWorker
+import com.trougnouf.cfait.workers.CalendarMigrationWorker
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -68,7 +68,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun CfaitNavHost(api: com.cfait.core.CfaitMobile, intent: Intent? = null) {
+fun CfaitNavHost(api: com.trougnouf.cfait.core.CfaitMobile, intent: Intent? = null) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -124,7 +124,7 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile, intent: Intent? = null) {
             val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
             Toast.makeText(context, msg ?: "Migration complete", Toast.LENGTH_LONG).show()
             // Force refresh UI to show tasks in their new location
-            val intent = Intent("com.cfait.REFRESH_UI")
+            val intent = Intent("com.trougnouf.cfait.REFRESH_UI")
             intent.setPackage(context.packageName)
             context.sendBroadcast(intent)
         } else if (currentMigration?.state == WorkInfo.State.FAILED) {
@@ -170,13 +170,13 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile, intent: Intent? = null) {
     DisposableEffect(Unit) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                if (intent?.action == "com.cfait.REFRESH_UI") {
+                if (intent?.action == "com.trougnouf.cfait.REFRESH_UI") {
                     android.util.Log.d("CfaitMain", "Received REFRESH_UI broadcast")
                     refreshLists()
                 }
             }
         }
-        val filter = IntentFilter("com.cfait.REFRESH_UI")
+        val filter = IntentFilter("com.trougnouf.cfait.REFRESH_UI")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {

@@ -37,7 +37,7 @@ val (appVersionName, appVersionCode) = getCargoVersionInfo()
 println("Cfait Android Build: v$appVersionName (Code: $appVersionCode)")
 
 android {
-    namespace = "com.cfait"
+    namespace = "com.trougnouf.cfait"
     compileSdk = 36
     ndkVersion = "27.3.13750724"
 
@@ -61,7 +61,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.cfait"
+        applicationId = "com.trougnouf.cfait"
         minSdk = 23
         targetSdk = 36
         versionCode = appVersionCode

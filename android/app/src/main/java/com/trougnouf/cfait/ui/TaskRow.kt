@@ -1,5 +1,5 @@
 // Compose UI component for rendering a single task row.
-package com.cfait.ui
+package com.trougnouf.cfait.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -18,7 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.cfait.core.MobileTask
+import com.trougnouf.cfait.core.MobileTask
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable

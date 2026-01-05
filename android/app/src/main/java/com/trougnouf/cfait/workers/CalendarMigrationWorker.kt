@@ -1,12 +1,12 @@
 // Worker for migrating local calendars.
-package com.cfait.workers
+package com.trougnouf.cfait.workers
 
 import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.WorkerParameters
-import com.cfait.CfaitApplication
+import com.trougnouf.cfait.CfaitApplication
 
 class CalendarMigrationWorker(
     context: Context,

@@ -1,5 +1,5 @@
 // Shared Compose UI components and syntax highlighting logic.
-package com.cfait.ui
+package com.trougnouf.cfait.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -15,9 +15,9 @@ import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
-import com.cfait.R
-import com.cfait.core.CfaitMobile
-import com.cfait.core.MobileSyntaxType
+import com.trougnouf.cfait.R
+import com.trougnouf.cfait.core.CfaitMobile
+import com.trougnouf.cfait.core.MobileSyntaxType
 
 val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
 

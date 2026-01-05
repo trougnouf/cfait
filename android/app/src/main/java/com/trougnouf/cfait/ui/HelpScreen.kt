@@ -1,5 +1,5 @@
 // Compose UI screen for help documentation.
-package com.cfait.ui
+package com.trougnouf.cfait.ui
 
 import android.content.ClipData
 import android.content.Intent
@@ -24,8 +24,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.cfait.BuildConfig
-import com.cfait.R
+import com.trougnouf.cfait.BuildConfig
+import com.trougnouf.cfait.R
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 

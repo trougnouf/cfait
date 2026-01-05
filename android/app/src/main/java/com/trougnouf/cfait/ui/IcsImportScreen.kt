@@ -1,5 +1,5 @@
 // Screen for selecting which calendar to import ICS file into.
-package com.cfait.ui
+package com.trougnouf.cfait.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -12,8 +12,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.cfait.core.CfaitMobile
-import com.cfait.core.MobileCalendar
+import com.trougnouf.cfait.core.CfaitMobile
+import com.trougnouf.cfait.core.MobileCalendar
 
 @Composable
 fun IcsImportScreen(

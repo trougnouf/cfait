@@ -1,5 +1,5 @@
 // Android Receiver for rescheduling alarms after device boot.
-package com.cfait.receivers
+package com.trougnouf.cfait.receivers
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -8,7 +8,7 @@ import android.util.Log
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.cfait.workers.BootWorker
+import com.trougnouf.cfait.workers.BootWorker
 
 /**
  * BroadcastReceiver that handles device boot completion and app updates.

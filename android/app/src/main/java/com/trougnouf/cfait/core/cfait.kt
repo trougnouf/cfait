@@ -3,7 +3,7 @@
 
 @file:Suppress("NAME_SHADOWING")
 
-package com.cfait.core
+package com.trougnouf.cfait.core
 
 // Common helper code.
 //

@@ -1,5 +1,5 @@
 // Background worker for processing firing alarms.
-package com.cfait.workers
+package com.trougnouf.cfait.workers
 
 import android.Manifest
 import android.app.PendingIntent
@@ -12,11 +12,11 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.cfait.CfaitApplication
-import com.cfait.MainActivity
-import com.cfait.R
-import com.cfait.receivers.NotificationActionReceiver
-import com.cfait.util.AlarmScheduler
+import com.trougnouf.cfait.CfaitApplication
+import com.trougnouf.cfait.MainActivity
+import com.trougnouf.cfait.R
+import com.trougnouf.cfait.receivers.NotificationActionReceiver
+import com.trougnouf.cfait.util.AlarmScheduler
 
 class AlarmWorker(
     private val context: Context,

@@ -1,5 +1,5 @@
 // Compose UI screen for editing task details.
-package com.cfait.ui
+package com.trougnouf.cfait.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -18,10 +18,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.cfait.core.CfaitMobile
-import com.cfait.core.MobileCalendar
-import com.cfait.core.MobileTask
-import com.cfait.core.MobileRelatedTask
+import com.trougnouf.cfait.core.CfaitMobile
+import com.trougnouf.cfait.core.MobileCalendar
+import com.trougnouf.cfait.core.MobileTask
+import com.trougnouf.cfait.core.MobileRelatedTask
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)

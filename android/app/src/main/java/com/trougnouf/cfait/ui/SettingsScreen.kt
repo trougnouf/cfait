@@ -1,5 +1,5 @@
 // Compose UI screen for application settings.
-package com.cfait.ui
+package com.trougnouf.cfait.ui
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
@@ -24,8 +24,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
-import com.cfait.core.CfaitMobile
-import com.cfait.core.MobileCalendar
+import com.trougnouf.cfait.core.CfaitMobile
+import com.trougnouf.cfait.core.MobileCalendar
 import kotlinx.coroutines.launch
 import java.io.File
 

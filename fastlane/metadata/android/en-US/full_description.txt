@@ -1,11 +1,3 @@
-<b>⚠️ IMPORTANT: Final Release Notice</b>
-<br>
-<b>This is the LAST release under the package name "com.cfait".</b> Version 0.4.4 will be released as "com.trougnouf.cfait" and will be available on F-Droid and Google Play (by January 13, 2026 at the latest).
-<br><br>
-<b>If you use local calendars:</b> Export your calendars (Settings → Local Calendars → Export), install the new app (com.trougnouf.cfait v0.4.4+), then import them. <b>If you use CalDAV sync:</b> Simply install the new app and log in - your tasks will sync automatically.
-<br><br>
-<hr>
-<br>
 <b>Take control of your TODO list.</b>
 <br><br>
 Cfait is designed for speed and stability using Rust, it puts you in control of your data with a local-first approach that syncs seamlessly across your devices.

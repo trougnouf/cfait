@@ -1,11 +1,11 @@
 // Android Application class initializing the Rust backend.
-package com.cfait
+package com.trougnouf.cfait
 
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
-import com.cfait.core.CfaitMobile
+import com.trougnouf.cfait.core.CfaitMobile
 
 class CfaitApplication : Application() {
     lateinit var api: CfaitMobile

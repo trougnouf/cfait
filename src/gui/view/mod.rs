@@ -899,7 +899,10 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .into()
 }
 
-fn view_ics_import_dialog<'a>(app: &'a GuiApp, content: Element<'a, Message>) -> Element<'a, Message> {
+fn view_ics_import_dialog<'a>(
+    app: &'a GuiApp,
+    content: Element<'a, Message>,
+) -> Element<'a, Message> {
     let file_name = app
         .ics_import_file_path
         .as_ref()
@@ -938,12 +941,10 @@ fn view_ics_import_dialog<'a>(app: &'a GuiApp, content: Element<'a, Message>) ->
     .spacing(5)
     .align_x(iced::Alignment::Center);
 
-    let select_label = text("Select target calendar:")
-        .size(16)
-        .font(iced::Font {
-            weight: iced::font::Weight::Medium,
-            ..Default::default()
-        });
+    let select_label = text("Select target calendar:").size(16).font(iced::Font {
+        weight: iced::font::Weight::Medium,
+        ..Default::default()
+    });
 
     // Calendar selection list
     let mut calendar_list = column![].spacing(5);
@@ -957,34 +958,36 @@ fn view_ics_import_dialog<'a>(app: &'a GuiApp, content: Element<'a, Message>) ->
         let cal_button = button(
             row![
                 if is_selected {
-                    icon::icon(icon::CHECK).size(14).color(Color::from_rgb(0.3, 0.7, 1.0))
+                    icon::icon(icon::CHECK)
+                        .size(14)
+                        .color(Color::from_rgb(0.3, 0.7, 1.0))
                 } else {
-                    icon::icon(' ').size(14)
+                    text(" ").size(14)
                 },
                 text(&cal.name).size(14),
                 if cal.href.starts_with("local://") {
-                    text(" (Local)").size(12).color(Color::from_rgb(0.6, 0.6, 0.6))
+                    text(" (Local)")
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.6, 0.6))
                 } else {
                     text("").size(12)
                 }
             ]
             .spacing(8)
-            .align_y(iced::Alignment::Center)
+            .align_y(iced::Alignment::Center),
         )
         .width(Length::Fill)
         .padding(10)
         .style(if is_selected {
-            |_theme: &Theme, _status| {
-                iced::widget::button::Style {
-                    background: Some(Color::from_rgb(0.2, 0.4, 0.6).into()),
-                    text_color: Color::WHITE,
-                    border: iced::Border {
-                        radius: 4.0.into(),
-                        width: 2.0,
-                        color: Color::from_rgb(0.3, 0.7, 1.0),
-                    },
-                    ..iced::widget::button::Style::default()
-                }
+            |_theme: &Theme, _status| iced::widget::button::Style {
+                background: Some(Color::from_rgb(0.2, 0.4, 0.6).into()),
+                text_color: Color::WHITE,
+                border: iced::Border {
+                    radius: 4.0.into(),
+                    width: 2.0,
+                    color: Color::from_rgb(0.3, 0.7, 1.0),
+                },
+                ..iced::widget::button::Style::default()
             }
         } else {
             button::secondary

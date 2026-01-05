@@ -1,0 +1,24 @@
+## [0.4.4] - First Release as com.trougnouf.cfait
+
+### 📦 Package Rename
+
+This is the first release under the new package name "com.trougnouf.cfait".
+
+**Migrating from the old app (com.cfait)?**
+- **CalDAV users:** Simply log in with your credentials - your tasks will sync automatically!
+- **Local calendar users:** Export from the old app (Settings → Export), then import here (Settings → Import)
+
+### 🚀 Features
+
+All features from v0.4.3 are included:
+- Import/Export local calendars (.ics format)
+- Open .ics files from other apps
+- Multiple local calendars support
+- Custom snooze durations
+- Click linked tasks to jump to them
+- Manual #blocked tag
+- Advanced recurrence parsing (until, except)
+
+### 📝 Note
+
+Settings and configuration from the old app (com.cfait) will need to be re-entered. Your CalDAV tasks will sync automatically once you log in.

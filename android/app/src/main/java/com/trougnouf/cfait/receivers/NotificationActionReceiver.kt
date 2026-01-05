@@ -1,5 +1,5 @@
 // Android Receiver for handling notification actions (Snooze/Dismiss).
-package com.cfait.receivers
+package com.trougnouf.cfait.receivers
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -10,7 +10,7 @@ import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.cfait.workers.NotificationActionWorker
+import com.trougnouf.cfait.workers.NotificationActionWorker
 
 /**
  * BroadcastReceiver that handles notification action clicks (Snooze/Dismiss).

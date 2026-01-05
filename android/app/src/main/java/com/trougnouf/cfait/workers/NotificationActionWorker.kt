@@ -1,13 +1,13 @@
 // Worker handling background notification interactions.
-package com.cfait.workers
+package com.trougnouf.cfait.workers
 
 import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.cfait.CfaitApplication
-import com.cfait.util.AlarmScheduler
+import com.trougnouf.cfait.CfaitApplication
+import com.trougnouf.cfait.util.AlarmScheduler
 
 class NotificationActionWorker(
     private val context: Context,
@@ -24,7 +24,7 @@ class NotificationActionWorker(
         const val ACTION_SNOOZE_LONG = "SNOOZE_LONG"
         const val ACTION_DISMISS = "DISMISS"
 
-        const val BROADCAST_REFRESH = "com.cfait.REFRESH_UI"
+        const val BROADCAST_REFRESH = "com.trougnouf.cfait.REFRESH_UI"
     }
 
     override suspend fun doWork(): Result {

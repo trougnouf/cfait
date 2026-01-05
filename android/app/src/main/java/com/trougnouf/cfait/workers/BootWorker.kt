@@ -1,12 +1,12 @@
 // Background worker for rescheduling alarms on boot.
-package com.cfait.workers
+package com.trougnouf.cfait.workers
 
 import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.cfait.CfaitApplication
-import com.cfait.util.AlarmScheduler
+import com.trougnouf.cfait.CfaitApplication
+import com.trougnouf.cfait.util.AlarmScheduler
 
 class BootWorker(
     private val context: Context,

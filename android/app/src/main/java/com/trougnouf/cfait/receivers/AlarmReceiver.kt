@@ -1,5 +1,5 @@
 // Android BroadcastReceiver for handling system alarm events.
-package com.cfait.receivers
+package com.trougnouf.cfait.receivers
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -8,7 +8,7 @@ import android.util.Log
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.cfait.workers.AlarmWorker
+import com.trougnouf.cfait.workers.AlarmWorker
 
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

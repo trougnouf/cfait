@@ -1,5 +1,5 @@
 // Compose UI screen for the main task list.
-package com.cfait.ui
+package com.trougnouf.cfait.ui
 
 import android.content.ClipData
 import android.widget.Toast
@@ -33,8 +33,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.cfait.R
-import com.cfait.core.*
+import com.trougnouf.cfait.R
+import com.trougnouf.cfait.core.*
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -858,7 +858,6 @@ fun HomeScreen(
             },
         ) { padding ->
             Column(Modifier.padding(padding).fillMaxSize()) {
-                MigrationBanner()
 
                 val activeIsLocal = calendars.find { it.href == defaultCalHref }?.isLocal == true
                 if (activeIsLocal && remoteCals.isNotEmpty()) {
