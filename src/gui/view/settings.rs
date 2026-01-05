@@ -206,67 +206,126 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             } else {
                 text("")
             },
-            iced::widget::rule::horizontal(1),
-            text("").size(5),
-            text("Data Management").size(20),
-            {
-                // Create export options for each local calendar
-                let local_calendars: Vec<_> = app
-                    .calendars
-                    .iter()
-                    .filter(|c| c.href.starts_with("local://"))
-                    .collect();
-
-                if local_calendars.len() == 1 {
-                    // Single local calendar - simple button
-                    let href = local_calendars[0].href.clone();
-                    Element::from(button(
-                        row![
-                            icon::icon(icon::EXPORT).size(16),
-                            text("Export Local Tasks (.ics)")
-                        ]
-                        .spacing(10)
-                        .align_y(iced::Alignment::Center)
-                    )
-                    .padding(10)
-                    .width(Length::Fill)
-                    .style(button::secondary)
-                    .on_press(Message::ExportLocalIcs(href)))
-                } else {
-                    // Multiple local calendars - show options
-                    let mut col = column![
-                        text("Export Local Calendar to .ics file:")
-                            .size(14)
-                            .color(Color::from_rgb(0.7, 0.7, 0.7))
-                    ]
-                    .spacing(5);
-
-                    for cal in local_calendars {
-                        col = col.push(
-                            button(
-                                row![
-                                    icon::icon(icon::EXPORT).size(14),
-                                    text(&cal.name).size(14)
-                                ]
-                                .spacing(8)
-                                .align_y(iced::Alignment::Center)
-                            )
-                            .padding(8)
-                            .width(Length::Fill)
-                            .style(button::secondary)
-                            .on_press(Message::ExportLocalIcs(cal.href.clone()))
-                        );
-                    }
-
-                    col.into()
-                }
-            },
-            text("").size(5),
-            iced::widget::rule::horizontal(1),
-            text("").size(5),
         ]
         .spacing(10)
         .into()
+    } else {
+        Space::new().width(0).into()
+    };
+
+    let data_management_ui: Element<_> = if is_settings {
+        // Create export/import options for each local calendar
+        let local_calendars: Vec<_> = app
+            .calendars
+            .iter()
+            .filter(|c| c.href.starts_with("local://"))
+            .collect();
+
+        if local_calendars.is_empty() {
+            Space::new().width(0).into()
+        } else if local_calendars.len() == 1 {
+            // Single local calendar - simple buttons
+            let href = local_calendars[0].href.clone();
+            let href2 = href.clone();
+            container(
+                column![
+                    text("Data Management").size(20),
+                    row![
+                        button(
+                            row![
+                                icon::icon(icon::EXPORT).size(16),
+                                text("Export Local Tasks (.ics)")
+                            ]
+                            .spacing(10)
+                            .align_y(iced::Alignment::Center)
+                        )
+                        .padding(10)
+                        .width(Length::Fill)
+                        .style(button::secondary)
+                        .on_press(Message::ExportLocalIcs(href)),
+                        button(
+                            row![
+                                icon::icon(icon::IMPORT).size(16),
+                                text("Import Local Tasks (.ics)")
+                            ]
+                            .spacing(10)
+                            .align_y(iced::Alignment::Center)
+                        )
+                        .padding(10)
+                        .width(Length::Fill)
+                        .style(button::secondary)
+                        .on_press(Message::ImportLocalIcs(href2))
+                    ]
+                    .spacing(10)
+                ]
+                .spacing(10),
+            )
+            .padding(10)
+            .style(|_| container::Style {
+                border: iced::Border {
+                    radius: 4.0.into(),
+                    width: 1.0,
+                    color: Color::from_rgb(0.3, 0.3, 0.3),
+                },
+                ..Default::default()
+            })
+            .into()
+        } else {
+            // Multiple local calendars - show options for each
+            let mut col = column![
+                text("Data Management").size(20),
+                text("Export/Import Local Calendars (.ics files):")
+                    .size(14)
+                    .color(Color::from_rgb(0.7, 0.7, 0.7))
+            ]
+            .spacing(10);
+
+            for cal in local_calendars {
+                let export_href = cal.href.clone();
+                let import_href = cal.href.clone();
+                col = col.push(
+                    row![
+                        button(
+                            row![
+                                icon::icon(icon::EXPORT).size(14),
+                                text(format!("Export {}", &cal.name)).size(14)
+                            ]
+                            .spacing(8)
+                            .align_y(iced::Alignment::Center)
+                        )
+                        .padding(8)
+                        .width(Length::Fill)
+                        .style(button::secondary)
+                        .on_press(Message::ExportLocalIcs(export_href)),
+                        button(
+                            row![
+                                icon::icon(icon::IMPORT).size(14),
+                                text(format!("Import {}", &cal.name)).size(14)
+                            ]
+                            .spacing(8)
+                            .align_y(iced::Alignment::Center)
+                        )
+                        .padding(8)
+                        .width(Length::Fill)
+                        .style(button::secondary)
+                        .on_press(Message::ImportLocalIcs(import_href))
+                    ]
+                    .spacing(10),
+                );
+            }
+
+            container(col)
+                .padding(10)
+                .style(|_| container::Style {
+                    border: iced::Border {
+                        radius: 4.0.into(),
+                        width: 1.0,
+                        color: Color::from_rgb(0.3, 0.3, 0.3),
+                    },
+                    ..Default::default()
+                })
+                .into()
+        }
     } else {
         Space::new().width(0).into()
     };
@@ -511,6 +570,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         picker,
         cal_mgmt_ui,
         local_cal_ui,
+        data_management_ui,
         prefs,
         notifications_ui,
         sorting_ui,

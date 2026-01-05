@@ -147,6 +147,8 @@ pub enum Message {
     BackfillEventsComplete(Result<usize, String>),
     ExportLocalIcs(String), // calendar_href
     ExportSaved(Result<std::path::PathBuf, String>),
+    ImportLocalIcs(String),                  // calendar_href
+    ImportCompleted(Result<String, String>), // success message or error
 
     // Local Calendar Management
     AddLocalCalendar,

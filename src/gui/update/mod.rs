@@ -43,6 +43,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::BackfillEventsComplete(_)
         | Message::ExportLocalIcs(_)
         | Message::ExportSaved(_)
+        | Message::ImportLocalIcs(_)
+        | Message::ImportCompleted(_)
         | Message::AddLocalCalendar
         | Message::DeleteLocalCalendar(_)
         | Message::LocalCalendarNameChanged(_, _)

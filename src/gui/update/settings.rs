@@ -492,6 +492,54 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::ImportLocalIcs(calendar_href) => {
+            // Open file picker to select ICS file
+            Task::perform(
+                async move {
+                    if let Some(file) = rfd::AsyncFileDialog::new()
+                        .add_filter("iCalendar", &["ics"])
+                        .pick_file()
+                        .await
+                    {
+                        let content = file.read().await;
+                        match String::from_utf8(content) {
+                            Ok(ics_content) => {
+                                // Use canonical import function
+                                match LocalStorage::import_from_ics(&calendar_href, &ics_content) {
+                                    Ok(count) => {
+                                        Ok(format!("Successfully imported {} task(s)", count))
+                                    }
+                                    Err(e) => Err(format!("Import failed: {}", e)),
+                                }
+                            }
+                            Err(e) => Err(format!("Failed to read file as text: {}", e)),
+                        }
+                    } else {
+                        Err("Import cancelled".to_string())
+                    }
+                },
+                Message::ImportCompleted,
+            )
+        }
+        Message::ImportCompleted(Ok(msg)) => {
+            app.error_msg = Some(msg);
+            // Refresh tasks after import
+            if let Some(client) = &app.client {
+                app.loading = true;
+                return Task::perform(
+                    async_fetch_all_wrapper(client.clone(), app.calendars.clone()),
+                    Message::RefreshedAll,
+                );
+            }
+            Task::none()
+        }
+        Message::ImportCompleted(Err(e)) => {
+            // Don't show error if user just cancelled
+            if e != "Import cancelled" {
+                app.error_msg = Some(format!("Import failed: {}", e));
+            }
+            Task::none()
+        }
         Message::AddLocalCalendar => {
             use uuid::Uuid;
             let id = Uuid::new_v4().to_string();

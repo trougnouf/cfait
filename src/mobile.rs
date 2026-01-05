@@ -313,6 +313,17 @@ impl CfaitMobile {
         Ok(LocalStorage::to_ics_string(&tasks))
     }
 
+    pub fn import_local_ics(
+        &self,
+        calendar_href: String,
+        ics_content: String,
+    ) -> Result<String, MobileError> {
+        let count = LocalStorage::import_from_ics(&calendar_href, &ics_content)
+            .map_err(|e| MobileError::from(e.to_string()))?;
+
+        Ok(format!("Successfully imported {} task(s)", count))
+    }
+
     pub fn parse_smart_string(&self, input: String) -> Vec<MobileSyntaxToken> {
         let tokens = tokenize_smart_input(&input);
 

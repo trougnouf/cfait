@@ -783,6 +783,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_has_unsynced_changes(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_import_local_ics(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_isolate_calendar(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_load_from_cache(): Short
@@ -974,6 +976,13 @@ internal object UniffiLib {
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Byte
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_import_local_ics(
+        `ptr`: Long,
+        `calendarHref`: RustBuffer.ByValue,
+        `icsContent`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_isolate_calendar(
         `ptr`: Long,
@@ -1411,6 +1420,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_unsynced_changes() != 28210.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_import_local_ics() != 55169.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_isolate_calendar() != 34103.toShort()) {
@@ -2084,6 +2096,11 @@ public interface CfaitMobileInterface {
 
     fun `hasUnsyncedChanges`(): kotlin.Boolean
 
+    fun `importLocalIcs`(
+        `calendarHref`: kotlin.String,
+        `icsContent`: kotlin.String,
+    ): kotlin.String
+
     fun `isolateCalendar`(`href`: kotlin.String)
 
     fun `loadFromCache`()
@@ -2732,6 +2749,24 @@ open class CfaitMobile :
                 uniffiRustCall { _status ->
                     UniffiLib.uniffi_cfait_fn_method_cfaitmobile_has_unsynced_changes(
                         it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    @Throws(MobileException::class)
+    override fun `importLocalIcs`(
+        `calendarHref`: kotlin.String,
+        `icsContent`: kotlin.String,
+    ): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCallWithError(MobileException) { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_import_local_ics(
+                        it,
+                        FfiConverterString.lower(`calendarHref`),
+                        FfiConverterString.lower(`icsContent`),
                         _status,
                     )
                 }

@@ -3,6 +3,8 @@ package com.cfait.ui
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -78,6 +80,7 @@ fun SettingsScreen(
     }
 
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     // Helper to format minutes for display on load
     fun formatDuration(m: UInt): String {
@@ -116,6 +119,34 @@ fun SettingsScreen(
         if (isInitialLoad) {
             initialCreateEventsState = cfg.createEventsForTasks
             isInitialLoad = false
+        }
+    }
+
+    // Track which calendar is being imported into
+    var importTargetHref by remember { mutableStateOf<String?>(null) }
+
+    // File picker launcher for import
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            scope.launch {
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val icsContent = inputStream?.bufferedReader()?.use { it.readText() }
+                    inputStream?.close()
+
+                    if (icsContent != null && importTargetHref != null) {
+                        val result = api.importLocalIcs(importTargetHref!!, icsContent)
+                        status = result
+                        reload()
+                    } else {
+                        status = "Error: Could not read file"
+                    }
+                } catch (e: Exception) {
+                    status = "Import Error: ${e.message}"
+                }
+            }
         }
     }
 
@@ -430,9 +461,6 @@ fun SettingsScreen(
                 // Filter local calendars from the state we already have
                 val localCals = allCalendars.filter { it.isLocal }
 
-                // Capture context outside the lambda
-                val context = LocalContext.current
-
                 localCals.forEach { cal ->
                     LocalCalendarEditor(
                         cal = cal,
@@ -477,6 +505,10 @@ fun SettingsScreen(
                             } catch (e: Exception) {
                                 status = "Export Error: ${e.message}"
                             }
+                        },
+                        onImport = {
+                            importTargetHref = cal.href
+                            importLauncher.launch("*/*")
                         }
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -573,7 +605,8 @@ fun LocalCalendarEditor(
     cal: MobileCalendar,
     onUpdate: (String, String?) -> Unit,
     onDelete: () -> Unit,
-    onExport: () -> Unit
+    onExport: () -> Unit,
+    onImport: () -> Unit
 ) {
     var name by remember { mutableStateOf(cal.name) }
     var color by remember { mutableStateOf(cal.color) }
@@ -606,8 +639,28 @@ fun LocalCalendarEditor(
                     }
                 }
 
-                IconButton(onClick = onExport) {
-                    NfIcon(NfIcons.EXPORT, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(onClick = onExport) {
+                        NfIcon(NfIcons.EXPORT, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(
+                        "Export",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 8.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    IconButton(onClick = onImport) {
+                        NfIcon(NfIcons.IMPORT, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Text(
+                        "Import",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 8.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
                 if (!isDefault) {

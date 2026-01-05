@@ -351,6 +351,67 @@ impl LocalStorage {
         Self::get_path_for_href(LOCAL_CALENDAR_HREF)
     }
 
+    /// Imports tasks from an ICS string and merges them into the specified calendar.
+    /// Returns the number of tasks successfully imported.
+    pub fn import_from_ics(calendar_href: &str, ics_content: &str) -> Result<usize> {
+        let mut imported_tasks = Vec::new();
+
+        // Normalize line endings to \r\n for consistent parsing
+        let normalized_content = ics_content.replace("\r\n", "\n").replace('\n', "\r\n");
+
+        // Split by VTODO blocks and parse each
+        let parts: Vec<&str> = normalized_content.split("BEGIN:VTODO").collect();
+
+        // Skip the first part (before first VTODO or VCALENDAR header)
+        for component in parts.iter().skip(1) {
+            if !component.contains("END:VTODO") {
+                continue;
+            }
+
+            // Extract just the VTODO content (everything up to and including END:VTODO)
+            let vtodo_end = match component.find("END:VTODO") {
+                Some(pos) => pos + "END:VTODO".len(),
+                None => continue,
+            };
+            let vtodo_content = &component[..vtodo_end];
+
+            // Reconstruct a valid VTODO block
+            let vtodo = format!("BEGIN:VTODO{}", vtodo_content);
+
+            // Always wrap in a proper VCALENDAR for parsing
+            let full_ics = format!(
+                "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//cfait//cfait//EN\r\n{}\r\nEND:VCALENDAR",
+                vtodo
+            );
+
+            // Parse the task
+            if let Ok(task) = Task::from_ics(
+                &full_ics,
+                String::new(), // Empty etag for imported tasks
+                format!("{}.ics", uuid::Uuid::new_v4()), // Generate new href
+                calendar_href.to_string(),
+            ) {
+                imported_tasks.push(task);
+            }
+        }
+
+        if imported_tasks.is_empty() {
+            anyhow::bail!("No valid tasks found in ICS file");
+        }
+
+        // Load existing tasks
+        let mut existing_tasks = Self::load_for_href(calendar_href)?;
+
+        // Merge: append imported tasks
+        let count = imported_tasks.len();
+        existing_tasks.extend(imported_tasks);
+
+        // Save back
+        Self::save_for_href(calendar_href, &existing_tasks)?;
+
+        Ok(count)
+    }
+
     /// Generates a single VCALENDAR string containing all provided tasks as VTODO components.
     pub fn to_ics_string(tasks: &[Task]) -> String {
         let mut output =
@@ -454,24 +515,35 @@ impl LocalStorage {
             let json = fs::read_to_string(path)?;
 
             // Try to parse as versioned format first
-            let tasks = if let Ok(data) = serde_json::from_str::<LocalStorageData>(&json) {
-                // Versioned format detected
-                if data.version == LOCAL_STORAGE_VERSION {
-                    // Current version, use directly
-                    data.tasks
+            let (tasks, needs_upgrade) =
+                if let Ok(data) = serde_json::from_str::<LocalStorageData>(&json) {
+                    // Versioned format detected
+                    if data.version == LOCAL_STORAGE_VERSION {
+                        // Current version, use directly
+                        (data.tasks, false)
+                    } else {
+                        // Old version, migrate
+                        (Self::migrate_to_current(data.version, &json)?, true)
+                    }
                 } else {
-                    // Old version, migrate
-                    Self::migrate_to_current(data.version, &json)?
-                }
-            } else {
-                // No version field or parsing failed - assume v1 (unversioned)
-                #[cfg(target_os = "android")]
-                log::info!("No version found in {}, assuming v1 format", href);
-                #[cfg(not(target_os = "android"))]
-                eprintln!("No version found in {}, assuming v1 format", href);
+                    // No version field or parsing failed - assume v1 (unversioned)
+                    #[cfg(target_os = "android")]
+                    log::info!("Migrating {} from v1 to v{}", href, LOCAL_STORAGE_VERSION);
+                    #[cfg(not(target_os = "android"))]
+                    eprintln!("Migrating {} from v1 to v{}", href, LOCAL_STORAGE_VERSION);
 
-                Self::migrate_v1_to_v2(&json)?
-            };
+                    (Self::migrate_v1_to_v2(&json)?, true)
+                };
+
+            // If we migrated, save the upgraded version immediately
+            if needs_upgrade {
+                let data = LocalStorageData {
+                    version: LOCAL_STORAGE_VERSION,
+                    tasks: tasks.clone(),
+                };
+                let upgraded_json = serde_json::to_string_pretty(&data)?;
+                Self::atomic_write(path, upgraded_json)?;
+            }
 
             Ok(tasks)
         });
@@ -790,15 +862,16 @@ mod tests {
     #[test]
     fn test_save_blocked_after_failed_load() {
         // Directly test that save() returns an error when LoadState is Failed
-        let test_href = LOCAL_CALENDAR_HREF;
+        // Use a unique test href to avoid conflicts with other tests
+        let test_href = "local://test-save-blocked-unique";
         LoadState::set(test_href, LoadState::Failed);
 
         let tasks = vec![];
-        let save_result = LocalStorage::save(&tasks);
+        let save_result = LocalStorage::save_for_href(test_href, &tasks);
 
         assert!(
             save_result.is_err(),
-            "save() should fail when LoadState is Failed"
+            "save_for_href() should fail when LoadState is Failed"
         );
         assert!(
             save_result

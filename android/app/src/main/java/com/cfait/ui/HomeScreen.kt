@@ -858,6 +858,8 @@ fun HomeScreen(
             },
         ) { padding ->
             Column(Modifier.padding(padding).fillMaxSize()) {
+                MigrationBanner()
+
                 val activeIsLocal = calendars.find { it.href == defaultCalHref }?.isLocal == true
                 if (activeIsLocal && remoteCals.isNotEmpty()) {
                     FilledTonalButton(
