@@ -13,6 +13,56 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    // CLI Command: cfait import
+    if args.len() > 1 && args[1] == "import" {
+        if args.len() < 3 {
+            eprintln!("Error: Missing file path");
+            eprintln!("Usage: cfait import <file.ics> [--calendar <id>]");
+            std::process::exit(1);
+        }
+
+        let file_path = &args[2];
+
+        // Check for --calendar flag
+        let calendar_id = if args.len() > 4 && args[3] == "--calendar" {
+            Some(args[4].clone())
+        } else {
+            None
+        };
+
+        // Read ICS file
+        let ics_content = match std::fs::read_to_string(file_path) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("Error reading file '{}': {}", file_path, e);
+                std::process::exit(1);
+            }
+        };
+
+        // Determine target calendar
+        let href = if let Some(cal_id) = calendar_id {
+            if cal_id == "default" {
+                "local://default".to_string()
+            } else {
+                format!("local://{}", cal_id)
+            }
+        } else {
+            "local://default".to_string()
+        };
+
+        // Import tasks
+        match LocalStorage::import_from_ics(&href, &ics_content) {
+            Ok(count) => {
+                println!("Successfully imported {} task(s) to calendar '{}'", count, href);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("Error importing tasks: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
     // CLI Command: cfait export
     if args.len() > 1 && args[1] == "export" {
         // Check for --calendar flag
@@ -51,9 +101,15 @@ fn print_help() {
     );
     println!();
     println!("USAGE:");
-    println!("    cfait                               Start interactive TUI");
-    println!("    cfait export [--calendar <id>]      Export local tasks as .ics file to stdout");
-    println!("    cfait --help                        Show this help message");
+    println!("    cfait                                    Start interactive TUI");
+    println!("    cfait export [--calendar <id>]           Export local tasks as .ics file to stdout");
+    println!("    cfait import <file.ics> [--calendar <id>] Import tasks from .ics file");
+    println!("    cfait --help                             Show this help message");
+    println!();
+    println!("IMPORT COMMAND:");
+    println!("    cfait import tasks.ics                        Import to default local calendar");
+    println!("    cfait import tasks.ics --calendar <id>        Import to specific local calendar");
+    println!("    cfait import backup.ics --calendar my-cal     Import to 'my-cal' calendar");
     println!();
     println!("EXPORT COMMAND:");
     println!("    cfait export                              Export default local calendar");

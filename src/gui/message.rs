@@ -149,6 +149,10 @@ pub enum Message {
     ExportSaved(Result<std::path::PathBuf, String>),
     ImportLocalIcs(String),                  // calendar_href
     ImportCompleted(Result<String, String>), // success message or error
+    IcsFileLoaded(Result<(String, String), String>), // (file_path, content) or error
+    IcsImportDialogCalendarSelected(String), // calendar_href
+    IcsImportDialogCancel,
+    IcsImportDialogConfirm,
 
     // Local Calendar Management
     AddLocalCalendar,

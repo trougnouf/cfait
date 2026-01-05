@@ -203,7 +203,7 @@ fn test_roundtrip_simple_task() {
 
     // 1. Create task
     let original = Task::new("Roundtrip Task", &HashMap::new(), None);
-    LocalStorage::save_for_href(href, &vec![original.clone()]).unwrap();
+    LocalStorage::save_for_href(href, std::slice::from_ref(&original)).unwrap();
 
     // 2. Export
     let tasks = LocalStorage::load_for_href(href).unwrap();
@@ -235,7 +235,7 @@ fn test_roundtrip_multiple_tasks() {
     let task1 = Task::new("First Task", &HashMap::new(), None);
     let task2 = Task::new("Second Task", &HashMap::new(), None);
     let task3 = Task::new("Third Task", &HashMap::new(), None);
-    LocalStorage::save_for_href(href, &vec![task1, task2, task3]).unwrap();
+    LocalStorage::save_for_href(href, &[task1, task2, task3]).unwrap();
 
     // 2. Export
     let tasks = LocalStorage::load_for_href(href).unwrap();
@@ -275,7 +275,7 @@ fn test_roundtrip_task_with_all_fields() {
     original.alarms.push(Alarm::new_relative(30));
     original.rrule = Some("FREQ=DAILY;COUNT=10".to_string());
 
-    LocalStorage::save_for_href(href, &vec![original.clone()]).unwrap();
+    LocalStorage::save_for_href(href, &[original.clone()]).unwrap();
 
     // 2. Export
     let tasks = LocalStorage::load_for_href(href).unwrap();
@@ -310,7 +310,7 @@ fn test_roundtrip_preserves_completed_status() {
     original.status = TaskStatus::Completed;
     original.percent_complete = Some(100);
 
-    LocalStorage::save_for_href(href, &vec![original.clone()]).unwrap();
+    LocalStorage::save_for_href(href, &[original.clone()]).unwrap();
 
     // 2. Export
     let tasks = LocalStorage::load_for_href(href).unwrap();
@@ -341,7 +341,7 @@ fn test_roundtrip_allday_date() {
         NaiveDate::from_ymd_opt(2026, 7, 4).unwrap(),
     ));
 
-    LocalStorage::save_for_href(href, &vec![original.clone()]).unwrap();
+    LocalStorage::save_for_href(href, &[original.clone()]).unwrap();
 
     // 2. Export
     let tasks = LocalStorage::load_for_href(href).unwrap();
@@ -452,11 +452,11 @@ fn test_export_then_merge_import() {
     // Calendar A has 2 tasks
     let task_a1 = Task::new("Task A1", &HashMap::new(), None);
     let task_a2 = Task::new("Task A2", &HashMap::new(), None);
-    LocalStorage::save_for_href(calendar_a, &vec![task_a1, task_a2]).unwrap();
+    LocalStorage::save_for_href(calendar_a, &[task_a1, task_a2]).unwrap();
 
     // Calendar B already has 1 task
     let task_b1 = Task::new("Task B1", &HashMap::new(), None);
-    LocalStorage::save_for_href(calendar_b, &vec![task_b1]).unwrap();
+    LocalStorage::save_for_href(calendar_b, &[task_b1]).unwrap();
 
     // Export from A
     let tasks_a = LocalStorage::load_for_href(calendar_a).unwrap();

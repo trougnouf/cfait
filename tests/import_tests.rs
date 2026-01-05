@@ -175,7 +175,7 @@ fn test_import_with_existing_tasks() {
 
     // Create initial task
     let existing_task = Task::new("Existing Task", &Default::default(), None);
-    LocalStorage::save_for_href(href, &vec![existing_task]).unwrap();
+    LocalStorage::save_for_href(href, &[existing_task]).unwrap();
 
     // Import new tasks
     let ics_content = create_multi_task_ics();
@@ -359,4 +359,71 @@ fn test_import_assigns_new_calendar_href() {
 // Helper function that uses the canonical import function
 fn import_ics_content(calendar_href: &str, ics_content: &str) -> Result<usize, anyhow::Error> {
     LocalStorage::import_from_ics(calendar_href, ics_content)
+}
+
+#[test]
+#[serial]
+fn test_cli_import_from_file() {
+    setup_test_env("cli_import");
+
+    // Create a temporary ICS file
+    let temp_dir = env::temp_dir();
+    let test_file = temp_dir.join("test_cli_import.ics");
+    let ics_content = create_multi_task_ics();
+    fs::write(&test_file, &ics_content).unwrap();
+
+    // Test import to default calendar
+    let default_href = "local://default";
+    let result = LocalStorage::import_from_ics(default_href, &ics_content);
+    assert!(result.is_ok(), "CLI import failed: {:?}", result.err());
+    assert_eq!(result.unwrap(), 3);
+
+    let tasks = LocalStorage::load_for_href(default_href).unwrap();
+    assert_eq!(tasks.len(), 3);
+    assert_eq!(tasks[0].summary, "First Task");
+
+    // Test import to custom calendar
+    let custom_href = "local://my-custom-cal";
+    let result = LocalStorage::import_from_ics(custom_href, &ics_content);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), 3);
+
+    let tasks = LocalStorage::load_for_href(custom_href).unwrap();
+    assert_eq!(tasks.len(), 3);
+    assert_eq!(tasks[0].calendar_href, custom_href);
+
+    // Clean up
+    fs::remove_file(&test_file).ok();
+    cleanup_test_env();
+}
+
+#[test]
+#[serial]
+fn test_cli_import_file_not_found() {
+    setup_test_env("cli_not_found");
+
+    let nonexistent_file = "/tmp/nonexistent_file_12345.ics";
+    let result = fs::read_to_string(nonexistent_file);
+    assert!(result.is_err(), "Should fail to read nonexistent file");
+
+    cleanup_test_env();
+}
+
+#[test]
+#[serial]
+fn test_cli_import_invalid_content_from_file() {
+    setup_test_env("cli_invalid");
+
+    let temp_dir = env::temp_dir();
+    let test_file = temp_dir.join("test_cli_invalid.ics");
+    fs::write(&test_file, "Invalid ICS content").unwrap();
+
+    let invalid_content = fs::read_to_string(&test_file).unwrap();
+    let href = "local://test-invalid";
+    let result = LocalStorage::import_from_ics(href, &invalid_content);
+    assert!(result.is_err(), "Should fail with invalid ICS content");
+
+    // Clean up
+    fs::remove_file(&test_file).ok();
+    cleanup_test_env();
 }

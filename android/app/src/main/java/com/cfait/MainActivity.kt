@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
@@ -35,6 +36,7 @@ import com.cfait.core.MobileLocation
 import com.cfait.core.MobileTag
 import com.cfait.ui.HelpScreen
 import com.cfait.ui.HomeScreen
+import com.cfait.ui.IcsImportScreen
 import com.cfait.ui.SettingsScreen
 import com.cfait.ui.TaskDetailScreen
 import com.cfait.util.AlarmScheduler
@@ -52,14 +54,21 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
-                CfaitNavHost(api)
+                CfaitNavHost(api, intent)
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        // Trigger recomposition with new intent
+        recreate()
     }
 }
 
 @Composable
-fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
+fun CfaitNavHost(api: com.cfait.core.CfaitMobile, intent: Intent? = null) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -73,6 +82,9 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
     var autoScrollUid by remember { mutableStateOf<String?>(null) }
     var refreshTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var isLoading by remember { mutableStateOf(false) }
+
+    // ICS Import State
+    var icsContentToImport by remember { mutableStateOf<String?>(null) }
 
     // --- WORK MANAGER OBSERVATION ---
     val workManager = WorkManager.getInstance(context)
@@ -256,6 +268,32 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
 
     LaunchedEffect("fastStart") { fastStart() }
 
+    // Handle incoming ICS file
+    LaunchedEffect(intent) {
+        intent?.let {
+            if (it.action == Intent.ACTION_VIEW) {
+                val uri: Uri? = it.data
+                uri?.let { fileUri ->
+                    try {
+                        val inputStream = context.contentResolver.openInputStream(fileUri)
+                        val icsContent = inputStream?.bufferedReader()?.use { reader -> reader.readText() }
+                        inputStream?.close()
+
+                        if (icsContent != null) {
+                            // Store content in state and navigate
+                            icsContentToImport = icsContent
+                            navController.navigate("ics_import")
+                        } else {
+                            Toast.makeText(context, "Failed to read ICS file", Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error opening file: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
+
     NavHost(navController, startDestination = "home") {
         composable("home") {
             HomeScreen(
@@ -314,6 +352,37 @@ fun CfaitNavHost(api: com.cfait.core.CfaitMobile) {
         }
         composable("help") {
             HelpScreen(onBack = { navController.popBackStack() })
+        }
+        composable("ics_import") {
+            val content = icsContentToImport
+            if (content != null) {
+                IcsImportScreen(
+                    api = api,
+                    icsContent = content,
+                    calendars = calendars,
+                    onImportComplete = { calendarHref ->
+                        scope.launch {
+                            try {
+                                val result = api.importLocalIcs(calendarHref, content)
+                                Toast.makeText(context, result, Toast.LENGTH_LONG).show()
+                                icsContentToImport = null
+                                refreshLists()
+                                navController.navigate("home") {
+                                    popUpTo("home") { inclusive = false }
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    onCancel = {
+                        icsContentToImport = null
+                        navController.navigate("home") {
+                            popUpTo("home") { inclusive = false }
+                        }
+                    }
+                )
+            }
         }
     }
 }

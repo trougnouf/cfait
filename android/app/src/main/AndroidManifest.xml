@@ -21,10 +21,24 @@
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@android:style/Theme.Material.NoActionBar"
+            android:launchMode="singleTask"
         >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Handle opening .ics files -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="text/calendar" />
+                <data android:mimeType="application/ics" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.ics" />
             </intent-filter>
         </activity>
 

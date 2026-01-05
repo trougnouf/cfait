@@ -1,6 +1,14 @@
 // Binary entry point for the GUI application.
 fn main() -> iced::Result {
     let args: Vec<String> = std::env::args().collect();
+
+    // Check if an ICS file path was provided
+    let ics_file_path = if args.len() > 1 && !args[1].starts_with("--") && !args[1].starts_with("-") {
+        Some(args[1].clone())
+    } else {
+        None
+    };
+
     if args.len() > 1 && (args[1] == "--help" || args[1] == "-h") {
         println!(
             "Cfait v{} - A powerful, fast and elegant CalDAV task manager (GUI)",
@@ -57,5 +65,5 @@ fn main() -> iced::Result {
         return Ok(());
     }
 
-    cfait::gui::run()
+    cfait::gui::run_with_ics_file(ics_file_path)
 }

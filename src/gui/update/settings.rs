@@ -629,6 +629,68 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::IcsFileLoaded(Ok((file_path, content))) => {
+            // Count tasks in the ICS content
+            let task_count = content.split("BEGIN:VTODO").count().saturating_sub(1);
+
+            app.ics_import_dialog_open = true;
+            app.ics_import_file_path = Some(file_path);
+            app.ics_import_content = Some(content);
+            app.ics_import_task_count = Some(task_count);
+            app.ics_import_selected_calendar = None;
+
+            Task::none()
+        }
+        Message::IcsFileLoaded(Err(e)) => {
+            app.error_msg = Some(format!("Failed to load ICS file: {}", e));
+            Task::none()
+        }
+        Message::IcsImportDialogCalendarSelected(href) => {
+            app.ics_import_selected_calendar = Some(href);
+            Task::none()
+        }
+        Message::IcsImportDialogCancel => {
+            app.ics_import_dialog_open = false;
+            app.ics_import_file_path = None;
+            app.ics_import_content = None;
+            app.ics_import_selected_calendar = None;
+            app.ics_import_task_count = None;
+            Task::none()
+        }
+        Message::IcsImportDialogConfirm => {
+            if let Some(calendar_href) = &app.ics_import_selected_calendar.clone()
+                && let Some(ics_content) = &app.ics_import_content.clone()
+            {
+                // Close dialog
+                app.ics_import_dialog_open = false;
+                let file_path = app.ics_import_file_path.take();
+                app.ics_import_content = None;
+                app.ics_import_selected_calendar = None;
+                app.ics_import_task_count = None;
+
+                // Import the tasks
+                let href = calendar_href.clone();
+                let content = ics_content.clone();
+                return Task::perform(
+                    async move {
+                        match LocalStorage::import_from_ics(&href, &content) {
+                            Ok(count) => {
+                                let file_name = file_path
+                                    .as_ref()
+                                    .and_then(|p| std::path::Path::new(p).file_name())
+                                    .and_then(|n| n.to_str())
+                                    .unwrap_or("file");
+                                Ok(format!("Successfully imported {} task(s) from {}", count, file_name))
+                            }
+                            Err(e) => Err(format!("Import failed: {}", e)),
+                        }
+                    },
+                    Message::ImportCompleted,
+                );
+            }
+            Task::none()
+        }
+
         _ => Task::none(),
     }
 }

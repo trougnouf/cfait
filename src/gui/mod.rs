@@ -18,22 +18,30 @@ use iced::{Element, Subscription, Task, Theme, font, window};
 use std::sync::Arc;
 
 pub fn run() -> iced::Result {
+    run_with_ics_file(None)
+}
+
+pub fn run_with_ics_file(ics_file_path: Option<String>) -> iced::Result {
     async_ops::init_runtime();
 
-    iced::application(GuiApp::new, GuiApp::update, GuiApp::view)
-        .title(GuiApp::title)
-        .subscription(GuiApp::subscription)
-        .theme(GuiApp::theme)
-        .window(window::Settings {
-            decorations: false,
-            platform_specific: window::settings::PlatformSpecific {
-                #[cfg(target_os = "linux")]
-                application_id: String::from("cfait"),
-                ..Default::default()
-            },
+    iced::application(
+        move || GuiApp::new_with_ics(ics_file_path.clone()),
+        GuiApp::update,
+        GuiApp::view,
+    )
+    .title(GuiApp::title)
+    .subscription(GuiApp::subscription)
+    .theme(GuiApp::theme)
+    .window(window::Settings {
+        decorations: false,
+        platform_specific: window::settings::PlatformSpecific {
+            #[cfg(target_os = "linux")]
+            application_id: String::from("cfait"),
             ..Default::default()
-        })
-        .run()
+        },
+        ..Default::default()
+    })
+    .run()
 }
 
 // Helper function to satisfy Subscription::run fn pointer requirement
@@ -54,17 +62,31 @@ fn alarm_stream() -> impl iced::futures::Stream<Item = Message> {
 }
 
 impl GuiApp {
-    fn new() -> (Self, Task<Message>) {
-        (
-            Self::default(),
-            Task::batch(vec![
-                Task::perform(
-                    async { Config::load().map_err(|e| e.to_string()) },
-                    Message::ConfigLoaded,
-                ),
-                font::load(icon::FONT_BYTES).map(|_| Message::FontLoaded(Ok(()))),
-            ]),
-        )
+    fn new_with_ics(ics_file_path: Option<String>) -> (Self, Task<Message>) {
+        let mut tasks = vec![
+            Task::perform(
+                async { Config::load().map_err(|e| e.to_string()) },
+                Message::ConfigLoaded,
+            ),
+            font::load(icon::FONT_BYTES).map(|_| Message::FontLoaded(Ok(()))),
+        ];
+
+        // If an ICS file path was provided, load it
+        if let Some(path) = ics_file_path {
+            tasks.push(Task::perform(
+                async move {
+                    std::fs::read_to_string(&path)
+                        .map(|content| (path, content))
+                        .map_err(|e| e.to_string())
+                },
+                |result| match result {
+                    Ok((path, content)) => Message::IcsFileLoaded(Ok((path, content))),
+                    Err(e) => Message::IcsFileLoaded(Err(e)),
+                },
+            ));
+        }
+
+        (Self::default(), Task::batch(tasks))
     }
 
     fn view(&self) -> Element<'_, Message> {

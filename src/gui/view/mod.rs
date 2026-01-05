@@ -197,6 +197,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         }
     };
 
+    // --- ICS IMPORT DIALOG ---
+    if app.ics_import_dialog_open {
+        return view_ics_import_dialog(app, content);
+    }
+
     if app.ringing_tasks.is_empty() {
         return content;
     }
@@ -892,4 +897,188 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             right: 10.0,
         })
         .into()
+}
+
+fn view_ics_import_dialog<'a>(app: &'a GuiApp, content: Element<'a, Message>) -> Element<'a, Message> {
+    let file_name = app
+        .ics_import_file_path
+        .as_ref()
+        .and_then(|p| std::path::Path::new(p).file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or("file.ics");
+
+    let task_count = app.ics_import_task_count.unwrap_or(0);
+
+    // Header
+    let icon_header = container(
+        icon::icon(icon::IMPORT)
+            .size(30)
+            .color(Color::from_rgb(0.3, 0.7, 1.0)),
+    )
+    .padding(5)
+    .center_x(Length::Fill);
+
+    let title = text("Import Tasks")
+        .size(24)
+        .font(iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..Default::default()
+        })
+        .width(Length::Fill)
+        .align_x(Horizontal::Center);
+
+    let file_info = column![
+        text(format!("File: {}", file_name))
+            .size(14)
+            .color(Color::from_rgb(0.7, 0.7, 0.7)),
+        text(format!("Tasks found: {}", task_count))
+            .size(14)
+            .color(Color::from_rgb(0.7, 0.7, 0.7)),
+    ]
+    .spacing(5)
+    .align_x(iced::Alignment::Center);
+
+    let select_label = text("Select target calendar:")
+        .size(16)
+        .font(iced::Font {
+            weight: iced::font::Weight::Medium,
+            ..Default::default()
+        });
+
+    // Calendar selection list
+    let mut calendar_list = column![].spacing(5);
+    for cal in &app.calendars {
+        if app.disabled_calendars.contains(&cal.href) {
+            continue;
+        }
+
+        let is_selected = app.ics_import_selected_calendar.as_ref() == Some(&cal.href);
+
+        let cal_button = button(
+            row![
+                if is_selected {
+                    icon::icon(icon::CHECK).size(14).color(Color::from_rgb(0.3, 0.7, 1.0))
+                } else {
+                    icon::icon(' ').size(14)
+                },
+                text(&cal.name).size(14),
+                if cal.href.starts_with("local://") {
+                    text(" (Local)").size(12).color(Color::from_rgb(0.6, 0.6, 0.6))
+                } else {
+                    text("").size(12)
+                }
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+        )
+        .width(Length::Fill)
+        .padding(10)
+        .style(if is_selected {
+            |_theme: &Theme, _status| {
+                iced::widget::button::Style {
+                    background: Some(Color::from_rgb(0.2, 0.4, 0.6).into()),
+                    text_color: Color::WHITE,
+                    border: iced::Border {
+                        radius: 4.0.into(),
+                        width: 2.0,
+                        color: Color::from_rgb(0.3, 0.7, 1.0),
+                    },
+                    ..iced::widget::button::Style::default()
+                }
+            }
+        } else {
+            button::secondary
+        })
+        .on_press(Message::IcsImportDialogCalendarSelected(cal.href.clone()));
+
+        calendar_list = calendar_list.push(cal_button);
+    }
+
+    let calendar_scroll = scrollable(calendar_list)
+        .height(Length::Fixed(250.0))
+        .direction(Direction::Vertical(
+            Scrollbar::new().width(8).scroller_width(8),
+        ));
+
+    // Action buttons
+    let cancel_btn = button(text("Cancel").size(14))
+        .style(iced::widget::button::secondary)
+        .padding([8, 16])
+        .on_press(Message::IcsImportDialogCancel);
+
+    let import_btn = button(text("Import").size(14).font(iced::Font {
+        weight: iced::font::Weight::Bold,
+        ..Default::default()
+    }))
+    .style(iced::widget::button::primary)
+    .padding([8, 16]);
+
+    let import_btn = if app.ics_import_selected_calendar.is_some() && task_count > 0 {
+        import_btn.on_press(Message::IcsImportDialogConfirm)
+    } else {
+        import_btn
+    };
+
+    let buttons = row![cancel_btn, import_btn]
+        .spacing(10)
+        .align_y(iced::Alignment::Center);
+
+    // Combine all elements
+    let modal_content = column![
+        icon_header,
+        title,
+        Space::new().height(Length::Fixed(10.0)),
+        file_info,
+        Space::new().height(Length::Fixed(20.0)),
+        select_label,
+        Space::new().height(Length::Fixed(10.0)),
+        calendar_scroll,
+        Space::new().height(Length::Fixed(20.0)),
+        buttons
+    ]
+    .spacing(5)
+    .align_x(iced::Alignment::Center);
+
+    let modal_card = container(modal_content)
+        .padding(20)
+        .width(Length::Fixed(450.0))
+        .max_height(600.0)
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                background: Some(
+                    Color {
+                        a: 0.98,
+                        ..palette.background.weak.color
+                    }
+                    .into(),
+                ),
+                border: iced::Border {
+                    color: palette.background.strong.color,
+                    width: 1.0,
+                    radius: 12.0.into(),
+                },
+                shadow: iced::Shadow {
+                    color: Color::BLACK.scale_alpha(0.5),
+                    offset: Vector::new(0.0, 4.0),
+                    blur_radius: 10.0,
+                },
+                ..Default::default()
+            }
+        });
+
+    // Overlay on top of existing content
+    stack![
+        content,
+        container(modal_card)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .center_x(Length::Fill)
+            .center_y(Length::Fill)
+            .style(|_| container::Style {
+                background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.7).into()),
+                ..Default::default()
+            })
+    ]
+    .into()
 }

@@ -126,6 +126,13 @@ pub struct GuiApp {
     // Snooze Custom Input
     pub snooze_custom_input: String,
 
+    // ICS Import Dialog State
+    pub ics_import_dialog_open: bool,
+    pub ics_import_file_path: Option<String>,
+    pub ics_import_content: Option<String>,
+    pub ics_import_selected_calendar: Option<String>,
+    pub ics_import_task_count: Option<usize>,
+
     // Config cache (New fields)
     pub auto_reminders: bool,
     pub default_reminder_time: String,
@@ -246,6 +253,13 @@ impl Default for GuiApp {
             deleting_events: false,
             ob_snooze_short_input: "1h".to_string(),
             ob_snooze_long_input: "1d".to_string(),
+
+            // ICS Import Dialog
+            ics_import_dialog_open: false,
+            ics_import_file_path: None,
+            ics_import_content: None,
+            ics_import_selected_calendar: None,
+            ics_import_task_count: None,
         }
     }
 }

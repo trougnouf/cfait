@@ -1,10 +1,11 @@
 [Desktop Entry]
 Name=Cfait
 Comment=🗹 Take control of your TODO list
-Exec=cfait-gui
+Exec=cfait-gui %F
 Terminal=false
 Type=Application
 Categories=Office;Utility;
 Keywords=todo;caldav;task;
 Icon=cfait
 StartupWMClass=cfait-gui
+MimeType=text/calendar;application/ics;
