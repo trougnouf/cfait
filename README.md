@@ -29,6 +29,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
   - [🐧 Linux](#linux)
   - [📱 Android](#android)
   - [🪟 Windows](#windows)
+  - [🍎 MacOS](#macos)
   - [⚙️ From Source (Rust)](#from-source-rust)
 - [⌨️ Smart Input Syntax](#smart-input-syntax)
 - [🔍 Search & Filtering](#search--filtering)
@@ -87,7 +88,9 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 
 <a name="from-source-rust"></a>
 ### ⚙️ From Source (Rust)
-Requires standard system libraries (openssl, alsa, fontconfig, x11, xkbcommon).
+
+#### Desktop (TUI/GUI)
+Requires Rust (latest stable version recommended).
 ```bash
 # Install TUI only
 cargo install cfait
@@ -96,6 +99,30 @@ cargo install cfait
 cargo install cfait --features gui --bin gui
 ```
 Replace `cfait` with `.` to build locally.
+
+#### Android
+Requires [Android NDK](https://developer.android.com/ndk/downloads) and [cargo-ndk](https://github.com/bbqsrc/cargo-ndk).
+
+```bash
+# Set up Android NDK environment variables
+export ANDROID_NDK_HOME=/path/to/android-ndk
+export ANDROID_NDK_ROOT=/path/to/android-ndk
+
+# Build native libraries for Android architectures
+cargo ndk -t aarch64-linux-android -t x86_64-linux-android \
+  -o ./android/app/src/main/jniLibs build --release --lib --features mobile
+
+# Generate Kotlin bindings
+cargo run --features mobile --bin uniffi-bindgen generate \
+  --library target/aarch64-linux-android/release/libcfait.so \
+  --language kotlin --out-dir ./android/app/src/main/java --config uniffi.toml
+
+# Build APK using Gradle
+cd android
+./gradlew assembleRelease
+```
+
+The APK will be in `android/app/build/outputs/apk/release/`.
 
 <a name="smart-input-syntax"></a>
 ## ⌨️ Smart Input Syntax
