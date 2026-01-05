@@ -1,6 +1,6 @@
 [package]
 name = "cfait"
-version = "0.4.2"
+version = "0.4.3"
 edition = "2024"
 description = "Powerful, fast and elegant task / TODO manager. (GUI & TUI, CalDAV & local)"
 license = "GPL-3.0"
@@ -146,4 +146,4 @@ pre-release-hook = ["python3", "scripts/prepare_release.py"]
 
 [package.metadata.android]
 # This must match (Major * 10000 + Minor * 100 + Patch)
-version_code = 402
+version_code = 403

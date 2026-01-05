@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.4.3] - 2026-01-05
+
+### 🚀 Features
+
+- Add import ics local store function and warn Android users about upcoming name change
+- Allow opening ics files from outside the app. Show Android migration warning max. once a day.
+- Allow changing default priority for sorting ( https://github.com/trougnouf/cfait/discussions/3 )
+
+### 🐛 Bug Fixes
+
+- *(android)* Local store backward compatibility: add missing #[serde(default)] to Task fields
+
+### 📚 Documentation
+
+- *(comments)* Add a short descriptive header to each source file
+- *(comments)* Comment on possible required cache / local store version bumps (and bump cache version)
+
+### ⚙️ Miscellaneous Tasks
+
+- *(flathub)* Update org.codeberg.trougnouf.cfait.yml per request and automate prepare_release
+- *(flathub)* Rename to com.trougnouf.Cfait
+- *(flatpak)* Try to auto-update
+- *(flathub)* Update cargo-sources.yml
+- *(flathub)* Fix linting issues
+- Prep for v0.4.3 release (last before com.cfait to com.trougnouf.cfait migration on Android)
 ## [0.4.2] - 2026-01-03
 
 ### 🐛 Bug Fixes
@@ -14,6 +39,7 @@
 
 - Update Flatpak manifest for v0.4.1 release
 - Set GUI as default command for Flatpak
+- Release cfait version 0.4.2
 ## [0.4.1] - 2026-01-03
 
 ### 🚀 Features
