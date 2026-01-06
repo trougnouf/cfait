@@ -107,7 +107,7 @@ def main():
 
             # Update the commit field
             manifest_content = re.sub(
-                r"(\s+commit:\s+)[a-f0-9]{40}", rf"\1{commit_hash}", manifest_content
+                r"(\s+commit:\s+)[a-f0-9]{40}", rf"\g<1>{commit_hash}", manifest_content
             )
 
             with open(flatpak_manifest, "w") as f:
@@ -122,7 +122,7 @@ def main():
         # We add the manifest if it exists, so the version bump is committed
         flatpak_manifest if os.path.exists(flatpak_manifest) else None,
     ]
-    
+
     # Filter out None values
     files_to_add = [f for f in files_to_add if f]
 
