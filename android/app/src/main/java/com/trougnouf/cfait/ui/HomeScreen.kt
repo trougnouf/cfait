@@ -105,6 +105,27 @@ fun HomeScreen(
     }
 
     val listState = rememberLazyListState()
+    var showScrollToTop by remember { mutableStateOf(false) }
+    var lastScrollPosition by remember { mutableIntStateOf(0) }
+    val scrollToTopIcon = remember { getRandomScrollToTopIcon() }
+
+    // Detect upward/downward scrolling with proper timeout
+    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
+        val currentPosition = listState.firstVisibleItemIndex * 10000 + listState.firstVisibleItemScrollOffset
+        val isScrollingUp = currentPosition < lastScrollPosition && listState.firstVisibleItemIndex > 0
+        val isScrollingDown = currentPosition > lastScrollPosition
+        lastScrollPosition = currentPosition
+
+        if (isScrollingDown) {
+            // Immediately hide when scrolling down
+            showScrollToTop = false
+        } else if (isScrollingUp) {
+            // Show when scrolling up and hide after 3 seconds
+            showScrollToTop = true
+            kotlinx.coroutines.delay(3000)
+            showScrollToTop = false
+        }
+    }
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var filterTag by rememberSaveable { mutableStateOf<String?>(null) }
@@ -884,7 +905,8 @@ fun HomeScreen(
                 }
             },
         ) { padding ->
-            Column(Modifier.padding(padding).fillMaxSize()) {
+            Box(Modifier.padding(padding).fillMaxSize()) {
+                Column(Modifier.fillMaxSize()) {
 
                 val activeIsLocal = calendars.find { it.href == defaultCalHref }?.isLocal == true
                 if (activeIsLocal && remoteCals.isNotEmpty()) {
@@ -941,6 +963,25 @@ fun HomeScreen(
                     }
                 }
             }
+
+            // Scroll to top FAB
+            if (showScrollToTop) {
+                FloatingActionButton(
+                    onClick = {
+                        scope.launch {
+                            listState.animateScrollToItem(0)
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .navigationBarsPadding()
+                        .offset(x = (-45).dp, y = 40.dp),
+                    containerColor = Color.Transparent,
+                ) {
+                    NfIcon(scrollToTopIcon, 28.sp, color = Color(0xf2660000))
+                }
+            }
+        }
         }
     }
 }

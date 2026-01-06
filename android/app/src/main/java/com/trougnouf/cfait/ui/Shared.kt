@@ -51,7 +51,18 @@ object NfIcons {
     val PRIORITY_UP = get(0xf0603)
     val PRIORITY_DOWN = get(0xf0604)
     val EDIT = get(0xf040)
+    val ARROW_UP = get(0xf062)
+    val ARROW_DOWN = get(0xf063)
+    val ARROW_LEFT = get(0xf060)
     val ARROW_RIGHT = get(0xf061)
+    val GONDOLA = get(0xf0686)
+    val ROCKET_OUTLINE = get(0xf13af)
+    val ELEVATOR_UP = get(0xf12c1)
+    val ESCALATOR_UP = get(0xf12bf)
+    val ARROW_CIRCLE_UP = get(0xf0aa)
+    val TRANSFER_UP = get(0xf0da3)
+    val FLY = get(0xed43)
+    val BALLOON = get(0xf0a26)
     val LINK = get(0xf0c1)
     val UNLINK = get(0xf127)
     val INFO = get(0xf129)
@@ -108,6 +119,20 @@ fun getRandomRelatedIcon(uid1: String, uid2: String): String {
         1 -> NfIcons.RELATED_MALE_MALE
         else -> NfIcons.RELATED_MALE_FEMALE
     }
+}
+
+fun getRandomScrollToTopIcon(): String {
+    val icons = listOf(
+        NfIcons.GONDOLA,
+        NfIcons.ROCKET_OUTLINE,
+        NfIcons.ELEVATOR_UP,
+        NfIcons.ESCALATOR_UP,
+        NfIcons.ARROW_CIRCLE_UP,
+        NfIcons.TRANSFER_UP,
+        NfIcons.FLY,
+        NfIcons.BALLOON
+    )
+    return icons.random()
 }
 
 @Composable
