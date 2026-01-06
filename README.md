@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://codeberg.org/trougnouf/cfait/releases"><img src="https://codeberg.org/trougnouf/cfait/badges/release.svg" alt="Releases"></a>
-  <a href="https://f-droid.org/packages/com.cfait/"><img src="https://img.shields.io/f-droid/v/com.cfait.svg" alt="F-Droid"></a>
+  <a href="https://f-droid.org/packages/com.trougnouf.cfait/"><img src="https://img.shields.io/f-droid/v/com.trougnouf.cfait.svg" alt="F-Droid"></a>
   <a href="https://codeberg.org/trougnouf/cfait/actions"><img src="https://codeberg.org/trougnouf/cfait/badges/workflows/test.yml/badge.svg" alt="Test status"></a>
   <a href="https://codeberg.org/trougnouf/cfait/src/branch/main/LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-gray.svg" alt="License"></a>
   <a href="https://liberapay.com/trougnouf/donate"><img src="https://img.shields.io/liberapay/patrons/trougnouf?label=donate" alt="Donate through Liberapay" /></a>
@@ -74,7 +74,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 
 <a name="android"></a>
 ### 📱 Android
-*   **<a href="https://f-droid.org/packages/com.cfait/">F-Droid</a>**
+*   **<a href="https://f-droid.org/packages/com.trougnouf.cfait/">F-Droid</a>**
 *   **Google Play:** Submitted, currently in testing. <span style="color:red;">More testers are needed for inclusion in the Play Store, please <a href='mailto:trougnouf@gmail.com'>contact me</a></span>.
 *   **APK:** Download the latest universal APK from the [releases page](https://codeberg.org/trougnouf/cfait/releases).
 
