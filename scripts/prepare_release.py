@@ -4,6 +4,7 @@ import os
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 
 def main():
@@ -61,21 +62,28 @@ def main():
     with open(fastlane_file, "w") as f:
         f.write(clean_body)
 
-    # 6. UPDATE METAINFO.XML RELEASES
+    # 6. UPDATE METAINFO.XML RELEASES WITH CHANGELOG
     metainfo_path = "assets/com.trougnouf.Cfait.metainfo.xml"
-    print(f"📝 Updating Metainfo: {metainfo_path}")
+    print(f"📝 Updating Metainfo with changelog: {metainfo_path}")
 
     today = datetime.date.today().isoformat()
-    release_tag = f'    <release version="{version_string}" date="{today}"/>'
+
+    # Parse the changelog to create AppStream XML
+    changelog_xml = _parse_changelog_to_appstream(clean_body)
+
+    # Create the release element with description
+    release_xml = f'    <release version="{version_string}" date="{today}">\n'
+    release_xml += f"      <description>\n{changelog_xml}      </description>\n"
+    release_xml += f"    </release>"
 
     with open(metainfo_path, "r") as f:
         xml_content = f.read()
 
     if "<releases>" in xml_content:
-        xml_content = xml_content.replace("<releases>", f"<releases>\n{release_tag}")
+        xml_content = xml_content.replace("<releases>", f"<releases>\n{release_xml}")
     else:
         xml_content = xml_content.replace(
-            "</component>", f"  <releases>\n{release_tag}\n  </releases>\n</component>"
+            "</component>", f"  <releases>\n{release_xml}\n  </releases>\n</component>"
         )
 
     with open(metainfo_path, "w") as f:
@@ -130,6 +138,83 @@ def main():
         ["git", "add"] + files_to_add,
         check=True,
     )
+
+
+def _parse_changelog_to_appstream(changelog_md: str) -> str:
+    """
+    Convert markdown changelog to AppStream XML format.
+
+    Converts sections like:
+    ### 🚀 Features
+    - Add feature X
+
+    To:
+    <p>Features:</p>
+    <ul>
+      <li>Add feature X</li>
+    </ul>
+    """
+    lines = changelog_md.strip().split("\n")
+    xml_parts = []
+    current_section = None
+    current_items = []
+
+    def flush_section():
+        """Output the current section and items."""
+        if current_section and current_items:
+            # Clean up section name (remove emojis and HTML comments)
+            section_name = current_section
+            # Remove HTML comments like <!-- 0 -->
+            section_name = re.sub(r"<!--\s*\d+\s*-->", "", section_name)
+            # Remove common emojis (but keep letters and numbers)
+            section_name = re.sub(r"[🚀🐛🚜📚⚡🎨🧪⚙️◀️💼]", "", section_name)
+            section_name = section_name.strip()
+            if section_name:
+                xml_parts.append(f"        <p>{section_name}:</p>")
+                xml_parts.append("        <ul>")
+                for item in current_items:
+                    # Escape XML special characters
+                    item = (
+                        item.replace("&", "&amp;")
+                        .replace("<", "&lt;")
+                        .replace(">", "&gt;")
+                    )
+                    xml_parts.append(f"          <li>{item}</li>")
+                xml_parts.append("        </ul>")
+
+    for line in lines:
+        line = line.strip()
+
+        # Skip version headers (## but not ###) and empty lines
+        if (line.startswith("##") and not line.startswith("###")) or not line:
+            continue
+
+        # New section header
+        if line.startswith("###"):
+            flush_section()
+            current_section = line.replace("###", "").strip()
+            current_items = []
+
+        # List item
+        elif line.startswith("- "):
+            item = line[2:].strip()
+            # Remove markdown formatting like *(scope)* and **breaking**
+            item = re.sub(r"\*\(([^)]+)\)\*\s*", r"(\1) ", item)
+            item = re.sub(
+                r"\[?\*\*breaking\*\*\]?\s*", "[breaking] ", item, flags=re.IGNORECASE
+            )
+            # Remove extra asterisks
+            item = item.replace("**", "")
+            current_items.append(item)
+
+    # Flush the last section
+    flush_section()
+
+    if xml_parts:
+        return "\n".join(xml_parts) + "\n"
+    else:
+        # Fallback if parsing fails
+        return "        <p>See CHANGELOG.md for details.</p>\n"
 
 
 if __name__ == "__main__":
