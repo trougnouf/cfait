@@ -99,6 +99,7 @@ pub const GLOBEMODEL: char = '\u{f08e9}'; // nf-md-globe_model
 
 // NEW
 pub const BELL: char = '\u{f0f3}'; // nf-fa-bell
+pub const PALETTE_COLOR: char = '\u{e22b}'; // nf-fae-palette_color
 
 // NEW HEADER ICONS per request
 pub const CALENDARS_HEADER: char = '\u{f00f2}'; // nf-md-calendar_multiple_check

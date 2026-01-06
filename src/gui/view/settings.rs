@@ -250,122 +250,8 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         Space::new().width(0).into()
     };
 
-    let data_management_ui: Element<_> = if is_settings {
-        // Create export/import options for each local calendar
-        let local_calendars: Vec<_> = app
-            .calendars
-            .iter()
-            .filter(|c| c.href.starts_with("local://"))
-            .collect();
-
-        if local_calendars.is_empty() {
-            Space::new().width(0).into()
-        } else if local_calendars.len() == 1 {
-            // Single local calendar - simple buttons
-            let href = local_calendars[0].href.clone();
-            let href2 = href.clone();
-            container(
-                column![
-                    text("Data Management").size(20),
-                    row![
-                        button(
-                            row![
-                                icon::icon(icon::EXPORT).size(16),
-                                text("Export Local Tasks (.ics)")
-                            ]
-                            .spacing(10)
-                            .align_y(iced::Alignment::Center)
-                        )
-                        .padding(10)
-                        .width(Length::Fill)
-                        .style(button::secondary)
-                        .on_press(Message::ExportLocalIcs(href)),
-                        button(
-                            row![
-                                icon::icon(icon::IMPORT).size(16),
-                                text("Import Local Tasks (.ics)")
-                            ]
-                            .spacing(10)
-                            .align_y(iced::Alignment::Center)
-                        )
-                        .padding(10)
-                        .width(Length::Fill)
-                        .style(button::secondary)
-                        .on_press(Message::ImportLocalIcs(href2))
-                    ]
-                    .spacing(10)
-                ]
-                .spacing(10),
-            )
-            .padding(10)
-            .style(|_| container::Style {
-                border: iced::Border {
-                    radius: 4.0.into(),
-                    width: 1.0,
-                    color: Color::from_rgb(0.3, 0.3, 0.3),
-                },
-                ..Default::default()
-            })
-            .into()
-        } else {
-            // Multiple local calendars - show options for each
-            let mut col = column![
-                text("Data Management").size(20),
-                text("Export/Import Local Calendars (.ics files):")
-                    .size(14)
-                    .color(Color::from_rgb(0.7, 0.7, 0.7))
-            ]
-            .spacing(10);
-
-            for cal in local_calendars {
-                let export_href = cal.href.clone();
-                let import_href = cal.href.clone();
-                col = col.push(
-                    row![
-                        button(
-                            row![
-                                icon::icon(icon::EXPORT).size(14),
-                                text(format!("Export {}", &cal.name)).size(14)
-                            ]
-                            .spacing(8)
-                            .align_y(iced::Alignment::Center)
-                        )
-                        .padding(8)
-                        .width(Length::Fill)
-                        .style(button::secondary)
-                        .on_press(Message::ExportLocalIcs(export_href)),
-                        button(
-                            row![
-                                icon::icon(icon::IMPORT).size(14),
-                                text(format!("Import {}", &cal.name)).size(14)
-                            ]
-                            .spacing(8)
-                            .align_y(iced::Alignment::Center)
-                        )
-                        .padding(8)
-                        .width(Length::Fill)
-                        .style(button::secondary)
-                        .on_press(Message::ImportLocalIcs(import_href))
-                    ]
-                    .spacing(10),
-                );
-            }
-
-            container(col)
-                .padding(10)
-                .style(|_| container::Style {
-                    border: iced::Border {
-                        radius: 4.0.into(),
-                        width: 1.0,
-                        color: Color::from_rgb(0.3, 0.3, 0.3),
-                    },
-                    ..Default::default()
-                })
-                .into()
-        }
-    } else {
-        Space::new().width(0).into()
-    };
+    // Data Management is now merged into Local Calendar UI below
+    let data_management_ui: Element<_> = Space::new().width(0).into();
 
     let aliases_ui: Element<_> = if is_settings {
         let mut list_col = column![text("Tag aliases").size(20)].spacing(10);
@@ -459,12 +345,35 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             let href = cal.href.clone();
             let is_default = href == LOCAL_CALENDAR_HREF;
 
+            // Name input
             let name_input = text_input("Name", &cal.name)
                 .on_input(move |s| Message::LocalCalendarNameChanged(href.clone(), s))
                 .padding(5)
-                .width(Length::Fill);
+                .width(Length::FillPortion(3));
 
-            // Color Button logic
+            // Export button
+            let export_href = cal.href.clone();
+            let export_btn = button(
+                row![icon::icon(icon::EXPORT).size(14), text("Export").size(10)]
+                    .spacing(3)
+                    .align_y(iced::Alignment::Center),
+            )
+            .padding(5)
+            .style(button::secondary)
+            .on_press(Message::ExportLocalIcs(export_href));
+
+            // Import button
+            let import_href = cal.href.clone();
+            let import_btn = button(
+                row![icon::icon(icon::IMPORT).size(14), text("Import").size(10)]
+                    .spacing(3)
+                    .align_y(iced::Alignment::Center),
+            )
+            .padding(5)
+            .style(button::secondary)
+            .on_press(Message::ImportLocalIcs(import_href));
+
+            // Color Button with palette icon
             let current_color = cal
                 .color
                 .as_ref()
@@ -473,20 +382,13 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .unwrap_or(Color::from_rgb(0.5, 0.5, 0.5));
 
             let color_btn = button(
-                container(text(" "))
-                    .width(Length::Fixed(20.0))
-                    .height(Length::Fixed(20.0))
-                    .style(move |_| container::Style {
-                        background: Some(current_color.into()),
-                        border: iced::Border {
-                            radius: 10.0.into(),
-                            width: 1.0,
-                            color: Color::from_rgb(0.5, 0.5, 0.5),
-                        },
-                        ..Default::default()
-                    }),
+                text(icon::PALETTE_COLOR.to_string())
+                    .font(icon::FONT)
+                    .size(16)
+                    .color(current_color),
             )
-            .padding(0)
+            .padding(5)
+            .style(button::text)
             .on_press(Message::OpenColorPicker(cal.href.clone(), current_color));
 
             // Wrap in ColorPicker if active
@@ -504,6 +406,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     color_btn.into()
                 };
 
+            // Trash button (or spacer for default calendar)
             let delete_btn: Element<_> = if !is_default {
                 let h = cal.href.clone();
                 button(icon::icon(icon::TRASH).size(14))
@@ -512,12 +415,12 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .on_press(Message::DeleteLocalCalendar(h))
                     .into()
             } else {
-                Space::new().width(Length::Fixed(24.0)).into()
+                Space::new().width(Length::Fixed(22.0)).into()
             };
 
             local_cal_col = local_cal_col.push(
-                row![name_input, color_widget, delete_btn]
-                    .spacing(10)
+                row![name_input, export_btn, import_btn, color_widget, delete_btn]
+                    .spacing(5)
                     .align_y(iced::Alignment::Center),
             );
         }
