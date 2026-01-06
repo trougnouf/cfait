@@ -1,6 +1,8 @@
 // Renders the help screen overlay.
 use crate::gui::message::Message;
-use iced::widget::{Space, button, column, container, row, scrollable, svg, text, text_input};
+use iced::widget::{
+    MouseArea, Space, button, column, container, row, scrollable, svg, text, text_input,
+};
 use iced::{Color, Element, Length, Theme};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -27,7 +29,7 @@ pub fn view_help() -> Element<'static, Message> {
         .style(iced::widget::button::text)
         .on_press(Message::CloseHelp);
 
-    let title = row![
+    let title_row = row![
         back_btn,
         svg(svg::Handle::from_memory(help_icon))
             .width(Length::Fixed(84.0)) // 168 / 2 for smooth rendering at half native size
@@ -37,10 +39,14 @@ pub fn view_help() -> Element<'static, Message> {
             .size(28)
             .style(|_: &Theme| text::Style {
                 color: Some(Color::WHITE)
-            })
+            }),
+        Space::new().width(Length::Fill)
     ]
     .spacing(15)
     .align_y(iced::Alignment::Center);
+
+    let title = MouseArea::new(container(title_row).width(Length::Fill).padding(20))
+        .on_press(Message::WindowDragged);
 
     let content = column![
         // 1. FUNDAMENTALS
@@ -321,7 +327,7 @@ pub fn view_help() -> Element<'static, Message> {
     .max_width(800);
 
     column![
-        container(title).padding(20),
+        title,
         scrollable(
             container(content)
                 .width(Length::Fill)

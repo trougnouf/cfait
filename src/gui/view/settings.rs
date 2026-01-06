@@ -5,7 +5,9 @@ use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::storage::LOCAL_CALENDAR_HREF;
 
-use iced::widget::{Space, button, checkbox, column, container, row, scrollable, text, text_input};
+use iced::widget::{
+    MouseArea, Space, button, checkbox, column, container, row, scrollable, text, text_input,
+};
 use iced::{Color, Element, Length};
 
 #[cfg(feature = "gui")]
@@ -22,19 +24,24 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     })
     .size(40);
 
-    let title_row: Element<_> = if is_settings {
+    let title_row = if is_settings {
         row![
             button(icon::icon(icon::ARROW_LEFT).size(24))
                 .style(button::text)
                 .on_press(Message::CancelSettings), // Functions as Back
-            title_text
+            title_text,
+            Space::new().width(Length::Fill)
         ]
         .spacing(20)
         .align_y(iced::Alignment::Center)
-        .into()
     } else {
-        row![title_text].into()
+        row![title_text, Space::new().width(Length::Fill)]
     };
+
+    let title_drag_area: Element<_> =
+        MouseArea::new(container(title_row).width(Length::Fill).padding(20))
+            .on_press(Message::WindowDragged)
+            .into();
 
     let error = if let Some(e) = &app.error_msg {
         text(e).color(Color::from_rgb(1.0, 0.0, 0.0))
@@ -526,7 +533,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         .align_x(iced::Alignment::Center);
 
     let main_col = column![
-        container(title_row).padding(20),
+        title_drag_area,
         scrollable(
             container(scrollable_content)
                 .width(Length::Fill)
