@@ -35,7 +35,8 @@ fun TaskRow(
     parentCategories: List<String> = emptyList(),
     parentLocation: String? = null,
     aliasMap: Map<String, List<String>> = emptyMap(),
-    isHighlighted: Boolean = false
+    isHighlighted: Boolean = false,
+    incomingRelations: List<String> = emptyList()
 ) {
     val startPadding = (task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
@@ -130,6 +131,15 @@ fun TaskRow(
                 ) {
                     if (task.description.isNotEmpty()) {
                         NfIcon(NfIcons.INFO, 10.sp, Color.Gray)
+                    }
+
+                    if (task.relatedToUids.isNotEmpty() || incomingRelations.isNotEmpty()) {
+                        val relatedUid = if (task.relatedToUids.isNotEmpty()) {
+                            task.relatedToUids[0]
+                        } else {
+                            incomingRelations[0]
+                        }
+                        NfIcon(getRandomRelatedIcon(task.uid, relatedUid), 10.sp, Color.Gray)
                     }
 
                     if (task.isBlocked) NfIcon(NfIcons.BLOCKED, 10.sp, MaterialTheme.colorScheme.error)

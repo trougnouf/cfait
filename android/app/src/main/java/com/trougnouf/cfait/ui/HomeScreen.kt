@@ -128,6 +128,18 @@ fun HomeScreen(
     // Build a map for quick parent lookup
     val taskMap = remember(tasks) { tasks.associateBy { it.uid } }
 
+    // Build a map of incoming relations (which tasks are related TO this task)
+    // Maps taskUid -> list of UIDs that are related to it
+    val incomingRelationsMap = remember(tasks) {
+        val map = mutableMapOf<String, MutableList<String>>()
+        tasks.forEach { task ->
+            task.relatedToUids.forEach { relatedUid ->
+                map.getOrPut(relatedUid) { mutableListOf() }.add(task.uid)
+            }
+        }
+        map
+    }
+
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
 
     fun updateTaskList() {
@@ -922,7 +934,8 @@ fun HomeScreen(
                                 parentCategories = pCats,
                                 parentLocation = pLoc,
                                 aliasMap = aliases,
-                                isHighlighted = task.uid == autoScrollUid
+                                isHighlighted = task.uid == autoScrollUid,
+                                incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
                             )
                         }
                     }

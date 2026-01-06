@@ -257,6 +257,27 @@ pub fn view_task_row<'a>(
         actions = actions.push(Space::new().width(Length::Fixed(16.0)));
     }
 
+    if has_related || has_incoming_related {
+        let related_icon_name = if !task.related_to.is_empty() {
+            icon::random_related_icon(&task.uid, &task.related_to[0])
+        } else if has_incoming_related {
+            let incoming = app.store.get_tasks_related_to(&task.uid);
+            if !incoming.is_empty() {
+                icon::random_related_icon(&task.uid, &incoming[0].0)
+            } else {
+                icon::LINK
+            }
+        } else {
+            icon::LINK
+        };
+
+        actions = actions.push(
+            icon::icon(related_icon_name)
+                .size(12)
+                .color(Color::from_rgb(0.5, 0.5, 0.5)),
+        );
+    }
+
     if let Some(yanked) = &app.yanked_uid {
         if *yanked != task.uid {
             let block_btn = button(icon::icon(icon::BLOCKED).size(14))
