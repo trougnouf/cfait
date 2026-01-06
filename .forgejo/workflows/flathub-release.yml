@@ -1,0 +1,91 @@
+name: Update Flathub
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  flathub_update:
+    runs-on: codeberg-tiny
+
+    # We run inside a Python container so we don't need 'setup-python' actions
+    container:
+      image: python:3.11-bookworm
+
+    steps:
+      - name: Install System Dependencies
+        run: |
+          apt-get update && apt-get install -y git wget curl jq
+
+      - name: Checkout Source (Codeberg)
+        uses: actions/checkout@v4
+        with:
+          path: source-repo
+
+      - name: Install Generator Dependencies
+        run: |
+          pip install aiohttp toml
+
+      - name: Fetch Flatpak Cargo Generator
+        run: |
+          wget https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
+          chmod +x flatpak-cargo-generator.py
+
+      - name: Generate cargo-sources.yml
+        run: |
+          cd source-repo
+          # Generate sources from the Codeberg Cargo.lock
+          python3 ../flatpak-cargo-generator.py Cargo.lock -o ../cargo-sources.yml
+
+          # Save variables for next steps
+          echo "COMMIT_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
+          echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+
+      - name: Clone Flathub Repository (GitHub)
+        run: |
+          # Uses the Secret you added to Codeberg Settings
+          git clone https://oauth2:${{ secrets.FLATHUB_GITHUB_TOKEN }}@github.com/flathub/com.trougnouf.Cfait.git flathub-repo
+
+      - name: Update Flathub Manifest
+        id: update
+        run: |
+          cp cargo-sources.yml flathub-repo/cargo-sources.yml
+
+          cd flathub-repo
+          manifest="com.trougnouf.Cfait.yml"
+
+          # Update Tag and Commit using | delimiter
+          sed -i "s|tag: v.*|tag: ${{ env.TAG_NAME }}|" $manifest
+          sed -i "s|commit: [a-f0-9]\{40\}|commit: ${{ env.COMMIT_HASH }}|" $manifest
+
+          if [[ -z $(git status -s) ]]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Push and Open PR
+        if: steps.update.outputs.changed == 'true'
+        run: |
+          cd flathub-repo
+          git config user.name "Cfait Release Bot"
+          git config user.email "bot@trougnouf.com"
+
+          BRANCH_NAME="update-${{ env.TAG_NAME }}"
+          git checkout -b $BRANCH_NAME
+
+          git add cargo-sources.yml com.trougnouf.Cfait.yml
+          git commit -m "Update to ${{ env.TAG_NAME }}"
+          git push origin $BRANCH_NAME
+
+          # Open PR via GitHub API
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.FLATHUB_GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/flathub/com.trougnouf.Cfait/pulls \
+            -d "{
+              \"title\": \"Update to ${{ env.TAG_NAME }}\",
+              \"head\": \"$BRANCH_NAME\",
+              \"base\": \"master\",
+              \"body\": \"Automated update triggered by release ${{ env.TAG_NAME }} from Codeberg.\"
+            }"
