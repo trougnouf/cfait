@@ -766,6 +766,7 @@ impl LocalStorage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::sync::Arc;
     use std::thread;
 
@@ -822,6 +823,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_load_state_mechanism() {
         // Test the LoadState mechanism directly without file I/O
         let test_href = "local://test";
@@ -860,14 +862,35 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_save_blocked_after_failed_load() {
         // Directly test that save() returns an error when LoadState is Failed
-        // Use a unique test href to avoid conflicts with other tests
-        let test_href = "local://test-save-blocked-unique";
-        LoadState::set(test_href, LoadState::Failed);
+        // Use a unique test href with timestamp to avoid conflicts with parallel tests
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let test_href = format!("local://test-save-blocked-{}", timestamp);
+
+        // Set state to Failed
+        LoadState::set(&test_href, LoadState::Failed);
+
+        // Verify the state was actually set correctly
+        assert_eq!(
+            LoadState::get(&test_href),
+            LoadState::Failed,
+            "LoadState should be Failed after set"
+        );
+
+        // Verify can_save_href returns false
+        assert!(
+            !LocalStorage::can_save_href(&test_href),
+            "can_save_href should return false when LoadState is Failed"
+        );
 
         let tasks = vec![];
-        let save_result = LocalStorage::save_for_href(test_href, &tasks);
+        let save_result = LocalStorage::save_for_href(&test_href, &tasks);
 
         assert!(
             save_result.is_err(),
@@ -880,9 +903,13 @@ mod tests {
                 .contains("previous load failed"),
             "Error message should explain why save was blocked"
         );
+
+        // Cleanup: reset state to avoid affecting other tests
+        LoadState::set(&test_href, LoadState::Uninitialized);
     }
 
     #[test]
+    #[serial]
     fn test_force_save_bypasses_load_state() {
         // force_save should work even when LoadState is Failed
         let test_href = LOCAL_CALENDAR_HREF;
@@ -1061,6 +1088,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn test_full_migration_workflow() {
         // Test complete workflow: v1 file -> load -> auto-migrate -> save -> load as v2
         let temp_dir = std::env::temp_dir().join("cfait_test_full_migration");
