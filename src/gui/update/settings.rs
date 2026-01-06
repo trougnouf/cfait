@@ -357,7 +357,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
                 app.ob_default_priority_input = val.clone();
                 if let Ok(n) = val.trim().parse::<u8>()
-                    && (1..=9).contains(&n)
+                    && n > 0
+                // Allow any non-zero u8 value (1-255)
                 {
                     app.default_priority = n;
                     save_config(app);
