@@ -310,7 +310,8 @@ fun CfaitNavHost(api: com.trougnouf.cfait.core.CfaitMobile, intent: Intent? = nu
                 onSettings = { navController.navigate("settings") },
                 onTaskClick = { uid -> navController.navigate("detail/$uid") },
                 onDataChanged = { refreshLists() },
-                onMigrateLocal = { sourceHref, targetHref -> handleMigration(sourceHref, targetHref) }
+                onMigrateLocal = { sourceHref, targetHref -> handleMigration(sourceHref, targetHref) },
+                onAutoScrollComplete = { autoScrollUid = null }
             )
         }
         composable("detail/{uid}") { backStackEntry ->
@@ -331,8 +332,9 @@ fun CfaitNavHost(api: com.trougnouf.cfait.core.CfaitMobile, intent: Intent? = nu
                         refreshLists()
                     },
                     onNavigate = { targetUid ->
-                        // Navigate to same screen with new UID
-                        navController.navigate("detail/$targetUid")
+                        // Navigate back to home and scroll to the target task
+                        autoScrollUid = targetUid
+                        navController.popBackStack("home", inclusive = false)
                     }
                 )
             }

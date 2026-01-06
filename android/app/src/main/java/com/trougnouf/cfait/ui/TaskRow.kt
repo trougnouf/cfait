@@ -34,13 +34,14 @@ fun TaskRow(
     // New parameters for inheritance hiding
     parentCategories: List<String> = emptyList(),
     parentLocation: String? = null,
-    aliasMap: Map<String, List<String>> = emptyMap()
+    aliasMap: Map<String, List<String>> = emptyMap(),
+    isHighlighted: Boolean = false
 ) {
     val startPadding = (task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
     val textColor = getTaskTextColor(task.priority.toInt(), task.isDone, isDark)
     val highlightColor = Color(0xFFffe600).copy(alpha = 0.1f)
-    val containerColor = if (expanded) highlightColor else MaterialTheme.colorScheme.surface
+    val containerColor = if (isHighlighted || expanded) highlightColor else MaterialTheme.colorScheme.surface
     val uriHandler = LocalUriHandler.current
 
     // --- ALIAS SHADOWING LOGIC ---

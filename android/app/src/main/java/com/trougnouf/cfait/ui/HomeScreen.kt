@@ -54,6 +54,7 @@ fun HomeScreen(
     onTaskClick: (String) -> Unit,
     onDataChanged: () -> Unit,
     onMigrateLocal: (String, String) -> Unit, // (sourceHref, targetHref)
+    onAutoScrollComplete: () -> Unit = {},
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -187,7 +188,21 @@ fun HomeScreen(
     LaunchedEffect(autoScrollUid, tasks) {
         if (autoScrollUid != null) {
             val index = tasks.indexOfFirst { it.uid == autoScrollUid }
-            if (index >= 0) listState.animateScrollToItem(index)
+            if (index >= 0) {
+                listState.animateScrollToItem(index)
+                // Clear highlight after a short delay
+                kotlinx.coroutines.delay(2000)
+                onAutoScrollComplete()
+            } else {
+                // Task not visible with current filters, clear them
+                if (filterTag != null || filterLocation != null || searchQuery.isNotEmpty()) {
+                    filterTag = null
+                    filterLocation = null
+                    searchQuery = ""
+                    isSearchActive = false
+                    // updateTaskList will be called automatically via LaunchedEffect
+                }
+            }
         }
     }
 
@@ -906,7 +921,8 @@ fun HomeScreen(
                                 enabledCalendarCount = enabledCalendarCount,
                                 parentCategories = pCats,
                                 parentLocation = pLoc,
-                                aliasMap = aliases
+                                aliasMap = aliases,
+                                isHighlighted = task.uid == autoScrollUid
                             )
                         }
                     }
