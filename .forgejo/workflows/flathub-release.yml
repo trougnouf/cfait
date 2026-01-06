@@ -7,24 +7,25 @@ on:
 jobs:
   flathub_update:
     runs-on: codeberg-tiny
-
-    # We run inside a Python container so we don't need 'setup-python' actions
     container:
       image: python:3.11-bookworm
-
     steps:
       - name: Install System Dependencies
         run: |
           apt-get update && apt-get install -y git wget curl jq
+          # We don't need 'nodejs' if we clone manually
 
-      - name: Checkout Source (Codeberg)
-        uses: actions/checkout@v4
-        with:
-          path: source-repo
+      - name: Checkout Source (Manual)
+        run: |
+          # Manual checkout to avoid installing Node.js for actions/checkout
+          git init
+          git remote add origin ${{ github.server_url }}/${{ github.repository }}.git
+          git fetch --depth 1 origin ${{ github.ref }}
+          git checkout FETCH_HEAD
 
       - name: Install Generator Dependencies
         run: |
-          pip install aiohttp toml
+          pip install aiohttp tomlkit
 
       - name: Fetch Flatpak Cargo Generator
         run: |
@@ -33,9 +34,8 @@ jobs:
 
       - name: Generate cargo-sources.yml
         run: |
-          cd source-repo
           # Generate sources from the Codeberg Cargo.lock
-          python3 ../flatpak-cargo-generator.py Cargo.lock -o ../cargo-sources.yml
+          python3 flatpak-cargo-generator.py Cargo.lock -o cargo-sources.yml
 
           # Save variables for next steps
           echo "COMMIT_HASH=$(git rev-parse HEAD)" >> $GITHUB_ENV
@@ -43,7 +43,6 @@ jobs:
 
       - name: Clone Flathub Repository (GitHub)
         run: |
-          # Uses the Secret you added to Codeberg Settings
           git clone https://oauth2:${{ secrets.FLATHUB_GITHUB_TOKEN }}@github.com/flathub/com.trougnouf.Cfait.git flathub-repo
 
       - name: Update Flathub Manifest
