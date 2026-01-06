@@ -37,9 +37,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.urgent_days = config.urgent_days_horizon;
             app.urgent_prio = config.urgent_priority_threshold;
             app.default_priority = config.default_priority;
+            app.start_grace_period_days = config.start_grace_period_days;
             app.ob_urgent_days_input = app.urgent_days.to_string();
             app.ob_urgent_prio_input = app.urgent_prio.to_string();
             app.ob_default_priority_input = app.default_priority.to_string();
+            app.ob_start_grace_input = app.start_grace_period_days.to_string();
 
             // --- LOAD NEW FIELDS ---
             app.auto_reminders = config.auto_reminders;
@@ -156,6 +158,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 urgent_days_horizon: app.urgent_days,
                 urgent_priority_threshold: app.urgent_prio,
                 default_priority: app.default_priority,
+                start_grace_period_days: app.start_grace_period_days,
                 // NEW FIELDS
                 auto_reminders: app.auto_reminders,
                 default_reminder_time: app.default_reminder_time.clone(),
@@ -243,6 +246,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 urgent_days_horizon: app.urgent_days,
                 urgent_priority_threshold: app.urgent_prio,
                 default_priority: app.default_priority,
+                start_grace_period_days: app.start_grace_period_days,
 
                 // NEW FIELDS
                 auto_reminders: app.auto_reminders,
@@ -356,6 +360,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     && (1..=9).contains(&n)
                 {
                     app.default_priority = n;
+                    save_config(app);
+                    refresh_filtered_tasks(app);
+                }
+            }
+            Task::none()
+        }
+        Message::ObStartGraceChanged(val) => {
+            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
+                app.ob_start_grace_input = val.clone();
+                if let Ok(n) = val.trim().parse::<u32>() {
+                    app.start_grace_period_days = n;
                     save_config(app);
                     refresh_filtered_tasks(app);
                 }
@@ -697,7 +712,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                                     .and_then(|p| std::path::Path::new(p).file_name())
                                     .and_then(|n| n.to_str())
                                     .unwrap_or("file");
-                                Ok(format!("Successfully imported {} task(s) from {}", count, file_name))
+                                Ok(format!(
+                                    "Successfully imported {} task(s) from {}",
+                                    count, file_name
+                                ))
                             }
                             Err(e) => Err(format!("Import failed: {}", e)),
                         }

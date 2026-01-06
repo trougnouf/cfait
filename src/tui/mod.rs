@@ -109,6 +109,8 @@ pub async fn run() -> Result<()> {
         disabled_calendars,
         urgent_days,
         urgent_prio,
+        default_priority,
+        start_grace_period_days,
         snooze_short_mins,
         snooze_long_mins,
     ) = match config_result {
@@ -126,6 +128,8 @@ pub async fn run() -> Result<()> {
             cfg.disabled_calendars,
             cfg.urgent_days_horizon,
             cfg.urgent_priority_threshold,
+            cfg.default_priority,
+            cfg.start_grace_period_days,
             cfg.snooze_short_mins,
             cfg.snooze_long_mins,
         ),
@@ -148,12 +152,14 @@ pub async fn run() -> Result<()> {
     let mut app_state = AppState::new();
     app_state.hide_completed = hide_completed;
     app_state.hide_fully_completed_tags = hide_fully_completed_tags;
-    app_state.tag_aliases = tag_aliases;
     app_state.sort_cutoff_months = sort_cutoff;
+    app_state.tag_aliases = tag_aliases;
     app_state.hidden_calendars = hidden_calendars.into_iter().collect();
     app_state.disabled_calendars = disabled_calendars.into_iter().collect();
     app_state.urgent_days = urgent_days;
     app_state.urgent_prio = urgent_prio;
+    app_state.default_priority = default_priority;
+    app_state.start_grace_period_days = start_grace_period_days;
     app_state.snooze_short_mins = snooze_short_mins;
     app_state.snooze_long_mins = snooze_long_mins;
 

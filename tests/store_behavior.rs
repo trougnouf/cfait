@@ -42,6 +42,7 @@ fn test_filter_by_tag() {
         urgent_days: 1,
         urgent_prio: 1,
         default_priority: 5,
+        start_grace_period_days: 1,
     });
 
     assert_eq!(results.len(), 1);
@@ -79,6 +80,7 @@ fn test_filter_hierarchical_tags() {
         urgent_days: 1,
         urgent_prio: 1,
         default_priority: 5,
+        start_grace_period_days: 1,
     });
 
     assert_eq!(results.len(), 1);
@@ -120,6 +122,7 @@ fn test_hide_hidden_calendars() {
         urgent_days: 1,
         urgent_prio: 1,
         default_priority: 5,
+        start_grace_period_days: 1,
     });
 
     assert_eq!(results.len(), 1);

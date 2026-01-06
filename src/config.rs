@@ -21,6 +21,10 @@ fn default_urgent_prio() -> u8 {
     1
 } // !1
 
+fn default_start_grace_period() -> u32 {
+    1
+} // 1 day grace period for start dates
+
 fn default_priority() -> u8 {
     5
 } // Normal priority
@@ -96,6 +100,8 @@ pub struct Config {
     pub urgent_priority_threshold: u8,
     #[serde(default = "default_priority")]
     pub default_priority: u8,
+    #[serde(default = "default_start_grace_period")]
+    pub start_grace_period_days: u32,
 
     #[serde(default = "default_auto_remind")]
     pub auto_reminders: bool,
@@ -133,6 +139,7 @@ impl Default for Config {
             urgent_days_horizon: 1,
             urgent_priority_threshold: 1,
             default_priority: 5,
+            start_grace_period_days: 1,
             auto_reminders: true,
             default_reminder_time: "08:00".to_string(),
             snooze_short_mins: 60,

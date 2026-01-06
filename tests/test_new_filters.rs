@@ -161,6 +161,7 @@ fn test_is_ready_filters_future_start_dates() {
         urgent_days: 7,
         urgent_prio: 5,
         default_priority: 5,
+        start_grace_period_days: 1,
     };
 
     let filtered = store.filter(options);
@@ -211,6 +212,7 @@ fn test_is_ready_filters_blocked_tasks() {
         urgent_days: 7,
         urgent_prio: 5,
         default_priority: 5,
+        start_grace_period_days: 1,
     };
 
     let filtered = store.filter(options);
@@ -267,6 +269,7 @@ fn test_is_ready_combines_with_other_filters() {
         urgent_days: 7,
         urgent_prio: 5,
         default_priority: 5,
+        start_grace_period_days: 1,
     };
 
     let filtered = store.filter(options);

@@ -177,6 +177,7 @@ pub struct MobileConfig {
     pub urgent_days: u32,
     pub urgent_prio: u8,
     pub default_priority: u8,
+    pub start_grace_period_days: u32,
     pub auto_reminders: bool,
     pub default_reminder_time: String,
     pub snooze_short: u32,
@@ -369,6 +370,7 @@ impl CfaitMobile {
             urgent_days: c.urgent_days_horizon,
             urgent_prio: c.urgent_priority_threshold,
             default_priority: c.default_priority,
+            start_grace_period_days: c.start_grace_period_days,
             auto_reminders: c.auto_reminders,
             default_reminder_time: c.default_reminder_time,
             snooze_short: c.snooze_short_mins,
@@ -395,6 +397,7 @@ impl CfaitMobile {
         urgent_days: u32,
         urgent_prio: u8,
         default_priority: u8,
+        start_grace_period_days: u32,
         auto_reminders: bool,
         default_reminder_time: String,
         snooze_short: u32,
@@ -415,6 +418,7 @@ impl CfaitMobile {
         c.urgent_days_horizon = urgent_days;
         c.urgent_priority_threshold = urgent_prio;
         c.default_priority = default_priority;
+        c.start_grace_period_days = start_grace_period_days;
         c.auto_reminders = auto_reminders;
         c.default_reminder_time = default_reminder_time;
         c.snooze_short_mins = snooze_short;
@@ -810,6 +814,7 @@ impl CfaitMobile {
             urgent_days: config.urgent_days_horizon,
             urgent_prio: config.urgent_priority_threshold,
             default_priority: config.default_priority,
+            start_grace_period_days: config.start_grace_period_days,
         });
 
         filtered

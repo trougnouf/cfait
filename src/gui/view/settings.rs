@@ -97,51 +97,75 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     };
 
     let sorting_ui: Element<_> = if is_settings {
-        column![
-            text("Sorting").size(16),
-            row![
-                text("Default Priority (!):").width(Length::Fixed(150.0)),
-                text_input("5", &app.ob_default_priority_input)
-                    .on_input(Message::ObDefaultPriorityChanged)
-                    .width(Length::Fixed(60.0))
-                    .padding(5)
+        container(
+            column![
+                text("Sorting & Visibility").size(20),
+                Space::new().height(10),
+                text("Future Task Grace Period:").size(16),
+                row![
+                    text("Start within (days):").width(Length::Fixed(150.0)),
+                    text_input("1", &app.ob_start_grace_input)
+                        .on_input(Message::ObStartGraceChanged)
+                        .width(Length::Fixed(60.0))
+                        .padding(5)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+                text("Tasks starting within this period won't be pushed to 'Future'")
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
+                Space::new().height(15),
+                text("Urgency Rules (Shown at top):").size(16),
+                row![
+                    text("Due within (days):").width(Length::Fixed(150.0)),
+                    text_input("1", &app.ob_urgent_days_input)
+                        .on_input(Message::ObUrgentDaysChanged)
+                        .width(Length::Fixed(60.0))
+                        .padding(5)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+                row![
+                    text("Priority <= (!):").width(Length::Fixed(150.0)),
+                    text_input("1", &app.ob_urgent_prio_input)
+                        .on_input(Message::ObUrgentPrioChanged)
+                        .width(Length::Fixed(60.0))
+                        .padding(5)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+                Space::new().height(15),
+                text("Priority Settings:").size(16),
+                row![
+                    text("Default Priority (!):").width(Length::Fixed(150.0)),
+                    text_input("5", &app.ob_default_priority_input)
+                        .on_input(Message::ObDefaultPriorityChanged)
+                        .width(Length::Fixed(60.0))
+                        .padding(5)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+                text("(Tasks without priority (0) sort as this value)")
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
+                Space::new().height(10),
+                row![
+                    text("Priority cutoff (months):").width(Length::Fixed(150.0)),
+                    text_input("6", &app.ob_sort_months_input)
+                        .on_input(Message::ObSortMonthsChanged)
+                        .width(Length::Fixed(100.0))
+                        .padding(5)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+                text("(Tasks due within this range are shown first. Blank = all timed first)")
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
             ]
-            .spacing(10)
-            .align_y(iced::Alignment::Center),
-            text("(Tasks without priority (0) sort as this value)")
-                .size(12)
-                .color(Color::from_rgb(0.6, 0.6, 0.6)),
-            Space::new().height(5),
-            text("Priority cutoff (months):"),
-            text("(Tasks due within this range are shown first. Blank = all timed first)")
-                .size(12)
-                .color(Color::from_rgb(0.6, 0.6, 0.6)),
-            text_input("6", &app.ob_sort_months_input)
-                .on_input(Message::ObSortMonthsChanged)
-                .padding(10)
-                .width(Length::Fixed(100.0)),
-            Space::new().height(10),
-            text("Urgency Rules (Shown at top):").size(16),
-            row![
-                text("Due within (days):").width(Length::Fixed(150.0)),
-                text_input("1", &app.ob_urgent_days_input)
-                    .on_input(Message::ObUrgentDaysChanged)
-                    .width(Length::Fixed(60.0))
-                    .padding(5)
-            ]
-            .spacing(10)
-            .align_y(iced::Alignment::Center),
-            row![
-                text("Priority <= (!):").width(Length::Fixed(150.0)),
-                text_input("1", &app.ob_urgent_prio_input)
-                    .on_input(Message::ObUrgentPrioChanged)
-                    .width(Length::Fixed(60.0))
-                    .padding(5)
-            ]
-            .spacing(10)
-            .align_y(iced::Alignment::Center),
-        ]
-        .spacing(5)
+            .spacing(5),
+        )
+        .padding(15)
+        .style(container::rounded_box)
         .into()
     } else {
         Space::new().width(0).into()

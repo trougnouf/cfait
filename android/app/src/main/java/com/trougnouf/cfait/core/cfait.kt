@@ -1054,6 +1054,7 @@ internal object UniffiLib {
         `urgentDays`: Int,
         `urgentPrio`: Byte,
         `defaultPriority`: Byte,
+        `startGracePeriodDays`: Int,
         `autoReminders`: Byte,
         `defaultReminderTime`: RustBuffer.ByValue,
         `snoozeShort`: Int,
@@ -1456,7 +1457,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_related_to() != 5080.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 31659.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 38430.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility() != 63556.toShort()) {
@@ -2145,6 +2146,7 @@ public interface CfaitMobileInterface {
         `urgentDays`: kotlin.UInt,
         `urgentPrio`: kotlin.UByte,
         `defaultPriority`: kotlin.UByte,
+        `startGracePeriodDays`: kotlin.UInt,
         `autoReminders`: kotlin.Boolean,
         `defaultReminderTime`: kotlin.String,
         `snoozeShort`: kotlin.UInt,
@@ -2955,6 +2957,7 @@ open class CfaitMobile :
         `urgentDays`: kotlin.UInt,
         `urgentPrio`: kotlin.UByte,
         `defaultPriority`: kotlin.UByte,
+        `startGracePeriodDays`: kotlin.UInt,
         `autoReminders`: kotlin.Boolean,
         `defaultReminderTime`: kotlin.String,
         `snoozeShort`: kotlin.UInt,
@@ -2975,6 +2978,7 @@ open class CfaitMobile :
                 FfiConverterUInt.lower(`urgentDays`),
                 FfiConverterUByte.lower(`urgentPrio`),
                 FfiConverterUByte.lower(`defaultPriority`),
+                FfiConverterUInt.lower(`startGracePeriodDays`),
                 FfiConverterBoolean.lower(`autoReminders`),
                 FfiConverterString.lower(`defaultReminderTime`),
                 FfiConverterUInt.lower(`snoozeShort`),
@@ -3385,6 +3389,7 @@ data class MobileConfig(
     var `urgentDays`: kotlin.UInt,
     var `urgentPrio`: kotlin.UByte,
     var `defaultPriority`: kotlin.UByte,
+    var `startGracePeriodDays`: kotlin.UInt,
     var `autoReminders`: kotlin.Boolean,
     var `defaultReminderTime`: kotlin.String,
     var `snoozeShort`: kotlin.UInt,
@@ -3412,6 +3417,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterUInt.read(buf),
             FfiConverterUByte.read(buf),
             FfiConverterUByte.read(buf),
+            FfiConverterUInt.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterString.read(buf),
             FfiConverterUInt.read(buf),
@@ -3433,6 +3439,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterUInt.allocationSize(value.`urgentDays`) +
                 FfiConverterUByte.allocationSize(value.`urgentPrio`) +
                 FfiConverterUByte.allocationSize(value.`defaultPriority`) +
+                FfiConverterUInt.allocationSize(value.`startGracePeriodDays`) +
                 FfiConverterBoolean.allocationSize(value.`autoReminders`) +
                 FfiConverterString.allocationSize(value.`defaultReminderTime`) +
                 FfiConverterUInt.allocationSize(value.`snoozeShort`) +
@@ -3456,6 +3463,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterUInt.write(value.`urgentDays`, buf)
         FfiConverterUByte.write(value.`urgentPrio`, buf)
         FfiConverterUByte.write(value.`defaultPriority`, buf)
+        FfiConverterUInt.write(value.`startGracePeriodDays`, buf)
         FfiConverterBoolean.write(value.`autoReminders`, buf)
         FfiConverterString.write(value.`defaultReminderTime`, buf)
         FfiConverterUInt.write(value.`snoozeShort`, buf)

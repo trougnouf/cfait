@@ -33,6 +33,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ObUrgentDaysChanged(_)
         | Message::ObUrgentPrioChanged(_)
         | Message::ObDefaultPriorityChanged(_)
+        | Message::ObStartGraceChanged(_)
         | Message::ThemeChanged(_)
         | Message::SetAutoReminders(_)
         | Message::SetDefaultReminderTime(_)

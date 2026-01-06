@@ -48,6 +48,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         urgent_days: app.urgent_days,
         urgent_prio: app.urgent_prio,
         default_priority: app.default_priority,
+        start_grace_period_days: app.start_grace_period_days,
     });
 
     // Update sidebar cache after filtering
@@ -80,6 +81,7 @@ pub fn save_config(app: &GuiApp) {
         urgent_days_horizon: app.urgent_days,
         urgent_priority_threshold: app.urgent_prio,
         default_priority: app.default_priority,
+        start_grace_period_days: app.start_grace_period_days,
 
         // NEW FIELDS
         auto_reminders: app.auto_reminders,

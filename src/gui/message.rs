@@ -130,6 +130,7 @@ pub enum Message {
     ObUrgentDaysChanged(String),
     ObUrgentPrioChanged(String),
     ObDefaultPriorityChanged(String),
+    ObStartGraceChanged(String),
     InitAlarmActor(mpsc::Sender<SystemEvent>),
     AlarmSignalReceived(Arc<AlarmMessage>), // Arc to make it Clone-able easily
     SnoozeAlarm(String, String, u32),       // TaskUID, AlarmUID, Minutes
@@ -148,10 +149,10 @@ pub enum Message {
     BackfillEventsComplete(Result<usize, String>),
     ExportLocalIcs(String), // calendar_href
     ExportSaved(Result<std::path::PathBuf, String>),
-    ImportLocalIcs(String),                  // calendar_href
-    ImportCompleted(Result<String, String>), // success message or error
+    ImportLocalIcs(String),                          // calendar_href
+    ImportCompleted(Result<String, String>),         // success message or error
     IcsFileLoaded(Result<(String, String), String>), // (file_path, content) or error
-    IcsImportDialogCalendarSelected(String), // calendar_href
+    IcsImportDialogCalendarSelected(String),         // calendar_href
     IcsImportDialogCancel,
     IcsImportDialogConfirm,
 

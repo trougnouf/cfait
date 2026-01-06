@@ -395,6 +395,7 @@ impl Task {
         urgent_days: u32,
         urgent_prio: u8,
         default_priority: u8,
+        start_grace_period_days: u32,
     ) -> Ordering {
         let now = Utc::now();
 
@@ -415,10 +416,17 @@ impl Task {
             }
 
             // Check Future Start (Excludes from 1-5)
-            if let Some(start) = &t.dtstart
-                && start.to_start_comparison_time() > now
-            {
-                return 6;
+            // But NOT if:
+            // 1. Start date is within the grace period
+            // 2. Task has a recent acknowledged alarm (indicating user interaction)
+            if let Some(start) = &t.dtstart {
+                let start_time = start.to_start_comparison_time();
+                let grace_threshold = now + chrono::Duration::days(start_grace_period_days as i64);
+
+                // If start is beyond grace period AND no recent acknowledged alarms, rank as future
+                if start_time > grace_threshold && !t.has_recent_acknowledged_alarm() {
+                    return 6;
+                }
             }
 
             // Blocked tasks skip ranks 1-3 (Urgent, Due Soon, Started)
@@ -529,13 +537,23 @@ impl Task {
         urgent_days: u32,
         urgent_prio: u8,
         default_priority: u8,
+        start_grace_period_days: u32,
     ) -> Vec<Task> {
         let present_uids: std::collections::HashSet<String> =
             tasks.iter().map(|t| t.uid.clone()).collect();
         let mut children_map: HashMap<String, Vec<Task>> = HashMap::new();
         let mut roots: Vec<Task> = Vec::new();
 
-        tasks.sort_by(|a, b| a.compare_with_cutoff(b, cutoff, urgent_days, urgent_prio, default_priority));
+        tasks.sort_by(|a, b| {
+            a.compare_with_cutoff(
+                b,
+                cutoff,
+                urgent_days,
+                urgent_prio,
+                default_priority,
+                start_grace_period_days,
+            )
+        });
 
         // Consume tasks directly instead of cloning the entire vector
         let total_tasks = tasks.len();
@@ -698,6 +716,17 @@ impl Task {
             // by the system actor before checking.
             _ => false,
         })
+    }
+
+    /// Check if task has any acknowledged alarms.
+    /// This helps identify tasks that the user has interacted with via reminders,
+    /// preventing them from being pushed to the "future tasks" section.
+    ///
+    /// For recurring tasks, old alarms from past recurrences are automatically cleared
+    /// when the task advances (see `respawn()` in adapter.rs), so any acknowledged alarm
+    /// present is guaranteed to be for the current task instance.
+    pub fn has_recent_acknowledged_alarm(&self) -> bool {
+        self.alarms.iter().any(|alarm| alarm.acknowledged.is_some())
     }
 
     /// Converts a synthetic implicit alarm into a real, acknowledged VALARM.
@@ -1239,7 +1268,7 @@ mod tests {
 
         // Urgent (rank 1) should come before normal (rank 4)
         assert_eq!(
-            urgent_task.compare_with_cutoff(&normal_task, None, urgent_days, urgent_prio, 5),
+            urgent_task.compare_with_cutoff(&normal_task, None, urgent_days, urgent_prio, 5, 1),
             Ordering::Less
         );
     }
@@ -1316,7 +1345,7 @@ mod tests {
 
         // Due soon (rank 2) should come before due later (rank 4)
         assert_eq!(
-            due_soon.compare_with_cutoff(&due_later, None, urgent_days, urgent_prio, 5),
+            due_soon.compare_with_cutoff(&due_later, None, urgent_days, urgent_prio, 5, 1),
             Ordering::Less
         );
     }
@@ -1393,7 +1422,7 @@ mod tests {
 
         // Started (rank 3) should come before normal (rank 4)
         assert_eq!(
-            started.compare_with_cutoff(&not_started, None, urgent_days, urgent_prio, 5),
+            started.compare_with_cutoff(&not_started, None, urgent_days, urgent_prio, 5, 1),
             Ordering::Less
         );
     }
@@ -1475,7 +1504,8 @@ mod tests {
                 None,
                 urgent_days,
                 urgent_prio,
-                5
+                5,
+                1
             ),
             Ordering::Less
         );
@@ -1554,7 +1584,14 @@ mod tests {
 
         // Both in rank 4, should be sorted by due date first
         assert_eq!(
-            due_earlier.compare_with_cutoff(&due_later, Some(cutoff), urgent_days, urgent_prio, 5),
+            due_earlier.compare_with_cutoff(
+                &due_later,
+                Some(cutoff),
+                urgent_days,
+                urgent_prio,
+                5,
+                1
+            ),
             Ordering::Less
         );
     }
@@ -1632,7 +1669,7 @@ mod tests {
 
         // Both in rank 5 (outside cutoff), should be sorted by priority first
         assert_eq!(
-            high_prio.compare_with_cutoff(&low_prio, Some(cutoff), urgent_days, urgent_prio, 5),
+            high_prio.compare_with_cutoff(&low_prio, Some(cutoff), urgent_days, urgent_prio, 5, 1),
             Ordering::Less
         );
     }
@@ -1710,7 +1747,7 @@ mod tests {
         // Future start (rank 6) should come after normal (rank 4)
         // Normal task (rank 4) should come before future start (rank 6)
         assert_eq!(
-            normal_task.compare_with_cutoff(&future_start, None, urgent_days, urgent_prio, 5),
+            normal_task.compare_with_cutoff(&future_start, None, urgent_days, urgent_prio, 5, 1),
             Ordering::Less
         );
     }
@@ -1788,7 +1825,7 @@ mod tests {
         // Done (rank 7) should come after all others
         // Normal task (rank 4/5) should come before done task (rank 7)
         assert_eq!(
-            normal_task.compare_with_cutoff(&done_task, None, urgent_days, urgent_prio, 5),
+            normal_task.compare_with_cutoff(&done_task, None, urgent_days, urgent_prio, 5, 1),
             Ordering::Less
         );
     }

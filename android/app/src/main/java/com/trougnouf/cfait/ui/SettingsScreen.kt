@@ -61,6 +61,7 @@ fun SettingsScreen(
     var urgentDays by remember { mutableStateOf("1") }
     var urgentPrio by remember { mutableStateOf("1") }
     var defaultPriority by remember { mutableStateOf("5") }
+    var startGracePeriodDays by remember { mutableStateOf("1") }
     var autoRemind by remember { mutableStateOf(true) }
     var defTime by remember { mutableStateOf("09:00") }
     var snoozeShort by remember { mutableStateOf("1h") }
@@ -110,6 +111,7 @@ fun SettingsScreen(
         urgentDays = cfg.urgentDays.toString()
         urgentPrio = cfg.urgentPrio.toString()
         defaultPriority = cfg.defaultPriority.toString()
+        startGracePeriodDays = cfg.startGracePeriodDays.toString()
         autoRemind = cfg.autoReminders
         defTime = cfg.defaultReminderTime
         snoozeShort = formatDuration(cfg.snoozeShort)
@@ -159,6 +161,7 @@ fun SettingsScreen(
         val daysInt = urgentDays.trim().toUIntOrNull() ?: 1u
         val prioInt = urgentPrio.trim().toUByteOrNull() ?: 1u
         val defaultPrioInt = defaultPriority.trim().toUByteOrNull() ?: 5u
+        val startGraceInt = startGracePeriodDays.trim().toUIntOrNull() ?: 1u
 
         // Use api.parseDurationString instead of toUIntOrNull
         val sShort = api.parseDurationString(snoozeShort) ?: 60u
@@ -167,7 +170,7 @@ fun SettingsScreen(
         api.saveConfig(
             url, user, pass, insecure, hideCompleted,
             disabledSet.toList(), sortInt,
-            daysInt, prioInt, defaultPrioInt,
+            daysInt, prioInt, defaultPrioInt, startGraceInt,
             autoRemind, defTime, sShort, sLong,
             createEventsForTasks, deleteEventsOnCompletion
         )
@@ -290,81 +293,114 @@ fun SettingsScreen(
                     })
                     Text("Hide completed and canceled tasks")
                 }
+            }
 
-                // Sorting Settings
-                Text("Sorting:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+            // Sorting Settings (outlined card)
+            item {
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                androidx.compose.material3.OutlinedCard(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "Sorting & Visibility",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
 
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                    Text("Default Priority (!):", modifier = Modifier.weight(1f))
-                    OutlinedTextField(
-                        value = defaultPriority,
-                        onValueChange = { defaultPriority = it },
-                        modifier = Modifier.width(80.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
+                        // Start Grace Period
+                        Text("Future Task Grace Period:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                            Text("Start within (days):", modifier = Modifier.weight(1f))
+                            OutlinedTextField(
+                                value = startGracePeriodDays,
+                                onValueChange = { startGracePeriodDays = it },
+                                modifier = Modifier.width(80.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true
+                            )
+                        }
+                        Text(
+                            "Tasks starting within this period stay visible (not pushed to Future).",
+                            fontSize = 12.sp,
+                            color = androidx.compose.ui.graphics.Color.Gray
+                        )
+
+                        // Urgency Rules
+                        Text("Urgency Rules (shown at top):", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                            Text("Due within (days):", modifier = Modifier.weight(1f))
+                            OutlinedTextField(
+                                value = urgentDays,
+                                onValueChange = { urgentDays = it },
+                                modifier = Modifier.width(80.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true
+                            )
+                        }
+                        Text(
+                            "Tasks due within this range show at top.",
+                            fontSize = 12.sp,
+                            color = androidx.compose.ui.graphics.Color.Gray
+                        )
+
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                            Text("Priority <= (!):", modifier = Modifier.weight(1f))
+                            OutlinedTextField(
+                                value = urgentPrio,
+                                onValueChange = { urgentPrio = it },
+                                modifier = Modifier.width(80.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true
+                            )
+                        }
+                        Text(
+                            "Priorities at or below this value show at top.",
+                            fontSize = 12.sp,
+                            color = androidx.compose.ui.graphics.Color.Gray
+                        )
+
+                        // Default Priority
+                        Text("Priority Settings:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                            Text("Default Priority (!):", modifier = Modifier.weight(1f))
+                            OutlinedTextField(
+                                value = defaultPriority,
+                                onValueChange = { defaultPriority = it },
+                                modifier = Modifier.width(80.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true
+                            )
+                        }
+                        Text(
+                            "Tasks without priority (0) sort as this value.",
+                            fontSize = 12.sp,
+                            color = androidx.compose.ui.graphics.Color.Gray
+                        )
+
+                        // Priority Cutoff
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                            Text("Priority cutoff (months):", modifier = Modifier.weight(1f))
+                            OutlinedTextField(
+                                value = sortMonths,
+                                onValueChange = { sortMonths = it },
+                                modifier = Modifier.width(80.dp),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true
+                            )
+                        }
+                        Text(
+                            "Tasks due within this range are shown before undated tasks.",
+                            fontSize = 12.sp,
+                            color = androidx.compose.ui.graphics.Color.Gray
+                        )
+                    }
                 }
-                Text(
-                    "Tasks without priority (0) sort as this value.",
-                    fontSize = 12.sp,
-                    color = androidx.compose.ui.graphics.Color.Gray
-                )
+            }
 
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                    Text("Priority cutoff (months):", modifier = Modifier.weight(1f))
-                    OutlinedTextField(
-                        value = sortMonths,
-                        onValueChange = {
-                            sortMonths = it
-                        },
-                        modifier =
-                            Modifier.width(
-                                80.dp,
-                            ),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                    )
-                }
-                Text(
-                    "Tasks due within this range are shown before undated tasks.",
-                    fontSize = 12.sp,
-                    color = androidx.compose.ui.graphics.Color.Gray
-                )
-
-                // Urgency Settings
-                Text("Urgency rules:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
-
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                    Text("Due within (days):", modifier = Modifier.weight(1f))
-                    OutlinedTextField(
-                        value = urgentDays,
-                        onValueChange = { urgentDays = it },
-                        modifier = Modifier.width(80.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
-                }
-                Text(
-                    "Tasks due in this range show at top.",
-                    fontSize = 12.sp,
-                    color = androidx.compose.ui.graphics.Color.Gray
-                )
-
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                    Text("Top Priority Threshold (!):", modifier = Modifier.weight(1f))
-                    OutlinedTextField(
-                        value = urgentPrio,
-                        onValueChange = { urgentPrio = it },
-                        modifier = Modifier.width(80.dp),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
-                    )
-                }
-                Text(
-                    "Priorities <= this value show at top.",
-                    fontSize = 12.sp,
-                    color = androidx.compose.ui.graphics.Color.Gray
-                )
+            item {
 
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(

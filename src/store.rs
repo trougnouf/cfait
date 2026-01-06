@@ -31,6 +31,7 @@ pub struct FilterOptions<'a> {
     pub urgent_days: u32,
     pub urgent_prio: u8,
     pub default_priority: u8,
+    pub start_grace_period_days: u32,
 }
 
 impl TaskStore {
@@ -771,6 +772,7 @@ impl TaskStore {
             options.urgent_days,
             options.urgent_prio,
             options.default_priority,
+            options.start_grace_period_days,
         )
     }
 

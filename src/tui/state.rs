@@ -56,6 +56,7 @@ pub struct AppState {
     pub urgent_days: u32,
     pub urgent_prio: u8,
     pub default_priority: u8,
+    pub start_grace_period_days: u32,
 
     // Snooze configuration
     pub snooze_short_mins: u32,
@@ -125,6 +126,7 @@ impl AppState {
             urgent_days: 1,
             urgent_prio: 1,
             default_priority: 5,
+            start_grace_period_days: 1,
 
             snooze_short_mins: 60,
             snooze_long_mins: 1440,
@@ -194,6 +196,7 @@ impl AppState {
             urgent_days: self.urgent_days,
             urgent_prio: self.urgent_prio,
             default_priority: self.default_priority,
+            start_grace_period_days: self.start_grace_period_days,
         });
 
         let len = self.tasks.len();
