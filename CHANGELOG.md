@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.4.5] - 2026-01-06
+
+### 🚀 Features
+
+- Allow canceling single occurrence of recurring task
+- Allow grace period before pushing tasks with a future date in the future/bottom bin
+- *(gui)* Make window draggable in the settings and help panels
+- Improve Android related-tasks navigation
+- Show related-task icon in the tasks list (Android, GUI)
+- *(android)* Add jump back up shortcut button
+- Allow default sorting priority > 9
+
+### 🐛 Bug Fixes
+
+- Test concurrency issue
+- *(android)* Rm dead scroll zone in Settings > Manage calendars
+
+### 📚 Documentation
+
+- *(installation)* Mention MacOS binaries provided by Martin Stut and Flatpak Linux binaries
+- *(readme)* Add Android build instructions
+
+### 🎨 Styling
+
+- *(gui)* Merge local calendars and data management settings
+
+### ⚙️ Miscellaneous Tasks
+
+- *(android)* Rename com.cfait to com.trougnouf.cfait
+- *(flathub)* Attempt auto-release
+- Fix prepare_release.py
 ## [0.4.3] - 2026-01-05
 
 ### 🚀 Features
@@ -25,6 +56,7 @@
 - *(flathub)* Update cargo-sources.yml
 - *(flathub)* Fix linting issues
 - Prep for v0.4.3 release (last before com.cfait to com.trougnouf.cfait migration on Android)
+- Release cfait version 0.4.3
 ## [0.4.2] - 2026-01-03
 
 ### 🐛 Bug Fixes
