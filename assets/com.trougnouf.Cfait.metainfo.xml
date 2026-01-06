@@ -27,6 +27,22 @@
 
   <launchable type="desktop-id">com.trougnouf.Cfait.desktop</launchable>
 
+  <categories>
+    <category>Office</category>
+    <category>Utility</category>
+  </categories>
+
+  <keywords>
+    <keyword>todo</keyword>
+    <keyword>caldav</keyword>
+    <keyword>task</keyword>
+    <keyword>gtd</keyword>
+    <keyword>productivity</keyword>
+    <keyword>organizer</keyword>
+    <keyword>planner</keyword>
+    <keyword>checklist</keyword>
+  </keywords>
+
   <screenshots>
     <screenshot type="default">
       <image
@@ -48,46 +64,453 @@
   <url type="homepage">https://trougnouf.com</url>
   <url type="bugtracker">https://codeberg.org/trougnouf/cfait/issues</url>
   <url type="vcs-browser">https://codeberg.org/trougnouf/cfait</url>
+  <url type="donation">https://liberapay.com/trougnouf</url>
 
   <content_rating type="oars-1.1" />
 
+  <recommends>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>touch</control>
+  </recommends>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+
   <releases>
-    <release version="0.4.5" date="2026-01-06"/>
-    <release version="0.4.3" date="2026-01-05" />
-    <release version="0.4.2" date="2026-01-03" />
-    <release version="0.4.1" date="2026-01-03" />
-    <release version="0.4.0" date="2025-12-30" />
-    <release version="0.3.14" date="2025-12-29" />
-    <release version="0.3.13" date="2025-12-28" />
-    <release version="0.3.12" date="2025-12-24" />
-    <release version="0.3.11" date="2025-12-24" />
-    <release version="0.3.10" date="2025-12-24" />
-    <release version="0.3.9" date="2025-12-23" />
-    <release version="0.3.8" date="2025-12-23" />
-    <release version="0.3.7" date="2025-12-21" />
-    <release version="0.3.6" date="2025-12-21" />
-    <release version="0.3.5" date="2025-12-20" />
-    <release version="0.3.4" date="2025-12-19" />
-    <release version="0.3.3" date="2025-12-19" />
-    <release version="0.3.2" date="2025-12-18" />
-    <release version="0.3.1" date="2025-12-17" />
-    <release version="0.3.0" date="2025-12-17" />
-    <release version="0.2.9" date="2025-12-08" />
-    <release version="0.2.8" date="2025-12-08" />
-    <release version="0.2.7" date="2025-12-06" />
-    <release version="0.2.5" date="2025-12-04" />
-    <release version="0.2.4" date="2025-12-03" />
-    <release version="0.2.3" date="2025-12-01" />
-    <release version="0.2.2" date="2025-11-29" />
-    <release version="0.2.1" date="2025-11-29" />
-    <release version="0.2.0" date="2025-11-27" />
-    <release version="0.1.9" date="2025-11-26" />
-    <release version="0.1.7" date="2025-11-25" />
-    <release version="0.1.6" date="2025-11-24" />
-    <release version="0.1.5" date="2025-11-22" />
-    <release version="0.1.4" date="2025-11-22" />
-    <release version="0.1.3" date="2025-11-22" />
-    <release version="0.1.2" date="2025-11-21" />
-    <release version="0.1.1" date="2025-11-21" />
+    <release version="0.4.5" date="2026-01-06">
+      <description>
+        <p>Improvements to recurring tasks and Android navigation</p>
+        <ul>
+          <li>Allow canceling single occurrence of recurring task</li>
+          <li
+                    >Allow grace period before pushing tasks with a future date in the future/bottom bin</li>
+          <li>Make window draggable in the settings and help panels</li>
+          <li
+                    >Improve Android related-tasks navigation with jump back up shortcut button</li>
+          <li>Show related-task icon in the tasks list</li>
+          <li>Allow default sorting priority greater than 9</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.4.3" date="2026-01-05">
+      <description>
+        <p>Import and migration improvements</p>
+        <ul>
+          <li>Add import ics local store function</li>
+          <li>Allow opening ics files from outside the app</li>
+          <li>Allow changing default priority for sorting</li>
+          <li>Local store backward compatibility improvements</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.4.2" date="2026-01-03">
+      <description>
+        <p>Bug fixes and Flatpak improvements</p>
+        <ul>
+          <li>Restore RFC5545 duration compliance</li>
+          <li>Set GUI as default command for Flatpak</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.4.1" date="2026-01-03">
+      <description>
+        <p>Major feature update with improved task management</p>
+        <ul>
+          <li>Implement custom snooze with configurable durations</li>
+          <li>Include sub-tasks in search results when parent matches</li>
+          <li>Support multiple local collections</li>
+          <li>Support manual #blocked tag</li>
+          <li>Click on a linked task to jump to it (GUI, TUI, Android)</li>
+          <li>Parse "until" and "except" in recurrence rules</li>
+          <li>Allow moving tasks between calendars</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.4.0" date="2025-12-30">
+      <description>
+        <p>Performance improvements and new features</p>
+        <ul>
+          <li>Various performance optimizations</li>
+          <li>Styling improvements across all platforms</li>
+          <li>Bug fixes for improved stability</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.14" date="2025-12-29">
+      <description>
+        <p>Location features and performance improvements</p>
+        <ul>
+          <li>Sub-locations support (e.g. @@home:office)</li>
+          <li>Location-based aliases (e.g. @@aldi:=#groceries)</li>
+          <li>Add generic related-to relationships</li>
+          <li>Eliminate disk I/O on every action for better performance</li>
+          <li>Allow editing long titles with horizontal scrolling in TUI</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.13" date="2025-12-28">
+      <description>
+        <p>Reminders and notifications system</p>
+        <ul>
+          <li>Add reminders and alarm system with snoozing</li>
+          <li>Implement TUI, GUI, and Android notifications</li>
+          <li>Configurable auto-reminders</li>
+          <li>Parse time units in reminder settings (rem:TIME, rem:in TIME)</li>
+          <li>Add "Create subtask" action on Android</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.12" date="2025-12-24">
+      <description>
+        <p>Urgency rules and parser improvements</p>
+        <ul>
+          <li>Prioritize urgent tasks with configurable urgency rules</li>
+          <li>Handle escape character in parser</li>
+          <li>Unify syntax highlighting with core Rust parser via UniFFI</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.11" date="2025-12-24">
+      <description>
+        <p>Parser refactoring</p>
+        <ul>
+          <li
+                    >Improve smart input engine for robust date and recurrence parsing</li>
+          <li>Fix bug where short dates were parsed as start dates</li>
+          <li>Improve test coverage</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.10" date="2025-12-24">
+      <description>
+        <p>Bug fixes and documentation</p>
+        <ul>
+          <li>Correct recurrence parsing and fix highlighting</li>
+          <li>Add comprehensive README compliance tests</li>
+          <li>Add Matrix chatroom to README</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.9" date="2025-12-23">
+      <description>
+        <p>Android improvements and location features</p>
+        <ul>
+          <li>Improve multi-word highlighting on Android</li>
+          <li>Add pull down to refresh</li>
+          <li>Add clickable URL/Geo icons</li>
+          <li>Add cache versioning to invalidate stale caches on upgrade</li>
+          <li>Count only active tasks in header</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.8" date="2025-12-23">
+      <description>
+        <p>Locations, URLs, and aliases</p>
+        <ul>
+          <li>Add locations and URLs support</li>
+          <li>Recursive aliases with cycle detection</li>
+          <li>Quoted string support</li>
+          <li>Filter views by location</li>
+          <li>Compact journal on sync for better performance</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.7" date="2025-12-21">
+      <description>
+        <p>Syntax highlighting and sync improvements</p>
+        <ul>
+          <li
+                    >Refine smart input syntax highlighting with different colors per type</li>
+          <li>Add optional "in" date keyword</li>
+          <li>Correctly journal offline task moves to prevent duplication</li>
+          <li
+                    >Centralize journal application logic and improve sort consistency</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.6" date="2025-12-21">
+      <description>
+        <p>Authentication improvements</p>
+        <ul>
+          <li>Add Digest authentication</li>
+          <li>Fix Android SSL support</li>
+          <li>Published on F-Droid</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.5" date="2025-12-20">
+      <description>
+        <p>Real-time input decoration</p>
+        <ul>
+          <li
+                    >Decorate special statements and tags in real time in the input bar</li>
+          <li>Android: Press once to search</li>
+          <li>Add suggested CalDAV providers to README</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.4" date="2025-12-19">
+      <description>
+        <p>Offline handling and settings improvements</p>
+        <ul>
+          <li>Improve offline remote calendar handling</li>
+          <li>Show current state of connection</li>
+          <li>Refactor settings for instant save</li>
+          <li
+                    >Resolve journal deadlock by handling 412 conflict on task creation</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.3" date="2025-12-19">
+      <description>
+        <p>Optimistic UI updates and workflow improvements</p>
+        <ul>
+          <li>Implement pause/stop task states</li>
+          <li
+                    >Implement optimistic UI updates for instant task creation and modification</li>
+          <li>Show task duration</li>
+          <li>Make RustyDark the default theme</li>
+          <li>Resolve infinite sync loop</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.2" date="2025-12-18">
+      <description>
+        <p>Build fixes and F-Droid preparation</p>
+        <ul>
+          <li>Fix Android build configuration</li>
+          <li>Work on reproducible builds for F-Droid</li>
+          <li>Auto-generate changelogs</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.1" date="2025-12-17">
+      <description>
+        <p>Android crash fixes</p>
+        <ul>
+          <li>Prevent crash on "Show all calendars" toggle on first run</li>
+          <li
+                    >Prevent sync conflicts by writing post-sync ETag/sequence back to store</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.3.0" date="2025-12-17">
+      <description>
+        <p>Major release: Native Android client and hierarchical features</p>
+        <ul>
+          <li
+                    >Implement native Android client using Jetpack Compose and UniFFI</li>
+          <li>Hierarchical tag filtering and sidebar aggregation</li>
+          <li>Tag inheritance for child tasks</li>
+          <li>Display CalDAV calendar colors in all UIs</li>
+          <li>Implement priority gradient</li>
+          <li
+                    >Add keyboard shortcuts for GUI ("/" to search, "a" for smart input)</li>
+          <li>Implement theme switcher with custom 'Rusty Dark' option</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.9" date="2025-12-08">
+      <description>
+        <p>GUI improvements and startup optimization</p>
+        <ul>
+          <li>Preserve recurring task exceptions written by other clients</li>
+          <li>Click on tag jumps to it in GUI</li>
+          <li>Help on hover in GUI</li>
+          <li>Optimize VTODO parsing to speed up startup from empty cache</li>
+          <li
+                    >Always align tags to the right and share a line with the title</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.8" date="2025-12-08">
+      <description>
+        <p>Smart tag navigation and safe conflict resolution</p>
+        <ul>
+          <li>Implement smart tag navigation and search result jumping</li>
+          <li
+                    >Implement safe 3-way merge for 412 conflicts to reduce duplicates</li>
+          <li>Safe unmapped property handling</li>
+          <li>Implement optimistic cache loading for instant startup</li>
+          <li>Use default color for white background terminal compatibility</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.7" date="2025-12-06">
+      <description>
+        <p>Start dates and GUI help screen</p>
+        <ul>
+          <li>Implement Start Date (DTSTART) with smart input parsing</li>
+          <li>Display active task count next to each tag in sidebars</li>
+          <li>Add help screen to GUI with icons</li>
+          <li>Implement custom draggable and resizable window decorations</li>
+          <li>Upgrade to iced 0.14-dev for native window resizing</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.5" date="2025-12-04">
+      <description>
+        <p>Help screen and code refactoring</p>
+        <ul>
+          <li>Streamline child task creation from parent in GUI and TUI</li>
+          <li>Add toggleable, dynamic, and comprehensive help screen in TUI</li>
+          <li>Implement auto-jump to new tasks in TUI and GUI</li>
+          <li
+                    >Split code into granular submodules for better maintainability</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.4" date="2025-12-03">
+      <description>
+        <p>File locking and multiline descriptions</p>
+        <ul>
+          <li>Implement robust file locking to prevent data corruption</li>
+          <li>Enable multiline task descriptions in GUI and TUI (Alt+Enter)</li>
+          <li>Move main mirror from GitHub to Codeberg</li>
+          <li>Add Codeberg Actions for testing and release builds</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.3" date="2025-12-01">
+      <description>
+        <p>Layered calendars and conflict resolution</p>
+        <ul>
+          <li>Implement layered calendars with disabled state</li>
+          <li>Implement safe conflict resolution with copy on 412 error</li>
+          <li>Implement CTag caching and optimize fetch operations</li>
+          <li
+                    >Implement bounded concurrency and delta sync for task fetching</li>
+          <li>Treat no priority as implied normal priority (5) for sorting</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.2" date="2025-11-29">
+      <description>
+        <p>Sync improvements</p>
+        <ul>
+          <li
+                    >Handle 412 Precondition Failed by refreshing ETag and retrying</li>
+          <li>Align tags with titles in GUI</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.1" date="2025-11-29">
+      <description>
+        <p>Local-only calendar and offline support</p>
+        <ul>
+          <li>Implement secure TLS with insecure toggle option</li>
+          <li>Add setting to hide specific calendars from view</li>
+          <li>Implement moving tasks between calendars in GUI and TUI</li>
+          <li
+                    >Introduce a local-only calendar with migration option to CalDAV</li>
+          <li>Implement offline task queue and UI indicators</li>
+          <li>Embed Symbols Nerd Font and iconify UI</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.0" date="2025-11-27">
+      <description>
+        <p>GTD workflow implementation</p>
+        <ul>
+          <li>Initial implementation of ongoing and canceled tasks</li>
+          <li>Custom checkmark icons (V, &gt;, X)</li>
+          <li>Implement GTD workflow and advanced search parser</li>
+          <li>Add refresh key in TUI and remove dependency buttons in GUI</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.1.9" date="2025-11-26">
+      <description>
+        <p>Sorting and tag improvements</p>
+        <ul>
+          <li
+                    >Set cutoff date so timed tasks are not always on top (default: 6 months)</li>
+          <li>Add scroll wheel in GUI settings</li>
+          <li>Change hide_completed_in_tags to hide_fully_completed_tags</li>
+          <li>Fix tags saved with comma for better client compatibility</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.1.7" date="2025-11-25">
+      <description>
+        <p>Dependencies and aliases</p>
+        <ul>
+          <li>Support RFC 9253 (DEPENDS-ON) in both TUI and GUI</li>
+          <li>Support aliases (configurable in settings)</li>
+          <li>Add subtitle to GUI window</li>
+          <li>Manually allow multiple RELATED-TO fields</li>
+          <li>Add unit tests</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.1.6" date="2025-11-24">
+      <description>
+        <p>Categories and tags view</p>
+        <ul>
+          <li>Add icon to application</li>
+          <li>Add support for #categories in GUI and TUI</li>
+          <li>Add Tags (categories) view pulling from all calendars</li>
+          <li>Add settings to hide completed tasks</li>
+          <li>Browse by category/tags in TUI</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.1.5" date="2025-11-22">
+      <description>
+        <p>Packaging and optimization</p>
+        <ul>
+          <li>Rename fairouille to cfait</li>
+          <li>Optimize binary size</li>
+          <li>Add onboarding prompt</li>
+          <li>Automate Arch Linux PKGBUILD</li>
+          <li>Add .deb release</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.1.4" date="2025-11-22">
+      <description>
+        <p>Packaging improvements</p>
+        <ul>
+          <li>Add license file</li>
+          <li>Add Arch Linux PKGBUILD</li>
+          <li>Project renamed from Rustache to ferouille</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.1.3" date="2025-11-22">
+      <description>
+        <p>Recurrence and caching</p>
+        <ul>
+          <li>Add recurrence support with recurrence symbol</li>
+          <li>Expand relative dates</li>
+          <li>Add caching for fast inter-calendar switching</li>
+          <li>Add unit tests to model</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.1.2" date="2025-11-21">
+      <description>
+        <p>Description editing and task management</p>
+        <ul>
+          <li>Allow viewing and editing task descriptions in GUI and TUI</li>
+          <li>Add priority, subtask, edit, and delete buttons in GUI</li>
+          <li>Show task descriptions in GUI</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.1.1" date="2025-11-21">
+      <description>
+        <p>Initial release</p>
+        <ul>
+          <li>Working TUI with create, add, complete, and delete tasks</li>
+          <li>Multiple calendars support from the same server</li>
+          <li>Basic GUI with multi-calendar support</li>
+          <li>Sub-tasks support in both TUI and GUI</li>
+          <li>Search function and date display in GUI</li>
+          <li>Scrolling support in TUI</li>
+        </ul>
+      </description>
+    </release>
   </releases>
 </component>
