@@ -1028,22 +1028,34 @@ impl CfaitMobile {
         let client_guard = self.client.lock().await;
         let mut store = self.store.lock().await;
 
-        let updated_task = store
+        // Use the atomic store API that returns both the original (pre-mutation)
+        // and updated (post-mutation) task so we don't need to clone/look up
+        // the original separately and risk races.
+        let (original_task, _updated_task) = store
             .move_task(&uid, new_cal_href.clone())
             .ok_or(MobileError::from("Task not found"))?;
 
         drop(store);
 
         let mut network_success = false;
+        // Pass the original (pre-mutation) task to the client so the backend
+        // / journal can identify the source calendar.
         if let Some(client) = &*client_guard
-            && client.move_task(&updated_task, &new_cal_href).await.is_ok()
+            && client
+                .move_task(&original_task, &new_cal_href)
+                .await
+                .is_ok()
         {
             network_success = true;
         }
 
         if !network_success && !new_cal_href.starts_with("local://") {
-            crate::journal::Journal::push(crate::journal::Action::Move(updated_task, new_cal_href))
-                .map_err(MobileError::from)?;
+            // Pass the original (pre-mutation) task to the Journal
+            crate::journal::Journal::push(crate::journal::Action::Move(
+                original_task,
+                new_cal_href,
+            ))
+            .map_err(MobileError::from)?;
         }
 
         // Rebuild alarm index after moving task

@@ -277,14 +277,31 @@ impl TaskStore {
         result
     }
 
-    pub fn move_task(&mut self, uid: &str, target_href: String) -> Option<Task> {
+    /// Move a task from its current calendar to `target_href`.
+    ///
+    /// Returns a tuple `(original_task, updated_task)` where `original_task` is the
+    /// pre-mutation copy (so callers can identify the source calendar) and
+    /// `updated_task` is the task after being moved into the target calendar.
+    ///
+    /// This single API is atomic from the store's perspective and prevents races
+    /// where callers might otherwise observe a mutated task and lose the source
+    /// calendar information.
+    pub fn move_task(&mut self, uid: &str, target_href: String) -> Option<(Task, Task)> {
         if let Some((mut task, old_href)) = self.delete_task(uid) {
             if old_href == target_href {
+                // No-op move; reinsert original task and signal nothing changed.
                 self.add_task(task);
                 return None;
             }
+
+            // Keep a copy of the pre-mutation task to allow callers to know the source.
+            let original = task.clone();
+
+            // Mutate and insert updated task into the target calendar.
             task.calendar_href = target_href.clone();
             self.add_task(task.clone());
+
+            // Persist caches for local / remote calendars as before.
             if target_href.starts_with("local://") {
                 if let Some(local_tasks) = self.calendars.get(&target_href) {
                     let _ = LocalStorage::save_for_href(&target_href, local_tasks);
@@ -293,7 +310,8 @@ impl TaskStore {
                 let (_, token) = Cache::load(&target_href).unwrap_or((vec![], None));
                 let _ = Cache::save(&target_href, target_list, token);
             }
-            return Some(task);
+
+            return Some((original, task));
         }
         None
     }

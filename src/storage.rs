@@ -790,7 +790,16 @@ mod tests {
 
     #[test]
     fn test_locking_concurrency() {
-        let temp_dir = std::env::temp_dir().join("cfait_test_lock");
+        // Use a uniquely-named temporary directory to avoid interference between
+        // parallel test runs or other processes that may reuse the same name.
+        let unique = format!(
+            "cfait_test_lock_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let temp_dir = std::env::temp_dir().join(unique);
         let _ = fs::create_dir_all(&temp_dir);
         let file_path = temp_dir.join("lock_test.txt");
         let path_ref = Arc::new(file_path.clone());

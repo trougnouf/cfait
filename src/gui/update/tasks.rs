@@ -302,25 +302,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::MoveTask(task_uid, target_href) => {
-            let original_task = app
-                .store
-                .calendars
-                .values()
-                .flatten()
-                .find(|t| t.uid == task_uid)
-                .cloned();
-
-            if let Some(updated) = app.store.move_task(&task_uid, target_href.clone()) {
+            // Use atomic store API that returns both the original (pre-mutation)
+            // and the updated (post-mutation) task so callers do not have to
+            // capture/cloning state separately and risk races.
+            if let Some((original, _updated)) = app.store.move_task(&task_uid, target_href.clone())
+            {
                 app.selected_uid = Some(task_uid);
                 refresh_filtered_tasks(app);
                 if let Some(client) = &app.client {
+                    // Pass the original (pre-mutation) task to the network layer
+                    // so the backend/journal can identify the source calendar.
                     return Task::perform(
-                        async_move_wrapper(client.clone(), updated, target_href),
+                        async_move_wrapper(client.clone(), original.clone(), target_href),
                         Message::TaskMoved,
                     );
-                } else if let Some(old_task) = original_task {
+                } else {
                     app.unsynced_changes = true;
-                    let _ = Journal::push(Action::Move(old_task, target_href));
+                    let _ = Journal::push(Action::Move(original, target_href));
                 }
             }
             Task::none()

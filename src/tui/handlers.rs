@@ -911,7 +911,7 @@ pub async fn handle_key_event(
                         state
                             .move_targets
                             .get(idx)
-                            .map(|target_cal| (task.uid.clone(), target_cal.href.clone()))
+                            .map(|target_cal| (task.clone(), target_cal.href.clone()))
                     } else {
                         None
                     }
@@ -919,13 +919,18 @@ pub async fn handle_key_event(
                     None
                 };
 
-                if let Some((uid, target_href)) = data
-                    && let Some(updated) = state.store.move_task(&uid, target_href.clone())
+                // Use the atomic store API that returns both the original (pre-mutation)
+                // and updated (post-mutation) tasks so we don't rely on separate
+                // lookups/clones and avoid races.
+                if let Some((ref selected_task, ref target_href)) = data
+                    && let Some((original_task, _updated_task)) = state
+                        .store
+                        .move_task(&selected_task.uid, target_href.clone())
                 {
                     state.refresh_filtered_view();
                     state.message = "Moving task...".to_string();
                     state.mode = InputMode::Normal;
-                    return Some(Action::MoveTask(updated, target_href));
+                    return Some(Action::MoveTask(original_task, target_href.clone()));
                 }
                 state.mode = InputMode::Normal;
             }
