@@ -99,7 +99,28 @@ impl GuiApp {
 
     fn theme(&self) -> Theme {
         match self.current_theme {
+            AppTheme::Light => Theme::Light,
             AppTheme::Dark => Theme::Dark,
+            AppTheme::Dracula => Theme::Dracula,
+            AppTheme::Nord => Theme::Nord,
+            AppTheme::SolarizedLight => Theme::SolarizedLight,
+            AppTheme::SolarizedDark => Theme::SolarizedDark,
+            AppTheme::GruvboxLight => Theme::GruvboxLight,
+            AppTheme::GruvboxDark => Theme::GruvboxDark,
+            AppTheme::CatppuccinLatte => Theme::CatppuccinLatte,
+            AppTheme::CatppuccinFrappe => Theme::CatppuccinFrappe,
+            AppTheme::CatppuccinMacchiato => Theme::CatppuccinMacchiato,
+            AppTheme::CatppuccinMocha => Theme::CatppuccinMocha,
+            AppTheme::TokyoNight => Theme::TokyoNight,
+            AppTheme::TokyoNightStorm => Theme::TokyoNightStorm,
+            AppTheme::TokyoNightLight => Theme::TokyoNightLight,
+            AppTheme::KanagawaWave => Theme::KanagawaWave,
+            AppTheme::KanagawaDragon => Theme::KanagawaDragon,
+            AppTheme::KanagawaLotus => Theme::KanagawaLotus,
+            AppTheme::Moonfly => Theme::Moonfly,
+            AppTheme::Nightfly => Theme::Nightfly,
+            AppTheme::Oxocarbon => Theme::Oxocarbon,
+            AppTheme::Ferra => Theme::Ferra,
             AppTheme::RustyDark => {
                 let dark_palette = iced::Theme::Dark.palette();
                 Theme::custom(

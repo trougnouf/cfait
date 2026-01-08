@@ -27,8 +27,13 @@ pub fn view_task_row<'a>(
     let is_blocked = app.store.is_blocked(task);
     let is_selected = app.selected_uid.as_ref() == Some(&task.uid);
 
+    let theme = app.theme();
+    // Use the theme palette for unset priority (0) so the UI adapts to light/dark themes.
+    // For explicit priorities, keep using the RGB mapping from color_utils.
     let color = if is_blocked {
         Color::from_rgb(0.5, 0.5, 0.5)
+    } else if task.priority == 0 {
+        theme.extended_palette().background.base.text
     } else {
         let (r, g, b) = color_utils::get_priority_rgb(task.priority);
         Color::from_rgb(r, g, b)

@@ -53,7 +53,28 @@ fn default_delete_events_on_completion() -> bool {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum AppTheme {
+    Light,
     Dark,
+    Dracula,
+    Nord,
+    SolarizedLight,
+    SolarizedDark,
+    GruvboxLight,
+    GruvboxDark,
+    CatppuccinLatte,
+    CatppuccinFrappe,
+    CatppuccinMacchiato,
+    CatppuccinMocha,
+    TokyoNight,
+    TokyoNightStorm,
+    TokyoNightLight,
+    KanagawaWave,
+    KanagawaDragon,
+    KanagawaLotus,
+    Moonfly,
+    Nightfly,
+    Oxocarbon,
+    Ferra,
     #[default]
     RustyDark,
 }
@@ -61,14 +82,59 @@ pub enum AppTheme {
 impl fmt::Display for AppTheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AppTheme::Dark => write!(f, "Default Dark"),
+            AppTheme::Light => write!(f, "Light"),
+            AppTheme::Dark => write!(f, "Dark"),
+            AppTheme::Dracula => write!(f, "Dracula"),
+            AppTheme::Nord => write!(f, "Nord"),
+            AppTheme::SolarizedLight => write!(f, "Solarized Light"),
+            AppTheme::SolarizedDark => write!(f, "Solarized Dark"),
+            AppTheme::GruvboxLight => write!(f, "Gruvbox Light"),
+            AppTheme::GruvboxDark => write!(f, "Gruvbox Dark"),
+            AppTheme::CatppuccinLatte => write!(f, "Catppuccin Latte"),
+            AppTheme::CatppuccinFrappe => write!(f, "Catppuccin Frappé"),
+            AppTheme::CatppuccinMacchiato => write!(f, "Catppuccin Macchiato"),
+            AppTheme::CatppuccinMocha => write!(f, "Catppuccin Mocha"),
+            AppTheme::TokyoNight => write!(f, "Tokyo Night"),
+            AppTheme::TokyoNightStorm => write!(f, "Tokyo Night Storm"),
+            AppTheme::TokyoNightLight => write!(f, "Tokyo Night Light"),
+            AppTheme::KanagawaWave => write!(f, "Kanagawa Wave"),
+            AppTheme::KanagawaDragon => write!(f, "Kanagawa Dragon"),
+            AppTheme::KanagawaLotus => write!(f, "Kanagawa Lotus"),
+            AppTheme::Moonfly => write!(f, "Moonfly"),
+            AppTheme::Nightfly => write!(f, "Nightfly"),
+            AppTheme::Oxocarbon => write!(f, "Oxocarbon"),
+            AppTheme::Ferra => write!(f, "Ferra"),
             AppTheme::RustyDark => write!(f, "Rusty Dark"),
         }
     }
 }
 
 impl AppTheme {
-    pub const ALL: [AppTheme; 2] = [AppTheme::Dark, AppTheme::RustyDark];
+    pub const ALL: [AppTheme; 23] = [
+        AppTheme::RustyDark,
+        AppTheme::Light,
+        AppTheme::Dark,
+        AppTheme::Dracula,
+        AppTheme::Nord,
+        AppTheme::SolarizedLight,
+        AppTheme::SolarizedDark,
+        AppTheme::GruvboxLight,
+        AppTheme::GruvboxDark,
+        AppTheme::CatppuccinLatte,
+        AppTheme::CatppuccinFrappe,
+        AppTheme::CatppuccinMacchiato,
+        AppTheme::CatppuccinMocha,
+        AppTheme::TokyoNight,
+        AppTheme::TokyoNightStorm,
+        AppTheme::TokyoNightLight,
+        AppTheme::KanagawaWave,
+        AppTheme::KanagawaDragon,
+        AppTheme::KanagawaLotus,
+        AppTheme::Moonfly,
+        AppTheme::Nightfly,
+        AppTheme::Oxocarbon,
+        AppTheme::Ferra,
+    ];
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

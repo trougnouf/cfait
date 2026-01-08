@@ -1,8 +1,12 @@
 // Utilities for generating deterministic colors from strings.
+// This file provides HSL-based color generation and priority color mappings.
+// It intentionally has NO dependencies on iced or other GUI crates so it can be
+// used from non-GUI code (TUI, core logic, tests, etc).
+
 use std::hash::{Hash, Hasher};
 
 /// Generates a deterministic color tuple (r, g, b) in [0.0, 1.0] range based on the input string.
-/// Ranges updated to S: 40-90, L: 65-90 per user request.
+/// Ranges selected produce reasonably saturated and bright colors suitable for UI accents.
 pub fn generate_color(tag: &str) -> (f32, f32, f32) {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     tag.hash(&mut hasher);
@@ -14,14 +18,10 @@ pub fn generate_color(tag: &str) -> (f32, f32, f32) {
     let hash_s = hash >> 16;
     let hash_l = hash >> 32;
 
-    // Saturation: 40% - 90%
-    // (hash % 51) gives 0..50. / 100.0 gives 0.0..0.50.
-    // 0.40 + 0.50 = 0.90
+    // Saturation: 40% - 90% (0.40 .. 0.90)
     let s = 0.40 + ((hash_s % 51) as f32 / 100.0);
 
-    // Lightness: 65% - 90%
-    // (hash % 26) gives 0..25. / 100.0 gives 0.0..0.25.
-    // 0.65 + 0.25 = 0.90
+    // Lightness: 65% - 90% (0.65 .. 0.90)
     let l = 0.65 + ((hash_l % 26) as f32 / 100.0);
 
     hsl_to_rgb(h, s, l)
@@ -29,11 +29,12 @@ pub fn generate_color(tag: &str) -> (f32, f32, f32) {
 
 /// Helper: HSL to RGB conversion
 fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
+    // Implementation based on standard HSL->RGB conversion
     let c = (1.0 - (2.0 * l - 1.0).abs()) * s;
     let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
     let m = l - c / 2.0;
 
-    let (r, g, b) = if (0.0..60.0).contains(&h) {
+    let (r1, g1, b1) = if (0.0..60.0).contains(&h) {
         (c, x, 0.0)
     } else if (60.0..120.0).contains(&h) {
         (x, c, 0.0)
@@ -47,15 +48,18 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> (f32, f32, f32) {
         (c, 0.0, x)
     };
 
-    (r + m, g + m, b + m)
+    (r1 + m, g1 + m, b1 + m)
 }
 
 /// Determines if text on top of this color should be black or white.
+/// Input components are expected in [0.0, 1.0] range.
 pub fn is_dark(r: f32, g: f32, b: f32) -> bool {
+    // Perceptual luminance approximation
     let brightness = 0.299 * r + 0.587 * g + 0.114 * b;
     brightness < 0.5
 }
 
+/// Parse a hex color string like "#RRGGBB" or "RRGGBB" into floats (0.0..1.0).
 pub fn parse_hex_to_floats(hex: &str) -> Option<(f32, f32, f32)> {
     let hex = hex.trim_start_matches('#');
     if hex.len() < 6 {
@@ -64,10 +68,10 @@ pub fn parse_hex_to_floats(hex: &str) -> Option<(f32, f32, f32)> {
     let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
     let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
     let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-
     Some((r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0))
 }
 
+/// Parse a hex color string like "#RRGGBB" or "RRGGBB" into u8 tuple.
 pub fn parse_hex_to_u8(hex: &str) -> Option<(u8, u8, u8)> {
     let hex = hex.trim_start_matches('#');
     if hex.len() < 6 {
@@ -76,12 +80,21 @@ pub fn parse_hex_to_u8(hex: &str) -> Option<(u8, u8, u8)> {
     let r = u8::from_str_radix(&hex[0..2], 16).ok()?;
     let g = u8::from_str_radix(&hex[2..4], 16).ok()?;
     let b = u8::from_str_radix(&hex[4..6], 16).ok()?;
-
     Some((r, g, b))
 }
 
 /// Returns the RGB color tuple for a given priority level.
-/// 1 = Critical (Red) -> 9 = Lowest (Greyish)
+/// Priority mapping:
+/// 1 = Critical (Red)
+/// 2 = Orange-Red
+/// 3 = Orange
+/// 4 = Amber
+/// 5 = Yellow
+/// 6 = Pale Khaki
+/// 7 = Light Steel Blue
+/// 8 = Slate / Muted Purple
+/// 9 = Greyish Lavender
+/// Any other value returns white (1.0, 1.0, 1.0).
 pub fn get_priority_rgb(priority: u8) -> (f32, f32, f32) {
     match priority {
         1 => (1.0, 0.2, 0.2),    // Red
@@ -93,6 +106,6 @@ pub fn get_priority_rgb(priority: u8) -> (f32, f32, f32) {
         7 => (0.7, 0.75, 0.85),  // Light Steel Blue
         8 => (0.65, 0.6, 0.8),   // Slate / Muted Purple
         9 => (0.6, 0.55, 0.65),  // Greyish Lavender
-        _ => (1.0, 1.0, 1.0),    // White
+        _ => (1.0, 1.0, 1.0),    // White / default
     }
 }
