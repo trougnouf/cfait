@@ -22,13 +22,16 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
         .iter()
         .filter(|c| !app.disabled_calendars.contains(&c.href))
         .all(|c| !app.hidden_calendars.contains(&c.href));
+    // Capture the current theme so we can pick theme-aware defaults for icons/foregrounds
+    let theme = app.theme();
     let toggler_style = |theme: &Theme, status: toggler::Status| -> toggler::Style {
         let mut style = toggler::default(theme, status);
         match status {
             toggler::Status::Active { is_toggled } | toggler::Status::Hovered { is_toggled } => {
                 if is_toggled {
                     style.background = Color::from_rgb(1.0, 0.6, 0.0).into();
-                    style.foreground = Color::WHITE.into();
+                    // Use the theme's text color instead of a hardcoded white so the toggler adapts
+                    style.foreground = theme.extended_palette().background.base.text.into();
                 }
             }
             _ => {}
@@ -64,17 +67,18 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
                 let (icon_char, icon_color) = if is_target {
                     (
                         icon::CONTENT_SAVE_EDIT,
-                        // Use cal color if present, else Orange
-                        cal_color.unwrap_or(Color::from_rgb(1.0, 0.6, 0.0)),
+                        // Use cal color if present, else theme foreground (adapts to light/dark)
+                        cal_color.unwrap_or(theme.extended_palette().background.base.text),
                     )
                 } else if is_visible {
                     (
                         icon::EYE,
-                        // Use cal color if present, else Grey
-                        cal_color.unwrap_or(Color::from_rgb(0.7, 0.7, 0.7)),
+                        // Use cal color if present, else a weaker theme text color for non-target items
+                        cal_color.unwrap_or(theme.extended_palette().background.weak.text),
                     )
                 } else {
-                    (icon::EYE_CLOSED, Color::from_rgb(0.4, 0.4, 0.4))
+                    // Hidden calendars use the theme's weak text color by default
+                    (icon::EYE_CLOSED, theme.extended_palette().secondary.base.color)
                 };
                 // ---------------------------------
 

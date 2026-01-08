@@ -1,4 +1,4 @@
-// Renders the help screen overlay.
+// File: ./src/gui/view/help.rs
 use crate::gui::message::Message;
 use iced::widget::{
     MouseArea, Space, button, column, container, row, scrollable, svg, text, text_input,
@@ -7,13 +7,12 @@ use iced::{Color, Element, Length, Theme};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // --- STYLE CONSTANTS ---
-const COL_ACCENT: Color = Color::from_rgb(0.4, 0.7, 1.0); // Soft Blue
-const COL_SYNTAX: Color = Color::from_rgb(1.0, 0.85, 0.4); // Gold/Yellow
+const COL_ACCENT: Color = Color::from_rgb(0.4, 0.7, 1.0); // Soft Blue (Dark Mode)
+const COL_SYNTAX: Color = Color::from_rgb(1.0, 0.85, 0.4); // Gold/Yellow (Dark Mode)
 const COL_MUTED: Color = Color::from_rgb(0.6, 0.6, 0.6); // Grey
-const COL_CARD_BG: Color = Color::from_rgb(0.15, 0.15, 0.17); // Slightly lighter than pure black
 
 pub fn view_help() -> Element<'static, Message> {
-    // Randomize icon based on current time (choose between 3 icons)
+    // Randomize icon based on current time
     let icon_choice = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| (d.as_secs() % 3) as u8)
@@ -37,8 +36,8 @@ pub fn view_help() -> Element<'static, Message> {
             .content_fit(iced::ContentFit::Contain),
         text("Help & About")
             .size(28)
-            .style(|_: &Theme| text::Style {
-                color: Some(Color::WHITE)
+            .style(|theme: &Theme| text::Style {
+                color: Some(theme.extended_palette().background.base.text)
             }),
         Space::new().width(Length::Fill)
     ]
@@ -305,8 +304,12 @@ pub fn view_help() -> Element<'static, Message> {
                 button(
                     text("https://codeberg.org/trougnouf/cfait")
                         .size(12)
-                        .style(|_: &Theme| text::Style {
-                            color: Some(COL_ACCENT)
+                        .style(|theme: &Theme| text::Style {
+                            color: Some(if theme.extended_palette().is_dark {
+                                COL_ACCENT
+                            } else {
+                                theme.extended_palette().primary.base.color
+                            })
                         })
                 )
                 .padding(0)
@@ -359,14 +362,23 @@ fn help_card(
     icon_char: char,
     items: Vec<HelpEntry>,
 ) -> Element<'static, Message> {
+    // Header Row with Dynamic Accent Color
     let header = row![
         crate::gui::icon::icon(icon_char)
             .size(20)
-            .style(|_: &Theme| text::Style {
-                color: Some(COL_ACCENT)
+            .style(|theme: &Theme| text::Style {
+                color: Some(if theme.extended_palette().is_dark {
+                    COL_ACCENT
+                } else {
+                    theme.extended_palette().primary.base.color
+                })
             }),
-        text(title).size(18).style(|_: &Theme| text::Style {
-            color: Some(COL_ACCENT)
+        text(title).size(18).style(|theme: &Theme| text::Style {
+            color: Some(if theme.extended_palette().is_dark {
+                COL_ACCENT
+            } else {
+                theme.extended_palette().primary.base.color
+            })
         })
     ]
     .spacing(10)
@@ -376,8 +388,9 @@ fn help_card(
         header,
         iced::widget::rule::horizontal(1).style(|theme: &Theme| {
             let base = iced::widget::rule::default(theme);
+            let palette = theme.extended_palette();
             iced::widget::rule::Style {
-                color: Color::from_rgb(0.3, 0.3, 0.3),
+                color: Color { a: 0.12, ..palette.background.base.text },
                 ..base
             }
         })
@@ -385,19 +398,38 @@ fn help_card(
     .spacing(12);
 
     for item in items {
+        // Syntax Pill with Dynamic High Contrast Color
         let syntax_pill = container(text::<Theme, iced::Renderer>(item.syntax).size(14).style(
-            |_: &Theme| text::Style {
-                color: Some(COL_SYNTAX),
+            |theme: &Theme| {
+                let palette = theme.extended_palette();
+                text::Style {
+                    // Dark Mode: Yellow (COL_SYNTAX)
+                    // Light Mode: Primary Strong (Dark Blue/Purple) for readability on Light Blue BG
+                    color: Some(if palette.is_dark {
+                        COL_SYNTAX
+                    } else {
+                        palette.primary.strong.color
+                    }),
+                }
             },
         ))
         .padding([2, 6])
-        .style(|_: &Theme| container::Style {
-            background: Some(Color::from_rgba(1.0, 0.85, 0.4, 0.1).into()),
-            border: iced::Border {
-                radius: 4.0.into(),
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                background: Some(
+                    Color {
+                        a: 0.10,
+                        ..palette.primary.base.color
+                    }
+                    .into(),
+                ),
+                border: iced::Border {
+                    radius: 4.0.into(),
+                    ..Default::default()
+                },
                 ..Default::default()
-            },
-            ..Default::default()
+            }
         });
 
         let content = column![
@@ -406,8 +438,8 @@ fn help_card(
                 text::<Theme, iced::Renderer>(item.desc)
                     .size(14)
                     .width(Length::Fill)
-                    .style(|_: &Theme| text::Style {
-                        color: Some(Color::WHITE)
+                    .style(|theme: &Theme| text::Style {
+                        color: Some(theme.extended_palette().background.base.text)
                     }),
             ]
             .spacing(10)
@@ -432,14 +464,23 @@ fn help_card(
 
     container(rows)
         .padding(15)
-        .style(|_: &Theme| container::Style {
-            background: Some(COL_CARD_BG.into()),
-            border: iced::Border {
-                radius: 8.0.into(),
-                width: 1.0,
-                color: Color::from_rgb(0.25, 0.25, 0.28),
-            },
-            ..Default::default()
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                background: Some(
+                    Color {
+                        a: 0.98,
+                        ..palette.background.weak.color
+                    }
+                    .into(),
+                ),
+                border: iced::Border {
+                    radius: 8.0.into(),
+                    width: 1.0,
+                    color: Color { a: 0.35, ..palette.background.base.text },
+                },
+                ..Default::default()
+            }
         })
         .width(Length::Fill)
         .into()
@@ -454,15 +495,13 @@ fn support_card() -> Element<'static, Message> {
         }),
         text("Support Development")
             .size(18)
-            .style(|_: &Theme| text::Style {
-                color: Some(Color::WHITE)
+            .style(|theme: &Theme| text::Style {
+                color: Some(theme.extended_palette().background.base.text)
             })
     ]
     .spacing(10)
     .align_y(iced::Alignment::Center);
 
-    // Explicitly type arguments as &'static str to satisfy Element<'static> requirements
-    // and avoid lifetime inference errors when creating the Row.
     let copy_row = |icon_char: char, label: &'static str, val: &'static str| {
         row![
             icon(icon_char)
@@ -497,8 +536,12 @@ fn support_card() -> Element<'static, Message> {
                 .style(|_: &Theme| text::Style {
                     color: Some(COL_MUTED)
                 }),
-            button(text(url).size(14).style(|_: &Theme| text::Style {
-                color: Some(COL_ACCENT)
+            button(text(url).size(14).style(|theme: &Theme| text::Style {
+                color: Some(if theme.extended_palette().is_dark {
+                    COL_ACCENT
+                } else {
+                    theme.extended_palette().primary.base.color
+                })
             }))
             .padding(5)
             .width(Length::Fill)
@@ -541,14 +584,26 @@ fn support_card() -> Element<'static, Message> {
 
     container(rows)
         .padding(15)
-        .style(|_: &Theme| container::Style {
-            background: Some(COL_CARD_BG.into()),
-            border: iced::Border {
-                radius: 8.0.into(),
-                width: 1.0,
-                color: Color::from_rgb(0.25, 0.25, 0.28),
-            },
-            ..Default::default()
+        // Updated Background style to be Theme-Aware
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                background: Some(
+                    // Use a slightly darker shade of the theme's background
+                    // instead of the hardcoded COL_CARD_BG
+                    Color {
+                        a: 0.98,
+                        ..palette.background.weak.color
+                    }
+                    .into(),
+                ),
+                border: iced::Border {
+                    radius: 8.0.into(),
+                    width: 1.0,
+                    color: Color { a: 0.3, ..palette.background.base.text },
+                },
+                ..Default::default()
+            }
         })
         .width(Length::Fill)
         .into()

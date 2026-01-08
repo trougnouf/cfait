@@ -1,3 +1,5 @@
+//cfait/src/color_utils.rs
+
 // Utilities for generating deterministic colors from strings.
 // This file provides HSL-based color generation and priority color mappings.
 // It intentionally has NO dependencies on iced or other GUI crates so it can be
@@ -84,28 +86,35 @@ pub fn parse_hex_to_u8(hex: &str) -> Option<(u8, u8, u8)> {
 }
 
 /// Returns the RGB color tuple for a given priority level.
-/// Priority mapping:
-/// 1 = Critical (Red)
-/// 2 = Orange-Red
-/// 3 = Orange
-/// 4 = Amber
-/// 5 = Yellow
-/// 6 = Pale Khaki
-/// 7 = Light Steel Blue
-/// 8 = Slate / Muted Purple
-/// 9 = Greyish Lavender
-/// Any other value returns white (1.0, 1.0, 1.0).
-pub fn get_priority_rgb(priority: u8) -> (f32, f32, f32) {
-    match priority {
-        1 => (1.0, 0.2, 0.2),    // Red
-        2 => (1.0, 0.4, 0.2),    // Orange-Red
-        3 => (1.0, 0.6, 0.2),    // Orange
-        4 => (1.0, 0.8, 0.2),    // Amber
-        5 => (1.0, 1.0, 0.2),    // Yellow
-        6 => (0.85, 0.85, 0.55), // Pale Khaki
-        7 => (0.7, 0.75, 0.85),  // Light Steel Blue
-        8 => (0.65, 0.6, 0.8),   // Slate / Muted Purple
-        9 => (0.6, 0.55, 0.65),  // Greyish Lavender
-        _ => (1.0, 1.0, 1.0),    // White / default
+/// Adapts to light/dark themes to ensure readability.
+pub fn get_priority_rgb(priority: u8, is_dark_theme: bool) -> (f32, f32, f32) {
+    if is_dark_theme {
+        // Bright/Pastel colors for Dark Mode
+        match priority {
+            1 => (1.0, 0.2, 0.2),    // Red
+            2 => (1.0, 0.4, 0.2),    // Orange-Red
+            3 => (1.0, 0.6, 0.2),    // Orange
+            4 => (1.0, 0.8, 0.2),    // Amber
+            5 => (1.0, 1.0, 0.2),    // Yellow
+            6 => (0.85, 0.85, 0.55), // Pale Khaki
+            7 => (0.7, 0.75, 0.85),  // Light Steel Blue
+            8 => (0.65, 0.6, 0.8),   // Slate / Muted Purple
+            9 => (0.6, 0.55, 0.65),  // Greyish Lavender
+            _ => (1.0, 1.0, 1.0),    // White
+        }
+    } else {
+        // Darker/Saturated colors for Light Mode (White Background)
+        match priority {
+            1 => (0.8, 0.0, 0.0),    // Dark Red
+            2 => (0.9, 0.3, 0.0),    // Burnt Orange
+            3 => (0.9, 0.5, 0.0),    // Dark Orange
+            4 => (0.8, 0.6, 0.0),    // Dark Gold
+            5 => (0.7, 0.7, 0.0),    // Olive/Dark Yellow
+            6 => (0.5, 0.5, 0.2),    // Olive Drab
+            7 => (0.3, 0.4, 0.6),    // Navy Blue
+            8 => (0.4, 0.4, 0.5),    // Dark Slate
+            9 => (0.5, 0.5, 0.5),    // Grey
+            _ => (0.0, 0.0, 0.0),    // Black
+        }
     }
 }

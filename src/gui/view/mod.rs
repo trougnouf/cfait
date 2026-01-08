@@ -556,7 +556,9 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     if app.unsynced_changes {
         left_section = left_section.push(
-            container(text("Unsynced").size(10).color(Color::WHITE))
+            container(text("Unsynced").size(10).style(|theme: &Theme| text::Style {
+                color: Some(theme.extended_palette().background.base.text)
+            }))
                 .style(|_| container::Style {
                     background: Some(Color::from_rgb(0.8, 0.5, 0.0).into()),
                     border: iced::Border {
@@ -611,9 +613,9 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     } else {
         (
             icon::SEARCH_STOP,
-            Color::WHITE,
+            app.theme().extended_palette().background.base.text,
             Some(Message::SearchChanged(String::new())),
-        ) // White, Clear action
+        ) // theme-aware clear action color
     };
 
     let mut clear_btn =
@@ -771,8 +773,10 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     if let Some(err) = &app.error_msg {
         let error_content = row![
-            text(err).color(Color::WHITE).size(14).width(Length::Fill),
-            iced::widget::button(icon::icon(icon::CROSS).size(14).color(Color::WHITE))
+            text(err).style(|theme: &Theme| text::Style {
+                color: Some(theme.extended_palette().background.base.text)
+            }).size(14).width(Length::Fill),
+            iced::widget::button(icon::icon(icon::CROSS).size(14).color(app.theme().extended_palette().background.base.text))
                 .style(iced::widget::button::text)
                 .padding(2)
                 .on_press(Message::DismissError)
@@ -820,11 +824,12 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 }
 
 fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
+    let is_dark_mode = app.theme().extended_palette().is_dark;
     let input_title = text_editor(&app.input_value)
         .id("main_input")
         .placeholder(&app.current_placeholder)
         .on_action(Message::InputChanged)
-        .highlight_with::<self::syntax::SmartInputHighlighter>((), |highlight, _theme| *highlight)
+        .highlight_with::<self::syntax::SmartInputHighlighter>(is_dark_mode, |highlight, _theme| *highlight)
         .padding(10)
         .height(Length::Fixed(45.0))
         .font(iced::Font::DEFAULT);
@@ -979,9 +984,9 @@ fn view_ics_import_dialog<'a>(
         .width(Length::Fill)
         .padding(10)
         .style(if is_selected {
-            |_theme: &Theme, _status| iced::widget::button::Style {
+            |theme: &Theme, _status| iced::widget::button::Style {
                 background: Some(Color::from_rgb(0.2, 0.4, 0.6).into()),
-                text_color: Color::WHITE,
+                text_color: theme.extended_palette().background.base.text,
                 border: iced::Border {
                     radius: 4.0.into(),
                     width: 2.0,

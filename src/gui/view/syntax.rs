@@ -5,20 +5,33 @@ use iced::advanced::text::highlighter::{self, Highlighter};
 use iced::{Color, Font};
 use std::ops::Range;
 
-#[derive(Default)]
-pub struct SmartInputHighlighter;
+// 1. Add state field
+pub struct SmartInputHighlighter {
+    is_dark: bool,
+}
+
+impl Default for SmartInputHighlighter {
+    fn default() -> Self {
+        Self { is_dark: true } // Default to dark if unknown
+    }
+}
+
+
 
 impl Highlighter for SmartInputHighlighter {
-    type Settings = ();
+    // 2. Change Settings from () to bool (is_dark)
+    type Settings = bool;
     type Highlight = highlighter::Format<Font>;
     type Iterator<'a> = std::vec::IntoIter<(Range<usize>, Self::Highlight)>;
 
-    fn new(_settings: &Self::Settings) -> Self {
-        Self
+    // 3. Initialize with the setting
+    fn new(settings: &Self::Settings) -> Self {
+        Self { is_dark: *settings }
     }
 
-    fn update(&mut self, _settings: &Self::Settings) {
-        // No-op as we are stateless
+    // 4. Update state when view rebuilds
+    fn update(&mut self, settings: &Self::Settings) {
+        self.is_dark = *settings;
     }
 
     fn highlight_line(&mut self, line: &str) -> Self::Iterator<'_> {
@@ -31,7 +44,9 @@ impl Highlighter for SmartInputHighlighter {
                     SyntaxType::Priority => {
                         let text = &line[t.start..t.end];
                         let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
-                        let (r, g, b) = color_utils::get_priority_rgb(p);
+
+                        // 5. FIX: Pass self.is_dark to the color utility
+                        let (r, g, b) = color_utils::get_priority_rgb(p, self.is_dark);
 
                         highlighter::Format {
                             color: Some(Color::from_rgb(r, g, b)),
@@ -42,19 +57,19 @@ impl Highlighter for SmartInputHighlighter {
                         }
                     }
                     SyntaxType::DueDate => highlighter::Format {
-                        color: Some(Color::from_rgb(0.2, 0.6, 1.0)), // Blue
+                        color: Some(Color::from_rgb(0.2, 0.6, 1.0)),
                         font: None,
                     },
                     SyntaxType::StartDate => highlighter::Format {
-                        color: Some(Color::from_rgb(0.4, 0.8, 0.4)), // Green
+                        color: Some(Color::from_rgb(0.4, 0.8, 0.4)),
                         font: None,
                     },
                     SyntaxType::Recurrence => highlighter::Format {
-                        color: Some(Color::from_rgb(0.8, 0.4, 0.8)), // Magenta
+                        color: Some(Color::from_rgb(0.8, 0.4, 0.8)),
                         font: None,
                     },
                     SyntaxType::Duration => highlighter::Format {
-                        color: Some(Color::from_rgb(0.6, 0.6, 0.6)), // Grey
+                        color: Some(Color::from_rgb(0.6, 0.6, 0.6)),
                         font: None,
                     },
                     SyntaxType::Tag => {
@@ -73,25 +88,24 @@ impl Highlighter for SmartInputHighlighter {
                         color: None,
                         font: None,
                     },
-                    // --- NEW TYPES ---
                     SyntaxType::Location => highlighter::Format {
-                        color: Some(Color::from_rgb(0.8, 0.5, 0.0)), // Amber/Orange
+                        color: Some(Color::from_rgb(0.8, 0.5, 0.0)),
                         font: None,
                     },
                     SyntaxType::Url => highlighter::Format {
-                        color: Some(Color::from_rgb(0.2, 0.2, 0.8)), // Dark Blue
+                        color: Some(Color::from_rgb(0.2, 0.2, 0.8)),
                         font: None,
                     },
                     SyntaxType::Geo => highlighter::Format {
-                        color: Some(Color::from_rgb(0.5, 0.5, 0.5)), // Grey
+                        color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
                         font: None,
                     },
                     SyntaxType::Description => highlighter::Format {
-                        color: Some(Color::from_rgb(0.6, 0.0, 0.6)), // Dark Magenta
+                        color: Some(Color::from_rgb(0.6, 0.0, 0.6)),
                         font: None,
                     },
                     SyntaxType::Reminder => highlighter::Format {
-                        color: Some(Color::from_rgb(1.0, 0.4, 0.0)), // Orange
+                        color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
                         font: Some(Font {
                             weight: iced::font::Weight::Bold,
                             ..Default::default()

@@ -111,7 +111,7 @@ impl fmt::Display for AppTheme {
 
 impl AppTheme {
     pub const ALL: [AppTheme; 23] = [
-        AppTheme::RustyDark,
+        AppTheme::RustyDark, // Default first
         AppTheme::Light,
         AppTheme::Dark,
         AppTheme::Dracula,
