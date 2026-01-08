@@ -519,6 +519,7 @@ fn support_card() -> Element<'static, Message> {
             }
         }),
         link_row(CREDIT_CARD, "Liberapay", "https://liberapay.com/trougnouf"),
+        link_row(CREDIT_CARD, "Ko-fi", "https://ko-fi.com/trougnouf"),
         copy_row(BANK, "Bank (SEPA)", "BE77 9731 6116 6342"),
         copy_row(
             BITCOIN,

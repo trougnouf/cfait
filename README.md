@@ -411,6 +411,7 @@ The GUI also supports `/` for search and `a` for adding tasks.
 If you enjoy using Cfait, consider supporting the developper:
 
 *   💳 **Liberapay:** [https://liberapay.com/trougnouf](https://liberapay.com/trougnouf)
+*   💳 **Ko-fi:** [https://ko-fi.com/trougnouf](https://ko-fi.com/trougnouf)
 *   🏦 **Bank (SEPA):** `BE77 9731 6116 6342`
 *   ₿ **Bitcoin:** `bc1qc3z9ctv34v0ufxwpmq875r89umnt6ggeclp979`
 *   Ł **Litecoin:** `ltc1qv0xcmeuve080j7ad2cj2sd9d22kgqmlxfxvhmg`

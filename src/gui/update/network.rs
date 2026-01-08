@@ -9,6 +9,7 @@ use crate::journal::Journal;
 use crate::model::CalendarListEntry;
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalCalendarRegistry};
 use crate::system::SystemEvent;
+use iced::widget::text_editor;
 use iced::Task;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
@@ -249,6 +250,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let _ = Cache::save(&new_task.calendar_href, list, token);
             }
             refresh_filtered_tasks(app);
+
+            // Close the task editing interface after successful move
+            app.input_value = text_editor::Content::new();
+            app.description_value = text_editor::Content::new();
+            app.editing_uid = None;
+            app.creating_child_of = None;
+
+            // Select the moved task in the list
+            app.selected_uid = Some(new_task.uid.clone());
+
             Task::none()
         }
         Message::TaskMoved(Err(e)) => {

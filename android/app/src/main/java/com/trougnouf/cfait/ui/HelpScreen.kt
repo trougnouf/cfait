@@ -242,6 +242,12 @@ fun HelpScreen(onBack: () -> Unit) {
                             value = "https://liberapay.com/trougnouf",
                             trailingIcon = { NfIcon(NfIcons.EXTERNAL_LINK, 14.sp, Color.Gray) },
                         ) { openUrl("https://liberapay.com/trougnouf") }
+                        DonationRow(
+                            icon = NfIcons.CREDIT_CARD,
+                            name = "Ko-fi",
+                            value = "https://ko-fi.com/trougnouf",
+                            trailingIcon = { NfIcon(NfIcons.EXTERNAL_LINK, 14.sp, Color.Gray) },
+                        ) { openUrl("https://ko-fi.com/trougnouf") }
                         DonationRow(NfIcons.BANK, "Bank (SEPA)", "BE77 9731 6116 6342") { copy("BE77 9731 6116 6342") }
                         DonationRow(
                             NfIcons.BITCOIN,
