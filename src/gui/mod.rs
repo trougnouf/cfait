@@ -98,6 +98,17 @@ impl GuiApp {
     }
 
     fn theme(&self) -> Theme {
+        // Helper to create the Rusty Dark custom theme (avoids duplicating the palette)
+        fn create_rusty_dark_theme() -> Theme {
+            let mut palette = iced::Theme::Dark.palette();
+            palette.background = iced::Color::from_rgb8(0x21, 0x1e, 0x1e);
+            palette.text = iced::Color::WHITE;
+            palette.primary = iced::Color::from_rgb8(0xFF, 0xA5, 0x00); // Orange
+            palette.success = iced::Color::from_rgb8(0xA3, 0xBE, 0x8C); // Muted Green
+            palette.danger = iced::Color::from_rgb8(0xBF, 0x61, 0x6A); // Muted Red
+            Theme::custom("Rusty Dark", palette)
+        }
+
         // Determine which theme to actually render
         let effective_theme = if self.current_theme == AppTheme::Random {
             self.resolved_random_theme
@@ -128,17 +139,9 @@ impl GuiApp {
             AppTheme::Nightfly => Theme::Nightfly,
             AppTheme::Oxocarbon => Theme::Oxocarbon,
             AppTheme::Ferra => Theme::Ferra,
-            AppTheme::RustyDark => {
-                let mut palette = iced::Theme::Dark.palette();
-                palette.background = iced::Color::from_rgb8(0x21, 0x1e, 0x1e);
-                palette.text = iced::Color::WHITE;
-                palette.primary = iced::Color::from_rgb8(0xFF, 0xA5, 0x00); // Orange
-                palette.success = iced::Color::from_rgb8(0xA3, 0xBE, 0x8C); // Muted Green
-                palette.danger = iced::Color::from_rgb8(0xBF, 0x61, 0x6A); // Muted Red;
-                Theme::custom("Rusty Dark", palette)
-            }
-            // Fallback: If for some reason resolved_random_theme was Random (shouldn't happen), default to Dark
-            AppTheme::Random => Theme::Dark,
+            AppTheme::RustyDark => create_rusty_dark_theme(),
+            // Fallback: If for some reason resolved_random_theme was Random (shouldn't happen), default to RustyDark
+            AppTheme::Random => create_rusty_dark_theme(),
         }
     }
 

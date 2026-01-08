@@ -4,7 +4,7 @@ use iced::widget::{
     MouseArea, Space, button, column, container, row, scrollable, svg, text, text_input,
 };
 use iced::{Color, Element, Length, Theme};
-use std::time::{SystemTime, UNIX_EPOCH};
+use fastrand;
 
 // --- STYLE CONSTANTS ---
 const COL_ACCENT: Color = Color::from_rgb(0.4, 0.7, 1.0); // Soft Blue (Dark Mode)
@@ -12,11 +12,8 @@ const COL_SYNTAX: Color = Color::from_rgb(1.0, 0.85, 0.4); // Gold/Yellow (Dark 
 const COL_MUTED: Color = Color::from_rgb(0.6, 0.6, 0.6); // Grey
 
 pub fn view_help() -> Element<'static, Message> {
-    // Randomize icon based on current time
-    let icon_choice = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| (d.as_secs() % 3) as u8)
-        .unwrap_or(0);
+    // Randomize icon
+    let icon_choice = fastrand::u8(0..3);
 
     let help_icon = match icon_choice {
         0 => crate::gui::icon::HELP_ICON_QUESTION,

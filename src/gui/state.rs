@@ -174,23 +174,26 @@ impl Default for GuiApp {
             icon::GLOBEMODEL,
         ];
 
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .subsec_nanos() as usize;
+        let mut rng = fastrand::Rng::new();
 
-        let location_tab_icon = loc_icons[nanos % loc_icons.len()];
+        let location_tab_icon = loc_icons[rng.usize(..loc_icons.len())];
 
-        // Select a random theme based on time.
+        // Select a random theme using a proper RNG.
         // Exclude the last item because it is `Random` itself.
         let theme_options_count = AppTheme::ALL.len().saturating_sub(1);
-        let random_idx = if theme_options_count > 0 {
-            nanos % theme_options_count
+        let resolved_random_theme = if theme_options_count > 0 {
+            // Pick a choice but guard against accidentally selecting `Random`.
+            let choice = AppTheme::ALL[rng.usize(..theme_options_count)];
+            if choice == AppTheme::Random {
+                // Defensive fallback: prefer a known concrete theme
+                AppTheme::RustyDark
+            } else {
+                choice
+            }
         } else {
-            0
+            // Fallback: pick a concrete default theme if no options exist
+            AppTheme::RustyDark
         };
-        // Ensure we pick a concrete theme, not Random
-        let resolved_random_theme = AppTheme::ALL[random_idx];
 
         Self {
             state: AppState::Loading,
