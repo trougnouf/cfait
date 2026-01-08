@@ -75,8 +75,9 @@ pub enum AppTheme {
     Nightfly,
     Oxocarbon,
     Ferra,
-    #[default]
     RustyDark,
+    #[default]
+    Random,
 }
 
 impl fmt::Display for AppTheme {
@@ -105,13 +106,15 @@ impl fmt::Display for AppTheme {
             AppTheme::Oxocarbon => write!(f, "Oxocarbon"),
             AppTheme::Ferra => write!(f, "Ferra"),
             AppTheme::RustyDark => write!(f, "Rusty Dark"),
+            AppTheme::Random => write!(f, "Random"),
         }
     }
 }
 
 impl AppTheme {
-    pub const ALL: [AppTheme; 23] = [
-        AppTheme::RustyDark, // Default first
+    pub const ALL: [AppTheme; 24] = [
+        AppTheme::RustyDark,
+        AppTheme::Random,
         AppTheme::Light,
         AppTheme::Dark,
         AppTheme::Dracula,

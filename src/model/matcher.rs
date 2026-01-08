@@ -324,7 +324,7 @@ impl Task {
                     .categories
                     .iter()
                     .any(|c| c.to_lowercase().contains(part))
-                // FIX: Check location for plain text matches
+                // Check location for plain text matches
                 && !self
                     .location
                     .as_deref()

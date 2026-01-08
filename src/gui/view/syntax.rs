@@ -45,7 +45,7 @@ impl Highlighter for SmartInputHighlighter {
                         let text = &line[t.start..t.end];
                         let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
 
-                        // 5. FIX: Pass self.is_dark to the color utility
+                        // 5. Pass self.is_dark to the color utility
                         let (r, g, b) = color_utils::get_priority_rgb(p, self.is_dark);
 
                         highlighter::Format {

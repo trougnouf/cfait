@@ -56,7 +56,6 @@ pub fn spawn_alarm_actor(
 
                     // 1. Explicit Alarms
                     for alarm in &task.alarms {
-                        // FIX: Removed `&& !alarm.is_snooze()`.
                         // Snoozed alarms are active alarms that need to fire.
                         if alarm.acknowledged.is_none() {
                             check_list.push((alarm.clone(), false));
@@ -77,7 +76,7 @@ pub fn spawn_alarm_actor(
                                     .with_timezone(&Utc),
                             };
 
-                            // FIX: Don't fire if ANY alarm (even acknowledged/dismissed) exists for this exact time.
+                            // Don't fire if ANY alarm (even acknowledged/dismissed) exists for this exact time.
                             // This prevents firing on restart after dismissal.
                             if !task.has_alarm_at(trigger_dt) {
                                 // Encode the timestamp into the UID so the UI knows exactly what time to write back

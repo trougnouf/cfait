@@ -910,7 +910,7 @@ impl RustyClient {
                 Action::Delete(task) => {
                     let path = strip_host(&task.href);
 
-                    // FIX: Split logic to avoid type mismatch in Delete builder
+                    // Split logic to avoid type mismatch in Delete builder
                     let resp = if !task.etag.is_empty() && task.etag != "pending_refresh" {
                         // Conditional Delete
                         client

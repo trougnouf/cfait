@@ -108,7 +108,7 @@ impl DateType {
         match self {
             DateType::AllDay(d) => d.format("%Y-%m-%d").to_string(),
             DateType::Specific(dt) => {
-                // FIX: Convert UTC to Local before formatting for display/edit string
+                // Convert UTC to Local before formatting for display/edit string
                 dt.with_timezone(&Local)
                     .format("%Y-%m-%d %H:%M")
                     .to_string()

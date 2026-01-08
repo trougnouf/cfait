@@ -154,7 +154,7 @@ impl Journal {
         }
 
         // 2. Ghost Pruning: Remove tasks with no ETag that are NOT in the journal.
-        // FIX: Explicitly skip pruning for ALL Local Calendars, as local tasks never have ETags.
+        // Explicitly skip pruning for ALL Local Calendars, as local tasks never have ETags.
         if !calendar_href.starts_with("local://") {
             tasks.retain(|t| !t.etag.is_empty() || pending_uids.contains(&t.uid));
         }

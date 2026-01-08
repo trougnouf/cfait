@@ -98,7 +98,14 @@ impl GuiApp {
     }
 
     fn theme(&self) -> Theme {
-        match self.current_theme {
+        // Determine which theme to actually render
+        let effective_theme = if self.current_theme == AppTheme::Random {
+            self.resolved_random_theme
+        } else {
+            self.current_theme
+        };
+
+        match effective_theme {
             AppTheme::Light => Theme::Light,
             AppTheme::Dark => Theme::Dark,
             AppTheme::Dracula => Theme::Dracula,
@@ -130,6 +137,8 @@ impl GuiApp {
                 palette.danger = iced::Color::from_rgb8(0xBF, 0x61, 0x6A); // Muted Red;
                 Theme::custom("Rusty Dark", palette)
             }
+            // Fallback: If for some reason resolved_random_theme was Random (shouldn't happen), default to Dark
+            AppTheme::Random => Theme::Dark,
         }
     }
 

@@ -728,8 +728,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             let prefix_span = Span::styled(prefix, Style::default().fg(color));
 
-            // --- HORIZONTAL SCROLLING FIX STARTS HERE ---
-
             // 1. Calculate available width for the input text
             // Width - 2 (borders) - prefix width - 1 (cursor spacing/padding)
             let inner_width = footer_area.width.saturating_sub(2) as usize;
@@ -847,7 +845,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     footer_area.y + 1,
                 ));
             }
-            // --- HORIZONTAL SCROLLING FIX ENDS HERE ---
         }
         _ => {
             if state.show_full_help {

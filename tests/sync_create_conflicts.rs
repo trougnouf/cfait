@@ -72,8 +72,6 @@ async fn test_create_412_handled_gracefully() {
     Journal::push(Action::Create(task)).unwrap();
 
     // 4. Run Sync
-    // WITHOUT FIX: This returns Err, and the item stays in the journal.
-    // WITH FIX: This returns Ok (with warning), and the item is removed.
     let result = client.sync_journal().await;
 
     // 5. Assertions

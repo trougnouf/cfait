@@ -605,10 +605,8 @@ pub fn view_task_row<'a>(
                     tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
                 }
             }
-            if let Some(l) = &task.location {
-                if hidden_location.as_ref() != Some(l) {
-                    tags_width += (l.len() as f32 * 7.0) + 25.0;
-                }
+            if let Some(l) = &task.location && hidden_location.as_ref() != Some(l) {
+                tags_width += (l.len() as f32 * 7.0) + 25.0;
             }
             if task.estimated_duration.is_some() {
                 tags_width += 50.0;
@@ -687,41 +685,39 @@ pub fn view_task_row<'a>(
                 );
             }
 
-            if let Some(loc) = &task.location {
-                if hidden_location.as_ref() != Some(loc) {
-                    // FIX 2: Fixed white text for location pill
-                    let text_color = Color::WHITE;
+            if let Some(loc) = &task.location && hidden_location.as_ref() != Some(loc) {
+                // Fixed white text for location pill
+                let text_color = Color::WHITE;
 
-                    let loc_btn = button(text(format!("@@{}", loc)).size(12).color(text_color))
-                        .style(move |_theme, status| {
-                            let base = button::Style {
-                                background: Some(COLOR_LOCATION.into()),
-                                text_color,
-                                border: iced::Border {
-                                    radius: 4.0.into(),
-                                    ..Default::default()
-                                },
-                                ..button::Style::default()
-                            };
-                            match status {
-                                button::Status::Hovered | button::Status::Pressed => {
-                                    button::Style {
-                                        border: iced::Border {
-                                            color: Color::BLACK.scale_alpha(0.2),
-                                            width: 1.0,
-                                            radius: 4.0.into(),
-                                        },
-                                        ..base
-                                    }
+                let loc_btn = button(text(format!("@@{}", loc)).size(12).color(text_color))
+                    .style(move |_theme, status| {
+                        let base = button::Style {
+                            background: Some(COLOR_LOCATION.into()),
+                            text_color,
+                            border: iced::Border {
+                                radius: 4.0.into(),
+                                ..Default::default()
+                            },
+                            ..button::Style::default()
+                        };
+                        match status {
+                            button::Status::Hovered | button::Status::Pressed => {
+                                button::Style {
+                                    border: iced::Border {
+                                        color: Color::BLACK.scale_alpha(0.2),
+                                        width: 1.0,
+                                        radius: 4.0.into(),
+                                    },
+                                    ..base
                                 }
-                                _ => base,
                             }
-                        })
-                        .padding(3)
-                        .on_press(Message::JumpToLocation(loc.clone()));
+                            _ => base,
+                        }
+                    })
+                    .padding(3)
+                    .on_press(Message::JumpToLocation(loc.clone()));
 
-                    tags_row = tags_row.push(loc_btn);
-                }
+                tags_row = tags_row.push(loc_btn);
             }
 
             if let Some(mins) = task.estimated_duration {

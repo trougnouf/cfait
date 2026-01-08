@@ -70,7 +70,6 @@ fn test_recurrence_weekday() {
 fn test_date_iso_explicit() {
     let t = parse("@2025-12-31");
     let d = t.due.unwrap();
-    // FIX: use to_date_naive()
     assert_eq!(d.to_date_naive().year(), 2025);
     assert_eq!(d.to_date_naive().month(), 12);
     assert_eq!(d.to_date_naive().day(), 31);
@@ -88,7 +87,6 @@ fn test_date_keywords() {
     assert!(parse("Task due:today").due.is_some());
     let t_wed = parse("Meeting @wednesday");
     assert!(t_wed.due.is_some());
-    // FIX: use to_date_naive()
     assert_eq!(
         t_wed.due.unwrap().to_date_naive().weekday(),
         chrono::Weekday::Wed
@@ -103,7 +101,6 @@ fn test_start_date_permutations() {
     let t = parse("^3d");
     let now = Local::now().date_naive();
     let expected = now + Duration::days(3);
-    // FIX: use to_date_naive()
     assert_eq!(t.dtstart.unwrap().to_date_naive(), expected);
 }
 
@@ -111,7 +108,6 @@ fn test_start_date_permutations() {
 fn test_relative_offsets() {
     let now = Local::now().date_naive();
     let t1 = parse("@in 5 days");
-    // FIX: use to_date_naive()
     assert_eq!(t1.due.unwrap().to_date_naive(), now + Duration::days(5));
     let t2 = parse("@in 5d");
     assert_eq!(t2.due.unwrap().to_date_naive(), now + Duration::days(5));
@@ -124,9 +120,7 @@ fn test_next_weekday() {
     let t = parse("@next friday");
     assert!(t.due.is_some());
     let due = t.due.unwrap();
-    // FIX: use to_date_naive()
     assert_eq!(due.to_date_naive().weekday(), chrono::Weekday::Fri);
-    // FIX: Wrap Utc::now() in DateType for comparison
     assert!(due > cfait::model::DateType::Specific(chrono::Utc::now()));
 }
 
@@ -231,7 +225,6 @@ fn test_start_date_weekdays() {
     // "^monday"
     let t = parse("Start ^monday");
     assert!(t.dtstart.is_some());
-    // FIX: use to_date_naive()
     assert_eq!(
         t.dtstart.unwrap().to_date_naive().weekday(),
         chrono::Weekday::Mon
@@ -240,7 +233,6 @@ fn test_start_date_weekdays() {
     // "start:friday"
     let t2 = parse("Start start:friday");
     assert!(t2.dtstart.is_some());
-    // FIX: use to_date_naive()
     assert_eq!(
         t2.dtstart.unwrap().to_date_naive().weekday(),
         chrono::Weekday::Fri

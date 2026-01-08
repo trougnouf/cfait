@@ -287,7 +287,6 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .on_input(Message::AliasKeyInput)
                 .padding(5)
                 .width(Length::FillPortion(1)),
-            // FIX: Updated placeholder to show new capabilities
             text_input("#tag,@@loc,!3", &app.alias_input_values)
                 .on_input(Message::AliasValueInput)
                 .padding(5)
@@ -469,7 +468,6 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         .size(16)
         .text_size(14);
 
-    // --- FIX IS HERE ---
     let offline_button_or_space: Element<_> = if !is_settings {
         button("Use offline mode")
             .padding(10)

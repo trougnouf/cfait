@@ -275,7 +275,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let tags: Vec<String> = app
                     .alias_input_values
                     .split(',')
-                    // FIX: Removed .trim_start_matches('#') to preserve #tags, @@locs, etc.
+                    // Removed .trim_start_matches('#') to preserve #tags, @@locs, etc.
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty())
                     .collect();

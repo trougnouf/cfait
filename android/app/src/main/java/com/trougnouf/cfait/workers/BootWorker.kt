@@ -17,7 +17,7 @@ class BootWorker(
         return try {
             Log.d("CfaitBootWorker", "Rescheduling alarms after boot")
 
-            // FIX: Use Singleton
+            // Use Singleton
             val app = context.applicationContext as CfaitApplication
             val api = app.api
 

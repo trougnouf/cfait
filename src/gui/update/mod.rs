@@ -140,7 +140,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::AlarmSignalReceived(msg) => {
             match &*msg {
                 AlarmMessage::Fire(task_uid, alarm_uid) => {
-                    // FIX: Look up in the full store, not the filtered app.tasks view.
+                    // Look up in the full store, not the filtered app.tasks view.
                     // The task might be hidden by filters but should still ring.
                     if let Some((task, _)) = app.store.get_task_mut(task_uid) {
                         // Check if alarm still exists (wasn't dismissed elsewhere)

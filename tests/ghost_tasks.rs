@@ -127,7 +127,7 @@ async fn test_pending_delete_suppresses_server_item() {
     task.calendar_href = full_cal_href.clone();
     task.etag = "\"old-etag\"".to_string();
 
-    // FIX: Save task to cache so the client knows it exists locally.
+    // Save task to cache so the client knows it exists locally.
     // This allows the client to match the server item (via href) to the local item,
     // recognize the pending delete in the journal, and prune it instead of trying to fetch it.
     cfait::cache::Cache::save(

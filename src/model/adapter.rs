@@ -48,7 +48,7 @@ impl Task {
         let dtstart_str = seed_dt_utc.format("%Y%m%dT%H%M%SZ").to_string();
         let mut rrule_string = format!("DTSTART:{}\nRRULE:{}", dtstart_str, rule_str);
 
-        // NEW: Add EXDATEs
+        // Add EXDATEs
         if !self.exdates.is_empty() {
             for ex in &self.exdates {
                 match ex {
@@ -222,7 +222,6 @@ impl Task {
             todo.add_property("RRULE", &rrule_str);
         }
 
-        // NEW: EXDATE
         for ex in &self.exdates {
             match ex {
                 DateType::AllDay(d) => {
@@ -626,7 +625,7 @@ impl Task {
         let dtstart = todo.properties().get("DTSTART").and_then(parse_date_type);
         let rrule = get_prop("RRULE");
 
-        // NEW: Parse EXDATE
+        // Parse EXDATE
         let mut exdates = Vec::new();
         if let Some(multi_props) = todo.multi_properties().get("EXDATE") {
             for prop in multi_props {

@@ -859,7 +859,7 @@ impl CfaitMobile {
         if let Some(client) = &*guard
             && client.create_task(&mut task).await.is_ok()
         {
-            // FIX: Assign a placeholder etag to prevent ghost pruning.
+            // Assign a placeholder etag to prevent ghost pruning.
             if task.etag.is_empty() {
                 task.etag = "pending_refresh".to_string();
             }
@@ -1543,7 +1543,7 @@ impl CfaitMobile {
 
                 // Check Explicit
                 for alarm in &task.alarms {
-                    // FIX: Do NOT filter out snoozes here.
+                    // Do NOT filter out snoozes here.
                     if alarm.acknowledged.is_some() {
                         continue;
                     }
@@ -1578,7 +1578,7 @@ impl CfaitMobile {
 
                 // Check Implicit
                 if config.auto_reminders {
-                    // FIX: Count snooze alarms as active so we don't double-fire
+                    // Count snooze alarms as active so we don't double-fire
                     let has_active_explicit = task.alarms.iter().any(|a| a.acknowledged.is_none());
                     if !has_active_explicit {
                         // Helper for check
@@ -1751,7 +1751,7 @@ impl CfaitMobile {
         if let Some(client) = &*client_guard
             && client.update_task(&mut task_for_net).await.is_ok()
         {
-            // FIX: Assign a placeholder etag to prevent ghost pruning.
+            // Assign a placeholder etag to prevent ghost pruning.
             // Similar to add_task_smart, we need to ensure the task has a non-empty etag
             // to survive ghost pruning when AlarmWorker creates a fresh CfaitMobile instance.
             if task_for_net.etag.is_empty() {

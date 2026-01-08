@@ -33,8 +33,6 @@ fn test_local_tasks_are_not_pruned_as_ghosts() {
     Journal::apply_to_tasks(&mut tasks, LOCAL_CALENDAR_HREF);
 
     // 4. Assert Data Integrity
-    // BEFORE FIX: This fails because the task is removed (size 0).
-    // AFTER FIX: This passes.
     assert_eq!(
         tasks.len(),
         1,

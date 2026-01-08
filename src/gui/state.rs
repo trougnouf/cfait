@@ -70,6 +70,9 @@ pub struct GuiApp {
     pub sort_cutoff_months: Option<u32>,
     pub current_theme: AppTheme,
 
+    // Store the resolved random theme for this session
+    pub resolved_random_theme: AppTheme,
+
     // Filter State
     pub filter_min_duration: Option<u32>,
     pub filter_max_duration: Option<u32>,
@@ -178,6 +181,17 @@ impl Default for GuiApp {
 
         let location_tab_icon = loc_icons[nanos % loc_icons.len()];
 
+        // Select a random theme based on time.
+        // Exclude the last item because it is `Random` itself.
+        let theme_options_count = AppTheme::ALL.len().saturating_sub(1);
+        let random_idx = if theme_options_count > 0 {
+            nanos % theme_options_count
+        } else {
+            0
+        };
+        // Ensure we pick a concrete theme, not Random
+        let resolved_random_theme = AppTheme::ALL[random_idx];
+
         Self {
             state: AppState::Loading,
             store: TaskStore::new(),
@@ -204,6 +218,7 @@ impl Default for GuiApp {
             sort_cutoff_months: Some(2),
             ob_sort_months_input: "2".to_string(),
             current_theme: AppTheme::default(),
+            resolved_random_theme,
 
             filter_min_duration: None,
             filter_max_duration: None,

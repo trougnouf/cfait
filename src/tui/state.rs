@@ -24,7 +24,7 @@ pub enum InputMode {
     SelectingExportSource,
     Exporting,
     Snoozing,
-    RelationshipBrowsing, // NEW: For navigating through task relationships
+    RelationshipBrowsing,
 }
 
 pub struct AppState {
