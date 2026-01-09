@@ -75,7 +75,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 <a name="android"></a>
 ### 📱 Android
 *   **<a href="https://f-droid.org/packages/com.trougnouf.cfait/">F-Droid</a>**
-*   **Google Play:** Submitted, currently in testing. <span style="color:red;">More testers are needed for inclusion in the Play Store, please <a href='mailto:trougnouf@gmail.com'>contact me</a></span>.
+*   **Google Play:** Submitted, currently in testing. <span style="color:red;">More testers are needed for inclusion in the Play Store, please <a href='mailto:trougnouf@gmail.com'>contact me</a> if you are willing to install the app through the Google Play store.</span>.
 *   **APK:** Download the latest universal APK from the [releases page](https://codeberg.org/trougnouf/cfait/releases).
 
 <a name="windows"></a>

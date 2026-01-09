@@ -1,4 +1,5 @@
 // Binary entry point for the GUI application.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 fn main() -> iced::Result {
     let args: Vec<String> = std::env::args().collect();
 

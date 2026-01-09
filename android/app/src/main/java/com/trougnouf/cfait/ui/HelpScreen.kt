@@ -135,7 +135,7 @@ fun HelpScreen(onBack: () -> Unit) {
                     "Recurrence",
                     NfIcons.REPEAT,
                     listOf(
-                        HelpItem("@daily", "Quick presets.", "@daily, @weekly, @monthly"),
+                        HelpItem("@daily", "Quick presets.", "@daily, @weekly, @monthly, @yearly"),
                         HelpItem("@every X", "Custom intervals.", "@every 3 days, @every 2 weeks"),
                         HelpItem("@every <day>", "Specific weekdays.", "@every monday, @every monday,wednesday,friday"),
                         HelpItem("until", "End date for recurrence.", "@daily until 2025-12-31"),
