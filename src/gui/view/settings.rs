@@ -9,9 +9,9 @@ use iced::widget::{
     MouseArea, Space, button, checkbox, column, container, row, scrollable, text, text_input,
 };
 use iced::{Color, Element, Length};
-
 #[cfg(feature = "gui")]
 use iced_aw::color_picker;
+use strum::IntoEnumIterator;
 
 pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     let is_settings = matches!(app.state, AppState::Settings);
@@ -75,7 +75,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 row![
                     text("Theme:"),
                     iced::widget::pick_list(
-                        &AppTheme::ALL[..],
+                        AppTheme::iter().collect::<Vec<_>>(),
                         Some(app.current_theme),
                         Message::ThemeChanged
                     )

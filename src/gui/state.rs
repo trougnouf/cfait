@@ -8,6 +8,7 @@ use crate::system::SystemEvent;
 use iced::widget::text_editor;
 use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc;
+use strum::IntoEnumIterator;
 
 #[derive(Default, PartialEq, Clone, Copy, Debug)]
 pub enum AppState {
@@ -178,20 +179,14 @@ impl Default for GuiApp {
 
         let location_tab_icon = loc_icons[rng.usize(..loc_icons.len())];
 
-        // Select a random theme using a proper RNG.
-        // Exclude the last item because it is `Random` itself.
-        let theme_options_count = AppTheme::ALL.len().saturating_sub(1);
-        let resolved_random_theme = if theme_options_count > 0 {
-            // Pick a choice but guard against accidentally selecting `Random`.
-            let choice = AppTheme::ALL[rng.usize(..theme_options_count)];
-            if choice == AppTheme::Random {
-                // Defensive fallback: prefer a known concrete theme
-                AppTheme::RustyDark
-            } else {
-                choice
-            }
+        // Select a random theme (excluding Random itself)
+        let themes: Vec<AppTheme> = AppTheme::iter()
+            .filter(|&t| t != AppTheme::Random)
+            .collect();
+        let resolved_random_theme = if !themes.is_empty() {
+            themes[rng.usize(..themes.len())]
         } else {
-            // Fallback: pick a concrete default theme if no options exist
+            // Fallback if the themes list is somehow empty
             AppTheme::RustyDark
         };
 

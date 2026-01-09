@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
+use strum::{EnumIter};
 
 fn default_true() -> bool {
     true
@@ -51,8 +52,11 @@ fn default_delete_events_on_completion() -> bool {
     false
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
 pub enum AppTheme {
+    #[default]
+    RustyDark,
+    Random,
     Light,
     Dark,
     Dracula,
@@ -75,14 +79,13 @@ pub enum AppTheme {
     Nightfly,
     Oxocarbon,
     Ferra,
-    RustyDark,
-    #[default]
-    Random,
 }
 
 impl fmt::Display for AppTheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            AppTheme::RustyDark => write!(f, "Rusty Dark"),
+            AppTheme::Random => write!(f, "Random"),
             AppTheme::Light => write!(f, "Light"),
             AppTheme::Dark => write!(f, "Dark"),
             AppTheme::Dracula => write!(f, "Dracula"),
@@ -105,39 +108,8 @@ impl fmt::Display for AppTheme {
             AppTheme::Nightfly => write!(f, "Nightfly"),
             AppTheme::Oxocarbon => write!(f, "Oxocarbon"),
             AppTheme::Ferra => write!(f, "Ferra"),
-            AppTheme::RustyDark => write!(f, "Rusty Dark"),
-            AppTheme::Random => write!(f, "Random"),
         }
     }
-}
-
-impl AppTheme {
-    pub const ALL: [AppTheme; 24] = [
-        AppTheme::RustyDark,
-        AppTheme::Random,
-        AppTheme::Light,
-        AppTheme::Dark,
-        AppTheme::Dracula,
-        AppTheme::Nord,
-        AppTheme::SolarizedLight,
-        AppTheme::SolarizedDark,
-        AppTheme::GruvboxLight,
-        AppTheme::GruvboxDark,
-        AppTheme::CatppuccinLatte,
-        AppTheme::CatppuccinFrappe,
-        AppTheme::CatppuccinMacchiato,
-        AppTheme::CatppuccinMocha,
-        AppTheme::TokyoNight,
-        AppTheme::TokyoNightStorm,
-        AppTheme::TokyoNightLight,
-        AppTheme::KanagawaWave,
-        AppTheme::KanagawaDragon,
-        AppTheme::KanagawaLotus,
-        AppTheme::Moonfly,
-        AppTheme::Nightfly,
-        AppTheme::Oxocarbon,
-        AppTheme::Ferra,
-    ];
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]

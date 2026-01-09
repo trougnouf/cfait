@@ -4,7 +4,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
 
 jobs:
@@ -40,10 +40,10 @@ jobs:
             RAW_VERSION="debug-${{ github.sha }}"
             CLEAN_VERSION="$RAW_VERSION"
           fi
-          
+
           # Source Tarball
           git archive --format=tar.gz --prefix="cfait-${CLEAN_VERSION}/" -o "dist/cfait-source-${RAW_VERSION}.tar.gz" HEAD
-          
+
           # Linux Binary Tarball
           mkdir "cfait-linux-${CLEAN_VERSION}"
           cp target/release/cfait "cfait-linux-${CLEAN_VERSION}/"
@@ -123,7 +123,7 @@ jobs:
         with:
           name: android-artifacts
           path: dist-android/*
-  
+
   # --- JOB 3: WINDOWS BUILD & PUBLISH (Arch) ---
   # This job waits for Linux and Android, then bundles everything and releases.
   build-windows-and-publish:
@@ -169,12 +169,10 @@ jobs:
           else
             RAW_VERSION="debug-${{ github.sha }}"
           fi
-          
           mkdir -p windows-staging
           cp target/x86_64-pc-windows-gnu/release/cfait.exe windows-staging/
           cp target/x86_64-pc-windows-gnu/release/gui.exe windows-staging/cfait-gui.exe
           cp README.md LICENSE windows-staging/
-          
           (cd windows-staging && zip -r "../dist/cfait-windows-$RAW_VERSION.zip" .)
 
       # 5. Generate Changelog
@@ -188,24 +186,24 @@ jobs:
         run: |
           RAW_VERSION="${{ github.ref_name }}"
           CLEAN_VER=$(echo "$RAW_VERSION" | sed 's/^v//')
-          
+
           cd dist
-          
+
           # Verify Linux source tarball exists
           if [ ! -f "cfait-source-${RAW_VERSION}.tar.gz" ]; then
             echo "Error: Source tarball not found"
             exit 1
           fi
-          
+
           HASH=$(sha256sum "cfait-source-${RAW_VERSION}.tar.gz" | awk '{print $1}')
-          
+
           cp ../packaging/arch/PKGBUILD .
-          
+
           sed -i "s/pkgver=.*/pkgver=${CLEAN_VER}/" PKGBUILD
           sed -i "s/'SKIP'/'$HASH'/" PKGBUILD
           NEW_SOURCE_URL="https://codeberg.org/trougnouf/cfait/releases/download/${RAW_VERSION}/cfait-source-${RAW_VERSION}.tar.gz"
           sed -i "s|source=.*|source=(\"cfait-source-${RAW_VERSION}.tar.gz::${NEW_SOURCE_URL}\")|" PKGBUILD
-          
+
           # Fix ownership so builder user can write .SRCINFO
           chown -R builder:builder .
           su builder -c "makepkg --printsrcinfo > .SRCINFO"
@@ -218,7 +216,7 @@ jobs:
         run: |
           tea login add --name codeberg --url ${{ github.server_url }} --token ${{ secrets.RELEASE_TOKEN }}
           tea release delete --repo ${{ github.repository }} --confirm ${{ github.ref_name }} || true
-          
+
           tea release create \
             --repo "${{ github.repository }}" \
             --title "${{ github.ref_name }}" \
@@ -234,7 +232,7 @@ jobs:
               tea release assets create --repo ${{ github.repository }} ${{ github.ref_name }} "$file"
             fi
           done
-          
+
           # Upload PKGBUILD separately
           tea release assets create --repo ${{ github.repository }} ${{ github.ref_name }} PKGBUILD
 
@@ -249,18 +247,18 @@ jobs:
           chmod 600 /root/.ssh/aur_key
           ssh-keyscan aur.archlinux.org >> /root/.ssh/known_hosts
           export GIT_SSH_COMMAND="ssh -i /root/.ssh/aur_key -o UserKnownHostsFile=/root/.ssh/known_hosts"
-          
+
           git config --global user.name "Cfait Bot (Benoit Brummer)"
           git config --global user.email "trougnouf@gmail.com"
-          
+
           git clone ssh://aur@aur.archlinux.org/cfait.git aur-repo
-          
+
           cp dist/PKGBUILD aur-repo/
           cp dist/.SRCINFO aur-repo/
-          
+
           cd aur-repo
           git add PKGBUILD .SRCINFO
-          
+
           if git diff --staged --quiet; then
             echo "No changes to AUR files."
           else
