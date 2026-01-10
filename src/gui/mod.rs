@@ -32,8 +32,22 @@ pub fn run_with_ics_file(ics_file_path: Option<String>) -> iced::Result {
     .title(GuiApp::title)
     .subscription(GuiApp::subscription)
     .theme(GuiApp::theme)
+    // Set the global window background to transparent (Critical for rounded corners)
+    .style(|state, _appearance| {
+        // `state` is &GuiApp here; obtain the Theme into a local binding so its
+        // palette does not borrow from a temporary value that is dropped.
+        let theme_binding = state.theme();
+        let palette = theme_binding.extended_palette();
+        iced::theme::Style {
+            background_color: iced::Color::TRANSPARENT,
+            // Use theme-aware text color so dark themes don't end up with black text
+            text_color: palette.background.base.text,
+        }
+    })
     .window(window::Settings {
         decorations: false,
+        // Tell the OS to allow transparency
+        transparent: true,
         platform_specific: window::settings::PlatformSpecific {
             #[cfg(target_os = "linux")]
             application_id: String::from("cfait"),

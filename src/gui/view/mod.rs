@@ -51,7 +51,8 @@ pub fn tooltip_style(theme: &Theme) -> container::Style {
 }
 
 pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
-    let content = match app.state {
+    // 1. Generate the content as you normally would
+    let mut content: Element<'_, Message> = match app.state {
         AppState::Loading => container(text("Loading...").size(30))
             .width(Length::Fill)
             .height(Length::Fill)
@@ -197,178 +198,196 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         }
     };
 
-    // --- ICS IMPORT DIALOG ---
+    // --- ICS IMPORT DIALOG / ALARM MODAL WRAPPING ---
+    // Instead of returning early, transform `content` into an overlayed element when necessary.
     if app.ics_import_dialog_open {
-        return view_ics_import_dialog(app, content);
-    }
+        content = view_ics_import_dialog(app, content);
+    } else if !app.ringing_tasks.is_empty() {
+        // --- ALARM MODAL ---
+        let (task, alarm) = &app.ringing_tasks[0];
 
-    if app.ringing_tasks.is_empty() {
-        return content;
-    }
+        // Header
+        let icon_header = container(
+            icon::icon(icon::BELL)
+                .size(30)
+                .color(Color::from_rgb(1.0, 0.4, 0.0)),
+        )
+        .padding(5)
+        .center_x(Length::Fill);
 
-    // --- ALARM MODAL ---
-    let (task, alarm) = &app.ringing_tasks[0];
+        let title = text("Reminder")
+            .size(24)
+            .font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..Default::default()
+            })
+            .width(Length::Fill)
+            .align_x(Horizontal::Center);
 
-    // Header
-    let icon_header = container(
-        icon::icon(icon::BELL)
-            .size(30)
-            .color(Color::from_rgb(1.0, 0.4, 0.0)),
-    )
-    .padding(5)
-    .center_x(Length::Fill);
+        // Task Summary (Title)
+        let summary = text(&task.summary)
+            .size(18)
+            .width(Length::Fill)
+            .align_x(Horizontal::Center);
 
-    let title = text("Reminder")
-        .size(24)
-        .font(iced::Font {
-            weight: iced::font::Weight::Bold,
-            ..Default::default()
-        })
-        .width(Length::Fill)
-        .align_x(Horizontal::Center);
-
-    // Task Summary (Title)
-    let summary = text(&task.summary)
-        .size(18)
-        .width(Length::Fill)
-        .align_x(Horizontal::Center);
-
-    // Task Description (New)
-    let task_desc_content = if !task.description.is_empty() {
-        column![
-            text(&task.description)
-                .size(14)
-                .color(Color::from_rgb(0.9, 0.9, 0.9)),
-            Space::new().height(Length::Fixed(10.0))
-        ]
-    } else {
-        column![]
-    };
-
-    // --- BUTTONS ---
-
-    // Load config for presets
-    let (s1, s2) = if let Ok(cfg) = crate::config::Config::load() {
-        (cfg.snooze_short_mins, cfg.snooze_long_mins)
-    } else {
-        (15, 60)
-    };
-
-    let snooze_btn = |mins: u32| {
-        let label = if mins >= 60 {
-            format!("{}h", mins / 60)
+        // Task Description (New)
+        let task_desc_content = if !task.description.is_empty() {
+            column![
+                text(&task.description)
+                    .size(14)
+                    .color(Color::from_rgb(0.9, 0.9, 0.9)),
+                Space::new().height(Length::Fixed(10.0))
+            ]
         } else {
-            format!("{}m", mins)
+            column![]
         };
-        button(text(label).size(12))
-            .style(iced::widget::button::secondary)
-            .padding([6, 12])
-            .on_press(Message::SnoozeAlarm(
-                task.uid.clone(),
-                alarm.uid.clone(),
-                mins,
-            ))
-    };
 
-    // Custom Snooze Input
-    let custom_snooze_row = row![
-        text_input("Custom (eg 30m)", &app.snooze_custom_input)
-            .on_input(Message::SnoozeCustomInput)
-            .on_submit(Message::SnoozeCustomSubmit(
-                task.uid.clone(),
-                alarm.uid.clone()
-            ))
-            .padding(5)
-            .size(12)
-            .width(Length::Fixed(100.0)),
-        button(icon::icon(icon::CHECK).size(12))
-            .style(iced::widget::button::secondary)
-            .padding(6)
-            .on_press(Message::SnoozeCustomSubmit(
-                task.uid.clone(),
-                alarm.uid.clone()
-            ))
-    ]
-    .spacing(5)
-    .align_y(iced::Alignment::Center);
+        // --- BUTTONS ---
 
-    let dismiss_btn = button(text("Dismiss").size(14).font(iced::Font {
-        weight: iced::font::Weight::Bold,
-        ..Default::default()
-    }))
-    .style(iced::widget::button::primary)
-    .padding([8, 16])
-    .on_press(Message::DismissAlarm(task.uid.clone(), alarm.uid.clone()));
+        // Load config for presets
+        let (s1, s2) = if let Ok(cfg) = crate::config::Config::load() {
+            (cfg.snooze_short_mins, cfg.snooze_long_mins)
+        } else {
+            (15, 60)
+        };
 
-    let buttons = column![
-        row![snooze_btn(s1), snooze_btn(s2), custom_snooze_row]
-            .spacing(10)
-            .align_y(iced::Alignment::Center),
-        Space::new().height(10),
-        dismiss_btn
-    ]
-    .align_x(iced::Alignment::Center);
+        let snooze_btn = |mins: u32| {
+            let label = if mins >= 60 {
+                format!("{}h", mins / 60)
+            } else {
+                format!("{}m", mins)
+            };
+            button(text(label).size(12))
+                .style(iced::widget::button::secondary)
+                .padding([6, 12])
+                .on_press(Message::SnoozeAlarm(
+                    task.uid.clone(),
+                    alarm.uid.clone(),
+                    mins,
+                ))
+        };
 
-    // Combine content into a scrollable area to handle dynamic sizes
-    let modal_content = scrollable(
-        column![
-            icon_header,
-            title,
-            summary,
-            Space::new().height(Length::Fixed(10.0)),
-            task_desc_content,
-            // Removed redundant alarm_info here
-            Space::new().height(Length::Fixed(20.0)),
-            buttons
+        // Custom Snooze Input
+        let custom_snooze_row = row![
+            text_input("Custom (eg 30m)", &app.snooze_custom_input)
+                .on_input(Message::SnoozeCustomInput)
+                .on_submit(Message::SnoozeCustomSubmit(
+                    task.uid.clone(),
+                    alarm.uid.clone()
+                ))
+                .padding(5)
+                .size(12)
+                .width(Length::Fixed(100.0)),
+            button(icon::icon(icon::CHECK).size(12))
+                .style(iced::widget::button::secondary)
+                .padding(6)
+                .on_press(Message::SnoozeCustomSubmit(
+                    task.uid.clone(),
+                    alarm.uid.clone()
+                ))
         ]
         .spacing(5)
-        .align_x(iced::Alignment::Center),
-    )
-    .height(Length::Shrink); // Allow shrinking to content
+        .align_y(iced::Alignment::Center);
 
-    let modal_card = container(modal_content)
-        .padding(20)
-        .width(Length::Fixed(380.0))
-        // Max height constraint to ensure it fits on screen even with huge descriptions
-        .max_height(500.0)
+        let dismiss_btn = button(text("Dismiss").size(14).font(iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..Default::default()
+        }))
+        .style(iced::widget::button::primary)
+        .padding([8, 16])
+        .on_press(Message::DismissAlarm(task.uid.clone(), alarm.uid.clone()));
+
+        let buttons = column![
+            row![snooze_btn(s1), snooze_btn(s2), custom_snooze_row]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+            Space::new().height(10),
+            dismiss_btn
+        ]
+        .align_x(iced::Alignment::Center);
+
+        // Combine content into a scrollable area to handle dynamic sizes
+        let modal_content = scrollable(
+            column![
+                icon_header,
+                title,
+                summary,
+                Space::new().height(Length::Fixed(10.0)),
+                task_desc_content,
+                // Removed redundant alarm_info here
+                Space::new().height(Length::Fixed(20.0)),
+                buttons
+            ]
+            .spacing(5)
+            .align_x(iced::Alignment::Center),
+        )
+        .height(Length::Shrink); // Allow shrinking to content
+
+        let modal_card = container(modal_content)
+            .padding(20)
+            .width(Length::Fixed(380.0))
+            // Max height constraint to ensure it fits on screen even with huge descriptions
+            .max_height(500.0)
+            .style(|theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.95,
+                            ..palette.background.weak.color
+                        }
+                        .into(),
+                    ),
+                    border: iced::Border {
+                        color: palette.background.strong.color,
+                        width: 1.0,
+                        radius: 12.0.into(),
+                    },
+                    shadow: iced::Shadow {
+                        color: Color::BLACK.scale_alpha(0.5),
+                        offset: Vector::new(0.0, 4.0),
+                        blur_radius: 10.0,
+                    },
+                    ..Default::default()
+                }
+            });
+
+        // Build overlay stack
+        content = stack![
+            content,
+            container(modal_card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_| container::Style {
+                    background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.6).into()),
+                    ..Default::default()
+                })
+        ]
+        .into();
+    }
+
+    // 2. THE FIX: Wrap the final content in the rounded window container
+    container(content)
+        .width(Length::Fill)
+        .height(Length::Fill)
         .style(|theme: &Theme| {
             let palette = theme.extended_palette();
             container::Style {
-                background: Some(
-                    Color {
-                        a: 0.95,
-                        ..palette.background.weak.color
-                    }
-                    .into(),
-                ),
+                // Apply the actual background color here
+                background: Some(iced::Background::Color(palette.background.base.color)),
+                // Apply the Border Radius here
                 border: iced::Border {
                     color: palette.background.strong.color,
                     width: 1.0,
-                    radius: 12.0.into(),
+                    radius: 12.0.into(), // <--- ROUNDED CORNERS
                 },
-                shadow: iced::Shadow {
-                    color: Color::BLACK.scale_alpha(0.5),
-                    offset: Vector::new(0.0, 4.0),
-                    blur_radius: 10.0,
-                },
+                // Ensure clip is true if content overflows corners (optional but good)
                 ..Default::default()
             }
-        });
-
-    // Overlay
-    stack![
-        content,
-        container(modal_card)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .center_x(Length::Fill)
-            .center_y(Length::Fill)
-            .style(|_| container::Style {
-                background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.6).into()),
-                ..Default::default()
-            })
-    ]
-    .into()
+        })
+        .into()
 }
 
 fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
