@@ -1,4 +1,10 @@
-// Entry point and setup for the GUI application.
+/*
+Entry point and setup for the GUI application.
+This file was updated to parse a `--force-ssd` CLI flag and pass it to the GUI state
+initialization. When `--force-ssd` is present the app uses server-side/native window
+decorations and disables transparency / rounded corners in the GUI.
+*/
+
 pub mod async_ops;
 pub mod icon;
 pub mod message;
@@ -22,32 +28,42 @@ pub fn run() -> iced::Result {
 }
 
 pub fn run_with_ics_file(ics_file_path: Option<String>) -> iced::Result {
+    // Parse CLI args for --force-ssd
+    let args: Vec<String> = std::env::args().collect();
+    let force_ssd = args.iter().any(|a| a == "--force-ssd");
+
     async_ops::init_runtime();
 
     iced::application(
-        move || GuiApp::new_with_ics(ics_file_path.clone()),
+        // Pass force_ssd down into app initialization
+        move || GuiApp::new_with_ics(ics_file_path.clone(), force_ssd),
         GuiApp::update,
         GuiApp::view,
     )
     .title(GuiApp::title)
     .subscription(GuiApp::subscription)
     .theme(GuiApp::theme)
-    // Set the global window background to transparent (Critical for rounded corners)
+    // Window-level styling: pick an appropriate background depending on SSD vs CSD
     .style(|state, _appearance| {
         // `state` is &GuiApp here; obtain the Theme into a local binding so its
         // palette does not borrow from a temporary value that is dropped.
         let theme_binding = state.theme();
         let palette = theme_binding.extended_palette();
         iced::theme::Style {
-            background_color: iced::Color::TRANSPARENT,
-            // Use theme-aware text color so dark themes don't end up with black text
+            background_color: if state.force_ssd {
+                // If SSD (native decorations) are used, use an opaque background.
+                palette.background.base.color
+            } else {
+                // If we use client-side decorations with custom rounded frame, the
+                // global window background must be transparent to allow rounded corners.
+                iced::Color::TRANSPARENT
+            },
             text_color: palette.background.base.text,
         }
     })
     .window(window::Settings {
-        decorations: false,
-        // Tell the OS to allow transparency
-        transparent: true,
+        decorations: force_ssd,        // Enable native decorations when forced
+        transparent: !force_ssd,      // Only allow transparency when not using native decorations
         platform_specific: window::settings::PlatformSpecific {
             #[cfg(target_os = "linux")]
             application_id: String::from("cfait"),
@@ -76,7 +92,8 @@ fn alarm_stream() -> impl iced::futures::Stream<Item = Message> {
 }
 
 impl GuiApp {
-    fn new_with_ics(ics_file_path: Option<String>) -> (Self, Task<Message>) {
+    // NOTE: new_with_ics signature was updated to accept force_ssd; call sites must match.
+    fn new_with_ics(ics_file_path: Option<String>, force_ssd: bool) -> (Self, Task<Message>) {
         let mut tasks = vec![
             Task::perform(
                 async { Config::load().map_err(|e| e.to_string()) },
@@ -100,7 +117,8 @@ impl GuiApp {
             ));
         }
 
-        (Self::default(), Task::batch(tasks))
+        let app = Self { force_ssd, ..Self::default() };
+        (app, Task::batch(tasks))
     }
 
     fn view(&self) -> Element<'_, Message> {

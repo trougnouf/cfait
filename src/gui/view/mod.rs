@@ -25,7 +25,6 @@ use iced::widget::{
 use iced::{Color, Element, Length, Theme, Vector};
 
 /// Shared semantic color for Locations (Gray)
-//pub const COLOR_LOCATION: Color = Color::from_rgb(0.5, 0.55, 0.45);
 pub const COLOR_LOCATION: Color = Color::from_rgb(0.4, 0.4, 0.6);
 
 /// Shared style for tooltips with slight transparency
@@ -83,118 +82,108 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     .center_x(Length::Fill)
             ];
 
-            // --- RESTORED: Resizing Logic ---
+            // --- Resizing Logic (conditional on SSD) ---
             let main_container = container(content_layout)
                 .width(Length::Fill)
                 .height(Length::Fill);
 
-            let t = 6.0; // Thickness of edge grips
-            let c = 12.0; // Size of corner grips
+            if app.force_ssd {
+                // SSD: rely on native window decorations -> no resize grips overlay
+                main_container.into()
+            } else {
+                // CSD: add custom resize grips (existing behavior)
+                let t = 6.0; // Thickness of edge grips
+                let c = 12.0; // Size of corner grips
 
-            let n_grip = MouseArea::new(
-                container(text(""))
-                    .width(Length::Fill)
-                    .height(Length::Fixed(t)),
-            )
-            .on_press(Message::ResizeStart(ResizeDirection::North))
-            .interaction(mouse::Interaction::ResizingVertically);
+                let n_grip = MouseArea::new(
+                    container(text("")).width(Length::Fill).height(Length::Fixed(t)),
+                )
+                .on_press(Message::ResizeStart(ResizeDirection::North))
+                .interaction(mouse::Interaction::ResizingVertically);
 
-            let s_grip = MouseArea::new(
-                container(text(""))
-                    .width(Length::Fill)
-                    .height(Length::Fixed(t)),
-            )
-            .on_press(Message::ResizeStart(ResizeDirection::South))
-            .interaction(mouse::Interaction::ResizingVertically);
+                let s_grip = MouseArea::new(
+                    container(text("")).width(Length::Fill).height(Length::Fixed(t)),
+                )
+                .on_press(Message::ResizeStart(ResizeDirection::South))
+                .interaction(mouse::Interaction::ResizingVertically);
 
-            let e_grip = MouseArea::new(
-                container(text(""))
-                    .width(Length::Fixed(t))
-                    .height(Length::Fill),
-            )
-            .on_press(Message::ResizeStart(ResizeDirection::East))
-            .interaction(mouse::Interaction::ResizingHorizontally);
+                let e_grip = MouseArea::new(
+                    container(text("")).width(Length::Fixed(t)).height(Length::Fill),
+                )
+                .on_press(Message::ResizeStart(ResizeDirection::East))
+                .interaction(mouse::Interaction::ResizingHorizontally);
 
-            let w_grip = MouseArea::new(
-                container(text(""))
-                    .width(Length::Fixed(t))
-                    .height(Length::Fill),
-            )
-            .on_press(Message::ResizeStart(ResizeDirection::West))
-            .interaction(mouse::Interaction::ResizingHorizontally);
+                let w_grip = MouseArea::new(
+                    container(text("")).width(Length::Fixed(t)).height(Length::Fill),
+                )
+                .on_press(Message::ResizeStart(ResizeDirection::West))
+                .interaction(mouse::Interaction::ResizingHorizontally);
 
-            let nw_grip = MouseArea::new(
-                container(text(""))
-                    .width(Length::Fixed(c))
-                    .height(Length::Fixed(c)),
-            )
-            .on_press(Message::ResizeStart(ResizeDirection::NorthWest))
-            .interaction(mouse::Interaction::ResizingDiagonallyDown);
+                let nw_grip = MouseArea::new(
+                    container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
+                )
+                .on_press(Message::ResizeStart(ResizeDirection::NorthWest))
+                .interaction(mouse::Interaction::ResizingDiagonallyDown);
 
-            let ne_grip = MouseArea::new(
-                container(text(""))
-                    .width(Length::Fixed(c))
-                    .height(Length::Fixed(c)),
-            )
-            .on_press(Message::ResizeStart(ResizeDirection::NorthEast))
-            .interaction(mouse::Interaction::ResizingDiagonallyUp);
+                let ne_grip = MouseArea::new(
+                    container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
+                )
+                .on_press(Message::ResizeStart(ResizeDirection::NorthEast))
+                .interaction(mouse::Interaction::ResizingDiagonallyUp);
 
-            let sw_grip = MouseArea::new(
-                container(text(""))
-                    .width(Length::Fixed(c))
-                    .height(Length::Fixed(c)),
-            )
-            .on_press(Message::ResizeStart(ResizeDirection::SouthWest))
-            .interaction(mouse::Interaction::ResizingDiagonallyUp);
+                let sw_grip = MouseArea::new(
+                    container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
+                )
+                .on_press(Message::ResizeStart(ResizeDirection::SouthWest))
+                .interaction(mouse::Interaction::ResizingDiagonallyUp);
 
-            let se_grip = MouseArea::new(
-                container(text(""))
-                    .width(Length::Fixed(c))
-                    .height(Length::Fixed(c)),
-            )
-            .on_press(Message::ResizeStart(ResizeDirection::SouthEast))
-            .interaction(mouse::Interaction::ResizingDiagonallyDown);
+                let se_grip = MouseArea::new(
+                    container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
+                )
+                .on_press(Message::ResizeStart(ResizeDirection::SouthEast))
+                .interaction(mouse::Interaction::ResizingDiagonallyDown);
 
-            stack![
-                main_container,
-                container(n_grip)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_y(iced::alignment::Vertical::Top),
-                container(s_grip)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_y(iced::alignment::Vertical::Bottom),
-                container(e_grip)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Right),
-                container(w_grip)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Left),
-                container(nw_grip)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Left)
-                    .align_y(iced::alignment::Vertical::Top),
-                container(ne_grip)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Right)
-                    .align_y(iced::alignment::Vertical::Top),
-                container(sw_grip)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Left)
-                    .align_y(iced::alignment::Vertical::Bottom),
-                container(se_grip)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_x(iced::alignment::Horizontal::Right)
-                    .align_y(iced::alignment::Vertical::Bottom),
-            ]
-            .into()
+                stack![
+                    main_container,
+                    container(n_grip)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .align_y(iced::alignment::Vertical::Top),
+                    container(s_grip)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .align_y(iced::alignment::Vertical::Bottom),
+                    container(e_grip)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Right),
+                    container(w_grip)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Left),
+                    container(nw_grip)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Left)
+                        .align_y(iced::alignment::Vertical::Top),
+                    container(ne_grip)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Right)
+                        .align_y(iced::alignment::Vertical::Top),
+                    container(sw_grip)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Left)
+                        .align_y(iced::alignment::Vertical::Bottom),
+                    container(se_grip)
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .align_x(iced::alignment::Horizontal::Right)
+                        .align_y(iced::alignment::Vertical::Bottom),
+                ]
+                .into()
+            }
         }
     };
 
@@ -377,11 +366,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             container::Style {
                 // Apply the actual background color here
                 background: Some(iced::Background::Color(palette.background.base.color)),
-                // Apply the Border Radius here
+                // Apply the Border Radius here (remove when SSD)
                 border: iced::Border {
                     color: palette.background.strong.color,
-                    width: 1.0,
-                    radius: 12.0.into(), // <--- ROUNDED CORNERS
+                    width: if app.force_ssd { 0.0 } else { 1.0 },
+                    radius: if app.force_ssd { 0.0.into() } else { 12.0.into() },
                 },
                 // Ensure clip is true if content overflows corners (optional but good)
                 ..Default::default()
@@ -650,17 +639,22 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     search_row = search_row.push(search_input);
     // --------------------------------
 
-    let window_controls = row![
-        iced::widget::button(icon::icon(icon::WINDOW_MINIMIZE).size(14))
-            .style(iced::widget::button::text)
-            .padding(8)
-            .on_press(Message::MinimizeWindow),
-        iced::widget::button(icon::icon(icon::CROSS).size(14))
-            .style(iced::widget::button::danger)
-            .padding(8)
-            .on_press(Message::CloseWindow)
-    ]
-    .spacing(0);
+    let window_controls = if app.force_ssd {
+        // If SSD, hide custom controls
+        row![].spacing(0)
+    } else {
+        row![
+            iced::widget::button(icon::icon(icon::WINDOW_MINIMIZE).size(14))
+                .style(iced::widget::button::text)
+                .padding(8)
+                .on_press(Message::MinimizeWindow),
+            iced::widget::button(icon::icon(icon::CROSS).size(14))
+                .style(iced::widget::button::danger)
+                .padding(8)
+                .on_press(Message::CloseWindow)
+        ]
+        .spacing(0)
+    };
 
     let right_section = row![search_row, window_controls]
         .spacing(10)
@@ -676,7 +670,12 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         })
         .align_y(iced::Alignment::Center);
 
-    let header_drag_area = MouseArea::new(header_row).on_press(Message::WindowDragged);
+    let header_drag_area = if app.force_ssd {
+        // If SSD, let the OS handle dragging; don't make a custom drag area
+        Element::from(header_row)
+    } else {
+        MouseArea::new(header_row).on_press(Message::WindowDragged).into()
+    };
 
     // If viewing any local calendar, show export-to-caldav button bar
     let export_ui: Element<'_, Message>;

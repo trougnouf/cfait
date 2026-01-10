@@ -153,6 +153,9 @@ pub struct GuiApp {
     // Settings input buffers for duration strings
     pub ob_snooze_short_input: String,
     pub ob_snooze_long_input: String,
+
+    // ADDED: Force Server-Side Decorations
+    pub force_ssd: bool,
 }
 
 impl Default for GuiApp {
@@ -274,6 +277,9 @@ impl Default for GuiApp {
             deleting_events: false,
             ob_snooze_short_input: "1h".to_string(),
             ob_snooze_long_input: "1d".to_string(),
+
+            // ADDED: Force Server-Side Decorations
+            force_ssd: false,
 
             // ICS Import Dialog
             ics_import_dialog_open: false,
