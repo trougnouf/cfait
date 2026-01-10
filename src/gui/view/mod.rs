@@ -1,3 +1,4 @@
+// File: ./src/gui/view/mod.rs
 // Main view composition and layout logic for the GUI.
 use std::time::Duration;
 pub mod help;
@@ -50,8 +51,8 @@ pub fn tooltip_style(theme: &Theme) -> container::Style {
 }
 
 pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
-    // 1. Generate the content as you normally would
-    let mut content: Element<'_, Message> = match app.state {
+    // 1. Generate the base content
+    let base_content: Element<'_, Message> = match app.state {
         AppState::Loading => container(text("Loading...").size(30))
             .width(Length::Fill)
             .height(Length::Fill)
@@ -82,120 +83,24 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     .center_x(Length::Fill)
             ];
 
-            // --- Resizing Logic (conditional on SSD) ---
-            let main_container = container(content_layout)
+            container(content_layout)
                 .width(Length::Fill)
-                .height(Length::Fill);
-
-            if app.force_ssd {
-                // SSD: rely on native window decorations -> no resize grips overlay
-                main_container.into()
-            } else {
-                // CSD: add custom resize grips (existing behavior)
-                let t = 6.0; // Thickness of edge grips
-                let c = 12.0; // Size of corner grips
-
-                let n_grip = MouseArea::new(
-                    container(text("")).width(Length::Fill).height(Length::Fixed(t)),
-                )
-                .on_press(Message::ResizeStart(ResizeDirection::North))
-                .interaction(mouse::Interaction::ResizingVertically);
-
-                let s_grip = MouseArea::new(
-                    container(text("")).width(Length::Fill).height(Length::Fixed(t)),
-                )
-                .on_press(Message::ResizeStart(ResizeDirection::South))
-                .interaction(mouse::Interaction::ResizingVertically);
-
-                let e_grip = MouseArea::new(
-                    container(text("")).width(Length::Fixed(t)).height(Length::Fill),
-                )
-                .on_press(Message::ResizeStart(ResizeDirection::East))
-                .interaction(mouse::Interaction::ResizingHorizontally);
-
-                let w_grip = MouseArea::new(
-                    container(text("")).width(Length::Fixed(t)).height(Length::Fill),
-                )
-                .on_press(Message::ResizeStart(ResizeDirection::West))
-                .interaction(mouse::Interaction::ResizingHorizontally);
-
-                let nw_grip = MouseArea::new(
-                    container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
-                )
-                .on_press(Message::ResizeStart(ResizeDirection::NorthWest))
-                .interaction(mouse::Interaction::ResizingDiagonallyDown);
-
-                let ne_grip = MouseArea::new(
-                    container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
-                )
-                .on_press(Message::ResizeStart(ResizeDirection::NorthEast))
-                .interaction(mouse::Interaction::ResizingDiagonallyUp);
-
-                let sw_grip = MouseArea::new(
-                    container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
-                )
-                .on_press(Message::ResizeStart(ResizeDirection::SouthWest))
-                .interaction(mouse::Interaction::ResizingDiagonallyUp);
-
-                let se_grip = MouseArea::new(
-                    container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
-                )
-                .on_press(Message::ResizeStart(ResizeDirection::SouthEast))
-                .interaction(mouse::Interaction::ResizingDiagonallyDown);
-
-                stack![
-                    main_container,
-                    container(n_grip)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .align_y(iced::alignment::Vertical::Top),
-                    container(s_grip)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .align_y(iced::alignment::Vertical::Bottom),
-                    container(e_grip)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .align_x(iced::alignment::Horizontal::Right),
-                    container(w_grip)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .align_x(iced::alignment::Horizontal::Left),
-                    container(nw_grip)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .align_x(iced::alignment::Horizontal::Left)
-                        .align_y(iced::alignment::Vertical::Top),
-                    container(ne_grip)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .align_x(iced::alignment::Horizontal::Right)
-                        .align_y(iced::alignment::Vertical::Top),
-                    container(sw_grip)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .align_x(iced::alignment::Horizontal::Left)
-                        .align_y(iced::alignment::Vertical::Bottom),
-                    container(se_grip)
-                        .width(Length::Fill)
-                        .height(Length::Fill)
-                        .align_x(iced::alignment::Horizontal::Right)
-                        .align_y(iced::alignment::Vertical::Bottom),
-                ]
+                .height(Length::Fill)
                 .into()
-            }
         }
     };
 
-    // --- ICS IMPORT DIALOG / ALARM MODAL WRAPPING ---
-    // Instead of returning early, transform `content` into an overlayed element when necessary.
+    // 2. Modals (Import / Alarm)
+    // Wrap base_content in modals if necessary
+    let mut content_with_modals = base_content;
+
     if app.ics_import_dialog_open {
-        content = view_ics_import_dialog(app, content);
+        content_with_modals = view_ics_import_dialog(app, content_with_modals);
     } else if !app.ringing_tasks.is_empty() {
         // --- ALARM MODAL ---
         let (task, alarm) = &app.ringing_tasks[0];
 
-        // Header
+        // --- ALARM MODAL ---
         let icon_header = container(
             icon::icon(icon::BELL)
                 .size(30)
@@ -256,7 +161,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 ))
         };
 
-        // Custom Snooze Input
         let custom_snooze_row = row![
             text_input("Custom (eg 30m)", &app.snooze_custom_input)
                 .on_input(Message::SnoozeCustomInput)
@@ -303,14 +207,13 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 summary,
                 Space::new().height(Length::Fixed(10.0)),
                 task_desc_content,
-                // Removed redundant alarm_info here
                 Space::new().height(Length::Fixed(20.0)),
                 buttons
             ]
             .spacing(5)
             .align_x(iced::Alignment::Center),
         )
-        .height(Length::Shrink); // Allow shrinking to content
+        .height(Length::Shrink);
 
         let modal_card = container(modal_content)
             .padding(20)
@@ -341,9 +244,8 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 }
             });
 
-        // Build overlay stack
-        content = stack![
-            content,
+        content_with_modals = stack![
+            content_with_modals,
             container(modal_card)
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -357,8 +259,107 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         .into();
     }
 
-    // 2. THE FIX: Wrap the final content in the rounded window container
-    container(content)
+    // 3. Resize Grips (if !SSD)
+    // Apply resize grips *after* modals so grips are on top of everything (including full-screen modal overlays)
+    let final_content = if app.force_ssd {
+        content_with_modals
+    } else {
+        let t = 6.0; // Thickness of edge grips
+        let c = 12.0; // Size of corner grips
+
+        let n_grip = MouseArea::new(
+            container(text("")).width(Length::Fill).height(Length::Fixed(t)),
+        )
+        .on_press(Message::ResizeStart(ResizeDirection::North))
+        .interaction(mouse::Interaction::ResizingVertically);
+
+        let s_grip = MouseArea::new(
+            container(text("")).width(Length::Fill).height(Length::Fixed(t)),
+        )
+        .on_press(Message::ResizeStart(ResizeDirection::South))
+        .interaction(mouse::Interaction::ResizingVertically);
+
+        let e_grip = MouseArea::new(
+            container(text("")).width(Length::Fixed(t)).height(Length::Fill),
+        )
+        .on_press(Message::ResizeStart(ResizeDirection::East))
+        .interaction(mouse::Interaction::ResizingHorizontally);
+
+        let w_grip = MouseArea::new(
+            container(text("")).width(Length::Fixed(t)).height(Length::Fill),
+        )
+        .on_press(Message::ResizeStart(ResizeDirection::West))
+        .interaction(mouse::Interaction::ResizingHorizontally);
+
+        let nw_grip = MouseArea::new(
+            container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
+        )
+        .on_press(Message::ResizeStart(ResizeDirection::NorthWest))
+        .interaction(mouse::Interaction::ResizingDiagonallyDown);
+
+        let ne_grip = MouseArea::new(
+            container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
+        )
+        .on_press(Message::ResizeStart(ResizeDirection::NorthEast))
+        .interaction(mouse::Interaction::ResizingDiagonallyUp);
+
+        let sw_grip = MouseArea::new(
+            container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
+        )
+        .on_press(Message::ResizeStart(ResizeDirection::SouthWest))
+        .interaction(mouse::Interaction::ResizingDiagonallyUp);
+
+        let se_grip = MouseArea::new(
+            container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
+        )
+        .on_press(Message::ResizeStart(ResizeDirection::SouthEast))
+        .interaction(mouse::Interaction::ResizingDiagonallyDown);
+
+        stack![
+            content_with_modals, // Content is bottom layer
+            // Grips are top layers
+            container(n_grip)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_y(iced::alignment::Vertical::Top),
+            container(s_grip)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_y(iced::alignment::Vertical::Bottom),
+            container(e_grip)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Right),
+            container(w_grip)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Left),
+            container(nw_grip)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Left)
+                .align_y(iced::alignment::Vertical::Top),
+            container(ne_grip)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Right)
+                .align_y(iced::alignment::Vertical::Top),
+            container(sw_grip)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Left)
+                .align_y(iced::alignment::Vertical::Bottom),
+            container(se_grip)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(iced::alignment::Horizontal::Right)
+                .align_y(iced::alignment::Vertical::Bottom),
+        ]
+        .into()
+    };
+
+    // 4. Final Window Style Container
+    container(final_content)
         .width(Length::Fill)
         .height(Length::Fill)
         .style(|theme: &Theme| {
@@ -372,7 +373,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     width: if app.force_ssd { 0.0 } else { 1.0 },
                     radius: if app.force_ssd { 0.0.into() } else { 12.0.into() },
                 },
-                // Ensure clip is true if content overflows corners (optional but good)
                 ..Default::default()
             }
         })
