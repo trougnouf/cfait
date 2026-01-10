@@ -306,6 +306,11 @@ pub struct Task {
     /// Set to true if task is blocked (by dependencies or #blocked tag).
     #[serde(skip)]
     pub is_blocked: bool,
+
+    /// Transient field for sorting rank (1=Urgent, 7=Done).
+    /// Populated during filter/sort phase (not serialized).
+    #[serde(skip)]
+    pub sort_rank: u8,
 }
 
 impl Task {
@@ -345,6 +350,7 @@ impl Task {
             raw_components: Vec::new(),
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
         task.apply_smart_input(input, aliases, default_reminder_time);
         task
@@ -388,6 +394,123 @@ impl Task {
         }
     }
 
+    /// Calculates the "intrinsic" sort rank of this task based on its own properties.
+    /// 1: Urgent, 2: Due Soon, 3: Started, 4: Standard, 5: Defer/NoDate, 6: Future, 7: Done
+    pub fn calculate_base_rank(
+        &self,
+        cutoff: Option<DateTime<Utc>>,
+        urgent_days: u32,
+        urgent_prio: u8,
+        start_grace_period_days: u32,
+    ) -> u8 {
+        if self.status.is_done() {
+            return 7;
+        }
+
+        let now = Utc::now();
+
+        // Future check
+        if let Some(start) = &self.dtstart {
+            let start_time = start.to_start_comparison_time();
+            let grace_threshold = now + chrono::Duration::days(start_grace_period_days as i64);
+            if start_time > grace_threshold && !self.has_recent_acknowledged_alarm() {
+                return 6;
+            }
+        }
+
+        if !self.is_blocked {
+            // 1: Urgent (Priority)
+            if self.priority > 0 && self.priority <= urgent_prio {
+                return 1;
+            }
+            // 2: Due Soon
+            if let Some(due) = &self.due
+                && due.to_comparison_time() <= now + chrono::Duration::days(urgent_days as i64)
+            {
+                return 2;
+            }
+            // 3: Started
+            if self.status == TaskStatus::InProcess {
+                return 3;
+            }
+        }
+
+        // 4: Inside Cutoff
+        if let Some(due) = &self.due {
+            if let Some(limit) = cutoff {
+                if due.to_comparison_time() <= limit {
+                    return 4;
+                }
+            } else {
+                return 4;
+            }
+        }
+
+        // 5: Remaining
+        5
+    }
+
+    pub fn compare_for_sort(
+        &self,
+        other: &Self,
+        default_priority: u8,
+    ) -> Ordering {
+        // Primary Sort: Effective Rank (pre-calculated and propagated)
+        if self.sort_rank != other.sort_rank {
+            return self.sort_rank.cmp(&other.sort_rank);
+        }
+
+        // Helper: Treat Priority 0 (Unset) as default_priority for comparison
+        let normalize_prio = |p: u8| if p == 0 { default_priority } else { p };
+
+        // Helper: Sort dates, putting None last
+        let compare_dates = |d1: &Option<DateType>, d2: &Option<DateType>| -> Ordering {
+            match (d1, d2) {
+                (Some(a), Some(b)) => a.cmp(b),
+                (Some(_), None) => Ordering::Less,
+                (None, Some(_)) => Ordering::Greater,
+                (None, None) => Ordering::Equal,
+            }
+        };
+
+        // Tie-breaking within ranks
+        match self.sort_rank {
+            1 => {
+                // Urgent: Priority -> Due -> Name
+                normalize_prio(self.priority)
+                    .cmp(&normalize_prio(other.priority))
+                    .then_with(|| compare_dates(&self.due, &other.due))
+            }
+            2..=4 => {
+                // Due Soon / Started / Standard: Due -> Priority -> Name
+                compare_dates(&self.due, &other.due)
+                    .then(normalize_prio(self.priority).cmp(&normalize_prio(other.priority)))
+            }
+            5 => {
+                // Remaining: Priority -> Name -> Due
+                normalize_prio(self.priority)
+                    .cmp(&normalize_prio(other.priority))
+                    .then_with(|| self.summary.cmp(&other.summary))
+                    .then_with(|| compare_dates(&self.due, &other.due))
+            }
+            6 => {
+                // Future: Start Date -> Priority -> Name
+                let s1 = self.dtstart.as_ref().map(|d| d.to_start_comparison_time());
+                let s2 = other.dtstart.as_ref().map(|d| d.to_start_comparison_time());
+                s1.cmp(&s2)
+                    .then(normalize_prio(self.priority).cmp(&normalize_prio(other.priority)))
+            }
+            _ => {
+                // Done/Other
+                normalize_prio(self.priority)
+                    .cmp(&normalize_prio(other.priority))
+                    .then_with(|| compare_dates(&self.due, &other.due))
+            }
+        }
+        .then_with(|| self.summary.cmp(&other.summary))
+    }
+
+    // --- Existing compare_with_cutoff preserved for backward compatibility/tests ---
     pub fn compare_with_cutoff(
         &self,
         other: &Self,
@@ -531,29 +654,19 @@ impl Task {
         .then_with(|| self.summary.cmp(&other.summary))
     }
 
+    /// Organize hierarchy expecting tasks to already have `sort_rank` populated.
+    /// This function now only needs the `default_priority` for tie-breakers during sort.
     pub fn organize_hierarchy(
         mut tasks: Vec<Task>,
-        cutoff: Option<DateTime<Utc>>,
-        urgent_days: u32,
-        urgent_prio: u8,
         default_priority: u8,
-        start_grace_period_days: u32,
     ) -> Vec<Task> {
         let present_uids: std::collections::HashSet<String> =
             tasks.iter().map(|t| t.uid.clone()).collect();
         let mut children_map: HashMap<String, Vec<Task>> = HashMap::new();
         let mut roots: Vec<Task> = Vec::new();
 
-        tasks.sort_by(|a, b| {
-            a.compare_with_cutoff(
-                b,
-                cutoff,
-                urgent_days,
-                urgent_prio,
-                default_priority,
-                start_grace_period_days,
-            )
-        });
+        // Sort using precomputed `sort_rank` and tie-breakers
+        tasks.sort_by(|a, b| a.compare_for_sort(b, default_priority));
 
         // Consume tasks directly instead of cloning the entire vector
         let total_tasks = tasks.len();
@@ -1232,6 +1345,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         let normal_task = Task {
@@ -1264,6 +1378,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         // Urgent (rank 1) should come before normal (rank 4)
@@ -1309,6 +1424,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         let due_later = Task {
@@ -1341,6 +1457,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         // Due soon (rank 2) should come before due later (rank 4)
@@ -1386,6 +1503,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         let not_started = Task {
@@ -1418,6 +1536,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         // Started (rank 3) should come before normal (rank 4)
@@ -1463,6 +1582,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         let started_due_later = Task {
@@ -1495,6 +1615,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         // Within rank 3, should sort by due date first (earlier before later)
@@ -1548,6 +1669,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         let due_later = Task {
@@ -1580,6 +1702,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         // Both in rank 4, should be sorted by due date first
@@ -1633,6 +1756,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         let low_prio = Task {
@@ -1665,6 +1789,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         // Both in rank 5 (outside cutoff), should be sorted by priority first
@@ -1710,6 +1835,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         let normal_task = Task {
@@ -1742,6 +1868,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         // Future start (rank 6) should come after normal (rank 4)
@@ -1788,6 +1915,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         let normal_task = Task {
@@ -1820,6 +1948,7 @@ mod tests {
             raw_components: vec![],
             create_event: None,
             is_blocked: false,
+            sort_rank: 0,
         };
 
         // Done (rank 7) should come after all others

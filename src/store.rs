@@ -775,8 +775,8 @@ impl TaskStore {
                 .collect()
         };
 
-        // Populate the transient is_blocked field before sorting
-        let final_tasks_with_blocked = final_tasks
+        // Populate the transient is_blocked field before sorting and prepare for rank propagation
+        let mut final_tasks_processed: Vec<Task> = final_tasks
             .into_iter()
             .map(|mut t| {
                 t.is_blocked = self.is_blocked(&t);
@@ -784,14 +784,81 @@ impl TaskStore {
             })
             .collect();
 
-        Task::organize_hierarchy(
-            final_tasks_with_blocked,
-            options.cutoff_date,
-            options.urgent_days,
-            options.urgent_prio,
-            options.default_priority,
-            options.start_grace_period_days,
-        )
+        // 1. Calculate base ranks for all visible tasks
+        for t in final_tasks_processed.iter_mut() {
+            t.sort_rank = t.calculate_base_rank(
+                options.cutoff_date,
+                options.urgent_days,
+                options.urgent_prio,
+                options.start_grace_period_days,
+            );
+        }
+
+        // 2. Build Hierarchy Map (Parent UID -> Vec<Child Indices>)
+        let mut uid_to_index: HashMap<String, usize> = HashMap::new();
+        for (i, t) in final_tasks_processed.iter().enumerate() {
+            uid_to_index.insert(t.uid.clone(), i);
+        }
+
+        let mut parent_to_children: HashMap<String, Vec<usize>> = HashMap::new();
+        for (i, t) in final_tasks_processed.iter().enumerate() {
+            if let Some(p_uid) = &t.parent_uid
+                && uid_to_index.contains_key(p_uid) {
+                    parent_to_children.entry(p_uid.clone()).or_default().push(i);
+                }
+        }
+
+        // 3. Propagate Ranks (bubble-up the minimum rank from children to parents)
+        let mut rank_cache: HashMap<usize, u8> = HashMap::new();
+        let mut visiting: HashSet<usize> = HashSet::new();
+
+        // Recursive resolver that returns the best (lowest) rank reachable from idx
+        fn resolve_rank(
+            idx: usize,
+            tasks: &Vec<Task>,
+            map: &HashMap<String, Vec<usize>>,
+            cache: &mut HashMap<usize, u8>,
+            visiting: &mut HashSet<usize>,
+        ) -> u8 {
+            if let Some(&r) = cache.get(&idx) {
+                return r;
+            }
+            if visiting.contains(&idx) {
+                // Cycle detected: break by returning intrinsic rank
+                return tasks[idx].sort_rank;
+            }
+            visiting.insert(idx);
+
+            let mut best_rank = tasks[idx].sort_rank;
+
+            if let Some(children) = map.get(&tasks[idx].uid) {
+                for &child_idx in children {
+                    let child_rank = resolve_rank(child_idx, tasks, map, cache, visiting);
+                    if child_rank < best_rank {
+                        best_rank = child_rank;
+                    }
+                }
+            }
+
+            visiting.remove(&idx);
+            cache.insert(idx, best_rank);
+            best_rank
+        }
+
+        // Compute effective rank for all tasks and write back to sort_rank
+        for i in 0..final_tasks_processed.len() {
+            let eff = resolve_rank(
+                i,
+                &final_tasks_processed,
+                &parent_to_children,
+                &mut rank_cache,
+                &mut visiting,
+            );
+            final_tasks_processed[i].sort_rank = eff;
+        }
+
+        // 4. Organize hierarchy using the fully prepared tasks (with propagated sort_rank)
+        Task::organize_hierarchy(final_tasks_processed, options.default_priority)
     }
 
     pub fn is_task_done(&self, uid: &str) -> Option<bool> {

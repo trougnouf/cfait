@@ -117,7 +117,7 @@ fn test_hierarchy_organization() {
     let tasks = vec![child.clone(), parent.clone()];
 
     // This function rebuilds the visual list (flattened tree)
-    let organized = Task::organize_hierarchy(tasks, None, 1, 1, 5, 1);
+    let organized = Task::organize_hierarchy(tasks, 5);
 
     assert_eq!(organized.len(), 2);
     assert_eq!(organized[0].summary, "Parent");

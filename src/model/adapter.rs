@@ -940,6 +940,7 @@ impl Task {
             raw_alarms: Vec::new(),
             create_event,
             is_blocked: false,
+            sort_rank: 0,
         })
     }
 }
