@@ -776,10 +776,15 @@ impl TaskStore {
         };
 
         // Populate the transient is_blocked field before sorting and prepare for rank propagation
+        // Also initialize effective tie-breaker fields (priority/due/dtstart) to the task's own values.
         let mut final_tasks_processed: Vec<Task> = final_tasks
             .into_iter()
             .map(|mut t| {
                 t.is_blocked = self.is_blocked(&t);
+                // Init effective fields to own values; these may be overridden when bubbling up.
+                t.effective_priority = t.priority;
+                t.effective_due = t.due.clone();
+                t.effective_dtstart = t.dtstart.clone();
                 t
             })
             .collect();
@@ -808,53 +813,91 @@ impl TaskStore {
                 }
         }
 
-        // 3. Propagate Ranks (bubble-up the minimum rank from children to parents)
-        let mut rank_cache: HashMap<usize, u8> = HashMap::new();
-        let mut visiting: HashSet<usize> = HashSet::new();
+        // 3. Propagate Effective Properties from children to parents
+        // We must propagate not only the minimum rank, but also the tie-breaker
+        // fields (priority, due, dtstart) from the most-urgent descendant.
+        #[derive(Clone)]
+        struct Effective {
+            rank: u8,
+            prio: u8,
+            due: Option<crate::model::item::DateType>,
+            start: Option<crate::model::item::DateType>,
+        }
 
-        // Recursive resolver that returns the best (lowest) rank reachable from idx
-        fn resolve_rank(
+        let mut cache: HashMap<usize, Effective> = HashMap::new();
+        let mut visiting: HashSet<usize> = HashSet::new();
+        let default_prio = options.default_priority;
+
+        fn resolve(
             idx: usize,
             tasks: &Vec<Task>,
             map: &HashMap<String, Vec<usize>>,
-            cache: &mut HashMap<usize, u8>,
+            cache: &mut HashMap<usize, Effective>,
             visiting: &mut HashSet<usize>,
-        ) -> u8 {
-            if let Some(&r) = cache.get(&idx) {
-                return r;
+            default_prio: u8,
+        ) -> Effective {
+            if let Some(c) = cache.get(&idx) {
+                return c.clone();
             }
+
+            // Base values come from the task itself
+            let t = &tasks[idx];
+            let mut best = Effective {
+                rank: t.sort_rank,
+                prio: t.effective_priority,
+                due: t.effective_due.clone(),
+                start: t.effective_dtstart.clone(),
+            };
+
             if visiting.contains(&idx) {
-                // Cycle detected: break by returning intrinsic rank
-                return tasks[idx].sort_rank;
+                return best;
             }
             visiting.insert(idx);
 
-            let mut best_rank = tasks[idx].sort_rank;
-
-            if let Some(children) = map.get(&tasks[idx].uid) {
+            if let Some(children) = map.get(&t.uid) {
                 for &child_idx in children {
-                    let child_rank = resolve_rank(child_idx, tasks, map, cache, visiting);
-                    if child_rank < best_rank {
-                        best_rank = child_rank;
+                    let child_eff = resolve(child_idx, tasks, map, cache, visiting, default_prio);
+
+                    // Compare full components (rank + tie-breakers) to decide if child is "more urgent"
+                    let ordering = Task::compare_components(
+                        child_eff.rank,
+                        child_eff.prio,
+                        &child_eff.due,
+                        &child_eff.start,
+                        best.rank,
+                        best.prio,
+                        &best.due,
+                        &best.start,
+                        default_prio,
+                    );
+
+                    if ordering == std::cmp::Ordering::Less {
+                        best = child_eff;
                     }
                 }
             }
 
             visiting.remove(&idx);
-            cache.insert(idx, best_rank);
-            best_rank
+            cache.insert(idx, best.clone());
+            best
         }
 
-        // Compute effective rank for all tasks and write back to sort_rank
+        // Apply propagation results back to the mutable task list
         for i in 0..final_tasks_processed.len() {
-            let eff = resolve_rank(
+            let eff = resolve(
                 i,
                 &final_tasks_processed,
                 &parent_to_children,
-                &mut rank_cache,
+                &mut cache,
                 &mut visiting,
+                default_prio,
             );
-            final_tasks_processed[i].sort_rank = eff;
+
+            let t = &mut final_tasks_processed[i];
+            t.sort_rank = eff.rank;
+            t.effective_priority = eff.prio;
+            t.effective_due = eff.due;
+            t.effective_dtstart = eff.start;
         }
 
         // 4. Organize hierarchy using the fully prepared tasks (with propagated sort_rank)

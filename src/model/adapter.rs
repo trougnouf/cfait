@@ -941,6 +941,11 @@ impl Task {
             create_event,
             is_blocked: false,
             sort_rank: 0,
+            // Initialize transient effective tie-breaker fields so callers that
+            // expect them to exist (after the propagation changes) do not fail.
+            effective_priority: 0,
+            effective_due: None,
+            effective_dtstart: None,
         })
     }
 }
