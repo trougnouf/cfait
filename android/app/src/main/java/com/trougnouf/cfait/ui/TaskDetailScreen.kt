@@ -1,3 +1,4 @@
+// File: ./android/app/src/main/java/com/trougnouf/cfait/ui/TaskDetailScreen.kt
 // Compose UI screen for editing task details.
 package com.trougnouf.cfait.ui
 
@@ -124,11 +125,12 @@ fun TaskDetailScreen(
         Column(modifier = Modifier.padding(p).padding(16.dp)) {
             OutlinedTextField(
                 value = smartInput,
-                onValueChange = { smartInput = it },
+                onValueChange = { smartInput = it.replace("\n", "") }, // Manually block newlines
                 label = { Text("Task (smart syntax)") },
                 modifier = Modifier.fillMaxWidth(),
                 visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
-                singleLine = true,
+                // Fix: Removed singleLine = true to fix cursor handle positioning on high DPI tablets
+                maxLines = 5,
                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
                     onSave(smartInput, description)
