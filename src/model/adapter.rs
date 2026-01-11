@@ -386,6 +386,58 @@ impl Task {
     /// Returns None if the task implies no event (e.g. no dates set).
     /// Returns (event_uid, ics_string) tuple.
     pub fn to_event_ics(&self) -> Option<(String, String)> {
+        // If Completed, we move the event to the completion time (or Now).
+        // This takes precedence over scheduled dates.
+        if self.status == TaskStatus::Completed {
+            // 1. Determine End Time (Completed At)
+            let completed_at = self.unmapped_properties.iter()
+                .find(|p| p.key == "COMPLETED")
+                .and_then(|p| NaiveDateTime::parse_from_str(&p.value, "%Y%m%dT%H%M%SZ").ok())
+                .map(|ndt| Utc.from_utc_datetime(&ndt))
+                .unwrap_or_else(Utc::now);
+
+            // 2. Determine Start Time (End - Duration)
+            // Default to 1h (60m) if no duration provided
+            let duration_mins = self.estimated_duration.unwrap_or(60) as i64;
+            let start_at = completed_at - chrono::Duration::minutes(duration_mins);
+
+            // 3. Generate Event
+            let event_uid = format!("evt-{}", self.uid);
+            let mut event = Event::new();
+            event.add_property("UID", &event_uid);
+            event.summary(&self.summary);
+            event.timestamp(Utc::now());
+
+            // Explicitly set STATUS:CONFIRMED for completed items on the calendar
+            event.add_property("STATUS", "CONFIRMED");
+
+            let mut event_desc = String::new();
+            if !self.description.is_empty() {
+                event_desc.push_str(&self.description);
+                event_desc.push_str("\n\n");
+            }
+            event_desc.push_str("✓ Task Completed\n");
+            event_desc.push_str("This event marks when the task was checked off.\n");
+            event.description(&event_desc);
+
+            if let Some(loc) = &self.location {
+                event.add_property("LOCATION", loc);
+            }
+            if let Some(url) = &self.url {
+                event.add_property("URL", url);
+            }
+
+            // Set Times
+            event.add_property("DTSTART", start_at.format("%Y%m%dT%H%M%SZ").to_string());
+            event.add_property("DTEND", completed_at.format("%Y%m%dT%H%M%SZ").to_string());
+
+            let mut calendar = Calendar::new();
+            calendar.push(event);
+            return Some((event_uid, calendar.to_string()));
+        }
+
+        // --- Standard Logic for Active/Cancelled Tasks ---
+
         // If no due date and no start date, we can't place it on a calendar.
         if self.due.is_none() && self.dtstart.is_none() {
             return None;
@@ -606,7 +658,7 @@ impl Task {
                 _ => None,
             });
 
-        // REVISED DATE PARSING LOGIC TO FIX FLOATING TIMES
+        // Date parsing logic to fix floating times
         let parse_date_type = |prop: &icalendar::Property| -> Option<DateType> {
             let val = prop.value();
             let is_date = prop
@@ -641,7 +693,7 @@ impl Task {
         let dtstart = todo.properties().get("DTSTART").and_then(parse_date_type);
         let rrule = get_prop("RRULE");
 
-        // REVISED EXDATE PARSING LOGIC
+        // EXDATE parsing logic
         let mut exdates = Vec::new();
         if let Some(multi_props) = todo.multi_properties().get("EXDATE") {
             for prop in multi_props {

@@ -669,9 +669,12 @@ impl RustyClient {
         // - Cancelled tasks get STATUS:CANCELLED (event kept with cancelled status)
         // - Completed tasks keep their events with STATUS:CONFIRMED
 
+        let has_dates = task.due.is_some() || task.dtstart.is_some();
+        let keep_completed = !delete_on_completion && task.status.is_done();
+
         let should_delete = is_delete_intent
             || (delete_on_completion && task.status.is_done())
-            || (task.due.is_none() && task.dtstart.is_none())
+            || (!has_dates && !keep_completed) // Delete if no dates AND we are not in "keep completed" mode
             || !should_create_events; // Delete if this task shouldn't have events
 
         if should_delete {

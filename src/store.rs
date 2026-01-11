@@ -1,6 +1,6 @@
 // In-memory storage and filtering logic for tasks.
 use crate::cache::Cache;
-use crate::model::{Task, TaskStatus};
+use crate::model::{RawProperty, Task, TaskStatus};
 use crate::storage::LocalStorage;
 use chrono::{DateTime, Utc};
 use std::collections::{HashMap, HashSet};
@@ -107,9 +107,20 @@ impl TaskStore {
             if task.status == TaskStatus::Completed {
                 task.status = TaskStatus::NeedsAction;
                 task.percent_complete = None;
+                // Remove COMPLETED date
+                task.unmapped_properties.retain(|p| p.key != "COMPLETED");
             } else {
                 task.status = TaskStatus::Completed;
                 task.percent_complete = Some(100);
+                // Set COMPLETED date to Now
+                let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+                // Remove existing if any to avoid duplicates
+                task.unmapped_properties.retain(|p| p.key != "COMPLETED");
+                task.unmapped_properties.push(RawProperty {
+                    key: "COMPLETED".to_string(),
+                    value: now_str,
+                    params: vec![],
+                });
             }
             return Some(task.clone());
         }
@@ -119,13 +130,29 @@ impl TaskStore {
     pub fn set_status(&mut self, uid: &str, status: TaskStatus) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
             if task.status == status {
+                // Toggling off (if same status requested) -> NeedsAction
                 task.status = TaskStatus::NeedsAction;
+                task.unmapped_properties.retain(|p| p.key != "COMPLETED");
             } else {
                 // When cancelling a recurring task, advance to next occurrence
                 if status == TaskStatus::Cancelled && task.rrule.is_some() {
                     task.advance_recurrence_with_cancellation();
+                    // Recurrence advanced, task is now fresh (NeedsAction), so no COMPLETED date needed
+                    task.unmapped_properties.retain(|p| p.key != "COMPLETED");
                 } else {
                     task.status = status;
+                    // Handle COMPLETED property
+                    if status == TaskStatus::Completed {
+                        let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+                        task.unmapped_properties.retain(|p| p.key != "COMPLETED");
+                        task.unmapped_properties.push(RawProperty {
+                            key: "COMPLETED".to_string(),
+                            value: now_str,
+                            params: vec![],
+                        });
+                    } else {
+                        task.unmapped_properties.retain(|p| p.key != "COMPLETED");
+                    }
                 }
             }
             return Some(task.clone());
