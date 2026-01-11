@@ -1,4 +1,4 @@
-// Main Android Activity setting up the Compose UI.
+// File: ./android/app/src/main/java/com/trougnouf/cfait/MainActivity.kt
 package com.trougnouf.cfait
 
 import android.Manifest
@@ -16,8 +16,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.runtime.livedata.observeAsState
@@ -41,8 +44,8 @@ import com.trougnouf.cfait.ui.SettingsScreen
 import com.trougnouf.cfait.ui.TaskDetailScreen
 import com.trougnouf.cfait.util.AlarmScheduler
 import com.trougnouf.cfait.workers.AlarmWorker
-import com.trougnouf.cfait.workers.CalendarSyncWorker
 import com.trougnouf.cfait.workers.CalendarMigrationWorker
+import com.trougnouf.cfait.workers.CalendarSyncWorker
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -52,9 +55,46 @@ class MainActivity : ComponentActivity() {
         val app = application as CfaitApplication
         val api = app.api
 
+        // Retrieve saved theme preference (defaulting to "auto")
+        val sharedPrefs = getSharedPreferences("cfait_ui_prefs", Context.MODE_PRIVATE)
+        val savedTheme = sharedPrefs.getString("app_theme", "auto") ?: "auto"
+
         setContent {
-            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
-                CfaitNavHost(api, intent)
+            // Lift theme state to root so SettingsScreen can update it
+            var currentTheme by remember { mutableStateOf(savedTheme) }
+
+            // Determine the color scheme based on preference and system state
+            val context = LocalContext.current
+            val systemInDark = isSystemInDarkTheme()
+            val dynamicAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+            val colorScheme: ColorScheme = remember(currentTheme, systemInDark) {
+                when (currentTheme) {
+                    "light" -> lightColorScheme()
+                    "dark" -> darkColorScheme()
+                    "dynamic_light" -> if (dynamicAvailable) dynamicLightColorScheme(context) else lightColorScheme()
+                    "dynamic_dark" -> if (dynamicAvailable) dynamicDarkColorScheme(context) else darkColorScheme()
+                    // Auto: Prefer dynamic if available, otherwise standard
+                    else -> {
+                        if (dynamicAvailable) {
+                            if (systemInDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+                        } else {
+                            if (systemInDark) darkColorScheme() else lightColorScheme()
+                        }
+                    }
+                }
+            }
+
+            MaterialTheme(colorScheme = colorScheme) {
+                CfaitNavHost(
+                    api = api,
+                    intent = intent,
+                    currentTheme = currentTheme,
+                    onThemeChange = { newTheme ->
+                        currentTheme = newTheme
+                        sharedPrefs.edit().putString("app_theme", newTheme).apply()
+                    }
+                )
             }
         }
     }
@@ -62,13 +102,17 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        // Trigger recomposition with new intent
         recreate()
     }
 }
 
 @Composable
-fun CfaitNavHost(api: com.trougnouf.cfait.core.CfaitMobile, intent: Intent? = null) {
+fun CfaitNavHost(
+    api: com.trougnouf.cfait.core.CfaitMobile,
+    intent: Intent? = null,
+    currentTheme: String,
+    onThemeChange: (String) -> Unit
+) {
     val navController = rememberNavController()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -219,7 +263,6 @@ fun CfaitNavHost(api: com.trougnouf.cfait.core.CfaitMobile, intent: Intent? = nu
         }
     }
 
-    // Updated Action: Use WorkManager
     fun handleDeleteEvents() {
         val workRequest = OneTimeWorkRequestBuilder<CalendarSyncWorker>()
             .setInputData(Data.Builder().putString(CalendarSyncWorker.KEY_MODE, CalendarSyncWorker.MODE_DELETE).build())
@@ -233,7 +276,6 @@ fun CfaitNavHost(api: com.trougnouf.cfait.core.CfaitMobile, intent: Intent? = nu
         Toast.makeText(context, "Deleting events in background...", Toast.LENGTH_SHORT).show()
     }
 
-    // Updated Action: Use WorkManager
     fun handleCreateMissingEvents() {
         val workRequest = OneTimeWorkRequestBuilder<CalendarSyncWorker>()
             .setInputData(Data.Builder().putString(CalendarSyncWorker.KEY_MODE, CalendarSyncWorker.MODE_CREATE).build())
@@ -241,13 +283,12 @@ fun CfaitNavHost(api: com.trougnouf.cfait.core.CfaitMobile, intent: Intent? = nu
 
         workManager.enqueueUniqueWork(
             CalendarSyncWorker.UNIQUE_WORK_NAME,
-            ExistingWorkPolicy.REPLACE, // Restart if clicked again
+            ExistingWorkPolicy.REPLACE,
             workRequest
         )
         Toast.makeText(context, "Creating events in background...", Toast.LENGTH_SHORT).show()
     }
 
-    // DEFINE MIGRATION ACTION HANDLER
     fun handleMigration(sourceHref: String, targetHref: String) {
         val workRequest = OneTimeWorkRequestBuilder<CalendarMigrationWorker>()
             .setInputData(
@@ -260,7 +301,7 @@ fun CfaitNavHost(api: com.trougnouf.cfait.core.CfaitMobile, intent: Intent? = nu
 
         workManager.enqueueUniqueWork(
             CalendarMigrationWorker.UNIQUE_WORK_NAME,
-            ExistingWorkPolicy.KEEP, // Don't run two migrations at once
+            ExistingWorkPolicy.KEEP,
             workRequest
         )
         Toast.makeText(context, "Migrating tasks in background...", Toast.LENGTH_SHORT).show()
@@ -268,7 +309,6 @@ fun CfaitNavHost(api: com.trougnouf.cfait.core.CfaitMobile, intent: Intent? = nu
 
     LaunchedEffect("fastStart") { fastStart() }
 
-    // Handle incoming ICS file
     LaunchedEffect(intent) {
         intent?.let {
             if (it.action == Intent.ACTION_VIEW) {
@@ -280,7 +320,6 @@ fun CfaitNavHost(api: com.trougnouf.cfait.core.CfaitMobile, intent: Intent? = nu
                         inputStream?.close()
 
                         if (icsContent != null) {
-                            // Store content in state and navigate
                             icsContentToImport = icsContent
                             navController.navigate("ics_import")
                         } else {
@@ -332,7 +371,6 @@ fun CfaitNavHost(api: com.trougnouf.cfait.core.CfaitMobile, intent: Intent? = nu
                         refreshLists()
                     },
                     onNavigate = { targetUid ->
-                        // Navigate back to home and scroll to the target task
                         autoScrollUid = targetUid
                         navController.popBackStack("home", inclusive = false)
                     }
@@ -347,9 +385,11 @@ fun CfaitNavHost(api: com.trougnouf.cfait.core.CfaitMobile, intent: Intent? = nu
                     refreshLists()
                 },
                 onHelp = { navController.navigate("help") },
-                isCalendarBusy = isLoading || isCalendarSyncRunning, // Bound to WorkManager status
+                isCalendarBusy = isLoading || isCalendarSyncRunning,
                 onDeleteEvents = { handleDeleteEvents() },
-                onCreateEvents = { handleCreateMissingEvents() }
+                onCreateEvents = { handleCreateMissingEvents() },
+                currentTheme = currentTheme,
+                onThemeChange = onThemeChange
             )
         }
         composable("help") {

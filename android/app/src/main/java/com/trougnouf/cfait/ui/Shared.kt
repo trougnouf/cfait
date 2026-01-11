@@ -1,4 +1,5 @@
 // Shared Compose UI components and syntax highlighting logic.
+// File: ./android/app/src/main/java/com/trougnouf/cfait/ui/Shared.kt
 package com.trougnouf.cfait.ui
 
 import androidx.compose.material3.MaterialTheme
@@ -105,14 +106,11 @@ object NfIcons {
 }
 
 fun getRandomRelatedIcon(uid1: String, uid2: String): String {
-    // Sort UIDs to ensure consistent ordering regardless of direction
     val (first, second) = if (uid1 < uid2) {
         Pair(uid1, uid2)
     } else {
         Pair(uid2, uid1)
     }
-
-    // Hash the sorted pair
     val hash = (first + second).fold(0) { acc, c -> (acc * 31 + c.code) and 0x7FFFFFFF }
     return when (hash % 3) {
         0 -> NfIcons.RELATED_FEMALE_FEMALE
@@ -178,7 +176,8 @@ fun getTaskTextColor(
         7 -> Color(0xFFB3BFC6)
         8 -> Color(0xFFA699CC)
         9 -> Color(0xFF998CA6)
-        else -> if (isDark) Color.White else Color.Black
+        // Fix: Use Unspecified so Text() components use the active theme's onSurface color automatically
+        else -> Color.Unspecified
     }
 }
 
@@ -199,7 +198,6 @@ class SmartSyntaxTransformation(
     val isDark: Boolean,
 ) : VisualTransformation {
 
-    // Define colors once
     private val COLOR_DUE = Color(0xFF42A5F5)
     private val COLOR_START = Color(0xFF66BB6A)
     private val COLOR_RECUR = Color(0xFFAB47BC)
@@ -213,20 +211,15 @@ class SmartSyntaxTransformation(
         val raw = text.text
         val builder = AnnotatedString.Builder(raw)
 
-        // Offload parsing to Rust Core
-        // Note: VisualTransformation runs on UI thread.
-        // Rust string parsing is extremely fast (μs range), so blocking here is acceptable.
         try {
             val tokens = api.parseSmartString(raw)
 
             for (token in tokens) {
-                // Ensure indices are within bounds
                 if (token.start >= raw.length || token.end > raw.length) continue
 
                 val spanColor: Color? =
                     when (token.kind) {
                         MobileSyntaxType.PRIORITY -> {
-                            // Extract number from text for priority color
                             val sub = raw.substring(token.start, token.end)
                             val p = sub.trimStart('!').toIntOrNull() ?: 0
                             getTaskTextColor(p, false, isDark)
@@ -266,7 +259,6 @@ class SmartSyntaxTransformation(
                 }
             }
         } catch (e: Exception) {
-            // Fallback to plain text if Rust bridge fails (rare)
         }
 
         return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)

@@ -1,7 +1,9 @@
 // Compose UI screen for application settings.
+// File: ./android/app/src/main/java/com/trougnouf/cfait/ui/SettingsScreen.kt
 package com.trougnouf.cfait.ui
 
 import android.content.Intent
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,6 +47,8 @@ fun SettingsScreen(
     isCalendarBusy: Boolean,
     onDeleteEvents: () -> Unit,
     onCreateEvents: () -> Unit,
+    currentTheme: String,
+    onThemeChange: (String) -> Unit
 ) {
     var url by remember { mutableStateOf("") }
     var user by remember { mutableStateOf("") }
@@ -69,11 +73,24 @@ fun SettingsScreen(
     var createEventsForTasks by remember { mutableStateOf(false) }
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
 
-    // Track initial state to detect toggle transitions
+    // Theme dropdown state
+    var themeExpanded by remember { mutableStateOf(false) }
+    val themeOptions = remember {
+        val list = mutableListOf(
+            "auto" to "Auto-detect",
+            "light" to "Light",
+            "dark" to "Dark"
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            list.add("dynamic_light" to "Dynamic Light")
+            list.add("dynamic_dark" to "Dynamic Dark")
+        }
+        list
+    }
+
     var initialCreateEventsState by remember { mutableStateOf(false) }
     var isInitialLoad by remember { mutableStateOf(true) }
 
-    // Random busy message that only changes when busy state begins
     var currentBusyMessage by remember { mutableStateOf(busyMessages.first()) }
     LaunchedEffect(isCalendarBusy) {
         if (isCalendarBusy) {
@@ -84,7 +101,6 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
-    // Helper to format minutes for display on load
     fun formatDuration(m: UInt): String {
         val min = m.toInt()
         return when {
@@ -119,17 +135,13 @@ fun SettingsScreen(
         createEventsForTasks = cfg.createEventsForTasks
         deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
 
-        // Capture initial state on first load
         if (isInitialLoad) {
             initialCreateEventsState = cfg.createEventsForTasks
             isInitialLoad = false
         }
     }
 
-    // Track which calendar is being imported into
     var importTargetHref by remember { mutableStateOf<String?>(null) }
-
-    // File picker launcher for import
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -163,7 +175,6 @@ fun SettingsScreen(
         val defaultPrioInt = defaultPriority.trim().toUByteOrNull() ?: 5u
         val startGraceInt = startGracePeriodDays.trim().toUIntOrNull() ?: 1u
 
-        // Use api.parseDurationString instead of toUIntOrNull
         val sShort = api.parseDurationString(snoozeShort) ?: 60u
         val sLong = api.parseDurationString(snoozeLong) ?: 1440u
 
@@ -192,20 +203,14 @@ fun SettingsScreen(
     fun handleBack() {
         scope.launch {
             saveToDisk()
-
-            // If user enabled calendar events (transition from OFF to ON), trigger backfill
             if (!initialCreateEventsState && createEventsForTasks) {
                 onCreateEvents()
             }
-
             onBack()
         }
     }
 
-    // Intercept system back gesture/button to save settings and trigger backfill
-    BackHandler {
-        handleBack()
-    }
+    BackHandler { handleBack() }
 
     Scaffold(
         topBar = {
@@ -240,9 +245,7 @@ fun SettingsScreen(
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = pass,
-                    onValueChange = {
-                        pass = it
-                    },
+                    onValueChange = { pass = it },
                     label = { Text("Password") },
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
@@ -289,6 +292,61 @@ fun SettingsScreen(
                 }
             }
 
+            // --- APPEARANCE SECTION ---
+            item {
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                Text(
+                    "Appearance",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+
+                Box {
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { themeExpanded = true },
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("App Theme", fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    text = themeOptions.find { it.first == currentTheme }?.second ?: "Auto-detect",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            NfIcon(NfIcons.ARROW_DOWN, 12.sp)
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = themeExpanded,
+                        onDismissRequest = { themeExpanded = false },
+                        modifier = Modifier.fillMaxWidth(0.9f)
+                    ) {
+                        themeOptions.forEach { (key, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    onThemeChange(key)
+                                    themeExpanded = false
+                                },
+                                leadingIcon = if (currentTheme == key) {
+                                    { NfIcon(NfIcons.CHECK, 16.sp) }
+                                } else null
+                            )
+                        }
+                    }
+                }
+            }
+            // ---------------------------
+
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
@@ -306,12 +364,9 @@ fun SettingsScreen(
                 }
             }
 
-            // Sorting Settings (outlined card)
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
-                androidx.compose.material3.OutlinedCard(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                androidx.compose.material3.OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             "Sorting & Visibility",
@@ -321,7 +376,6 @@ fun SettingsScreen(
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
 
-                        // Start Grace Period
                         Text("Future Task Grace Period:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                             Text("Start within (days):", modifier = Modifier.weight(1f))
@@ -339,7 +393,6 @@ fun SettingsScreen(
                             color = androidx.compose.ui.graphics.Color.Gray
                         )
 
-                        // Urgency Rules
                         Text("Urgency Rules (shown at top):", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                             Text("Due within (days):", modifier = Modifier.weight(1f))
@@ -373,7 +426,6 @@ fun SettingsScreen(
                             color = androidx.compose.ui.graphics.Color.Gray
                         )
 
-                        // Default Priority
                         Text("Priority Settings:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                             Text("Default Priority (!):", modifier = Modifier.weight(1f))
@@ -391,7 +443,6 @@ fun SettingsScreen(
                             color = androidx.compose.ui.graphics.Color.Gray
                         )
 
-                        // Priority Cutoff
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                             Text("Priority cutoff (months):", modifier = Modifier.weight(1f))
                             OutlinedTextField(
@@ -412,7 +463,6 @@ fun SettingsScreen(
             }
 
             item {
-
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
                     "Notifications & Reminders",
@@ -527,7 +577,6 @@ fun SettingsScreen(
                     color = MaterialTheme.colorScheme.primary,
                 )
 
-                // Filter local calendars from the state we already have
                 val localCals = allCalendars.filter { it.isLocal }
 
                 localCals.forEach { cal ->
@@ -639,9 +688,7 @@ fun SettingsScreen(
                     Spacer(Modifier.width(8.dp))
                     OutlinedTextField(
                         value = newAliasTags,
-                        onValueChange = {
-                            newAliasTags = it
-                        },
+                        onValueChange = { newAliasTags = it },
                         label = { Text("Value(s)") },
                         placeholder = { Text("@@loc, #tag_b, !1") },
                         modifier = Modifier.weight(1f),
@@ -680,8 +727,6 @@ fun LocalCalendarEditor(
     var name by remember { mutableStateOf(cal.name) }
     var color by remember { mutableStateOf(cal.color) }
 
-    // Debounce name updates or save on focus loss could be complex,
-    // so we provide a "Save" icon button for explicit updates if name changes.
     val hasChanges = name != cal.name || color != cal.color
     val isDefault = cal.href == "local://default"
 
@@ -692,7 +737,6 @@ fun LocalCalendarEditor(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Row 1: Name and Actions
             Row(verticalAlignment = Alignment.CenterVertically) {
                 OutlinedTextField(
                     value = name,
@@ -741,7 +785,6 @@ fun LocalCalendarEditor(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Row 2: Color Picker
             Text(
                 "Color:",
                 style = MaterialTheme.typography.bodySmall,
@@ -751,7 +794,6 @@ fun LocalCalendarEditor(
                 selectedColor = color,
                 onColorSelected = {
                     color = it
-                    // Auto-save color changes immediately for better UX
                     onUpdate(name, it)
                 }
             )
@@ -796,7 +838,6 @@ fun ColorPickerRow(
                 contentAlignment = Alignment.Center
             ) {
                 if (hex == null) {
-                    // slash for none
                     NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.onSurfaceVariant)
                 } else if (isSelected) {
                     NfIcon(NfIcons.CHECK, 16.sp, Color.White)
