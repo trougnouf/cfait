@@ -40,8 +40,13 @@ impl Task {
         let rule_str = self.rrule.as_ref()?;
         let seed_date_type = self.dtstart.as_ref().or(self.due.as_ref())?;
 
+        // All-Day: Interpret as Local midnight, then convert to UTC.
         let seed_dt_utc = match seed_date_type {
-            DateType::AllDay(d) => d.and_hms_opt(0, 0, 0).unwrap().and_utc(),
+            DateType::AllDay(d) => d.and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_local_timezone(chrono::Local)
+                .unwrap()
+                .with_timezone(&Utc),
             DateType::Specific(dt) => *dt,
         };
 
@@ -75,9 +80,15 @@ impl Task {
 
         if let Ok(rrule_set) = RRuleSet::from_str(&rrule_string) {
             let now = Utc::now();
+            // Advance past current occurrence:
+            // If the task is due later today (seed_dt_utc > now), we must use seed_dt_utc
+            // as the floor to ensure we get the *next* occurrence (next week), not *this* one.
+            // If the task is overdue (seed_dt_utc < now), we use 'now' to skip missed occurrences.
+            let search_floor = std::cmp::max(now, seed_dt_utc);
+
             let next_occurrence = rrule_set
                 .into_iter()
-                .find(|d| d.to_utc() > now)
+                .find(|d| d.to_utc() > search_floor) // Changed from 'now' to 'search_floor'
                 .map(|d| d.to_utc());
 
             if let Some(next_start) = next_occurrence {
