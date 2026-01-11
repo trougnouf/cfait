@@ -262,6 +262,17 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
             has_recurrence = true;
         }
 
+        if matched_kind == Some(SyntaxType::Recurrence) {
+            // Peek ahead: if the token immediately after the recurrence definition is a time,
+            // consume it and include it in the recurrence highlighting.
+            if i + words_consumed < words.len() {
+                let potential_time = &words[i + words_consumed].2;
+                if is_time_format(potential_time) {
+                    words_consumed += 1;
+                }
+            }
+        }
+
         // Check for until / except keywords (Recurrence extensions)
         // Only highlight if we've seen a recurrence token
         if matched_kind.is_none()
@@ -1382,6 +1393,30 @@ pub fn apply_smart_input(
                     consumed = 2;
                 } else {
                     summary_words.push(unescape(token));
+                }
+            }
+
+            if let Some(rrule_str) = task.rrule.clone() {
+                // Check for time (e.g. "@every sunday 8pm")
+                if i + consumed < stream.len() {
+                    let potential_time = &stream[i + consumed];
+                    if let Some(t) = parse_time_string(potential_time) {
+                        // Found a time! Calculate the dates immediately.
+                        let today = Local::now().date_naive();
+                        let first_date = calculate_first_occurrence(&rrule_str, today);
+
+                        let dt_specific = first_date
+                            .and_time(t)
+                            .and_local_timezone(Local)
+                            .unwrap()
+                            .with_timezone(&Utc);
+
+                        let date_val = DateType::Specific(dt_specific);
+                        task.due = Some(date_val.clone());
+                        task.dtstart = Some(date_val);
+
+                        consumed += 1;
+                    }
                 }
             }
         }
