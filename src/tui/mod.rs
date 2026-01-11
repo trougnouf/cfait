@@ -1,3 +1,4 @@
+// File: ./src/tui/mod.rs
 // Entry point and main loop for the TUI application.
 pub mod action;
 pub mod handlers;
@@ -240,6 +241,11 @@ pub async fn run() -> Result<()> {
                     _ => {}
                 },
                 Event::Key(key) => {
+                    // Filter out KeyRelease events to prevent double input on Windows
+                    if key.kind == event::KeyEventKind::Release {
+                        continue;
+                    }
+
                     if let Some(action) =
                         handlers::handle_key_event(key, &mut app_state, &action_tx).await
                     {
