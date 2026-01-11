@@ -212,8 +212,19 @@ where
     let v: Option<DateTypeOrLegacy> = Option::deserialize(deserializer)?;
     match v {
         Some(DateTypeOrLegacy::New(d)) => Ok(Some(d)),
-        // Convert legacy DateTime<Utc> to DateType::Specific for backward compatibility
-        Some(DateTypeOrLegacy::Legacy(d)) => Ok(Some(DateType::Specific(d))),
+        // Convert legacy DateTime<Utc> to DateType
+        Some(DateTypeOrLegacy::Legacy(d)) => {
+            // HEURISTIC FIX:
+            // If the legacy timestamp is exactly midnight UTC (00:00:00), it was likely
+            // intended as an All-Day task in the old version (which didn't support DateType).
+            // converting it to AllDay fixes the "1 AM" display issue in local time.
+            let midnight = NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+            if d.time() == midnight {
+                Ok(Some(DateType::AllDay(d.date_naive())))
+            } else {
+                Ok(Some(DateType::Specific(d)))
+            }
+        },
         None => Ok(None),
     }
 }

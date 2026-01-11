@@ -606,29 +606,34 @@ impl Task {
                 _ => None,
             });
 
+        // REVISED DATE PARSING LOGIC TO FIX FLOATING TIMES
         let parse_date_type = |prop: &icalendar::Property| -> Option<DateType> {
             let val = prop.value();
-            // Check VALUE param
             let is_date = prop
                 .params()
                 .get("VALUE")
                 .map(|v| v.value() == "DATE")
                 .unwrap_or(false);
+
             if is_date || val.len() == 8 {
                 NaiveDate::parse_from_str(val, "%Y%m%d")
                     .ok()
                     .map(DateType::AllDay)
+            } else if val.ends_with('Z') {
+                // Explicit UTC
+                NaiveDateTime::parse_from_str(val, "%Y%m%dT%H%M%SZ")
+                    .ok()
+                    .map(|d| DateType::Specific(Utc.from_utc_datetime(&d)))
             } else {
-                NaiveDateTime::parse_from_str(
-                    val,
-                    if val.ends_with('Z') {
-                        "%Y%m%dT%H%M%SZ"
-                    } else {
-                        "%Y%m%dT%H%M%S"
-                    },
-                )
-                .ok()
-                .map(|d| DateType::Specific(Utc.from_utc_datetime(&d)))
+                // Floating Time: Interpret as Local, then convert to UTC
+                NaiveDateTime::parse_from_str(val, "%Y%m%dT%H%M%S")
+                    .ok()
+                    .map(|d| {
+                        let dt = chrono::Local.from_local_datetime(&d)
+                            .earliest()
+                            .unwrap_or_else(|| Utc.from_utc_datetime(&d).with_timezone(&chrono::Local));
+                        DateType::Specific(dt.with_timezone(&Utc))
+                    })
             }
         };
 
@@ -636,7 +641,7 @@ impl Task {
         let dtstart = todo.properties().get("DTSTART").and_then(parse_date_type);
         let rrule = get_prop("RRULE");
 
-        // Parse EXDATE
+        // REVISED EXDATE PARSING LOGIC
         let mut exdates = Vec::new();
         if let Some(multi_props) = todo.multi_properties().get("EXDATE") {
             for prop in multi_props {
@@ -658,13 +663,16 @@ impl Task {
                         }
                     } else {
                         // Try DATE-TIME
-                        let fmt = if part.ends_with('Z') {
-                            "%Y%m%dT%H%M%SZ"
-                        } else {
-                            "%Y%m%dT%H%M%S"
-                        };
-                        if let Ok(dt) = NaiveDateTime::parse_from_str(part, fmt) {
-                            exdates.push(DateType::Specific(Utc.from_utc_datetime(&dt)));
+                        if part.ends_with('Z') {
+                            if let Ok(dt) = NaiveDateTime::parse_from_str(part, "%Y%m%dT%H%M%SZ") {
+                                exdates.push(DateType::Specific(Utc.from_utc_datetime(&dt)));
+                            }
+                        } else if let Ok(dt) = NaiveDateTime::parse_from_str(part, "%Y%m%dT%H%M%S") {
+                            // Treat floating time as Local
+                            let local = chrono::Local.from_local_datetime(&dt)
+                                .earliest()
+                                .unwrap_or_else(|| Utc.from_utc_datetime(&dt).with_timezone(&chrono::Local));
+                            exdates.push(DateType::Specific(local.with_timezone(&Utc)));
                         }
                     }
                 }
