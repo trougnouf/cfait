@@ -550,18 +550,21 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     };
 
     // 2. Identify Other Visible Calendars
-    let other_visible_cals: Vec<&crate::model::CalendarListEntry> = if !app.loading {
-        app.calendars
-            .iter()
-            .filter(|c| {
-                !app.disabled_calendars.contains(&c.href)
-                    && !app.hidden_calendars.contains(&c.href)
-                    && Some(&c.href) != app.active_cal_href.as_ref()
-            })
-            .collect()
-    } else {
-        vec![]
-    };
+    // Logic change: Only show other visible calendars if we are NOT in the Calendars sidebar mode.
+    // If we are in Calendar mode, the sidebar already shows what is active/visible.
+    let other_visible_cals: Vec<&crate::model::CalendarListEntry> =
+        if !app.loading && app.sidebar_mode != SidebarMode::Calendars {
+            app.calendars
+                .iter()
+                .filter(|c| {
+                    !app.disabled_calendars.contains(&c.href)
+                        && !app.hidden_calendars.contains(&c.href)
+                        && Some(&c.href) != app.active_cal_href.as_ref()
+                })
+                .collect()
+        } else {
+            vec![]
+        };
 
     // Prepare Active Calendar Color (computed outside closure to allow move)
     let active_cal_color_opt = active_cal
@@ -634,7 +637,6 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         .spacing(10)
         .align_y(iced::Alignment::Center);
 
-    // ... [Keep rest of view_main_content unchanged] ...
     if app.unsynced_changes {
         left_section = left_section.push(
             container(
