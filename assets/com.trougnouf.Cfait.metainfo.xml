@@ -78,6 +78,54 @@
   </requires>
 
   <releases>
+    <release version="0.4.6" date="2026-01-11">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>(gui) Navigate back to tasks list after moving a task</li>
+          <li>(sorting) Sort task and its sub-task(s) according to the first sort_rank of the whole group</li>
+          <li>(sorting) Propagate more tie-breaker fields from sub-tasks</li>
+          <li>(gui) Ensure resize handles are available in every panel</li>
+          <li>(parser) Parse time in recurrences</li>
+          <li>(calendar) Move completed tasks to the time they were done (and add undated done tasks)</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>Moving a task no longer leaves the old calendar event</li>
+          <li>(windows) Avoid spawning a console window with the GUI ( https://codeberg.org/trougnouf/cfait/issues/8 )</li>
+          <li>Fix respawn logic and timezone handling for recurring tasks (reported by Antoine Bargel)</li>
+          <li>(android) Correct cursor position in high DPI screens</li>
+          <li>Fix legacy data migration and floating time parsing for all-day tasks</li>
+          <li>(recurrence) Fix respawn logic and timezone handling for recurring tasks (for realz this time)</li>
+        </ul>
+        <p>Refactor:</p>
+        <ul>
+          <li>(gui) Reduce theme repetition, rm fragile manual count and position-dependent code</li>
+        </ul>
+        <p>Documentation:</p>
+        <ul>
+          <li>(readme) Update F-Droid link to com.trougnouf.cfait</li>
+        </ul>
+        <p>Styling:</p>
+        <ul>
+          <li>(gui) Add a bunch of themes</li>
+          <li>(gui) Improve themes</li>
+          <li>(gui) Add Random theme and make it the default</li>
+          <li>(gui) Switch to fastrand randomness generator</li>
+          <li>(gui) Add two rounded corners</li>
+          <li>(gui) Allow server-side decorations with --force-ssd flag ( https://codeberg.org/trougnouf/cfait/issues/11 )</li>
+          <li>Show calendar's name in its own color, add ++... with each calendar's color (GUI, Android, https://codeberg.org/trougnouf/cfait/issues/4 proposed by devinside)</li>
+          <li>(android) Add theme switch w/ light, dark, dynamic light, dynamic dark, default to dynamic auto-detect ( https://codeberg.org/trougnouf/cfait/issues/6 proposed by devinside )</li>
+          <li>(gui) Only show calendar+++ when not in calendar list view. chore: update screenshots</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>(flatpak) Add changelog to future releases</li>
+          <li>(flathub) Add release notes, categories, keywords, controls</li>
+          <li>Update rust licenses</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.5" date="2026-01-06">
       <description>
         <p>Improvements to recurring tasks and Android navigation</p>

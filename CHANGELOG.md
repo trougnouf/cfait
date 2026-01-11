@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.4.6] - 2026-01-11
+
+### 🚀 Features
+
+- *(gui)* Navigate back to tasks list after moving a task
+- *(sorting)* Sort task and its sub-task(s) according to the first sort_rank of the whole group
+- *(sorting)* Propagate more tie-breaker fields from sub-tasks
+- *(gui)* Ensure resize handles are available in every panel
+- *(parser)* Parse time in recurrences
+- *(calendar)* Move completed tasks to the time they were done (and add undated done tasks)
+
+### 🐛 Bug Fixes
+
+- Moving a task no longer leaves the old calendar event
+- *(windows)* Avoid spawning a console window with the GUI ( https://codeberg.org/trougnouf/cfait/issues/8 )
+- Fix respawn logic and timezone handling for recurring tasks (reported by Antoine Bargel)
+- *(android)* Correct cursor position in high DPI screens
+- Fix legacy data migration and floating time parsing for all-day tasks
+- *(recurrence)* Fix respawn logic and timezone handling for recurring tasks (for realz this time)
+
+### 🚜 Refactor
+
+- *(gui)* Reduce theme repetition, rm fragile manual count and position-dependent code
+
+### 📚 Documentation
+
+- *(readme)* Update F-Droid link to com.trougnouf.cfait
+
+### 🎨 Styling
+
+- *(gui)* Add a bunch of themes
+- *(gui)* Improve themes
+- *(gui)* Add Random theme and make it the default
+- *(gui)* Switch to fastrand randomness generator
+- *(gui)* Add two rounded corners
+- *(gui)* Allow server-side decorations with --force-ssd flag ( https://codeberg.org/trougnouf/cfait/issues/11 )
+- Show calendar's name in its own color, add ++... with each calendar's color (GUI, Android, https://codeberg.org/trougnouf/cfait/issues/4 proposed by devinside)
+- *(android)* Add theme switch w/ light, dark, dynamic light, dynamic dark, default to dynamic auto-detect ( https://codeberg.org/trougnouf/cfait/issues/6 proposed by devinside )
+- *(gui)* Only show calendar+++ when not in calendar list view. chore: update screenshots
+
+### ⚙️ Miscellaneous Tasks
+
+- *(flatpak)* Add changelog to future releases
+- *(flathub)* Add release notes, categories, keywords, controls
+- Update rust licenses
 ## [0.4.5] - 2026-01-06
 
 ### 🚀 Features
@@ -31,6 +76,8 @@
 - *(android)* Rename com.cfait to com.trougnouf.cfait
 - *(flathub)* Attempt auto-release
 - Fix prepare_release.py
+- Release cfait version 0.4.5
+- Fix flathub-release CI script
 ## [0.4.3] - 2026-01-05
 
 ### 🚀 Features
