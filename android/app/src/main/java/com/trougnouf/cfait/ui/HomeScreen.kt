@@ -1,4 +1,4 @@
-// Compose UI screen for the main task list.
+// File: ./android/app/src/main/java/com/trougnouf/cfait/ui/HomeScreen.kt
 package com.trougnouf.cfait.ui
 
 import android.content.ClipData
@@ -26,8 +26,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,6 +37,16 @@ import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.*
 import kotlinx.coroutines.launch
+
+// Component for colored dots
+@Composable
+fun ColoredOverflowDots() {
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(".", color = Color(0xFFFF4444), fontSize = 13.sp)
+        Text(".", color = Color(0xFF66BB6A), fontSize = 13.sp)
+        Text(".", color = Color(0xFF42A5F5), fontSize = 13.sp)
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -492,7 +503,6 @@ fun HomeScreen(
         )
     }
 
-    // Step 1: Select source local calendar
     if (showExportSourceDialog) {
         AlertDialog(
             onDismissRequest = { showExportSourceDialog = false },
@@ -524,7 +534,6 @@ fun HomeScreen(
         )
     }
 
-    // Step 2: Select destination remote calendar
     if (showExportDestDialog) {
         AlertDialog(
             onDismissRequest = {
@@ -551,7 +560,6 @@ fun HomeScreen(
                                 modifier =
                                     Modifier.clickable {
                                         exportSourceHref?.let { sourceHref ->
-                                            // Pass both source and destination to migration
                                             onMigrateLocal(sourceHref, cal.href)
                                         }
                                         showExportDestDialog = false
@@ -645,7 +653,6 @@ fun HomeScreen(
                                     ) {
                                         Text(
                                             cal.name,
-                                            fontWeight = if (isDefault) FontWeight.Bold else FontWeight.Normal,
                                             modifier = Modifier.fillMaxWidth(),
                                             textAlign = TextAlign.Start,
                                         )
@@ -768,31 +775,106 @@ fun HomeScreen(
                     )
                 } else {
                     val headerTitle: @Composable () -> Unit = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                                contentDescription = null,
-                                modifier = Modifier.size(28.dp),
+                        val textMeasurer = rememberTextMeasurer()
+                        val density = LocalDensity.current
+
+                        val activeCal = calendars.find { it.href == defaultCalHref }
+                        val activeCalName = activeCal?.name ?: "Local"
+                        val activeColorHex = activeCal?.color
+                        val activeColor = if (activeColorHex != null) parseHexColor(activeColorHex) else MaterialTheme.colorScheme.onSurface
+
+                        val otherVisible = calendars.filter {
+                            !it.isDisabled && it.isVisible && it.href != defaultCalHref
+                        }
+
+                        val activeCount = tasks.count { !it.isDone }
+                        val countText = if (tasks.isNotEmpty()) "($activeCount)" else ""
+
+                        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                            val maxWidth = constraints.maxWidth.toFloat()
+
+                            val textStyle = LocalTextStyle.current.copy(
+                                fontSize = 18.sp
                             )
-                            Spacer(Modifier.width(8.dp))
-                            val activeCalName = calendars.find { it.href == defaultCalHref }?.name ?: "Local"
-                            Text(
+                            val smallTextStyle = LocalTextStyle.current.copy(
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            )
+
+                            // Measure components
+                            val nameResult = textMeasurer.measure(
                                 text = activeCalName,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false),
+                                style = textStyle.copy(color = activeColor)
                             )
+                            val countResult = textMeasurer.measure(
+                                text = if (countText.isNotEmpty()) " $countText" else "",
+                                style = smallTextStyle
+                            )
+                            val plusResult = textMeasurer.measure(text = "+", style = smallTextStyle)
+                            val dotsResult = textMeasurer.measure(text = "...", style = smallTextStyle)
 
-                            // Count only active tasks
-                            val activeCount = tasks.count { !it.isDone }
+                            val iconSizePx = with(density) { 28.dp.toPx() }
+                            val spacerAfterIconPx = with(density) { 8.dp.toPx() }
+                            val safetyMarginPx = with(density) { 16.dp.toPx() }
 
-                            if (tasks.isNotEmpty()) {
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    text = "($activeCount)",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            val availableForPlus = maxWidth - iconSizePx - spacerAfterIconPx - nameResult.size.width - countResult.size.width - safetyMarginPx
+
+                            val maxVisiblePlus = if (availableForPlus > 0 && plusResult.size.width > 0) {
+                                (availableForPlus / plusResult.size.width).toInt()
+                            } else 0
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(28.dp),
                                 )
+                                Spacer(Modifier.width(8.dp))
+
+                                Text(
+                                    text = activeCalName,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = activeColor,
+                                )
+
+                                if (otherVisible.isNotEmpty()) {
+                                    if (otherVisible.size <= maxVisiblePlus) {
+                                        otherVisible.forEach { cal ->
+                                            val c = cal.color?.let { parseHexColor(it) } ?: Color.Gray
+                                            Text(
+                                                text = "+",
+                                                color = c,
+                                                fontSize = 13.sp
+                                            )
+                                        }
+                                    } else {
+                                        val spaceWithDots = availableForPlus - dotsResult.size.width
+                                        val fitWithDots = if (spaceWithDots > 0 && plusResult.size.width > 0) {
+                                            (spaceWithDots / plusResult.size.width).toInt()
+                                        } else 0
+                                        val visibleCount = fitWithDots.coerceAtLeast(0)
+
+                                        otherVisible.take(visibleCount).forEach { cal ->
+                                            val c = cal.color?.let { parseHexColor(it) } ?: Color.Gray
+                                            Text(
+                                                text = "+",
+                                                color = c,
+                                                fontSize = 13.sp
+                                            )
+                                        }
+                                        ColoredOverflowDots()
+                                    }
+                                }
+
+                                if (countText.isNotEmpty()) {
+                                    Text(
+                                        text = " $countText",
+                                        fontSize = 13.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                        maxLines = 1,
+                                    )
+                                }
                             }
                         }
                     }

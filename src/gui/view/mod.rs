@@ -268,49 +268,65 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         let c = 12.0; // Size of corner grips
 
         let n_grip = MouseArea::new(
-            container(text("")).width(Length::Fill).height(Length::Fixed(t)),
+            container(text(""))
+                .width(Length::Fill)
+                .height(Length::Fixed(t)),
         )
         .on_press(Message::ResizeStart(ResizeDirection::North))
         .interaction(mouse::Interaction::ResizingVertically);
 
         let s_grip = MouseArea::new(
-            container(text("")).width(Length::Fill).height(Length::Fixed(t)),
+            container(text(""))
+                .width(Length::Fill)
+                .height(Length::Fixed(t)),
         )
         .on_press(Message::ResizeStart(ResizeDirection::South))
         .interaction(mouse::Interaction::ResizingVertically);
 
         let e_grip = MouseArea::new(
-            container(text("")).width(Length::Fixed(t)).height(Length::Fill),
+            container(text(""))
+                .width(Length::Fixed(t))
+                .height(Length::Fill),
         )
         .on_press(Message::ResizeStart(ResizeDirection::East))
         .interaction(mouse::Interaction::ResizingHorizontally);
 
         let w_grip = MouseArea::new(
-            container(text("")).width(Length::Fixed(t)).height(Length::Fill),
+            container(text(""))
+                .width(Length::Fixed(t))
+                .height(Length::Fill),
         )
         .on_press(Message::ResizeStart(ResizeDirection::West))
         .interaction(mouse::Interaction::ResizingHorizontally);
 
         let nw_grip = MouseArea::new(
-            container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
+            container(text(""))
+                .width(Length::Fixed(c))
+                .height(Length::Fixed(c)),
         )
         .on_press(Message::ResizeStart(ResizeDirection::NorthWest))
         .interaction(mouse::Interaction::ResizingDiagonallyDown);
 
         let ne_grip = MouseArea::new(
-            container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
+            container(text(""))
+                .width(Length::Fixed(c))
+                .height(Length::Fixed(c)),
         )
         .on_press(Message::ResizeStart(ResizeDirection::NorthEast))
         .interaction(mouse::Interaction::ResizingDiagonallyUp);
 
         let sw_grip = MouseArea::new(
-            container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
+            container(text(""))
+                .width(Length::Fixed(c))
+                .height(Length::Fixed(c)),
         )
         .on_press(Message::ResizeStart(ResizeDirection::SouthWest))
         .interaction(mouse::Interaction::ResizingDiagonallyUp);
 
         let se_grip = MouseArea::new(
-            container(text("")).width(Length::Fixed(c)).height(Length::Fixed(c)),
+            container(text(""))
+                .width(Length::Fixed(c))
+                .height(Length::Fixed(c)),
         )
         .on_press(Message::ResizeStart(ResizeDirection::SouthEast))
         .interaction(mouse::Interaction::ResizingDiagonallyDown);
@@ -371,7 +387,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 border: iced::Border {
                     color: palette.background.strong.color,
                     width: if app.force_ssd { 0.0 } else { 1.0 },
-                    radius: if app.force_ssd { 0.0.into() } else { 12.0.into() },
+                    radius: if app.force_ssd {
+                        0.0.into()
+                    } else {
+                        12.0.into()
+                    },
                 },
                 ..Default::default()
             }
@@ -513,20 +533,49 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 }
 
 fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
+    // 1. Identify Active Calendar
+    let active_cal = app
+        .active_cal_href
+        .as_ref()
+        .and_then(|href| app.calendars.iter().find(|c| &c.href == href));
+
     let title_text = if app.loading {
         "Loading...".to_string()
-    } else if app.active_cal_href.is_none() {
-        if app.selected_categories.is_empty() {
-            "All tasks".to_string()
-        } else {
-            "Tasks".to_string()
-        }
+    } else if let Some(cal) = active_cal {
+        cal.name.clone()
+    } else if app.selected_categories.is_empty() {
+        "All tasks".to_string()
     } else {
+        "Tasks".to_string()
+    };
+
+    // 2. Identify Other Visible Calendars
+    let other_visible_cals: Vec<&crate::model::CalendarListEntry> = if !app.loading {
         app.calendars
             .iter()
-            .find(|c| Some(&c.href) == app.active_cal_href.as_ref())
-            .map(|c| c.name.clone())
-            .unwrap_or("Calendar".to_string())
+            .filter(|c| {
+                !app.disabled_calendars.contains(&c.href)
+                    && !app.hidden_calendars.contains(&c.href)
+                    && Some(&c.href) != app.active_cal_href.as_ref()
+            })
+            .collect()
+    } else {
+        vec![]
+    };
+
+    // Prepare Active Calendar Color (computed outside closure to allow move)
+    let active_cal_color_opt = active_cal
+        .and_then(|c| c.color.as_ref())
+        .and_then(|h| crate::color_utils::parse_hex_to_floats(h))
+        .map(|(r, g, b)| Color::from_rgb(r, g, b));
+
+    // Dynamic Title Style Closure
+    let title_style = move |theme: &Theme| -> text::Style {
+        text::Style {
+            color: Some(
+                active_cal_color_opt.unwrap_or(theme.extended_palette().background.base.text),
+            ),
+        }
     };
 
     let active_count = app.tasks.iter().filter(|t| !t.status.is_done()).count();
@@ -546,7 +595,8 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         }
     }
 
-    let mut title_group = row![].spacing(10).align_y(iced::Alignment::Center);
+    // Reduced spacing to 0 to remove gaps between +
+    let mut title_group = row![].spacing(0).align_y(iced::Alignment::Center);
 
     if show_logo {
         title_group = title_group.push(
@@ -554,28 +604,55 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
                 .width(24)
                 .height(24),
         );
+        // Add spacing back manually only after logo
+        title_group = title_group.push(Space::new().width(10));
     }
 
-    title_group = title_group.push(text(title_text).size(20).font(iced::Font::DEFAULT));
+    // Add Active Calendar Name with Color
+    title_group = title_group.push(
+        text(title_text)
+            .size(20)
+            .font(iced::Font::DEFAULT)
+            .style(title_style), // Apply color style
+    );
+
+    // Add "+" for other visible calendars with their respective colors
+    for other in other_visible_cals {
+        let other_color = other
+            .color
+            .as_ref()
+            .and_then(|h| crate::color_utils::parse_hex_to_floats(h))
+            .map(|(r, g, b)| Color::from_rgb(r, g, b))
+            .unwrap_or(Color::from_rgb(0.5, 0.5, 0.5)); // Fallback gray
+
+        title_group = title_group.push(text("+").size(18).color(other_color).font(iced::Font {
+            ..Default::default()
+        }));
+    }
 
     let mut left_section = row![title_group]
         .spacing(10)
         .align_y(iced::Alignment::Center);
 
+    // ... [Keep rest of view_main_content unchanged] ...
     if app.unsynced_changes {
         left_section = left_section.push(
-            container(text("Unsynced").size(10).style(|theme: &Theme| text::Style {
-                color: Some(theme.extended_palette().background.base.text)
-            }))
-                .style(|_| container::Style {
-                    background: Some(Color::from_rgb(0.8, 0.5, 0.0).into()),
-                    border: iced::Border {
-                        radius: 4.0.into(),
-                        ..Default::default()
-                    },
+            container(
+                text("Unsynced")
+                    .size(10)
+                    .style(|theme: &Theme| text::Style {
+                        color: Some(theme.extended_palette().background.base.text),
+                    }),
+            )
+            .style(|_| container::Style {
+                background: Some(Color::from_rgb(0.8, 0.5, 0.0).into()),
+                border: iced::Border {
+                    radius: 4.0.into(),
                     ..Default::default()
-                })
-                .padding(3),
+                },
+                ..Default::default()
+            })
+            .padding(3),
         );
     }
 
@@ -674,7 +751,9 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         // If SSD, let the OS handle dragging; don't make a custom drag area
         Element::from(header_row)
     } else {
-        MouseArea::new(header_row).on_press(Message::WindowDragged).into()
+        MouseArea::new(header_row)
+            .on_press(Message::WindowDragged)
+            .into()
     };
 
     // If viewing any local calendar, show export-to-caldav button bar
@@ -791,13 +870,20 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     if let Some(err) = &app.error_msg {
         let error_content = row![
-            text(err).style(|theme: &Theme| text::Style {
-                color: Some(theme.extended_palette().background.base.text)
-            }).size(14).width(Length::Fill),
-            iced::widget::button(icon::icon(icon::CROSS).size(14).color(app.theme().extended_palette().background.base.text))
-                .style(iced::widget::button::text)
-                .padding(2)
-                .on_press(Message::DismissError)
+            text(err)
+                .style(|theme: &Theme| text::Style {
+                    color: Some(theme.extended_palette().background.base.text)
+                })
+                .size(14)
+                .width(Length::Fill),
+            iced::widget::button(
+                icon::icon(icon::CROSS)
+                    .size(14)
+                    .color(app.theme().extended_palette().background.base.text)
+            )
+            .style(iced::widget::button::text)
+            .padding(2)
+            .on_press(Message::DismissError)
         ]
         .align_y(iced::Alignment::Center);
         main_col = main_col.push(
@@ -847,7 +933,9 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .id("main_input")
         .placeholder(&app.current_placeholder)
         .on_action(Message::InputChanged)
-        .highlight_with::<self::syntax::SmartInputHighlighter>(is_dark_mode, |highlight, _theme| *highlight)
+        .highlight_with::<self::syntax::SmartInputHighlighter>(is_dark_mode, |highlight, _theme| {
+            *highlight
+        })
         .padding(10)
         .height(Length::Fixed(45.0))
         .font(iced::Font::DEFAULT);
