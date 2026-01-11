@@ -42,11 +42,7 @@ impl Task {
 
         // All-Day: Interpret as Local midnight, then convert to UTC.
         let seed_dt_utc = match seed_date_type {
-            DateType::AllDay(d) => d.and_hms_opt(0, 0, 0)
-                .unwrap()
-                .and_local_timezone(chrono::Local)
-                .unwrap()
-                .with_timezone(&Utc),
+            DateType::AllDay(d) => d.and_hms_opt(0, 0, 0).unwrap().and_utc(),
             DateType::Specific(dt) => *dt,
         };
 
@@ -58,15 +54,6 @@ impl Task {
             for ex in &self.exdates {
                 match ex {
                     DateType::AllDay(d) => {
-                        // rrule crate requires consistent types or might handle both.
-                        // Standard iCal: DTSTART type defines recurrence set type.
-                        // If DTSTART is DATE-TIME, EXDATE should be DATE-TIME.
-                        // If seed_dt_utc is derived as Specific (DateTime), we should probably format EXDATE as DateTime too if possible?
-                        // Actually `DateType::AllDay` converts to 00:00 UTC in `seed_dt_utc`.
-                        // If we feed EXDATE as DATE, rrule crate might complain if DTSTART is DATE-TIME.
-                        // Let's try to match format.
-                        // But `ex` is what it is.
-                        // Let's output as is.
                         rrule_string
                             .push_str(&format!("\nEXDATE;VALUE=DATE:{}\n", d.format("%Y%m%d")));
                     }
@@ -80,15 +67,16 @@ impl Task {
 
         if let Ok(rrule_set) = RRuleSet::from_str(&rrule_string) {
             let now = Utc::now();
+
             // Advance past current occurrence:
-            // If the task is due later today (seed_dt_utc > now), we must use seed_dt_utc
-            // as the floor to ensure we get the *next* occurrence (next week), not *this* one.
-            // If the task is overdue (seed_dt_utc < now), we use 'now' to skip missed occurrences.
+            // 1. If task is completed "early" (seed > now), we must skip 'seed' to avoid duplicating "today's" task.
+            // 2. If task is overdue (seed < now), we must skip past times to find the next future occurrence.
+            // Therefore, we look for d > max(now, seed).
             let search_floor = std::cmp::max(now, seed_dt_utc);
 
             let next_occurrence = rrule_set
                 .into_iter()
-                .find(|d| d.to_utc() > search_floor) // Changed from 'now' to 'search_floor'
+                .find(|d| d.to_utc() > search_floor)
                 .map(|d| d.to_utc());
 
             if let Some(next_start) = next_occurrence {

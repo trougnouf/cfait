@@ -540,23 +540,49 @@ impl RustyClient {
         &self,
         task: &mut Task,
     ) -> Result<(Task, Option<Task>, Vec<String>), String> {
-        if task.status == TaskStatus::Completed && task.rrule.is_some() && task.advance_recurrence()
-        {
-            // Task Recycled
-        }
+        // Logic change: Do NOT recycle the task struct in-place.
+        // Instead, handle recurrence by creating a separate next_task.
+        // This ensures the completion of the *current* task is properly synced as an Update,
+        // and the *next* task is properly synced as a Create.
+
+        let mut next_task_opt = None;
+
+        if task.status == TaskStatus::Completed && task.rrule.is_some()
+            && let Some(next) = task.respawn() {
+                next_task_opt = Some(next);
+            }
 
         if task.calendar_href.starts_with("local://") {
             let mut all =
                 LocalStorage::load_for_href(&task.calendar_href).map_err(|e| e.to_string())?;
+
+            // Update the completed task
             if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
                 all[idx] = task.clone();
             }
+
+            // Append the new next task if it exists
+            if let Some(ref next) = next_task_opt {
+                all.push(next.clone());
+            }
+
             LocalStorage::save_for_href(&task.calendar_href, &all).map_err(|e| e.to_string())?;
-            return Ok((task.clone(), None, vec![]));
+            return Ok((task.clone(), next_task_opt, vec![]));
         }
 
-        let logs = self.update_task(task).await?;
-        Ok((task.clone(), None, logs))
+        // Remote Sync:
+        // 1. Update the original task (save completion state)
+        let mut logs = self.update_task(task).await?;
+
+        // 2. Create the next task (save new recurrence instance)
+        if let Some(mut next) = next_task_opt.clone() {
+            let create_logs = self.create_task(&mut next).await?;
+            logs.extend(create_logs);
+            // Update return value with any changes from create_task (e.g. if we want to pass back precise state)
+            next_task_opt = Some(next);
+        }
+
+        Ok((task.clone(), next_task_opt, logs))
     }
 
     pub async fn move_task(
