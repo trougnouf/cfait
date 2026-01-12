@@ -6,6 +6,7 @@ use crate::gui::state::GuiApp;
 use crate::gui::view::COLOR_LOCATION;
 use crate::model::Task as TodoTask;
 use crate::model::parser::strip_quotes;
+use chrono::Utc;
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -203,7 +204,31 @@ pub fn view_task_row<'a>(
             );
         }
 
-        if let Some(d) = &task.due {
+        // Check for Future Start Date
+        let now = Utc::now();
+        let is_future_start = task
+            .dtstart
+            .as_ref()
+            .map(|start| start.to_start_comparison_time() > now)
+            .unwrap_or(false);
+
+        if is_future_start {
+            // Lighter gray for future start
+            let dim_color = Color::from_rgb(0.7, 0.7, 0.7);
+
+            let hourglass = icon::icon(icon::HOURGLASS_START).size(12).color(dim_color);
+
+            let mut date_str = task.dtstart.as_ref().unwrap().format_smart();
+
+            if let Some(due) = &task.due {
+                date_str.push_str(" - ");
+                date_str.push_str(&due.format_smart());
+            }
+
+            row_content = row_content.push(hourglass);
+            row_content = row_content.push(text(date_str).size(14).color(dim_color));
+        } else if let Some(d) = &task.due {
+            // Standard Due Date display
             row_content = row_content.push(
                 text(d.format_smart())
                     .size(14)
@@ -211,9 +236,7 @@ pub fn view_task_row<'a>(
             );
         }
 
-        container(row_content)
-            .width(Length::Shrink)
-            .into()
+        container(row_content).width(Length::Shrink).into()
     };
 
     let has_desc = !task.description.is_empty();
@@ -540,9 +563,13 @@ pub fn view_task_row<'a>(
 
     let status_btn = button(
         container(if icon_char != ' ' {
-            icon::icon(icon_char).size(12).color(theme.extended_palette().background.base.text)
+            icon::icon(icon_char)
+                .size(12)
+                .color(theme.extended_palette().background.base.text)
         } else {
-            text("").size(12).color(theme.extended_palette().background.base.text)
+            text("")
+                .size(12)
+                .color(theme.extended_palette().background.base.text)
         })
         .width(Length::Fill)
         .height(Length::Fill)
@@ -605,7 +632,9 @@ pub fn view_task_row<'a>(
                     tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
                 }
             }
-            if let Some(l) = &task.location && hidden_location.as_ref() != Some(l) {
+            if let Some(l) = &task.location
+                && hidden_location.as_ref() != Some(l)
+            {
                 tags_width += (l.len() as f32 * 7.0) + 25.0;
             }
             if task.estimated_duration.is_some() {
@@ -625,18 +654,22 @@ pub fn view_task_row<'a>(
 
             if is_blocked {
                 tags_row = tags_row.push(
-                    container(text("[Blocked]").size(12).style(|theme: &Theme| text::Style {
-                        color: Some(theme.extended_palette().background.base.text)
-                    }))
-                        .style(|_| container::Style {
-                            background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
-                            border: iced::Border {
-                                radius: 4.0.into(),
-                                ..Default::default()
-                            },
+                    container(
+                        text("[Blocked]")
+                            .size(12)
+                            .style(|theme: &Theme| text::Style {
+                                color: Some(theme.extended_palette().background.base.text),
+                            }),
+                    )
+                    .style(|_| container::Style {
+                        background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
+                        border: iced::Border {
+                            radius: 4.0.into(),
                             ..Default::default()
-                        })
-                        .padding(3),
+                        },
+                        ..Default::default()
+                    })
+                    .padding(3),
                 );
             }
 
@@ -685,7 +718,9 @@ pub fn view_task_row<'a>(
                 );
             }
 
-            if let Some(loc) = &task.location && hidden_location.as_ref() != Some(loc) {
+            if let Some(loc) = &task.location
+                && hidden_location.as_ref() != Some(loc)
+            {
                 // Fixed white text for location pill
                 let text_color = Color::WHITE;
 
@@ -701,16 +736,14 @@ pub fn view_task_row<'a>(
                             ..button::Style::default()
                         };
                         match status {
-                            button::Status::Hovered | button::Status::Pressed => {
-                                button::Style {
-                                    border: iced::Border {
-                                        color: Color::BLACK.scale_alpha(0.2),
-                                        width: 1.0,
-                                        radius: 4.0.into(),
-                                    },
-                                    ..base
-                                }
-                            }
+                            button::Status::Hovered | button::Status::Pressed => button::Style {
+                                border: iced::Border {
+                                    color: Color::BLACK.scale_alpha(0.2),
+                                    width: 1.0,
+                                    radius: 4.0.into(),
+                                },
+                                ..base
+                            },
                             _ => base,
                         }
                     })
@@ -736,17 +769,17 @@ pub fn view_task_row<'a>(
                 };
                 tags_row = tags_row.push(
                     container(text(label).size(10).style(|theme: &Theme| text::Style {
-                        color: Some(theme.extended_palette().background.base.text)
+                        color: Some(theme.extended_palette().background.base.text),
                     }))
-                        .style(|_| container::Style {
-                            background: Some(Color::from_rgb(0.5, 0.5, 0.5).into()),
-                            border: iced::Border {
-                                radius: 4.0.into(),
-                                ..Default::default()
-                            },
+                    .style(|_| container::Style {
+                        background: Some(Color::from_rgb(0.5, 0.5, 0.5).into()),
+                        border: iced::Border {
+                            radius: 4.0.into(),
                             ..Default::default()
-                        })
-                        .padding(3),
+                        },
+                        ..Default::default()
+                    })
+                    .padding(3),
                 );
             }
             if task.rrule.is_some() {
@@ -914,7 +947,6 @@ pub fn view_task_row<'a>(
                     .color(Color::from_rgb(0.7, 0.7, 0.7)),
             );
         }
-
 
         if has_valid_parent {
             let p_uid = task.parent_uid.as_ref().unwrap();

@@ -147,11 +147,41 @@ fun TaskRow(
                     if (task.hasAlarms) {
                         NfIcon(NfIcons.BELL, 10.sp, Color(0xFFFF7043))
                     }
-                    if (!task.dueDateIso.isNullOrEmpty()) {
+
+                    // Date Display Logic
+                    if (task.isFutureStart && task.startDateIso != null) {
+                        // Future Start Display
+                        val dimColor = Color(0xFFBDBDBD) // Lighter Gray
+                        NfIcon(NfIcons.HOURGLASS_START, 10.sp, dimColor)
+
+                        var dateStr = if (task.isAlldayStart) {
+                            task.startDateIso!!.take(10)
+                        } else {
+                            task.startDateIso!!.take(16).replace("T", " ")
+                        }
+
+                        if (task.dueDateIso != null) {
+                            val dueStr = if (task.isAlldayDue) {
+                                task.dueDateIso!!.take(10)
+                            } else {
+                                task.dueDateIso!!.take(16).replace("T", " ")
+                            }
+                            dateStr += " - $dueStr"
+                        }
+
+                        Text(dateStr, fontSize = 10.sp, color = dimColor)
+                    } else if (!task.dueDateIso.isNullOrEmpty()) {
+                        // Standard Due Date Display
                         if (!task.hasAlarms) {
                             NfIcon(NfIcons.CALENDAR, 10.sp, Color.Gray)
                         }
-                        Text(task.dueDateIso!!.take(10), fontSize = 10.sp, color = Color.Gray)
+                        // Format: If all-day show YYYY-MM-DD, else show YYYY-MM-DD HH:MM
+                        val displayStr = if (task.isAlldayDue) {
+                            task.dueDateIso!!.take(10)
+                        } else {
+                            task.dueDateIso!!.take(16).replace("T", " ")
+                        }
+                        Text(displayStr, fontSize = 10.sp, color = Color.Gray)
                     }
 
                     if (task.durationMins != null) {

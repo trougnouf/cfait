@@ -107,7 +107,8 @@ pub struct MobileTask {
     pub is_allday_due: bool, // NEW
     pub start_date_iso: Option<String>,
     pub is_allday_start: bool,
-    pub has_alarms: bool, // indicator for UI bell
+    pub has_alarms: bool,      // indicator for UI bell
+    pub is_future_start: bool, // NEW field
     pub duration_mins: Option<u32>,
     pub calendar_href: String,
     pub categories: Vec<String>,
@@ -219,6 +220,14 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         .iter()
         .all(|a| a.acknowledged.is_some() || a.is_snooze());
 
+    // Calculate future start flag
+    let now = Utc::now();
+    let is_future_start = if let Some(start) = &t.dtstart {
+        start.to_start_comparison_time() > now
+    } else {
+        false
+    };
+
     MobileTask {
         uid: t.uid.clone(),
         summary: t.summary.clone(),
@@ -230,6 +239,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         start_date_iso: start_iso,
         is_allday_start: start_allday,
         has_alarms,
+        is_future_start,
         duration_mins: t.estimated_duration,
         calendar_href: t.calendar_href.clone(),
         categories: t.categories.clone(),

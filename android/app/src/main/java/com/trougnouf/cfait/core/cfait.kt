@@ -3620,6 +3620,7 @@ data class MobileTask(
     var `startDateIso`: kotlin.String?,
     var `isAlldayStart`: kotlin.Boolean,
     var `hasAlarms`: kotlin.Boolean,
+    var `isFutureStart`: kotlin.Boolean,
     var `durationMins`: kotlin.UInt?,
     var `calendarHref`: kotlin.String,
     var `categories`: List<kotlin.String>,
@@ -3657,6 +3658,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterOptionalUInt.read(buf),
             FfiConverterString.read(buf),
             FfiConverterSequenceString.read(buf),
@@ -3688,6 +3690,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterOptionalString.allocationSize(value.`startDateIso`) +
                 FfiConverterBoolean.allocationSize(value.`isAlldayStart`) +
                 FfiConverterBoolean.allocationSize(value.`hasAlarms`) +
+                FfiConverterBoolean.allocationSize(value.`isFutureStart`) +
                 FfiConverterOptionalUInt.allocationSize(value.`durationMins`) +
                 FfiConverterString.allocationSize(value.`calendarHref`) +
                 FfiConverterSequenceString.allocationSize(value.`categories`) +
@@ -3721,6 +3724,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterOptionalString.write(value.`startDateIso`, buf)
         FfiConverterBoolean.write(value.`isAlldayStart`, buf)
         FfiConverterBoolean.write(value.`hasAlarms`, buf)
+        FfiConverterBoolean.write(value.`isFutureStart`, buf)
         FfiConverterOptionalUInt.write(value.`durationMins`, buf)
         FfiConverterString.write(value.`calendarHref`, buf)
         FfiConverterSequenceString.write(value.`categories`, buf)

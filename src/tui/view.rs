@@ -5,6 +5,8 @@ use crate::store::UNCATEGORIZED_ID;
 use crate::tui::action::SidebarMode;
 use crate::tui::state::{AppState, Focus, InputMode};
 
+use chrono::Utc;
+
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -373,11 +375,31 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let full_symbol = t.checkbox_symbol();
             let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
 
-            let due_str = t
-                .due
+            // Check for Future Start Date
+            let now = Utc::now();
+            let is_future_start = t
+                .dtstart
                 .as_ref()
-                .map(|d| format!(" @{}", d.format_smart()))
-                .unwrap_or_default();
+                .map(|start| start.to_start_comparison_time() > now)
+                .unwrap_or(false);
+
+            // Construct Date String
+            let (date_display_str, date_style) = if is_future_start {
+                let start_str = t.dtstart.as_ref().unwrap().format_smart();
+                let combined = if let Some(due) = &t.due {
+                    format!(" ⏳{} - {}", start_str, due.format_smart())
+                } else {
+                    format!(" ⏳{}", start_str)
+                };
+                (combined, Style::default().fg(Color::DarkGray)) // Lighter/Dimmer for future
+            } else if let Some(d) = &t.due {
+                (
+                    format!(" @{}", d.format_smart()),
+                    Style::default().fg(Color::Blue),
+                )
+            } else {
+                (String::new(), Style::default())
+            };
             let dur_str = t.format_duration_short();
             let recur_str = if t.rrule.is_some() { " (R)" } else { "" };
 
@@ -429,8 +451,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 ));
             }
 
-            // Due Date
-            if !due_str.is_empty() {
+            // Date Display (Start or Due)
+            if !date_display_str.is_empty() {
                 if !metadata_spans
                     .last()
                     .map(|s| s.content.ends_with(' '))
@@ -438,7 +460,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 {
                     metadata_spans.push(Span::raw(" "));
                 }
-                metadata_spans.push(Span::styled(due_str, Style::default().fg(Color::Blue)));
+                metadata_spans.push(Span::styled(date_display_str, date_style));
             }
 
             // 2. URL & Geo Indicators
