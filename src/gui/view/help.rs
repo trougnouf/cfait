@@ -1,10 +1,10 @@
 // File: ./src/gui/view/help.rs
 use crate::gui::message::Message;
+use fastrand;
 use iced::widget::{
     MouseArea, Space, button, column, container, row, scrollable, svg, text, text_input,
 };
 use iced::{Color, Element, Length, Theme};
-use fastrand;
 
 // --- STYLE CONSTANTS ---
 const COL_ACCENT: Color = Color::from_rgb(0.4, 0.7, 1.0); // Soft Blue (Dark Mode)
@@ -106,6 +106,11 @@ pub fn view_help() -> Element<'static, Message> {
                     "@next week, @next month, @next year"
                 ),
                 entry("Keywords", "Relative dates supported.", "today, tomorrow"),
+                entry(
+                    "^@date",
+                    "Set both Start and Due dates.",
+                    "^@tomorrow, ^@2d, ^@next friday"
+                ),
             ]
         ),
         // 3. RECURRENCE
@@ -387,7 +392,10 @@ fn help_card(
             let base = iced::widget::rule::default(theme);
             let palette = theme.extended_palette();
             iced::widget::rule::Style {
-                color: Color { a: 0.12, ..palette.background.base.text },
+                color: Color {
+                    a: 0.12,
+                    ..palette.background.base.text
+                },
                 ..base
             }
         })
@@ -474,7 +482,10 @@ fn help_card(
                 border: iced::Border {
                     radius: 8.0.into(),
                     width: 1.0,
-                    color: Color { a: 0.35, ..palette.background.base.text },
+                    color: Color {
+                        a: 0.35,
+                        ..palette.background.base.text
+                    },
                 },
                 ..Default::default()
             }
@@ -597,7 +608,10 @@ fn support_card() -> Element<'static, Message> {
                 border: iced::Border {
                     radius: 8.0.into(),
                     width: 1.0,
-                    color: Color { a: 0.3, ..palette.background.base.text },
+                    color: Color {
+                        a: 0.3,
+                        ..palette.background.base.text
+                    },
                 },
                 ..Default::default()
             }

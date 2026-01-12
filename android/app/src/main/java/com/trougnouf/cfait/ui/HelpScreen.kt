@@ -126,6 +126,7 @@ fun HelpScreen(onBack: () -> Unit) {
                         HelpItem("Weekdays", "Next occurrence (\"next\" optional).", "@friday = @next friday, @monday"),
                         HelpItem("Next period", "Next week/month/year.", "@next week, @next month, @next year"),
                         HelpItem("Keywords", "Relative dates supported.", "today, tomorrow"),
+                        HelpItem("^@date", "Set both Start and Due dates.", "^@tomorrow, ^@2d, ^@next friday"),
                     ),
                 )
             }

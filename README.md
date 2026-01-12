@@ -153,6 +153,7 @@ You can use absolute ISO dates or natural language relative offsets.
 *   **Offsets:** `1d` (days), `1w` (weeks), `1mo` (months), `1y` (years).
     *   `@2d` = Due in 2 days.
     *   `^1w` = Start in 1 week.
+    *   `^@2d` = Start and Due in 2 days.
     *   The word "in" is optional: `@2 weeks` works the same as `@in 2 weeks`
 *   **Weekdays:** `@friday`, `@monday`, etc. (or with "next": `@next friday`)
     *   Both forms work identically - they always go to the **next** occurrence of that weekday

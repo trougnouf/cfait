@@ -835,9 +835,10 @@ impl TaskStore {
         let mut parent_to_children: HashMap<String, Vec<usize>> = HashMap::new();
         for (i, t) in final_tasks_processed.iter().enumerate() {
             if let Some(p_uid) = &t.parent_uid
-                && uid_to_index.contains_key(p_uid) {
-                    parent_to_children.entry(p_uid.clone()).or_default().push(i);
-                }
+                && uid_to_index.contains_key(p_uid)
+            {
+                parent_to_children.entry(p_uid.clone()).or_default().push(i);
+            }
         }
 
         // 3. Propagate Effective Properties from children to parents
@@ -881,28 +882,35 @@ impl TaskStore {
             }
             visiting.insert(idx);
 
-            if let Some(children) = map.get(&t.uid) {
-                for &child_idx in children {
-                    let child_eff = resolve(child_idx, tasks, map, cache, visiting, default_prio);
+            // UPDATED: Check if this task is Done or Paused.
+            // If so, do NOT look at children to determine effective rank.
+            // The group will sort based on this parent's (inactive) status.
+            let is_suppressed = t.status.is_done() || t.is_paused();
 
-                    // Compare full components (rank + tie-breakers) to decide if child is "more urgent"
-                    let ordering = Task::compare_components(
-                        child_eff.rank,
-                        child_eff.prio,
-                        &child_eff.due,
-                        &child_eff.start,
-                        best.rank,
-                        best.prio,
-                        &best.due,
-                        &best.start,
-                        default_prio,
-                    );
+            if !is_suppressed
+                && let Some(children) = map.get(&t.uid) {
+                    for &child_idx in children {
+                        let child_eff =
+                            resolve(child_idx, tasks, map, cache, visiting, default_prio);
 
-                    if ordering == std::cmp::Ordering::Less {
-                        best = child_eff;
+                        // Compare full components (rank + tie-breakers) to decide if child is "more urgent"
+                        let ordering = Task::compare_components(
+                            child_eff.rank,
+                            child_eff.prio,
+                            &child_eff.due,
+                            &child_eff.start,
+                            best.rank,
+                            best.prio,
+                            &best.due,
+                            &best.start,
+                            default_prio,
+                        );
+
+                        if ordering == std::cmp::Ordering::Less {
+                            best = child_eff;
+                        }
                     }
                 }
-            }
 
             visiting.remove(&idx);
             cache.insert(idx, best.clone());

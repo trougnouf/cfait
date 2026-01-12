@@ -298,7 +298,10 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
 
         // 2. Dates
         if matched_kind.is_none() {
-            let (is_start, clean_word) = if let Some(val) = word
+            // Check for ^@ prefix first
+            let (is_start, clean_word) = if let Some(val) = word.strip_prefix("^@") {
+                (true, val)
+            } else if let Some(val) = word
                 .strip_prefix("start:")
                 .or_else(|| word.strip_prefix('^'))
             {
@@ -1652,7 +1655,10 @@ pub fn apply_smart_input(
             || token_lower.starts_with("start:"))
             && stream.get(i + 1).is_some()
         {
-            let (is_start, clean) = if let Some(_v) = token
+            // Determine if setting start, due, or both
+            let (set_start, set_due, clean) = if let Some(s) = token.strip_prefix("^@") {
+                (true, true, s)
+            } else if let Some(_v) = token
                 .strip_prefix('^')
                 .or_else(|| token_lower.strip_prefix("start:"))
             {
@@ -1661,7 +1667,7 @@ pub fn apply_smart_input(
                 } else {
                     &token[6..]
                 };
-                (true, clean_v)
+                (true, false, clean_v)
             } else {
                 let clean_v = if let Some(s) = token.strip_prefix('@') {
                     s
@@ -1670,7 +1676,7 @@ pub fn apply_smart_input(
                 } else {
                     ""
                 };
-                (false, clean_v)
+                (false, true, clean_v)
             };
 
             let mut matched_date = false;
@@ -1679,9 +1685,10 @@ pub fn apply_smart_input(
                 let next_str = &stream[i + 1];
                 if let Some(d) = parse_next_date(next_str) {
                     let dt = finalize_date_token(d, &stream, i + 2, &mut consumed);
-                    if is_start {
-                        task.dtstart = Some(dt);
-                    } else {
+                    if set_start {
+                        task.dtstart = Some(dt.clone());
+                    }
+                    if set_due {
                         task.due = Some(dt);
                     }
                     consumed += 1; // consumed "next" + unit + (time?)
@@ -1701,9 +1708,10 @@ pub fn apply_smart_input(
                     && let Some(d) = parse_in_date(amount, &unit)
                 {
                     let dt = finalize_date_token(d, &stream, i + 1 + 1 + extra, &mut consumed);
-                    if is_start {
-                        task.dtstart = Some(dt);
-                    } else {
+                    if set_start {
+                        task.dtstart = Some(dt.clone());
+                    }
+                    if set_due {
                         task.due = Some(dt);
                     }
                     consumed += 1 + extra;
@@ -1714,9 +1722,10 @@ pub fn apply_smart_input(
             if !matched_date {
                 if let Some(d) = parse_smart_date(clean) {
                     let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
-                    if is_start {
-                        task.dtstart = Some(dt);
-                    } else {
+                    if set_start {
+                        task.dtstart = Some(dt.clone());
+                    }
+                    if set_due {
                         task.due = Some(dt);
                     }
                 } else if let Some(t) = parse_time_string(clean) {
@@ -1726,19 +1735,22 @@ pub fn apply_smart_input(
                         .and_local_timezone(Local)
                         .unwrap()
                         .with_timezone(&Utc);
-                    if is_start {
-                        task.dtstart = Some(DateType::Specific(dt));
-                    } else {
-                        task.due = Some(DateType::Specific(dt));
+                    let dt_type = DateType::Specific(dt);
+                    if set_start {
+                        task.dtstart = Some(dt_type.clone());
+                    }
+                    if set_due {
+                        task.due = Some(dt_type);
                     }
                 } else if let Some(rrule) = parse_recurrence(clean) {
                     task.rrule = Some(rrule);
                     has_recurrence = true;
                 } else if let Some(d) = parse_weekday_date(clean) {
                     let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
-                    if is_start {
-                        task.dtstart = Some(dt);
-                    } else {
+                    if set_start {
+                        task.dtstart = Some(dt.clone());
+                    }
+                    if set_due {
                         task.due = Some(dt);
                     }
                 } else {
@@ -1750,7 +1762,16 @@ pub fn apply_smart_input(
         else if let Some(val) = token
             .strip_prefix("rec:")
             .or_else(|| token.strip_prefix('@'))
+            // Check for ^@ prefix here too
+            .or_else(|| token.strip_prefix("^@"))
         {
+            // Detect if this specific token was ^@ to determine assignment mode
+            let (set_start, set_due) = if token.starts_with("^@") {
+                (true, true)
+            } else {
+                (false, true) // Default for @ or rec: logic below (rec logic overrides this anyway)
+            };
+
             // Recurrence, Date, or Weekday
             if let Some(rrule) = parse_recurrence(val) {
                 task.rrule = Some(rrule);
@@ -1769,7 +1790,12 @@ pub fn apply_smart_input(
                 }
             } else if let Some(d) = parse_smart_date(val) {
                 let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
-                task.due = Some(dt);
+                if set_start {
+                    task.dtstart = Some(dt.clone());
+                }
+                if set_due {
+                    task.due = Some(dt);
+                }
             } else if let Some(t) = parse_time_string(val) {
                 let now = Local::now().date_naive();
                 let dt = now
@@ -1777,10 +1803,21 @@ pub fn apply_smart_input(
                     .and_local_timezone(Local)
                     .unwrap()
                     .with_timezone(&Utc);
-                task.due = Some(DateType::Specific(dt));
+                let dt_type = DateType::Specific(dt);
+                if set_start {
+                    task.dtstart = Some(dt_type.clone());
+                }
+                if set_due {
+                    task.due = Some(dt_type);
+                }
             } else if let Some(d) = parse_weekday_date(val) {
                 let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
-                task.due = Some(dt);
+                if set_start {
+                    task.dtstart = Some(dt.clone());
+                }
+                if set_due {
+                    task.due = Some(dt);
+                }
             } else if let Some(_stripped) = token_lower.strip_prefix("due:") {
                 let real_val = &token[4..];
                 if let Some(d) = parse_smart_date(real_val) {
