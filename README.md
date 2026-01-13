@@ -53,7 +53,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 *   **Dependencies:** Block tasks until others are done. You can create parent/child tasks or loose dependencies <small>(RFC9253)</small> (or manually block with `#blocked`).
 *   **Recurrence:** Powerful repetition rules for habits and recurrent tasks.
 *   **Inline Aliases:** Define shortcuts on the fly; typing `#gardening:=#fun,@@home` or `@@aldi:=#groceries,#shopping` applies the alias immediately and saves it for future use (retroactive).
-*   **Cross-Platform:** Runs on Linux, Android, and Windows. (Probably on MacOS too.)
+*   **Cross-Platform:** Runs on Linux, Android, Windows, and MacOS.
 
 <a name="screenshots"></a>
 ## 📸 Screenshots
@@ -153,7 +153,7 @@ You can use absolute ISO dates or natural language relative offsets.
 *   **Offsets:** `1d` (days), `1w` (weeks), `1mo` (months), `1y` (years).
     *   `@2d` = Due in 2 days.
     *   `^1w` = Start in 1 week.
-    *   `^@2d` = Start and Due in 2 days.
+    *   `^@tomorrow` = Start and Due tomorrow.
     *   The word "in" is optional: `@2 weeks` works the same as `@in 2 weeks`
 *   **Weekdays:** `@friday`, `@monday`, etc. (or with "next": `@next friday`)
     *   Both forms work identically - they always go to the **next** occurrence of that weekday
