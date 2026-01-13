@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.ImeAction
@@ -82,6 +83,18 @@ fun HomeScreen(
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
 
+    // --- Highlighting State ---
+    // We maintain a local highlight state that can be set by navigation (autoScrollUid)
+    // or by adding a new task locally.
+    var highlightedUid by remember { mutableStateOf(autoScrollUid) }
+
+    // Sync external autoScrollUid changes to local highlight
+    LaunchedEffect(autoScrollUid) {
+        if (autoScrollUid != null) {
+            highlightedUid = autoScrollUid
+        }
+    }
+
     val locationTabIcon = rememberSaveable {
         val icons = listOf(
             NfIcons.LOCATION, NfIcons.EARTH_ASIA, NfIcons.EARTH_AMERICAS,
@@ -121,6 +134,10 @@ fun HomeScreen(
     val listState = rememberLazyListState()
     var showScrollToTop by remember { mutableStateOf(false) }
     var lastScrollPosition by remember { mutableIntStateOf(0) }
+
+    // New state to track if we are auto-scrolling
+    var isProgrammaticScroll by remember { mutableStateOf(false) }
+
     val scrollToTopIcon = remember { getRandomScrollToTopIcon() }
 
     // Detect upward/downward scrolling with proper timeout
@@ -130,11 +147,16 @@ fun HomeScreen(
         val isScrollingDown = currentPosition > lastScrollPosition
         lastScrollPosition = currentPosition
 
-        if (isScrollingDown) {
-            // Immediately hide when scrolling down
+        // Updated logic
+        if (listState.firstVisibleItemIndex == 0) {
+            // Always hide if we are at the top
+            showScrollToTop = false
+        } else if (isProgrammaticScroll) {
+            // If the button caused the scroll, do not show the button again
+            showScrollToTop = false
+        } else if (isScrollingDown) {
             showScrollToTop = false
         } else if (isScrollingUp) {
-            // Show when scrolling up and hide after 3 seconds
             showScrollToTop = true
             kotlinx.coroutines.delay(3000)
             showScrollToTop = false
@@ -155,6 +177,7 @@ fun HomeScreen(
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
+    val keyboardController = LocalSoftwareKeyboardController.current
     val calColorMap = remember(calendars) {
         calendars.associate { it.href to (it.color?.let { hex -> parseHexColor(hex) } ?: Color.Gray) }
     }
@@ -303,6 +326,9 @@ fun HomeScreen(
         } else {
             newTaskText = ""
             scope.launch {
+                // Hide keyboard to ensure the new task is visible (prevents layout gap issues)
+                keyboardController?.hide()
+
                 activeOpCount++
                 try {
                     val newUid = api.addTaskSmart(text)
@@ -311,6 +337,9 @@ fun HomeScreen(
                         api.setParent(newUid, creatingChildUid!!)
                         creatingChildUid = null
                     }
+
+                    // Set highlight to the newly created task
+                    highlightedUid = newUid
 
                     onDataChanged()
                     lastSyncFailed = false
@@ -1061,7 +1090,8 @@ fun HomeScreen(
                                 parentCategories = pCats,
                                 parentLocation = pLoc,
                                 aliasMap = aliases,
-                                isHighlighted = task.uid == autoScrollUid,
+                                // Use our local highlight state which tracks both auto-scroll and newly added tasks
+                                isHighlighted = task.uid == highlightedUid,
                                 incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
                             )
                         }
@@ -1073,8 +1103,12 @@ fun HomeScreen(
             if (showScrollToTop) {
                 FloatingActionButton(
                     onClick = {
+                        // Updated logic
+                        isProgrammaticScroll = true // 1. Set flag to ignore scroll events
+                        showScrollToTop = false     // 2. Hide immediately
                         scope.launch {
-                            listState.animateScrollToItem(0)
+                            listState.animateScrollToItem(0) // 3. Perform scroll
+                            isProgrammaticScroll = false     // 4. Reset flag after animation finishes
                         }
                     },
                     modifier = Modifier
