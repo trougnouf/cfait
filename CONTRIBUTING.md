@@ -32,6 +32,6 @@ Before submitting, please ensure your changes meet the following criteria:
 
 ### Other ways to contribute
 
-*   **Testing:** Run the current development version of Cfait and report any bug before the next release.
+*   **Testing:** Use the current development version of Cfait and report any bug before the next release.
 *   **Documentation:** Could always be improved
 *   **Localization:** This isn't implemented yet as of when this document was written, but feel free to contact me s.t. I will recontact you when it's ready.

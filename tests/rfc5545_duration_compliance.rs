@@ -1,3 +1,4 @@
+// File: tests/./rfc5545_duration_compliance.rs
 // Tests ensuring ICS compliance regarding DUE/DURATION properties.
 //
 // Tests to ensure RFC 5545 compliance: VTODO components cannot contain both
@@ -357,4 +358,37 @@ fn test_regression_radicale_serialization_error() {
         "cal".to_string(),
     );
     assert!(parsed.is_ok(), "ICS should be parseable without errors");
+}
+
+#[test]
+fn test_allday_task_with_duration_uses_x_prop() {
+    // This test directly addresses the DAVx5 crash.
+    // An all-day task (DTSTART;VALUE=DATE) cannot have a time-based DURATION (e.g., PT60M).
+    // The fix is to use X-ESTIMATED-DURATION in this case.
+
+    let mut task = parse("All-day task with duration");
+    task.dtstart = Some(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2025, 8, 1).unwrap(),
+    ));
+    task.estimated_duration = Some(60); // 1 hour
+
+    let ics = task.to_ics();
+
+    // Verify it is an all-day task
+    assert!(
+        ics.contains("DTSTART;VALUE=DATE:20250801"),
+        "Task should have an all-day DTSTART"
+    );
+
+    // Verify it uses the custom property, NOT the standard one
+    assert!(
+        ics.contains("X-ESTIMATED-DURATION:PT60M"),
+        "All-day task should use X-ESTIMATED-DURATION. Got:\n{}",
+        ics
+    );
+    assert!(
+        !ics.contains("\nDURATION:"),
+        "All-day task must NOT use standard DURATION with time value. Got:\n{}",
+        ics
+    );
 }

@@ -206,10 +206,21 @@ impl Task {
         }
 
         if let Some(mins) = self.estimated_duration {
-            // RFC 5545: VTODO cannot contain both DUE and DURATION.
-            if self.due.is_some() {
+            // RFC 5545 & Implementation Constraints:
+            // 1. VTODO cannot contain both DUE and DURATION.
+            // 2. If DTSTART is VALUE=DATE (All-Day), DURATION must be a duration of Days/Weeks (e.g. P1D).
+            //    Since we store estimated_duration in minutes (e.g. PT30M), applying this to an
+            //    All-Day start causes parsing errors in clients (like Android/DAVx5) because
+            //    you cannot add "Minutes" to a "Date-only" value.
+            let is_all_day_start = self.dtstart.as_ref()
+                .map(|dt| matches!(dt, DateType::AllDay(_)))
+                .unwrap_or(false);
+
+            if self.due.is_some() || is_all_day_start {
+                // Use X-prop for All-Day tasks OR if Due date is present
                 todo.add_property("X-ESTIMATED-DURATION", format!("PT{}M", mins));
             } else {
+                // Use standard DURATION only for specific-time tasks with no due date
                 todo.add_property("DURATION", format!("PT{}M", mins));
             }
         }
