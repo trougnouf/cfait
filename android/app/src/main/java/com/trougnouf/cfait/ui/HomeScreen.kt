@@ -83,12 +83,11 @@ fun HomeScreen(
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
 
-    // --- Highlighting State ---
-    // We maintain a local highlight state that can be set by navigation (autoScrollUid)
-    // or by adding a new task locally.
+    // Highlighting State
     var highlightedUid by remember { mutableStateOf(autoScrollUid) }
+    // Trigger for scrolling to the highlighted item (separating 'Add' from 'Nav')
+    var scrollTrigger by remember { mutableLongStateOf(0L) }
 
-    // Sync external autoScrollUid changes to local highlight
     LaunchedEffect(autoScrollUid) {
         if (autoScrollUid != null) {
             highlightedUid = autoScrollUid
@@ -135,33 +134,35 @@ fun HomeScreen(
     var showScrollToTop by remember { mutableStateOf(false) }
     var lastScrollPosition by remember { mutableIntStateOf(0) }
 
-    // New state to track if we are auto-scrolling
+    // Flag to prevent the auto-hide logic from fighting the manual button press
     var isProgrammaticScroll by remember { mutableStateOf(false) }
 
     val scrollToTopIcon = remember { getRandomScrollToTopIcon() }
 
-    // Detect upward/downward scrolling with proper timeout
+    // Detect upward/downward scrolling
     LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
         val currentPosition = listState.firstVisibleItemIndex * 10000 + listState.firstVisibleItemScrollOffset
         val isScrollingUp = currentPosition < lastScrollPosition && listState.firstVisibleItemIndex > 0
         val isScrollingDown = currentPosition > lastScrollPosition
         lastScrollPosition = currentPosition
 
-        // Updated logic
         if (listState.firstVisibleItemIndex == 0) {
-            // Always hide if we are at the top
             showScrollToTop = false
         } else if (isProgrammaticScroll) {
-            // If the button caused the scroll, do not show the button again
+            // Ignore scroll events caused by the FAB
             showScrollToTop = false
         } else if (isScrollingDown) {
             showScrollToTop = false
         } else if (isScrollingUp) {
             showScrollToTop = true
             kotlinx.coroutines.delay(3000)
-            showScrollToTop = false
+            // Only hide if we haven't started another interaction in the meantime
+            if (showScrollToTop && !isProgrammaticScroll) {
+                showScrollToTop = false
+            }
         }
     }
+
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
@@ -257,19 +258,22 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(autoScrollUid, tasks) {
-        if (autoScrollUid != null) {
-            val index = tasks.indexOfFirst { it.uid == autoScrollUid }
+    // Scroll Logic: Handles both automatic navigation and manual additions
+    LaunchedEffect(scrollTrigger, autoScrollUid, tasks) {
+        if (highlightedUid != null && tasks.isNotEmpty()) {
+            val index = tasks.indexOfFirst { it.uid == highlightedUid }
             if (index >= 0) {
-                listState.animateScrollToItem(index)
-                kotlinx.coroutines.delay(2000)
-                onAutoScrollComplete()
-            } else {
-                if (filterTags.isNotEmpty() || filterLocations.isNotEmpty() || searchQuery.isNotEmpty()) {
-                    filterTags = emptySet()
-                    filterLocations = emptySet()
-                    searchQuery = ""
-                    isSearchActive = false
+                if (scrollTrigger > 0) {
+                    // Manual Add Case: Use SNAP to ensure item is visible even if layout is resizing
+                    // This fixes the "Hidden behind keyboard" issue robustly
+                    listState.scrollToItem(index)
+                    // Reset trigger to avoid repeat scrolling
+                    scrollTrigger = 0
+                } else if (autoScrollUid != null) {
+                    // Navigation Case: Smooth scroll is preferred here
+                    listState.animateScrollToItem(index)
+                    kotlinx.coroutines.delay(2000)
+                    onAutoScrollComplete()
                 }
             }
         }
@@ -326,8 +330,7 @@ fun HomeScreen(
         } else {
             newTaskText = ""
             scope.launch {
-                // Hide keyboard to ensure the new task is visible (prevents layout gap issues)
-                keyboardController?.hide()
+                // Keyboard remains open for batch entry
 
                 activeOpCount++
                 try {
@@ -338,21 +341,25 @@ fun HomeScreen(
                         creatingChildUid = null
                     }
 
-                    // Set highlight to the newly created task
+                    // 1. Highlight the new task
                     highlightedUid = newUid
 
                     onDataChanged()
                     lastSyncFailed = false
                     try {
-                        // Re-fetch with current filters to include new task
+                        // 2. Fetch new list
                         val newTasks = api.getViewTasks(
                             filterTags.toList(),
                             filterLocations.toList(),
                             searchQuery
                         )
                         tasks = newTasks
-                        val index = newTasks.indexOfFirst { it.uid == newUid }
-                        if (index >= 0) listState.animateScrollToItem(index)
+
+                        // 3. Trigger Scroll
+                        // Incrementing scrollTrigger forces the LaunchedEffect to run
+                        // and execute scrollToItem (Snap)
+                        scrollTrigger++
+
                     } catch (_: Exception) {
                     }
                 } catch (_: Exception) {
@@ -1090,7 +1097,6 @@ fun HomeScreen(
                                 parentCategories = pCats,
                                 parentLocation = pLoc,
                                 aliasMap = aliases,
-                                // Use our local highlight state which tracks both auto-scroll and newly added tasks
                                 isHighlighted = task.uid == highlightedUid,
                                 incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
                             )
@@ -1103,12 +1109,11 @@ fun HomeScreen(
             if (showScrollToTop) {
                 FloatingActionButton(
                     onClick = {
-                        // Updated logic
-                        isProgrammaticScroll = true // 1. Set flag to ignore scroll events
-                        showScrollToTop = false     // 2. Hide immediately
+                        isProgrammaticScroll = true
+                        showScrollToTop = false
                         scope.launch {
-                            listState.animateScrollToItem(0) // 3. Perform scroll
-                            isProgrammaticScroll = false     // 4. Reset flag after animation finishes
+                            listState.animateScrollToItem(0)
+                            isProgrammaticScroll = false
                         }
                     },
                     modifier = Modifier
