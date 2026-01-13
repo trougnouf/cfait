@@ -75,7 +75,10 @@ fun HomeScreen(
     var lastSyncFailed by remember { mutableStateOf(false) }
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
     var isPullRefreshing by remember { mutableStateOf(false) }
-    var filterLocation by rememberSaveable { mutableStateOf<String?>(null) }
+
+    var filterTags by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var filterLocations by remember { mutableStateOf<Set<String>>(emptySet()) }
+
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
 
@@ -139,7 +142,6 @@ fun HomeScreen(
     }
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    var filterTag by rememberSaveable { mutableStateOf<String?>(null) }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
     var newTaskText by remember { mutableStateOf("") }
@@ -177,14 +179,18 @@ fun HomeScreen(
     fun updateTaskList() {
         scope.launch {
             try {
-                tasks = api.getViewTasks(if (filterTag != null) listOf(filterTag!!) else emptyList(), if (filterLocation != null) listOf(filterLocation!!) else emptyList(), searchQuery)
+                tasks = api.getViewTasks(
+                    filterTags.toList(),
+                    filterLocations.toList(),
+                    searchQuery
+                )
                 aliases = api.getConfig().tagAliases
             } catch (_: Exception) {
             }
         }
     }
 
-    LaunchedEffect(searchQuery, filterTag, filterLocation, isLoading, calendars, tags, locations, refreshTick) {
+    LaunchedEffect(searchQuery, filterTags, filterLocations, isLoading, calendars, tags, locations, refreshTick) {
         updateTaskList()
     }
 
@@ -233,17 +239,14 @@ fun HomeScreen(
             val index = tasks.indexOfFirst { it.uid == autoScrollUid }
             if (index >= 0) {
                 listState.animateScrollToItem(index)
-                // Clear highlight after a short delay
                 kotlinx.coroutines.delay(2000)
                 onAutoScrollComplete()
             } else {
-                // Task not visible with current filters, clear them
-                if (filterTag != null || filterLocation != null || searchQuery.isNotEmpty()) {
-                    filterTag = null
-                    filterLocation = null
+                if (filterTags.isNotEmpty() || filterLocations.isNotEmpty() || searchQuery.isNotEmpty()) {
+                    filterTags = emptySet()
+                    filterLocations = emptySet()
                     searchQuery = ""
                     isSearchActive = false
-                    // updateTaskList will be called automatically via LaunchedEffect
                 }
             }
         }
@@ -280,7 +283,7 @@ fun HomeScreen(
 
         if (text.startsWith("#") && !text.contains(" ") && !isAliasDef) {
             val tag = text.removePrefix("#")
-            filterTag = tag
+            filterTags = setOf(tag)
             sidebarTab = 1
             newTaskText = ""
             updateTaskList()
@@ -293,7 +296,7 @@ fun HomeScreen(
                 }
             val cleanLoc = loc.replace("\"", "")
 
-            filterLocation = cleanLoc
+            filterLocations = setOf(cleanLoc)
             sidebarTab = 2
             newTaskText = ""
             updateTaskList()
@@ -312,7 +315,12 @@ fun HomeScreen(
                     onDataChanged()
                     lastSyncFailed = false
                     try {
-                        val newTasks = api.getViewTasks(if (filterTag != null) listOf(filterTag!!) else emptyList(), if (filterLocation != null) listOf(filterLocation!!) else emptyList(), searchQuery)
+                        // Re-fetch with current filters to include new task
+                        val newTasks = api.getViewTasks(
+                            filterTags.toList(),
+                            filterLocations.toList(),
+                            searchQuery
+                        )
                         tasks = newTasks
                         val index = newTasks.indexOfFirst { it.uid == newUid }
                         if (index >= 0) listState.animateScrollToItem(index)
@@ -348,14 +356,8 @@ fun HomeScreen(
                 .map { t ->
                     if (t.uid == task.uid) {
                         when (action) {
-                            "delete" -> {
-                                null
-                            }
-
-                            "cancel" -> {
-                                t.copy(statusString = "Cancelled", isDone = true)
-                            }
-
+                            "delete" -> null
+                            "cancel" -> t.copy(statusString = "Cancelled", isDone = true)
                             "playpause" -> {
                                 if (t.statusString == "InProcess") {
                                     t.copy(statusString = "NeedsAction", isPaused = true)
@@ -363,28 +365,20 @@ fun HomeScreen(
                                     t.copy(statusString = "InProcess", isPaused = false)
                                 }
                             }
-
-                            "stop" -> {
-                                t.copy(statusString = "NeedsAction", isPaused = false)
-                            }
-
+                            "stop" -> t.copy(statusString = "NeedsAction", isPaused = false)
                             "prio_up" -> {
                                 var p = t.priority.toInt()
                                 if (p == 0) p = 5
                                 if (p > 1) p -= 1
                                 t.copy(priority = p.toUByte())
                             }
-
                             "prio_down" -> {
                                 var p = t.priority.toInt()
                                 if (p == 0) p = 5
                                 if (p < 9) p += 1
                                 t.copy(priority = p.toUByte())
                             }
-
-                            else -> {
-                                t
-                            }
+                            else -> t
                         }
                     } else {
                         t
@@ -396,50 +390,29 @@ fun HomeScreen(
             activeOpCount++
             try {
                 when (action) {
-                    "delete" -> {
-                        api.deleteTask(task.uid)
-                    }
-
-                    "cancel" -> {
-                        api.setStatusCancelled(task.uid)
-                    }
-
-                    "playpause" -> {
-                        if (task.statusString == "InProcess") api.pauseTask(task.uid) else api.startTask(task.uid)
-                    }
-
-                    "stop" -> {
-                        api.stopTask(task.uid)
-                    }
-
-                    "prio_up" -> {
-                        api.changePriority(task.uid, 1)
-                    }
-
-                    "prio_down" -> {
-                        api.changePriority(task.uid, -1)
-                    }
-
+                    "delete" -> api.deleteTask(task.uid)
+                    "cancel" -> api.setStatusCancelled(task.uid)
+                    "playpause" -> if (task.statusString == "InProcess") api.pauseTask(task.uid) else api.startTask(task.uid)
+                    "stop" -> api.stopTask(task.uid)
+                    "prio_up" -> api.changePriority(task.uid, 1)
+                    "prio_down" -> api.changePriority(task.uid, -1)
                     "yank" -> {
                         yankedUid = task.uid
                         val clipData = ClipData.newPlainText("task_uid", task.uid)
                         clipboard.setClipEntry(ClipEntry(clipData))
                     }
-
                     "block" -> {
                         if (yankedUid != null) {
                             api.addDependency(task.uid, yankedUid!!)
                             yankedUid = null
                         }
                     }
-
                     "child" -> {
                         if (yankedUid != null) {
                             api.setParent(task.uid, yankedUid!!)
                             yankedUid = null
                         }
                     }
-
                     "related" -> {
                         if (yankedUid != null) {
                             api.addRelatedTo(task.uid, yankedUid!!)
@@ -602,6 +575,51 @@ fun HomeScreen(
                             icon = { NfIcon(locationTabIcon) },
                         )
                     }
+
+                    // --- STICKY HEADERS SECTION ---
+                    if (sidebarTab == 1) {
+                        val isAllTagsSelected = filterTags.isEmpty()
+                        // Use Filled TAG if selected (active), otherwise Outline
+                        val iconStr = if (isAllTagsSelected) NfIcons.TAG else NfIcons.TAG_OUTLINE
+
+                        CompactTagRow(
+                            name = "All Tasks",
+                            count = null,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            isSelected = isAllTagsSelected,
+                            icon = iconStr, // Dynamic Icon
+                            onClick = {
+                                filterTags = emptySet()
+                            },
+                            onFocus = {
+                                filterTags = emptySet()
+                                scope.launch { drawerState.close() }
+                            }
+                        )
+                        HorizontalDivider()
+                    } else if (sidebarTab == 2) {
+                        val isAllLocsSelected = filterLocations.isEmpty()
+                        // Use Filled MAP if selected (active), otherwise Outline (MAP_O)
+                        val iconStr = if (isAllLocsSelected) NfIcons.MAP else NfIcons.MAP_O
+
+                        CompactTagRow(
+                            name = "All Locations",
+                            count = null,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            isSelected = isAllLocsSelected,
+                            icon = iconStr, // Dynamic Icon
+                            onClick = {
+                                filterLocations = emptySet()
+                            },
+                            onFocus = {
+                                filterLocations = emptySet()
+                                scope.launch { drawerState.close() }
+                            }
+                        )
+                        HorizontalDivider()
+                    }
+                    // -----------------------------
+
                     LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
                         if (sidebarTab == 0) {
                             item {
@@ -666,58 +684,65 @@ fun HomeScreen(
                                 }
                             }
                         } else if (sidebarTab == 1) {
-                            item {
-                                CompactTagRow(
-                                    name = "All Tasks",
-                                    count = null,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    isSelected = filterTag == null,
-                                    onClick = {
-                                        filterTag = null
-                                        scope.launch { drawerState.close() }
-                                    },
-                                )
-                            }
+                            // "All Tasks" item moved out of here to Sticky Section above
                             items(tags) { tag ->
                                 val isUncat = tag.isUncategorized
                                 val displayName = if (isUncat) "Uncategorized" else "#${tag.name}"
-                                val isSel = if (isUncat) filterTag == ":::uncategorized:::" else filterTag == tag.name
+                                val targetKey = if (isUncat) ":::uncategorized:::" else tag.name
+                                val isSelected = filterTags.contains(targetKey)
                                 val color = if (isUncat) Color.Gray else getTagColor(tag.name)
+
+                                // GUI icons style
+                                val iconStr = if (isSelected) NfIcons.TAG_CHECK else NfIcons.TAG_OUTLINE
+
                                 CompactTagRow(
                                     name = displayName,
                                     count = tag.count.toInt(),
                                     color = color,
-                                    isSelected = isSel,
+                                    isSelected = isSelected,
+                                    icon = iconStr,
                                     onClick = {
-                                        filterTag = if (isUncat) ":::uncategorized:::" else tag.name
-                                        scope.launch { drawerState.close() }
-                                    })
-                            }
-                        } else {
-                            item {
-                                CompactTagRow(
-                                    name = "All Locations",
-                                    count = null,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    isSelected = filterLocation == null,
-                                    onClick = {
-                                        filterLocation = null
-                                        scope.launch { drawerState.close() }
+                                        // Toggle selection logic
+                                        filterTags = if (isSelected) {
+                                            filterTags - targetKey
+                                        } else {
+                                            filterTags + targetKey
+                                        }
                                     },
-                                    icon = NfIcons.MAP,
+                                    onFocus = {
+                                        // Focus logic: Exclusive select and close drawer
+                                        filterTags = setOf(targetKey)
+                                        scope.launch { drawerState.close() }
+                                    }
                                 )
                             }
+                        } else {
+                            // "All Locations" item moved out of here to Sticky Section above
                             items(locations) { loc ->
+                                val isSelected = filterLocations.contains(loc.name)
+                                // GUI icons style: Gray MAP_PIN if unselected, Amber CHECK_CIRCLE if selected
+                                val iconStr = if (isSelected) NfIcons.CHECK_CIRCLE else NfIcons.MAP_PIN
+                                val itemColor = if (isSelected) Color(0xFFFFB300) else Color.Gray
+
                                 CompactTagRow(
                                     name = loc.name,
                                     count = loc.count.toInt(),
-                                    color = Color(0xFFFFB300),
-                                    isSelected = filterLocation == loc.name,
+                                    color = itemColor,
+                                    isSelected = isSelected,
                                     onClick = {
-                                        filterLocation = loc.name
-                                        scope.launch { drawerState.close() }
+                                        // Toggle selection logic
+                                        filterLocations = if (isSelected) {
+                                            filterLocations - loc.name
+                                        } else {
+                                            filterLocations + loc.name
+                                        }
                                     },
-                                    icon = NfIcons.MAP_PIN,
+                                    icon = iconStr,
+                                    onFocus = {
+                                        // Focus logic
+                                        filterLocations = setOf(loc.name)
+                                        scope.launch { drawerState.close() }
+                                    }
                                 )
                             }
                         }
@@ -800,7 +825,6 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
 
-                            // Measure components
                             val nameResult = textMeasurer.measure(
                                 text = activeCalName,
                                 style = textStyle.copy(color = activeColor)

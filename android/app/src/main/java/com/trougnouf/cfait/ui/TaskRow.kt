@@ -397,7 +397,10 @@ fun CompactTagRow(
     icon: String = NfIcons.TAG,
     onFocus: (() -> Unit)? = null // NEW Parameter
 ) {
-    val bg = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
+    // UPDATED: Use the specific tag color with low opacity for the background,
+    // matching the Desktop GUI's visual style.
+    val bg = if (isSelected) color.copy(alpha = 0.15f) else Color.Transparent
+
     Row(
         modifier =
             Modifier
