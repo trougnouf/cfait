@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.4.7] - 2026-01-13
+
+### 🚀 Features
+
+- Show start date (if not yet started) in tasks list
+- Add ^@ syntax (sets both start and due date(time)). sorting: if parent is canceled/paused/done, use that for the whole group
+- Implement multi-select filtering and focus for tags & locations, make the clear icon always visible, improve UI and make it consistent between GUI and Android
+-  feat: implement multi-select filtering and focus for tags & locations and make the clear icon always visible on Android (feature parity with GUI)
+
+### 🐛 Bug Fixes
+
+- Ignore Release KeyEvents (fixes doubled characters on Windows reported by Christian Meixner
+- *(adapter)* Use X-ESTIMATED-DURATION for all-day tasks to fix RFC 5545 / iCalendar standard compliance
+- *(android)* Hide keyboard after adding task s.t. it is visible when we jump to it ( https://codeberg.org/trougnouf/cfait/issues/7 ), ensure that the jump-to-top icon hiden after 3-seconds and after getting pressed
+
+### 📚 Documentation
+
+- Confirm MacOS compatibility and add CONTRIBUTING.md file
+
+### 🎨 Styling
+
+- *(gui)* Improve tags list UI
+- *(gui)* Remove empty space between title bar and input bar
 ## [0.4.6] - 2026-01-11
 
 ### 🚀 Features
@@ -45,6 +68,7 @@
 - *(flatpak)* Add changelog to future releases
 - *(flathub)* Add release notes, categories, keywords, controls
 - Update rust licenses
+- Release cfait version 0.4.6
 ## [0.4.5] - 2026-01-06
 
 ### 🚀 Features

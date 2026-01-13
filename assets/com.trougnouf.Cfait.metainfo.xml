@@ -78,6 +78,32 @@
   </requires>
 
   <releases>
+    <release version="0.4.7" date="2026-01-13">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>Show start date (if not yet started) in tasks list</li>
+          <li>Add ^@ syntax (sets both start and due date(time)). sorting: if parent is canceled/paused/done, use that for the whole group</li>
+          <li>Implement multi-select filtering and focus for tags &amp; locations, make the clear icon always visible, improve UI and make it consistent between GUI and Android</li>
+          <li>feat: implement multi-select filtering and focus for tags &amp; locations and make the clear icon always visible on Android (feature parity with GUI)</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>Ignore Release KeyEvents (fixes doubled characters on Windows reported by Christian Meixner</li>
+          <li>(adapter) Use X-ESTIMATED-DURATION for all-day tasks to fix RFC 5545 / iCalendar standard compliance</li>
+          <li>(android) Hide keyboard after adding task s.t. it is visible when we jump to it ( https://codeberg.org/trougnouf/cfait/issues/7 ), ensure that the jump-to-top icon hiden after 3-seconds and after getting pressed</li>
+        </ul>
+        <p>Documentation:</p>
+        <ul>
+          <li>Confirm MacOS compatibility and add CONTRIBUTING.md file</li>
+        </ul>
+        <p>Styling:</p>
+        <ul>
+          <li>(gui) Improve tags list UI</li>
+          <li>(gui) Remove empty space between title bar and input bar</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.6" date="2026-01-11">
       <description>
         <p>Features:</p>
