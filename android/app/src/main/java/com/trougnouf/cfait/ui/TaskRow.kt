@@ -395,6 +395,7 @@ fun CompactTagRow(
     isSelected: Boolean,
     onClick: () -> Unit,
     icon: String = NfIcons.TAG,
+    onFocus: (() -> Unit)? = null // NEW Parameter
 ) {
     val bg = if (isSelected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent
     Row(
@@ -412,5 +413,16 @@ fun CompactTagRow(
         Spacer(Modifier.width(12.dp))
         Text(name, fontSize = 14.sp, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
         if (count != null) Text("$count", fontSize = 12.sp, color = Color.Gray)
+
+        // NEW: Render Focus Button if callback exists
+        if (onFocus != null) {
+            Spacer(Modifier.width(8.dp))
+            IconButton(
+                onClick = onFocus,
+                modifier = Modifier.size(24.dp)
+            ) {
+                NfIcon(NfIcons.ARROW_RIGHT, 14.sp)
+            }
+        }
     }
 }

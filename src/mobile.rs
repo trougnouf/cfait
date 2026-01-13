@@ -787,19 +787,19 @@ impl CfaitMobile {
 
     pub async fn get_view_tasks(
         &self,
-        filter_tag: Option<String>,
-        filter_location: Option<String>,
+        filter_tags: Vec<String>,
+        filter_locations: Vec<String>,
         search_query: String,
     ) -> Vec<MobileTask> {
         let store = self.store.lock().await;
         let config = Config::load().unwrap_or_default();
 
         let mut selected_categories = HashSet::new();
-        if let Some(tag) = filter_tag {
+        for tag in filter_tags {
             selected_categories.insert(tag);
         }
         let mut selected_locations = HashSet::new();
-        if let Some(l) = filter_location {
+        for l in filter_locations {
             selected_locations.insert(l);
         }
 

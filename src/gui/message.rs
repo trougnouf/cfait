@@ -98,9 +98,10 @@ pub enum Message {
     MoveTask(String, String),
 
     JumpToTag(String),
-    JumpToLocation(String), // <--- NEW
-    JumpToTask(String),     // <--- NEW
-
+    JumpToLocation(String),
+    JumpToTask(String),
+    FocusTag(String),
+    FocusLocation(String),
     TaskMoved(Result<TodoTask, String>),
     ObSubmitOffline,
     MigrateLocalTo(String, String), // (source_calendar_href, target_calendar_href)

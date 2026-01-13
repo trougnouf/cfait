@@ -1,4 +1,11 @@
-// Manages SVG icons and font definitions for the GUI.
+/*
+File: cfait/src/gui/icon.rs
+
+This file defines icon font loading and codepoint constants used by the GUI.
+It mirrors the project's existing icon mappings with added tag/check variants
+used by the sidebar and Android clients.
+*/
+
 use iced::Font;
 use iced::widget::{Text, text};
 
@@ -20,8 +27,11 @@ pub fn icon<'a>(codepoint: char) -> Text<'a> {
 }
 
 // --- NERD FONT MAPPING ---
+
 pub const CALENDAR: char = '\u{f073}'; // 
-pub const TAG: char = '\u{f02b}'; // 
+pub const TAG: char = '\u{f02b}'; //  (generic tag)
+pub const TAG_OUTLINE: char = '\u{f04fc}'; // nf-md-tag_outline
+pub const TAG_CHECK: char = '\u{f1a7a}';   // nf-md-tag_check
 pub const SETTINGS: char = '\u{f013}'; // 
 pub const REFRESH: char = '\u{f0450}'; // nf-md-refresh
 pub const UNSYNCED: char = '\u{f0c2}'; //  (Cloud)
@@ -29,6 +39,7 @@ pub const PLUS: char = '\u{f0603}'; // nf-md-priority_high
 pub const MINUS: char = '\u{f0604}'; // nf-md-priority_low
 pub const TRASH: char = '\u{f1f8}'; // 
 pub const CHECK: char = '\u{f00c}'; // 
+pub const CHECK_CIRCLE: char = '\u{f058}'; // nf-fa-check_circle
 pub const CROSS: char = '\u{f00d}'; // 
 pub const EDIT: char = '\u{f040}'; // 
 pub const PLAY: char = '\u{eb2c}'; // nf-cod-play

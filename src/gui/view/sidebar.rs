@@ -1,28 +1,28 @@
+// File: ./src/gui/view/sidebar.rs
 // Renders the sidebar (calendars, tags, locations) for the GUI.
+
 use super::tooltip_style;
 use crate::color_utils;
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
-use crate::gui::view::COLOR_LOCATION;
+
 use crate::store::UNCATEGORIZED_ID;
 use iced::never;
-use iced::widget::{Space, button, checkbox, column, container, row, text, toggler, tooltip};
-// Import rich_text and span for multi-colored text
-use iced::widget::{rich_text, span};
+use iced::widget::{
+    button, column, container, rich_text, row, scrollable, span, text, toggler, tooltip, Space,
+};
 use iced::{Color, Element, Length, Theme};
 use std::time::Duration;
 
-// Define the semantic color for Locations (Amber/Gold)
-
+// --- CALENDARS ---
 pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
-    // ... [setup] ...
     let are_all_visible = app
         .calendars
         .iter()
         .filter(|c| !app.disabled_calendars.contains(&c.href))
         .all(|c| !app.hidden_calendars.contains(&c.href));
-    // Capture the current theme so we can pick theme-aware defaults for icons/foregrounds
+
     let theme = app.theme();
     let toggler_style = |theme: &Theme, status: toggler::Status| -> toggler::Style {
         let mut style = toggler::default(theme, status);
@@ -30,7 +30,6 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
             toggler::Status::Active { is_toggled } | toggler::Status::Hovered { is_toggled } => {
                 if is_toggled {
                     style.background = Color::from_rgb(1.0, 0.6, 0.0).into();
-                    // Use the theme's text color instead of a hardcoded white so the toggler adapts
                     style.foreground = theme.extended_palette().background.base.text.into();
                 }
             }
@@ -49,6 +48,7 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
         .style(toggler_style);
     let toggle_container = container(toggle_all).padding(5);
 
+    // List generation (mostly unchanged logic, just wrapped in scrollable at end)
     let list = column(
         app.calendars
             .iter()
@@ -57,7 +57,6 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
                 let is_visible = !app.hidden_calendars.contains(&cal.href);
                 let is_target = app.active_cal_href.as_ref() == Some(&cal.href);
 
-                // --- Color Resolution ---
                 let cal_color = cal
                     .color
                     .as_ref()
@@ -67,20 +66,19 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
                 let (icon_char, icon_color) = if is_target {
                     (
                         icon::CONTENT_SAVE_EDIT,
-                        // Use cal color if present, else theme foreground (adapts to light/dark)
                         cal_color.unwrap_or(theme.extended_palette().background.base.text),
                     )
                 } else if is_visible {
                     (
                         icon::EYE,
-                        // Use cal color if present, else a weaker theme text color for non-target items
                         cal_color.unwrap_or(theme.extended_palette().background.weak.text),
                     )
                 } else {
-                    // Hidden calendars use the theme's weak text color by default
-                    (icon::EYE_CLOSED, theme.extended_palette().secondary.base.color)
+                    (
+                        icon::EYE_CLOSED,
+                        theme.extended_palette().secondary.base.color,
+                    )
                 };
-                // ---------------------------------
 
                 let vis_btn = button(icon::icon(icon_char).size(16).style(move |_| text::Style {
                     color: Some(icon_color),
@@ -92,7 +90,6 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
                     !is_visible,
                 ));
 
-                // Apply tooltip_style
                 let vis_tooltip = tooltip(
                     vis_btn,
                     text(if is_visible { "Hide" } else { "Show" }).size(12),
@@ -125,7 +122,6 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
                     .padding(10)
                     .on_press(Message::IsolateCalendar(cal.href.clone()));
 
-                // Apply tooltip_style
                 let focus_tooltip = tooltip(
                     focus_btn,
                     text("Focus (hide others)").size(12),
@@ -144,10 +140,17 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     .spacing(2)
     .width(Length::Fill);
 
-    column![toggle_container, list].spacing(5).into()
+    // ADDED: Wrap list in scrollable, keep toggle_container sticky
+    column![
+        toggle_container,
+        scrollable(list).height(Length::Fill).id(app.sidebar_scrollable_id.clone())
+    ]
+    .spacing(5)
+    .into()
 }
 
-// ... DurationOpt (unchanged) ...
+// ... format_mins and DurationOpt unchanged ...
+// (Omitting to save space)
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DurationOpt(Option<u32>, String);
 impl std::fmt::Display for DurationOpt {
@@ -171,11 +174,12 @@ fn format_mins(m: u32) -> String {
     }
 }
 
+// --- CATEGORIES ---
 pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
-    // ... [setup] ...
     let all_cats = &app.cached_categories;
     let has_selection = !app.selected_categories.is_empty();
 
+    // --- 1. Header Logic ---
     let clear_btn = if has_selection {
         button(icon::icon(icon::CLEAR_ALL).size(16))
             .style(button::text)
@@ -193,7 +197,6 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         .padding(5)
     };
 
-    // Apply tooltip_style
     let clear_tooltip = tooltip(
         clear_btn,
         text("Clear all tags").size(12),
@@ -212,7 +215,6 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         .padding(5)
         .on_press(Message::CategoryMatchModeChanged(!app.match_all_categories));
 
-    // Apply tooltip_style
     let logic_tooltip = tooltip(
         logic_btn,
         text("Toggle matching logic").size(12),
@@ -221,64 +223,17 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     .style(tooltip_style)
     .delay(Duration::from_millis(700));
 
-    let header = row![clear_tooltip, Space::new(), logic_tooltip]
+    // STICKY HEADER
+    let header = row![clear_tooltip, Space::new().width(Length::Fill), logic_tooltip]
         .spacing(5)
         .align_y(iced::Alignment::Center)
         .padding(iced::Padding {
             right: 14.0,
+            bottom: 5.0,
             ..Default::default()
         });
 
-    // ... [List] ...
-    let tags_list: Element<'_, Message> = if all_cats.is_empty() {
-        column![
-            header,
-            text("No tags found")
-                .size(14)
-                .color(Color::from_rgb(0.5, 0.5, 0.5))
-        ]
-        .spacing(10)
-        .into()
-    } else {
-        let list = column(
-            all_cats
-                .iter()
-                .map(|(cat, count)| {
-                    let is_selected = app.selected_categories.contains(cat.as_str());
-                    let cat_clone_check = cat.clone();
-                    let cat_clone_text = cat.clone();
-                    let check = checkbox(is_selected)
-                        .size(18)
-                        .on_toggle(move |_| Message::CategoryToggled(cat_clone_check.clone()));
-                    let label_content: Element<'_, Message> = if cat == UNCATEGORIZED_ID {
-                        text(format!("Uncategorized ({})", count)).size(16).into()
-                    } else {
-                        let (r, g, b) = color_utils::generate_color(cat);
-                        let tag_color = Color::from_rgb(r, g, b);
-                        rich_text![
-                            span("#").color(tag_color),
-                            span(format!("{} ({})", cat, count))
-                        ]
-                        .size(16)
-                        .on_link_click(never)
-                        .into()
-                    };
-                    let label_btn = button(label_content)
-                        .style(button::text)
-                        .padding(0)
-                        .on_press(Message::CategoryToggled(cat_clone_text));
-                    row![check, label_btn]
-                        .spacing(5)
-                        .align_y(iced::Alignment::Center)
-                        .into()
-                })
-                .collect::<Vec<_>>(),
-        )
-        .spacing(5);
-        column![header, list].spacing(10).into()
-    };
-
-    // ... [Filters] ...
+    // --- 2. Duration Filters Logic (Moved Up) ---
     let mut dur_set = std::collections::HashSet::new();
     for tasks in app.store.calendars.values() {
         for t in tasks {
@@ -329,7 +284,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         ]
         .spacing(5)
         .align_y(iced::Alignment::Center),
-        checkbox(app.filter_include_unset_duration)
+        iced::widget::checkbox(app.filter_include_unset_duration)
             .label("Include unset")
             .text_size(12)
             .size(16)
@@ -341,12 +296,112 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         ..Default::default()
     });
 
-    column![tags_list, dur_filters].spacing(10).into()
+    // --- 3. Tag List Construction ---
+    let tags_column = if all_cats.is_empty() {
+        column![container(
+            text("No tags found")
+                .size(14)
+                .color(Color::from_rgb(0.5, 0.5, 0.5)),
+        )
+        .padding(10)]
+    } else {
+        column(
+            all_cats
+                .iter()
+                .map(|(cat, count)| {
+                    let is_selected = app.selected_categories.contains(cat.as_str());
+                    let cat_clone_toggle = cat.clone();
+                    let cat_clone_focus = cat.clone();
+
+                    let (r, g, b) = color_utils::generate_color(cat);
+                    let tag_color = Color::from_rgb(r, g, b);
+
+                    // Icon Selection: Always use Tag Color
+                    let (icon_char, icon_color) = if is_selected {
+                        (icon::TAG_CHECK, tag_color)
+                    } else {
+                        (icon::TAG_OUTLINE, tag_color)
+                    };
+
+                    let icon_btn = button(icon::icon(icon_char).size(16).color(icon_color))
+                        .style(button::text)
+                        .padding(2)
+                        .on_press(Message::CategoryToggled(cat_clone_toggle.clone()));
+
+                    let label_content: Element<'_, Message> = if cat == UNCATEGORIZED_ID {
+                        text(format!("Uncategorized ({})", count)).size(16).into()
+                    } else {
+                        rich_text![
+                            span("#").color(tag_color),
+                            span(format!("{} ({})", cat, count))
+                        ]
+                        .size(16)
+                        .on_link_click(never)
+                        .into()
+                    };
+
+                    let label_btn = button(
+                        container(label_content)
+                            .width(Length::Shrink)
+                            .align_x(iced::alignment::Horizontal::Left),
+                    )
+                    .style(button::text)
+                    .padding(0)
+                    .on_press(Message::CategoryToggled(cat_clone_toggle));
+
+                    // Use new FocusTag message
+                    let focus_btn = button(icon::icon(icon::ARROW_RIGHT).size(14))
+                        .style(button::text)
+                        .padding(2)
+                        .on_press(Message::FocusTag(cat_clone_focus));
+
+                    let focus_tooltip = tooltip(
+                        focus_btn,
+                        text("Focus (hide others)").size(12),
+                        tooltip::Position::Left,
+                    )
+                    .style(tooltip_style)
+                    .delay(Duration::from_millis(700));
+
+                    row![
+                        icon_btn,
+                        label_btn,
+                        Space::new().width(Length::Fill),
+                        focus_tooltip
+                    ]
+                    .spacing(5)
+                    .align_y(iced::Alignment::Center)
+                    // Added Right Padding so scrollbar doesn't overlap arrow
+                    .padding(iced::Padding {
+                        right: 15.0,
+                        ..Default::default()
+                    })
+                    .into()
+                })
+                .collect::<Vec<_>>(),
+        )
+        .spacing(2)
+    };
+
+    // --- 4. Combine: Tags + Filter Duration ---
+    let scroll_content = tags_column
+        .push(Space::new().height(10))
+        .push(dur_filters);
+
+    // --- 5. Final Output: Header + Scrollable Area ---
+    column![
+        header,
+        scrollable(scroll_content)
+            .height(Length::Fill)
+            .id(app.sidebar_scrollable_id.clone())
+    ]
+    .spacing(5)
+    .into()
 }
 
+// --- LOCATIONS ---
 pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
     let all_locs = &app.cached_locations;
-
     let has_selection = !app.selected_locations.is_empty();
 
     let clear_btn = if has_selection {
@@ -366,7 +421,6 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
         .padding(5)
     };
 
-    // Apply tooltip
     let clear_tooltip = tooltip(
         clear_btn,
         text("Clear all locations").size(12),
@@ -375,6 +429,7 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
     .style(tooltip_style)
     .delay(Duration::from_millis(700));
 
+    // STICKY HEADER
     let header = row![
         text("Locations").size(14),
         Space::new().width(Length::Fill),
@@ -383,50 +438,88 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
     .padding(10)
     .align_y(iced::Alignment::Center);
 
-    if all_locs.is_empty() {
-        return column![
-            header,
+    let list_content: Element<'_, Message> = if all_locs.is_empty() {
+        container(
             text("No locations")
                 .size(14)
-                .color(Color::from_rgb(0.5, 0.5, 0.5))
-        ]
-        .into();
-    }
+                .color(Color::from_rgb(0.5, 0.5, 0.5)),
+        )
+        .padding(10)
+        .into()
+    } else {
+        let list = column(
+            all_locs
+                .iter()
+                .map(|(loc, count)| {
+                    let is_selected = app.selected_locations.contains(loc.as_str());
+                    let loc_clone_toggle = loc.clone();
+                    let loc_clone_focus = loc.clone();
 
-    let list = column(
-        all_locs
-            .iter()
-            .map(|(loc, count)| {
-                let is_selected = app.selected_locations.contains(loc.as_str());
-                let loc_clone = loc.clone();
+                    // Icon Logic: Amber for Checked
+                    let (icon_char, icon_color) = if is_selected {
+                        (icon::CHECK_CIRCLE, Color::from_rgb(1.0, 0.6, 0.0)) // Amber
+                    } else {
+                        (icon::MAP_PIN, Color::from_rgb(0.5, 0.5, 0.5)) // Gray
+                    };
 
-                let check = checkbox(is_selected)
-                    .on_toggle(move |_| Message::LocationToggled(loc_clone.clone()));
+                    let icon_btn = button(icon::icon(icon_char).size(14).color(icon_color))
+                        .style(button::text)
+                        .padding(2)
+                        .on_press(Message::LocationToggled(loc_clone_toggle.clone()));
 
-                // Highlighted @@ text for Locations
-                let label = rich_text![
-                    span(icon::MAP_PIN.to_string())
-                        .font(icon::FONT)
-                        .color(COLOR_LOCATION),
-                    span(format!(" {} ({})", loc, count))
-                ]
-                .size(14)
-                .on_link_click(never); // Prevent interactivity on text
+                    let label = rich_text![
+                        span(format!("{} ({})", loc, count))
+                    ]
+                    .size(14)
+                    .on_link_click(never);
 
-                // Make the text clickable to toggle
-                let label_btn = button(label)
+                    let label_btn = button(
+                        container(label)
+                            .width(Length::Shrink)
+                            .align_x(iced::alignment::Horizontal::Left),
+                    )
                     .style(button::text)
                     .padding(0)
-                    .on_press(Message::LocationToggled(loc.clone()));
+                    .on_press(Message::LocationToggled(loc_clone_toggle));
 
-                row![check, label_btn]
+                    // Use new FocusLocation message
+                    let focus_btn = button(icon::icon(icon::ARROW_RIGHT).size(14))
+                        .style(button::text)
+                        .padding(2)
+                        .on_press(Message::FocusLocation(loc_clone_focus));
+
+                    let focus_tooltip = tooltip(
+                        focus_btn,
+                        text("Focus (hide others)").size(12),
+                        tooltip::Position::Left,
+                    )
+                    .style(tooltip_style)
+                    .delay(Duration::from_millis(700));
+
+                    row![
+                        icon_btn,
+                        label_btn,
+                        Space::new().width(Length::Fill),
+                        focus_tooltip
+                    ]
                     .spacing(5)
                     .align_y(iced::Alignment::Center)
+                    // Added Right Padding so scrollbar doesn't overlap arrow
+                    .padding(iced::Padding {
+                        right: 15.0,
+                        ..Default::default()
+                    })
                     .into()
-            })
-            .collect::<Vec<_>>(),
-    )
-    .spacing(5);
+                })
+                .collect::<Vec<_>>(),
+        )
+        .spacing(2);
 
-    column![header, list].spacing(10).into()
+        scrollable(list)
+            .height(Length::Fill)
+            .id(app.sidebar_scrollable_id.clone())
+            .into()
+    };
+
+    column![header, list_content].spacing(0).into()
 }

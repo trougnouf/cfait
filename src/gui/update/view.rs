@@ -241,6 +241,27 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.current_window_size = size;
             Task::none()
         }
+        // NEW: Focus Handlers (No scrolling)
+        Message::FocusTag(tag) => {
+            app.sidebar_mode = SidebarMode::Categories;
+            app.selected_categories.clear();
+            app.selected_categories.insert(tag.clone());
+            app.search_value.clear();
+            refresh_filtered_tasks(app);
+            // DO NOT scroll sidebar here, as user just clicked the arrow
+            Task::none()
+        }
+        Message::FocusLocation(loc) => {
+            app.sidebar_mode = SidebarMode::Locations;
+            app.selected_locations.clear();
+            app.selected_locations.insert(loc.clone());
+            app.search_value.clear();
+            refresh_filtered_tasks(app);
+            // DO NOT scroll sidebar here
+            Task::none()
+        }
+
+        // KEEP: JumpToTag still scrolls (used for tags in task list)
         Message::JumpToTag(tag) => {
             app.sidebar_mode = SidebarMode::Categories;
             app.selected_categories.clear();
@@ -248,10 +269,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.search_value.clear();
             refresh_filtered_tasks(app);
 
-            // AUTO-SCROLL LOGIC TAGS
-            // Use cached data (already updated by refresh_filtered_tasks)
+            // Auto-scroll logic is kept for JumpTo...
             let all_cats = &app.cached_categories;
-
             if let Some(index) = all_cats.iter().position(|(t, _)| t == &tag) {
                 let total = all_cats.len();
                 if total > 1 {
@@ -265,9 +284,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     );
                 }
             }
-
             Task::none()
         }
+        // KEEP: JumpToLocation still scrolls
         Message::JumpToLocation(loc) => {
             app.sidebar_mode = SidebarMode::Locations;
             app.selected_locations.clear();
@@ -275,10 +294,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.search_value.clear();
             refresh_filtered_tasks(app);
 
-            // AUTO-SCROLL LOGIC LOCATIONS
-            // Use cached data (already updated by refresh_filtered_tasks)
             let all_locs = &app.cached_locations;
-
             if let Some(index) = all_locs.iter().position(|(l, _)| l == &loc) {
                 let total = all_locs.len();
                 if total > 1 {
@@ -292,7 +308,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     );
                 }
             }
-
             Task::none()
         }
         Message::JumpToTask(uid) => {

@@ -784,27 +784,56 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Right => {
-                if state.active_focus == Focus::Sidebar
-                    && state.sidebar_mode == SidebarMode::Calendars
-                {
-                    let target_href = if let Some(idx) = state.cal_state.selected() {
-                        let filtered = state.get_filtered_calendars();
-                        filtered.get(idx).map(|c| c.href.clone())
-                    } else {
-                        None
-                    };
+                if state.active_focus == Focus::Sidebar {
+                    match state.sidebar_mode {
+                        SidebarMode::Calendars => {
+                            let target_href = if let Some(idx) = state.cal_state.selected() {
+                                let filtered = state.get_filtered_calendars();
+                                filtered.get(idx).map(|c| c.href.clone())
+                            } else {
+                                None
+                            };
 
-                    if let Some(href) = target_href {
-                        state.active_cal_href = Some(href.clone());
-                        state.hidden_calendars.clear();
-                        for c in &state.calendars {
-                            if c.href != href {
-                                state.hidden_calendars.insert(c.href.clone());
+                            if let Some(href) = target_href {
+                                state.active_cal_href = Some(href.clone());
+                                state.hidden_calendars.clear();
+                                for c in &state.calendars {
+                                    if c.href != href {
+                                        state.hidden_calendars.insert(c.href.clone());
+                                    }
+                                }
+                                state.refresh_filtered_view();
+                                if href != LOCAL_CALENDAR_HREF {
+                                    return Some(Action::IsolateCalendar(href));
+                                }
                             }
                         }
-                        state.refresh_filtered_view();
-                        if href != LOCAL_CALENDAR_HREF {
-                            return Some(Action::IsolateCalendar(href));
+                        SidebarMode::Categories => {
+                            let cats = state.store.get_all_categories(
+                                state.hide_completed,
+                                state.hide_fully_completed_tags,
+                                &state.selected_categories,
+                                &state.hidden_calendars,
+                            );
+                            if let Some(idx) = state.cal_state.selected()
+                                && let Some((c, _)) = cats.get(idx)
+                            {
+                                state.selected_categories.clear();
+                                state.selected_categories.insert(c.clone());
+                                state.refresh_filtered_view();
+                            }
+                        }
+                        SidebarMode::Locations => {
+                            let locs = state
+                                .store
+                                .get_all_locations(state.hide_completed, &state.hidden_calendars);
+                            if let Some(idx) = state.cal_state.selected()
+                                && let Some((l, _)) = locs.get(idx)
+                            {
+                                state.selected_locations.clear();
+                                state.selected_locations.insert(l.clone());
+                                state.refresh_filtered_view();
+                            }
                         }
                     }
                 } else if state.mode == InputMode::Editing {

@@ -50,7 +50,7 @@ fun TaskDetailScreen(
 
     fun reload() {
         scope.launch {
-            val all = api.getViewTasks(null, null, "")
+            val all = api.getViewTasks(emptyList(), emptyList(), "")
             task = all.find { it.uid == uid }
             task?.let {
                 smartInput = it.smartString

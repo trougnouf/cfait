@@ -494,9 +494,7 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     let mut sidebar_col = column![
         tabs,
-        scrollable(content)
-            .height(Length::Fill)
-            .id(app.sidebar_scrollable_id.clone())
+        content
     ];
 
     if show_logo {

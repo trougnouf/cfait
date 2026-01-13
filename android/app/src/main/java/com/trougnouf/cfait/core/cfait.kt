@@ -967,8 +967,8 @@ internal object UniffiLib {
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
         `ptr`: Long,
-        `filterTag`: RustBuffer.ByValue,
-        `filterLocation`: RustBuffer.ByValue,
+        `filterTags`: RustBuffer.ByValue,
+        `filterLocations`: RustBuffer.ByValue,
         `searchQuery`: RustBuffer.ByValue,
     ): Long
 
@@ -1418,7 +1418,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 50889.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 2430.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 18822.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_unsynced_changes() != 28210.toShort()) {
@@ -2091,8 +2091,8 @@ public interface CfaitMobileInterface {
     suspend fun `getTasksRelatedTo`(`uid`: kotlin.String): List<MobileRelatedTask>
 
     suspend fun `getViewTasks`(
-        `filterTag`: kotlin.String?,
-        `filterLocation`: kotlin.String?,
+        `filterTags`: List<kotlin.String>,
+        `filterLocations`: List<kotlin.String>,
         `searchQuery`: kotlin.String,
     ): List<MobileTask>
 
@@ -2725,16 +2725,16 @@ open class CfaitMobile :
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `getViewTasks`(
-        `filterTag`: kotlin.String?,
-        `filterLocation`: kotlin.String?,
+        `filterTags`: List<kotlin.String>,
+        `filterLocations`: List<kotlin.String>,
         `searchQuery`: kotlin.String,
     ): List<MobileTask> =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
                     uniffiHandle,
-                    FfiConverterOptionalString.lower(`filterTag`),
-                    FfiConverterOptionalString.lower(`filterLocation`),
+                    FfiConverterSequenceString.lower(`filterTags`),
+                    FfiConverterSequenceString.lower(`filterLocations`),
                     FfiConverterString.lower(`searchQuery`),
                 )
             },

@@ -177,8 +177,7 @@ fun HomeScreen(
     fun updateTaskList() {
         scope.launch {
             try {
-                tasks = api.getViewTasks(filterTag, filterLocation, searchQuery)
-                // Load aliases
+                tasks = api.getViewTasks(if (filterTag != null) listOf(filterTag!!) else emptyList(), if (filterLocation != null) listOf(filterLocation!!) else emptyList(), searchQuery)
                 aliases = api.getConfig().tagAliases
             } catch (_: Exception) {
             }
@@ -313,7 +312,7 @@ fun HomeScreen(
                     onDataChanged()
                     lastSyncFailed = false
                     try {
-                        val newTasks = api.getViewTasks(filterTag, filterLocation, searchQuery)
+                        val newTasks = api.getViewTasks(if (filterTag != null) listOf(filterTag!!) else emptyList(), if (filterLocation != null) listOf(filterLocation!!) else emptyList(), searchQuery)
                         tasks = newTasks
                         val index = newTasks.indexOfFirst { it.uid == newUid }
                         if (index >= 0) listState.animateScrollToItem(index)

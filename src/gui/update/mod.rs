@@ -1,4 +1,6 @@
 // Central message handler dispatching to specific update modules.
+// File: ./src/gui/update/mod.rs
+
 pub mod common;
 pub mod network;
 pub mod settings;
@@ -81,9 +83,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::StartTask(_)
         | Message::PauseTask(_)
         | Message::StopTask(_)
-        | Message::SnoozeCustomInput(_) // ADD THIS
-        | Message::SnoozeCustomSubmit(_, _) // ADD THIS
-        => tasks::handle(app, message),
+        | Message::SnoozeCustomInput(_)
+        | Message::SnoozeCustomSubmit(_, _) => tasks::handle(app, message),
 
         Message::TabPressed(_)
         | Message::FocusInput
@@ -109,7 +110,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleDetails(_)
         | Message::OpenHelp
         | Message::CloseHelp
-        | Message::WindowDragged
+        | Message::WindowDragged    // <--- Added missing pipe here
         | Message::MinimizeWindow
         | Message::CloseWindow
         | Message::ResizeStart(_)
@@ -117,7 +118,9 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::JumpToTag(_)
         | Message::JumpToLocation(_)
         | Message::JumpToTask(_)
-        | Message::OpenUrl(_) => view::handle(app, message),
+        | Message::OpenUrl(_)
+        | Message::FocusTag(_)
+        | Message::FocusLocation(_) => view::handle(app, message),
 
         Message::Refresh
         | Message::Loaded(_)
@@ -129,22 +132,16 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::MigrationComplete(_) => network::handle(app, message),
         Message::InitAlarmActor(tx) => {
             app.alarm_tx = Some(tx.clone());
-            // Send initial load
             if !app.tasks.is_empty() {
                 let all = app.store.calendars.values().flatten().cloned().collect();
                 let _ = tx.try_send(SystemEvent::UpdateTasks(all));
             }
-            // Note: We do NOT send EnableAlarms here yet.
             Task::none()
         }
         Message::AlarmSignalReceived(msg) => {
             match &*msg {
                 AlarmMessage::Fire(task_uid, alarm_uid) => {
-                    // Look up in the full store, not the filtered app.tasks view.
-                    // The task might be hidden by filters but should still ring.
                     if let Some((task, _)) = app.store.get_task_mut(task_uid) {
-                        // Check if alarm still exists (wasn't dismissed elsewhere)
-                        // For implicit alarms (which are not in task.alarms), we check if the synthetic ID implies validity
                         let is_implicit = alarm_uid.starts_with("implicit_");
                         let exists = is_implicit || task.alarms.iter().any(|a| a.uid == *alarm_uid);
 
@@ -155,11 +152,10 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                             let alarm_obj = if let Some(a) = task.alarms.iter().find(|a| a.uid == *alarm_uid) {
                                 a.clone()
                             } else {
-                                // Reconstruct basic info for implicit alarm so the modal doesn't crash
                                 crate::model::Alarm {
                                     uid: alarm_uid.clone(),
                                     action: "DISPLAY".to_string(),
-                                    trigger: crate::model::AlarmTrigger::Relative(0), // Dummy
+                                    trigger: crate::model::AlarmTrigger::Relative(0),
                                     description: Some(if alarm_uid.contains("due") { "Due now".to_string() } else { "Starting".to_string() }),
                                     acknowledged: None,
                                     related_to_uid: None,
@@ -175,10 +171,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SnoozeAlarm(t_uid, a_uid, mins) => {
-            // Remove from modal stack
             app.ringing_tasks.retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
-
-            // Perform Logic
             tasks::handle(app, Message::SnoozeAlarm(t_uid, a_uid, mins))
         }
         Message::DismissAlarm(t_uid, a_uid) => {
