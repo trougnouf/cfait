@@ -492,10 +492,7 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     ]
     .spacing(5);
 
-    let mut sidebar_col = column![
-        tabs,
-        content
-    ];
+    let mut sidebar_col = column![tabs, content];
 
     if show_logo {
         sidebar_col = sidebar_col.push(
@@ -792,13 +789,13 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
                     })
                     .into();
             } else {
-                export_ui = container(text("")).into();
+                export_ui = Space::new().height(0).into();
             }
         } else {
-            export_ui = container(text("")).into();
+            export_ui = Space::new().height(0).into();
         }
     } else {
-        export_ui = container(text("")).into();
+        export_ui = Space::new().height(0).into();
     }
 
     let input_area = view_input_area(app);
