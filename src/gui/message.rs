@@ -100,6 +100,7 @@ pub enum Message {
     JumpToTag(String),
     JumpToLocation(String),
     JumpToTask(String),
+    TagHovered(Option<String>),
     FocusTag(String),
     FocusLocation(String),
     TaskMoved(Result<TodoTask, String>),

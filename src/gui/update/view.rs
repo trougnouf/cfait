@@ -353,6 +353,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::TagHovered(uid) => {
+            app.hovered_tag_uid = uid;
+            Task::none()
+        }
         Message::OpenUrl(target) => {
             // Note: target can be "https://..." or "geo:lat,long"
             let target_url = target.clone();

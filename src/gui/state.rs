@@ -7,8 +7,8 @@ use crate::store::TaskStore;
 use crate::system::SystemEvent;
 use iced::widget::text_editor;
 use std::collections::{HashMap, HashSet};
-use tokio::sync::mpsc;
 use strum::IntoEnumIterator;
+use tokio::sync::mpsc;
 
 #[derive(Default, PartialEq, Clone, Copy, Debug)]
 pub enum AppState {
@@ -61,6 +61,8 @@ pub struct GuiApp {
     pub selected_locations: HashSet<String>, // NEW
     pub match_all_categories: bool,
     pub yanked_uid: Option<String>,
+
+    pub hovered_tag_uid: Option<String>,
 
     // Track selected task for highlighting
     pub selected_uid: Option<String>,
@@ -213,6 +215,8 @@ impl Default for GuiApp {
             match_all_categories: false,
             yanked_uid: None,
             selected_uid: None,
+
+            hovered_tag_uid: None,
 
             hide_completed: false,
             hide_fully_completed_tags: true,

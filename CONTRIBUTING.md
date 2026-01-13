@@ -10,7 +10,7 @@ Cfait shares one Rust core across TUI, GUI, and Android clients. To maintain con
     *   **TUI:** `src/tui/view.rs`
     *   **GUI:** `src/gui/view/help.rs`
     *   **Android:** `android/app/src/main/java/com/trougnouf/cfait/ui/HelpScreen.kt`
-4.  **Keep it Light:** Aim for simplicity to minimize the codebase and maintenance burden.
+4.  **Keep it Light:** Aim for simplicity to minimize the codebase and maintenance burden and to keep the program fast.
 
 
 ### Submitting a Pull Request

@@ -120,6 +120,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::JumpToTask(_)
         | Message::OpenUrl(_)
         | Message::FocusTag(_)
+        | Message::TagHovered(_)
         | Message::FocusLocation(_) => view::handle(app, message),
 
         Message::Refresh

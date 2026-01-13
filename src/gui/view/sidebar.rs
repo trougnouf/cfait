@@ -10,7 +10,8 @@ use crate::gui::state::GuiApp;
 use crate::store::UNCATEGORIZED_ID;
 use iced::never;
 use iced::widget::{
-    button, column, container, rich_text, row, scrollable, span, text, toggler, tooltip, Space,
+    MouseArea, Space, button, column, container, rich_text, row, scrollable, span, text, toggler,
+    tooltip,
 };
 use iced::{Color, Element, Length, Theme};
 use std::time::Duration;
@@ -143,7 +144,9 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     // ADDED: Wrap list in scrollable, keep toggle_container sticky
     column![
         toggle_container,
-        scrollable(list).height(Length::Fill).id(app.sidebar_scrollable_id.clone())
+        scrollable(list)
+            .height(Length::Fill)
+            .id(app.sidebar_scrollable_id.clone())
     ]
     .spacing(5)
     .into()
@@ -224,14 +227,18 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     .delay(Duration::from_millis(700));
 
     // STICKY HEADER
-    let header = row![clear_tooltip, Space::new().width(Length::Fill), logic_tooltip]
-        .spacing(5)
-        .align_y(iced::Alignment::Center)
-        .padding(iced::Padding {
-            right: 14.0,
-            bottom: 5.0,
-            ..Default::default()
-        });
+    let header = row![
+        clear_tooltip,
+        Space::new().width(Length::Fill),
+        logic_tooltip
+    ]
+    .spacing(5)
+    .align_y(iced::Alignment::Center)
+    .padding(iced::Padding {
+        right: 14.0,
+        bottom: 5.0,
+        ..Default::default()
+    });
 
     // --- 2. Duration Filters Logic (Moved Up) ---
     let mut dur_set = std::collections::HashSet::new();
@@ -298,17 +305,20 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
 
     // --- 3. Tag List Construction ---
     let tags_column = if all_cats.is_empty() {
-        column![container(
-            text("No tags found")
-                .size(14)
-                .color(Color::from_rgb(0.5, 0.5, 0.5)),
-        )
-        .padding(10)]
+        column![
+            container(
+                text("No tags found")
+                    .size(14)
+                    .color(Color::from_rgb(0.5, 0.5, 0.5)),
+            )
+            .padding(10)
+        ]
     } else {
         column(
             all_cats
                 .iter()
                 .map(|(cat, count)| {
+                    let is_hovered = app.hovered_tag_uid.as_ref() == Some(cat);
                     let is_selected = app.selected_categories.contains(cat.as_str());
                     let cat_clone_toggle = cat.clone();
                     let cat_clone_focus = cat.clone();
@@ -316,24 +326,58 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                     let (r, g, b) = color_utils::generate_color(cat);
                     let tag_color = Color::from_rgb(r, g, b);
 
-                    // Icon Selection: Always use Tag Color
-                    let (icon_char, icon_color) = if is_selected {
-                        (icon::TAG_CHECK, tag_color)
+                    // Icon character depends on selection state
+                    let icon_char = if is_selected {
+                        icon::TAG_CHECK
                     } else {
-                        (icon::TAG_OUTLINE, tag_color)
+                        icon::TAG_OUTLINE
                     };
 
-                    let icon_btn = button(icon::icon(icon_char).size(16).color(icon_color))
-                        .style(button::text)
+                    // The icon widget itself has no color set; the button style will control it.
+                    let icon_content = icon::icon(icon_char).size(16);
+
+                    let icon_btn = button(icon_content)
+                        .style(move |_theme: &Theme, status: button::Status| {
+                            // On hover, always use the full opaque tag color for feedback.
+                            // Otherwise, use the appropriate color based on selection state.
+                            let color =
+                                if status == button::Status::Hovered || is_selected || is_hovered {
+                                    tag_color
+                                } else {
+                                    Color {
+                                        a: 0.5,
+                                        ..tag_color
+                                    }
+                                };
+
+                            button::Style {
+                                text_color: color,
+                                background: None,
+                                ..button::Style::default()
+                            }
+                        })
                         .padding(2)
                         .on_press(Message::CategoryToggled(cat_clone_toggle.clone()));
 
                     let label_content: Element<'_, Message> = if cat == UNCATEGORIZED_ID {
-                        text(format!("Uncategorized ({})", count)).size(16).into()
+                        let color = if is_hovered {
+                            app.theme().extended_palette().primary.base.color
+                        } else {
+                            app.theme().extended_palette().background.base.text
+                        };
+                        text(format!("Uncategorized ({})", count))
+                            .size(16)
+                            .color(color)
+                            .into()
                     } else {
+                        let text_color = if is_hovered {
+                            tag_color
+                        } else {
+                            app.theme().extended_palette().background.base.text
+                        };
                         rich_text![
                             span("#").color(tag_color),
-                            span(format!("{} ({})", cat, count))
+                            span(format!("{} ({})", cat, count)).color(text_color)
                         ]
                         .size(16)
                         .on_link_click(never)
@@ -363,7 +407,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                     .style(tooltip_style)
                     .delay(Duration::from_millis(700));
 
-                    row![
+                    let item_row = row![
                         icon_btn,
                         label_btn,
                         Space::new().width(Length::Fill),
@@ -375,8 +419,12 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                     .padding(iced::Padding {
                         right: 15.0,
                         ..Default::default()
-                    })
-                    .into()
+                    });
+
+                    MouseArea::new(item_row)
+                        .on_enter(Message::TagHovered(Some(cat.clone())))
+                        .on_exit(Message::TagHovered(None))
+                        .into()
                 })
                 .collect::<Vec<_>>(),
         )
@@ -384,9 +432,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     };
 
     // --- 4. Combine: Tags + Filter Duration ---
-    let scroll_content = tags_column
-        .push(Space::new().height(10))
-        .push(dur_filters);
+    let scroll_content = tags_column.push(Space::new().height(10)).push(dur_filters);
 
     // --- 5. Final Output: Header + Scrollable Area ---
     column![
@@ -467,11 +513,9 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
                         .padding(2)
                         .on_press(Message::LocationToggled(loc_clone_toggle.clone()));
 
-                    let label = rich_text![
-                        span(format!("{} ({})", loc, count))
-                    ]
-                    .size(14)
-                    .on_link_click(never);
+                    let label = rich_text![span(format!("{} ({})", loc, count))]
+                        .size(14)
+                        .on_link_click(never);
 
                     let label_btn = button(
                         container(label)
