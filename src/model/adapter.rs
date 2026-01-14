@@ -136,13 +136,33 @@ impl Task {
     /// Advances to the next recurrence while adding the current date to exdates.
     /// This is used when canceling a single occurrence of a recurring task.
     pub fn advance_recurrence_with_cancellation(&mut self) -> bool {
-        // Add current occurrence date to exdates before respawning
-        if let Some(current_date) = self.dtstart.as_ref().or(self.due.as_ref()) {
-            self.exdates.push(current_date.clone());
+        // 1. Add current occurrence date to exdates
+        // We must do this before respawn() so the calculator knows to skip this date
+        let seed_dt = self.dtstart.as_ref().or(self.due.as_ref()).cloned();
+        if let Some(current_date) = seed_dt {
+            self.exdates.push(current_date);
         }
 
+        // 2. Calculate next occurrence
         if let Some(next) = self.respawn() {
+            // 3. Adopt the new state (dates, status=NeedsAction, clean alarms, etc.)
+            // We temporarily capture identity fields to preserve them
+            let uid = self.uid.clone();
+            let href = self.href.clone();
+            let etag = self.etag.clone();
+            let calendar_href = self.calendar_href.clone();
+            let old_seq = self.sequence;
+
+            // Overwrite self with the new state
             *self = next;
+
+            // Restore identity to ensure this is treated as an UPDATE, not a CREATE
+            self.uid = uid;
+            self.href = href;
+            self.etag = etag;
+            self.calendar_href = calendar_href;
+            self.sequence = old_seq + 1;
+
             return true;
         }
         false
@@ -212,7 +232,9 @@ impl Task {
             //    Since we store estimated_duration in minutes (e.g. PT30M), applying this to an
             //    All-Day start causes parsing errors in clients (like Android/DAVx5) because
             //    you cannot add "Minutes" to a "Date-only" value.
-            let is_all_day_start = self.dtstart.as_ref()
+            let is_all_day_start = self
+                .dtstart
+                .as_ref()
                 .map(|dt| matches!(dt, DateType::AllDay(_)))
                 .unwrap_or(false);
 
@@ -389,7 +411,9 @@ impl Task {
         // This takes precedence over scheduled dates.
         if self.status == TaskStatus::Completed {
             // 1. Determine End Time (Completed At)
-            let completed_at = self.unmapped_properties.iter()
+            let completed_at = self
+                .unmapped_properties
+                .iter()
                 .find(|p| p.key == "COMPLETED")
                 .and_then(|p| NaiveDateTime::parse_from_str(&p.value, "%Y%m%dT%H%M%SZ").ok())
                 .map(|ndt| Utc.from_utc_datetime(&ndt))
@@ -680,9 +704,12 @@ impl Task {
                 NaiveDateTime::parse_from_str(val, "%Y%m%dT%H%M%S")
                     .ok()
                     .map(|d| {
-                        let dt = chrono::Local.from_local_datetime(&d)
+                        let dt = chrono::Local
+                            .from_local_datetime(&d)
                             .earliest()
-                            .unwrap_or_else(|| Utc.from_utc_datetime(&d).with_timezone(&chrono::Local));
+                            .unwrap_or_else(|| {
+                                Utc.from_utc_datetime(&d).with_timezone(&chrono::Local)
+                            });
                         DateType::Specific(dt.with_timezone(&Utc))
                     })
             }
@@ -718,11 +745,15 @@ impl Task {
                             if let Ok(dt) = NaiveDateTime::parse_from_str(part, "%Y%m%dT%H%M%SZ") {
                                 exdates.push(DateType::Specific(Utc.from_utc_datetime(&dt)));
                             }
-                        } else if let Ok(dt) = NaiveDateTime::parse_from_str(part, "%Y%m%dT%H%M%S") {
+                        } else if let Ok(dt) = NaiveDateTime::parse_from_str(part, "%Y%m%dT%H%M%S")
+                        {
                             // Treat floating time as Local
-                            let local = chrono::Local.from_local_datetime(&dt)
+                            let local = chrono::Local
+                                .from_local_datetime(&dt)
                                 .earliest()
-                                .unwrap_or_else(|| Utc.from_utc_datetime(&dt).with_timezone(&chrono::Local));
+                                .unwrap_or_else(|| {
+                                    Utc.from_utc_datetime(&dt).with_timezone(&chrono::Local)
+                                });
                             exdates.push(DateType::Specific(local.with_timezone(&Utc)));
                         }
                     }
