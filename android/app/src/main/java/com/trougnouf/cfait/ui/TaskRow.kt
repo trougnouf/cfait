@@ -152,36 +152,52 @@ fun TaskRow(
                     if (task.isFutureStart && task.startDateIso != null) {
                         // Future Start Display
                         val dimColor = Color(0xFFBDBDBD) // Lighter Gray
+
+                        // Start Icon
                         NfIcon(NfIcons.HOURGLASS_START, 10.sp, dimColor)
 
-                        var dateStr = if (task.isAlldayStart) {
+                        // Format Start Date
+                        val startStr = if (task.isAlldayStart) {
                             task.startDateIso!!.take(10)
                         } else {
                             task.startDateIso!!.take(16).replace("T", " ")
                         }
 
                         if (task.dueDateIso != null) {
+                            // Format Due Date
                             val dueStr = if (task.isAlldayDue) {
                                 task.dueDateIso!!.take(10)
                             } else {
                                 task.dueDateIso!!.take(16).replace("T", " ")
                             }
-                            dateStr += " - $dueStr"
+
+                            if (startStr == dueStr) {
+                                // Case 2: Start == Due -> Show once
+                                Text(startStr, fontSize = 10.sp, color = dimColor)
+                            } else {
+                                // Case 1: Start != Due -> Show range
+                                Text("$startStr - $dueStr", fontSize = 10.sp, color = dimColor)
+                            }
+                            // End Icon
+                            NfIcon(NfIcons.HOURGLASS_END, 10.sp, dimColor)
+                        } else {
+                            // Case 4: Start Only
+                            Text(startStr, fontSize = 10.sp, color = dimColor)
                         }
 
-                        Text(dateStr, fontSize = 10.sp, color = dimColor)
                     } else if (!task.dueDateIso.isNullOrEmpty()) {
-                        // Standard Due Date Display
-                        if (!task.hasAlarms) {
-                            NfIcon(NfIcons.CALENDAR, 10.sp, Color.Gray)
-                        }
-                        // Format: If all-day show YYYY-MM-DD, else show YYYY-MM-DD HH:MM
+                        // Case 3: Due Only (or Started)
+                        // Note: Removed generic CALENDAR icon check to rely on the new hourglass_end
+
+                        // Format Due Date
                         val displayStr = if (task.isAlldayDue) {
                             task.dueDateIso!!.take(10)
                         } else {
                             task.dueDateIso!!.take(16).replace("T", " ")
                         }
+
                         Text(displayStr, fontSize = 10.sp, color = Color.Gray)
+                        NfIcon(NfIcons.HOURGLASS_END, 10.sp, Color.Gray)
                     }
 
                     if (task.durationMins != null) {

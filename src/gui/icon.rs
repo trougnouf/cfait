@@ -112,6 +112,7 @@ pub const GLOBEMODEL: char = '\u{f08e9}'; // nf-md-globe_model
 pub const BELL: char = '\u{f0f3}'; // nf-fa-bell
 pub const PALETTE_COLOR: char = '\u{e22b}'; // nf-fae-palette_color
 pub const HOURGLASS_START: char = '\u{f251}'; // nf-fa-hourglass_start
+pub const HOURGLASS_END: char = '\u{f253}'; // nf-fa-hourglass_end (NEW)
 
 // NEW HEADER ICONS per request
 pub const CALENDARS_HEADER: char = '\u{f00f2}'; // nf-md-calendar_multiple_check

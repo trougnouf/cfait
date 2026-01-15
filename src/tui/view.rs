@@ -386,15 +386,33 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             // Construct Date String
             let (date_display_str, date_style) = if is_future_start {
                 let start_str = t.dtstart.as_ref().unwrap().format_smart();
-                let combined = if let Some(due) = &t.due {
-                    format!(" ⏳{} - {}", start_str, due.format_smart())
+
+                if let Some(due) = &t.due {
+                    let due_str = due.format_smart();
+                    if start_str == due_str {
+                        // Case 2: Start == Due (Future)
+                        (
+                            format!(" ►{}⌛", start_str),
+                            Style::default().fg(Color::DarkGray),
+                        )
+                    } else {
+                        // Case 1: Start != Due (Future)
+                        (
+                            format!(" ►{}-{}⌛", start_str, due_str),
+                            Style::default().fg(Color::DarkGray),
+                        )
+                    }
                 } else {
-                    format!(" ⏳{}", start_str)
-                };
-                (combined, Style::default().fg(Color::DarkGray)) // Lighter/Dimmer for future
+                    // Case 4: Start Only (Future)
+                    (
+                        format!(" ►{}", start_str),
+                        Style::default().fg(Color::DarkGray),
+                    )
+                }
             } else if let Some(d) = &t.due {
+                // Case 3: Due Only (or started)
                 (
-                    format!(" @{}", d.format_smart()),
+                    format!(" @{}⌛", d.format_smart()),
                     Style::default().fg(Color::Blue),
                 )
             } else {

@@ -104,6 +104,7 @@ object NfIcons {
     val GLOBEMODEL = get(0xf08e9)
     val BELL = get(0xf0f3)
     val HOURGLASS_START = get(0xf251) // NEW Icon
+    val HOURGLASS_END = get(0xf253) // NEW
     val RELATED_FEMALE_FEMALE = get(0xf0a5a)
     val RELATED_MALE_MALE = get(0xf0a5e)
     val RELATED_MALE_FEMALE = get(0xf02e8)

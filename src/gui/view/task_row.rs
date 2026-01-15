@@ -187,7 +187,7 @@ pub fn view_task_row<'a>(
 
     // Build the date/alarm section
     let date_and_alarm_section: Element<'a, Message> = {
-        let mut row_content = row![].spacing(5).align_y(iced::Alignment::Center);
+        let mut row_content = row![].spacing(3).align_y(iced::Alignment::Center);
 
         if has_active_alarm {
             let bell_icon = icon::icon(icon::BELL)
@@ -212,27 +212,49 @@ pub fn view_task_row<'a>(
             .map(|start| start.to_start_comparison_time() > now)
             .unwrap_or(false);
 
+        // Define colors
+        let dim_color = Color::from_rgb(0.7, 0.7, 0.7); // For future
+        let due_color = Color::from_rgb(0.5, 0.5, 0.5); // For active/due
+
         if is_future_start {
-            // Lighter gray for future start
-            let dim_color = Color::from_rgb(0.7, 0.7, 0.7);
+            // Start Icon
+            row_content = row_content.push(
+                container(icon::icon(icon::HOURGLASS_START).size(12).color(dim_color))
+                    .align_y(iced::Alignment::Center),
+            );
 
-            let hourglass = icon::icon(icon::HOURGLASS_START).size(12).color(dim_color);
-
-            let mut date_str = task.dtstart.as_ref().unwrap().format_smart();
+            let start_str = task.dtstart.as_ref().unwrap().format_smart();
 
             if let Some(due) = &task.due {
-                date_str.push_str(" - ");
-                date_str.push_str(&due.format_smart());
-            }
+                let due_str = due.format_smart();
 
-            row_content = row_content.push(hourglass);
-            row_content = row_content.push(text(date_str).size(14).color(dim_color));
+                if start_str == due_str {
+                    // Case 2: Start == Due (Future) -> Show once
+                    row_content = row_content.push(text(start_str).size(14).color(dim_color));
+                } else {
+                    // Case 1: Start != Due (Future) -> Show range
+                    row_content = row_content.push(
+                        text(format!("{} - {}", start_str, due_str))
+                            .size(14)
+                            .color(dim_color),
+                    );
+                }
+                // End Icon (for both Case 1 and 2)
+                row_content = row_content.push(
+                    container(icon::icon(icon::HOURGLASS_END).size(12).color(dim_color))
+                        .align_y(iced::Alignment::Center),
+                );
+            } else {
+                // Case 4: Start Only (Future) -> No end icon
+                row_content = row_content.push(text(start_str).size(14).color(dim_color));
+            }
         } else if let Some(d) = &task.due {
-            // Standard Due Date display
+            // Case 3: Due Only (or Start passed)
+            row_content = row_content.push(text(d.format_smart()).size(14).color(due_color));
+            // End Icon
             row_content = row_content.push(
-                text(d.format_smart())
-                    .size(14)
-                    .color(Color::from_rgb(0.5, 0.5, 0.5)),
+                container(icon::icon(icon::HOURGLASS_END).size(12).color(due_color))
+                    .align_y(iced::Alignment::Center),
             );
         }
 
