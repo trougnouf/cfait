@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
-use strum::{EnumIter};
+use strum::EnumIter;
 
 fn default_true() -> bool {
     true

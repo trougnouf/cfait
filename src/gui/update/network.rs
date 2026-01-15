@@ -9,8 +9,8 @@ use crate::journal::Journal;
 use crate::model::CalendarListEntry;
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalCalendarRegistry};
 use crate::system::SystemEvent;
-use iced::widget::text_editor;
 use iced::Task;
+use iced::widget::text_editor;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {

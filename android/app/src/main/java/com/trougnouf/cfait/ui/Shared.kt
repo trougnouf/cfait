@@ -29,7 +29,7 @@ object NfIcons {
     val TAGS_VIEW = get(0xf04fb)
     val LOCATION = get(0xef4b)
     val MAP_PIN = get(0xf276)
-    val MAP = get(0xf279)   // nf-fa-map (Filled)
+    val MAP = get(0xf279) // nf-fa-map (Filled)
     val MAP_O = get(0xf278) // nf-fa-map_o (Outline)    val URL = get(0xf0c1)
     val GEO = get(0xf041)
     val CALENDAR = get(0xf073)
@@ -109,12 +109,16 @@ object NfIcons {
     val RELATED_MALE_FEMALE = get(0xf02e8)
 }
 
-fun getRandomRelatedIcon(uid1: String, uid2: String): String {
-    val (first, second) = if (uid1 < uid2) {
-        Pair(uid1, uid2)
-    } else {
-        Pair(uid2, uid1)
-    }
+fun getRandomRelatedIcon(
+    uid1: String,
+    uid2: String,
+): String {
+    val (first, second) =
+        if (uid1 < uid2) {
+            Pair(uid1, uid2)
+        } else {
+            Pair(uid2, uid1)
+        }
     val hash = (first + second).fold(0) { acc, c -> (acc * 31 + c.code) and 0x7FFFFFFF }
     return when (hash % 3) {
         0 -> NfIcons.RELATED_FEMALE_FEMALE
@@ -124,16 +128,17 @@ fun getRandomRelatedIcon(uid1: String, uid2: String): String {
 }
 
 fun getRandomScrollToTopIcon(): String {
-    val icons = listOf(
-        NfIcons.GONDOLA,
-        NfIcons.ROCKET_OUTLINE,
-        NfIcons.ELEVATOR_UP,
-        NfIcons.ESCALATOR_UP,
-        NfIcons.ARROW_CIRCLE_UP,
-        NfIcons.TRANSFER_UP,
-        NfIcons.FLY,
-        NfIcons.BALLOON
-    )
+    val icons =
+        listOf(
+            NfIcons.GONDOLA,
+            NfIcons.ROCKET_OUTLINE,
+            NfIcons.ELEVATOR_UP,
+            NfIcons.ESCALATOR_UP,
+            NfIcons.ARROW_CIRCLE_UP,
+            NfIcons.TRANSFER_UP,
+            NfIcons.FLY,
+            NfIcons.BALLOON,
+        )
     return icons.random()
 }
 
@@ -172,28 +177,51 @@ fun getTaskTextColor(
     if (isDone) return Color.Gray
     return when (prio) {
         1 -> Color(0xFFFF4444)
+
         2 -> Color(0xFFFF6633)
+
         3 -> Color(0xFFFF8800)
+
         4 -> Color(0xFFFFBB33)
+
         5 -> Color(0xFFFFD700)
+
         6 -> Color(0xFFD9D98C)
+
         7 -> Color(0xFFB3BFC6)
+
         8 -> Color(0xFFA699CC)
+
         9 -> Color(0xFF998CA6)
+
         // Fix: Use Unspecified so Text() components use the active theme's onSurface color automatically
         else -> Color.Unspecified
     }
 }
 
-fun formatDuration(minutes: UInt): String {
-    val m = minutes.toInt()
-    return when {
-        m >= 525600 -> "~${m / 525600}y"
-        m >= 43200 -> "~${m / 43200}mo"
-        m >= 10080 -> "~${m / 10080}w"
-        m >= 1440 -> "~${m / 1440}d"
-        m >= 60 -> "~${m / 60}h"
-        else -> "~${m}m"
+fun formatDuration(
+    minMinutes: UInt,
+    maxMinutes: UInt? = null,
+): String {
+    val min = minMinutes.toInt()
+
+    fun fmt(m: Int): String =
+        when {
+            m >= 525600 -> "${m / 525600}y"
+            m >= 43200 -> "${m / 43200}mo"
+            m >= 10080 -> "${m / 10080}w"
+            m >= 1440 -> "${m / 1440}d"
+            m >= 60 -> "${m / 60}h"
+            else -> "${m}m"
+        }
+
+    val minStr = fmt(min)
+
+    return if (maxMinutes != null && maxMinutes > minMinutes) {
+        val maxStr = fmt(maxMinutes.toInt())
+        "~$minStr-$maxStr"
+    } else {
+        "~$minStr"
     }
 }
 
@@ -201,7 +229,6 @@ class SmartSyntaxTransformation(
     val api: CfaitMobile,
     val isDark: Boolean,
 ) : VisualTransformation {
-
     private val COLOR_DUE = Color(0xFF42A5F5)
     private val COLOR_START = Color(0xFF66BB6A)
     private val COLOR_RECUR = Color(0xFFAB47BC)
@@ -229,22 +256,51 @@ class SmartSyntaxTransformation(
                             getTaskTextColor(p, false, isDark)
                         }
 
-                        MobileSyntaxType.DUE_DATE -> COLOR_DUE
-                        MobileSyntaxType.START_DATE -> COLOR_START
-                        MobileSyntaxType.RECURRENCE -> COLOR_RECUR
-                        MobileSyntaxType.DURATION -> COLOR_DURATION
+                        MobileSyntaxType.DUE_DATE -> {
+                            COLOR_DUE
+                        }
+
+                        MobileSyntaxType.START_DATE -> {
+                            COLOR_START
+                        }
+
+                        MobileSyntaxType.RECURRENCE -> {
+                            COLOR_RECUR
+                        }
+
+                        MobileSyntaxType.DURATION -> {
+                            COLOR_DURATION
+                        }
+
                         MobileSyntaxType.TAG -> {
                             val sub = raw.substring(token.start, token.end)
                             val tagName = sub.trimStart('#').replace("\"", "")
                             getTagColor(tagName)
                         }
 
-                        MobileSyntaxType.LOCATION -> COLOR_LOCATION
-                        MobileSyntaxType.URL -> COLOR_URL
-                        MobileSyntaxType.GEO -> COLOR_META
-                        MobileSyntaxType.DESCRIPTION -> COLOR_META
-                        MobileSyntaxType.REMINDER -> COLOR_REMINDER
-                        else -> null
+                        MobileSyntaxType.LOCATION -> {
+                            COLOR_LOCATION
+                        }
+
+                        MobileSyntaxType.URL -> {
+                            COLOR_URL
+                        }
+
+                        MobileSyntaxType.GEO -> {
+                            COLOR_META
+                        }
+
+                        MobileSyntaxType.DESCRIPTION -> {
+                            COLOR_META
+                        }
+
+                        MobileSyntaxType.REMINDER -> {
+                            COLOR_REMINDER
+                        }
+
+                        else -> {
+                            null
+                        }
                     }
 
                 if (spanColor != null) {

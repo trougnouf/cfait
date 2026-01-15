@@ -977,7 +977,7 @@ pub fn prettify_recurrence(rrule: &str) -> String {
     format!("rec:{}", rrule)
 }
 
-pub fn parse_duration(val: &str) -> Option<u32> {
+fn parse_single_duration(val: &str) -> Option<u32> {
     let lower = val.to_lowercase();
     if let Some(n) = lower.strip_suffix("min") {
         return n.parse::<u32>().ok();
@@ -996,6 +996,23 @@ pub fn parse_duration(val: &str) -> Option<u32> {
         return n.parse::<u32>().ok().map(|y| y * 365 * 24 * 60);
     }
     None
+}
+
+pub fn parse_duration(val: &str) -> Option<u32> {
+    parse_single_duration(val)
+}
+
+pub fn parse_duration_range(val: &str) -> Option<(u32, Option<u32>)> {
+    if let Some((left, right)) = val.split_once('-') {
+        let min = parse_single_duration(left)?;
+        let max = parse_single_duration(right)?;
+        if max >= min {
+            return Some((min, Some(max)));
+        }
+        return Some((min, None));
+    }
+    let single = parse_single_duration(val)?;
+    Some((single, None))
 }
 
 pub fn format_duration_compact(mins: u32) -> String {
@@ -1329,6 +1346,7 @@ pub fn apply_smart_input(
     task.dtstart = None;
     task.rrule = None;
     task.estimated_duration = None;
+    task.estimated_duration_max = None;
     task.location = None;
     task.url = None;
     task.geo = None;
@@ -1642,8 +1660,9 @@ pub fn apply_smart_input(
             } else {
                 &token[4..]
             });
-            if let Some(d) = parse_duration(&val) {
-                task.estimated_duration = Some(d);
+            if let Some((min, max_opt)) = parse_duration_range(&val) {
+                task.estimated_duration = Some(min);
+                task.estimated_duration_max = max_opt;
             } else {
                 summary_words.push(unescape(token));
             }

@@ -185,7 +185,7 @@ fun TaskRow(
                     }
 
                     if (task.durationMins != null) {
-                        Text(formatDuration(task.durationMins!!), fontSize = 10.sp, color = Color.Gray)
+                        Text(formatDuration(task.durationMins!!, task.durationMaxMins), fontSize = 10.sp, color = Color.Gray)
                     }
                     if (task.isRecurring) NfIcon(NfIcons.REPEAT, 10.sp, Color.Gray)
 

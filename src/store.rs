@@ -887,30 +887,28 @@ impl TaskStore {
             // The group will sort based on this parent's (inactive) status.
             let is_suppressed = t.status.is_done() || t.is_paused();
 
-            if !is_suppressed
-                && let Some(children) = map.get(&t.uid) {
-                    for &child_idx in children {
-                        let child_eff =
-                            resolve(child_idx, tasks, map, cache, visiting, default_prio);
+            if !is_suppressed && let Some(children) = map.get(&t.uid) {
+                for &child_idx in children {
+                    let child_eff = resolve(child_idx, tasks, map, cache, visiting, default_prio);
 
-                        // Compare full components (rank + tie-breakers) to decide if child is "more urgent"
-                        let ordering = Task::compare_components(
-                            child_eff.rank,
-                            child_eff.prio,
-                            &child_eff.due,
-                            &child_eff.start,
-                            best.rank,
-                            best.prio,
-                            &best.due,
-                            &best.start,
-                            default_prio,
-                        );
+                    // Compare full components (rank + tie-breakers) to decide if child is "more urgent"
+                    let ordering = Task::compare_components(
+                        child_eff.rank,
+                        child_eff.prio,
+                        &child_eff.due,
+                        &child_eff.start,
+                        best.rank,
+                        best.prio,
+                        &best.due,
+                        &best.start,
+                        default_prio,
+                    );
 
-                        if ordering == std::cmp::Ordering::Less {
-                            best = child_eff;
-                        }
+                    if ordering == std::cmp::Ordering::Less {
+                        best = child_eff;
                     }
                 }
+            }
 
             visiting.remove(&idx);
             cache.insert(idx, best.clone());

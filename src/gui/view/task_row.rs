@@ -753,20 +753,34 @@ pub fn view_task_row<'a>(
                 tags_row = tags_row.push(loc_btn);
             }
 
-            if let Some(mins) = task.estimated_duration {
-                let label = if mins >= 525600 {
-                    format!("~{}y", mins / 525600)
-                } else if mins >= 43200 {
-                    format!("~{}mo", mins / 43200)
-                } else if mins >= 10080 {
-                    format!("~{}w", mins / 10080)
-                } else if mins >= 1440 {
-                    format!("~{}d", mins / 1440)
-                } else if mins >= 60 {
-                    format!("~{}h", mins / 60)
-                } else {
-                    format!("~{}m", mins)
+            if let Some(min) = task.estimated_duration {
+                // Helper closure for formatting (same logic as model)
+                let fmt_dur = |m: u32| -> String {
+                    if m >= 525600 {
+                        format!("{}y", m / 525600)
+                    } else if m >= 43200 {
+                        format!("{}mo", m / 43200)
+                    } else if m >= 10080 {
+                        format!("{}w", m / 10080)
+                    } else if m >= 1440 {
+                        format!("{}d", m / 1440)
+                    } else if m >= 60 {
+                        format!("{}h", m / 60)
+                    } else {
+                        format!("{}m", m)
+                    }
                 };
+
+                let label = if let Some(max) = task.estimated_duration_max {
+                    if max > min {
+                        format!("~{}-{}", fmt_dur(min), fmt_dur(max))
+                    } else {
+                        format!("~{}", fmt_dur(min))
+                    }
+                } else {
+                    format!("~{}", fmt_dur(min))
+                };
+
                 tags_row = tags_row.push(
                     container(text(label).size(10).style(|theme: &Theme| text::Style {
                         color: Some(theme.extended_palette().background.base.text),

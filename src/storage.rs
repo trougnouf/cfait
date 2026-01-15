@@ -29,7 +29,8 @@ pub const LOCAL_REGISTRY_FILENAME: &str = "local_calendars.json";
 // Version history:
 // - v1: Original format with DateTime<Utc> for due/dtstart (v3.12 and earlier)
 // - v2: DateType enum for due/dtstart with AllDay/Specific support (v3.14+)
-const LOCAL_STORAGE_VERSION: u32 = 2;
+// - v3: Added estimated_duration_max field for duration ranges
+const LOCAL_STORAGE_VERSION: u32 = 3;
 
 /// Wrapper struct for versioned local storage
 #[derive(Serialize, Deserialize)]
@@ -676,11 +677,11 @@ impl LocalStorage {
                 let data: LocalStorageData = serde_json::from_str(json)?;
                 data.tasks
             }
-            // Future versions would be parsed here:
-            // 3 => {
-            //     let data: LocalStorageData = serde_json::from_str(json)?;
-            //     data.tasks
-            // }
+            3 => {
+                // Version 3: Added estimated_duration_max for duration ranges
+                let data: LocalStorageData = serde_json::from_str(json)?;
+                data.tasks
+            }
             _ => {
                 return Err(anyhow::anyhow!(
                     "Unknown local storage version: {}",

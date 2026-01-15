@@ -107,9 +107,10 @@ pub struct MobileTask {
     pub is_allday_due: bool, // NEW
     pub start_date_iso: Option<String>,
     pub is_allday_start: bool,
-    pub has_alarms: bool,      // indicator for UI bell
-    pub is_future_start: bool, // NEW field
+    pub has_alarms: bool,
+    pub is_future_start: bool,
     pub duration_mins: Option<u32>,
+    pub duration_max_mins: Option<u32>,
     pub calendar_href: String,
     pub categories: Vec<String>,
     pub is_recurring: bool,
@@ -241,6 +242,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         has_alarms,
         is_future_start,
         duration_mins: t.estimated_duration,
+        duration_max_mins: t.estimated_duration_max,
         calendar_href: t.calendar_href.clone(),
         categories: t.categories.clone(),
         is_recurring: t.rrule.is_some(),

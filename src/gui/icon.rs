@@ -31,7 +31,7 @@ pub fn icon<'a>(codepoint: char) -> Text<'a> {
 pub const CALENDAR: char = '\u{f073}'; // 
 pub const TAG: char = '\u{f02b}'; //  (generic tag)
 pub const TAG_OUTLINE: char = '\u{f04fc}'; // nf-md-tag_outline
-pub const TAG_CHECK: char = '\u{f1a7a}';   // nf-md-tag_check
+pub const TAG_CHECK: char = '\u{f1a7a}'; // nf-md-tag_check
 pub const SETTINGS: char = '\u{f013}'; // 
 pub const REFRESH: char = '\u{f0450}'; // nf-md-refresh
 pub const UNSYNCED: char = '\u{f0c2}'; //  (Cloud)

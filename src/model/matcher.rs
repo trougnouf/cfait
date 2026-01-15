@@ -26,7 +26,6 @@ impl Task {
                 }
                 continue;
             }
-            // -----------------------------------------------
 
             // 1. Duration Filter (~30m, ~<1h, ~>2h)
             if part.starts_with('~') {
@@ -44,7 +43,6 @@ impl Task {
                     continue;
                 };
 
-                // Parse value
                 let mins = if let Some(n) = val_str.strip_suffix('m') {
                     n.parse::<u32>().ok()
                 } else if let Some(n) = val_str.strip_suffix('h') {
@@ -62,35 +60,39 @@ impl Task {
                 };
 
                 if let Some(target) = mins {
-                    match self.estimated_duration {
-                        Some(d) => match op {
-                            "<" => {
-                                if d >= target {
-                                    return false;
-                                }
+                    let t_min = self.estimated_duration.unwrap_or(0);
+                    let t_max = self.estimated_duration_max.unwrap_or(t_min);
+
+                    if self.estimated_duration.is_none() {
+                        return false;
+                    }
+
+                    match op {
+                        "<" => {
+                            if t_min >= target {
+                                return false;
                             }
-                            ">" => {
-                                if d <= target {
-                                    return false;
-                                }
+                        }
+                        ">" => {
+                            if t_max <= target {
+                                return false;
                             }
-                            "<=" => {
-                                if d > target {
-                                    return false;
-                                }
+                        }
+                        "<=" => {
+                            if t_min > target {
+                                return false;
                             }
-                            ">=" => {
-                                if d < target {
-                                    return false;
-                                }
+                        }
+                        ">=" => {
+                            if t_max < target {
+                                return false;
                             }
-                            _ => {
-                                if d != target {
-                                    return false;
-                                }
+                        }
+                        _ => {
+                            if target < t_min || target > t_max {
+                                return false;
                             }
-                        },
-                        None => return false,
+                        }
                     }
                     continue;
                 }
@@ -144,9 +146,6 @@ impl Task {
                 }
             }
 
-            // --- REFACTORED DATE FILTERING (Fixes: Relative Start Date & Not Set logic) ---
-
-            // Helper for Date Logic
             let check_date_filter = |prefix_char: char,
                                      alt_prefix: &str,
                                      task_date: Option<NaiveDate>|
@@ -160,8 +159,6 @@ impl Task {
                     .or_else(|| part.strip_prefix(prefix_char))
                     .unwrap();
 
-                // 1. Handle "Not Set" Logic (trailing !)
-                // Syntax: ^>tomorrow! (Start > tomorrow OR Start is None)
                 let (val_str_full, include_none) = if let Some(stripped) = raw_val.strip_suffix('!')
                 {
                     (stripped, true)
@@ -183,7 +180,6 @@ impl Task {
 
                 let now = Local::now().date_naive();
 
-                // Unified Relative Date Parsing
                 let target_date = if date_str == "today" {
                     Some(now)
                 } else if date_str == "tomorrow" {
@@ -193,7 +189,6 @@ impl Task {
                 } else if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
                     Some(date)
                 } else {
-                    // Try Relative Offsets (1d, 2w, 1mo) - Now works for Start Date too!
                     let offset = if let Some(n) = date_str.strip_suffix('d') {
                         n.parse::<i64>().ok()
                     } else if let Some(n) = date_str.strip_suffix('w') {
@@ -243,13 +238,12 @@ impl Task {
                             }
                         }
                     }
-                    return Some(true); // Passed check
+                    return Some(true);
                 }
 
-                None // Failed parsing, treat as text? or ignore
+                None
             };
 
-            // Apply to Start Date (^ or start:)
             let t_start = self.dtstart.as_ref().map(|d| d.to_date_naive());
             if let Some(passed) = check_date_filter('^', "start:", t_start) {
                 if !passed {
@@ -258,7 +252,6 @@ impl Task {
                 continue;
             }
 
-            // Apply to Due Date (@ or due:)
             let t_due = self.due.as_ref().map(|d| d.to_date_naive());
             if let Some(passed) = check_date_filter('@', "due:", t_due) {
                 if !passed {
@@ -267,7 +260,6 @@ impl Task {
                 continue;
             }
 
-            // 2. Tag Filter (#work)
             if let Some(tag_query) = part.strip_prefix('#') {
                 if !self
                     .categories
@@ -279,22 +271,20 @@ impl Task {
                 continue;
             }
 
-            // 3. Status Filter (is:done, is:active)
             if part == "is:done" {
                 if !self.status.is_done() {
                     return false;
                 }
                 continue;
             }
-            if part == "is:started"
-                // TODO(2026-01-02): Remove "is:ongoing" alias in a future version (deprecated, use "is:started")
-                || part == "is:ongoing"
-            {
+
+            if part == "is:started" || part == "is:ongoing" {
                 if self.status != TaskStatus::InProcess {
                     return false;
                 }
                 continue;
             }
+
             if part == "is:active" {
                 if self.status.is_done() {
                     return false;
@@ -302,29 +292,16 @@ impl Task {
                 continue;
             }
 
-            // --- Work Mode / Ready Filter ---
-            // We return true here to "consume" the token so it doesn't fail text search.
-            // The actual logic is handled in TaskStore::filter because it requires dependency lookups.
-            if part == "is:ready" {
+            if part == "is:ready" || part == "is:blocked" {
                 continue;
             }
 
-            // --- Blocked Filter ---
-            // Similar to is:ready, this is handled in TaskStore::filter because it requires dependency lookups.
-            // We consume the token here so it doesn't interfere with text search.
-            if part == "is:blocked" {
-                continue;
-            }
-
-            // Standard Text Search
-            // Explicitly search categories AND LOCATION for matches
             if !self.summary.to_lowercase().contains(part)
                 && !self.description.to_lowercase().contains(part)
                 && !self
                     .categories
                     .iter()
                     .any(|c| c.to_lowercase().contains(part))
-                // Check location for plain text matches
                 && !self
                     .location
                     .as_deref()

@@ -61,7 +61,7 @@ pub fn view_help() -> Element<'static, Message> {
                     "Location. Supports hierarchy with ':'.",
                     "@@home, @@home:office, @@store:aldi:downtown"
                 ),
-                entry("~30m", "Estimated Duration (m/h/d/w).", "~30m, ~1.5h, ~2d"),
+                entry("~30m or ~1h-2h", "Estimated Duration (Single or Range).", "~30m, ~1.5h, ~15m-45m"),
                 entry(
                     "#a:=#b,#c,@@d",
                     "Define tag alias inline (Retroactive).",

@@ -16,8 +16,6 @@ impl Default for SmartInputHighlighter {
     }
 }
 
-
-
 impl Highlighter for SmartInputHighlighter {
     // 2. Change Settings from () to bool (is_dark)
     type Settings = bool;

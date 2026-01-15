@@ -224,7 +224,7 @@ where
             } else {
                 Ok(Some(DateType::Specific(d)))
             }
-        },
+        }
         None => Ok(None),
     }
 }
@@ -269,6 +269,10 @@ pub struct Task {
     pub description: String,
     pub status: TaskStatus,
     pub estimated_duration: Option<u32>,
+
+    // NEW FIELD: Optional Max duration
+    #[serde(default)]
+    pub estimated_duration_max: Option<u32>,
 
     #[serde(default, deserialize_with = "deserialize_date_option")]
     pub due: Option<DateType>,
@@ -371,7 +375,9 @@ pub fn compare_sortkeys(a: &SortKey, b: &SortKey, default_prio: u8) -> Ordering 
     match a.rank {
         1 => {
             // Urgent: Priority -> Due
-            norm_prio(a.prio).cmp(&norm_prio(b.prio)).then_with(|| compare_dates(&a.due, &b.due))
+            norm_prio(a.prio)
+                .cmp(&norm_prio(b.prio))
+                .then_with(|| compare_dates(&a.due, &b.due))
         }
         2..=4 => {
             // Due Soon / Started / Standard: Due -> Priority
@@ -379,17 +385,25 @@ pub fn compare_sortkeys(a: &SortKey, b: &SortKey, default_prio: u8) -> Ordering 
         }
         5 => {
             // Remaining: Priority -> Due (Name is handled in final sort)
-            norm_prio(a.prio).cmp(&norm_prio(b.prio)).then_with(|| compare_dates(&a.due, &b.due))
+            norm_prio(a.prio)
+                .cmp(&norm_prio(b.prio))
+                .then_with(|| compare_dates(&a.due, &b.due))
         }
         6 => {
             // Future: Start -> Priority
-            let s1 = a.start.as_ref().map(|d: &DateType| d.to_start_comparison_time());
-            let s2 = b.start.as_ref().map(|d: &DateType| d.to_start_comparison_time());
+            let s1 = a
+                .start
+                .as_ref()
+                .map(|d: &DateType| d.to_start_comparison_time());
+            let s2 = b
+                .start
+                .as_ref()
+                .map(|d: &DateType| d.to_start_comparison_time());
             s1.cmp(&s2).then(norm_prio(a.prio).cmp(&norm_prio(b.prio)))
         }
-        _ => {
-            norm_prio(a.prio).cmp(&norm_prio(b.prio)).then_with(|| compare_dates(&a.due, &b.due))
-        }
+        _ => norm_prio(a.prio)
+            .cmp(&norm_prio(b.prio))
+            .then_with(|| compare_dates(&a.due, &b.due)),
     }
 }
 
@@ -406,6 +420,7 @@ impl Task {
             description: String::new(),
             status: TaskStatus::NeedsAction,
             estimated_duration: None,
+            estimated_duration_max: None,
             due: None,
             dtstart: None,
             alarms: Vec::new(),
@@ -440,23 +455,31 @@ impl Task {
     }
 
     pub fn format_duration_short(&self) -> String {
-        if let Some(mins) = self.estimated_duration {
-            if mins >= 525600 {
-                format!("[~{}y]", mins / 525600)
-            } else if mins >= 43200 {
-                format!("[~{}mo]", mins / 43200)
-            } else if mins >= 10080 {
-                format!("[~{}w]", mins / 10080)
-            } else if mins >= 1440 {
-                format!("[~{}d]", mins / 1440)
-            } else if mins >= 60 {
-                format!("[~{}h]", mins / 60)
+        fn fmt_min(m: u32) -> String {
+            if m >= 525600 {
+                format!("{}y", m / 525600)
+            } else if m >= 43200 {
+                format!("{}mo", m / 43200)
+            } else if m >= 10080 {
+                format!("{}w", m / 10080)
+            } else if m >= 1440 {
+                format!("{}d", m / 1440)
+            } else if m >= 60 {
+                format!("{}h", m / 60)
             } else {
-                format!("[~{}m]", mins)
+                format!("{}m", m)
             }
-        } else {
-            String::new()
         }
+
+        if let Some(min) = self.estimated_duration {
+            if let Some(max) = self.estimated_duration_max
+                && max > min
+            {
+                return format!("[~{}-{}]", fmt_min(min), fmt_min(max));
+            }
+            return format!("[~{}]", fmt_min(min));
+        }
+        String::new()
     }
 
     pub fn is_paused(&self) -> bool {
@@ -563,11 +586,7 @@ impl Task {
         compare_sortkeys(&a, &b, default_prio)
     }
 
-    pub fn compare_for_sort(
-        &self,
-        other: &Self,
-        default_priority: u8,
-    ) -> Ordering {
+    pub fn compare_for_sort(&self, other: &Self, default_priority: u8) -> Ordering {
         // Build compact SortKey instances and use the central comparator.
         let a = SortKey {
             rank: self.sort_rank,
@@ -730,10 +749,7 @@ impl Task {
 
     /// Organize hierarchy expecting tasks to already have `sort_rank` populated.
     /// This function now only needs the `default_priority` for tie-breakers during sort.
-    pub fn organize_hierarchy(
-        mut tasks: Vec<Task>,
-        default_priority: u8,
-    ) -> Vec<Task> {
+    pub fn organize_hierarchy(mut tasks: Vec<Task>, default_priority: u8) -> Vec<Task> {
         let present_uids: std::collections::HashSet<String> =
             tasks.iter().map(|t| t.uid.clone()).collect();
         let mut children_map: HashMap<String, Vec<Task>> = HashMap::new();
@@ -983,19 +999,31 @@ impl Task {
             s.push_str(&format!(" @{}", d.format_smart()));
         }
 
-        if let Some(mins) = self.estimated_duration {
-            if mins > 0 && mins % 525600 == 0 {
-                s.push_str(&format!(" ~{}y", mins / 525600));
-            } else if mins > 0 && mins % 43200 == 0 {
-                s.push_str(&format!(" ~{}mo", mins / 43200));
-            } else if mins > 0 && mins % 10080 == 0 {
-                s.push_str(&format!(" ~{}w", mins / 10080));
-            } else if mins > 0 && mins % 1440 == 0 {
-                s.push_str(&format!(" ~{}d", mins / 1440));
-            } else if mins > 0 && mins % 60 == 0 {
-                s.push_str(&format!(" ~{}h", mins / 60));
+        if let Some(min) = self.estimated_duration {
+            let fmt_val = |m: u32| -> String {
+                if m.is_multiple_of(525600) {
+                    format!("{}y", m / 525600)
+                } else if m.is_multiple_of(43200) {
+                    format!("{}mo", m / 43200)
+                } else if m.is_multiple_of(10080) {
+                    format!("{}w", m / 10080)
+                } else if m.is_multiple_of(1440) {
+                    format!("{}d", m / 1440)
+                } else if m.is_multiple_of(60) {
+                    format!("{}h", m / 60)
+                } else {
+                    format!("{}m", m)
+                }
+            };
+
+            if let Some(max) = self.estimated_duration_max {
+                if max > min {
+                    s.push_str(&format!(" ~{}-{}", fmt_val(min), fmt_val(max)));
+                } else {
+                    s.push_str(&format!(" ~{}", fmt_val(min)));
+                }
             } else {
-                s.push_str(&format!(" ~{}m", mins));
+                s.push_str(&format!(" ~{}", fmt_val(min)));
             }
         }
 

@@ -227,8 +227,8 @@ impl Task {
 
         if let Some(mins) = self.estimated_duration {
             // RFC 5545 & Implementation Constraints:
-            // 1. VTODO cannot contain both DUE and DURATION.
-            // 2. If DTSTART is VALUE=DATE (All-Day), DURATION must be a duration of Days/Weeks (e.g. P1D).
+            //1. VTODO cannot contain both DUE and DURATION.
+            //2. If DTSTART is VALUE=DATE (All-Day), DURATION must be a duration of Days/Weeks (e.g. P1D).
             //    Since we store estimated_duration in minutes (e.g. PT30M), applying this to an
             //    All-Day start causes parsing errors in clients (like Android/DAVx5) because
             //    you cannot add "Minutes" to a "Date-only" value.
@@ -244,6 +244,11 @@ impl Task {
             } else {
                 // Use standard DURATION only for specific-time tasks with no due date
                 todo.add_property("DURATION", format!("PT{}M", mins));
+            }
+
+            // NEW: Write Max Duration
+            if let Some(max) = self.estimated_duration_max {
+                todo.add_property("X-CFAIT-ESTIMATED-DURATION-MAX", format!("PT{}M", max));
             }
         }
         if self.priority > 0 {
@@ -805,6 +810,11 @@ impl Task {
                 .and_then(|p: &icalendar::Property| parse_dur(p.value()));
         }
 
+        let estimated_duration_max = todo
+            .properties()
+            .get("X-CFAIT-ESTIMATED-DURATION-MAX")
+            .and_then(|p: &icalendar::Property| parse_dur(p.value()));
+
         let mut categories = Vec::new();
         // Check for multi-value property CATEGORIES
         if let Some(multi_props) = todo.multi_properties().get("CATEGORIES") {
@@ -1017,6 +1027,7 @@ impl Task {
             description,
             status,
             estimated_duration,
+            estimated_duration_max,
             due,
             dtstart,
             alarms,
@@ -1043,7 +1054,7 @@ impl Task {
             is_blocked: false,
             sort_rank: 0,
             // Initialize transient effective tie-breaker fields so callers that
-            // expect them to exist (after the propagation changes) do not fail.
+            // expect them to exist (after propagation changes) do not fail.
             effective_priority: 0,
             effective_due: None,
             effective_dtstart: None,

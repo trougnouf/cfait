@@ -105,16 +105,16 @@ pub fn get_priority_rgb(priority: u8, is_dark_theme: bool) -> (f32, f32, f32) {
     } else {
         // Darker/Saturated colors for Light Mode (White Background)
         match priority {
-            1 => (0.8, 0.0, 0.0),    // Dark Red
-            2 => (0.9, 0.3, 0.0),    // Burnt Orange
-            3 => (0.9, 0.5, 0.0),    // Dark Orange
-            4 => (0.8, 0.6, 0.0),    // Dark Gold
-            5 => (0.7, 0.7, 0.0),    // Olive/Dark Yellow
-            6 => (0.5, 0.5, 0.2),    // Olive Drab
-            7 => (0.3, 0.4, 0.6),    // Navy Blue
-            8 => (0.4, 0.4, 0.5),    // Dark Slate
-            9 => (0.5, 0.5, 0.5),    // Grey
-            _ => (0.0, 0.0, 0.0),    // Black
+            1 => (0.8, 0.0, 0.0), // Dark Red
+            2 => (0.9, 0.3, 0.0), // Burnt Orange
+            3 => (0.9, 0.5, 0.0), // Dark Orange
+            4 => (0.8, 0.6, 0.0), // Dark Gold
+            5 => (0.7, 0.7, 0.0), // Olive/Dark Yellow
+            6 => (0.5, 0.5, 0.2), // Olive Drab
+            7 => (0.3, 0.4, 0.6), // Navy Blue
+            8 => (0.4, 0.4, 0.5), // Dark Slate
+            9 => (0.5, 0.5, 0.5), // Grey
+            _ => (0.0, 0.0, 0.0), // Black
         }
     }
 }

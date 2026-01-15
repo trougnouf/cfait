@@ -137,7 +137,7 @@ You don't need to click through menus to set the due/start date, length, priorit
 | **Due Date** | `@` / `due:` | When the task must be finished. |
 | **Start Date** | `^` / `start:` | When you plan to start (hides from "active" views until then). |
 | **Recurrence** | `@` / `rec:` | How often the task repeats. |
-| **Duration** | `~` / `est:` | Estimated time to complete. |
+| **Duration** | `~` / `est:` | Estimated time (`~30m`, `~1h`, `~1h-2h`). |
 | **Tag** | `#` | Categories. Use `:` for hierarchy (e.g. `#gardening:tree_planting`). |
 | **Location** | `@@` / `loc:` | Where the task happens. Supports hierarchy like tags (e.g. `@@home:office`, `@@store:aldi:downtown`). |
 | **Reminder** | `rem:` | Set an notification. (e.g. `rem:10m`, `rem:8am`, `rem:tomorrow 9:00`). |
@@ -188,7 +188,9 @@ Recurrence rules determine when the next task is created after you complete the 
 
 ### Duration Units
 Supported units for `~` duration estimates: `m` (minutes), `h` (hours), `d` (days), `w` (weeks), `mo` (months), `y` (years).
+You can specify a single point estimate or a range.
 *   `~15m` (15 minutes)
+*   `~30m-1h` (Range: 30 to 60 minutes)
 *   `~1.5h` (1 hour 30 minutes)
 
 ### Reminders
@@ -280,8 +282,9 @@ Date filters support **relative dates** for both due (`@`) and start (`^`) dates
     *   `@<=2025-12-31!` (Due before Dec 31 OR no due date)
 
 ### Duration Filters (`~`)
-*   `~<30m` (Quick tasks, less than 30 mins)
-*   `~>2h` (Long tasks)
+*   `~<30m` (Matches tasks where the *minimum* duration is < 30m. Matches `~15m-45m` because 15 < 30).
+*   `~>2h` (Matches tasks where the *maximum* duration is > 2h. Matches `~1h-3h` because 3 > 2).
+*   `~30m` (Matches if 30m falls within the task's estimated range).
 
 ### Tag Filters
 *   `#gardening` (Contains this tag)

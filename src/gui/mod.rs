@@ -62,8 +62,8 @@ pub fn run_with_ics_file(ics_file_path: Option<String>) -> iced::Result {
         }
     })
     .window(window::Settings {
-        decorations: force_ssd,        // Enable native decorations when forced
-        transparent: !force_ssd,      // Only allow transparency when not using native decorations
+        decorations: force_ssd,  // Enable native decorations when forced
+        transparent: !force_ssd, // Only allow transparency when not using native decorations
         platform_specific: window::settings::PlatformSpecific {
             #[cfg(target_os = "linux")]
             application_id: String::from("cfait"),
@@ -117,7 +117,10 @@ impl GuiApp {
             ));
         }
 
-        let app = Self { force_ssd, ..Self::default() };
+        let app = Self {
+            force_ssd,
+            ..Self::default()
+        };
         (app, Task::batch(tasks))
     }
 

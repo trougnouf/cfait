@@ -53,7 +53,10 @@ async fn main() -> Result<()> {
         // Import tasks
         match LocalStorage::import_from_ics(&href, &ics_content) {
             Ok(count) => {
-                println!("Successfully imported {} task(s) to calendar '{}'", count, href);
+                println!(
+                    "Successfully imported {} task(s) to calendar '{}'",
+                    count, href
+                );
                 return Ok(());
             }
             Err(e) => {
@@ -102,7 +105,9 @@ fn print_help() {
     println!();
     println!("USAGE:");
     println!("    cfait                                    Start interactive TUI");
-    println!("    cfait export [--calendar <id>]           Export local tasks as .ics file to stdout");
+    println!(
+        "    cfait export [--calendar <id>]           Export local tasks as .ics file to stdout"
+    );
     println!("    cfait import <file.ics> [--calendar <id>] Import tasks from .ics file");
     println!("    cfait --help                             Show this help message");
     println!();
@@ -127,7 +132,7 @@ fn print_help() {
     println!("    @@location        Add location (supports hierarchy: @@home:office)");
     println!("    @date             Set due date (@tomorrow, @2d, @next friday)");
     println!("    ^date             Set start date (^next week, ^2025-01-01)");
-    println!("    ~duration         Set duration (~30m, ~1.5h)");
+    println!("    ~duration         Set duration (~30m, ~1.5h, ~1h-2h)");
     println!("    @daily            Recurrence (@daily, @weekly, @every 3 days)");
     println!("    until <date>      End date for recurrence (@daily until 2025-12-31)");
     println!("    except <date>     Skip dates (@daily except 2025-12-25,2026-01-01)");

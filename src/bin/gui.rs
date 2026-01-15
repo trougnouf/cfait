@@ -4,7 +4,8 @@ fn main() -> iced::Result {
     let args: Vec<String> = std::env::args().collect();
 
     // Check if an ICS file path was provided
-    let ics_file_path = if args.len() > 1 && !args[1].starts_with("--") && !args[1].starts_with("-") {
+    let ics_file_path = if args.len() > 1 && !args[1].starts_with("--") && !args[1].starts_with("-")
+    {
         Some(args[1].clone())
     } else {
         None
@@ -28,7 +29,7 @@ fn main() -> iced::Result {
         println!("    @@location        Add location (supports hierarchy: @@home:office)");
         println!("    @date             Set due date (@tomorrow, @2d, @next friday)");
         println!("    ^date             Set start date (^next week, ^2025-01-01)");
-        println!("    ~duration         Set duration (~30m, ~1.5h)");
+        println!("    ~duration         Set duration (~30m, ~1.5h, ~1h-2h)");
         println!("    @daily            Recurrence (@daily, @weekly, @every 3 days)");
         println!("    until <date>      End date for recurrence (@daily until 2025-12-31)");
         println!("    except <date>     Skip dates (@daily except 2025-12-25,2026-01-01)");

@@ -104,7 +104,7 @@ fun HelpScreen(onBack: () -> Unit) {
                             "Define/update location alias (retroactive).",
                             "@@aldi:=#groceries,#shopping"
                         ),
-                        HelpItem("~30m", "Estimated duration (m/h/d/w).", "~30m, ~1.5h, ~2d"),
+                        HelpItem("~30m or ~1h-2h", "Estimated duration (Single or Range).", "~30m, ~1.5h, ~15m-45m"),
                         HelpItem(
                             "@@loc",
                             "Location. Supports hierarchy with ':'.",

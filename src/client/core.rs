@@ -547,10 +547,12 @@ impl RustyClient {
 
         let mut next_task_opt = None;
 
-        if task.status == TaskStatus::Completed && task.rrule.is_some()
-            && let Some(next) = task.respawn() {
-                next_task_opt = Some(next);
-            }
+        if task.status == TaskStatus::Completed
+            && task.rrule.is_some()
+            && let Some(next) = task.respawn()
+        {
+            next_task_opt = Some(next);
+        }
 
         if task.calendar_href.starts_with("local://") {
             let mut all =
