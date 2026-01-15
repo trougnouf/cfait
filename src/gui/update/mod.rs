@@ -1,6 +1,5 @@
 // Central message handler dispatching to specific update modules.
 // File: ./src/gui/update/mod.rs
-
 pub mod common;
 pub mod network;
 pub mod settings;
@@ -17,6 +16,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::FontLoaded(_) => Task::none(),
         Message::DeleteComplete(_) => Task::none(),
 
+        // --- Settings Messages ---
         Message::ConfigLoaded(_)
         | Message::ObUrlChanged(_)
         | Message::ObUserChanged(_)
@@ -60,6 +60,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CancelColorPicker
         | Message::SubmitColorPicker(_) => settings::handle(app, message),
 
+        // --- Task Logic Messages ---
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)
         | Message::StartCreateChild(_)
@@ -84,8 +85,21 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::PauseTask(_)
         | Message::StopTask(_)
         | Message::SnoozeCustomInput(_)
-        | Message::SnoozeCustomSubmit(_, _) => tasks::handle(app, message),
+        | Message::SnoozeCustomSubmit(_, _)
+        // Keyboard Shortcuts routing to Task logic
+        | Message::EditSelectedDescription
+        | Message::PromoteSelected
+        | Message::DemoteSelected
+        | Message::YankSelected
+        | Message::KeyboardCreateChild
+        | Message::KeyboardAddDependency
+        | Message::KeyboardAddRelation
+        | Message::ToggleActiveSelected
+        | Message::StopSelected
+        | Message::CancelSelected
+        | Message::ChangePrioritySelected(_) => tasks::handle(app, message),
 
+        // --- View & Navigation Messages ---
         Message::TabPressed(_)
         | Message::FocusInput
         | Message::FocusSearch
@@ -110,7 +124,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleDetails(_)
         | Message::OpenHelp
         | Message::CloseHelp
-        | Message::WindowDragged    // <--- Added missing pipe here
+        | Message::WindowDragged
         | Message::MinimizeWindow
         | Message::CloseWindow
         | Message::ResizeStart(_)
@@ -119,6 +133,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::JumpToLocation(_)
         | Message::SelectNextTask
         | Message::SelectPrevTask
+        | Message::SelectNextPage
+        | Message::SelectPrevPage
         | Message::DeleteSelected
         | Message::ToggleSelected
         | Message::EditSelected
@@ -126,8 +142,11 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::OpenUrl(_)
         | Message::FocusTag(_)
         | Message::TagHovered(_)
-        | Message::FocusLocation(_) => view::handle(app, message),
+        | Message::FocusLocation(_)
+        | Message::ToggleHideCompletedToggle
+        | Message::CategoryMatchModeToggle => view::handle(app, message),
 
+        // --- Network Messages ---
         Message::Refresh
         | Message::Loaded(_)
         | Message::RefreshedAll(_)
@@ -136,6 +155,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SyncToggleComplete(_)
         | Message::TaskMoved(_)
         | Message::MigrationComplete(_) => network::handle(app, message),
+
+        // --- Alarm System ---
         Message::InitAlarmActor(tx) => {
             app.alarm_tx = Some(tx.clone());
             if !app.tasks.is_empty() {
@@ -145,16 +166,13 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::AlarmSignalReceived(msg) => {
-            match &*msg {
+             match &*msg {
                 AlarmMessage::Fire(task_uid, alarm_uid) => {
                     if let Some((task, _)) = app.store.get_task_mut(task_uid) {
                         let is_implicit = alarm_uid.starts_with("implicit_");
                         let exists = is_implicit || task.alarms.iter().any(|a| a.uid == *alarm_uid);
 
                         if exists {
-                            // We clone the task state at the moment of firing to show in the modal
-                            // We construct a synthetic Alarm object for the modal if it's implicit,
-                            // otherwise copy the real one.
                             let alarm_obj = if let Some(a) = task.alarms.iter().find(|a| a.uid == *alarm_uid) {
                                 a.clone()
                             } else {
@@ -168,7 +186,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                                     relation_type: None,
                                 }
                             };
-
                             app.ringing_tasks.push((task.clone(), alarm_obj));
                         }
                     }
@@ -186,19 +203,15 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
     };
 
-    update_placeholder(app);
-    task
-}
-
-fn update_placeholder(app: &mut GuiApp) {
-    app.current_placeholder = if app.editing_uid.is_some() {
-        "Edit Title...".to_string()
+    // Update placeholder text for UI
+    if app.editing_uid.is_some() {
+        app.current_placeholder = "Edit Title...".to_string();
     } else if let Some(parent_uid) = &app.creating_child_of {
         let parent_name = app
             .store
             .get_summary(parent_uid)
             .unwrap_or("Parent".to_string());
-        format!("New child of '{}'...", parent_name)
+        app.current_placeholder = format!("New child of '{}'...", parent_name);
     } else {
         let target_name = app
             .calendars
@@ -206,9 +219,11 @@ fn update_placeholder(app: &mut GuiApp) {
             .find(|c| Some(&c.href) == app.active_cal_href.as_ref())
             .map(|c| c.name.as_str())
             .unwrap_or("Default");
-        format!(
+        app.current_placeholder = format!(
             "Add task to {} (e.g. Buy cat food !1 @tomorrow #groceries ~30m)",
             target_name
-        )
-    };
+        );
+    }
+
+    task
 }

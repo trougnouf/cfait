@@ -687,9 +687,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     // --- UPDATED SEARCH BAR LOGIC ---
     let mut search_row = row![].align_y(iced::Alignment::Center).spacing(5);
-
     let is_search_empty = app.search_value.is_empty();
-
     let (search_icon_char, icon_color, on_press) = if is_search_empty {
         (icon::SEARCH, Color::from_rgb(0.4, 0.4, 0.4), None) // Gray, no action
     } else {
@@ -939,6 +937,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
 
     let inner_content: Element<'_, Message> = if app.editing_uid.is_some() {
         let input_desc = text_editor(&app.description_value)
+            .id("description_input") // ID Added here
             .placeholder("Notes...")
             .on_action(Message::DescriptionChanged)
             .padding(10)

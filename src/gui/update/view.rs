@@ -8,6 +8,53 @@ use iced::{Task, window};
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
+        Message::SelectNextPage => {
+            if app.tasks.is_empty() {
+                return Task::none();
+            }
+            let current_idx = app
+                .selected_uid
+                .as_ref()
+                .and_then(|uid| app.tasks.iter().position(|t| t.uid == *uid))
+                .unwrap_or(0);
+
+            let next_idx = (current_idx + 10).min(app.tasks.len() - 1);
+
+            if let Some(task) = app.tasks.get(next_idx) {
+                app.selected_uid = Some(task.uid.clone());
+                return scroll_to_selected(app);
+            }
+            Task::none()
+        }
+        Message::SelectPrevPage => {
+            if app.tasks.is_empty() {
+                return Task::none();
+            }
+            let current_idx = app
+                .selected_uid
+                .as_ref()
+                .and_then(|uid| app.tasks.iter().position(|t| t.uid == *uid))
+                .unwrap_or(0);
+
+            let prev_idx = current_idx.saturating_sub(10);
+
+            if let Some(task) = app.tasks.get(prev_idx) {
+                app.selected_uid = Some(task.uid.clone());
+                return scroll_to_selected(app);
+            }
+            Task::none()
+        }
+
+        // Stateless toggles: read current state, flip it, call existing logic
+        Message::ToggleHideCompletedToggle => {
+            let new_val = !app.hide_completed;
+            handle(app, Message::ToggleHideCompleted(new_val))
+        }
+        Message::CategoryMatchModeToggle => {
+            let new_val = !app.match_all_categories;
+            handle(app, Message::CategoryMatchModeChanged(new_val))
+        }
+
         Message::TabPressed(shift_held) => {
             if shift_held {
                 operation::focus_previous()
@@ -31,11 +78,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             // Calculate next index (wrapping or clamping)
             let next_idx = if current_idx + 1 >= app.tasks.len() {
-                0 // Wrap to top
+                0
             } else {
                 current_idx + 1
             };
-
             if let Some(task) = app.tasks.get(next_idx) {
                 app.selected_uid = Some(task.uid.clone());
                 return scroll_to_selected(app);
@@ -46,19 +92,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.tasks.is_empty() {
                 return Task::none();
             }
-
             let current_idx = app
                 .selected_uid
                 .as_ref()
                 .and_then(|uid| app.tasks.iter().position(|t| t.uid == *uid))
                 .unwrap_or(0);
-
             let prev_idx = if current_idx == 0 {
-                app.tasks.len() - 1 // Wrap to bottom
+                app.tasks.len() - 1
             } else {
                 current_idx - 1
             };
-
             if let Some(task) = app.tasks.get(prev_idx) {
                 app.selected_uid = Some(task.uid.clone());
                 return scroll_to_selected(app);
@@ -67,27 +110,30 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::DeleteSelected => {
             if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid) {
-                    return crate::gui::update::tasks::handle(app, Message::DeleteTask(idx));
-                }
+                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+            {
+                return crate::gui::update::tasks::handle(app, Message::DeleteTask(idx));
+            }
             Task::none()
         }
         Message::ToggleSelected => {
             if let Some(uid) = &app.selected_uid
                 && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
-                    && let Some(task) = app.tasks.get(idx) {
-                        return crate::gui::update::tasks::handle(
-                            app,
-                            Message::ToggleTask(idx, !task.status.is_done()),
-                        );
-                    }
+            {
+                let task = &app.tasks[idx];
+                return crate::gui::update::tasks::handle(
+                    app,
+                    Message::ToggleTask(idx, !task.status.is_done()),
+                );
+            }
             Task::none()
         }
         Message::EditSelected => {
             if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid) {
-                    return crate::gui::update::tasks::handle(app, Message::EditTaskStart(idx));
-                }
+                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+            {
+                return crate::gui::update::tasks::handle(app, Message::EditTaskStart(idx));
+            }
             Task::none()
         }
         Message::DismissError => {
@@ -314,7 +360,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.current_window_size = size;
             Task::none()
         }
-        // NEW: Focus Handlers (No scrolling)
+        // Focus Handlers (No scrolling)
         Message::FocusTag(tag) => {
             app.sidebar_mode = SidebarMode::Categories;
             app.selected_categories.clear();
@@ -433,7 +479,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::OpenUrl(target) => {
             // Note: target can be "https://..." or "geo:lat,long"
             let target_url = target.clone();
-
             #[cfg(not(target_os = "android"))]
             std::thread::spawn(move || {
                 #[cfg(target_os = "linux")]

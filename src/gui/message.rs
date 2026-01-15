@@ -22,6 +22,7 @@ pub type LoadedResult = Result<
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    // --- Settings & Onboarding ---
     ObUrlChanged(String),
     ObUserChanged(String),
     ObPassChanged(String),
@@ -32,12 +33,11 @@ pub enum Message {
     ObSubmit,
     OpenSettings,
     CancelSettings,
-    OpenHelp,
-    CloseHelp,
+    ObSubmitOffline,
+
+    // --- Input & Editing ---
     InputChanged(text_editor::Action),
-
     DescriptionChanged(text_editor::Action),
-
     SearchChanged(String),
     SubmitTask,
     ToggleTask(usize, bool),
@@ -46,50 +46,57 @@ pub enum Message {
     CancelEdit,
     ChangePriority(usize, i8),
     SetTaskStatus(usize, crate::model::TaskStatus),
-    // --- NEW MESSAGES ---
     StartTask(String),
     PauseTask(String),
     StopTask(String),
-    // --------------------
-    // Keyboard Navigation
+
+    // --- Keyboard Shortcuts (Stateless / Context-Aware) ---
     SelectNextTask,
     SelectPrevTask,
+    SelectNextPage,
+    SelectPrevPage,
     DeleteSelected,
     ToggleSelected,
     EditSelected,
-    // --------------------
+    EditSelectedDescription,
+    PromoteSelected,
+    DemoteSelected,
+    YankSelected,
+    ClearYank,
+    KeyboardCreateChild,
+    KeyboardAddDependency,
+    KeyboardAddRelation,
+    ToggleActiveSelected,       // 's' logic
+    StopSelected,               // 'S' logic
+    CancelSelected,             // 'x' logic
+    ChangePrioritySelected(i8), // '+' / '-' logic
+    ToggleHideCompletedToggle,  // 'H' (Stateless switch)
+    CategoryMatchModeToggle,    // 'm' (Stateless switch)
+    FocusInput,
+    FocusSearch,
+    Refresh,
+
+    // --- View & Filter ---
     SetMinDuration(Option<u32>),
     SetMaxDuration(Option<u32>),
     ToggleIncludeUnsetDuration(bool),
     ToggleDetails(String),
-    ConfigLoaded(Result<Config, String>),
-    ObSortMonthsChanged(String),
-    ThemeChanged(AppTheme),
-
-    Loaded(LoadedResult),
-    Refresh,
-
-    SyncSaved(Result<TodoTask, String>),
-    SyncToggleComplete(Box<Result<(TodoTask, Option<TodoTask>), String>>),
-
-    TasksRefreshed(Result<(String, Vec<TodoTask>), String>),
-    DeleteComplete(Result<(), String>),
-
     SidebarModeChanged(SidebarMode),
     SelectCalendar(String),
     IsolateCalendar(String),
     CategoryToggled(String),
     LocationToggled(String),
     ClearAllTags,
-    ClearAllLocations, // <--- NEW
+    ClearAllLocations,
     CategoryMatchModeChanged(bool),
-    RefreshedAll(Result<Vec<(String, Vec<TodoTask>)>, String>),
-
     ToggleHideCompleted(bool),
     ToggleHideFullyCompletedTags(bool),
+    TabPressed(bool),
+    OpenHelp,
+    CloseHelp,
 
+    // --- Navigation & Actions ---
     YankTask(String),
-    ClearYank,
     StartCreateChild(String),
     AddDependency(String),
     AddRelatedTo(String),
@@ -97,57 +104,56 @@ pub enum Message {
     RemoveParent(String),
     RemoveDependency(String, String),
     RemoveRelatedTo(String, String),
-
     AliasKeyInput(String),
     AliasValueInput(String),
     AddAlias,
     RemoveAlias(String),
     MoveTask(String, String),
-
+    MigrateLocalTo(String, String),
     JumpToTag(String),
     JumpToLocation(String),
     JumpToTask(String),
     TagHovered(Option<String>),
     FocusTag(String),
     FocusLocation(String),
-    TaskMoved(Result<TodoTask, String>),
-    ObSubmitOffline,
-    MigrateLocalTo(String, String), // (source_calendar_href, target_calendar_href)
+    OpenUrl(String),
 
+    // --- System & Network Events ---
+    ConfigLoaded(Result<Config, String>),
+    ObSortMonthsChanged(String),
+    ThemeChanged(AppTheme),
+    Loaded(LoadedResult),
+    SyncSaved(Result<TodoTask, String>),
+    SyncToggleComplete(Box<Result<(TodoTask, Option<TodoTask>), String>>),
+    TasksRefreshed(Result<(String, Vec<TodoTask>), String>),
+    DeleteComplete(Result<(), String>),
+    RefreshedAll(Result<Vec<(String, Vec<TodoTask>)>, String>),
+    TaskMoved(Result<TodoTask, String>),
     MigrationComplete(Result<usize, String>),
     FontLoaded(Result<(), String>),
     DismissError,
     ToggleAllCalendars(bool),
 
-    TabPressed(bool),
-
-    // Shortcuts
-    FocusInput,
-    FocusSearch,
-
-    // Window Controls
+    // --- Window Management ---
     WindowDragged,
     MinimizeWindow,
     CloseWindow,
     WindowResized(iced::Size),
-
-    // Resize
     ResizeStart(ResizeDirection),
 
-    // Open URL
-    OpenUrl(String),
+    // --- Settings Input Fields ---
     ObUrgentDaysChanged(String),
     ObUrgentPrioChanged(String),
     ObDefaultPriorityChanged(String),
     ObStartGraceChanged(String),
+
+    // --- Alarms & Reminders ---
     InitAlarmActor(mpsc::Sender<SystemEvent>),
-    AlarmSignalReceived(Arc<AlarmMessage>), // Arc to make it Clone-able easily
-    SnoozeAlarm(String, String, u32),       // TaskUID, AlarmUID, Minutes
-    DismissAlarm(String, String),           // TaskUID, AlarmUID
+    AlarmSignalReceived(Arc<AlarmMessage>),
+    SnoozeAlarm(String, String, u32),
+    DismissAlarm(String, String),
     SnoozeCustomInput(String),
     SnoozeCustomSubmit(String, String),
-
-    // Reminder & Snooze Settings
     SetAutoReminders(bool),
     SetDefaultReminderTime(String),
     SetSnoozeShort(String),
@@ -156,20 +162,20 @@ pub enum Message {
     SetDeleteEventsOnCompletion(bool),
     DeleteAllCalendarEvents,
     BackfillEventsComplete(Result<usize, String>),
-    ExportLocalIcs(String), // calendar_href
+
+    // --- Local Calendar & ICS ---
+    ExportLocalIcs(String),
     ExportSaved(Result<std::path::PathBuf, String>),
-    ImportLocalIcs(String),                          // calendar_href
-    ImportCompleted(Result<String, String>),         // success message or error
-    IcsFileLoaded(Result<(String, String), String>), // (file_path, content) or error
-    IcsImportDialogCalendarSelected(String),         // calendar_href
+    ImportLocalIcs(String),
+    ImportCompleted(Result<String, String>),
+    IcsFileLoaded(Result<(String, String), String>),
+    IcsImportDialogCalendarSelected(String),
     IcsImportDialogCancel,
     IcsImportDialogConfirm,
-
-    // Local Calendar Management
     AddLocalCalendar,
-    DeleteLocalCalendar(String),              // href
-    LocalCalendarNameChanged(String, String), // href, new_name
-    OpenColorPicker(String, iced::Color),     // href, initial_color
+    DeleteLocalCalendar(String),
+    LocalCalendarNameChanged(String, String),
+    OpenColorPicker(String, iced::Color),
     CancelColorPicker,
     SubmitColorPicker(iced::Color),
 }

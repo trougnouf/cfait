@@ -109,6 +109,111 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
+        // --- SHORTCUT LOGIC ---
+        Message::EditSelectedDescription => {
+            if let Some(uid) = &app.selected_uid
+                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+            {
+                // Enter edit mode AND focus the description box
+                return Task::batch(vec![
+                    handle(app, Message::EditTaskStart(idx)),
+                    iced::widget::operation::focus(iced::widget::Id::new("description_input")),
+                ]);
+            }
+            Task::none()
+        }
+        Message::PromoteSelected => {
+            if let Some(uid) = &app.selected_uid {
+                return handle(app, Message::RemoveParent(uid.clone()));
+            }
+            Task::none()
+        }
+        Message::DemoteSelected => {
+            if let Some(uid) = &app.selected_uid
+                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+                && idx > 0
+            {
+                let parent_candidate_uid = app.tasks[idx - 1].uid.clone();
+                if parent_candidate_uid != *uid {
+                    // Temporarily use yanked_uid to pass the target parent context
+                    app.yanked_uid = Some(parent_candidate_uid);
+                    return handle(app, Message::MakeChild(uid.clone()));
+                }
+            }
+            Task::none()
+        }
+        Message::YankSelected => {
+            if let Some(uid) = &app.selected_uid {
+                app.yanked_uid = Some(uid.clone());
+            }
+            Task::none()
+        }
+        Message::KeyboardCreateChild => {
+            if let Some(_yanked) = &app.yanked_uid {
+                if let Some(selected) = &app.selected_uid {
+                    return handle(app, Message::MakeChild(selected.clone()));
+                }
+            } else if let Some(selected) = &app.selected_uid {
+                return handle(app, Message::StartCreateChild(selected.clone()));
+            }
+            Task::none()
+        }
+        Message::KeyboardAddDependency => {
+            if let Some(_yanked) = &app.yanked_uid
+                && let Some(selected) = &app.selected_uid
+            {
+                return handle(app, Message::AddDependency(selected.clone()));
+            }
+            Task::none()
+        }
+        Message::KeyboardAddRelation => {
+            if let Some(_yanked) = &app.yanked_uid
+                && let Some(selected) = &app.selected_uid
+            {
+                return handle(app, Message::AddRelatedTo(selected.clone()));
+            }
+            Task::none()
+        }
+        Message::ToggleActiveSelected => {
+            if let Some(uid) = &app.selected_uid
+                && let Some(t) = app.tasks.iter().find(|t| t.uid == *uid)
+            {
+                if t.status == crate::model::TaskStatus::InProcess {
+                    return handle(app, Message::PauseTask(uid.clone()));
+                } else {
+                    return handle(app, Message::StartTask(uid.clone()));
+                }
+            }
+            Task::none()
+        }
+        Message::StopSelected => {
+            if let Some(uid) = &app.selected_uid {
+                return handle(app, Message::StopTask(uid.clone()));
+            }
+            Task::none()
+        }
+        Message::CancelSelected => {
+            if let Some(uid) = &app.selected_uid
+                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+            {
+                return handle(
+                    app,
+                    Message::SetTaskStatus(idx, crate::model::TaskStatus::Cancelled),
+                );
+            }
+            Task::none()
+        }
+        Message::ChangePrioritySelected(delta) => {
+            if let Some(uid) = &app.selected_uid
+                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+            {
+                return handle(app, Message::ChangePriority(idx, delta));
+            }
+            Task::none()
+        }
+
+        // --- STANDARD TASK ACTIONS ---
         Message::ChangePriority(index, delta) => {
             if let Some(view_task) = app.tasks.get(index) {
                 app.selected_uid = Some(view_task.uid.clone());
@@ -433,35 +538,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::DeleteSelected => {
-            if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid) {
-                    // Reuse existing Delete logic by recursing
-                    return handle(app, Message::DeleteTask(idx));
-                }
-            Task::none()
-        }
-        Message::ToggleSelected => {
-            if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid) {
-                    let task = &app.tasks[idx];
-                    // FIX: Use .status.is_done() instead of .completed
-                    return handle(app, Message::ToggleTask(idx, !task.status.is_done()));
-                }
-            Task::none()
-        }
-        Message::EditSelected => {
-            if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid) {
-                    return handle(app, Message::EditTaskStart(idx));
-                }
-            Task::none()
-        }
         _ => Task::none(),
     }
 }
 
-// ... helper functions (handle_offline_update, etc.) unchanged ...
 fn handle_offline_update(app: &mut GuiApp, task: TodoTask) {
     app.unsynced_changes = true;
     if task.calendar_href.starts_with("local://") {
@@ -485,7 +565,6 @@ fn handle_offline_delete(app: &mut GuiApp, task: TodoTask) {
 }
 
 fn handle_submit(app: &mut GuiApp) -> Task<Message> {
-    // ... same as before ...
     let raw_text = app.input_value.text();
     let text_to_submit = raw_text.trim().to_string();
 

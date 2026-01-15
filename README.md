@@ -214,15 +214,19 @@ Set alarms to notify you about tasks. Reminders can be **relative** (recalculate
 >
 > `"Water plants @every 3 days until 2025-06-30"` (Every 3 days until end of June)
 >
+> `"Water plants @@home @monthly except oct,nov,dec,jan,feb,mar"` (Monthly watering, skip winter months)
+>
 > `"Practice handstands @daily except saturdays,sundays"` (Daily practice, weekdays only)
 >
 > `"Yoga class @every tue,thu until 2025-12-31"` (Tue/Thu classes until end of year)
 >
-> `"Water plants @@home @monthly except oct,nov,dec,jan,feb,mar"` (Monthly watering, skip winter months)
->
 > `"Gardening @saturday @weekly except march"` (Saturday gardening, skip March entirely)
 >
 > `"Plant plum tree #tree_planting !3 ~2h"` and `"#tree_planting:=#gardening,@@home"`
+>
+> `Bouldering @@Charleroi:Maniak @every 23 days until 2026-09-20 @in 23 days`
+> 
+> `Sweep the floor @weekly #chore @@home` 
 
 The syntax highlighting should visually let you know whether your statements are valid.
 
