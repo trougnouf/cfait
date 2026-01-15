@@ -250,12 +250,12 @@ pub fn view_task_row<'a>(
             }
         } else if let Some(d) = &task.due {
             // Case 3: Due Only (or Start passed)
-            row_content = row_content.push(text(d.format_smart()).size(14).color(due_color));
-            // End Icon
+            // Use calendar icon before the date instead of hourglass_end after
             row_content = row_content.push(
-                container(icon::icon(icon::HOURGLASS_END).size(12).color(due_color))
+                container(icon::icon(icon::CALENDAR).size(12).color(due_color))
                     .align_y(iced::Alignment::Center),
             );
+            row_content = row_content.push(text(d.format_smart()).size(14).color(due_color));
         }
 
         container(row_content).width(Length::Shrink).into()
