@@ -92,6 +92,7 @@ jobs:
             -t armv7-linux-androideabi \
             -t x86_64-linux-android \
             -o ./android/app/src/main/jniLibs \
+            --platform 28 \
             build --release --lib --features mobile
 
       - name: Build Android Artifacts (AAB & APK)

@@ -64,8 +64,8 @@ notify-rust = "4"
 strum = { version = "0.27", features = ["derive"] }
 
 # --- ANDROID / INTEROP ---
-uniffi = { version = "0.30", features = ["tokio", "build", "cli"], optional = true }
-uniffi_bindgen = { version = "0.30",  optional = true }
+uniffi = { version = "0.31", features = ["tokio", "build", "cli"], optional = true }
+uniffi_bindgen = { version = "0.31",  optional = true }
 
 
 # --- TUI ONLY (Optional) ---

@@ -62,7 +62,7 @@ android {
 
     defaultConfig {
         applicationId = "com.trougnouf.cfait"
-        minSdk = 23
+        minSdk = 28
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
