@@ -453,6 +453,8 @@ Cfait works with any standard CalDAV server. If you don't have one yet, here are
 
 You can also use the `Local` calendar entirely offline (and there is the possibility to migrate to and synchronize with a CalDAV server at a later time).
 
+Note that Open-Xchange-based servers (such as mailbox.org) are not supported because they only support a subset of the CalDAV standard.
+
 ## 💬 Community & Support
 
 Have a question, found a bug, a great idea, or just want to chat?

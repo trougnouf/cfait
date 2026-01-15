@@ -7,7 +7,7 @@ pub mod state;
 pub mod view;
 
 use crate::config;
-use crate::system::{AlarmMessage, SystemEvent}; // Import AlarmMessage and SystemEvent
+use crate::system::{AlarmMessage, SystemEvent};
 use crate::tui::action::AppEvent;
 use crate::tui::state::{AppState, InputMode};
 use crate::tui::view::draw;
@@ -19,8 +19,13 @@ use crossterm::{
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
-use std::{env, io, time::Duration};
-use tokio::sync::mpsc;
+use rpassword::prompt_password;
+use std::{
+    env,
+    io::{self, Write},
+    time::Duration,
+};
+use tokio::sync::mpsc; // <-- Import the function
 
 pub async fn run() -> Result<()> {
     // --- 1. PREAMBLE & CONFIG ---
@@ -97,6 +102,107 @@ pub async fn run() -> Result<()> {
     }));
 
     let config_result = config::Config::load();
+    let cfg = match config_result {
+        Ok(c) => c,
+        Err(_) => {
+            // Interactive Onboarding
+            println!("Welcome to Cfait (TUI). No configuration file found.");
+            println!("Let's set up your task manager.\n");
+
+            println!("Select mode:");
+            println!("  [1] Connect to CalDAV Server (Radicale, Nextcloud, etc.)");
+            println!("  [2] Offline Mode (Local tasks only)");
+
+            print!("\nChoice [1]: ");
+            io::stdout().flush()?;
+
+            let mut choice = String::new();
+            io::stdin().read_line(&mut choice)?;
+
+            let mut new_config = config::Config::default();
+
+            if choice.trim() == "2" {
+                println!("Setting up Offline Mode...");
+                // Config defaults are already suitable for offline (empty url/creds)
+            } else {
+                // CalDAV Setup Loop
+                loop {
+                    println!("\n--- CalDAV Connection Setup ---");
+
+                    print!("Server URL (e.g. https://cloud.example.com/remote.php/dav/): ");
+                    io::stdout().flush()?;
+                    let mut url = String::new();
+                    io::stdin().read_line(&mut url)?;
+                    new_config.url = url.trim().to_string();
+
+                    print!("Username: ");
+                    io::stdout().flush()?;
+                    let mut user = String::new();
+                    io::stdin().read_line(&mut user)?;
+                    new_config.username = user.trim().to_string();
+
+                    // --- CHANGE STARTS HERE ---
+                    let pass = prompt_password("Password: ")?;
+                    new_config.password = pass;
+                    // --- CHANGE ENDS HERE ---
+
+                    print!("Allow insecure SSL certificates? (y/N): ");
+                    io::stdout().flush()?;
+                    let mut insecure = String::new();
+                    io::stdin().read_line(&mut insecure)?;
+                    new_config.allow_insecure_certs = insecure.trim().eq_ignore_ascii_case("y");
+
+                    println!("\nTesting connection...");
+
+                    let check_result = async {
+                        let client = crate::client::RustyClient::new(
+                            &new_config.url,
+                            &new_config.username,
+                            &new_config.password,
+                            new_config.allow_insecure_certs,
+                        )
+                        .map_err(|e| e.to_string())?;
+
+                        match client.get_calendars().await {
+                            Ok(cals) => Ok(cals.len()),
+                            Err(e) => Err(e),
+                        }
+                    }
+                    .await;
+
+                    match check_result {
+                        Ok(count) => {
+                            println!("Success! Found {} calendars.", count);
+                            break;
+                        }
+                        Err(e) => {
+                            eprintln!("Connection failed: {}", e);
+                            println!("Retry configuration? [Y/n]");
+                            let mut retry = String::new();
+                            io::stdin().read_line(&mut retry)?;
+                            if retry.trim().eq_ignore_ascii_case("n") {
+                                println!(
+                                    "Falling back to offline mode (saving provided details anyway)."
+                                );
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let Err(e) = new_config.save() {
+                eprintln!("Warning: Could not save config file: {}", e);
+            } else if let Ok(path) = config::Config::get_path_string() {
+                println!("Configuration saved to: {}", path);
+            }
+
+            println!("Starting TUI...");
+            std::thread::sleep(Duration::from_secs(1));
+            new_config
+        }
+    };
+
     let (
         url,
         user,
@@ -115,33 +221,25 @@ pub async fn run() -> Result<()> {
         start_grace_period_days,
         snooze_short_mins,
         snooze_long_mins,
-    ) = match config_result {
-        Ok(cfg) => (
-            cfg.url,
-            cfg.username,
-            cfg.password,
-            cfg.default_calendar,
-            cfg.hide_completed,
-            cfg.hide_fully_completed_tags,
-            cfg.tag_aliases,
-            cfg.sort_cutoff_months,
-            cfg.allow_insecure_certs,
-            cfg.hidden_calendars,
-            cfg.disabled_calendars,
-            cfg.urgent_days_horizon,
-            cfg.urgent_priority_threshold,
-            cfg.default_priority,
-            cfg.start_grace_period_days,
-            cfg.snooze_short_mins,
-            cfg.snooze_long_mins,
-        ),
-        Err(_) => {
-            let path_str =
-                config::Config::get_path_string().unwrap_or("[path unknown]".to_string());
-            eprintln!("Config file not found: {}", path_str);
-            return Ok(());
-        }
-    };
+    ) = (
+        cfg.url,
+        cfg.username,
+        cfg.password,
+        cfg.default_calendar,
+        cfg.hide_completed,
+        cfg.hide_fully_completed_tags,
+        cfg.tag_aliases,
+        cfg.sort_cutoff_months,
+        cfg.allow_insecure_certs,
+        cfg.hidden_calendars,
+        cfg.disabled_calendars,
+        cfg.urgent_days_horizon,
+        cfg.urgent_priority_threshold,
+        cfg.default_priority,
+        cfg.start_grace_period_days,
+        cfg.snooze_short_mins,
+        cfg.snooze_long_mins,
+    );
 
     // --- 2. TERMINAL SETUP ---
     enable_raw_mode()?;
