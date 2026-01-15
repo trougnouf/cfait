@@ -17,6 +17,79 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::FocusInput => operation::focus("main_input"),
         Message::FocusSearch => operation::focus("header_search_input"),
+        Message::SelectNextTask => {
+            if app.tasks.is_empty() {
+                return Task::none();
+            }
+
+            // Find current index
+            let current_idx = app
+                .selected_uid
+                .as_ref()
+                .and_then(|uid| app.tasks.iter().position(|t| t.uid == *uid))
+                .unwrap_or(0);
+
+            // Calculate next index (wrapping or clamping)
+            let next_idx = if current_idx + 1 >= app.tasks.len() {
+                0 // Wrap to top
+            } else {
+                current_idx + 1
+            };
+
+            if let Some(task) = app.tasks.get(next_idx) {
+                app.selected_uid = Some(task.uid.clone());
+                return scroll_to_selected(app);
+            }
+            Task::none()
+        }
+        Message::SelectPrevTask => {
+            if app.tasks.is_empty() {
+                return Task::none();
+            }
+
+            let current_idx = app
+                .selected_uid
+                .as_ref()
+                .and_then(|uid| app.tasks.iter().position(|t| t.uid == *uid))
+                .unwrap_or(0);
+
+            let prev_idx = if current_idx == 0 {
+                app.tasks.len() - 1 // Wrap to bottom
+            } else {
+                current_idx - 1
+            };
+
+            if let Some(task) = app.tasks.get(prev_idx) {
+                app.selected_uid = Some(task.uid.clone());
+                return scroll_to_selected(app);
+            }
+            Task::none()
+        }
+        Message::DeleteSelected => {
+            if let Some(uid) = &app.selected_uid
+                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid) {
+                    return crate::gui::update::tasks::handle(app, Message::DeleteTask(idx));
+                }
+            Task::none()
+        }
+        Message::ToggleSelected => {
+            if let Some(uid) = &app.selected_uid
+                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+                    && let Some(task) = app.tasks.get(idx) {
+                        return crate::gui::update::tasks::handle(
+                            app,
+                            Message::ToggleTask(idx, !task.status.is_done()),
+                        );
+                    }
+            Task::none()
+        }
+        Message::EditSelected => {
+            if let Some(uid) = &app.selected_uid
+                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid) {
+                    return crate::gui::update::tasks::handle(app, Message::EditTaskStart(idx));
+                }
+            Task::none()
+        }
         Message::DismissError => {
             app.error_msg = None;
             Task::none()

@@ -51,6 +51,13 @@ pub enum Message {
     PauseTask(String),
     StopTask(String),
     // --------------------
+    // Keyboard Navigation
+    SelectNextTask,
+    SelectPrevTask,
+    DeleteSelected,
+    ToggleSelected,
+    EditSelected,
+    // --------------------
     SetMinDuration(Option<u32>),
     SetMaxDuration(Option<u32>),
     ToggleIncludeUnsetDuration(bool),

@@ -4,14 +4,14 @@ use crate::gui::state::{AppState, GuiApp};
 use iced::{Subscription, event, keyboard, window};
 
 pub fn subscription(app: &GuiApp) -> Subscription<Message> {
-    use iced::keyboard::key;
+    use iced::keyboard::key::Named;
 
     let mut subs = Vec::new();
 
     if matches!(app.state, AppState::Onboarding | AppState::Settings) {
         subs.push(keyboard::listen().filter_map(|event| {
             if let keyboard::Event::KeyPressed { key, modifiers, .. } = event
-                && key == key::Key::Named(key::Named::Tab)
+                && key == keyboard::Key::Named(Named::Tab)
             {
                 return Some(Message::TabPressed(modifiers.shift()));
             }
@@ -30,8 +30,23 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
                 }
 
                 match key.as_ref() {
+                    // Navigation
+                    keyboard::Key::Character("j") | keyboard::Key::Named(Named::ArrowDown) => {
+                        Some(Message::SelectNextTask)
+                    }
+                    keyboard::Key::Character("k") | keyboard::Key::Named(Named::ArrowUp) => {
+                        Some(Message::SelectPrevTask)
+                    }
+
+                    // Actions
+                    keyboard::Key::Character("d") => Some(Message::DeleteSelected),
+                    keyboard::Key::Character("e") => Some(Message::EditSelected),
+                    keyboard::Key::Named(Named::Space) => Some(Message::ToggleSelected),
+
+                    // Focus inputs (Already exists)
                     keyboard::Key::Character("a") => Some(Message::FocusInput),
                     keyboard::Key::Character("/") => Some(Message::FocusSearch),
+
                     _ => None,
                 }
             } else {

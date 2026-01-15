@@ -433,6 +433,30 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::DeleteSelected => {
+            if let Some(uid) = &app.selected_uid
+                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid) {
+                    // Reuse existing Delete logic by recursing
+                    return handle(app, Message::DeleteTask(idx));
+                }
+            Task::none()
+        }
+        Message::ToggleSelected => {
+            if let Some(uid) = &app.selected_uid
+                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid) {
+                    let task = &app.tasks[idx];
+                    // FIX: Use .status.is_done() instead of .completed
+                    return handle(app, Message::ToggleTask(idx, !task.status.is_done()));
+                }
+            Task::none()
+        }
+        Message::EditSelected => {
+            if let Some(uid) = &app.selected_uid
+                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid) {
+                    return handle(app, Message::EditTaskStart(idx));
+                }
+            Task::none()
+        }
         _ => Task::none(),
     }
 }

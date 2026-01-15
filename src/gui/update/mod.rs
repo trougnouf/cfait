@@ -117,6 +117,11 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::WindowResized(_)
         | Message::JumpToTag(_)
         | Message::JumpToLocation(_)
+        | Message::SelectNextTask
+        | Message::SelectPrevTask
+        | Message::DeleteSelected
+        | Message::ToggleSelected
+        | Message::EditSelected
         | Message::JumpToTask(_)
         | Message::OpenUrl(_)
         | Message::FocusTag(_)
