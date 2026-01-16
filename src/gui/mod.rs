@@ -100,6 +100,8 @@ impl GuiApp {
                 Message::ConfigLoaded,
             ),
             font::load(icon::FONT_BYTES).map(|_| Message::FontLoaded(Ok(()))),
+            // Load the internal font for iced_aw widgets (ColorPicker, etc.)
+            font::load(iced_aw::ICED_AW_FONT_BYTES).map(|_| Message::FontLoaded(Ok(()))),
         ];
 
         // If an ICS file path was provided, load it
