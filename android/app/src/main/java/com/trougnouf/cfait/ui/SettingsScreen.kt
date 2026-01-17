@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -234,6 +235,12 @@ fun SettingsScreen(
                     onValueChange = { url = it },
                     label = { Text("CalDAV URL") },
                     modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        autoCorrect = false,
+                        capitalization = KeyboardCapitalization.None
+                    ),
+                    singleLine = true
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
@@ -241,6 +248,11 @@ fun SettingsScreen(
                     onValueChange = { user = it },
                     label = { Text("Username") },
                     modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(
+                        autoCorrect = false,
+                        capitalization = KeyboardCapitalization.None
+                    ),
+                    singleLine = true
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
@@ -248,7 +260,12 @@ fun SettingsScreen(
                     onValueChange = { pass = it },
                     label = { Text("Password") },
                     visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        autoCorrect = false
+                    ),
+                    singleLine = true
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = insecure, onCheckedChange = { insecure = it })
@@ -376,7 +393,11 @@ fun SettingsScreen(
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
 
-                        Text("Future Task Grace Period:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                        Text(
+                            "Future Task Grace Period:",
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                             Text("Start within (days):", modifier = Modifier.weight(1f))
                             OutlinedTextField(
@@ -393,7 +414,11 @@ fun SettingsScreen(
                             color = androidx.compose.ui.graphics.Color.Gray
                         )
 
-                        Text("Urgency Rules (shown at top):", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+                        Text(
+                            "Urgency Rules (shown at top):",
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 16.dp)
+                        )
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                             Text("Due within (days):", modifier = Modifier.weight(1f))
                             OutlinedTextField(
@@ -426,7 +451,11 @@ fun SettingsScreen(
                             color = androidx.compose.ui.graphics.Color.Gray
                         )
 
-                        Text("Priority Settings:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
+                        Text(
+                            "Priority Settings:",
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(top = 16.dp)
+                        )
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                             Text("Default Priority (!):", modifier = Modifier.weight(1f))
                             OutlinedTextField(
