@@ -401,6 +401,7 @@ fun HomeScreen(
                                     t.copy(statusString = "InProcess", isPaused = false)
                                 }
                             }
+
                             "stop" -> t.copy(statusString = "NeedsAction", isPaused = false)
                             "prio_up" -> {
                                 var p = t.priority.toInt()
@@ -408,12 +409,14 @@ fun HomeScreen(
                                 if (p > 1) p -= 1
                                 t.copy(priority = p.toUByte())
                             }
+
                             "prio_down" -> {
                                 var p = t.priority.toInt()
                                 if (p == 0) p = 5
                                 if (p < 9) p += 1
                                 t.copy(priority = p.toUByte())
                             }
+
                             else -> t
                         }
                     } else {
@@ -437,18 +440,21 @@ fun HomeScreen(
                         val clipData = ClipData.newPlainText("task_uid", task.uid)
                         clipboard.setClipEntry(ClipEntry(clipData))
                     }
+
                     "block" -> {
                         if (yankedUid != null) {
                             api.addDependency(task.uid, yankedUid!!)
                             yankedUid = null
                         }
                     }
+
                     "child" -> {
                         if (yankedUid != null) {
                             api.setParent(task.uid, yankedUid!!)
                             yankedUid = null
                         }
                     }
+
                     "related" -> {
                         if (yankedUid != null) {
                             api.addRelatedTo(task.uid, yankedUid!!)
@@ -841,7 +847,8 @@ fun HomeScreen(
                         val activeCal = calendars.find { it.href == defaultCalHref }
                         val activeCalName = activeCal?.name ?: "Local"
                         val activeColorHex = activeCal?.color
-                        val activeColor = if (activeColorHex != null) parseHexColor(activeColorHex) else MaterialTheme.colorScheme.onSurface
+                        val activeColor =
+                            if (activeColorHex != null) parseHexColor(activeColorHex) else MaterialTheme.colorScheme.onSurface
 
                         val otherVisible = calendars.filter {
                             !it.isDisabled && it.isVisible && it.href != defaultCalHref
@@ -876,7 +883,8 @@ fun HomeScreen(
                             val spacerAfterIconPx = with(density) { 8.dp.toPx() }
                             val safetyMarginPx = with(density) { 16.dp.toPx() }
 
-                            val availableForPlus = maxWidth - iconSizePx - spacerAfterIconPx - nameResult.size.width - countResult.size.width - safetyMarginPx
+                            val availableForPlus =
+                                maxWidth - iconSizePx - spacerAfterIconPx - nameResult.size.width - countResult.size.width - safetyMarginPx
 
                             val maxVisiblePlus = if (availableForPlus > 0 && plusResult.size.width > 0) {
                                 (availableForPlus / plusResult.size.width).toInt()
@@ -1024,7 +1032,7 @@ fun HomeScreen(
                     }
                     Surface(tonalElevation = 3.dp) {
                         Row(
-                            Modifier.padding(16.dp).navigationBarsPadding(),
+                            Modifier.padding(16.dp).navigationBarsPadding().imePadding(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedTextField(
@@ -1049,83 +1057,83 @@ fun HomeScreen(
             Box(Modifier.padding(padding).fillMaxSize()) {
                 Column(Modifier.fillMaxSize()) {
 
-                val activeIsLocal = calendars.find { it.href == defaultCalHref }?.isLocal == true
-                if (activeIsLocal && remoteCals.isNotEmpty()) {
-                    FilledTonalButton(
-                        onClick = { showExportSourceDialog = true },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                        colors =
-                            ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                            ),
-                        contentPadding = PaddingValues(vertical = 8.dp),
-                    ) {
-                        NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Export local tasks to server")
+                    val activeIsLocal = calendars.find { it.href == defaultCalHref }?.isLocal == true
+                    if (activeIsLocal && remoteCals.isNotEmpty()) {
+                        FilledTonalButton(
+                            onClick = { showExportSourceDialog = true },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                            colors =
+                                ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                ),
+                            contentPadding = PaddingValues(vertical = 8.dp),
+                        ) {
+                            NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Export local tasks to server")
+                        }
                     }
-                }
 
-                PullToRefreshBox(
-                    isRefreshing = false,
-                    onRefresh = { handlePullRefresh() },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    LazyColumn(
-                        state = listState,
-                        contentPadding = PaddingValues(bottom = 80.dp),
-                        modifier = Modifier.fillMaxSize(),
+                    PullToRefreshBox(
+                        isRefreshing = false,
+                        onRefresh = { handlePullRefresh() },
+                        modifier = Modifier.weight(1f),
                     ) {
-                        items(tasks, key = { it.uid }) { task ->
-                            val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+                        LazyColumn(
+                            state = listState,
+                            contentPadding = PaddingValues(bottom = 80.dp),
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            items(tasks, key = { it.uid }) { task ->
+                                val calColor = calColorMap[task.calendarHref] ?: Color.Gray
 
-                            // Resolve parent info for inheritance hiding
-                            val parent = task.parentUid?.let { taskMap[it] }
-                            val pCats = parent?.categories ?: emptyList()
-                            val pLoc = parent?.location
+                                // Resolve parent info for inheritance hiding
+                                val parent = task.parentUid?.let { taskMap[it] }
+                                val pCats = parent?.categories ?: emptyList()
+                                val pLoc = parent?.location
 
-                            TaskRow(
-                                task = task,
-                                calColor = calColor,
-                                isDark = isDark,
-                                onToggle = { toggleTask(task) },
-                                onAction = { act -> onTaskAction(act, task) },
-                                onClick = onTaskClick,
-                                yankedUid = yankedUid,
-                                enabledCalendarCount = enabledCalendarCount,
-                                parentCategories = pCats,
-                                parentLocation = pLoc,
-                                aliasMap = aliases,
-                                isHighlighted = task.uid == highlightedUid,
-                                incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
-                            )
+                                TaskRow(
+                                    task = task,
+                                    calColor = calColor,
+                                    isDark = isDark,
+                                    onToggle = { toggleTask(task) },
+                                    onAction = { act -> onTaskAction(act, task) },
+                                    onClick = onTaskClick,
+                                    yankedUid = yankedUid,
+                                    enabledCalendarCount = enabledCalendarCount,
+                                    parentCategories = pCats,
+                                    parentLocation = pLoc,
+                                    aliasMap = aliases,
+                                    isHighlighted = task.uid == highlightedUid,
+                                    incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            // Scroll to top FAB
-            if (showScrollToTop) {
-                FloatingActionButton(
-                    onClick = {
-                        isProgrammaticScroll = true
-                        showScrollToTop = false
-                        scope.launch {
-                            listState.animateScrollToItem(0)
-                            isProgrammaticScroll = false
-                        }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .navigationBarsPadding()
-                        .offset(x = (-45).dp, y = 40.dp),
-                    containerColor = Color.Transparent,
-                ) {
-                    NfIcon(scrollToTopIcon, 28.sp, color = Color(0xf2660000))
+                // Scroll to top FAB
+                if (showScrollToTop) {
+                    FloatingActionButton(
+                        onClick = {
+                            isProgrammaticScroll = true
+                            showScrollToTop = false
+                            scope.launch {
+                                listState.animateScrollToItem(0)
+                                isProgrammaticScroll = false
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .navigationBarsPadding()
+                            .offset(x = (-45).dp, y = 40.dp),
+                        containerColor = Color.Transparent,
+                    ) {
+                        NfIcon(scrollToTopIcon, 28.sp, color = Color(0xf2660000))
+                    }
                 }
             }
-        }
         }
     }
 }

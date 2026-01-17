@@ -122,7 +122,11 @@ fun TaskDetailScreen(
             )
         },
     ) { p ->
-        Column(modifier = Modifier.padding(p).padding(16.dp)) {
+        Column(modifier = Modifier
+            .padding(p)
+            .imePadding()
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp)
+        ) {
             OutlinedTextField(
                 value = smartInput,
                 onValueChange = { smartInput = it.replace("\n", "") }, // Manually block newlines
