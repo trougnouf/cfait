@@ -121,11 +121,16 @@ def main():
             with open(flatpak_manifest, "w") as f:
                 f.write(manifest_content)
 
-    # 8. STAGE ALL FILES FOR GIT
+    # 8. Stage all files for git and update Cargo.lock
+    print("🔒 Updating Cargo.lock...")
+    subprocess.run(["cargo", "generate-lockfile"], check=True)
+
+    # 9. STAGE ALL FILES FOR GIT
     files_to_add = [
         fastlane_file,
         metainfo_path,
         "Cargo.toml",
+        "Cargo.lock",
         "CHANGELOG.md",
         # We add the manifest if it exists, so the version bump is committed
         flatpak_manifest if os.path.exists(flatpak_manifest) else None,
@@ -134,6 +139,7 @@ def main():
     # Filter out None values
     files_to_add = [f for f in files_to_add if f]
 
+    print(f"✅ Staging files for release commit: {', '.join(files_to_add)}")
     subprocess.run(
         ["git", "add"] + files_to_add,
         check=True,

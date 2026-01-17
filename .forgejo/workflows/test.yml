@@ -3,15 +3,15 @@ name: Test and Lint
 on:
   push:
     branches:
-      - '**'    # Run on all branches
+      - "**" # Run on all branches
     tags-ignore:
-      - '**'    # Do NOT run on tags
+      - "**" # Do NOT run on tags
   pull_request:
-  
+
 jobs:
   test:
     runs-on: self-hosted-arch
-    
+
     container:
       image: local/arch-builder
       volumes:
@@ -26,8 +26,3 @@ jobs:
 
       - name: Run linter (clippy)
         run: cargo clippy --all-features -- -D warnings
-
-      - name: Check if Cargo.lock is up-to-date
-        run: |
-          cargo generate-lockfile
-          git diff --exit-code -- Cargo.lock
