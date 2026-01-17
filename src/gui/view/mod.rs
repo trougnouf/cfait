@@ -936,12 +936,24 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .font(iced::Font::DEFAULT);
 
     let inner_content: Element<'_, Message> = if app.editing_uid.is_some() {
+        let max_desc_height = (app.current_window_size.height - 250.0).max(100.0);
+
         let input_desc = text_editor(&app.description_value)
             .id("description_input") // ID Added here
             .placeholder("Notes...")
             .on_action(Message::DescriptionChanged)
             .padding(10)
-            .height(Length::Fixed(100.0));
+            .height(Length::Shrink)
+            .min_height(100.0);
+
+        let scrollable_desc = scrollable(input_desc)
+            .height(Length::Shrink)
+            .direction(Direction::Vertical(
+                Scrollbar::new().width(10).scroller_width(10),
+            ));
+
+        let desc_container = container(scrollable_desc).max_height(max_desc_height);
+
         let cancel_btn = iced::widget::button(text("Cancel").size(16))
             .style(iced::widget::button::secondary)
             .on_press(Message::CancelEdit);
@@ -989,7 +1001,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                     .into();
             }
         }
-        column![top_bar, input_title, input_desc, move_element]
+        column![top_bar, input_title, desc_container, move_element]
             .spacing(10)
             .into()
     } else {
