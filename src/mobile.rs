@@ -1,4 +1,8 @@
-// UniFFI interface for exposing core logic to mobile platforms (Android).
+/* cfait/src/mobile.rs
+ *
+ * UniFFI interface for exposing core logic to mobile platforms (Android).
+ */
+
 use crate::alarm_index::AlarmIndex;
 use crate::cache::Cache;
 use crate::client::RustyClient;
@@ -843,12 +847,73 @@ impl CfaitMobile {
         #[cfg(target_os = "android")]
         log::debug!("add_task_smart() called with input: '{}'", input);
 
-        let config = Config::load().unwrap_or_default();
+        // Load mutable config so we can update aliases if present
+        let mut config = Config::load().unwrap_or_default();
+
+        // 1. Extract aliases from inline input (e.g., "#alias:=#real")
+        // Returns (clean_input, new_aliases_map)
+        let (clean_input, new_aliases) = crate::model::extract_inline_aliases(&input);
+
+        if !new_aliases.is_empty() {
+            // Validate
+            for (k, v) in &new_aliases {
+                crate::model::validate_alias_integrity(k, v, &config.tag_aliases)
+                    .map_err(MobileError::from)?;
+            }
+
+            // Update config
+            config.tag_aliases.extend(new_aliases.clone());
+            config.save().map_err(MobileError::from)?;
+
+            // Apply retroactive updates to store
+            let mut store = self.store.lock().await;
+            let mut all_modified = Vec::new();
+
+            for (key, tags) in &new_aliases {
+                let modified = store.apply_alias_retroactively(key, tags);
+                all_modified.extend(modified);
+            }
+            drop(store);
+
+            // Sync modified tasks
+            if !all_modified.is_empty() {
+                let client_guard = self.client.lock().await;
+                if let Some(client) = &*client_guard {
+                    for mut t in all_modified {
+                        let _ = client.update_task(&mut t).await;
+                    }
+                } else {
+                    for t in all_modified {
+                        let _ = crate::journal::Journal::push(crate::journal::Action::Update(t));
+                    }
+                }
+            }
+
+            // CHECK: Was this a pure definition?
+            // If the remaining input is just the alias key itself (single token starting with #, @@, or loc:),
+            // and no other text, we assume the user only wanted to define the alias, not create a task named "#alias".
+            let trimmed = clean_input.trim();
+            let is_pure_definition = trimmed.is_empty()
+                || (!trimmed.contains(' ')
+                    && (trimmed.starts_with('#')
+                        || trimmed.starts_with("@@")
+                        || trimmed.to_lowercase().starts_with("loc:")));
+
+            if is_pure_definition {
+                return Ok("ALIAS_UPDATED".to_string());
+            }
+        }
+
+        // If input is empty after extraction (no aliases or not handled above), we are done
+        if clean_input.trim().is_empty() {
+            return Ok("".to_string());
+        }
 
         // Parse time from config
         let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
-        let mut task = Task::new(&input, &config.tag_aliases, def_time);
+        // Create task with cleaned input and updated aliases
+        let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
 
         #[cfg(target_os = "android")]
         log::debug!(
@@ -857,6 +922,7 @@ impl CfaitMobile {
             task.summary,
             !task.alarms.is_empty()
         );
+
         let target_href = config
             .default_calendar
             .clone()
