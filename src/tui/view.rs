@@ -11,10 +11,90 @@ use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 use std::collections::HashSet;
+
+fn highlight_markdown_raw(input: &str) -> Text<'static> {
+    use ratatui::text::Text;
+    let mut lines = Vec::new();
+
+    // Preserve exact line endings and produce styled Lines for editing view.
+    for line in input.split_inclusive('\n') {
+        // Keep leading whitespace to preserve indentation
+        let trimmed = line.trim_start();
+        let mut spans = Vec::new();
+
+        // Headers (e.g., "# ...", "## ...")
+        if trimmed.starts_with('#') {
+            spans.push(Span::styled(
+                line.to_string(),
+                Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD),
+            ));
+        }
+        // List items ("- " or "* ")
+        else if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
+            spans.push(Span::styled(line.to_string(), Style::default().fg(Color::Yellow)));
+        }
+        // Blockquotes
+        else if trimmed.starts_with("> ") {
+            spans.push(Span::styled(
+                line.to_string(),
+                Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC),
+            ));
+        }
+        // Fenced code block marker
+        else if trimmed.starts_with("```") {
+            spans.push(Span::styled(line.to_string(), Style::default().fg(Color::Green)));
+        }
+        // Default: raw text (no styling) to preserve edit fidelity
+        else {
+            spans.push(Span::raw(line.to_string()));
+        }
+
+        lines.push(Line::from(spans));
+    }
+
+    if input.is_empty() {
+        lines.push(Line::from(""));
+    }
+
+    Text::from(lines)
+}
+
+fn format_description_for_markdown(raw: &str) -> String {
+    // Normalize CRLF to LF
+    let text = raw.replace("\r\n", "\n");
+
+    // Split into paragraphs (double-newline separated). For each paragraph, if it
+    // already contains Markdown structural elements (headers, lists, quotes, code
+    // fences) we leave it alone. Otherwise we treat it as plain text and force
+    // hard line breaks by appending two spaces before each newline so Markdown
+    // will render single line breaks as intended.
+    let paragraphs: Vec<String> = text
+        .split("\n\n")
+        .map(|p| {
+            let has_md_structure = p.lines().any(|l| {
+                let t = l.trim();
+                t.starts_with('#') || // header
+                t.starts_with("- ") || // list
+                t.starts_with("* ") || // list
+                t.starts_with("> ") || // quote
+                t.starts_with("```")   // code fence
+            });
+
+            if has_md_structure {
+                p.to_string()
+            } else {
+                // Force hard breaks for plain text
+                p.replace('\n', "  \n")
+            }
+        })
+        .collect();
+
+    paragraphs.join("\n\n")
+}
 
 pub fn draw(f: &mut Frame, state: &mut AppState) {
     let full_help_text = vec![
@@ -118,7 +198,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
     // --- 1. Prepare Details Text ---
     // We'll build this after rendering the task list so we know if the title was truncated
-    let mut full_details = String::new();
+    let mut details_md = String::new();
     let mut selected_task_was_truncated = false;
 
     // --- 2. Dynamic Layout (before rendering tasks so we know the width) ---
@@ -598,65 +678,63 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     if let Some(task) = state.get_selected_task() {
         // Only show title if it was truncated in the list
         if selected_task_was_truncated && !task.summary.is_empty() {
-            full_details.push_str(&task.summary);
-            full_details.push_str("\n\n");
+            details_md.push_str(&task.summary);
+            details_md.push_str("\n\n");
         }
 
         if !task.description.is_empty() {
-            full_details.push_str(&task.description);
-            full_details.push_str("\n\n");
+            // FIX: Auto-format plain text so single newlines are preserved in the
+            // Markdown viewer. If the user wrote Markdown blocks we keep them as-is.
+            let formatted_desc = format_description_for_markdown(&task.description);
+            details_md.push_str(&formatted_desc);
+            details_md.push_str("\n\n");
         }
 
-        // Render extra fields
-        if let Some(url) = &task.url {
-            full_details.push_str(&format!("URL: {}\n", url));
-        }
-        if let Some(geo) = &task.geo {
-            full_details.push_str(&format!("Geo: {}\n", geo));
-        }
-        if let Some(loc) = &task.location {
-            full_details.push_str(&format!("Location: {}\n", loc));
-        }
-        if !full_details.is_empty() {
-            full_details.push('\n');
+        // Add Metadata as a list or bolded sections
+        let mut meta = Vec::new();
+        if let Some(url) = &task.url { meta.push(format!("- **URL:** {}", url)); }
+        if let Some(geo) = &task.geo { meta.push(format!("- **Geo:** {}", geo)); }
+        if let Some(loc) = &task.location { meta.push(format!("- **Location:** {}", loc)); }
+
+        if !meta.is_empty() {
+            details_md.push_str("---\n"); // Separator
+            details_md.push_str(&meta.join("\n"));
+            details_md.push_str("\n\n");
         }
 
         if !task.dependencies.is_empty() {
-            full_details.push_str("[Blocked By]:\n");
+            details_md.push_str("### Blocked By\n");
             for dep_uid in &task.dependencies {
-                let name = state
-                    .store
-                    .get_summary(dep_uid)
-                    .unwrap_or_else(|| "Unknown task".to_string());
+                let name = state.store.get_summary(dep_uid).unwrap_or_else(|| "Unknown".to_string());
                 let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
                 let check = if is_done { "[x]" } else { "[ ]" };
-                full_details.push_str(&format!(" {} {}\n", check, name));
+                details_md.push_str(&format!("- {} {}\n", check, name));
             }
+            details_md.push('\n');
         }
 
-        // Outgoing relations (this task → others)
+        // Outgoing relations (this task -> others)
         if !task.related_to.is_empty() {
-            full_details.push_str("[Related To]:\n");
+            details_md.push_str("### Related To\n");
             for related_uid in &task.related_to {
-                let name = state
-                    .store
-                    .get_summary(related_uid)
-                    .unwrap_or_else(|| "Unknown task".to_string());
-                full_details.push_str(&format!(" → {}\n", name));
+                let name = state.store.get_summary(related_uid).unwrap_or_else(|| "Unknown".to_string());
+                details_md.push_str(&format!("- {}\n", name));
             }
+            details_md.push('\n');
         }
 
-        // Incoming relations (others → this task)
+        // Incoming relations (others -> this task)
         let incoming_related = state.store.get_tasks_related_to(&task.uid);
         if !incoming_related.is_empty() {
-            full_details.push_str("[Related From]:\n");
+            details_md.push_str("### Related From\n");
             for (_related_uid, related_name) in incoming_related {
-                full_details.push_str(&format!(" ← {}\n", related_name));
+                details_md.push_str(&format!("- {}\n", related_name));
             }
+            details_md.push('\n');
         }
     }
-    if full_details.is_empty() {
-        full_details = "No details.".to_string();
+    if details_md.is_empty() {
+        details_md = "_No details_".to_string();
     }
 
     let active_count = state.tasks.iter().filter(|t| !t.status.is_done()).count();
@@ -666,7 +744,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     let mut required_lines: u16 = 0;
 
     if details_width > 0 {
-        for line in full_details.lines() {
+        for line in details_md.lines() {
             let line_len = line.chars().count() as u16;
             if line_len == 0 {
                 required_lines += 1;
@@ -725,167 +803,175 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         );
     f.render_stateful_widget(task_list, main_chunks[0], &mut state.list_state);
 
-    // Details
-    let details = Paragraph::new(full_details)
-        .wrap(Wrap { trim: true })
-        .block(Block::default().borders(Borders::ALL).title(" Details "));
-    f.render_widget(details, main_chunks[1]);
+    // Details (rendered as Markdown when not editing description)
+    // details_md is built directly above; no clone needed
+    if state.mode != InputMode::EditingDescription {
+        // Render markdown for the details pane
+        let md_text = tui_markdown::from_str(&details_md);
+
+        let details_block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Details (Markdown) ")
+            .border_style(Style::default().fg(Color::Blue));
+
+        let p = Paragraph::new(md_text)
+            .block(details_block)
+            .wrap(Wrap { trim: true });
+
+        f.render_widget(p, main_chunks[1]);
+    } else {
+        // While editing description, keep details pane subdued so popup stands out.
+        let p = Paragraph::new("Editing description...")
+            .block(Block::default().borders(Borders::ALL).title(" Details ").style(Style::default().fg(Color::DarkGray)));
+        f.render_widget(p, main_chunks[1]);
+    }
 
     // Footer
     let footer_area = v_chunks[1];
     f.render_widget(Clear, footer_area);
 
     match state.mode {
-        InputMode::Creating
-        | InputMode::Editing
-        | InputMode::Searching
-        | InputMode::EditingDescription => {
-            let (mut title_str, prefix, color) = match state.mode {
-                InputMode::Searching => (" Search ".to_string(), "/ ", Color::Green),
-                InputMode::Editing => (" Edit Title ".to_string(), "> ", Color::Magenta),
-                InputMode::EditingDescription => {
-                    (" Edit Description ".to_string(), "📝 ", Color::Blue)
+            InputMode::Creating
+            | InputMode::Editing
+            | InputMode::Searching
+            | InputMode::EditingDescription => {
+                let (mut title_str, prefix, color) = match state.mode {
+                    InputMode::Searching => (" Search ".to_string(), "/ ", Color::Green),
+                    InputMode::Editing => (" Edit Title ".to_string(), "> ", Color::Magenta),
+                    InputMode::EditingDescription => {
+                        (" Edit Description ".to_string(), "📝 ", Color::Blue)
+                    }
+                    InputMode::Creating => {
+                        if state.creating_child_of.is_some() {
+                            (" Create Child Task ".to_string(), "> ", Color::LightYellow)
+                        } else {
+                            (" Create Task ".to_string(), "> ", Color::Yellow)
+                        }
+                    }
+                    _ => (" Create Task ".to_string(), "> ", Color::Yellow),
+                };
+
+                let show_tag_hint = (state.mode == InputMode::Searching
+                    && state.input_buffer.starts_with('#'))
+                    || (state.mode == InputMode::Creating
+                        && state.input_buffer.starts_with('#')
+                        && state.creating_child_of.is_none());
+
+                if show_tag_hint {
+                    title_str.push_str(" [Enter to jump to tag] ");
                 }
-                InputMode::Creating => {
-                    if state.creating_child_of.is_some() {
-                        (" Create Child Task ".to_string(), "> ", Color::LightYellow)
+
+                let prefix_span = Span::styled(prefix, Style::default().fg(color));
+
+                // 1. Calculate available width for the input text
+                // Width - 2 (borders) - prefix width - 1 (cursor spacing/padding)
+                let inner_width = footer_area.width.saturating_sub(2) as usize;
+                let prefix_width = prefix.chars().count();
+                let input_area_width = inner_width.saturating_sub(prefix_width).saturating_sub(1);
+
+                // 2. Determine Horizontal Scroll Offset
+                // For non-description single-line inputs we maintain sliding window scrolling.
+                let (visible_text, scroll_offset) = if state.mode == InputMode::EditingDescription {
+                    // Description editing will be handled in a centered popup, so footer will show a minimal hint.
+                    (String::new(), 0)
+                } else {
+                    let cursor = state.cursor_position;
+                    if cursor >= input_area_width {
+                        // Shift the view so the cursor is at the end
+                        let offset = cursor - input_area_width + 1;
+                        let slice: String = state
+                            .input_buffer
+                            .chars()
+                            .skip(offset)
+                            .take(input_area_width)
+                            .collect();
+                        (slice, offset)
                     } else {
-                        (" Create Task ".to_string(), "> ", Color::Yellow)
+                        // Start from 0, possibly truncate end if too long (though cursor is within bounds)
+                        let slice: String = state.input_buffer.chars().take(input_area_width).collect();
+                        (slice, 0)
+                    }
+                };
+
+                let mut input_spans = vec![prefix_span];
+
+                if state.mode == InputMode::EditingDescription {
+                    // Footer shows a compact hint while the large popup editor is visible.
+                    input_spans.push(Span::raw("Press Enter for newline. Esc / Ctrl+S to save."));
+                } else {
+                    // Tokenize the *visible* slice for single-line inputs.
+                    let tokens = tokenize_smart_input(&visible_text);
+
+                    for token in tokens {
+                        let text = &visible_text[token.start..token.end];
+                        let style = match token.kind {
+                            SyntaxType::Priority => {
+                                let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
+                                match p {
+                                    1 => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                                    2..=4 => Style::default().fg(Color::LightRed),
+                                    5 => Style::default().fg(Color::Yellow),
+                                    6..=8 => Style::default().fg(Color::LightBlue),
+                                    9 => Style::default().fg(Color::DarkGray),
+                                    _ => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                                }
+                            }
+                            SyntaxType::DueDate => Style::default().fg(Color::Blue),
+                            SyntaxType::StartDate => Style::default().fg(Color::Green),
+                            SyntaxType::Recurrence => Style::default().fg(Color::Magenta),
+                            SyntaxType::Duration => Style::default().fg(Color::DarkGray),
+                            SyntaxType::Tag => {
+                                let tag_name = text.trim_start_matches('#');
+                                let (r, g, b) = color_utils::generate_color(tag_name);
+                                Style::default().fg(Color::Rgb(
+                                    (r * 255.0) as u8,
+                                    (g * 255.0) as u8,
+                                    (b * 255.0) as u8,
+                                ))
+                            }
+                            SyntaxType::Text => Style::default().fg(color),
+                            // New fields syntax highlight
+                            SyntaxType::Location => Style::default().fg(Color::LightCyan),
+                            SyntaxType::Url => Style::default().fg(Color::Blue),
+                            SyntaxType::Geo => Style::default().fg(Color::DarkGray),
+                            SyntaxType::Description => Style::default().fg(Color::Gray),
+                            SyntaxType::Reminder => Style::default().fg(Color::LightRed),
+                        };
+                        input_spans.push(Span::styled(text, style));
                     }
                 }
-                _ => (" Create Task ".to_string(), "> ", Color::Yellow),
-            };
 
-            let show_tag_hint = (state.mode == InputMode::Searching
-                && state.input_buffer.starts_with('#'))
-                || (state.mode == InputMode::Creating
-                    && state.input_buffer.starts_with('#')
-                    && state.creating_child_of.is_none());
+                let input_text = Line::from(input_spans);
 
-            if show_tag_hint {
-                title_str.push_str(" [Enter to jump to tag] ");
-            }
+                let input = Paragraph::new(input_text)
+                    .style(Style::default())
+                    .block(Block::default().borders(Borders::ALL).title(title_str))
+                    .wrap(Wrap { trim: false });
 
-            let prefix_span = Span::styled(prefix, Style::default().fg(color));
+                f.render_widget(input, footer_area);
 
-            // 1. Calculate available width for the input text
-            // Width - 2 (borders) - prefix width - 1 (cursor spacing/padding)
-            let inner_width = footer_area.width.saturating_sub(2) as usize;
-            let prefix_width = prefix.chars().count();
-            let input_area_width = inner_width.saturating_sub(prefix_width).saturating_sub(1);
-
-            // 2. Determine Horizontal Scroll Offset
-            // If editing description, we allow wrapping (multiline).
-            // For single-line inputs, we scroll.
-            let (visible_text, scroll_offset) = if state.mode == InputMode::EditingDescription {
-                (state.input_buffer.clone(), 0)
-            } else {
-                let cursor = state.cursor_position;
-                if cursor >= input_area_width {
-                    // Shift the view so the cursor is at the end
-                    let offset = cursor - input_area_width + 1;
-                    let slice: String = state
-                        .input_buffer
-                        .chars()
-                        .skip(offset)
-                        .take(input_area_width)
-                        .collect();
-                    (slice, offset)
+                // 3. Render Cursor relative to Scroll Offset
+                if state.mode == InputMode::EditingDescription {
+                    // Cursor is handled inside the popup editor; move cursor out of footer.
+                    // Place it off-screen or at footer hint start to avoid accidental background selection.
+                    let cursor_x = footer_area.x + 2;
+                    let cursor_y = footer_area.y + 1;
+                    f.set_cursor_position((cursor_x, cursor_y));
                 } else {
-                    // Start from 0, possibly truncate end if too long (though cursor is within bounds)
-                    let slice: String = state.input_buffer.chars().take(input_area_width).collect();
-                    (slice, 0)
-                }
-            };
+                    // Single line sliding window cursor
+                    let visual_cursor_offset = state.cursor_position.saturating_sub(scroll_offset);
 
-            let mut input_spans = vec![prefix_span];
+                    let cursor_x = footer_area.x
+                        + 1 // Border
+                        + prefix_width as u16
+                        + visual_cursor_offset as u16;
 
-            if state.mode == InputMode::EditingDescription {
-                input_spans.push(Span::raw(&visible_text));
-            } else {
-                // Tokenize the *visible* slice.
-                // Note: Truncated tokens might lose coloring, which is acceptable behavior during scrolling.
-                let tokens = tokenize_smart_input(&visible_text);
-
-                for token in tokens {
-                    let text = &visible_text[token.start..token.end];
-                    let style = match token.kind {
-                        SyntaxType::Priority => {
-                            let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
-                            match p {
-                                1 => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                                2..=4 => Style::default().fg(Color::LightRed),
-                                5 => Style::default().fg(Color::Yellow),
-                                6..=8 => Style::default().fg(Color::LightBlue),
-                                9 => Style::default().fg(Color::DarkGray),
-                                _ => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                            }
-                        }
-                        SyntaxType::DueDate => Style::default().fg(Color::Blue),
-                        SyntaxType::StartDate => Style::default().fg(Color::Green),
-                        SyntaxType::Recurrence => Style::default().fg(Color::Magenta),
-                        SyntaxType::Duration => Style::default().fg(Color::DarkGray),
-                        SyntaxType::Tag => {
-                            let tag_name = text.trim_start_matches('#');
-                            let (r, g, b) = color_utils::generate_color(tag_name);
-                            Style::default().fg(Color::Rgb(
-                                (r * 255.0) as u8,
-                                (g * 255.0) as u8,
-                                (b * 255.0) as u8,
-                            ))
-                        }
-                        SyntaxType::Text => Style::default().fg(color),
-                        // New fields syntax highlight
-                        SyntaxType::Location => Style::default().fg(Color::LightCyan),
-                        SyntaxType::Url => Style::default().fg(Color::Blue),
-                        SyntaxType::Geo => Style::default().fg(Color::DarkGray),
-                        SyntaxType::Description => Style::default().fg(Color::Gray),
-                        SyntaxType::Reminder => Style::default().fg(Color::LightRed),
-                    };
-                    input_spans.push(Span::styled(text, style));
-                }
-            }
-
-            let input_text = Line::from(input_spans);
-
-            let input = Paragraph::new(input_text)
-                .style(Style::default())
-                .block(Block::default().borders(Borders::ALL).title(title_str))
-                .wrap(Wrap { trim: false }); // Wrap is fine for Description, ignored for others due to slicing
-
-            f.render_widget(input, footer_area);
-
-            // 3. Render Cursor relative to Scroll Offset
-            if state.mode == InputMode::EditingDescription {
-                // Multiline cursor logic (simplified: ratatui handles multiline text well,
-                // but exact cursor placement on wrapped lines requires more complex logic.
-                // For now, we leave the existing simple logic or improve it if needed.
-                // The prompt specifically asked about the "long name" bug which is single line).
-                // Keep existing logic for Description for now:
-                let term_width = footer_area.width.saturating_sub(2) as usize;
-                if term_width > 0 {
-                    let x = (state.cursor_position % term_width) as u16;
-                    let y = (state.cursor_position / term_width) as u16;
                     f.set_cursor_position((
-                        footer_area.x + 1 + prefix_width as u16 + x,
-                        footer_area.y + 1 + y,
+                        cursor_x.min(footer_area.x + footer_area.width - 2),
+                        footer_area.y + 1,
                     ));
                 }
-            } else {
-                // Single line sliding window cursor
-                let visual_cursor_offset = state.cursor_position.saturating_sub(scroll_offset);
-
-                let cursor_x = footer_area.x
-                    + 1 // Border
-                    + prefix_width as u16
-                    + visual_cursor_offset as u16;
-
-                f.set_cursor_position((
-                    cursor_x.min(footer_area.x + footer_area.width - 2),
-                    footer_area.y + 1,
-                ));
             }
-        }
         _ => {
             if state.show_full_help {
                 let p = Paragraph::new(full_help_text)
@@ -1096,6 +1182,74 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
         f.render_widget(Clear, area);
         f.render_widget(p, area);
+    }
+
+    // --- POPUP FOR DESCRIPTION EDITING ---
+    if state.mode == InputMode::EditingDescription {
+
+        let area = centered_rect(80, 70, f.area());
+        f.render_widget(Clear, area);
+
+        let block = Block::default()
+            .title(" Edit Description (Markdown Supported) ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow));
+
+        // Draw the block border (outer popup)
+        f.render_widget(block.clone(), area);
+
+        // Compute inner area and split for editor + footer
+        let inner_area = block.inner(area);
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(0), Constraint::Length(1)])
+            .split(inner_area);
+
+        // --- SCROLLING & CURSOR CALCULATIONS (newline-aware) ---
+        let cursor_pos = state.cursor_position.min(state.input_buffer.len());
+        let text_up_to_cursor = &state.input_buffer[..cursor_pos];
+        let cursor_row = text_up_to_cursor.chars().filter(|&c| c == '\n').count() as u16;
+        let last_newline_pos = text_up_to_cursor.rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let cursor_col = (cursor_pos - last_newline_pos) as u16;
+
+        let viewport_height = chunks[0].height;
+
+        // Auto-scroll: keep cursor within visible viewport
+        if cursor_row < state.edit_scroll_offset {
+            state.edit_scroll_offset = cursor_row;
+        }
+        if cursor_row >= state.edit_scroll_offset + viewport_height {
+            state.edit_scroll_offset = cursor_row - viewport_height + 1;
+        }
+
+        // Render highlighted content inside a Paragraph. We use a plain Block
+        // for the inner paragraph; the outer popup border was already drawn.
+        let styled_content = highlight_markdown_raw(&state.input_buffer);
+
+        let p = Paragraph::new(styled_content)
+            .block(Block::default())
+            .scroll((state.edit_scroll_offset, 0));
+
+        f.render_widget(block, area);
+        f.render_widget(p, chunks[0]);
+
+        // Instructions footer
+        let instructions = Line::from(vec![
+            Span::styled("Ctrl+S", Style::default().fg(Color::Yellow)),
+            Span::raw(": Save  "),
+            Span::styled("Esc", Style::default().fg(Color::Yellow)),
+            Span::raw(": Cancel"),
+        ]);
+        f.render_widget(Paragraph::new(instructions).alignment(Alignment::Center), chunks[1]);
+
+        // Draw cursor relative to visible viewport (only if visible)
+        let visual_cursor_row = cursor_row.saturating_sub(state.edit_scroll_offset);
+        if visual_cursor_row < viewport_height {
+            f.set_cursor_position((
+                chunks[0].x + cursor_col,
+                chunks[0].y + visual_cursor_row,
+            ));
+        }
     }
 }
 

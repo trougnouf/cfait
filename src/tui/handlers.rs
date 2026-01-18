@@ -1,13 +1,13 @@
 // Handles keyboard input and system events for the TUI.
 use crate::config::Config;
-use crate::model::parser::parse_duration;
-use crate::model::{Task, TaskStatus, extract_inline_aliases, validate_alias_integrity};
+use crate::model::parser::{extract_inline_aliases, validate_alias_integrity, parse_duration};
+use crate::model::{Task, TaskStatus};
 use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::system::SystemEvent;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
 use crate::tui::state::{AppState, Focus, InputMode};
 use chrono::NaiveTime;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
@@ -288,40 +288,76 @@ pub async fn handle_key_event(
             _ => {}
         },
         InputMode::EditingDescription => match key.code {
+            // Enter inserts a newline
             KeyCode::Enter => {
-                if key.modifiers.contains(crossterm::event::KeyModifiers::ALT)
-                    || key
-                        .modifiers
-                        .contains(crossterm::event::KeyModifiers::SHIFT)
-                {
-                    state.enter_char('\n');
-                } else {
-                    let target_uid: Option<String> = state
-                        .editing_index
-                        .and_then(|idx| state.tasks.get(idx).map(|t| t.uid.clone()));
+                state.enter_char('\n');
+            }
+            // Save: Ctrl+S
+            KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let target_uid: Option<String> = state
+                    .editing_index
+                    .and_then(|idx| state.tasks.get(idx).map(|t| t.uid.clone()));
 
-                    if let Some(uid) = target_uid
-                        && let Some((t, _)) = state.store.get_task_mut(&uid)
-                    {
-                        t.description = state.input_buffer.clone();
-                        let clone = t.clone();
-                        state.refresh_filtered_view();
-                        state.mode = InputMode::Normal;
-                        state.reset_input();
-                        return Some(Action::UpdateTask(clone));
-                    }
+                if let Some(uid) = target_uid
+                    && let Some((t, _)) = state.store.get_task_mut(&uid)
+                {
+                    t.description = state.input_buffer.clone();
+                    let clone = t.clone();
+                    state.refresh_filtered_view();
                     state.mode = InputMode::Normal;
                     state.reset_input();
+                    return Some(Action::UpdateTask(clone));
                 }
-            }
-            KeyCode::Esc => {
                 state.mode = InputMode::Normal;
                 state.reset_input();
             }
+            // Cancel: Esc
+            KeyCode::Esc => {
+                state.mode = InputMode::Normal;
+                state.reset_input();
+                state.message = "Editing cancelled.".to_string();
+            }
+            // Editing & Navigation
             KeyCode::Char(c) => state.enter_char(c),
             KeyCode::Backspace => state.delete_char(),
             KeyCode::Left => state.move_cursor_left(),
             KeyCode::Right => state.move_cursor_right(),
+            KeyCode::Up => {
+                // Move cursor to same column on previous line (or start)
+                let text_before = &state.input_buffer[..state.cursor_position];
+                let current_line_start = text_before.rfind('\n').map(|i| i + 1).unwrap_or(0);
+                let col = state.cursor_position - current_line_start;
+
+                if current_line_start > 0 {
+                    let prev_line_end = current_line_start - 1;
+                    let prev_line_start = state.input_buffer[..prev_line_end]
+                        .rfind('\n')
+                        .map(|i| i + 1)
+                        .unwrap_or(0);
+                    let prev_line_len = prev_line_end - prev_line_start;
+                    let new_col = col.min(prev_line_len);
+                    state.cursor_position = prev_line_start + new_col;
+                } else {
+                    state.cursor_position = 0;
+                }
+            }
+            KeyCode::Down => {
+                // Move cursor to same column on next line (or end)
+                let text_after = &state.input_buffer[state.cursor_position..];
+                if let Some(newline_offset) = text_after.find('\n') {
+                    let next_line_start = state.cursor_position + newline_offset + 1;
+                    let text_before = &state.input_buffer[..state.cursor_position];
+                    let current_line_start = text_before.rfind('\n').map(|i| i + 1).unwrap_or(0);
+                    let col = state.cursor_position - current_line_start;
+
+                    let text_after_next = &state.input_buffer[next_line_start..];
+                    let next_line_len = text_after_next.find('\n').unwrap_or(text_after_next.len());
+                    let new_col = col.min(next_line_len);
+                    state.cursor_position = next_line_start + new_col;
+                } else {
+                    state.cursor_position = state.input_buffer.len();
+                }
+            }
             _ => {}
         },
         InputMode::Snoozing => match key.code {
@@ -919,8 +955,11 @@ pub async fn handle_key_event(
                 if state.active_focus == Focus::Main
                     && let Some(t) = state.get_selected_task()
                 {
+                    // Load description into input buffer for manual editing
                     state.input_buffer = t.description.clone();
                     state.cursor_position = state.input_buffer.len();
+                    state.edit_scroll_offset = 0;
+
                     state.editing_index = state.list_state.selected();
                     state.mode = InputMode::EditingDescription;
                 }
