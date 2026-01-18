@@ -15,6 +15,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 use std::collections::HashSet;
+use unicode_width::UnicodeWidthStr;
 
 fn highlight_markdown_raw(input: &str) -> Text<'static> {
     use ratatui::text::Text;
@@ -1186,7 +1187,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
     // --- POPUP FOR DESCRIPTION EDITING ---
     if state.mode == InputMode::EditingDescription {
-
         let area = centered_rect(80, 70, f.area());
         f.render_widget(Clear, area);
 
@@ -1195,9 +1195,6 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Yellow));
 
-        // Draw the block border (outer popup)
-        f.render_widget(block.clone(), area);
-
         // Compute inner area and split for editor + footer
         let inner_area = block.inner(area);
         let chunks = Layout::default()
@@ -1205,16 +1202,28 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .constraints([Constraint::Min(0), Constraint::Length(1)])
             .split(inner_area);
 
-        // --- SCROLLING & CURSOR CALCULATIONS (newline-aware) ---
-        let cursor_pos = state.cursor_position.min(state.input_buffer.len());
-        let text_up_to_cursor = &state.input_buffer[..cursor_pos];
-        let cursor_row = text_up_to_cursor.chars().filter(|&c| c == '\n').count() as u16;
-        let last_newline_pos = text_up_to_cursor.rfind('\n').map(|i| i + 1).unwrap_or(0);
-        let cursor_col = (cursor_pos - last_newline_pos) as u16;
-
+        // --- NEW 2D SCROLLING LOGIC (No Wrap) ---
         let viewport_height = chunks[0].height;
+        let viewport_width = chunks[0].width.saturating_sub(1); // Safety margin
 
-        // Auto-scroll: keep cursor within visible viewport
+        // 1. Calculate Cursor Row (newlines)
+        // Safely get a &str of the input up to the cursor (cursor is indexed by chars)
+        let byte_idx_at_cursor = state
+            .input_buffer
+            .char_indices()
+            .map(|(i, _)| i)
+            .nth(state.cursor_position)
+            .unwrap_or(state.input_buffer.len());
+        let text_up_to_cursor = &state.input_buffer[..byte_idx_at_cursor];
+        let cursor_row = text_up_to_cursor.chars().filter(|&c| c == '\n').count() as u16;
+
+        // 2. Calculate Cursor Column (visual width)
+        // Find the string slice of the CURRENT line up to cursor
+        let last_newline_byte_idx = text_up_to_cursor.rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let current_line_slice = &text_up_to_cursor[last_newline_byte_idx..];
+        let cursor_col = current_line_slice.width() as u16;
+
+        // 3. Update Vertical Scroll
         if cursor_row < state.edit_scroll_offset {
             state.edit_scroll_offset = cursor_row;
         }
@@ -1222,19 +1231,28 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             state.edit_scroll_offset = cursor_row - viewport_height + 1;
         }
 
-        // Render highlighted content inside a Paragraph. We use a plain Block
-        // for the inner paragraph; the outer popup border was already drawn.
-        let styled_content = highlight_markdown_raw(&state.input_buffer);
+        // 4. Update Horizontal Scroll
+        if cursor_col < state.edit_scroll_x {
+            state.edit_scroll_x = cursor_col;
+        }
+        if cursor_col >= state.edit_scroll_x + viewport_width {
+            state.edit_scroll_x = cursor_col - viewport_width + 1;
+        }
 
+        // 5. Render Paragraph
+        let styled_content = highlight_markdown_raw(&state.input_buffer);
         let p = Paragraph::new(styled_content)
             .block(Block::default())
-            .scroll((state.edit_scroll_offset, 0));
+            // FIX: Removed .wrap() call entirely to disable wrapping.
+            .scroll((state.edit_scroll_offset, state.edit_scroll_x));
 
         f.render_widget(block, area);
         f.render_widget(p, chunks[0]);
 
-        // Instructions footer
+        // Instructions
         let instructions = Line::from(vec![
+            Span::styled("Enter", Style::default().fg(Color::Yellow)),
+            Span::raw(": NewLine  "),
             Span::styled("Ctrl+S", Style::default().fg(Color::Yellow)),
             Span::raw(": Save  "),
             Span::styled("Esc", Style::default().fg(Color::Yellow)),
@@ -1242,12 +1260,15 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         ]);
         f.render_widget(Paragraph::new(instructions).alignment(Alignment::Center), chunks[1]);
 
-        // Draw cursor relative to visible viewport (only if visible)
-        let visual_cursor_row = cursor_row.saturating_sub(state.edit_scroll_offset);
-        if visual_cursor_row < viewport_height {
+        // 6. Set Cursor
+        // Calculate visual coords relative to scroll window
+        let visual_row = cursor_row.saturating_sub(state.edit_scroll_offset);
+        let visual_col = cursor_col.saturating_sub(state.edit_scroll_x);
+
+        if visual_row < viewport_height && visual_col < chunks[0].width {
             f.set_cursor_position((
-                chunks[0].x + cursor_col,
-                chunks[0].y + visual_cursor_row,
+                chunks[0].x + visual_col,
+                chunks[0].y + visual_row,
             ));
         }
     }

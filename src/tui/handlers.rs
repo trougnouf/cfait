@@ -121,6 +121,12 @@ pub async fn handle_key_event(
         }
     }
     // --------------------------
+    // --- SANITY CHECK ---
+    // Prevent out-of-bounds panics if cursor drift happened
+    let char_count = state.input_buffer.chars().count();
+    if state.cursor_position > char_count {
+        state.cursor_position = char_count;
+    }
 
     match state.mode {
         InputMode::Creating => match key.code {
@@ -318,23 +324,46 @@ pub async fn handle_key_event(
                 state.message = "Editing cancelled.".to_string();
             }
             // Editing & Navigation
-            KeyCode::Char(c) => state.enter_char(c),
+            KeyCode::Char(c) => {
+                // FIX: Sanitize control characters and normalize tabs to spaces.
+                // Convert Tab to 4 spaces to ensure cursor math matches rendering.
+                if c == '\t' {
+                    for _ in 0..4 {
+                        state.enter_char(' ');
+                    }
+                } else if !c.is_control() || c == '\n' {
+                    state.enter_char(c);
+                }
+            },
             KeyCode::Backspace => state.delete_char(),
             KeyCode::Left => state.move_cursor_left(),
             KeyCode::Right => state.move_cursor_right(),
             KeyCode::Up => {
                 // Move cursor to same column on previous line (or start)
-                let text_before = &state.input_buffer[..state.cursor_position];
-                let current_line_start = text_before.rfind('\n').map(|i| i + 1).unwrap_or(0);
-                let col = state.cursor_position - current_line_start;
+                let current_idx = state.cursor_position;
+                let chars: Vec<char> = state.input_buffer.chars().collect();
 
-                if current_line_start > 0 {
-                    let prev_line_end = current_line_start - 1;
-                    let prev_line_start = state.input_buffer[..prev_line_end]
-                        .rfind('\n')
-                        .map(|i| i + 1)
-                        .unwrap_or(0);
-                    let prev_line_len = prev_line_end - prev_line_start;
+                // 1. Find start of current line
+                let mut line_start = current_idx;
+                while line_start > 0 && chars[line_start - 1] != '\n' {
+                    line_start -= 1;
+                }
+
+                // 2. Calculate column offset
+                let col = current_idx - line_start;
+
+                if line_start > 0 {
+                    // 3. Find start of previous line
+                    let mut prev_line_start = line_start - 1;
+                    while prev_line_start > 0 && chars[prev_line_start - 1] != '\n' {
+                        prev_line_start -= 1;
+                    }
+
+                    // 4. Determine length of previous line
+                    // (line_start - 1) is the newline char itself
+                    let prev_line_len = (line_start - 1) - prev_line_start;
+
+                    // 5. Move to min(col, prev_len)
                     let new_col = col.min(prev_line_len);
                     state.cursor_position = prev_line_start + new_col;
                 } else {
@@ -342,20 +371,38 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Down => {
-                // Move cursor to same column on next line (or end)
-                let text_after = &state.input_buffer[state.cursor_position..];
-                if let Some(newline_offset) = text_after.find('\n') {
-                    let next_line_start = state.cursor_position + newline_offset + 1;
-                    let text_before = &state.input_buffer[..state.cursor_position];
-                    let current_line_start = text_before.rfind('\n').map(|i| i + 1).unwrap_or(0);
-                    let col = state.cursor_position - current_line_start;
+                let current_idx = state.cursor_position;
+                let chars: Vec<char> = state.input_buffer.chars().collect();
+                let total = chars.len();
 
-                    let text_after_next = &state.input_buffer[next_line_start..];
-                    let next_line_len = text_after_next.find('\n').unwrap_or(text_after_next.len());
+                // 1. Find start of current line and column
+                let mut line_start = current_idx;
+                while line_start > 0 && chars[line_start - 1] != '\n' {
+                    line_start -= 1;
+                }
+                let col = current_idx - line_start;
+
+                // 2. Find end of current line (start of next)
+                let mut next_line_start = current_idx;
+                while next_line_start < total && chars[next_line_start] != '\n' {
+                    next_line_start += 1;
+                }
+
+                if next_line_start < total {
+                    next_line_start += 1; // Skip the newline
+
+                    // 3. Find length of next line
+                    let mut next_line_end = next_line_start;
+                    while next_line_end < total && chars[next_line_end] != '\n' {
+                        next_line_end += 1;
+                    }
+                    let next_line_len = next_line_end - next_line_start;
+
+                    // 4. Move
                     let new_col = col.min(next_line_len);
                     state.cursor_position = next_line_start + new_col;
                 } else {
-                    state.cursor_position = state.input_buffer.len();
+                    state.cursor_position = total;
                 }
             }
             _ => {}
@@ -598,7 +645,7 @@ pub async fn handle_key_event(
                     }
 
                     state.input_buffer = initial_input;
-                    state.cursor_position = state.input_buffer.len();
+                    state.cursor_position = state.input_buffer.chars().count();
 
                     state.mode = InputMode::Creating;
                     state.creating_child_of = Some(uid);
@@ -946,7 +993,7 @@ pub async fn handle_key_event(
             KeyCode::Char('e') => {
                 if let Some(t) = state.get_selected_task() {
                     state.input_buffer = t.to_smart_string();
-                    state.cursor_position = state.input_buffer.len();
+                    state.cursor_position = state.input_buffer.chars().count();
                     state.editing_index = state.list_state.selected();
                     state.mode = InputMode::Editing;
                 }
@@ -957,8 +1004,11 @@ pub async fn handle_key_event(
                 {
                     // Load description into input buffer for manual editing
                     state.input_buffer = t.description.clone();
-                    state.cursor_position = state.input_buffer.len();
+                    state.cursor_position = state.input_buffer.chars().count();
+
+                    // Reset BOTH scroll offsets (vertical + horizontal)
                     state.edit_scroll_offset = 0;
+                    state.edit_scroll_x = 0;
 
                     state.editing_index = state.list_state.selected();
                     state.mode = InputMode::EditingDescription;

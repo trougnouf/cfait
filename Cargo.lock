@@ -706,6 +706,7 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tui-markdown",
+ "unicode-width",
  "uniffi",
  "uniffi_bindgen",
  "uuid",

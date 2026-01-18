@@ -62,6 +62,7 @@ tower-service = "0.3" # Explicitly add tower-service for the trait
 tower-layer = "0.3"   # And tower-layer for the Layer trait
 notify-rust = "4"
 strum = { version = "0.27", features = ["derive"] }
+unicode-width = "0.2"
 
 # --- ANDROID / INTEROP ---
 uniffi = { version = "0.31", features = ["tokio", "build", "cli"], optional = true }

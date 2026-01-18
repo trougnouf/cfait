@@ -67,6 +67,7 @@ pub struct AppState {
     pub active_search_query: String, // Holds the committed search term
     pub cursor_position: usize,
     pub edit_scroll_offset: u16,
+    pub edit_scroll_x: u16,
     pub editing_index: Option<usize>,
     pub move_selection_state: ListState,
     pub move_targets: Vec<CalendarListEntry>,
@@ -136,6 +137,7 @@ impl AppState {
             active_search_query: String::new(),
             cursor_position: 0,
             edit_scroll_offset: 0,
+            edit_scroll_x: 0,
             editing_index: None,
             move_selection_state: ListState::default(),
             move_targets: Vec::new(),
