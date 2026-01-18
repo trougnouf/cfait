@@ -142,6 +142,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::OpenUrl(_)
         | Message::FocusTag(_)
         | Message::TagHovered(_)
+        | Message::TaskClick(_, _)
         | Message::FocusLocation(_)
         | Message::ToggleHideCompletedToggle
         | Message::CategoryMatchModeToggle => view::handle(app, message),

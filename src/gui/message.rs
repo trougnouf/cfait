@@ -117,6 +117,7 @@ pub enum Message {
     FocusTag(String),
     FocusLocation(String),
     OpenUrl(String),
+    TaskClick(usize, String), // Added
 
     // --- System & Network Events ---
     ConfigLoaded(Result<Config, String>),

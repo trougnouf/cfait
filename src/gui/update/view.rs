@@ -3,11 +3,30 @@ use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp, ResizeDirection, SidebarMode};
 use crate::gui::update::common::{refresh_filtered_tasks, save_config, scroll_to_selected};
+use crate::gui::update::tasks;
 use iced::widget::operation;
 use iced::{Task, window};
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
+        Message::TaskClick(index, uid) => {
+            let now = std::time::Instant::now();
+            let mut is_double = false;
+
+            if let Some((last_time, last_uid)) = &app.last_click
+                && last_uid == &uid && now.duration_since(*last_time).as_millis() < 400 {
+                    is_double = true;
+                }
+
+            app.last_click = Some((now, uid.clone()));
+
+            if is_double {
+                app.last_click = None;
+                tasks::handle(app, Message::EditTaskStart(index))
+            } else {
+                handle(app, Message::ToggleDetails(uid))
+            }
+        }
         Message::SelectNextPage => {
             if app.tasks.is_empty() {
                 return Task::none();

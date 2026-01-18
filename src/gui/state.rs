@@ -143,6 +143,9 @@ pub struct GuiApp {
     pub ics_import_selected_calendar: Option<String>,
     pub ics_import_task_count: Option<usize>,
 
+    // Double click tracking
+    pub last_click: Option<(std::time::Instant, String)>, // Added
+
     // Config cache (New fields)
     pub auto_reminders: bool,
     pub default_reminder_time: String,
@@ -284,6 +287,9 @@ impl Default for GuiApp {
 
             // ADDED: Force Server-Side Decorations
             force_ssd: false,
+
+            // Double click tracking
+            last_click: None, // Added
 
             // ICS Import Dialog
             ics_import_dialog_open: false,

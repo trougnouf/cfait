@@ -911,7 +911,7 @@ pub fn view_task_row<'a>(
     .align_y(iced::Alignment::Center);
 
     let task_button = button(row_main)
-        .on_press(Message::ToggleDetails(task.uid.clone()))
+        .on_press(Message::TaskClick(index, task.uid.clone()))
         .padding(iced::Padding {
             top: 2.0,
             right: 16.0,
@@ -970,79 +970,35 @@ pub fn view_task_row<'a>(
     let row_id = iced::widget::Id::from(task.uid.clone());
 
     // Prepare container content (Expanded view details omitted for brevity, logic unchanged)
-    let container_content: Element<'a, Message> = if is_expanded && has_content_to_show {
-        // [Existing detail view logic matches original file...]
-        // Re-implementing just the container wrapper to save space in this response,
-        // assuming standard detail rendering logic is unchanged.
+    let container_content: Element<'a, Message> = if has_content_to_show {
+        if is_expanded {
+            let mut details_col = column![].spacing(5);
+            if !task.description.is_empty() {
+                details_col = details_col.push(
+                    text(&task.description)
+                        .size(14)
+                        .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                );
+            }
 
-        let mut details_col = column![].spacing(5);
-        if !task.description.is_empty() {
-            details_col = details_col.push(
-                text(&task.description)
-                    .size(14)
-                    .color(Color::from_rgb(0.7, 0.7, 0.7)),
-            );
-        }
-
-        if has_valid_parent {
-            let p_uid = task.parent_uid.as_ref().unwrap();
-            let p_name = app
-                .store
-                .get_summary(p_uid)
-                .unwrap_or_else(|| "Unknown parent".to_string());
-            let remove_parent_btn = button(icon::icon(icon::CROSS).size(10))
-                .style(button::danger)
-                .padding(2)
-                .on_press(Message::RemoveParent(task.uid.clone()));
-            let row = row![
-                text("Parent:")
-                    .size(12)
-                    .color(Color::from_rgb(0.4, 0.8, 0.4)),
-                text(p_name).size(12),
-                tooltip(
-                    remove_parent_btn,
-                    text("Remove parent").size(12),
-                    tooltip::Position::Top
-                )
-                .style(tooltip_style)
-                .delay(Duration::from_millis(700))
-            ]
-            .spacing(5)
-            .align_y(iced::Alignment::Center);
-            details_col = details_col.push(row);
-        }
-
-        if !task.dependencies.is_empty() {
-            details_col = details_col.push(
-                text("[Blocked By]:")
-                    .size(12)
-                    .color(Color::from_rgb(0.8, 0.4, 0.4)),
-            );
-            for dep_uid in &task.dependencies {
-                let name = app
+            if has_valid_parent {
+                let p_uid = task.parent_uid.as_ref().unwrap();
+                let p_name = app
                     .store
-                    .get_summary(dep_uid)
-                    .unwrap_or_else(|| "Unknown task".to_string());
-                let is_done = app.store.is_task_done(dep_uid).unwrap_or(false);
-                let check = if is_done { "[x]" } else { "[ ]" };
-                let remove_dep_btn = button(icon::icon(icon::CROSS).size(10))
+                    .get_summary(p_uid)
+                    .unwrap_or_else(|| "Unknown parent".to_string());
+                let remove_parent_btn = button(icon::icon(icon::CROSS).size(10))
                     .style(button::danger)
                     .padding(2)
-                    .on_press(Message::RemoveDependency(task.uid.clone(), dep_uid.clone()));
-                let name_btn = button(
-                    text(format!("{} {}", check, name))
+                    .on_press(Message::RemoveParent(task.uid.clone()));
+                let row = row![
+                    text("Parent:")
                         .size(12)
-                        .color(Color::from_rgb(0.6, 0.6, 0.6)),
-                )
-                .style(button::text)
-                .padding(0)
-                .on_press(Message::JumpToTask(dep_uid.clone()));
-
-                let dep_row = row![
-                    name_btn,
+                        .color(Color::from_rgb(0.4, 0.8, 0.4)),
+                    text(p_name).size(12),
                     tooltip(
-                        remove_dep_btn,
-                        text("Remove dependency").size(12),
+                        remove_parent_btn,
+                        text("Remove parent").size(12),
                         tooltip::Position::Top
                     )
                     .style(tooltip_style)
@@ -1050,105 +1006,149 @@ pub fn view_task_row<'a>(
                 ]
                 .spacing(5)
                 .align_y(iced::Alignment::Center);
-                details_col = details_col.push(dep_row);
+                details_col = details_col.push(row);
             }
-        }
 
-        // Outgoing relations (this task → others)
-        if !task.related_to.is_empty() {
-            details_col = details_col.push(
-                text("[Related To]:")
-                    .size(12)
-                    .color(Color::from_rgb(0.6, 0.6, 0.8)),
-            );
-            for related_uid in &task.related_to {
-                let name = app
-                    .store
-                    .get_summary(related_uid)
-                    .unwrap_or_else(|| "Unknown task".to_string());
-                let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
-                    .style(button::danger)
-                    .padding(2)
-                    .on_press(Message::RemoveRelatedTo(
-                        task.uid.clone(),
-                        related_uid.clone(),
-                    ));
-                let name_btn = button(text(name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
+            if !task.dependencies.is_empty() {
+                details_col = details_col.push(
+                    text("[Blocked By]:")
+                        .size(12)
+                        .color(Color::from_rgb(0.8, 0.4, 0.4)),
+                );
+                for dep_uid in &task.dependencies {
+                    let name = app
+                        .store
+                        .get_summary(dep_uid)
+                        .unwrap_or_else(|| "Unknown task".to_string());
+                    let is_done = app.store.is_task_done(dep_uid).unwrap_or(false);
+                    let check = if is_done { "[x]" } else { "[ ]" };
+                    let remove_dep_btn = button(icon::icon(icon::CROSS).size(10))
+                        .style(button::danger)
+                        .padding(2)
+                        .on_press(Message::RemoveDependency(task.uid.clone(), dep_uid.clone()));
+                    let name_btn = button(
+                        text(format!("{} {}", check, name))
+                            .size(12)
+                            .color(Color::from_rgb(0.6, 0.6, 0.6)),
+                    )
+                    .style(button::text)
+                    .padding(0)
+                    .on_press(Message::JumpToTask(dep_uid.clone()));
+
+                    let dep_row = row![
+                        name_btn,
+                        tooltip(
+                            remove_dep_btn,
+                            text("Remove dependency").size(12),
+                            tooltip::Position::Top
+                        )
+                        .style(tooltip_style)
+                        .delay(Duration::from_millis(700))
+                    ]
+                    .spacing(5)
+                    .align_y(iced::Alignment::Center);
+                    details_col = details_col.push(dep_row);
+                }
+            }
+
+            // Outgoing relations (this task → others)
+            if !task.related_to.is_empty() {
+                details_col = details_col.push(
+                    text("[Related To]:")
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.6, 0.8)),
+                );
+                for related_uid in &task.related_to {
+                    let name = app
+                        .store
+                        .get_summary(related_uid)
+                        .unwrap_or_else(|| "Unknown task".to_string());
+                    let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
+                        .style(button::danger)
+                        .padding(2)
+                        .on_press(Message::RemoveRelatedTo(
+                            task.uid.clone(),
+                            related_uid.clone(),
+                        ));
+                    let name_btn = button(text(name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
+                        .style(button::text)
+                        .padding(0)
+                        .on_press(Message::JumpToTask(related_uid.clone()));
+
+                    let related_row = row![
+                        icon::icon(icon::random_related_icon(&task.uid, related_uid)).size(12),
+                        name_btn,
+                        tooltip(
+                            remove_related_btn,
+                            text("Remove relation").size(12),
+                            tooltip::Position::Top
+                        )
+                        .style(tooltip_style)
+                        .delay(Duration::from_millis(700))
+                    ]
+                    .spacing(5)
+                    .align_y(iced::Alignment::Center);
+                    details_col = details_col.push(related_row);
+                }
+            }
+
+            // Incoming relations (others → this task)
+            let incoming_related = app.store.get_tasks_related_to(&task.uid);
+            if !incoming_related.is_empty() {
+                details_col = details_col.push(
+                    text("[Related From]:")
+                        .size(12)
+                        .color(Color::from_rgb(0.8, 0.6, 0.8)),
+                );
+                for (related_uid, related_name) in incoming_related {
+                    let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
+                        .style(button::danger)
+                        .padding(2)
+                        .on_press(Message::RemoveRelatedTo(
+                            related_uid.clone(),
+                            task.uid.clone(),
+                        ));
+                    let name_btn = button(
+                        text(related_name)
+                            .size(12)
+                            .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                    )
                     .style(button::text)
                     .padding(0)
                     .on_press(Message::JumpToTask(related_uid.clone()));
 
-                let related_row = row![
-                    icon::icon(icon::random_related_icon(&task.uid, related_uid)).size(12),
-                    name_btn,
-                    tooltip(
-                        remove_related_btn,
-                        text("Remove relation").size(12),
-                        tooltip::Position::Top
-                    )
-                    .style(tooltip_style)
-                    .delay(Duration::from_millis(700))
-                ]
-                .spacing(5)
-                .align_y(iced::Alignment::Center);
-                details_col = details_col.push(related_row);
+                    let related_row = row![
+                        icon::icon(icon::random_related_icon(&task.uid, &related_uid)).size(12),
+                        name_btn,
+                        tooltip(
+                            remove_related_btn,
+                            text("Remove relation").size(12),
+                            tooltip::Position::Top
+                        )
+                        .style(tooltip_style)
+                        .delay(Duration::from_millis(700))
+                    ]
+                    .spacing(5)
+                    .align_y(iced::Alignment::Center);
+                    details_col = details_col.push(related_row);
+                }
             }
+
+            let desc_row = row![
+                Space::new().width(Length::Fixed(indent_size as f32 + 30.0)),
+                details_col
+            ];
+            column![task_button, desc_row].spacing(5).into()
+        } else {
+            // FIX: Wrap collapsed state in Column to maintain widget tree stability
+            // This ensures double-click works even if the first click triggered layout change
+            column![task_button].into()
         }
-
-        // Incoming relations (others → this task)
-        let incoming_related = app.store.get_tasks_related_to(&task.uid);
-        if !incoming_related.is_empty() {
-            details_col = details_col.push(
-                text("[Related From]:")
-                    .size(12)
-                    .color(Color::from_rgb(0.8, 0.6, 0.8)),
-            );
-            for (related_uid, related_name) in incoming_related {
-                let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
-                    .style(button::danger)
-                    .padding(2)
-                    .on_press(Message::RemoveRelatedTo(
-                        related_uid.clone(),
-                        task.uid.clone(),
-                    ));
-                let name_btn = button(
-                    text(related_name)
-                        .size(12)
-                        .color(Color::from_rgb(0.7, 0.7, 0.7)),
-                )
-                .style(button::text)
-                .padding(0)
-                .on_press(Message::JumpToTask(related_uid.clone()));
-
-                let related_row = row![
-                    icon::icon(icon::random_related_icon(&task.uid, &related_uid)).size(12),
-                    name_btn,
-                    tooltip(
-                        remove_related_btn,
-                        text("Remove relation").size(12),
-                        tooltip::Position::Top
-                    )
-                    .style(tooltip_style)
-                    .delay(Duration::from_millis(700))
-                ]
-                .spacing(5)
-                .align_y(iced::Alignment::Center);
-                details_col = details_col.push(related_row);
-            }
-        }
-
-        let desc_row = row![
-            Space::new().width(Length::Fixed(indent_size as f32 + 30.0)),
-            details_col
-        ];
-        column![task_button, desc_row].spacing(5).into()
-    } else if !has_content_to_show {
+    } else {
         NoPointer {
             content: task_button.into(),
         }
         .into()
-    } else {
-        task_button.into()
     };
 
     container(container_content)
