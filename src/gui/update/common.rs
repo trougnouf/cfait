@@ -51,6 +51,32 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         start_grace_period_days: app.start_grace_period_days,
     });
 
+    // 2. Build Parent Attribute Cache (O(N))
+    // We do this here once per update so the view loop is O(1)
+    app.parent_attributes_cache.clear();
+
+    // Create a temporary lookup for all tasks in the store
+    // This allows us to resolve parents even if they aren't in the filtered view
+    let mut quick_lookup: std::collections::HashMap<String, &crate::model::Task> =
+        std::collections::HashMap::new();
+    for list in app.store.calendars.values() {
+        for t in list {
+            quick_lookup.insert(t.uid.clone(), t);
+        }
+    }
+
+    // Populate cache for the currently visible tasks
+    for task in &app.tasks {
+        if let Some(p_uid) = &task.parent_uid
+            && let Some(parent) = quick_lookup.get(p_uid) {
+                let p_tags: std::collections::HashSet<String> =
+                    parent.categories.iter().cloned().collect();
+                let p_loc = parent.location.clone();
+                app.parent_attributes_cache
+                    .insert(p_uid.clone(), (p_tags, p_loc));
+            }
+    }
+
     // Update sidebar cache after filtering
     refresh_sidebar_cache(app);
 

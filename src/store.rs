@@ -603,6 +603,38 @@ impl TaskStore {
             }
         }
 
+        // OPTIMIZATION START: Pre-calculate status of all tasks for O(1) dependency checks
+        let mut completed_uids: HashSet<String> = HashSet::new();
+        for tasks in self.calendars.values() {
+            for t in tasks {
+                if t.status.is_done() {
+                    completed_uids.insert(t.uid.clone());
+                }
+            }
+        }
+
+        // Define a fast is_blocked helper that uses the set
+        let check_is_blocked = |t: &Task, done_set: &HashSet<String>| -> bool {
+            // Check for manual blocking via #blocked tag
+            if t.categories.contains(&"blocked".to_string()) {
+                return true;
+            }
+
+            // Quick path: no dependencies
+            if t.dependencies.is_empty() {
+                return false;
+            }
+
+            // If a dependency exists in the store and is NOT in done_set, it blocks us.
+            for dep in &t.dependencies {
+                if self.index.contains_key(dep) && !done_set.contains(dep) {
+                    return true;
+                }
+            }
+            false
+        };
+        // OPTIMIZATION END
+
         // Pre-calculate is:ready and is:blocked flags
         let search_lower = options.search_term.to_lowercase();
         let is_ready_mode = search_lower.contains("is:ready");
@@ -639,7 +671,7 @@ impl TaskStore {
                     }
 
                     // 3. Must not be blocked by incomplete dependencies
-                    if self.is_blocked(t) {
+                    if check_is_blocked(t, &completed_uids) {
                         return false;
                     }
                 }
@@ -647,7 +679,7 @@ impl TaskStore {
                 // --- Blocked Mode (is:blocked) Logic ---
                 if is_blocked_mode {
                     // Only show tasks that are blocked (by dependencies or #blocked tag)
-                    if !self.is_blocked(t) {
+                    if !check_is_blocked(t, &completed_uids) {
                         return false;
                     }
                 }
@@ -807,7 +839,8 @@ impl TaskStore {
         let mut final_tasks_processed: Vec<Task> = final_tasks
             .into_iter()
             .map(|mut t| {
-                t.is_blocked = self.is_blocked(&t);
+                // CHANGE: Use the fast check created above instead of re-scanning the store
+                t.is_blocked = check_is_blocked(&t, &completed_uids);
                 // Init effective fields to own values; these may be overridden when bubbling up.
                 t.effective_priority = t.priority;
                 t.effective_due = t.due.clone();

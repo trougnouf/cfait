@@ -52,6 +52,10 @@ pub struct GuiApp {
     pub cached_categories: Vec<(String, usize)>,
     pub cached_locations: Vec<(String, usize)>,
 
+    // Cache for O(1) parent lookup in view_task_row
+    // Map<TaskUID, (ParentTags, ParentLocation)>
+    pub parent_attributes_cache: HashMap<String, (HashSet<String>, Option<String>)>,
+
     // UI State
     pub sidebar_mode: SidebarMode,
     pub active_cal_href: Option<String>,
@@ -210,6 +214,9 @@ impl Default for GuiApp {
 
             cached_categories: Vec::new(),
             cached_locations: Vec::new(),
+
+            // Initialize:
+            parent_attributes_cache: HashMap::new(),
 
             sidebar_mode: SidebarMode::Calendars,
             active_cal_href: None,

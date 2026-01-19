@@ -31,23 +31,33 @@ fn highlight_markdown_raw(input: &str) -> Text<'static> {
         if trimmed.starts_with('#') {
             spans.push(Span::styled(
                 line.to_string(),
-                Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
             ));
         }
         // List items ("- " or "* ")
         else if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
-            spans.push(Span::styled(line.to_string(), Style::default().fg(Color::Yellow)));
+            spans.push(Span::styled(
+                line.to_string(),
+                Style::default().fg(Color::Yellow),
+            ));
         }
         // Blockquotes
         else if trimmed.starts_with("> ") {
             spans.push(Span::styled(
                 line.to_string(),
-                Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC),
+                Style::default()
+                    .fg(Color::Gray)
+                    .add_modifier(Modifier::ITALIC),
             ));
         }
         // Fenced code block marker
         else if trimmed.starts_with("```") {
-            spans.push(Span::styled(line.to_string(), Style::default().fg(Color::Green)));
+            spans.push(Span::styled(
+                line.to_string(),
+                Style::default().fg(Color::Green),
+            ));
         }
         // Default: raw text (no styling) to preserve edit fidelity
         else {
@@ -82,7 +92,7 @@ fn format_description_for_markdown(raw: &str) -> String {
                 t.starts_with("- ") || // list
                 t.starts_with("* ") || // list
                 t.starts_with("> ") || // quote
-                t.starts_with("```")   // code fence
+                t.starts_with("```") // code fence
             });
 
             if has_md_structure {
@@ -423,7 +433,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             }
             // --- ALIAS SHADOWING LOGIC END ---
 
-            let is_blocked = state.store.is_blocked(t);
+            // CHANGE: Use cached field populated by filter()
+            let is_blocked = t.is_blocked;
             let base_style = if is_blocked {
                 Style::default().fg(Color::DarkGray)
             } else {
@@ -693,9 +704,15 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
         // Add Metadata as a list or bolded sections
         let mut meta = Vec::new();
-        if let Some(url) = &task.url { meta.push(format!("- **URL:** {}", url)); }
-        if let Some(geo) = &task.geo { meta.push(format!("- **Geo:** {}", geo)); }
-        if let Some(loc) = &task.location { meta.push(format!("- **Location:** {}", loc)); }
+        if let Some(url) = &task.url {
+            meta.push(format!("- **URL:** {}", url));
+        }
+        if let Some(geo) = &task.geo {
+            meta.push(format!("- **Geo:** {}", geo));
+        }
+        if let Some(loc) = &task.location {
+            meta.push(format!("- **Location:** {}", loc));
+        }
 
         if !meta.is_empty() {
             details_md.push_str("---\n"); // Separator
@@ -706,7 +723,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         if !task.dependencies.is_empty() {
             details_md.push_str("### Blocked By\n");
             for dep_uid in &task.dependencies {
-                let name = state.store.get_summary(dep_uid).unwrap_or_else(|| "Unknown".to_string());
+                let name = state
+                    .store
+                    .get_summary(dep_uid)
+                    .unwrap_or_else(|| "Unknown".to_string());
                 let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
                 let check = if is_done { "[x]" } else { "[ ]" };
                 details_md.push_str(&format!("- {} {}\n", check, name));
@@ -718,7 +738,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         if !task.related_to.is_empty() {
             details_md.push_str("### Related To\n");
             for related_uid in &task.related_to {
-                let name = state.store.get_summary(related_uid).unwrap_or_else(|| "Unknown".to_string());
+                let name = state
+                    .store
+                    .get_summary(related_uid)
+                    .unwrap_or_else(|| "Unknown".to_string());
                 details_md.push_str(&format!("- {}\n", name));
             }
             details_md.push('\n');
@@ -822,8 +845,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         f.render_widget(p, main_chunks[1]);
     } else {
         // While editing description, keep details pane subdued so popup stands out.
-        let p = Paragraph::new("Editing description...")
-            .block(Block::default().borders(Borders::ALL).title(" Details ").style(Style::default().fg(Color::DarkGray)));
+        let p = Paragraph::new("Editing description...").block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Details ")
+                .style(Style::default().fg(Color::DarkGray)),
+        );
         f.render_widget(p, main_chunks[1]);
     }
 
@@ -832,147 +859,147 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     f.render_widget(Clear, footer_area);
 
     match state.mode {
-            InputMode::Creating
-            | InputMode::Editing
-            | InputMode::Searching
-            | InputMode::EditingDescription => {
-                let (mut title_str, prefix, color) = match state.mode {
-                    InputMode::Searching => (" Search ".to_string(), "/ ", Color::Green),
-                    InputMode::Editing => (" Edit Title ".to_string(), "> ", Color::Magenta),
-                    InputMode::EditingDescription => {
-                        (" Edit Description ".to_string(), "📝 ", Color::Blue)
-                    }
-                    InputMode::Creating => {
-                        if state.creating_child_of.is_some() {
-                            (" Create Child Task ".to_string(), "> ", Color::LightYellow)
-                        } else {
-                            (" Create Task ".to_string(), "> ", Color::Yellow)
-                        }
-                    }
-                    _ => (" Create Task ".to_string(), "> ", Color::Yellow),
-                };
-
-                let show_tag_hint = (state.mode == InputMode::Searching
-                    && state.input_buffer.starts_with('#'))
-                    || (state.mode == InputMode::Creating
-                        && state.input_buffer.starts_with('#')
-                        && state.creating_child_of.is_none());
-
-                if show_tag_hint {
-                    title_str.push_str(" [Enter to jump to tag] ");
+        InputMode::Creating
+        | InputMode::Editing
+        | InputMode::Searching
+        | InputMode::EditingDescription => {
+            let (mut title_str, prefix, color) = match state.mode {
+                InputMode::Searching => (" Search ".to_string(), "/ ", Color::Green),
+                InputMode::Editing => (" Edit Title ".to_string(), "> ", Color::Magenta),
+                InputMode::EditingDescription => {
+                    (" Edit Description ".to_string(), "📝 ", Color::Blue)
                 }
-
-                let prefix_span = Span::styled(prefix, Style::default().fg(color));
-
-                // 1. Calculate available width for the input text
-                // Width - 2 (borders) - prefix width - 1 (cursor spacing/padding)
-                let inner_width = footer_area.width.saturating_sub(2) as usize;
-                let prefix_width = prefix.chars().count();
-                let input_area_width = inner_width.saturating_sub(prefix_width).saturating_sub(1);
-
-                // 2. Determine Horizontal Scroll Offset
-                // For non-description single-line inputs we maintain sliding window scrolling.
-                let (visible_text, scroll_offset) = if state.mode == InputMode::EditingDescription {
-                    // Description editing will be handled in a centered popup, so footer will show a minimal hint.
-                    (String::new(), 0)
-                } else {
-                    let cursor = state.cursor_position;
-                    if cursor >= input_area_width {
-                        // Shift the view so the cursor is at the end
-                        let offset = cursor - input_area_width + 1;
-                        let slice: String = state
-                            .input_buffer
-                            .chars()
-                            .skip(offset)
-                            .take(input_area_width)
-                            .collect();
-                        (slice, offset)
+                InputMode::Creating => {
+                    if state.creating_child_of.is_some() {
+                        (" Create Child Task ".to_string(), "> ", Color::LightYellow)
                     } else {
-                        // Start from 0, possibly truncate end if too long (though cursor is within bounds)
-                        let slice: String = state.input_buffer.chars().take(input_area_width).collect();
-                        (slice, 0)
-                    }
-                };
-
-                let mut input_spans = vec![prefix_span];
-
-                if state.mode == InputMode::EditingDescription {
-                    // Footer shows a compact hint while the large popup editor is visible.
-                    input_spans.push(Span::raw("Press Enter for newline. Esc / Ctrl+S to save."));
-                } else {
-                    // Tokenize the *visible* slice for single-line inputs.
-                    let tokens = tokenize_smart_input(&visible_text);
-
-                    for token in tokens {
-                        let text = &visible_text[token.start..token.end];
-                        let style = match token.kind {
-                            SyntaxType::Priority => {
-                                let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
-                                match p {
-                                    1 => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                                    2..=4 => Style::default().fg(Color::LightRed),
-                                    5 => Style::default().fg(Color::Yellow),
-                                    6..=8 => Style::default().fg(Color::LightBlue),
-                                    9 => Style::default().fg(Color::DarkGray),
-                                    _ => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                                }
-                            }
-                            SyntaxType::DueDate => Style::default().fg(Color::Blue),
-                            SyntaxType::StartDate => Style::default().fg(Color::Green),
-                            SyntaxType::Recurrence => Style::default().fg(Color::Magenta),
-                            SyntaxType::Duration => Style::default().fg(Color::DarkGray),
-                            SyntaxType::Tag => {
-                                let tag_name = text.trim_start_matches('#');
-                                let (r, g, b) = color_utils::generate_color(tag_name);
-                                Style::default().fg(Color::Rgb(
-                                    (r * 255.0) as u8,
-                                    (g * 255.0) as u8,
-                                    (b * 255.0) as u8,
-                                ))
-                            }
-                            SyntaxType::Text => Style::default().fg(color),
-                            // New fields syntax highlight
-                            SyntaxType::Location => Style::default().fg(Color::LightCyan),
-                            SyntaxType::Url => Style::default().fg(Color::Blue),
-                            SyntaxType::Geo => Style::default().fg(Color::DarkGray),
-                            SyntaxType::Description => Style::default().fg(Color::Gray),
-                            SyntaxType::Reminder => Style::default().fg(Color::LightRed),
-                        };
-                        input_spans.push(Span::styled(text, style));
+                        (" Create Task ".to_string(), "> ", Color::Yellow)
                     }
                 }
+                _ => (" Create Task ".to_string(), "> ", Color::Yellow),
+            };
 
-                let input_text = Line::from(input_spans);
+            let show_tag_hint = (state.mode == InputMode::Searching
+                && state.input_buffer.starts_with('#'))
+                || (state.mode == InputMode::Creating
+                    && state.input_buffer.starts_with('#')
+                    && state.creating_child_of.is_none());
 
-                let input = Paragraph::new(input_text)
-                    .style(Style::default())
-                    .block(Block::default().borders(Borders::ALL).title(title_str))
-                    .wrap(Wrap { trim: false });
+            if show_tag_hint {
+                title_str.push_str(" [Enter to jump to tag] ");
+            }
 
-                f.render_widget(input, footer_area);
+            let prefix_span = Span::styled(prefix, Style::default().fg(color));
 
-                // 3. Render Cursor relative to Scroll Offset
-                if state.mode == InputMode::EditingDescription {
-                    // Cursor is handled inside the popup editor; move cursor out of footer.
-                    // Place it off-screen or at footer hint start to avoid accidental background selection.
-                    let cursor_x = footer_area.x + 2;
-                    let cursor_y = footer_area.y + 1;
-                    f.set_cursor_position((cursor_x, cursor_y));
+            // 1. Calculate available width for the input text
+            // Width - 2 (borders) - prefix width - 1 (cursor spacing/padding)
+            let inner_width = footer_area.width.saturating_sub(2) as usize;
+            let prefix_width = prefix.chars().count();
+            let input_area_width = inner_width.saturating_sub(prefix_width).saturating_sub(1);
+
+            // 2. Determine Horizontal Scroll Offset
+            // For non-description single-line inputs we maintain sliding window scrolling.
+            let (visible_text, scroll_offset) = if state.mode == InputMode::EditingDescription {
+                // Description editing will be handled in a centered popup, so footer will show a minimal hint.
+                (String::new(), 0)
+            } else {
+                let cursor = state.cursor_position;
+                if cursor >= input_area_width {
+                    // Shift the view so the cursor is at the end
+                    let offset = cursor - input_area_width + 1;
+                    let slice: String = state
+                        .input_buffer
+                        .chars()
+                        .skip(offset)
+                        .take(input_area_width)
+                        .collect();
+                    (slice, offset)
                 } else {
-                    // Single line sliding window cursor
-                    let visual_cursor_offset = state.cursor_position.saturating_sub(scroll_offset);
+                    // Start from 0, possibly truncate end if too long (though cursor is within bounds)
+                    let slice: String = state.input_buffer.chars().take(input_area_width).collect();
+                    (slice, 0)
+                }
+            };
 
-                    let cursor_x = footer_area.x
+            let mut input_spans = vec![prefix_span];
+
+            if state.mode == InputMode::EditingDescription {
+                // Footer shows a compact hint while the large popup editor is visible.
+                input_spans.push(Span::raw("Press Enter for newline. Esc / Ctrl+S to save."));
+            } else {
+                // Tokenize the *visible* slice for single-line inputs.
+                let tokens = tokenize_smart_input(&visible_text);
+
+                for token in tokens {
+                    let text = &visible_text[token.start..token.end];
+                    let style = match token.kind {
+                        SyntaxType::Priority => {
+                            let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
+                            match p {
+                                1 => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                                2..=4 => Style::default().fg(Color::LightRed),
+                                5 => Style::default().fg(Color::Yellow),
+                                6..=8 => Style::default().fg(Color::LightBlue),
+                                9 => Style::default().fg(Color::DarkGray),
+                                _ => Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                            }
+                        }
+                        SyntaxType::DueDate => Style::default().fg(Color::Blue),
+                        SyntaxType::StartDate => Style::default().fg(Color::Green),
+                        SyntaxType::Recurrence => Style::default().fg(Color::Magenta),
+                        SyntaxType::Duration => Style::default().fg(Color::DarkGray),
+                        SyntaxType::Tag => {
+                            let tag_name = text.trim_start_matches('#');
+                            let (r, g, b) = color_utils::generate_color(tag_name);
+                            Style::default().fg(Color::Rgb(
+                                (r * 255.0) as u8,
+                                (g * 255.0) as u8,
+                                (b * 255.0) as u8,
+                            ))
+                        }
+                        SyntaxType::Text => Style::default().fg(color),
+                        // New fields syntax highlight
+                        SyntaxType::Location => Style::default().fg(Color::LightCyan),
+                        SyntaxType::Url => Style::default().fg(Color::Blue),
+                        SyntaxType::Geo => Style::default().fg(Color::DarkGray),
+                        SyntaxType::Description => Style::default().fg(Color::Gray),
+                        SyntaxType::Reminder => Style::default().fg(Color::LightRed),
+                    };
+                    input_spans.push(Span::styled(text, style));
+                }
+            }
+
+            let input_text = Line::from(input_spans);
+
+            let input = Paragraph::new(input_text)
+                .style(Style::default())
+                .block(Block::default().borders(Borders::ALL).title(title_str))
+                .wrap(Wrap { trim: false });
+
+            f.render_widget(input, footer_area);
+
+            // 3. Render Cursor relative to Scroll Offset
+            if state.mode == InputMode::EditingDescription {
+                // Cursor is handled inside the popup editor; move cursor out of footer.
+                // Place it off-screen or at footer hint start to avoid accidental background selection.
+                let cursor_x = footer_area.x + 2;
+                let cursor_y = footer_area.y + 1;
+                f.set_cursor_position((cursor_x, cursor_y));
+            } else {
+                // Single line sliding window cursor
+                let visual_cursor_offset = state.cursor_position.saturating_sub(scroll_offset);
+
+                let cursor_x = footer_area.x
                         + 1 // Border
                         + prefix_width as u16
                         + visual_cursor_offset as u16;
 
-                    f.set_cursor_position((
-                        cursor_x.min(footer_area.x + footer_area.width - 2),
-                        footer_area.y + 1,
-                    ));
-                }
+                f.set_cursor_position((
+                    cursor_x.min(footer_area.x + footer_area.width - 2),
+                    footer_area.y + 1,
+                ));
             }
+        }
         _ => {
             if state.show_full_help {
                 let p = Paragraph::new(full_help_text)
@@ -1258,7 +1285,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             Span::styled("Esc", Style::default().fg(Color::Yellow)),
             Span::raw(": Cancel"),
         ]);
-        f.render_widget(Paragraph::new(instructions).alignment(Alignment::Center), chunks[1]);
+        f.render_widget(
+            Paragraph::new(instructions).alignment(Alignment::Center),
+            chunks[1],
+        );
 
         // 6. Set Cursor
         // Calculate visual coords relative to scroll window
@@ -1266,10 +1296,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         let visual_col = cursor_col.saturating_sub(state.edit_scroll_x);
 
         if visual_row < viewport_height && visual_col < chunks[0].width {
-            f.set_cursor_position((
-                chunks[0].x + visual_col,
-                chunks[0].y + visual_row,
-            ));
+            f.set_cursor_position((chunks[0].x + visual_col, chunks[0].y + visual_row));
         }
     }
 }

@@ -195,7 +195,9 @@ pub struct MobileConfig {
 fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
     let smart = t.to_smart_string();
     let status_str = format!("{:?}", t.status);
-    let is_blocked = store.is_blocked(t);
+
+    // CHANGE: Use cached field populated by filter()
+    let is_blocked = t.is_blocked;
     let blocked_by_names = t
         .dependencies
         .iter()

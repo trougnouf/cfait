@@ -25,7 +25,9 @@ pub fn view_task_row<'a>(
     index: usize,
     task: &'a TodoTask,
 ) -> Element<'a, Message> {
-    let is_blocked = app.store.is_blocked(task);
+    // CHANGE: Use the pre-calculated field instead of calling app.store.is_blocked(task)
+    // app.store.is_blocked(task) triggers an O(N) scan. task.is_blocked is O(1).
+    let is_blocked = task.is_blocked;
     let is_selected = app.selected_uid.as_ref() == Some(&task.uid);
 
     let theme = app.theme();
@@ -47,17 +49,15 @@ pub fn view_task_row<'a>(
     let indent = Space::new().width(Length::Fixed(indent_size as f32));
 
     // Pre-calculate parent info for inheritance hiding
+    // CHANGE: Use the lookup cache instead of iterating calendars every frame.
+    // OLD CODE performed an O(N) search per-row. The cache is populated during filtering.
     let (parent_tags, parent_location) = if show_indent && let Some(p_uid) = &task.parent_uid {
-        let mut p_cats = HashSet::new();
-        let mut p_loc = None;
-        if let Some(href) = app.store.index.get(p_uid)
-            && let Some(list) = app.store.calendars.get(href)
-            && let Some(p) = list.iter().find(|t| t.uid == *p_uid)
-        {
-            p_cats = p.categories.iter().cloned().collect();
-            p_loc = p.location.clone();
+        if let Some(cached) = app.parent_attributes_cache.get(p_uid) {
+            // Clone to avoid holding references into app during view construction
+            (cached.0.clone(), cached.1.clone())
+        } else {
+            (HashSet::new(), None)
         }
-        (p_cats, p_loc)
     } else {
         (HashSet::new(), None)
     };
@@ -1070,10 +1070,11 @@ pub fn view_task_row<'a>(
                             task.uid.clone(),
                             related_uid.clone(),
                         ));
-                    let name_btn = button(text(name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
-                        .style(button::text)
-                        .padding(0)
-                        .on_press(Message::JumpToTask(related_uid.clone()));
+                    let name_btn =
+                        button(text(name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
+                            .style(button::text)
+                            .padding(0)
+                            .on_press(Message::JumpToTask(related_uid.clone()));
 
                     let related_row = row![
                         icon::icon(icon::random_related_icon(&task.uid, related_uid)).size(12),
