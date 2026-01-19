@@ -1,8 +1,36 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
+use std::env;
+use std::fs;
 
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
+
+/// Add global lock for env var manipulation
+static TEST_MUTEX: Mutex<()> = Mutex::new(());
+
+fn setup_env(suffix: &str) -> std::path::PathBuf {
+    let temp_dir = env::temp_dir().join(format!("cfait_test_move_{}_{}", suffix, std::process::id()));
+    let _ = fs::create_dir_all(&temp_dir);
+
+    // UNSAFE: modifying process environment
+    unsafe {
+        env::set_var("CFAIT_TEST_DIR", &temp_dir);
+    }
+
+    // Clear potential previous run
+    if let Some(p) = Journal::get_path() && p.exists() {
+        let _ = fs::remove_file(p);
+    }
+    temp_dir
+}
+
+fn teardown(path: std::path::PathBuf) {
+    unsafe {
+        env::remove_var("CFAIT_TEST_DIR");
+    }
+    let _ = fs::remove_dir_all(path);
+}
 
 /// A small test-double that simulates the server-side behavior of `RustyClient`
 /// for the narrow purpose of testing move semantics. The fake client keeps an
@@ -133,6 +161,10 @@ fn fake_client_move_with_original_task_moves_cleanly() {
 
 #[test]
 fn journal_apply_move_removes_from_source_and_adds_to_target() {
+    // Acquire lock to modify environment safely
+    let _guard = TEST_MUTEX.lock().unwrap();
+    let temp_dir = setup_env("journal_apply");
+
     // This test ensures the Journal's `apply_to_tasks` behaves correctly when
     // a Move action with the original (pre-mutation) task is present.
     let old_href = "cal://old_journal";
@@ -175,4 +207,6 @@ fn journal_apply_move_removes_from_source_and_adds_to_target() {
 
     // Cleanup journal so other tests aren't affected
     let _ = Journal::modify(|q| q.clear());
+
+    teardown(temp_dir);
 }

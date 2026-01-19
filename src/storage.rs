@@ -770,6 +770,50 @@ mod tests {
     use serial_test::serial;
     use std::sync::Arc;
     use std::thread;
+    use std::path::PathBuf;
+    
+    use std::fs;
+
+    // Helper for environment isolation
+    struct TestDirGuard {
+        original_val: Option<String>,
+        temp_dir: PathBuf,
+    }
+
+    impl TestDirGuard {
+        fn new(name: &str) -> Self {
+            let original_val = std::env::var("CFAIT_TEST_DIR").ok();
+            let temp_dir = std::env::temp_dir().join(format!("cfait_storage_test_{}_{}", name, std::process::id()));
+            let _ = fs::create_dir_all(&temp_dir);
+
+            // Clear global load state to ensure clean slate
+            if let Some(map) = LOAD_STATE_MAP.get() {
+                map.lock().unwrap().clear();
+            }
+
+            unsafe { std::env::set_var("CFAIT_TEST_DIR", &temp_dir); }
+
+            Self { original_val, temp_dir }
+        }
+    }
+
+    impl Drop for TestDirGuard {
+        fn drop(&mut self) {
+            unsafe {
+                if let Some(v) = &self.original_val {
+                    std::env::set_var("CFAIT_TEST_DIR", v);
+                } else {
+                    std::env::remove_var("CFAIT_TEST_DIR");
+                }
+            }
+            let _ = fs::remove_dir_all(&self.temp_dir);
+
+            // Clear state again
+            if let Some(map) = LOAD_STATE_MAP.get() {
+                map.lock().unwrap().clear();
+            }
+        }
+    }
 
     #[test]
     fn test_atomic_write_and_load() {
@@ -874,6 +918,9 @@ mod tests {
     #[test]
     #[serial]
     fn test_save_blocked_after_failed_load() {
+        // Initialize isolation guard
+        let _guard = TestDirGuard::new("blocked_save");
+
         // Directly test that save() returns an error when LoadState is Failed
         // Use a unique test href with timestamp to avoid conflicts with parallel tests
         use std::time::{SystemTime, UNIX_EPOCH};
@@ -906,6 +953,8 @@ mod tests {
             save_result.is_err(),
             "save_for_href() should fail when LoadState is Failed"
         );
+
+        // This assertion should now pass because get_path_for_href will succeed
         assert!(
             save_result
                 .unwrap_err()
@@ -914,7 +963,7 @@ mod tests {
             "Error message should explain why save was blocked"
         );
 
-        // Cleanup: reset state to avoid affecting other tests
+        // Cleanup: reset state to avoid affecting other tests (handled by guard drop mostly, but explicit doesn't hurt)
         LoadState::set(&test_href, LoadState::Uninitialized);
     }
 
