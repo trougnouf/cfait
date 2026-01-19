@@ -104,7 +104,14 @@ pub async fn run() -> Result<()> {
     let config_result = config::Config::load();
     let cfg = match config_result {
         Ok(c) => c,
-        Err(_) => {
+        Err(e) => {
+            // If the error is NOT a missing config file, it's a syntax/permission error.
+            // Report it and exit instead of treating it as a fresh install/onboarding.
+            if !config::Config::is_missing_config_error(&e) {
+                eprintln!("Error loading configuration:\n{}", e);
+                std::process::exit(1);
+            }
+
             // Interactive Onboarding
             println!("Welcome to Cfait (TUI). No configuration file found.");
             println!("Let's set up your task manager.\n");

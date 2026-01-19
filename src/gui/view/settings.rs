@@ -49,6 +49,44 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         text("")
     };
 
+    // --- FATAL ERROR GUARD ---
+    // If the config file existed but was corrupted (syntax/IO), show a blocking error
+    // screen to force the user to fix or remove the file. This prevents accidental
+    // overwrites by the onboarding/save flows.
+    if app.config_was_corrupted {
+        let error_text = app.error_msg.clone().unwrap_or_default();
+
+        return container(
+            column![
+                icon::icon(icon::TRASH)
+                    .size(40)
+                    .color(Color::from_rgb(0.8, 0.2, 0.2)),
+                text("Configuration File Error").size(24),
+                text("The existing configuration file could not be loaded.").size(16),
+                container(
+                    text(error_text)
+                        .size(14)
+                        .font(iced::Font::MONOSPACE)
+                        .color(Color::from_rgb(0.8, 0.1, 0.1))
+                )
+                .padding(10)
+                .style(container::rounded_box),
+                text("To prevent data loss, the application will not start."),
+                text("Please fix the syntax error in the file manually or delete it to reset."),
+                button("Quit Application")
+                    .style(button::danger)
+                    .on_press(Message::CloseWindow)
+            ]
+            .spacing(20)
+            .align_x(iced::Alignment::Center),
+        )
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .center_x(Length::Fill)
+        .center_y(Length::Fill)
+        .into();
+    }
+
     // --- Components ---
 
     let cal_names: Vec<String> = app.calendars.iter().map(|c| c.name.clone()).collect();

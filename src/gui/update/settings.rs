@@ -101,8 +101,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.loading = true;
             Task::perform(connect_and_fetch_wrapper(config), Message::Loaded)
         }
-        Message::ConfigLoaded(Err(_)) => {
+        Message::ConfigLoaded(Err(e)) => {
             app.state = AppState::Onboarding;
+            // If it failed to load but NOT because it was missing (e.g. syntax/permission error),
+            // show the specific error message on the onboarding screen and prevent overwrites.
+            if !e.contains("Config file not found") {
+                app.error_msg = Some(format!("Configuration Error:\n{}", e));
+                // Lock the UI to prevent accidental overwrites of the corrupted config file.
+                app.config_was_corrupted = true;
+            }
             Task::none()
         }
         Message::ObUrlChanged(v) => {

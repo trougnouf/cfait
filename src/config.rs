@@ -1,7 +1,7 @@
 // Handles configuration loading, saving, and defaults.
 use crate::paths::AppPaths;
 use crate::storage::LocalStorage;
-use anyhow::Result;
+use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -192,14 +192,60 @@ impl Default for Config {
 }
 
 impl Config {
+    /// Load the configuration from disk.
+    /// Returns a contextualized error if reading or parsing fails.
     pub fn load() -> Result<Self> {
         let path = AppPaths::get_config_file_path()?;
-        if path.exists() {
-            let contents = fs::read_to_string(path)?;
-            let config: Config = toml::from_str(&contents)?;
-            return Ok(config);
+
+        // Explicitly detect missing file so callers (onboarding) can behave accordingly.
+        if !path.exists() {
+            return Err(anyhow::anyhow!("Config file not found"));
         }
-        Err(anyhow::anyhow!("Config file not found"))
+
+        // Read the file with contextualized error (covers permission/IO issues).
+        let contents = fs::read_to_string(&path).map_err(|e| {
+            anyhow::anyhow!("Failed to read config file '{}': {}", path.display(), e)
+        })?;
+
+        // Parse TOML with contextualized error (covers syntax issues).
+        let config: Config = toml::from_str(&contents).map_err(|e| {
+            anyhow::anyhow!("Failed to parse config file '{}': {}", path.display(), e)
+        })?;
+
+        Ok(config)
+    }
+
+    /// Helper to detect whether an anyhow::Error indicates that the config file was missing.
+    /// This tries multiple strategies:
+    ///  - Fast path: check for our explicit "Config file not found" message
+    ///  - Look for underlying IO NotFound errors in the error chain
+    ///
+    /// The goal is to avoid brittle substring checks spread across the codebase.
+    pub fn is_missing_config_error(err: &Error) -> bool {
+        // Fast textual check for the explicit not-found message.
+        if err.to_string().contains("Config file not found") {
+            return true;
+        }
+
+        // Check if the top-level error is an io::Error with NotFound kind.
+        if let Some(io_err) = err.downcast_ref::<std::io::Error>()
+            && io_err.kind() == std::io::ErrorKind::NotFound
+        {
+            return true;
+        }
+
+        // Walk the error chain and look for an underlying IO NotFound.
+        // `chain()` yields references to the error chain; check each for io::Error.
+        // This makes detection robust even when errors are wrapped.
+        for cause in err.chain() {
+            if let Some(io_err) = cause.downcast_ref::<std::io::Error>()
+                && io_err.kind() == std::io::ErrorKind::NotFound
+            {
+                return true;
+            }
+        }
+
+        false
     }
 
     pub fn save(&self) -> Result<()> {

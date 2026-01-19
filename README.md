@@ -36,7 +36,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 - [📊 Task Sorting](#task-sorting)
 - [📅 Calendar Events for Tasks](#calendar-events-for-tasks)
 - [💾 Export & Backup](#export-backup)
-- [🎮 TUI Keybindings](#tui-keybindings)
+- [🎮 TUI Keybindings and configuration](#tui-keybindings)
 - [🤗 Support](#support)
 - [🪩 Mirrors](#mirrors)
 - [🛡️ Privacy Policy](#privacy-policy)
@@ -413,6 +413,8 @@ If you are using the Terminal interface, here are the essentials (*Press `?` ins
 **Note:** The sidebar shows hierarchical tags and locations. For example, if you have tasks with `#work:project:urgent` and `#work:meeting`, they'll be organized under the `#work` parent in the sidebar.
 
 The GUI also supports `/` for search and `a` for adding tasks.
+
+The configuration file is documented in https://codeberg.org/trougnouf/cfait/wiki/Configuration
 
 <a name="support"></a>
 ## 🤗 Support

@@ -111,6 +111,8 @@ pub struct GuiApp {
     pub ob_default_cal: Option<String>,
     pub ob_sort_months_input: String,
     pub ob_insecure: bool,
+    /// If true, the config file exists but is invalid. We must block overwrites.
+    pub config_was_corrupted: bool,
 
     // Local Calendar Management
     pub local_cals_editing: Vec<CalendarListEntry>,
@@ -253,6 +255,7 @@ impl Default for GuiApp {
             ob_pass: String::new(),
             ob_default_cal: None,
             ob_insecure: false,
+            config_was_corrupted: false,
 
             local_cals_editing: vec![],
             color_picker_active_href: None,
