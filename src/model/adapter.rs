@@ -1,3 +1,4 @@
+// File: ./src/model/adapter.rs
 // Adapter logic for converting between Task objects and iCalendar format.
 use crate::model::item::{Alarm, AlarmTrigger, DateType, RawProperty, Task, TaskStatus};
 use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
@@ -40,38 +41,35 @@ impl Task {
         let rule_str = self.rrule.as_ref()?;
         let seed_date_type = self.dtstart.as_ref().or(self.due.as_ref())?;
 
-        // All-Day: Interpret as Local midnight, then convert to UTC.
+        // Normalize seed to UTC DateTime for calculation
+        // For AllDay, we force UTC Midnight (T000000Z) to ensure stable arithmetic
         let seed_dt_utc = match seed_date_type {
             DateType::AllDay(d) => d.and_hms_opt(0, 0, 0).unwrap().and_utc(),
             DateType::Specific(dt) => *dt,
         };
 
+        // Construct RRULE string using strict UTC format for calculation stability.
+        // We use DATE-TIME (T000000Z) even for AllDay to avoid local timezone shifts
+        // during iteration (which caused off-by-one errors in tests).
         let dtstart_str = seed_dt_utc.format("%Y%m%dT%H%M%SZ").to_string();
-        let mut rrule_string = format!("DTSTART:{}\nRRULE:{}", dtstart_str, rule_str);
+        let mut rrule_string = format!("DTSTART:{}\nRRULE:{}\n", dtstart_str, rule_str);
 
-        // Add EXDATEs
+        // Add EXDATEs normalized to UTC matching DTSTART
         if !self.exdates.is_empty() {
             for ex in &self.exdates {
-                match ex {
-                    DateType::AllDay(d) => {
-                        rrule_string
-                            .push_str(&format!("\nEXDATE;VALUE=DATE:{}\n", d.format("%Y%m%d")));
-                    }
-                    DateType::Specific(dt) => {
-                        rrule_string
-                            .push_str(&format!("\nEXDATE:{}\n", dt.format("%Y%m%dT%H%M%SZ")));
-                    }
-                }
+                let ex_utc = match ex {
+                    // Force AllDay exceptions to UTC Midnight to match DTSTART
+                    DateType::AllDay(d) => d.and_hms_opt(0, 0, 0).unwrap().and_utc(),
+                    DateType::Specific(dt) => *dt,
+                };
+                rrule_string.push_str(&format!("EXDATE:{}\n", ex_utc.format("%Y%m%dT%H%M%SZ")));
             }
         }
 
         if let Ok(rrule_set) = RRuleSet::from_str(&rrule_string) {
             let now = Utc::now();
 
-            // Advance past current occurrence:
-            // 1. If task is completed "early" (seed > now), we must skip 'seed' to avoid duplicating "today's" task.
-            // 2. If task is overdue (seed < now), we must skip past times to find the next future occurrence.
-            // Therefore, we look for d > max(now, seed).
+            // Calculate search floor.
             let search_floor = std::cmp::max(now, seed_dt_utc);
 
             let next_occurrence = rrule_set
@@ -125,6 +123,8 @@ impl Task {
         None
     }
 
+    // NOTE: to_ics still generates standard VALUE=DATE for output compliance.
+
     pub fn advance_recurrence(&mut self) -> bool {
         if let Some(next) = self.respawn() {
             *self = next;
@@ -133,8 +133,6 @@ impl Task {
         false
     }
 
-    /// Advances to the next recurrence while adding the current date to exdates.
-    /// This is used when canceling a single occurrence of a recurring task.
     pub fn advance_recurrence_with_cancellation(&mut self) -> bool {
         // 1. Add current occurrence date to exdates
         // We must do this before respawn() so the calculator knows to skip this date
@@ -145,18 +143,16 @@ impl Task {
 
         // 2. Calculate next occurrence
         if let Some(next) = self.respawn() {
-            // 3. Adopt the new state (dates, status=NeedsAction, clean alarms, etc.)
-            // We temporarily capture identity fields to preserve them
+            // 3. Adopt the new state
             let uid = self.uid.clone();
             let href = self.href.clone();
             let etag = self.etag.clone();
             let calendar_href = self.calendar_href.clone();
             let old_seq = self.sequence;
 
-            // Overwrite self with the new state
             *self = next;
 
-            // Restore identity to ensure this is treated as an UPDATE, not a CREATE
+            // Restore identity
             self.uid = uid;
             self.href = href;
             self.etag = etag;
@@ -246,7 +242,6 @@ impl Task {
                 todo.add_property("DURATION", format!("PT{}M", mins));
             }
 
-            // NEW: Write Max Duration
             if let Some(max) = self.estimated_duration_max {
                 todo.add_property("X-CFAIT-ESTIMATED-DURATION-MAX", format!("PT{}M", max));
             }
@@ -473,7 +468,6 @@ impl Task {
 
         // Deterministic UID for the event
         let event_uid = format!("evt-{}", self.uid);
-
         let mut event = Event::new();
         event.add_property("UID", &event_uid);
         event.summary(&self.summary);
@@ -528,13 +522,10 @@ impl Task {
                         DateType::AllDay(date) => {
                             (DateType::AllDay(*date), DateType::AllDay(*date))
                         }
-                        DateType::Specific(dt) => {
-                            // For timed due dates, create a 1-hour event
-                            (
-                                DateType::Specific(*dt - chrono::Duration::hours(1)),
-                                DateType::Specific(*dt),
-                            )
-                        }
+                        DateType::Specific(dt) => (
+                            DateType::Specific(*dt - chrono::Duration::hours(1)),
+                            DateType::Specific(*dt),
+                        ),
                     }
                 } else {
                     // Normal span: use both dates
