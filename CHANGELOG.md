@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.4.8] - 2026-01-20
+
+### 🚀 Features
+
+- *(tasks)* Implement time estimation ranges (e.g. ~10m-3h) with compatible search logic
+- *(gui)* Initial work on keyboard shortcuts ( https://codeberg.org/trougnouf/cfait/issues/9 )
+- *(gui)* Towards keyboard shortcuts
+- *(gui)* Expandable description field with scroll bar
+- *(android)* Parse new alias definitions in task input bar
+- *(gui)* Double click to edit a task ( https://codeberg.org/trougnouf/cfait/issues/9 )
+- *(tui)* Improved task editing experience with enter for newline, basic markdown highlighting, and markdown viewer in the task details view (with plain-text auto-detection to maintain basic newlines) ( https://codeberg.org/trougnouf/cfait/issues/14 )
+- *(tui)* Support horizontal scrolling in the description editor and multi-byte characters ( https://codeberg.org/trougnouf/cfait/issues/14 )
+- *(config)* Differentiate between corrupted and missing config files ( https://codeberg.org/trougnouf/cfait/issues/13 )
+
+### 🐛 Bug Fixes
+
+- *(android)* Maintain keyboard after adding task and jump to task instantly instead of with animation
+- *(recurrence)* Preserve task UID on cancellation to prevent duplication
+- *(tui)* Restore onboarding ( https://codeberg.org/trougnouf/cfait/issues/13 )
+- *(gui)* Load iced_aw fonts to render correct icons in color picker (reported by beh bah)
+- *(android)* Disable keyboard autocorrect for login fields and enable url / password mode ( https://codeberg.org/trougnouf/cfait/issues/15 )
+- *(android)* Fix cursor position in new task field and adjust size of task description field when keyboard is out
+- *(tests)* Properly isolate all write tests in a temporary directory (reported by Geoffrey Frogeye)
+- *(model)* Fix stuck recurring tasks by normalizing AllDay/EXDATE calculations to UTC
+- *(gui)* Auto-scroll to task (linked or up/down)
+
+### ⚡ Performance
+
+- Pre-calculate and cache is_blocked status and parent attributes (fixes O(N^2) rendering lag)
+
+### 🎨 Styling
+
+- Use consistant style for start - due date(time) (hourglass_empty - hourglass_full), avoid identical start/due date(time) repetitions
+- *(gui)* Restore calendar icon for due date(time) when it's the only date(time) shown
+
+### ⚙️ Miscellaneous Tasks
+
+- *(android)* Bump min SDK to 28 (Android 9) due to uniffi v0.31 update
+- Move Cargo.lock update to every release and disable check
 ## [0.4.7] - 2026-01-13
 
 ### 🚀 Features
@@ -23,6 +62,10 @@
 
 - *(gui)* Improve tags list UI
 - *(gui)* Remove empty space between title bar and input bar
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cfait version 0.4.7
 ## [0.4.6] - 2026-01-11
 
 ### 🚀 Features
