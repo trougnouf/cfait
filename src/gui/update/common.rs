@@ -3,11 +3,14 @@ use crate::config::Config;
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
+use crate::gui::view::focusable::{get_all_focus_bounds, get_focus_bounds};
 use crate::store::FilterOptions;
 use crate::system::SystemEvent;
 use chrono::{Duration, Utc};
 use iced::Task;
-use iced::widget::{operation, scrollable::RelativeOffset};
+use iced::widget::operation;
+use iced::widget::scrollable::RelativeOffset;
+use std::time::Duration as StdDuration;
 
 pub fn refresh_sidebar_cache(app: &mut GuiApp) {
     // Cache categories
@@ -37,7 +40,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         active_cal_href: None, // This is now handled by hidden_calendars
         hidden_calendars: &app.hidden_calendars,
         selected_categories: &app.selected_categories,
-        selected_locations: &app.selected_locations, // NEW
+        selected_locations: &app.selected_locations,
         match_all_categories: app.match_all_categories,
         search_term: &app.search_value,
         hide_completed_global: app.hide_completed,
@@ -65,16 +68,21 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         }
     }
 
-    // Populate cache for the currently visible tasks
+    // --- UPDATE ID CACHE ---
     for task in &app.tasks {
+        app.task_ids
+            .entry(task.uid.clone())
+            .or_insert_with(iced::widget::Id::unique);
+
         if let Some(p_uid) = &task.parent_uid
-            && let Some(parent) = quick_lookup.get(p_uid) {
-                let p_tags: std::collections::HashSet<String> =
-                    parent.categories.iter().cloned().collect();
-                let p_loc = parent.location.clone();
-                app.parent_attributes_cache
-                    .insert(p_uid.clone(), (p_tags, p_loc));
-            }
+            && let Some(parent) = quick_lookup.get(p_uid)
+        {
+            let p_tags: std::collections::HashSet<String> =
+                parent.categories.iter().cloned().collect();
+            let p_loc = parent.location.clone();
+            app.parent_attributes_cache
+                .insert(p_uid.clone(), (p_tags, p_loc));
+        }
     }
 
     // Update sidebar cache after filtering
@@ -108,8 +116,6 @@ pub fn save_config(app: &GuiApp) {
         urgent_priority_threshold: app.urgent_prio,
         default_priority: app.default_priority,
         start_grace_period_days: app.start_grace_period_days,
-
-        // NEW FIELDS
         auto_reminders: app.auto_reminders,
         default_reminder_time: app.default_reminder_time.clone(),
         snooze_short_mins: app.snooze_short_mins,
@@ -148,19 +154,181 @@ pub fn apply_alias_retroactively(
 }
 
 /// Helper: Generates a command to scroll the main list to the currently selected task.
+///
+/// Strategy:
+/// 1) If both a stable widget Id is registered and the task index is known, perform both:
+///    focus the widget id and snap the scrollable to the relative offset (batched).
+/// 2) If only Id is present, focus it (ensures keyboard focus).
+/// 3) If only index known, snap_to relative offset as a fallback.
 pub fn scroll_to_selected(app: &GuiApp) -> Task<Message> {
-    if let Some(uid) = &app.selected_uid
-        && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+    if let Some(uid) = &app.selected_uid {
+        let id_opt = app.task_ids.get(uid).cloned();
+        let idx_opt = app.tasks.iter().position(|t| t.uid == *uid);
+
+        // If we have both an Id and an index, prefer to compute a pixel-accurate scroll offset
+        // and then focus. We try bounds-based centering first (most accurate), and fall back
+        // to an index-based center estimate if bounds are not available.
+        if let (Some(id), Some(idx)) = (id_opt.clone(), idx_opt) {
+            // Try bounds-based centering when available.
+            if let Some(rect) = get_focus_bounds(&id) {
+                // Compute content top/min and content bottom/max from registered bounds.
+                // This allows computing content height as max_y - min_y, and deriving the
+                // target item's center relative to the content origin (min_y).
+                let all = get_all_focus_bounds();
+                let mut min_y: f32 = f32::INFINITY;
+                let mut max_y: f32 = 0.0;
+                for (_k, r) in all.iter() {
+                    min_y = min_y.min(r.y);
+                    max_y = max_y.max(r.y + r.height);
+                }
+
+                if min_y.is_finite() && max_y > min_y {
+                    let content_h = max_y - min_y;
+                    let viewport_h = (app.current_window_size.height - 180.0).max(100.0);
+
+                    // Item center relative to content top (min_y)
+                    let item_center_rel = (rect.y - min_y) + rect.height / 2.0;
+
+                    // Maximum scroll offset (px) is content_h - viewport_h.
+                    let max_scroll = (content_h - viewport_h).max(0.0);
+                    // Desired offset so the item center is positioned in the middle of the viewport.
+                    let desired_offset_px =
+                        (item_center_rel - viewport_h / 2.0).clamp(0.0, max_scroll);
+
+                    // Use an absolute pixel scroll to position precisely, then focus the id.
+                    // Convert desired pixel offset into a relative fraction for snap_to.
+                    // max_scroll = content_height - viewport_height
+                    let max_scroll_px = (content_h - viewport_h).max(0.0);
+                    let y = if max_scroll_px > 0.0 {
+                        (desired_offset_px / max_scroll_px).clamp(0.0, 1.0)
+                    } else {
+                        0.0
+                    };
+
+                    let snap =
+                        operation::snap_to(app.scrollable_id.clone(), RelativeOffset { x: 0.0, y });
+
+                    return Task::batch(vec![snap, operation::focus(id)]);
+                }
+            }
+
+            // Fallback: index-centered heuristic (estimate pixels using avg row height).
+            let avg_item_h: f32 = 34.0; // tuned default row height
+            let total_items = app.tasks.len() as f32;
+            let content_h = (avg_item_h * total_items).max(1.0);
+            let viewport_h = (app.current_window_size.height - 180.0).max(100.0);
+            let item_center = (idx as f32 + 0.5) * avg_item_h;
+            let max_scroll = (content_h - viewport_h).max(0.0);
+            let desired_offset_px = (item_center - viewport_h / 2.0).clamp(0.0, max_scroll);
+
+            // Convert desired pixel offset into a relative fraction for snap_to.
+            let max_scroll_px = (content_h - viewport_h).max(0.0);
+            let y = if max_scroll_px > 0.0 {
+                (desired_offset_px / max_scroll_px).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+
+            let snap = operation::snap_to(app.scrollable_id.clone(), RelativeOffset { x: 0.0, y });
+
+            return Task::batch(vec![snap, operation::focus(id)]);
+        }
+
+        // If we only have the index, center using the same index-based pixel heuristic.
+        if let Some(idx) = idx_opt {
+            let avg_item_h: f32 = 34.0;
+            let total_items = app.tasks.len() as f32;
+            let content_h = (avg_item_h * total_items).max(1.0);
+            let viewport_h = (app.current_window_size.height - 180.0).max(100.0);
+            let item_center = (idx as f32 + 0.5) * avg_item_h;
+            let max_scroll = (content_h - viewport_h).max(0.0);
+            let desired_offset_px = (item_center - viewport_h / 2.0).clamp(0.0, max_scroll);
+
+            // Convert desired pixel offset into a relative fraction for snap_to.
+            let max_scroll_px = (content_h - viewport_h).max(0.0);
+            let y = if max_scroll_px > 0.0 {
+                (desired_offset_px / max_scroll_px).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+
+            return operation::snap_to(app.scrollable_id.clone(), RelativeOffset { x: 0.0, y });
+        }
+
+        // If we only have the widget Id, focus it (last resort).
+        if let Some(id) = id_opt {
+            return operation::focus(id);
+        }
+    }
+
+    //eprintln!("scroll_to_selected: no selected uid");
+    Task::none()
+}
+
+/// Helper: Waits a small amount of time (allowing the View to rebuild)
+/// and then triggers one or more `SnapToSelected` messages (retries).
+///
+/// Rationale:
+/// A single delayed attempt may still miss on some platforms/conditions. Emit a small batch
+/// of delayed triggers (at increasing delays) so the focus attempt has multiple chances across
+/// subsequent frames to succeed.
+pub fn scroll_to_selected_delayed(_app: &GuiApp) -> Task<Message> {
+    // Try to emit SnapToSelected as soon as the focusable row reports its layout bounds.
+    // Strategy:
+    // 1. If we know which UID is selected and we have a cached widget Id for it, poll the
+    //    focus bounds registry for that Id and emit SnapToSelected as soon as a bounds entry
+    //    is seen (up to a timeout). This yields the most precise timing to focus the widget
+    //    right after it has been registered by the View's operate traversal.
+    // 2. Fallback: if no selected UID / id is available, or the poll times out, emit a
+    //    series of delayed SnapToSelected messages as before.
+
+    // If we have an explicitly-selected task and a cached widget Id, try the bounds-aware path.
+    if let Some(uid) = &_app.selected_uid
+        && let Some(id) = _app.task_ids.get(uid).cloned()
     {
-        let len = app.tasks.len().max(1) as f32;
-        return operation::snap_to(
-            app.scrollable_id.clone(),
-            RelativeOffset {
-                x: 0.0,
-                y: idx as f32 / len,
+        // Spawn a single perform task that polls for the bounds to exist for this Id.
+        // We will wait up to ~1s (20 * 50ms) checking every 50ms; as soon as bounds exist
+        // we emit SnapToSelected. If polling times out, emit SnapToSelected once anyway.
+        return Task::perform(
+            async move {
+                let mut attempts = 0u8;
+                // Poll loop: check for bounds up to N attempts.
+                loop {
+                    // If bounds exist, we can stop waiting.
+                    if crate::gui::view::focusable::get_focus_bounds(&id).is_some() {
+                        break;
+                    }
+                    attempts = attempts.saturating_add(1);
+                    if attempts >= 20 {
+                        // timed out
+                        break;
+                    }
+                    std::thread::sleep(StdDuration::from_millis(50));
+                }
             },
+            |_| Message::SnapToSelected,
         );
     }
 
-    Task::none()
+    // Fallback: emit a small batch of delayed attempts (in case no id was cached yet).
+    Task::batch(vec![
+        Task::perform(
+            async {
+                std::thread::sleep(StdDuration::from_millis(120));
+            },
+            |_| Message::SnapToSelected,
+        ),
+        Task::perform(
+            async {
+                std::thread::sleep(StdDuration::from_millis(360));
+            },
+            |_| Message::SnapToSelected,
+        ),
+        Task::perform(
+            async {
+                std::thread::sleep(StdDuration::from_millis(720));
+            },
+            |_| Message::SnapToSelected,
+        ),
+    ])
 }

@@ -1,3 +1,4 @@
+// File: ./src/gui/state.rs
 // Manages the application state for the GUI (Iced).
 use crate::client::RustyClient;
 use crate::config::AppTheme;
@@ -56,13 +57,17 @@ pub struct GuiApp {
     // Map<TaskUID, (ParentTags, ParentLocation)>
     pub parent_attributes_cache: HashMap<String, (HashSet<String>, Option<String>)>,
 
+    // --- Stable ID Cache ---
+    // Maps Task UID -> Iced Widget ID. Ensures the View and Update loops use the exact same ID instance.
+    pub task_ids: HashMap<String, iced::widget::Id>,
+
     // UI State
     pub sidebar_mode: SidebarMode,
     pub active_cal_href: Option<String>,
     pub hidden_calendars: HashSet<String>,
     pub disabled_calendars: HashSet<String>,
     pub selected_categories: HashSet<String>,
-    pub selected_locations: HashSet<String>, // NEW
+    pub selected_locations: HashSet<String>,
     pub match_all_categories: bool,
     pub yanked_uid: Option<String>,
 
@@ -217,6 +222,7 @@ impl Default for GuiApp {
 
             // Initialize:
             parent_attributes_cache: HashMap::new(),
+            task_ids: HashMap::new(), // Init new field
 
             sidebar_mode: SidebarMode::Calendars,
             active_cal_href: None,

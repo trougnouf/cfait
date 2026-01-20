@@ -157,6 +157,25 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::TaskMoved(_)
         | Message::MigrationComplete(_) => network::handle(app, message),
 
+        // Delayed focus trigger: when the view has been refreshed and widget IDs are registered,
+        // `SnapToSelected` will attempt to focus/scroll to the selected task. If the task
+        // is still not present in the filtered view, re-schedule a delayed attempt.
+        Message::SnapToSelected => {
+            if let Some(uid) = &app.selected_uid {
+                let present_in_list = app.tasks.iter().any(|t| t.uid == *uid);
+                let has_cached_id = app.task_ids.contains_key(uid);
+
+                if present_in_list || has_cached_id {
+                    common::scroll_to_selected(app)
+                } else {
+                    // Task not yet visible/registered; try again shortly.
+                    common::scroll_to_selected_delayed(app)
+                }
+            } else {
+                Task::none()
+            }
+        }
+
         // --- Alarm System ---
         Message::InitAlarmActor(tx) => {
             app.alarm_tx = Some(tx.clone());

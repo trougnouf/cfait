@@ -113,6 +113,7 @@ pub enum Message {
     JumpToTag(String),
     JumpToLocation(String),
     JumpToTask(String),
+    SnapToSelected,
     TagHovered(Option<String>),
     FocusTag(String),
     FocusLocation(String),

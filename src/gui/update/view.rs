@@ -2,7 +2,9 @@
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp, ResizeDirection, SidebarMode};
-use crate::gui::update::common::{refresh_filtered_tasks, save_config, scroll_to_selected};
+use crate::gui::update::common::{
+    refresh_filtered_tasks, save_config, scroll_to_selected, scroll_to_selected_delayed,
+};
 use crate::gui::update::tasks;
 use iced::widget::operation;
 use iced::{Task, window};
@@ -14,9 +16,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let mut is_double = false;
 
             if let Some((last_time, last_uid)) = &app.last_click
-                && last_uid == &uid && now.duration_since(*last_time).as_millis() < 400 {
-                    is_double = true;
-                }
+                && last_uid == &uid
+                && now.duration_since(*last_time).as_millis() < 400
+            {
+                is_double = true;
+            }
 
             app.last_click = Some((now, uid.clone()));
 
@@ -486,8 +490,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.selected_uid = Some(uid.clone());
                 app.expanded_tasks.insert(uid.clone()); // Auto-expand details
 
-                // 5. Scroll
-                return scroll_to_selected(app);
+                // 5. USE DELAYED SCROLL
+                // We use delayed here because if we just un-hid the calendar or cleared filters,
+                // the row widget does not exist in the current frame.
+                return scroll_to_selected_delayed(app);
             }
             Task::none()
         }

@@ -4,6 +4,7 @@ use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
 use crate::gui::view::COLOR_LOCATION;
+use crate::gui::view::focusable::focusable;
 use crate::model::Task as TodoTask;
 use crate::model::parser::strip_quotes;
 use chrono::Utc;
@@ -14,16 +15,18 @@ use super::tooltip_style;
 use iced::widget::{Space, button, column, container, responsive, row, text, tooltip};
 use iced::{Border, Color, Element, Length, Theme};
 
-// ... wrapper imports ...
-use iced::advanced::Renderer as AdvancedRenderer;
+// Imports for custom widget (NoPointer)
+use iced::advanced::layout;
+use iced::advanced::renderer;
 use iced::advanced::widget::{self, Widget};
-use iced::advanced::{Clipboard, Layout, Shell, layout, mouse, renderer};
+use iced::advanced::{Clipboard, Layout, Shell, mouse};
 use iced::{Event, Rectangle, Size, Vector};
 
 pub fn view_task_row<'a>(
     app: &'a GuiApp,
     index: usize,
     task: &'a TodoTask,
+    row_id: iced::widget::Id, // <-- CHANGED: Accept ID as argument
 ) -> Element<'a, Message> {
     // CHANGE: Use the pre-calculated field instead of calling app.store.is_blocked(task)
     // app.store.is_blocked(task) triggers an O(N) scan. task.is_blocked is O(1).
@@ -967,8 +970,6 @@ pub fn view_task_row<'a>(
             }
         });
 
-    let row_id = iced::widget::Id::from(task.uid.clone());
-
     // Prepare container content (Expanded view details omitted for brevity, logic unchanged)
     let container_content: Element<'a, Message> = if has_content_to_show {
         if is_expanded {
@@ -1152,14 +1153,17 @@ pub fn view_task_row<'a>(
         .into()
     };
 
-    container(container_content)
-        .padding(if is_expanded && has_content_to_show {
+    // Use focusable wrapper to support focus/scroll logic
+    // We attach the ID here to the wrapper, which will be the target of operation::focus
+    focusable(
+        container(container_content).padding(if is_expanded && has_content_to_show {
             5
         } else {
             0
-        })
-        .id(row_id)
-        .into()
+        }),
+    )
+    .id(row_id)
+    .into()
 }
 
 // Wrapper widget to suppress pointer cursor on hover
@@ -1170,7 +1174,7 @@ struct NoPointer<'a, Message, Theme, Renderer> {
 impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
     for NoPointer<'a, Message, Theme, Renderer>
 where
-    Renderer: AdvancedRenderer,
+    Renderer: iced::advanced::Renderer,
 {
     fn size(&self) -> Size<Length> {
         self.content.as_widget().size()
@@ -1278,7 +1282,7 @@ impl<'a, Message, Theme, Renderer> From<NoPointer<'a, Message, Theme, Renderer>>
 where
     Message: 'a,
     Theme: 'a,
-    Renderer: AdvancedRenderer + 'a,
+    Renderer: iced::advanced::Renderer + 'a,
 {
     fn from(widget: NoPointer<'a, Message, Theme, Renderer>) -> Self {
         Element::new(widget)

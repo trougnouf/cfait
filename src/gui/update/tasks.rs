@@ -2,14 +2,14 @@
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{GuiApp, SidebarMode};
-use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tasks, save_config};
+use crate::gui::update::common::{
+    apply_alias_retroactively, refresh_filtered_tasks, save_config, scroll_to_selected_delayed,
+};
 use crate::journal::{Action, Journal};
 use crate::model::{Task as TodoTask, extract_inline_aliases};
 use crate::storage::LocalStorage;
 use chrono::{DateTime, NaiveTime, Utc};
 use iced::Task;
-use iced::widget::operation;
-use iced::widget::scrollable::RelativeOffset;
 use iced::widget::text_editor;
 use std::collections::HashMap;
 
@@ -690,23 +690,19 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
             app.store.add_task(new_task.clone());
 
+            // Ensure an Id is allocated and cached for this new task immediately so that
+            // later focus operations can target the correct widget once it's rendered.
+            app.task_ids
+                .entry(new_task.uid.clone())
+                .or_insert_with(iced::widget::Id::unique);
+
             app.selected_uid = Some(new_task.uid.clone());
             refresh_filtered_tasks(app);
             app.input_value = text_editor::Content::new();
 
-            let len = app.tasks.len().max(1) as f32;
-            let idx = app
-                .tasks
-                .iter()
-                .position(|t| t.uid == new_task.uid)
-                .unwrap_or(0) as f32;
-            let scroll_cmd = operation::snap_to(
-                app.scrollable_id.clone(),
-                RelativeOffset {
-                    x: 0.0,
-                    y: idx / len,
-                },
-            );
+            // Use a delayed scroll helper: waiting a short interval allows the view to
+            // rebuild and register the new row widget before attempting to focus it.
+            let scroll_cmd = scroll_to_selected_delayed(app);
 
             if let Some(client) = &app.client {
                 let create_cmd = Task::perform(

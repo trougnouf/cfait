@@ -1,11 +1,11 @@
 // File: ./src/gui/view/mod.rs
-// Main view composition and layout logic for the GUI.
 use std::time::Duration;
+pub mod focusable;
 pub mod help;
 pub mod settings;
 pub mod sidebar;
 pub mod syntax;
-pub mod task_row;
+pub mod task_row; // Added module export
 
 use crate::gui::icon;
 use crate::gui::message::Message;
@@ -896,7 +896,14 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         app.tasks
             .iter()
             .enumerate()
-            .map(|(real_index, task)| view_task_row(app, real_index, task))
+            .map(|(real_index, task)| {
+                // RETRIEVE ID FROM CACHE
+                let row_id = app.task_ids.get(&task.uid).cloned().unwrap_or_else(|| {
+                    // Fallback should not happen in a correctly functioning app
+                    iced::widget::Id::unique()
+                });
+                view_task_row(app, real_index, task, row_id)
+            })
             .collect::<Vec<_>>(),
     )
     .spacing(1);
@@ -908,8 +915,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             .id(app.scrollable_id.clone())
             .direction(Direction::Vertical(
                 Scrollbar::new().width(10).scroller_width(10).margin(0),
-            ))
-            .auto_scroll(true),
+            )),
     );
 
     container(main_col)
@@ -939,18 +945,19 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         let max_desc_height = (app.current_window_size.height - 250.0).max(100.0);
 
         let input_desc = text_editor(&app.description_value)
-            .id("description_input") // ID Added here
+            .id("description_input")
             .placeholder("Notes...")
             .on_action(Message::DescriptionChanged)
             .padding(10)
             .height(Length::Shrink)
             .min_height(100.0);
 
-        let scrollable_desc = scrollable(input_desc)
-            .height(Length::Shrink)
-            .direction(Direction::Vertical(
-                Scrollbar::new().width(10).scroller_width(10),
-            ));
+        let scrollable_desc =
+            scrollable(input_desc)
+                .height(Length::Shrink)
+                .direction(Direction::Vertical(
+                    Scrollbar::new().width(10).scroller_width(10),
+                ));
 
         let desc_container = container(scrollable_desc).max_height(max_desc_height);
 
