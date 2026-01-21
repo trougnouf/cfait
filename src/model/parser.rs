@@ -1650,7 +1650,8 @@ pub fn apply_smart_input(
             }
         } else if token.starts_with('!') && token.len() > 1 {
             if let Ok(p) = token[1..].parse::<u8>() {
-                task.priority = p;
+                // FIX: Clamp priority to 0-9 range (RFC 5545)
+                task.priority = p.min(9);
             } else {
                 summary_words.push(unescape(token));
             }

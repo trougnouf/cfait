@@ -1,6 +1,7 @@
 // Unit tests for export functionality and full roundtrip chain (create → export → import)
 use cfait::model::{Alarm, DateType, Task, TaskStatus};
 use cfait::storage::LocalStorage;
+use cfait::store::TaskStore;
 use chrono::{Datelike, NaiveDate, TimeZone, Utc};
 use serial_test::serial;
 use std::collections::HashMap;
@@ -254,6 +255,67 @@ fn test_roundtrip_multiple_tasks() {
     assert_eq!(imported_tasks[0].summary, "First Task");
     assert_eq!(imported_tasks[1].summary, "Second Task");
     assert_eq!(imported_tasks[2].summary, "Third Task");
+
+    cleanup_test_env();
+}
+
+#[test]
+#[serial]
+fn test_priority_clamp_export_and_import() {
+    setup_test_env("prio_roundtrip");
+
+    // Export side: a task with a priority > 9 should be clamped in the generated ICS
+    let mut task = Task::new("Prio Export Task", &HashMap::new(), None);
+    task.priority = 15;
+    let tasks = vec![task];
+    let ics = LocalStorage::to_ics_string(&tasks);
+    // Export should clamp to 9
+    assert!(
+        ics.contains("PRIORITY:9"),
+        "Exported ICS did not contain clamped PRIORITY:9: {}",
+        ics
+    );
+
+    // Import side: an incoming ICS with PRIORITY:15 should be clamped to 9 when imported
+    let ics_in = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Cfait//Export//EN\r\nBEGIN:VTODO\r\nUID:uid-prio\r\nSUMMARY:Prio Import\r\nPRIORITY:15\r\nEND:VTODO\r\nEND:VCALENDAR";
+    let import_href = "local://prio-import";
+    let res = LocalStorage::import_from_ics(import_href, ics_in);
+    assert!(res.is_ok());
+    assert_eq!(res.unwrap(), 1);
+    let imported = LocalStorage::load_for_href(import_href).unwrap();
+    assert_eq!(imported.len(), 1);
+    assert_eq!(
+        imported[0].priority, 9,
+        "Imported task priority was not clamped to 9"
+    );
+    cleanup_test_env();
+}
+
+#[test]
+#[serial]
+fn test_alias_priority_clamp() {
+    setup_test_env("alias_prio");
+
+    // Use TaskStore.apply_alias_retroactively to apply an alias that contains a priority >9
+    let mut store = TaskStore::new();
+    let mut task = Task::new("Alias Prio", &HashMap::new(), None);
+    task.uid = "t-alias".to_string();
+    task.location = Some("Home".to_string());
+    // Ensure the task is associated with a calendar so apply_alias_retroactively can find it
+    task.calendar_href = "local://alias-test".to_string();
+    store.add_task(task);
+
+    // Apply location alias that includes a priority of 15 (should clamp to 9)
+    let modified = store.apply_alias_retroactively("@@Home", &["!15".to_string()]);
+    assert_eq!(
+        modified.len(),
+        1,
+        "Expected one modified task from alias application"
+    );
+    assert_eq!(
+        modified[0].priority, 9,
+        "Alias-applied priority was not clamped to 9"
+    );
 
     cleanup_test_env();
 }

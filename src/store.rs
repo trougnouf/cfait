@@ -428,7 +428,8 @@ impl TaskStore {
                         task.location = Some(crate::model::parser::strip_quotes(loc));
                     } else if let Some(prio) = val.strip_prefix('!') {
                         if let Ok(p) = prio.parse::<u8>() {
-                            task.priority = p;
+                            // FIX: Clamp priority to 0-9 range (RFC 5545)
+                            task.priority = p.min(9);
                         }
                     } else if let Some(url) = val.strip_prefix("url:") {
                         task.url = Some(crate::model::parser::strip_quotes(url));
@@ -455,7 +456,7 @@ impl TaskStore {
         forced_includes: &HashSet<String>,
         hidden_calendars: &HashSet<String>,
     ) -> Vec<(String, usize)> {
-        // Group tags case-insensitively to prevent duplicates like "#Work" and "#WORK"
+        // Group tags case-insensitively to prevent duplicates like "#gardening" and "#Gardening"
         // Key: Lowercase tag
         // Value: (Display Name (first encountered), Count)
         let mut active_counts: HashMap<String, usize> = HashMap::new();

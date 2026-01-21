@@ -131,7 +131,7 @@ fn test_priority_formats() {
     assert_eq!(parse("!1").priority, 1);
     assert_eq!(parse("!9").priority, 9);
     let _t_inv = parse("!0");
-    assert_eq!(parse("!99").priority, 99);
+    assert_eq!(parse("!99").priority, 9);
     let t_text = parse("!important");
     assert_eq!(t_text.priority, 0);
     assert!(t_text.summary.contains("!important"));

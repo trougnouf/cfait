@@ -246,8 +246,10 @@ impl Task {
                 todo.add_property("X-CFAIT-ESTIMATED-DURATION-MAX", format!("PT{}M", max));
             }
         }
+        // Clamp priority to 0-9 range (RFC 5545). Store 0 as unset.
         if self.priority > 0 {
-            todo.priority(self.priority.into());
+            let prio = if self.priority > 9 { 9 } else { self.priority };
+            todo.priority(prio.into());
         }
         if let Some(rrule) = &self.rrule {
             let rrule_str: String = rrule.as_str().into();
@@ -659,6 +661,7 @@ impl Task {
 
         let priority = get_prop("PRIORITY")
             .and_then(|v| v.parse::<u8>().ok())
+            .map(|p| if p > 9 { 9 } else { p }) // Clamp priority from server to valid range
             .unwrap_or(0);
         let sequence = get_prop("SEQUENCE")
             .and_then(|v| v.parse::<u32>().ok())
