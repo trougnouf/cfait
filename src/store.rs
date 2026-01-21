@@ -1,3 +1,4 @@
+// File: ./src/store.rs
 // In-memory storage and filtering logic for tasks.
 use crate::cache::Cache;
 use crate::model::{RawProperty, Task, TaskStatus};
@@ -454,8 +455,13 @@ impl TaskStore {
         forced_includes: &HashSet<String>,
         hidden_calendars: &HashSet<String>,
     ) -> Vec<(String, usize)> {
+        // Group tags case-insensitively to prevent duplicates like "#Work" and "#WORK"
+        // Key: Lowercase tag
+        // Value: (Display Name (first encountered), Count)
         let mut active_counts: HashMap<String, usize> = HashMap::new();
-        let mut present_tags: HashSet<String> = HashSet::new();
+        let mut display_names: HashMap<String, String> = HashMap::new();
+        let mut present_tags_lower: HashSet<String> = HashSet::new();
+
         let mut has_uncategorized_active = false;
         let mut has_uncategorized_any = false;
 
@@ -481,9 +487,17 @@ impl TaskStore {
                                 current_hierarchy.push(':');
                             }
                             current_hierarchy.push_str(part);
-                            present_tags.insert(current_hierarchy.clone());
+
+                            let lower_key = current_hierarchy.to_lowercase();
+                            present_tags_lower.insert(lower_key.clone());
+
+                            // Keep the first casing encountered as the display name
+                            display_names
+                                .entry(lower_key.clone())
+                                .or_insert(current_hierarchy.clone());
+
                             if is_active {
-                                *active_counts.entry(current_hierarchy.clone()).or_insert(0) += 1;
+                                *active_counts.entry(lower_key).or_insert(0) += 1;
                             }
                         }
                     }
@@ -492,15 +506,25 @@ impl TaskStore {
         }
 
         let mut result = Vec::new();
-        for tag in present_tags {
-            let count = *active_counts.get(&tag).unwrap_or(&0);
+        for lower_tag in present_tags_lower {
+            let count = *active_counts.get(&lower_tag).unwrap_or(&0);
+            let display_name = display_names
+                .get(&lower_tag)
+                .cloned()
+                .unwrap_or(lower_tag.clone());
+
+            let is_forced = forced_includes
+                .iter()
+                .any(|f| f.to_lowercase() == lower_tag);
+
             let should_show = if hide_fully_completed_tags {
-                count > 0 || forced_includes.contains(&tag)
+                count > 0 || is_forced
             } else {
                 true
             };
+
             if should_show {
-                result.push((tag, count));
+                result.push((display_name, count));
             }
         }
 
@@ -519,7 +543,8 @@ impl TaskStore {
             result.push((UNCATEGORIZED_ID.to_string(), count));
         }
 
-        result.sort_by(|a, b| a.0.cmp(&b.0));
+        // Sort case-insensitively for better UX
+        result.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
         result
     }
 
@@ -704,10 +729,14 @@ impl TaskStore {
                     let filter_uncategorized =
                         options.selected_categories.contains(UNCATEGORIZED_ID);
                     let check_match = |task_cat: &str, selected: &str| -> bool {
-                        if task_cat == selected {
+                        // Case-insensitive comparison for matching tasks to selected group
+                        let tc_lower = task_cat.to_lowercase();
+                        let sel_lower = selected.to_lowercase();
+
+                        if tc_lower == sel_lower {
                             return true;
                         }
-                        if let Some(stripped) = task_cat.strip_prefix(selected) {
+                        if let Some(stripped) = tc_lower.strip_prefix(&sel_lower) {
                             return stripped.starts_with(':');
                         }
                         false
