@@ -160,7 +160,7 @@ fun TaskRow(
                         val startStr = if (task.isAlldayStart) {
                             task.startDateIso!!.take(10)
                         } else {
-                            task.startDateIso!!.take(16).replace("T", " ")
+                            formatIsoToLocal(task.startDateIso!!)
                         }
 
                         if (task.dueDateIso != null) {
@@ -168,7 +168,7 @@ fun TaskRow(
                             val dueStr = if (task.isAlldayDue) {
                                 task.dueDateIso!!.take(10)
                             } else {
-                                task.dueDateIso!!.take(16).replace("T", " ")
+                                formatIsoToLocal(task.dueDateIso!!)
                             }
 
                             if (startStr == dueStr) {
@@ -193,7 +193,7 @@ fun TaskRow(
                         val displayStr = if (task.isAlldayDue) {
                             task.dueDateIso!!.take(10)
                         } else {
-                            task.dueDateIso!!.take(16).replace("T", " ")
+                            formatIsoToLocal(task.dueDateIso!!)
                         }
 
                         Text(displayStr, fontSize = 10.sp, color = Color.Gray)

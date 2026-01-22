@@ -19,6 +19,9 @@ import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileSyntaxType
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
 
@@ -280,6 +283,18 @@ fun formatDuration(
         "~$minStr-$maxStr"
     } else {
         "~$minStr"
+    }
+}
+
+fun formatIsoToLocal(isoString: String): String {
+    return try {
+        val instant = Instant.parse(isoString)
+        val zone = ZoneId.systemDefault()
+        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+        instant.atZone(zone).format(formatter)
+    } catch (e: Exception) {
+        // Fallback for malformed strings or unexpected formats
+        isoString.take(16).replace("T", " ")
     }
 }
 
