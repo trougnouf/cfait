@@ -1,4 +1,9 @@
-// File: ./android/app/src/main/java/com/trougnouf/cfait/ui/HomeScreen.kt
+/*
+File: ./android/app/src/main/java/com/trougnouf/cfait/ui/HomeScreen.kt
+This file contains the HomeScreen composable with the random-jump behavior.
+Search-related state declarations were moved above `jumpToRandomTask` so the
+function can reference `searchQuery`.
+*/
 package com.trougnouf.cfait.ui
 
 import android.content.ClipData
@@ -164,9 +169,112 @@ fun HomeScreen(
     }
 
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
+
+    // Random Icon set for the Random-Jump action
+    // Expanded to match the Rust RANDOM_ICONS / Shared.kt list
+    val randomIcons = remember {
+        listOf(
+            NfIcons.DICE_D20,
+            NfIcons.DICE_D20_DUP,
+            NfIcons.DICE_D6,
+            NfIcons.DICE_MULTIPLE,
+            NfIcons.AUTO_FIX,
+            NfIcons.CRYSTAL_BALL,
+            NfIcons.ATOM,
+            NfIcons.CAT,
+            NfIcons.CAT_MD,
+            NfIcons.UNICORN,
+            NfIcons.UNICORN_VARIANT,
+            NfIcons.RAINBOW,
+            NfIcons.FRUIT_CHERRIES,
+            NfIcons.FRUIT_PINEAPPLE,
+            NfIcons.FRUIT_PEAR,
+            NfIcons.DOG,
+            NfIcons.PHOENIX,
+            NfIcons.LINUX,
+            NfIcons.TORTOISE,
+            NfIcons.FACE_SMILE_WINK,
+            NfIcons.ROBOT_LOVE_OUTLINE,
+            NfIcons.BOW_ARROW,
+            NfIcons.BULLSEYE_ARROW,
+            NfIcons.COINS,
+            NfIcons.COW,
+            NfIcons.DOLPHIN,
+            NfIcons.KIWI_BIRD,
+            NfIcons.DUCK,
+            NfIcons.FAE_TREE,
+            NfIcons.FA_TREE,
+            NfIcons.MD_TREE,
+            NfIcons.PLANT,
+            NfIcons.WIZARD_HAT,
+            NfIcons.STAR_SHOOTING_OUTLINE,
+            NfIcons.WEATHER_STARS,
+            NfIcons.KOALA,
+            NfIcons.SPIDER_THREAD,
+            NfIcons.SQUIRREL,
+            NfIcons.MUSHROOM_OUTLINE,
+            NfIcons.FLOWER,
+            NfIcons.BEE_FLOWER,
+            NfIcons.LINUX_FREEBSD,
+            NfIcons.BUG,
+            NfIcons.WEATHER_SUNNY,
+            NfIcons.FROG,
+            NfIcons.BINOCULARS,
+            NfIcons.ORANGE,
+            NfIcons.SNOWMAN,
+            NfIcons.GNU,
+            NfIcons.RUST,
+            NfIcons.R_BOX,
+            NfIcons.PEPPER_HOT,
+            NfIcons.SIGN_POST
+        )
+    }
+    var currentRandomIcon by remember { mutableStateOf(randomIcons.random()) }
+
+    // Move search state above jumpToRandomTask so it is in scope
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
+
+    /**
+     * Weighted random jump to a task.
+     * Priority 1 (High) = Weight 9
+     * Priority 9 (Low)  = Weight 1
+     * Priority 0 (None) = Default treated as 5
+     *
+     * Selection is delegated to the Rust core to keep weighting and filtering logic
+     * consistent across platforms (avoids duplicating algorithm in Kotlin).
+     *
+     * NOTE: This performs disk/network access and must run outside the UI thread.
+     */
+    fun jumpToRandomTask() {
+        if (tasks.isEmpty()) return
+
+        // Rotate the button icon for a visual cue (immediate, on UI thread)
+        currentRandomIcon = randomIcons.random()
+
+        // Run the disk/network call asynchronously to avoid blocking UI
+        scope.launch {
+            // Delegate selection to Rust core to ensure consistent weighting logic
+            // and filtering (ignoring done tasks, etc.)
+            val targetUid = try {
+                api.getRandomTaskUid(
+                    filterTags.toList(),
+                    filterLocations.toList(),
+                    searchQuery
+                )
+            } catch (_: Exception) {
+                null
+            }
+
+            if (targetUid != null) {
+                highlightedUid = targetUid
+                // Trigger scrolling to the highlighted item
+                scrollTrigger++
+            }
+        }
+    }
+
     var newTaskText by remember { mutableStateOf("") }
     var showExportSourceDialog by remember { mutableStateOf(false) }
     var showExportDestDialog by remember { mutableStateOf(false) }
@@ -957,23 +1065,34 @@ fun HomeScreen(
                             }
                         },
                         actions = {
-                            IconButton(onClick = { isSearchActive = true }) { NfIcon(NfIcons.SEARCH, 18.sp) }
-
-                            if (isLoading || isManualSyncing || activeOpCount > 0 || isPullRefreshing) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                            } else {
-                                val (icon, iconColor) =
-                                    when {
-                                        localHasUnsynced -> Pair(NfIcons.SYNC_ALERT, Color(0xFFEB0000))
-                                        lastSyncFailed -> Pair(NfIcons.SYNC_OFF, Color(0xFFFFB300))
-                                        else -> Pair(NfIcons.REFRESH, MaterialTheme.colorScheme.onSurface)
-                                    }
-
-                                IconButton(onClick = { handleRefresh() }) {
-                                    NfIcon(icon, 18.sp, color = iconColor)
+                            // Use a single Row with negative spacing to control all icon gaps uniformly
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy((-12).dp)
+                            ) {
+                                IconButton(onClick = { jumpToRandomTask() }) {
+                                    NfIcon(currentRandomIcon, 20.sp)
                                 }
+                                IconButton(onClick = { isSearchActive = true }) {
+                                    NfIcon(NfIcons.SEARCH, 18.sp)
+                                }
+
+                                if (isLoading || isManualSyncing || activeOpCount > 0 || isPullRefreshing) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                } else {
+                                    val (icon, iconColor) =
+                                        when {
+                                            localHasUnsynced -> Pair(NfIcons.SYNC_ALERT, Color(0xFFEB0000))
+                                            lastSyncFailed -> Pair(NfIcons.SYNC_OFF, Color(0xFFFFB300))
+                                            else -> Pair(NfIcons.REFRESH, MaterialTheme.colorScheme.onSurface)
+                                        }
+
+                                    IconButton(onClick = { handleRefresh() }) {
+                                        NfIcon(icon, 18.sp, color = iconColor)
+                                    }
+                                }
+                                IconButton(onClick = onSettings) { NfIcon(NfIcons.SETTINGS, 20.sp) }
                             }
-                            IconButton(onClick = onSettings) { NfIcon(NfIcons.SETTINGS, 20.sp) }
                         },
                     )
                 }

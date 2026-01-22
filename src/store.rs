@@ -4,9 +4,58 @@ use crate::cache::Cache;
 use crate::model::{RawProperty, Task, TaskStatus};
 use crate::storage::LocalStorage;
 use chrono::{DateTime, Utc};
+use fastrand;
 use std::collections::{HashMap, HashSet};
 
 pub const UNCATEGORIZED_ID: &str = ":::uncategorized:::";
+
+/// Select an index from `tasks` at random weighted by priority.
+/// Tasks with priority 0 use the provided `default_priority`.
+/// Lower numeric priority indicates higher importance; we invert
+/// to produce weights where priority 1 -> weight 9, priority 9 -> weight 1.
+/// Returns `None` for an empty slice.
+pub fn select_weighted_random_index(tasks: &[Task], default_priority: u8) -> Option<usize> {
+    if tasks.is_empty() {
+        return None;
+    }
+
+    let weights: Vec<u32> = tasks
+        .iter()
+        .map(|t| {
+            if t.status.is_done() {
+                return 0;
+            }
+            // Use the passed default_priority instead of any hardcoded value
+            let p = if t.priority == 0 {
+                default_priority
+            } else {
+                t.priority
+            };
+            // Invert priority so 1 is high weight (range 1..=9 -> weight 9..=1)
+            (10u32).saturating_sub(p as u32)
+        })
+        .collect();
+
+    let total_weight: u32 = weights.iter().sum();
+    if total_weight == 0 {
+        return None;
+    }
+
+    let mut rng = fastrand::Rng::new();
+    let mut choice = rng.u32(0..total_weight);
+
+    for (i, w) in weights.iter().enumerate() {
+        if *w == 0 {
+            continue;
+        }
+        if choice < *w {
+            return Some(i);
+        }
+        choice -= *w;
+    }
+
+    None
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct TaskStore {

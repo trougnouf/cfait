@@ -113,6 +113,7 @@ pub enum Message {
     JumpToTag(String),
     JumpToLocation(String),
     JumpToTask(String),
+    JumpToRandomTask, // Jump to a weighted-random task
     SnapToSelected,
     TagHovered(Option<String>),
     FocusTag(String),

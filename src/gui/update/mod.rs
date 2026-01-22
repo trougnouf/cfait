@@ -139,6 +139,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleSelected
         | Message::EditSelected
         | Message::JumpToTask(_)
+        | Message::JumpToRandomTask
         | Message::OpenUrl(_)
         | Message::FocusTag(_)
         | Message::TagHovered(_)

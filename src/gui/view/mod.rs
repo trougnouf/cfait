@@ -687,6 +687,26 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     // --- UPDATED SEARCH BAR LOGIC ---
     let mut search_row = row![].align_y(iced::Alignment::Center).spacing(5);
+
+    // NEW: Random Task Button
+    let random_btn = iced::widget::button(
+        icon::icon(app.random_icon).size(16)
+    )
+    .style(iced::widget::button::text)
+    .padding(6)
+    .on_press(Message::JumpToRandomTask);
+
+    // Add tooltip
+    search_row = search_row.push(
+        tooltip(
+            random_btn,
+            text("Jump to random task").size(12),
+            tooltip::Position::Bottom,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700))
+    );
+
     let is_search_empty = app.search_value.is_empty();
     let (search_icon_char, icon_color, on_press) = if is_search_empty {
         (icon::SEARCH, Color::from_rgb(0.4, 0.4, 0.4), None) // Gray, no action

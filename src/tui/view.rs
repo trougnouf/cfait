@@ -140,7 +140,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         ]),
         Line::from(vec![
             Span::styled("       ", Style::default()), // Indent alignment
-            Span::raw("s:Start/Pause  S:Stop  x:Cancel  M:Move  r:Sync  X:Export"),
+            Span::raw("s:Start/Pause  S:Stop  x:Cancel  M:Move  r:Sync  X:Export  R:Random Jump"),
         ]),
         Line::from(vec![
             Span::styled(

@@ -841,6 +841,53 @@ impl CfaitMobile {
             .collect()
     }
 
+    pub async fn get_random_task_uid(
+        &self,
+        filter_tags: Vec<String>,
+        filter_locations: Vec<String>,
+        search_query: String,
+    ) -> Option<String> {
+        let store = self.store.lock().await;
+        let config = Config::load().unwrap_or_default();
+
+        let mut selected_categories = HashSet::new();
+        for tag in filter_tags {
+            selected_categories.insert(tag);
+        }
+        let mut selected_locations = HashSet::new();
+        for l in filter_locations {
+            selected_locations.insert(l);
+        }
+
+        let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
+        hidden.extend(config.disabled_calendars);
+        let cutoff_date = config
+            .sort_cutoff_months
+            .map(|months| chrono::Utc::now() + chrono::Duration::days(months as i64 * 30));
+
+        let filtered = store.filter(FilterOptions {
+            active_cal_href: None,
+            hidden_calendars: &hidden,
+            selected_categories: &selected_categories,
+            selected_locations: &selected_locations,
+            match_all_categories: false,
+            search_term: &search_query,
+            hide_completed_global: config.hide_completed,
+            cutoff_date,
+            min_duration: None,
+            max_duration: None,
+            include_unset_duration: true,
+            urgent_days: config.urgent_days_horizon,
+            urgent_prio: config.urgent_priority_threshold,
+            default_priority: config.default_priority,
+            start_grace_period_days: config.start_grace_period_days,
+        });
+
+        // Use the shared core logic which handles weights and ignores done tasks
+        let idx = crate::store::select_weighted_random_index(&filtered, config.default_priority)?;
+        filtered.get(idx).map(|t| t.uid.clone())
+    }
+
     pub async fn yank_task(&self, _uid: String) -> Result<(), MobileError> {
         Ok(())
     }

@@ -396,6 +396,7 @@ If you are using the Terminal interface, here are the essentials (*Press `?` ins
 *   `S`: **Stop** (Reset to Needs Action)
 *   `x`: **Cancel** task
 *   `d`: **Delete** task
+*   `R`: **Random Jump** (weighted random, ignores completed/cancelled tasks)
 
 **Organization & Hierarchy**
 *   `y`: **Yank** task ID (Copy)

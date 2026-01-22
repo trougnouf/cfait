@@ -6,6 +6,7 @@ use crate::gui::update::common::{
     refresh_filtered_tasks, save_config, scroll_to_selected, scroll_to_selected_delayed,
 };
 use crate::gui::update::tasks;
+use crate::store::select_weighted_random_index;
 use iced::widget::operation;
 use iced::{Task, window};
 
@@ -517,6 +518,21 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 #[cfg(target_os = "macos")]
                 let _ = std::process::Command::new("open").arg(target_url).spawn();
             });
+            Task::none()
+        }
+        Message::JumpToRandomTask => {
+            // 1. Randomize icon for next time
+            let mut rng = fastrand::Rng::new();
+            let icons = crate::gui::icon::RANDOM_ICONS;
+            app.random_icon = icons[rng.usize(..icons.len())];
+
+            // 2. Select Weighted Random Task
+            if let Some(idx) = select_weighted_random_index(&app.tasks, app.default_priority)
+                && let Some(task) = app.tasks.get(idx) {
+                    app.selected_uid = Some(task.uid.clone());
+                    // 3. Scroll to it
+                    return scroll_to_selected(app);
+                }
             Task::none()
         }
         _ => Task::none(),

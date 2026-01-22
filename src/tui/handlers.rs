@@ -1,6 +1,6 @@
 // Handles keyboard input and system events for the TUI.
 use crate::config::Config;
-use crate::model::parser::{extract_inline_aliases, validate_alias_integrity, parse_duration};
+use crate::model::parser::{extract_inline_aliases, parse_duration, validate_alias_integrity};
 use crate::model::{Task, TaskStatus};
 use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::system::SystemEvent;
@@ -10,6 +10,9 @@ use chrono::NaiveTime;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
+
+// Weighted-random helper from the shared store
+use crate::store::select_weighted_random_index;
 
 pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Option<String>) {
     match event {
@@ -334,7 +337,7 @@ pub async fn handle_key_event(
                 } else if !c.is_control() || c == '\n' {
                     state.enter_char(c);
                 }
-            },
+            }
             KeyCode::Backspace => state.delete_char(),
             KeyCode::Left => state.move_cursor_left(),
             KeyCode::Right => state.move_cursor_right(),
@@ -524,6 +527,15 @@ pub async fn handle_key_event(
             KeyCode::Char('?') => state.show_full_help = !state.show_full_help,
             KeyCode::Char('q') => return Some(Action::Quit),
             KeyCode::Char('r') => return Some(Action::Refresh),
+            KeyCode::Char('R') => {
+                // Weighted-random jump to a task (uppercase R)
+                if let Some(idx) =
+                    select_weighted_random_index(&state.tasks, state.default_priority)
+                {
+                    state.list_state.select(Some(idx));
+                    state.message = "Jumped to random task".to_string();
+                }
+            }
 
             KeyCode::Char(' ') => {
                 if state.active_focus == Focus::Main {

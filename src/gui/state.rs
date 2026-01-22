@@ -104,6 +104,7 @@ pub struct GuiApp {
 
     // UI Visuals
     pub location_tab_icon: char,
+    pub random_icon: char, // NEW
 
     // Inputs - Settings (Aliases)
     pub alias_input_key: String,
@@ -192,11 +193,16 @@ impl Default for GuiApp {
             icon::MOUNTAINS,
             icon::GLOBE,
             icon::GLOBEMODEL,
+            icon::MOON,
         ];
 
         let mut rng = fastrand::Rng::new();
 
         let location_tab_icon = loc_icons[rng.usize(..loc_icons.len())];
+
+        // Pick initial random icon for the random-jump button
+        let random_icon =
+            crate::gui::icon::RANDOM_ICONS[rng.usize(..crate::gui::icon::RANDOM_ICONS.len())];
 
         // Select a random theme (excluding Random itself)
         let themes: Vec<AppTheme> = AppTheme::iter()
@@ -258,6 +264,7 @@ impl Default for GuiApp {
             current_placeholder: "Add a task...".to_string(),
 
             location_tab_icon, // Add this
+            random_icon,       // NEW
             alias_input_key: String::new(),
             alias_input_values: String::new(),
 

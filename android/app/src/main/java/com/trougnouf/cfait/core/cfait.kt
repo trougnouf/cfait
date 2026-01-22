@@ -789,6 +789,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks(): Short
@@ -971,6 +973,13 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_next_global_alarm_time(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_random_task_uid(
+        `ptr`: Long,
+        `filterTags`: RustBuffer.ByValue,
+        `filterLocations`: RustBuffer.ByValue,
+        `searchQuery`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_tasks_related_to(
         `ptr`: Long,
@@ -1425,6 +1434,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time() != 32010.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid() != 32270.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 33904.toShort()) {
@@ -2096,6 +2108,12 @@ public interface CfaitMobileInterface {
      */
     suspend fun `getNextGlobalAlarmTime`(): kotlin.Long?
 
+    suspend fun `getRandomTaskUid`(
+        `filterTags`: List<kotlin.String>,
+        `filterLocations`: List<kotlin.String>,
+        `searchQuery`: kotlin.String,
+    ): kotlin.String?
+
     /**
      * Get all tasks that have a related_to link to the given task
      */
@@ -2709,6 +2727,30 @@ open class CfaitMobile :
             { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
             { FfiConverterOptionalLong.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
+
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `getRandomTaskUid`(
+        `filterTags`: List<kotlin.String>,
+        `filterLocations`: List<kotlin.String>,
+        `searchQuery`: kotlin.String,
+    ): kotlin.String? =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_random_task_uid(
+                    uniffiHandle,
+                    FfiConverterSequenceString.lower(`filterTags`),
+                    FfiConverterSequenceString.lower(`filterLocations`),
+                    FfiConverterString.lower(`searchQuery`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterOptionalString.lift(it) },
             // Error FFI converter
             UniffiNullRustCallStatusErrorHandler,
         )
