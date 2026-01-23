@@ -13,18 +13,40 @@ pub const UNCATEGORIZED_ID: &str = ":::uncategorized:::";
 /// Tasks with priority 0 use the provided `default_priority`.
 /// Lower numeric priority indicates higher importance; we invert
 /// to produce weights where priority 1 -> weight 9, priority 9 -> weight 1.
-/// Returns `None` for an empty slice.
+///
+/// Filters for "is:ready" criteria:
+/// - Must not be done (Completed/Cancelled)
+/// - Must not be blocked (is_blocked)
+/// - Must not have a future start date
+///
+/// Returns `None` for an empty slice or if no tasks qualify.
 pub fn select_weighted_random_index(tasks: &[Task], default_priority: u8) -> Option<usize> {
     if tasks.is_empty() {
         return None;
     }
 
+    let now = Utc::now();
+
     let weights: Vec<u32> = tasks
         .iter()
         .map(|t| {
+            // 1. Must be active (not done/cancelled)
             if t.status.is_done() {
                 return 0;
             }
+
+            // 2. Must not be blocked (is:ready logic)
+            // Note: is_blocked is a transient field populated by store.filter()
+            if t.is_blocked {
+                return 0;
+            }
+
+            // 3. Must not start in the future (is:ready logic)
+            if let Some(start) = &t.dtstart
+                && start.to_start_comparison_time() > now {
+                    return 0;
+                }
+
             // Use the passed default_priority instead of any hardcoded value
             let p = if t.priority == 0 {
                 default_priority
