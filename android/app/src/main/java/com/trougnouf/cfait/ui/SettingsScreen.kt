@@ -222,7 +222,8 @@ fun SettingsScreen(
             )
         },
     ) { p ->
-        LazyColumn(modifier = Modifier.padding(p).padding(16.dp)) {
+        // Add .imePadding() to ensure content remains visible above the keyboard
+        LazyColumn(modifier = Modifier.padding(p).imePadding().padding(16.dp)) {
             item {
                 Text(
                     "Server Connection",
