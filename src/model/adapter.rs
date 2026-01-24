@@ -94,7 +94,13 @@ impl Task {
 
                 let duration = if let Some(old_due) = &self.due {
                     match old_due {
-                        DateType::AllDay(_) => chrono::Duration::zero(), // All day preserves all day
+                        DateType::AllDay(d) => {
+                            // FIX: Calculate actual duration instead of zero.
+                            // Convert AllDay due date to UTC midnight (matching seed_dt_utc format)
+                            // to determine the delta days.
+                            let due_utc = d.and_hms_opt(0, 0, 0).unwrap().and_utc();
+                            due_utc - seed_dt_utc
+                        }
                         DateType::Specific(dt) => *dt - seed_dt_utc,
                     }
                 } else {
