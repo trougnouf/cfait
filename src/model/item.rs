@@ -12,7 +12,7 @@
 //
 // - CalendarListEntry:
 //   → May require versioning in cache/registry (currently unversioned)
-use chrono::{DateTime, Duration, Local, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, Duration, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -261,7 +261,7 @@ where
 /// ## History
 /// - v0.1.7: Added `dependencies` field (RFC 9253 DEPENDS-ON support)
 /// - v0.3.14: Added `related_to` field (generic RELATED-TO relationships)
-/// - v0.4.2: Fixed backward compatibility by adding #[serde(default)] to above fields
+/// - v0.4.2: Fixed backward compatibility by adding #[serde/default] to above fields
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Task {
     pub uid: String,
@@ -408,6 +408,26 @@ pub fn compare_sortkeys(a: &SortKey, b: &SortKey, default_prio: u8) -> Ordering 
 }
 
 impl Task {
+    // COMPLETION DATE: parse the COMPLETED unmapped property (if present)
+    pub fn completion_date(&self) -> Option<DateTime<Utc>> {
+        self.unmapped_properties
+            .iter()
+            .find(|p| p.key == "COMPLETED")
+            .and_then(|p| {
+                // Handle different date-time formats for robustness
+                if p.value.contains('T') {
+                    NaiveDateTime::parse_from_str(&p.value, "%Y%m%dT%H%M%SZ")
+                        .ok()
+                        .map(|ndt| Utc.from_utc_datetime(&ndt))
+                } else {
+                    NaiveDate::parse_from_str(&p.value, "%Y%m%d")
+                        .ok()
+                        .and_then(|nd| nd.and_hms_opt(0, 0, 0))
+                        .map(|ndt| Utc.from_utc_datetime(&ndt))
+                }
+            })
+    }
+
     // Changed signature to accept default_time
     pub fn new(
         input: &str,
@@ -587,6 +607,15 @@ impl Task {
     }
 
     pub fn compare_for_sort(&self, other: &Self, default_priority: u8) -> Ordering {
+        // If both tasks are done (Completed/Cancelled), sort by completion date (newest first)
+        if self.sort_rank == 7 && other.sort_rank == 7 {
+            // Newest first: so compare `other` to `self`.
+            return other
+                .completion_date()
+                .cmp(&self.completion_date())
+                .then_with(|| self.summary.cmp(&other.summary));
+        }
+
         // Build compact SortKey instances and use the central comparator.
         let a = SortKey {
             rank: self.sort_rank,
@@ -700,25 +729,15 @@ impl Task {
         };
 
         // Tie-breaking within ranks
-        match rank_self {
+        let order = match rank_self {
             1 => {
                 // Urgent: Priority -> Due -> Name
                 normalize_prio(self.priority)
                     .cmp(&normalize_prio(other.priority))
                     .then_with(|| compare_dates(&self.due, &other.due))
             }
-            2 => {
-                // Due Soon: Due -> Priority -> Name
-                compare_dates(&self.due, &other.due)
-                    .then(normalize_prio(self.priority).cmp(&normalize_prio(other.priority)))
-            }
-            3 => {
-                // Started: Due -> Priority -> Name
-                compare_dates(&self.due, &other.due)
-                    .then(normalize_prio(self.priority).cmp(&normalize_prio(other.priority)))
-            }
-            4 => {
-                // Inside Cutoff: Due -> Priority -> Name
+            2..=4 => {
+                // Due Soon / Started / Inside Cutoff: Due -> Priority -> Name
                 compare_dates(&self.due, &other.due)
                     .then(normalize_prio(self.priority).cmp(&normalize_prio(other.priority)))
             }
@@ -731,20 +750,19 @@ impl Task {
             }
             6 => {
                 // Future: Start Date -> Priority -> Name
-                // Compare start dates for future tasks
                 let s1 = self.dtstart.as_ref().map(|d| d.to_start_comparison_time());
                 let s2 = other.dtstart.as_ref().map(|d| d.to_start_comparison_time());
                 s1.cmp(&s2)
                     .then(normalize_prio(self.priority).cmp(&normalize_prio(other.priority)))
             }
-            _ => {
-                // Done/Other: Priority -> Due -> Name
-                normalize_prio(self.priority)
-                    .cmp(&normalize_prio(other.priority))
-                    .then_with(|| compare_dates(&self.due, &other.due))
+            7 => {
+                // Done/Cancelled: Newest completion date first
+                other.completion_date().cmp(&self.completion_date())
             }
-        }
-        .then_with(|| self.summary.cmp(&other.summary))
+            _ => Ordering::Equal,
+        };
+
+        order.then_with(|| self.summary.cmp(&other.summary))
     }
 
     /// Organize hierarchy expecting tasks to already have `sort_rank` populated.

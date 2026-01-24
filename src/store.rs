@@ -43,9 +43,10 @@ pub fn select_weighted_random_index(tasks: &[Task], default_priority: u8) -> Opt
 
             // 3. Must not start in the future (is:ready logic)
             if let Some(start) = &t.dtstart
-                && start.to_start_comparison_time() > now {
-                    return 0;
-                }
+                && start.to_start_comparison_time() > now
+            {
+                return 0;
+            }
 
             // Use the passed default_priority instead of any hardcoded value
             let p = if t.priority == 0 {
@@ -214,7 +215,7 @@ impl TaskStore {
                 } else {
                     task.status = status;
                     // Handle COMPLETED property
-                    if status == TaskStatus::Completed {
+                    if status == TaskStatus::Completed || status == TaskStatus::Cancelled {
                         let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
                         task.unmapped_properties.retain(|p| p.key != "COMPLETED");
                         task.unmapped_properties.push(RawProperty {
