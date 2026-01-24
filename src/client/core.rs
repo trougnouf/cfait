@@ -1,3 +1,4 @@
+// File: ./src/client/core.rs
 // Core logic for CalDAV communication, sync, and task management.
 use crate::cache::Cache;
 use crate::client::auth::DynamicAuthLayer;
@@ -38,6 +39,18 @@ type HttpsClient = DynamicAuthService<
         String,
     >,
 >;
+
+#[cfg(test)]
+use std::sync::{Mutex, OnceLock};
+
+#[cfg(test)]
+type FetchRemoteHook = Box<dyn Fn(&str) -> Option<Task> + Send + Sync + 'static>;
+
+/// Test hook to simulate fetch_remote_task responses in unit tests.
+/// Tests may set this to a closure that accepts the queried href and returns
+/// an Option<Task> to emulate server state without actual network calls.
+#[cfg(test)]
+static TEST_FETCH_REMOTE_HOOK: OnceLock<Mutex<Option<FetchRemoteHook>>> = OnceLock::new();
 
 fn strip_host(href: &str) -> String {
     if let Ok(uri) = href.parse::<Uri>()
@@ -263,6 +276,15 @@ impl RustyClient {
     }
 
     async fn fetch_remote_task(&self, task_href: &str) -> Option<Task> {
+        // Test hook: if set, defer to injected function to simulate server responses.
+        #[cfg(test)]
+        {
+            if let Some(m) = TEST_FETCH_REMOTE_HOOK.get()
+                && let Some(cb) = &*m.lock().unwrap() {
+                    return cb(task_href);
+                }
+        }
+
         if let Some(client) = &self.client {
             let path_href = strip_host(task_href);
             let parent_path = if let Some(idx) = path_href.rfind('/') {
@@ -592,16 +614,58 @@ impl RustyClient {
         task: &Task,
         new_calendar_href: &str,
     ) -> Result<(Task, Vec<String>), String> {
+        // Handle Local -> Remote Migration (the dangerous path)
         if task.calendar_href.starts_with("local://") {
             let mut new_task = task.clone();
             new_task.calendar_href = new_calendar_href.to_string();
+
+            // 1. Calculate the expected remote HREF so we know where to verify
+            let cal_path = new_calendar_href.trim_end_matches('/');
+            let filename = format!("{}.ics", task.uid);
+            let expected_remote_href = format!("{}/{}", cal_path, filename);
+
+            // Reset metadata for new location (create_task will set href/etag if successful)
             new_task.href = String::new();
             new_task.etag = String::new();
-            self.create_task(&mut new_task).await?;
-            self.delete_task(task).await?;
-            return Ok((new_task, vec![]));
+
+            // 2. Attempt Creation
+            let logs = self.create_task(&mut new_task).await?;
+
+            // 3. Verification Step: Attempt to fetch the specific task back from the server
+            let verify_target = if !new_task.href.is_empty() {
+                new_task.href.clone()
+            } else {
+                expected_remote_href.clone()
+            };
+
+            match self.fetch_remote_task(&verify_target).await {
+                Some(remote_task) => {
+                    // 4. Identity check: make sure the returned task is the one we uploaded
+                    if remote_task.uid != task.uid {
+                        return Err(format!(
+                            "Migration Verification Failed: Server returned a task with UID '{}' but we uploaded '{}'. Local copy preserved.",
+                            remote_task.uid, task.uid
+                        ));
+                    }
+
+                    // 5. Safe to delete local copy now that server confirms presence
+                    self.delete_task(task).await?;
+
+                    // Return the server's canonical representation and the logs
+                    return Ok((remote_task, logs));
+                }
+                None => {
+                    // The server did not return the uploaded resource immediately.
+                    // SAFE DEFAULT: Do not delete local copy to avoid data loss.
+                    return Err(format!(
+                        "Migration Verification Failed: Task '{}' uploaded but could not be retrieved from server immediately. Local copy preserved to prevent data loss.",
+                        task.summary
+                    ));
+                }
+            }
         }
 
+        // Non-local moves use the journal/sync path
         Journal::push(Action::Move(task.clone(), new_calendar_href.to_string()))
             .map_err(|e| e.to_string())?;
 
@@ -622,7 +686,10 @@ impl RustyClient {
             async move { client.move_task(&task, &target).await.ok() }
         });
 
-        let mut stream = stream::iter(futures).buffer_unordered(4);
+        // Use buffer_unordered(1) to force effectively sequential processing.
+        // This avoids potential race conditions on the local.json file when multiple
+        // concurrent moves try to delete local tasks at the same time after verification.
+        let mut stream = stream::iter(futures).buffer_unordered(1);
         let mut count = 0;
         while let Some(res) = stream.next().await {
             if res.is_some() {
@@ -1306,6 +1373,39 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use serial_test::serial;
+
+    // Helper for environment isolation in client tests to prevent pollution
+    struct TestGuard {
+        temp_dir: std::path::PathBuf,
+        original_env: Option<String>,
+    }
+
+    impl TestGuard {
+        fn new() -> Self {
+            let original_env = std::env::var("CFAIT_TEST_DIR").ok();
+            let temp_dir = std::env::temp_dir().join(format!("cfait_client_test_{}", uuid::Uuid::new_v4()));
+            std::fs::create_dir_all(&temp_dir).unwrap();
+
+            // Set env var to redirect AppPaths to our temp dir
+            unsafe { std::env::set_var("CFAIT_TEST_DIR", &temp_dir); }
+
+            Self { temp_dir, original_env }
+        }
+    }
+
+    impl Drop for TestGuard {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.temp_dir);
+            unsafe {
+                if let Some(val) = &self.original_env {
+                    std::env::set_var("CFAIT_TEST_DIR", val);
+                } else {
+                    std::env::remove_var("CFAIT_TEST_DIR");
+                }
+            }
+        }
+    }
 
     #[test]
     fn test_three_way_merge_preserves_new_fields() {
@@ -1332,5 +1432,101 @@ mod tests {
             Some("New Loc".to_string()),
             "Failed to keep local's location change"
         );
+    }
+
+    #[test]
+    #[serial]
+    fn test_move_task_verify_success_preserves_remote_and_deletes_local() {
+        let _guard = TestGuard::new(); // Ensure clean environment
+
+        // Create a local task in source calendar
+        let mut task = Task::new("T1", &HashMap::new(), None);
+        task.uid = "uid-123".to_string();
+        task.calendar_href = "local://src".to_string();
+        task.summary = "Test task".to_string();
+        LocalStorage::save_for_href("local://src", std::slice::from_ref(&task)).unwrap();
+
+        // Destination is a local calendar too (we're testing local->local branch)
+        let dest = "local://dest";
+        let filename = format!("{}.ics", task.uid);
+        let expected_remote_href = format!("{}/{}", dest.trim_end_matches('/'), filename);
+
+        // Install test hook to simulate fetch_remote_task returning the uploaded task
+        let hook = TEST_FETCH_REMOTE_HOOK.get_or_init(|| Mutex::new(None));
+        {
+            let mut guard = hook.lock().unwrap();
+            let t_clone = task.clone();
+            *guard = Some(Box::new(move |href: &str| {
+                if href == expected_remote_href {
+                    let mut rt = t_clone.clone();
+                    rt.calendar_href = dest.to_string();
+                    rt.href = expected_remote_href.clone();
+                    Some(rt)
+                } else {
+                    None
+                }
+            }));
+        }
+
+        let client = RustyClient { client: None };
+        // Perform move: should create at dest (local branch), then verify via hook and delete source
+        let res = futures::executor::block_on(client.move_task(&task, dest)).unwrap();
+
+        // After successful move, source calendar should be empty
+        let src_tasks = LocalStorage::load_for_href("local://src").unwrap();
+        assert!(src_tasks.is_empty(), "Source should be deleted");
+
+        // Destination should contain the task
+        let dest_tasks = LocalStorage::load_for_href(dest).unwrap();
+        assert_eq!(dest_tasks.len(), 1);
+        assert_eq!(dest_tasks[0].uid, "uid-123");
+        // Returned task should be server's canonical representation
+        assert_eq!(res.0.uid, "uid-123");
+
+        // Clear hook
+        if let Some(h) = TEST_FETCH_REMOTE_HOOK.get() {
+            *h.lock().unwrap() = None;
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_move_task_verify_failure_preserves_local() {
+        let _guard = TestGuard::new(); // Ensure clean environment
+
+        // Create a local task in source calendar
+        let mut task = Task::new("T2", &HashMap::new(), None);
+        task.uid = "uid-456".to_string();
+        task.calendar_href = "local://src2".to_string();
+        task.summary = "Test task 2".to_string();
+        LocalStorage::save_for_href("local://src2", std::slice::from_ref(&task)).unwrap();
+
+        let dest = "local://dest2";
+        let filename = format!("{}.ics", task.uid);
+        let expected_remote_href = format!("{}/{}", dest.trim_end_matches('/'), filename);
+
+        // Install hook that returns None to simulate missing remote resource
+        let hook = TEST_FETCH_REMOTE_HOOK.get_or_init(|| Mutex::new(None));
+        {
+            let mut guard = hook.lock().unwrap();
+            *guard = Some(Box::new(move |href: &str| {
+                assert_eq!(href, expected_remote_href);
+                None
+            }));
+        }
+
+        let client = RustyClient { client: None };
+        let res = futures::executor::block_on(client.move_task(&task, dest));
+        assert!(res.is_err(), "Move should fail verification and return Err");
+
+        // Local copy should still exist
+        let src_tasks = LocalStorage::load_for_href("local://src2").unwrap();
+        assert_eq!(src_tasks.len(), 1);
+        assert_eq!(src_tasks[0].uid, "uid-456");
+
+        // Clear hook
+        if let Some(h) = TEST_FETCH_REMOTE_HOOK.get() {
+            *h.lock().unwrap() = None;
+        }
     }
 }
