@@ -455,6 +455,8 @@ Cfait works with any standard CalDAV server. If you don't have one yet, here are
 *   **[Nextcloud](https://nextcloud.com/):** A popular full-suite option (files, contacts, and calendars).
 
 **Free & Managed**
+*   **[Disroot](https://disroot.org/):** A privacy-focused platform providing a free Nextcloud account.
+    *   *How to connect:* After signing up, set `https://cloud.disroot.org/remote.php/dav` as the server URL. Use the [web-interface](https://cloud.disroot.org/apps/tasks/collections/all) to create new collections.
 *   **[Infomaniak](https://www.infomaniak.com/):** A Swiss provider with a free tier that includes a CalDAV account.
     *   *How to connect:* After signing up, go to [config.infomaniak.com](https://config.infomaniak.com/). Click **"On this device"** followed by **"My Calendars"** to reveal your specific Server URL and Login username. (Use your infomaniak password.)
 
