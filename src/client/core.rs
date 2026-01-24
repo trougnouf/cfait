@@ -21,7 +21,9 @@ use hyper_util::rt::TokioExecutor;
 use std::collections::{HashMap, HashSet};
 use std::mem;
 use std::sync::Arc;
+use std::task::{Context, Poll};
 use tower_layer::Layer;
+use tower_service::Service;
 use uuid::Uuid;
 
 #[cfg(not(target_os = "android"))]
@@ -33,10 +35,13 @@ pub const APPLE_COLOR: PropertyName =
 
 use crate::client::auth::DynamicAuthService;
 
+// Updated type alias to include UserAgentService
 type HttpsClient = DynamicAuthService<
-    Client<
-        hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-        String,
+    UserAgentService<
+        Client<
+            hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+            String,
+        >,
     >,
 >;
 
@@ -74,13 +79,65 @@ fn actions_match_identity(a: &Action, b: &Action) -> bool {
     }
 }
 
+// --- User Agent Middleware ---
+
+#[derive(Clone, Debug)]
+pub struct UserAgentLayer {
+    pub user_agent: String,
+}
+
+impl UserAgentLayer {
+    pub fn new(user_agent: String) -> Self {
+        Self { user_agent }
+    }
+}
+
+impl<S> Layer<S> for UserAgentLayer {
+    type Service = UserAgentService<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        UserAgentService {
+            inner,
+            user_agent: self.user_agent.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct UserAgentService<S> {
+    inner: S,
+    user_agent: String,
+}
+
+impl<S, ReqBody> Service<Request<ReqBody>> for UserAgentService<S>
+where
+    S: Service<Request<ReqBody>>,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
+        if let Ok(val) = http::HeaderValue::from_str(&self.user_agent) {
+            req.headers_mut().insert(http::header::USER_AGENT, val);
+        }
+        self.inner.call(req)
+    }
+}
+
+// -----------------------------
+
 #[derive(Clone, Debug)]
 pub struct RustyClient {
     pub client: Option<CalDavClient<HttpsClient>>,
 }
 
 impl RustyClient {
-    pub fn new(url: &str, user: &str, pass: &str, insecure: bool) -> Result<Self, String> {
+    pub fn new(url: &str, user: &str, pass: &str, insecure: bool, client_type: Option<&str>) -> Result<Self, String> {
         if url.is_empty() {
             return Ok(Self { client: None });
         }
@@ -126,8 +183,19 @@ impl RustyClient {
             .build();
 
         let http_client = Client::builder(TokioExecutor::new()).build(https_connector);
+
+        // Construct User-Agent string (optionally include client_type)
+        let version = env!("CARGO_PKG_VERSION");
+        let ua_string = if let Some(ctype) = client_type {
+            format!("Cfait/{} ({})", version, ctype)
+        } else {
+            format!("Cfait/{}", version)
+        };
+        let ua_client = UserAgentLayer::new(ua_string).layer(http_client);
+
         let auth_client =
-            DynamicAuthLayer::new(user.to_string(), pass.to_string()).layer(http_client);
+            DynamicAuthLayer::new(user.to_string(), pass.to_string()).layer(ua_client);
+
         let webdav = WebDavClient::new(uri, auth_client.clone());
         let caldav = CalDavClient::new(webdav);
         Ok(Self {
@@ -159,6 +227,7 @@ impl RustyClient {
 
     pub async fn connect_with_fallback(
         config: Config,
+        client_type: Option<&str>
     ) -> Result<
         (
             Self,
@@ -174,6 +243,7 @@ impl RustyClient {
             &config.username,
             &config.password,
             config.allow_insecure_certs,
+            client_type,
         )
         .map_err(|e| e.to_string())?;
 

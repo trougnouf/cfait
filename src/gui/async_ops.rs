@@ -37,7 +37,7 @@ pub async fn connect_and_fetch_wrapper(
     String,
 > {
     let rt = get_runtime();
-    rt.spawn(async { RustyClient::connect_with_fallback(config).await })
+    rt.spawn(async { RustyClient::connect_with_fallback(config, Some("GUI")).await })
         .await
         .map_err(|e| e.to_string())?
 }

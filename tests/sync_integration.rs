@@ -44,7 +44,7 @@ async fn test_sync_recovers_from_412() {
         .await;
 
     // 5. Configure Client
-    let client = RustyClient::new(&url, "user", "pass", true).unwrap();
+    let client = RustyClient::new(&url, "user", "pass", true, None).unwrap();
 
     // 6. Setup Local State (Journal)
     let mut task = Task::new("Local Title", &HashMap::new(), None);

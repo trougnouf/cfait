@@ -68,7 +68,7 @@ async fn test_ghost_is_pruned_even_when_ctag_matches() {
         .create_async()
         .await;
 
-    let client = RustyClient::new(&url, "u", "p", true).unwrap();
+    let client = RustyClient::new(&url, "u", "p", true, None).unwrap();
 
     let mut task = Task::new("Ghost", &HashMap::new(), None);
     task.uid = "ghost".to_string();
@@ -118,7 +118,7 @@ async fn test_pending_delete_suppresses_server_item() {
 
     let mock_list = server.mock("PROPFIND", cal_path).match_header("depth", "1").with_status(207).with_body(format!(r#"<d:multistatus xmlns:d="DAV:"><d:response><d:href>{}</d:href><d:propstat><d:prop><d:getetag>"server-etag"</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response></d:multistatus>"#, task_path)).create_async().await;
 
-    let client = RustyClient::new(&url, "u", "p", true).unwrap();
+    let client = RustyClient::new(&url, "u", "p", true, None).unwrap();
     let full_cal_href = format!("{}{}", url, cal_path);
 
     let mut task = Task::new("Zombie", &HashMap::new(), None);
@@ -173,7 +173,7 @@ async fn test_server_deletion_updates_cache() {
         .with_body(r#"<d:multistatus xmlns:d="DAV:"></d:multistatus>"#)
         .create_async()
         .await;
-    let client = RustyClient::new(&url, "u", "p", true).unwrap();
+    let client = RustyClient::new(&url, "u", "p", true, None).unwrap();
     let full_cal_href = format!("{}{}", url, cal_path);
     let mut task = Task::new("Existing", &HashMap::new(), None);
     task.uid = "existing".to_string();
@@ -215,7 +215,7 @@ async fn test_ghost_is_pruned_on_full_sync_with_ctag_mismatch() {
         .create_async()
         .await;
 
-    let client = RustyClient::new(&url, "u", "p", true).unwrap();
+    let client = RustyClient::new(&url, "u", "p", true, None).unwrap();
 
     let mut task = Task::new("Ghost", &HashMap::new(), None);
     task.uid = "ghost".to_string();

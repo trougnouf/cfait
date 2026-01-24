@@ -43,7 +43,7 @@ async fn test_client_handles_digest_auth_challenge() {
         .create_async()
         .await;
 
-    let client = RustyClient::new(&url, "user", "pass", false).unwrap();
+    let client = RustyClient::new(&url, "user", "pass", false, None).unwrap();
     let _ = client.discover_calendar().await;
 
     mock_unauthorized.assert();

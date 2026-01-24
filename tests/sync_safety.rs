@@ -60,7 +60,7 @@ async fn test_safety_resurrection_on_404() {
         .create_async()
         .await;
 
-    let client = RustyClient::new(&url, "u", "p", true).unwrap();
+    let client = RustyClient::new(&url, "u", "p", true, None).unwrap();
 
     let mut task = Task::new("Important Work", &HashMap::new(), None);
     task.uid = "important_task".to_string();
@@ -150,7 +150,7 @@ async fn test_safety_conflict_copy_on_hard_412() {
         .create_async()
         .await;
 
-    let client = RustyClient::new(&url, "u", "p", true).unwrap();
+    let client = RustyClient::new(&url, "u", "p", true, None).unwrap();
 
     let mut base_task = Task::new("Local Version", &HashMap::new(), None);
     base_task.uid = "conflict".to_string();

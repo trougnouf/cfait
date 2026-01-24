@@ -61,7 +61,7 @@ async fn test_create_412_handled_gracefully() {
         .await;
 
     // 2. Setup Client
-    let client = RustyClient::new(&url, "user", "pass", true).unwrap();
+    let client = RustyClient::new(&url, "user", "pass", true, None).unwrap();
 
     // 3. Queue the Create Action
     let mut task = Task::new("Stuck Task", &HashMap::new(), None);
@@ -111,7 +111,7 @@ async fn test_create_500_persists() {
         .create_async()
         .await;
 
-    let client = RustyClient::new(&url, "user", "pass", true).unwrap();
+    let client = RustyClient::new(&url, "user", "pass", true, None).unwrap();
 
     let mut task = Task::new("Broken Task", &HashMap::new(), None);
     task.uid = "broken-server".to_string();
@@ -155,7 +155,7 @@ async fn test_move_404_handled_gracefully() {
         .create_async()
         .await;
 
-    let client = RustyClient::new(&url, "user", "pass", true).unwrap();
+    let client = RustyClient::new(&url, "user", "pass", true, None).unwrap();
 
     let mut task = Task::new("Moving Task", &HashMap::new(), None);
     task.uid = "moving".to_string();

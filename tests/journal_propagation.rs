@@ -47,7 +47,7 @@ async fn test_move_propagates_href_to_pending_update() {
         .await;
 
     // 4. Configure Client
-    let client = RustyClient::new(&url, "user", "pass", true).unwrap();
+    let client = RustyClient::new(&url, "user", "pass", true, None).unwrap();
 
     // 5. Setup Journal
     let mut task = Task::new("Task to Move", &HashMap::new(), None);

@@ -56,7 +56,7 @@ async fn test_sync_delete_404_is_success() {
         .await;
 
     // 2. Setup Client
-    let client = RustyClient::new(&url, "u", "p", true).unwrap();
+    let client = RustyClient::new(&url, "u", "p", true, None).unwrap();
 
     // 3. Add Delete Action to Journal
     let mut task = Task::new("T", &HashMap::new(), None);
@@ -98,7 +98,7 @@ async fn test_sync_500_keeps_item_in_queue() {
         .await;
 
     // 2. Setup Client
-    let client = RustyClient::new(&url, "u", "p", true).unwrap();
+    let client = RustyClient::new(&url, "u", "p", true, None).unwrap();
 
     // 3. Add Create Action
     let mut task = Task::new("T", &HashMap::new(), None);

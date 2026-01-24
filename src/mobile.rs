@@ -1785,7 +1785,7 @@ impl CfaitMobile {
 
     async fn apply_connection(&self, config: Config) -> Result<String, MobileError> {
         let (client, cals, _, _, warning_from_fallback) =
-            RustyClient::connect_with_fallback(config)
+            RustyClient::connect_with_fallback(config, Some("Android"))
                 .await
                 .map_err(MobileError::from)?;
 

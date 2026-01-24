@@ -51,7 +51,7 @@ pub async fn run_network_actor(
     // ------------------------------------------------------------------
     // 1. CONNECT & SYNC
     // ------------------------------------------------------------------
-    let client: RustyClient = match RustyClient::new(&url, &user, &pass, allow_insecure) {
+    let client: RustyClient = match RustyClient::new(&url, &user, &pass, allow_insecure, Some("TUI")) {
         Ok(c) => c,
         Err(e) => {
             let _ = event_tx.send(AppEvent::Error(e)).await;

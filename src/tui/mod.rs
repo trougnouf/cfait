@@ -167,6 +167,7 @@ pub async fn run() -> Result<()> {
                             &new_config.username,
                             &new_config.password,
                             new_config.allow_insecure_certs,
+                            Some("TUI"),
                         )
                         .map_err(|e| e.to_string())?;
 
