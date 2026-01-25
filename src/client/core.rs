@@ -1,3 +1,4 @@
+
 // File: ./src/client/core.rs
 // Core logic for CalDAV communication, sync, and task management.
 use crate::cache::Cache;
@@ -943,6 +944,9 @@ impl RustyClient {
                             } else {
                                 path_for_refresh = Some(path.clone());
                             }
+                            // Important: Propagate the new href to subsequent actions
+                            new_href_to_propagate = Some((String::new(), full_href.clone()));
+
                             // Sync companion event after successful task creation
                             self.sync_companion_event(
                                 task,
@@ -1076,58 +1080,73 @@ impl RustyClient {
                     }
                 }
                 Action::Delete(task) => {
-                    let path = strip_host(&task.href);
-
-                    // Split logic to avoid type mismatch in Delete builder
-                    let resp = if !task.etag.is_empty() && task.etag != "pending_refresh" {
-                        // Conditional Delete
-                        client
-                            .request(Delete::new(&path).with_etag(&task.etag))
-                            .await
+                    if task.href.is_empty() {
+                        // Guard against empty hrefs (e.g. rapid Create->Delete where Create failed or pending).
+                        // If we try to DELETE "", it resolves to DELETE / which is Method Not Allowed (405).
+                        // Since it has no href, it likely doesn't exist on server (or is a ghost).
+                        // Just cleanup companion events and skip the network delete.
+                        self.sync_companion_event(
+                            task,
+                            events_enabled,
+                            delete_on_completion,
+                            true,
+                        )
+                        .await;
+                        Ok(())
                     } else {
-                        // Unconditional Delete (Force)
-                        client.request(Delete::new(&path).force()).await
-                    };
+                        let path = strip_host(&task.href);
 
-                    match resp {
-                        Ok(_) => {
-                            // Delete companion event when task is deleted
-                            self.sync_companion_event(
-                                task,
-                                events_enabled,
-                                delete_on_completion,
-                                true,
-                            )
-                            .await;
-                            Ok(())
+                        // Split logic to avoid type mismatch in Delete builder
+                        let resp = if !task.etag.is_empty() && task.etag != "pending_refresh" {
+                            // Conditional Delete
+                            client
+                                .request(Delete::new(&path).with_etag(&task.etag))
+                                .await
+                        } else {
+                            // Unconditional Delete (Force)
+                            client.request(Delete::new(&path).force()).await
+                        };
+
+                        match resp {
+                            Ok(_) => {
+                                // Delete companion event when task is deleted
+                                self.sync_companion_event(
+                                    task,
+                                    events_enabled,
+                                    delete_on_completion,
+                                    true,
+                                )
+                                .await;
+                                Ok(())
+                            }
+                            Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
+                                // Also delete companion event even if task was already deleted
+                                self.sync_companion_event(
+                                    task,
+                                    events_enabled,
+                                    delete_on_completion,
+                                    true,
+                                )
+                                .await;
+                                Ok(())
+                            }
+                            Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED)) => {
+                                warnings.push(format!(
+                                    "Conflict on delete task '{}'. Already modified/deleted.",
+                                    task.summary
+                                ));
+                                // Delete companion event even on conflict
+                                self.sync_companion_event(
+                                    task,
+                                    events_enabled,
+                                    delete_on_completion,
+                                    true,
+                                )
+                                .await;
+                                Ok(())
+                            }
+                            Err(e) => Err(format!("{:?}", e)),
                         }
-                        Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
-                            // Also delete companion event even if task was already deleted
-                            self.sync_companion_event(
-                                task,
-                                events_enabled,
-                                delete_on_completion,
-                                true,
-                            )
-                            .await;
-                            Ok(())
-                        }
-                        Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED)) => {
-                            warnings.push(format!(
-                                "Conflict on delete task '{}'. Already modified/deleted.",
-                                task.summary
-                            ));
-                            // Delete companion event even on conflict
-                            self.sync_companion_event(
-                                task,
-                                events_enabled,
-                                delete_on_completion,
-                                true,
-                            )
-                            .await;
-                            Ok(())
-                        }
-                        Err(e) => Err(format!("{:?}", e)),
                     }
                 }
                 Action::Move(task, new_cal) => {
@@ -1258,6 +1277,7 @@ impl RustyClient {
                     if let Some((old_href, new_href)) = new_href_to_propagate {
                         let target_uid = match &next_action {
                             Action::Move(t, _) => t.uid.clone(),
+                            Action::Create(t) => t.uid.clone(),
                             _ => String::new(),
                         };
                         for item in journal.queue.iter_mut() {
