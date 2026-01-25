@@ -1,4 +1,5 @@
 // Integration tests for TUI network task toggling.
+use cfait::config::{AccountConfig, Config};
 use cfait::model::{Task, TaskStatus};
 use cfait::tui::action::{Action, AppEvent};
 use cfait::tui::network::run_network_actor;
@@ -48,17 +49,26 @@ async fn test_tui_toggle_task_does_not_revert_status() {
     task.href = format!("{}{}", url, task_path);
     task.etag = "etag".to_string();
 
-    // 4. Run the Network Actor
+    // 4. Configure & Save Test Config
+    // run_network_actor loads config from disk, so we must write it first.
+    let mut config = Config::default();
+    let acc = AccountConfig {
+        id: "default".to_string(),
+        name: "Test Account".to_string(),
+        url: url.clone(),
+        username: "user".to_string(),
+        password: "pass".to_string(),
+        allow_insecure_certs: true,
+    };
+    config.accounts.push(acc);
+    config.save().expect("Failed to save test config");
+
+    // 5. Run the Network Actor
     let (action_tx, action_rx) = mpsc::channel(10);
     let (event_tx, mut event_rx) = mpsc::channel(10);
 
     let actor_handle = tokio::spawn(async move {
         run_network_actor(
-            url,
-            "user".into(),
-            "pass".into(),
-            true,
-            None,
             action_rx,
             event_tx,
         )
@@ -89,7 +99,7 @@ async fn test_tui_toggle_task_does_not_revert_status() {
         }
     }
 
-    // 5. Verify Mock
+    // 6. Verify Mock
     // This asserts the network actor sent COMPLETED, not NEEDS-ACTION
     m_put.assert();
 

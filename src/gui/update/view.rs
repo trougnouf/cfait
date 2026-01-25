@@ -199,8 +199,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if !app.store.calendars.contains_key(&href) {
                     app.loading = true;
                 }
+                // Look up account_id for this calendar href (fallback to legacy default)
+                let acc_id = app
+                    .calendars
+                    .iter()
+                    .find(|c| c.href == href)
+                    .map(|c| c.account_id.clone())
+                    .unwrap_or_else(|| "default".to_string());
+
                 return Task::perform(
-                    async_fetch_wrapper(client.clone(), href),
+                    async_fetch_wrapper(client.clone(), href, acc_id),
                     Message::TasksRefreshed,
                 );
             }
@@ -270,8 +278,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if !app.store.calendars.contains_key(&href) {
                     app.loading = true;
                 }
+                // Resolve account_id for this calendar href, fallback to default if unknown
+                let acc_id = app
+                    .calendars
+                    .iter()
+                    .find(|c| c.href == href)
+                    .map(|c| c.account_id.clone())
+                    .unwrap_or_else(|| "default".to_string());
+
                 return Task::perform(
-                    async_fetch_wrapper(client.clone(), href),
+                    async_fetch_wrapper(client.clone(), href, acc_id),
                     Message::TasksRefreshed,
                 );
             }

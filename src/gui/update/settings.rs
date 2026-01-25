@@ -5,9 +5,10 @@ use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tasks, save_config};
-use crate::model::parser::{format_duration_compact, parse_duration, validate_alias_integrity}; // Updated import
+use crate::model::parser::{format_duration_compact, parse_duration, validate_alias_integrity};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use iced::Task;
+use std::collections::HashMap;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
@@ -30,9 +31,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.hide_fully_completed_tags = config.hide_fully_completed_tags;
             app.current_theme = config.theme;
 
-            app.ob_url = config.url.clone();
-            app.ob_user = config.username.clone();
-            app.ob_pass = config.password.clone();
+            // Fix: Unwrap Options for UI fields to avoid Option<String> vs String mismatch
+            app.ob_url = config.url.clone().unwrap_or_default();
+            app.ob_user = config.username.clone().unwrap_or_default();
+            app.ob_pass = config.password.clone().unwrap_or_default();
+
             app.ob_default_cal = config.default_calendar.clone();
             app.urgent_days = config.urgent_days_horizon;
             app.urgent_prio = config.urgent_priority_threshold;
@@ -54,6 +57,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // Initialize inputs with formatted strings
             app.ob_snooze_short_input = format_duration_compact(config.snooze_short_mins);
             app.ob_snooze_long_input = format_duration_compact(config.snooze_long_mins);
+
+            // --- LOAD ACCOUNTS ---
+            // Populate GUI account list from config
+            app.accounts = config.accounts.clone();
 
             let mut cached_cals = Cache::load_calendars().unwrap_or_default();
 
@@ -112,6 +119,62 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
+        // --- Account Management ---
+        Message::AddNewAccount => {
+            app.editing_account_id = Some("new".to_string());
+            app.ob_name = "New Account".to_string();
+            app.ob_url = String::new();
+            app.ob_user = String::new();
+            app.ob_pass = String::new();
+            app.ob_insecure = false;
+            Task::none()
+        }
+        Message::EditAccount(id) => {
+            if let Some(acc) = app.accounts.iter().find(|a| a.id == id) {
+                app.editing_account_id = Some(id.clone());
+                app.ob_name = acc.name.clone();
+                app.ob_url = acc.url.clone();
+                app.ob_user = acc.username.clone();
+                app.ob_pass = acc.password.clone();
+                app.ob_insecure = acc.allow_insecure_certs;
+            }
+            Task::none()
+        }
+        Message::DeleteAccount(id) => {
+            app.accounts.retain(|a| a.id != id);
+            save_config(app);
+            Task::none()
+        }
+        Message::CancelEditAccount => {
+            app.editing_account_id = None;
+            Task::none()
+        }
+        Message::SaveAccount => {
+            use uuid::Uuid;
+            let new_acc = crate::config::AccountConfig {
+                id: if let Some(id) = &app.editing_account_id {
+                    if id == "new" { Uuid::new_v4().to_string() } else { id.clone() }
+                } else { Uuid::new_v4().to_string() },
+                name: if app.ob_name.is_empty() { "Account".to_string() } else { app.ob_name.clone() },
+                url: app.ob_url.clone(),
+                username: app.ob_user.clone(),
+                password: app.ob_pass.clone(),
+                allow_insecure_certs: app.ob_insecure,
+            };
+
+            if let Some(pos) = app.accounts.iter().position(|a| a.id == new_acc.id) {
+                app.accounts[pos] = new_acc;
+            } else {
+                app.accounts.push(new_acc);
+            }
+
+            app.editing_account_id = None;
+            save_config(app);
+            Task::none()
+        }
+        Message::ObNameChanged(v) => { app.ob_name = v; Task::none() }
+
         Message::ObUrlChanged(v) => {
             app.ob_url = v;
             Task::none()
@@ -150,11 +213,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             let mut config_to_save = Config::load().unwrap_or_else(|_| Config {
-                url: String::new(),
-                username: String::new(),
-                password: String::new(),
+                url: Some(String::new()),
+                username: Some(String::new()),
+                password: Some(String::new()),
                 default_calendar: None,
                 allow_insecure_certs: false,
+                accounts: Vec::new(),
                 hidden_calendars: Vec::new(),
                 disabled_calendars: Vec::new(),
                 hide_completed: app.hide_completed,
@@ -175,9 +239,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 delete_events_on_completion: app.delete_events_on_completion,
             });
 
-            config_to_save.url = app.ob_url.clone();
-            config_to_save.username = app.ob_user.clone();
-            config_to_save.password = app.ob_pass.clone();
+            // Update legacy top-level fields if present
+            config_to_save.url = Some(app.ob_url.clone());
+            config_to_save.username = Some(app.ob_user.clone());
+            config_to_save.password = Some(app.ob_pass.clone());
             config_to_save.default_calendar = app.ob_default_cal.clone();
             config_to_save.allow_insecure_certs = app.ob_insecure;
             config_to_save.hidden_calendars = app.hidden_calendars.iter().cloned().collect();
@@ -194,6 +259,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             config_to_save.create_events_for_tasks = app.create_events_for_tasks;
             config_to_save.delete_events_on_completion = app.delete_events_on_completion;
 
+            // Persist account list from GUI into saved config
+            config_to_save.accounts = app.accounts.clone();
+
             let _ = config_to_save.save();
 
             app.state = AppState::Loading;
@@ -203,9 +271,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::OpenSettings => {
             if let Ok(cfg) = Config::load() {
-                app.ob_url = cfg.url;
-                app.ob_user = cfg.username;
-                app.ob_pass = cfg.password;
+                app.ob_url = cfg.url.unwrap_or_default();
+                app.ob_user = cfg.username.unwrap_or_default();
+                app.ob_pass = cfg.password.unwrap_or_default();
                 app.ob_default_cal = cfg.default_calendar;
                 app.hide_completed = cfg.hide_completed;
                 app.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
@@ -218,6 +286,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     Some(m) => m.to_string(),
                     None => "".to_string(),
                 };
+                // Load accounts into GUI buffers
+                app.accounts = cfg.accounts;
             }
             app.state = AppState::Settings;
             Task::none()
@@ -238,11 +308,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_pass.clear();
 
             let config_to_save = Config {
-                url: String::new(),
-                username: String::new(),
-                password: String::new(),
+                url: Some(String::new()),
+                username: Some(String::new()),
+                password: Some(String::new()),
                 default_calendar: None,
                 allow_insecure_certs: false,
+                accounts: Vec::new(),
                 hidden_calendars: Vec::new(),
                 disabled_calendars: Vec::new(),
                 hide_completed: app.hide_completed,
@@ -426,8 +497,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 // Collect all tasks from all calendars
                 let all_tasks: Vec<_> = app.store.calendars.values().flatten().cloned().collect();
 
+                // Build the map required by the wrapper
+                let cal_map: HashMap<String, String> = app.calendars.iter()
+                    .map(|c| (c.href.clone(), c.account_id.clone()))
+                    .collect();
+
                 return Task::perform(
-                    async_backfill_events_wrapper(client.clone(), all_tasks, val),
+                    async_backfill_events_wrapper(client.clone(), all_tasks, cal_map, val),
                     Message::BackfillEventsComplete,
                 );
             }
@@ -445,8 +521,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 // Collect all tasks from all calendars
                 let all_tasks: Vec<_> = app.store.calendars.values().flatten().cloned().collect();
 
+                // Build the map required by the wrapper
+                let cal_map: HashMap<String, String> = app.calendars.iter()
+                    .map(|c| (c.href.clone(), c.account_id.clone()))
+                    .collect();
+
                 return Task::perform(
-                    async_backfill_events_wrapper(client.clone(), all_tasks, false),
+                    async_backfill_events_wrapper(client.clone(), all_tasks, cal_map, false),
                     Message::BackfillEventsComplete,
                 );
             }
@@ -587,6 +668,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 name: "New Calendar".to_string(),
                 href: format!("local://{}", id),
                 color: None,
+                account_id: "local".to_string(),
             };
             app.local_cals_editing.push(new_cal.clone());
 

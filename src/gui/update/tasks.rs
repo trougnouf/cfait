@@ -13,6 +13,14 @@ use iced::Task;
 use iced::widget::text_editor;
 use std::collections::HashMap;
 
+// Helper to find account_id for a calendar href
+fn get_account_id(app: &GuiApp, href: &str) -> String {
+    app.calendars.iter()
+        .find(|c| c.href == href)
+        .map(|c| c.account_id.clone())
+        .unwrap_or_else(|| "default".to_string())
+}
+
 // Helper to parse the packed implicit UID
 fn parse_implicit_id(alarm_uid: &str) -> Option<(DateTime<Utc>, String)> {
     if alarm_uid.starts_with("implicit_") {
@@ -81,9 +89,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.selected_uid = Some(uid.clone());
                 if let Some(updated) = app.store.toggle_task(&uid) {
                     refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
+                    // Determine account id from the updated task's calendar_href
+                    let acc_id = get_account_id(app, &updated.calendar_href);
+                    if let Some(manager) = &app.client {
                         return Task::perform(
-                            async_toggle_wrapper(client.clone(), updated),
+                            async_toggle_wrapper(manager.clone(), updated, acc_id),
                             |res| Message::SyncToggleComplete(Box::new(res)),
                         );
                     } else {
@@ -98,9 +108,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some((deleted_task, _)) = app.store.delete_task(&view_task.uid)
             {
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
+                // Determine account id from the deleted task's calendar_href
+                let acc_id = get_account_id(app, &deleted_task.calendar_href);
+                if let Some(manager) = &app.client {
                     return Task::perform(
-                        async_delete_wrapper(client.clone(), deleted_task),
+                        async_delete_wrapper(manager.clone(), deleted_task, acc_id),
                         Message::DeleteComplete,
                     );
                 } else {
@@ -219,9 +231,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.selected_uid = Some(view_task.uid.clone());
                 if let Some(updated) = app.store.change_priority(&view_task.uid, delta) {
                     refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
+                    // Determine account id from the updated task's calendar_href
+                    let acc_id = get_account_id(app, &updated.calendar_href);
+                    if let Some(manager) = &app.client {
                         return Task::perform(
-                            async_update_wrapper(client.clone(), updated),
+                            async_update_wrapper(manager.clone(), updated, acc_id),
                             Message::SyncSaved,
                         );
                     } else {
@@ -236,9 +250,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.selected_uid = Some(view_task.uid.clone());
                 if let Some(updated) = app.store.set_status(&view_task.uid, new_status) {
                     refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
+                    // Determine account id from the updated task's calendar_href
+                    let acc_id = get_account_id(app, &updated.calendar_href);
+                    if let Some(manager) = &app.client {
                         return Task::perform(
-                            async_update_wrapper(client.clone(), updated),
+                            async_update_wrapper(manager.clone(), updated, acc_id),
                             Message::SyncSaved,
                         );
                     } else {
@@ -252,9 +268,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(updated) = app.store.set_status_in_process(&uid) {
                 app.selected_uid = Some(uid.clone());
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
+                // Determine account id from the updated task's calendar_href
+                let acc_id = get_account_id(app, &updated.calendar_href);
+                if let Some(manager) = &app.client {
                     return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
+                        async_update_wrapper(manager.clone(), updated, acc_id),
                         Message::SyncSaved,
                     );
                 } else {
@@ -267,9 +285,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(updated) = app.store.pause_task(&uid) {
                 app.selected_uid = Some(uid.clone());
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
+                // Determine account id from the updated task's calendar_href
+                let acc_id = get_account_id(app, &updated.calendar_href);
+                if let Some(manager) = &app.client {
                     return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
+                        async_update_wrapper(manager.clone(), updated, acc_id),
                         Message::SyncSaved,
                     );
                 } else {
@@ -282,9 +302,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(updated) = app.store.stop_task(&uid) {
                 app.selected_uid = Some(uid.clone());
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
+                // Determine account id from the updated task's calendar_href
+                let acc_id = get_account_id(app, &updated.calendar_href);
+                if let Some(manager) = &app.client {
                     return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
+                        async_update_wrapper(manager.clone(), updated, acc_id),
                         Message::SyncSaved,
                     );
                 } else {
@@ -310,9 +332,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.selected_uid = Some(target_uid);
                 app.yanked_uid = None;
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
+                // Determine account id from the updated task's calendar_href
+                let acc_id = get_account_id(app, &updated.calendar_href);
+                if let Some(manager) = &app.client {
                     return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
+                        async_update_wrapper(manager.clone(), updated, acc_id),
                         Message::SyncSaved,
                     );
                 } else {
@@ -325,9 +349,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(updated) = app.store.set_parent(&child_uid, None) {
                 app.selected_uid = Some(child_uid);
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
+                // Determine account id from the updated task's calendar_href
+                let acc_id = get_account_id(app, &updated.calendar_href);
+                if let Some(manager) = &app.client {
                     return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
+                        async_update_wrapper(manager.clone(), updated, acc_id),
                         Message::SyncSaved,
                     );
                 } else {
@@ -340,9 +366,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(updated) = app.store.remove_dependency(&task_uid, &dep_uid) {
                 app.selected_uid = Some(task_uid);
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
+                // Determine account id from the updated task's calendar_href
+                let acc_id = get_account_id(app, &updated.calendar_href);
+                if let Some(manager) = &app.client {
                     return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
+                        async_update_wrapper(manager.clone(), updated, acc_id),
                         Message::SyncSaved,
                     );
                 } else {
@@ -355,9 +383,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(updated) = app.store.remove_related_to(&task_uid, &related_uid) {
                 app.selected_uid = Some(task_uid);
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
+                // Determine account id from the updated task's calendar_href
+                let acc_id = get_account_id(app, &updated.calendar_href);
+                if let Some(manager) = &app.client {
                     return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
+                        async_update_wrapper(manager.clone(), updated, acc_id),
                         Message::SyncSaved,
                     );
                 } else {
@@ -370,40 +400,42 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let blocker_opt = app.yanked_uid.clone();
 
             if let Some(blocker_uid) = blocker_opt
-                && let Some(updated) = app.store.add_dependency(&target_uid, blocker_uid.clone())
-            {
-                app.selected_uid = Some(target_uid);
-                app.yanked_uid = None;
-                refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
-                    );
-                } else {
-                    handle_offline_update(app, updated);
+                && let Some(updated) = app.store.add_dependency(&target_uid, blocker_uid.clone()) {
+                    app.selected_uid = Some(target_uid);
+                    app.yanked_uid = None;
+                    refresh_filtered_tasks(app);
+                    // Determine account id from the updated task's calendar_href
+                    let acc_id = get_account_id(app, &updated.calendar_href);
+                    if let Some(manager) = &app.client {
+                        return Task::perform(
+                            async_update_wrapper(manager.clone(), updated, acc_id),
+                            Message::SyncSaved,
+                        );
+                    } else {
+                        handle_offline_update(app, updated);
+                    }
                 }
-            }
             Task::none()
         }
         Message::AddRelatedTo(target_uid) => {
             let related_opt = app.yanked_uid.clone();
 
             if let Some(related_uid) = related_opt
-                && let Some(updated) = app.store.add_related_to(&target_uid, related_uid.clone())
-            {
-                app.selected_uid = Some(target_uid);
-                app.yanked_uid = None;
-                refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
-                    );
-                } else {
-                    handle_offline_update(app, updated);
+                && let Some(updated) = app.store.add_related_to(&target_uid, related_uid.clone()) {
+                    app.selected_uid = Some(target_uid);
+                    app.yanked_uid = None;
+                    refresh_filtered_tasks(app);
+                    // Determine account id from the updated task's calendar_href
+                    let acc_id = get_account_id(app, &updated.calendar_href);
+                    if let Some(manager) = &app.client {
+                        return Task::perform(
+                            async_update_wrapper(manager.clone(), updated, acc_id),
+                            Message::SyncSaved,
+                        );
+                    } else {
+                        handle_offline_update(app, updated);
+                    }
                 }
-            }
             Task::none()
         }
         Message::MoveTask(task_uid, target_href) => {
@@ -414,11 +446,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             {
                 app.selected_uid = Some(task_uid);
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
+                // Determine source account id from the original task
+                let src_acc_id = get_account_id(app, &original.calendar_href);
+                if let Some(manager) = &app.client {
                     // Pass the original (pre-mutation) task to the network layer
                     // so the backend/journal can identify the source calendar.
                     return Task::perform(
-                        async_move_wrapper(client.clone(), original.clone(), target_href),
+                        async_move_wrapper(manager.clone(), original.clone(), target_href, src_acc_id),
                         Message::TaskMoved,
                     );
                 } else {
@@ -435,9 +469,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     return Task::none();
                 }
                 app.loading = true;
-                if let Some(client) = &app.client {
+                // Determine target account id from the target_href
+                let target_acc_id = app.calendars.iter()
+                    .find(|c| c.href == target_href)
+                    .map(|c| c.account_id.clone())
+                    .unwrap_or_else(|| "default".to_string());
+                if let Some(manager) = &app.client {
                     return Task::perform(
-                        async_migrate_wrapper(client.clone(), tasks_to_move, target_href),
+                        async_migrate_wrapper(manager.clone(), tasks_to_move, target_href, target_acc_id),
                         Message::MigrationComplete,
                     );
                 } else {
@@ -491,9 +530,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if changed {
                     let t_clone = task.clone();
                     refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
+                    // Determine account id from the task's calendar_href
+                    let acc_id = get_account_id(app, &t_clone.calendar_href);
+                    if let Some(manager) = &app.client {
                         return Task::perform(
-                            async_update_wrapper(client.clone(), t_clone),
+                            async_update_wrapper(manager.clone(), t_clone, acc_id),
                             Message::SyncSaved,
                         );
                     } else {
@@ -526,9 +567,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if changed {
                     let t_clone = task.clone();
                     refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
+                    // Determine account id from the task's calendar_href
+                    let acc_id = get_account_id(app, &t_clone.calendar_href);
+                    if let Some(manager) = &app.client {
                         return Task::perform(
-                            async_update_wrapper(client.clone(), t_clone),
+                            async_update_wrapper(manager.clone(), t_clone, acc_id),
                             Message::SyncSaved,
                         );
                     } else {
@@ -646,31 +689,33 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
     let config_time = NaiveTime::parse_from_str(&app.default_reminder_time, "%H:%M").ok();
 
     if let Some(edit_uid) = &app.editing_uid {
-        if let Some((task, _)) = app.store.get_task_mut(edit_uid) {
-            // PASS CONFIG TIME HERE
-            task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
-            task.description = app.description_value.text();
-            let task_copy = task.clone();
+if let Some((task, _)) = app.store.get_task_mut(edit_uid) {
+    // PASS CONFIG TIME HERE
+    task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
+    task.description = app.description_value.text();
+    let task_copy = task.clone();
 
-            app.input_value = text_editor::Content::new();
-            app.description_value = text_editor::Content::new();
-            app.editing_uid = None;
-            app.selected_uid = Some(task_copy.uid.clone());
+    app.input_value = text_editor::Content::new();
+    app.description_value = text_editor::Content::new();
+    app.editing_uid = None;
+    app.selected_uid = Some(task_copy.uid.clone());
 
-            refresh_filtered_tasks(app);
+    refresh_filtered_tasks(app);
 
-            if let Some(client) = &app.client {
-                let save_cmd = Task::perform(
-                    async_update_wrapper(client.clone(), task_copy),
-                    Message::SyncSaved,
-                );
-                retroactive_sync_batch.push(save_cmd);
-                return Task::batch(retroactive_sync_batch);
-            } else {
-                handle_offline_update(app, task_copy);
-                return Task::none();
-            }
-        }
+    // Determine account id from the task's calendar_href
+    let acc_id = get_account_id(app, &task_copy.calendar_href);
+    if let Some(manager) = &app.client {
+        let save_cmd = Task::perform(
+            async_update_wrapper(manager.clone(), task_copy, acc_id),
+            Message::SyncSaved,
+        );
+        retroactive_sync_batch.push(save_cmd);
+        return Task::batch(retroactive_sync_batch);
+    } else {
+        handle_offline_update(app, task_copy);
+        return Task::none();
+    }
+}
     } else if !clean_input.is_empty() {
         // PASS CONFIG TIME HERE
         let mut new_task = TodoTask::new(&clean_input, &app.tag_aliases, config_time);
@@ -704,9 +749,11 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             // rebuild and register the new row widget before attempting to focus it.
             let scroll_cmd = scroll_to_selected_delayed(app);
 
-            if let Some(client) = &app.client {
+            // Determine account id for the target calendar before network call
+            let target_acc_id = get_account_id(app, &new_task.calendar_href);
+            if let Some(manager) = &app.client {
                 let create_cmd = Task::perform(
-                    async_create_wrapper(client.clone(), new_task),
+                    async_create_wrapper(manager.clone(), new_task, target_acc_id),
                     Message::SyncSaved,
                 );
 

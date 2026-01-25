@@ -1,4 +1,3 @@
-// Central message handler dispatching to specific update modules.
 // File: ./src/gui/update/mod.rs
 pub mod common;
 pub mod network;
@@ -58,7 +57,14 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::LocalCalendarNameChanged(_, _)
         | Message::OpenColorPicker(_, _)
         | Message::CancelColorPicker
-        | Message::SubmitColorPicker(_) => settings::handle(app, message),
+        | Message::SubmitColorPicker(_)
+        // NEW: Account Management
+        | Message::AddNewAccount
+        | Message::EditAccount(_)
+        | Message::DeleteAccount(_)
+        | Message::SaveAccount
+        | Message::CancelEditAccount
+        | Message::ObNameChanged(_) => settings::handle(app, message),
 
         // --- Task Logic Messages ---
         Message::InputChanged(_)
@@ -158,9 +164,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::TaskMoved(_)
         | Message::MigrationComplete(_) => network::handle(app, message),
 
-        // Delayed focus trigger: when the view has been refreshed and widget IDs are registered,
-        // `SnapToSelected` will attempt to focus/scroll to the selected task. If the task
-        // is still not present in the filtered view, re-schedule a delayed attempt.
+        // Delayed focus trigger
         Message::SnapToSelected => {
             if let Some(uid) = &app.selected_uid {
                 let present_in_list = app.tasks.iter().any(|t| t.uid == *uid);
@@ -169,7 +173,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if present_in_list || has_cached_id {
                     common::scroll_to_selected(app)
                 } else {
-                    // Task not yet visible/registered; try again shortly.
                     common::scroll_to_selected_delayed(app)
                 }
             } else {

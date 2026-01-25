@@ -239,19 +239,44 @@ impl RustyClient {
         ),
         String,
     > {
-        let client = Self::new(
-            &config.url,
-            &config.username,
-            &config.password,
-            config.allow_insecure_certs,
-            client_type,
-        )
-        .map_err(|e| e.to_string())?;
+        // Determine the account id we will tag returned calendars with (if any).
+        // Prefer the first account from the new multi-account config for backward compatibility.
+        let account_id = config
+            .accounts
+            .first()
+            .map(|a| a.id.clone())
+            .unwrap_or_else(|| "default".to_string());
+
+        // Prefer the first AccountConfig entry if present; otherwise fall back to legacy top-level fields.
+        let client = if let Some(acc) = config.accounts.first() {
+            Self::new(
+                &acc.url,
+                &acc.username,
+                &acc.password,
+                acc.allow_insecure_certs,
+                client_type,
+            )
+            .map_err(|e| e.to_string())?
+        } else {
+            // Legacy fields (Config kept for compatibility): treat Option<String> safely.
+            let url = config.url.unwrap_or_default();
+            let username = config.username.unwrap_or_default();
+            let password = config.password.unwrap_or_default();
+            Self::new(&url, &username, &password, config.allow_insecure_certs, client_type)
+                .map_err(|e| e.to_string())?
+        };
 
         let _ = client.sync_journal().await;
 
         let (calendars, warning) = match client.get_calendars().await {
-            Ok(c) => {
+            Ok(mut c) => {
+                // Tag calendars with the account id used for this client so callers can route requests.
+                for cal in &mut c {
+                    // Only overwrite empty/default account ids; respect existing values when present.
+                    if cal.account_id.is_empty() || cal.account_id == "default" {
+                        cal.account_id = account_id.clone();
+                    }
+                }
                 let _ = Cache::save_calendars(&c);
                 (c, None)
             }
@@ -338,6 +363,8 @@ impl RustyClient {
                     name,
                     href: col.href,
                     color,
+                    // Default to the legacy/default account id for single-client instances.
+                    account_id: "default".to_string(),
                 });
             }
             Ok(calendars)

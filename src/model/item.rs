@@ -22,11 +22,17 @@ fn default_uid() -> String {
     Uuid::new_v4().to_string()
 }
 
+fn default_account_id() -> String {
+    "default".to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CalendarListEntry {
     pub name: String,
     pub href: String,
     pub color: Option<String>,
+    #[serde(default = "default_account_id")]
+    pub account_id: String,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Serialize, Deserialize)]

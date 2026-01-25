@@ -7,7 +7,7 @@ use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{refresh_filtered_tasks, save_config, scroll_to_selected};
 use crate::journal::Journal;
 use crate::model::CalendarListEntry;
-use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalCalendarRegistry};
+use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalCalendarRegistry, LocalStorage};
 use crate::system::SystemEvent;
 use iced::Task;
 use iced::widget::text_editor;
@@ -25,8 +25,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::Loaded(Ok((client, mut cals, mut tasks, mut active, warning))) => {
-            app.client = Some(client.clone());
+        Message::Loaded(Ok((manager, mut cals, _tasks, mut active, warning))) => {
+            app.client = Some(manager.clone()); // Store manager
 
             if let Some(w) = warning {
                 app.error_msg = Some(w);
@@ -45,45 +45,33 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     cals.push(local_cal);
                 }
             }
-
-            // Ensure default local calendar is always present
             if !cals.iter().any(|c| c.href == LOCAL_CALENDAR_HREF) {
                 let local_entry = CalendarListEntry {
                     name: LOCAL_CALENDAR_NAME.to_string(),
                     href: LOCAL_CALENDAR_HREF.to_string(),
                     color: None,
+                    account_id: "local".to_string(), // Explicit local
                 };
                 cals.push(local_entry);
             }
 
             app.calendars = cals.clone();
-
-            // Clear store to rebuild from fresh network/cache state
             app.store.clear();
 
-            // 1. Load all local calendars
-            for cal in &app.calendars {
-                if cal.href.starts_with("local://")
-                    && let Ok(mut local_t) = crate::gui::async_ops::get_runtime()
-                        .block_on(async { client.get_tasks(&cal.href).await })
-                {
-                    // Apply Journal (replays Creates/Updates/Deletes correctly)
-                    Journal::apply_to_tasks(&mut local_t, &cal.href);
-                    app.store.insert(cal.href.clone(), local_t);
-                }
-            }
-
-            // 2. Load Caches for remote calendars
+            // Load Local/Cache ...
             for cal in &app.calendars {
                 if cal.href.starts_with("local://") {
-                    continue;
-                }
-                if let Ok((mut cached_tasks, _)) = Cache::load(&cal.href) {
+                    if let Ok(mut local_t) = LocalStorage::load_for_href(&cal.href) {
+                        Journal::apply_to_tasks(&mut local_t, &cal.href);
+                        app.store.insert(cal.href.clone(), local_t);
+                    }
+                } else if let Ok((mut cached_tasks, _)) = Cache::load(&cal.href) {
                     Journal::apply_to_tasks(&mut cached_tasks, &cal.href);
                     app.store.insert(cal.href.clone(), cached_tasks);
                 }
             }
 
+            // Set Active Calendar
             let mut valid_active = None;
             if let Some(current) = &app.active_cal_href
                 && app.calendars.iter().any(|c| c.href == *current)
@@ -106,13 +94,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             active = valid_active;
             app.active_cal_href = active.clone();
 
-            // 3. Load Fresh Network Data (Active Calendar)
-            if let Some(href) = &active
-                && href != LOCAL_CALENDAR_HREF
-                && app.error_msg.is_none()
-            {
-                Journal::apply_to_tasks(&mut tasks, href);
-                app.store.insert(href.clone(), tasks);
+            // 3. Load Fresh Network Data
+            // We use the manager to fetch all
+            if app.error_msg.is_none() {
+                app.loading = true;
+                // scroll_cmd logic...
+                return Task::perform(
+                    async_fetch_all_wrapper(manager, cals),
+                    Message::RefreshedAll
+                );
             }
 
             if let Ok(cfg) = Config::load() {
@@ -126,26 +116,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 save_config(app);
             }
 
-            app.state = AppState::Active;
             refresh_filtered_tasks(app);
+            app.state = AppState::Active;
             app.loading = false;
-
-            // Enable Alarms here!
-            if let Some(tx) = &app.alarm_tx {
-                let _ = tx.try_send(SystemEvent::EnableAlarms);
-            }
-
-            let scroll_cmd = scroll_to_selected(app);
-
-            if app.error_msg.is_none() {
-                app.loading = true;
-                Task::batch(vec![
-                    Task::perform(async_fetch_all_wrapper(client, cals), Message::RefreshedAll),
-                    scroll_cmd,
-                ])
-            } else {
-                scroll_cmd
-            }
+            Task::none()
         }
         Message::Loaded(Err(e)) => {
             app.error_msg = Some(format!("Connection Failed: {}", e));

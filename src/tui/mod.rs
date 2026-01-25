@@ -1,4 +1,3 @@
-// File: ./src/tui/mod.rs
 // Entry point and main loop for the TUI application.
 pub mod action;
 pub mod handlers;
@@ -9,7 +8,7 @@ pub mod view;
 use crate::config;
 use crate::system::{AlarmMessage, SystemEvent};
 use crate::tui::action::AppEvent;
-use crate::tui::state::{AppState, InputMode};
+use crate::tui::state::AppState;
 use crate::tui::view::draw;
 
 use anyhow::Result;
@@ -25,7 +24,7 @@ use std::{
     io::{self, Write},
     time::Duration,
 };
-use tokio::sync::mpsc; // <-- Import the function
+use tokio::sync::mpsc;
 
 pub async fn run() -> Result<()> {
     // --- 1. PREAMBLE & CONFIG ---
@@ -39,55 +38,11 @@ pub async fn run() -> Result<()> {
         println!("USAGE:");
         println!("    cfait");
         println!();
-        println!("KEYBINDINGS:");
-        println!("    Press '?' inside the app for full interactive help");
-        println!();
-        println!("SMART INPUT SYNTAX:");
-        println!("    !1-9              Priority (1=highest, 9=lowest)");
-        println!("    #tag              Add category/tag (supports hierarchy: #work:project)");
-        println!("    @@location        Add location (supports hierarchy: @@home:office)");
-        println!("    @date             Set due date (@tomorrow, @2d, @next friday)");
-        println!("    ^date             Set start date (^next week, ^2025-01-01)");
-        println!("    ^@date            Set both start and due dates (^@tomorrow, ^@2d)");
-        println!("    ~duration         Set duration (~30m, ~1.5h)");
-        println!("    @daily            Recurrence (@daily, @weekly, @every 3 days)");
-        println!("    until <date>      End date for recurrence (@daily until 2025-12-31)");
-        println!("    except <date>     Skip dates (@daily except 2025-12-25,2026-01-01)");
-        println!(
-            "    except <weekday>  Exclude weekdays (@daily except mo,tue or saturdays,sundays)"
-        );
-        println!("    except <month>    Exclude months (@monthly except oct,nov,dec)");
-        println!("    @friday           Next weekday (@friday = @next friday)");
-        println!("    @next X           Next week/month/year (@next week, @next month)");
-        println!("    \"in\" optional     @2 weeks = @in 2 weeks (the word \"in\" is optional)");
-        println!("    #alias:=#tags     Define tag alias inline (retroactive)");
-        println!("    @@alias:=#tags    Define location alias (@@aldi:=#groceries,#shopping)");
-        println!("    url:              Attach URL");
-        println!("    geo:              Add coordinates");
-        println!("    desc:             Add description");
-        println!("    rem:10m           Relative reminder (before due date, adjusts)");
-        println!("    rem:in 5m         Relative from now (becomes absolute)");
-        println!("    rem:next friday   Next occurrence (becomes absolute)");
-        println!("    rem:8am           Absolute reminder (fixed time)");
-        println!("    +cal              Force create calendar event (override global setting)");
-        println!("    -cal              Prevent calendar event creation (override global setting)");
-        println!("    \\#text            Escape special characters");
-        println!();
-        println!("EXAMPLES:");
-        println!("    Buy cookies !1 @2025-01-16 #shopping rem:2025-01-16 8am");
-        println!("    Exercise @daily ~30m #health rem:8am");
-        println!("    Meeting @tomorrow 2pm ~1h +cal (force create calendar event)");
-        println!("    Plant plum tree #tree_planting !3 ~2h @@home:garden");
-        println!("    #tree_planting:=#gardening,@@home");
-        println!("    @@aldi:=#groceries,#shopping (location alias)");
-        println!();
-        println!("MORE INFO:");
-        println!("    Repository: https://codeberg.org/trougnouf/cfait");
-        println!("    License:    GPL-3.0");
+        println!("Press '?' inside the app for full interactive help.");
         return Ok(());
     }
 
-    // Panic Hook
+    // Panic hook: log to disk and then call default hook
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         use std::io::Write;
@@ -112,7 +67,7 @@ pub async fn run() -> Result<()> {
                 std::process::exit(1);
             }
 
-            // Interactive Onboarding
+            // Interactive onboarding for TUI when no config exists.
             println!("Welcome to Cfait (TUI). No configuration file found.");
             println!("Let's set up your task manager.\n");
 
@@ -130,7 +85,7 @@ pub async fn run() -> Result<()> {
 
             if choice.trim() == "2" {
                 println!("Setting up Offline Mode...");
-                // Config defaults are already suitable for offline (empty url/creds)
+                // Default config is suitable for offline mode.
             } else {
                 // CalDAV Setup Loop
                 loop {
@@ -140,18 +95,17 @@ pub async fn run() -> Result<()> {
                     io::stdout().flush()?;
                     let mut url = String::new();
                     io::stdin().read_line(&mut url)?;
-                    new_config.url = url.trim().to_string();
+                    new_config.url = Some(url.trim().to_string());
 
                     print!("Username: ");
                     io::stdout().flush()?;
                     let mut user = String::new();
                     io::stdin().read_line(&mut user)?;
-                    new_config.username = user.trim().to_string();
+                    new_config.username = Some(user.trim().to_string());
 
-                    // --- CHANGE STARTS HERE ---
+                    // Prompt password without echo
                     let pass = prompt_password("Password: ")?;
-                    new_config.password = pass;
-                    // --- CHANGE ENDS HERE ---
+                    new_config.password = Some(pass);
 
                     print!("Allow insecure SSL certificates? (y/N): ");
                     io::stdout().flush()?;
@@ -163,9 +117,9 @@ pub async fn run() -> Result<()> {
 
                     let check_result = async {
                         let client = crate::client::RustyClient::new(
-                            &new_config.url,
-                            &new_config.username,
-                            &new_config.password,
+                            new_config.url.as_deref().unwrap_or(""),
+                            new_config.username.as_deref().unwrap_or(""),
+                            new_config.password.as_deref().unwrap_or(""),
                             new_config.allow_insecure_certs,
                             Some("TUI"),
                         )
@@ -211,16 +165,13 @@ pub async fn run() -> Result<()> {
         }
     };
 
+    // Extract only the fields we actually use in this module.
     let (
-        url,
-        user,
-        pass,
         default_cal,
         hide_completed,
         hide_fully_completed_tags,
         tag_aliases,
         sort_cutoff,
-        allow_insecure,
         hidden_calendars,
         disabled_calendars,
         urgent_days,
@@ -230,15 +181,11 @@ pub async fn run() -> Result<()> {
         snooze_short_mins,
         snooze_long_mins,
     ) = (
-        cfg.url,
-        cfg.username,
-        cfg.password,
         cfg.default_calendar,
         cfg.hide_completed,
         cfg.hide_fully_completed_tags,
         cfg.tag_aliases,
         cfg.sort_cutoff_months,
-        cfg.allow_insecure_certs,
         cfg.hidden_calendars,
         cfg.disabled_calendars,
         cfg.urgent_days_horizon,
@@ -273,25 +220,15 @@ pub async fn run() -> Result<()> {
 
     // --- START ALARM ACTOR ---
     let (gui_alarm_tx, mut gui_alarm_rx) = tokio::sync::mpsc::channel(10);
-    // Spawn the alarm system, giving it a channel to talk back to us
     let alarm_actor_tx = crate::system::spawn_alarm_actor(Some(gui_alarm_tx));
-    // Store the handle so we can send task updates to it
     app_state.alarm_actor_tx = Some(alarm_actor_tx.clone());
-    // -------------------------
 
     let (action_tx, action_rx) = mpsc::channel(10);
     let (event_tx, mut event_rx) = mpsc::channel(10);
 
     // --- 4. NETWORK THREAD ---
-    tokio::spawn(network::run_network_actor(
-        url,
-        user,
-        pass,
-        allow_insecure,
-        default_cal.clone(), // Clone for the thread
-        action_rx,
-        event_tx,
-    ));
+    // The network actor loads configuration internally; only pass channels here.
+    tokio::spawn(network::run_network_actor(action_rx, event_tx));
 
     // --- 5. UI LOOP ---
     loop {
@@ -299,7 +236,7 @@ pub async fn run() -> Result<()> {
 
         // A. Network Events
         if let Ok(event) = event_rx.try_recv() {
-            // Check for Sync Complete Status
+            // Check for sync complete status and task updates
             let enable_alarms = matches!(event, AppEvent::Status(ref s) if s == "Ready.");
             let is_task_update = matches!(event, AppEvent::TasksLoaded(_));
 
@@ -330,13 +267,10 @@ pub async fn run() -> Result<()> {
         }
 
         // B. Alarm Signals
-        // Check if the alarm actor sent a "Fire" message
-        if let Ok(AlarmMessage::Fire(t_uid, a_uid)) = gui_alarm_rx.try_recv() {
-            // Find the task in the store to display details
-            if let Some((task, _)) = app_state.store.get_task_mut(&t_uid) {
+        if let Ok(AlarmMessage::Fire(t_uid, a_uid)) = gui_alarm_rx.try_recv()
+            && let Some((task, _)) = app_state.store.get_task_mut(&t_uid) {
                 app_state.active_alarm = Some((task.clone(), a_uid));
             }
-        }
 
         // C. Input Events
         if crossterm::event::poll(Duration::from_millis(50))? {
@@ -348,7 +282,7 @@ pub async fn run() -> Result<()> {
                     _ => {}
                 },
                 Event::Key(key) => {
-                    // Filter out KeyRelease events to prevent double input on Windows
+                    // Ignore pure key release events to avoid duplicates on some platforms
                     if key.kind == event::KeyEventKind::Release {
                         continue;
                     }
@@ -360,11 +294,6 @@ pub async fn run() -> Result<()> {
                             break;
                         }
                         let _ = action_tx.send(action).await;
-                    }
-                    if matches!(app_state.mode, InputMode::Normal)
-                        && key.code == crossterm::event::KeyCode::Char('q')
-                    {
-                        // Double check redundant safety break if handler returned None
                     }
                 }
                 _ => {}

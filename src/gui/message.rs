@@ -1,6 +1,6 @@
 // Defines all messages used for the Elm architecture in the GUI.
 
-use crate::client::RustyClient;
+use crate::client::ClientManager;
 use crate::config::{AppTheme, Config};
 use crate::gui::state::{ResizeDirection, SidebarMode};
 use crate::model::{CalendarListEntry, Task as TodoTask};
@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 
 pub type LoadedResult = Result<
     (
-        RustyClient,
+        ClientManager,
         Vec<CalendarListEntry>,
         Vec<TodoTask>,
         Option<String>,
@@ -27,6 +27,18 @@ pub enum Message {
     ObUserChanged(String),
     ObPassChanged(String),
     ObInsecureToggled(bool),
+
+    // --- Account Management Messages ---
+    AddNewAccount,
+    EditAccount(String), // account_id
+    DeleteAccount(String), // account_id
+    SaveAccount,
+    CancelEditAccount,
+
+    // Account Inputs
+    ObNameChanged(String),
+    // Re-use existing ObUrlChanged, ObUserChanged, ObPassChanged, ObInsecureToggled
+
     ToggleCalendarVisibility(String, bool),
     ToggleCalendarDisabled(String, bool),
     ObDefaultCalChanged(String),

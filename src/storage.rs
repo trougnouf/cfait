@@ -93,6 +93,7 @@ impl LocalCalendarRegistry {
             name: LOCAL_CALENDAR_NAME.to_string(),
             href: LOCAL_CALENDAR_HREF.to_string(),
             color: None,
+            account_id: "local".to_string(),
         };
 
         if let Some(path) = Self::get_path()
@@ -201,11 +202,13 @@ mod registry_tests {
             name: "Work".to_string(),
             href: "local://work".to_string(),
             color: Some("#FF0000".to_string()),
+            account_id: "local".to_string(),
         };
         let cal2 = CalendarListEntry {
             name: "Personal".to_string(),
             href: "local://personal".to_string(),
             color: Some("#00FF00".to_string()),
+            account_id: "local".to_string(),
         };
 
         let registry = vec![cal1.clone(), cal2.clone()];
@@ -771,7 +774,7 @@ mod tests {
     use std::sync::Arc;
     use std::thread;
     use std::path::PathBuf;
-    
+
     use std::fs;
 
     // Helper for environment isolation

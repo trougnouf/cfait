@@ -1,7 +1,7 @@
 // File: ./src/gui/state.rs
 // Manages the application state for the GUI (Iced).
-use crate::client::RustyClient;
-use crate::config::AppTheme;
+use crate::client::ClientManager;
+use crate::config::{AppTheme, AccountConfig};
 use crate::gui::icon;
 use crate::model::{Alarm, CalendarListEntry, Task as TodoTask};
 use crate::store::TaskStore;
@@ -46,7 +46,17 @@ pub struct GuiApp {
     pub store: TaskStore,
     pub tasks: Vec<TodoTask>,
     pub calendars: Vec<CalendarListEntry>,
-    pub client: Option<RustyClient>,
+    pub client: Option<ClientManager>,
+
+    // --- Account State ---
+    pub accounts: Vec<AccountConfig>,
+    pub editing_account_id: Option<String>, // If Some, we are in "Edit/Create Account" mode
+
+    // Reuse existing `ob_` fields for the form:
+    // ob_url, ob_user, ob_pass, ob_insecure
+    // Add one new field for the Account Name:
+    pub ob_name: String,
+
     pub tag_aliases: HashMap<String, Vec<String>>,
 
     // Cached Sidebar Data (computed once, not in view())
@@ -221,6 +231,10 @@ impl Default for GuiApp {
             tasks: vec![],
             calendars: vec![],
             client: None,
+            // --- Account State ---
+            accounts: Vec::new(),
+            editing_account_id: None,
+            ob_name: String::new(),
             tag_aliases: HashMap::new(),
 
             cached_categories: Vec::new(),

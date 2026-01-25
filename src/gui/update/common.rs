@@ -100,9 +100,9 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
 
 pub fn save_config(app: &GuiApp) {
     let _ = Config {
-        url: app.ob_url.clone(),
-        username: app.ob_user.clone(),
-        password: app.ob_pass.clone(),
+        url: Some(app.ob_url.clone()),
+        username: Some(app.ob_user.clone()),
+        password: Some(app.ob_pass.clone()),
         default_calendar: app.ob_default_cal.clone(),
         hide_completed: app.hide_completed,
         hide_fully_completed_tags: app.hide_fully_completed_tags,
@@ -122,6 +122,7 @@ pub fn save_config(app: &GuiApp) {
         snooze_long_mins: app.snooze_long_mins,
         create_events_for_tasks: app.create_events_for_tasks,
         delete_events_on_completion: app.delete_events_on_completion,
+        accounts: app.accounts.clone(),
     }
     .save();
 }
@@ -142,8 +143,16 @@ pub fn apply_alias_retroactively(
     if let Some(client) = &app.client {
         let mut commands = Vec::new();
         for t in modified_tasks {
+            // Resolve account_id from known calendars; fall back to legacy default
+            let acc_id = app
+                .calendars
+                .iter()
+                .find(|c| c.href == t.calendar_href)
+                .map(|c| c.account_id.clone())
+                .unwrap_or_else(|| "default".to_string());
+
             commands.push(Task::perform(
-                async_update_wrapper(client.clone(), t),
+                async_update_wrapper(client.clone(), t, acc_id),
                 Message::SyncSaved,
             ));
         }
