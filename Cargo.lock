@@ -712,6 +712,7 @@ dependencies = [
  "once_cell",
  "ratatui",
  "rfd",
+ "roxmltree 0.21.1",
  "rpassword",
  "rrule",
  "rustls",

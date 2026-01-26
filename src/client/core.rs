@@ -1,4 +1,3 @@
-
 // File: ./src/client/core.rs
 // Core logic for CalDAV communication, sync, and task management.
 use crate::cache::Cache;
@@ -10,9 +9,10 @@ use crate::model::{CalendarListEntry, Task, TaskStatus};
 use crate::storage::LocalStorage;
 
 use libdav::caldav::{FindCalendarHomeSet, FindCalendars, GetCalendarResources};
-use libdav::dav::{Delete, GetProperty, ListResources, PutResource};
+use libdav::dav::{Delete, GetProperty, ListResources, Propfind, PutResource};
 use libdav::dav::{WebDavClient, WebDavError};
 use libdav::{CalDavClient, PropertyName, names};
+use roxmltree::Document;
 
 use futures::stream::{self, StreamExt};
 use http::{Request, StatusCode, Uri};
@@ -138,7 +138,13 @@ pub struct RustyClient {
 }
 
 impl RustyClient {
-    pub fn new(url: &str, user: &str, pass: &str, insecure: bool, client_type: Option<&str>) -> Result<Self, String> {
+    pub fn new(
+        url: &str,
+        user: &str,
+        pass: &str,
+        insecure: bool,
+        client_type: Option<&str>,
+    ) -> Result<Self, String> {
         if url.is_empty() {
             return Ok(Self { client: None });
         }
@@ -228,7 +234,7 @@ impl RustyClient {
 
     pub async fn connect_with_fallback(
         config: Config,
-        client_type: Option<&str>
+        client_type: Option<&str>,
     ) -> Result<
         (
             Self,
@@ -334,11 +340,22 @@ impl RustyClient {
                     .ok()
                     .and_then(|r| r.value);
 
-                calendars.push(CalendarListEntry {
-                    name,
-                    href: col.href,
-                    color,
-                });
+                // Query supported components and only include calendars that advertise VTODO
+                let comps = self
+                    .get_supported_components(&col.href)
+                    .await
+                    .unwrap_or_default();
+
+                // Only include calendars that explicitly advertise VTODO support.
+                // If a server does not advertise VTODO (components list missing or only VEVENT),
+                // we skip it to avoid showing event-only calendars in the task UI.
+                if comps.iter().any(|c| c.eq_ignore_ascii_case("VTODO")) {
+                    calendars.push(CalendarListEntry {
+                        name,
+                        href: col.href,
+                        color,
+                    });
+                } 
             }
             Ok(calendars)
         } else {
@@ -351,9 +368,10 @@ impl RustyClient {
         #[cfg(test)]
         {
             if let Some(m) = TEST_FETCH_REMOTE_HOOK.get()
-                && let Some(cb) = &*m.lock().unwrap() {
-                    return cb(task_href);
-                }
+                && let Some(cb) = &*m.lock().unwrap()
+            {
+                return cb(task_href);
+            }
         }
 
         if let Some(client) = &self.client {
@@ -781,6 +799,39 @@ impl RustyClient {
         None
     }
 
+    pub async fn get_supported_components(
+        &self,
+        calendar_href: &str,
+    ) -> Result<Vec<String>, String> {
+        if let Some(client) = &self.client {
+            // 1. Send a PROPFIND specifically for the supported-calendar-component-set
+            let req = Propfind::new(calendar_href)
+                .with_properties(&[&names::SUPPORTED_CALENDAR_COMPONENT_SET])
+                .with_depth(libdav::Depth::Zero);
+
+            let response = client.request(req).await.map_err(|e| e.to_string())?;
+
+            // 2. Parse the raw XML response
+            let xml_str = std::str::from_utf8(&response.body).map_err(|e| e.to_string())?;
+
+            let doc = Document::parse(xml_str).map_err(|e| e.to_string())?;
+
+            let mut components = Vec::new();
+
+            // 3. Traverse XML to find <comp name="..."> elements
+            for node in doc.descendants() {
+                if node.tag_name().name().eq_ignore_ascii_case("comp")
+                    && let Some(name) = node.attribute("name") {
+                        components.push(name.to_uppercase());
+                    }
+            }
+
+            Ok(components)
+        } else {
+            Err("Offline".to_string())
+        }
+    }
+
     /// Helper to sync the companion event for a task.
     /// Creates/Updates the event when task has dates, or deletes it when task is done/has no dates.
     /// Returns true if an event was created/updated or deleted, false if no action was taken.
@@ -1085,13 +1136,8 @@ impl RustyClient {
                         // If we try to DELETE "", it resolves to DELETE / which is Method Not Allowed (405).
                         // Since it has no href, it likely doesn't exist on server (or is a ghost).
                         // Just cleanup companion events and skip the network delete.
-                        self.sync_companion_event(
-                            task,
-                            events_enabled,
-                            delete_on_completion,
-                            true,
-                        )
-                        .await;
+                        self.sync_companion_event(task, events_enabled, delete_on_completion, true)
+                            .await;
                         Ok(())
                     } else {
                         let path = strip_host(&task.href);
@@ -1462,8 +1508,8 @@ fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use serial_test::serial;
+    use std::collections::HashMap;
 
     // Helper for environment isolation in client tests to prevent pollution
     struct TestGuard {
@@ -1474,13 +1520,19 @@ mod tests {
     impl TestGuard {
         fn new() -> Self {
             let original_env = std::env::var("CFAIT_TEST_DIR").ok();
-            let temp_dir = std::env::temp_dir().join(format!("cfait_client_test_{}", uuid::Uuid::new_v4()));
+            let temp_dir =
+                std::env::temp_dir().join(format!("cfait_client_test_{}", uuid::Uuid::new_v4()));
             std::fs::create_dir_all(&temp_dir).unwrap();
 
             // Set env var to redirect AppPaths to our temp dir
-            unsafe { std::env::set_var("CFAIT_TEST_DIR", &temp_dir); }
+            unsafe {
+                std::env::set_var("CFAIT_TEST_DIR", &temp_dir);
+            }
 
-            Self { temp_dir, original_env }
+            Self {
+                temp_dir,
+                original_env,
+            }
         }
     }
 
