@@ -82,8 +82,8 @@ fun HomeScreen(
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
     var isPullRefreshing by remember { mutableStateOf(false) }
 
-    var filterTags by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var filterLocations by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var filterTags by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
+    var filterLocations by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
 
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
