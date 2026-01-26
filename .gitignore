@@ -5,6 +5,7 @@ build-dir
 
 # Android - Build Artifacts
 android/app/build/
+android/app/release/
 android/build/
 .gradle/
 android/.gradle/

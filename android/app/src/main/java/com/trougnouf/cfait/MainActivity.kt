@@ -162,18 +162,24 @@ fun CfaitNavHost(
 
     val currentMigration = migrationWorkInfo?.firstOrNull()
 
-    // Show toast when migration finishes
     LaunchedEffect(currentMigration?.state) {
         if (currentMigration?.state == WorkInfo.State.SUCCEEDED) {
             val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
             Toast.makeText(context, msg ?: "Migration complete", Toast.LENGTH_LONG).show()
-            // Force refresh UI to show tasks in their new location
+
+            // Force refresh UI
             val intent = Intent("com.trougnouf.cfait.REFRESH_UI")
             intent.setPackage(context.packageName)
             context.sendBroadcast(intent)
+
+            // Prune the work so the Toast doesn't appear on next launch
+            workManager.pruneWork()
         } else if (currentMigration?.state == WorkInfo.State.FAILED) {
             val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
             Toast.makeText(context, msg ?: "Migration failed", Toast.LENGTH_LONG).show()
+
+            // Prune failed work too so user can retry immediately without UI glitch
+            workManager.pruneWork()
         }
     }
     // --------------------------------
