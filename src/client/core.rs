@@ -6,7 +6,7 @@ use crate::client::cert::NoVerifier;
 use crate::config::Config;
 use crate::journal::{Action, Journal};
 use crate::model::{CalendarListEntry, Task, TaskStatus};
-use crate::storage::LocalStorage;
+use crate::storage::{LocalCalendarRegistry, LocalStorage};
 
 use libdav::caldav::{FindCalendarHomeSet, FindCalendars, GetCalendarResources};
 use libdav::dav::{Delete, GetProperty, ListResources, Propfind, PutResource};
@@ -51,12 +51,20 @@ use std::sync::{Mutex, OnceLock};
 
 #[cfg(test)]
 type FetchRemoteHook = Box<dyn Fn(&str) -> Option<Task> + Send + Sync + 'static>;
+#[cfg(test)]
+type ForceSyncErrorHook = Box<dyn Fn(&Action) -> Option<String> + Send + Sync + 'static>;
 
 /// Test hook to simulate fetch_remote_task responses in unit tests.
 /// Tests may set this to a closure that accepts the queried href and returns
 /// an Option<Task> to emulate server state without actual network calls.
 #[cfg(test)]
 static TEST_FETCH_REMOTE_HOOK: OnceLock<Mutex<Option<FetchRemoteHook>>> = OnceLock::new();
+
+/// Test hook to force a synthetic sync error for a given Action during tests.
+/// If the hook returns Some(String) we treat that as a fatal error message
+/// for that action and run the same recovery handling as real server errors.
+#[cfg(test)]
+static TEST_FORCE_SYNC_ERROR: OnceLock<Mutex<Option<ForceSyncErrorHook>>> = OnceLock::new();
 
 fn strip_host(href: &str) -> String {
     if let Ok(uri) = href.parse::<Uri>()
@@ -355,12 +363,206 @@ impl RustyClient {
                         href: col.href,
                         color,
                     });
-                } 
+                }
             }
+
+            // --- BEGIN NEW LOGIC ---
+            // Load local calendars from the registry
+            if let Ok(local_cals) = LocalCalendarRegistry::load() {
+                for local_cal in local_cals {
+                    // If this is the recovery calendar, check if it's empty
+                    if local_cal.href == "local://recovery" {
+                        if let Ok(tasks) = LocalStorage::load_for_href(&local_cal.href)
+                            && !tasks.is_empty()
+                        {
+                            // Only add it to the visible list if it has tasks
+                            calendars.push(local_cal);
+                        }
+                    } else {
+                        // For all other local calendars, add them unconditionally
+                        calendars.push(local_cal);
+                    }
+                }
+            }
+            // --- END NEW LOGIC ---
+
             Ok(calendars)
         } else {
-            Ok(vec![])
+            // --- OFFLINE MODE: Apply the same logic to the cached/local list ---
+            // FIX: Load cached remote calendars first.
+            let mut calendars = Cache::load_calendars().unwrap_or_default();
+            if let Ok(local_cals) = LocalCalendarRegistry::load() {
+                for local_cal in local_cals {
+                    // Prevent duplicates if already in cache (unlikely but safe)
+                    if calendars.iter().any(|c| c.href == local_cal.href) {
+                        continue;
+                    }
+
+                    if local_cal.href == "local://recovery" {
+                        if let Ok(tasks) = LocalStorage::load_for_href(&local_cal.href)
+                            && !tasks.is_empty()
+                        {
+                            calendars.push(local_cal);
+                        }
+                    } else {
+                        calendars.push(local_cal);
+                    }
+                }
+            }
+            Ok(calendars)
         }
+    }
+
+    pub async fn get_supported_components(
+        &self,
+        calendar_href: &str,
+    ) -> Result<Vec<String>, String> {
+        if let Some(client) = &self.client {
+            // 1. Send a PROPFIND specifically for the supported-calendar-component-set
+            let req = Propfind::new(calendar_href)
+                .with_properties(&[&names::SUPPORTED_CALENDAR_COMPONENT_SET])
+                .with_depth(libdav::Depth::Zero);
+
+            let response = client.request(req).await.map_err(|e| e.to_string())?;
+
+            // 2. Parse the raw XML response
+            let xml_str = std::str::from_utf8(&response.body).map_err(|e| e.to_string())?;
+
+            let doc = Document::parse(xml_str).map_err(|e| e.to_string())?;
+
+            let mut components = Vec::new();
+
+            // 3. Traverse XML to find <comp name="..."> elements
+            for node in doc.descendants() {
+                if node.tag_name().name().eq_ignore_ascii_case("comp")
+                    && let Some(name) = node.attribute("name")
+                {
+                    components.push(name.to_uppercase());
+                }
+            }
+
+            Ok(components)
+        } else {
+            Err("Offline".to_string())
+        }
+    }
+
+    /// Helper to sync the companion event for a task.
+    /// Creates/Updates the event when task has dates, or deletes it when task is done/has no dates.
+    /// Returns true if an event was created/updated or deleted, false if no action was taken.
+    async fn sync_companion_event(
+        &self,
+        task: &Task,
+        config_enabled: bool,
+        delete_on_completion: bool,
+        is_delete_intent: bool,
+    ) -> bool {
+        // Skip event operations for local calendar tasks (no server to sync to)
+        if task.calendar_href.starts_with("local://") {
+            return false;
+        }
+
+        // Determine if we should create events for this task
+        // Priority: task override > global config
+        let should_create_events = task.create_event.unwrap_or(config_enabled);
+
+        // Define the companion UID and Path
+        let event_uid = format!("evt-{}", task.uid);
+        let filename = format!("{}.ics", event_uid);
+
+        // Construct URI. Task href might be full URL or relative.
+        // We assume the event lives in the same calendar collection.
+        let cal_path = if task.calendar_href.ends_with('/') {
+            task.calendar_href.clone()
+        } else {
+            // Fallback: try to extract parent dir from href
+            let p = strip_host(&task.href);
+            if let Some(idx) = p.rfind('/') {
+                p[..=idx].to_string()
+            } else {
+                task.calendar_href.clone()
+            }
+        };
+
+        let event_path = format!("{}{}", strip_host(&cal_path), filename);
+        let client = match &self.client {
+            Some(c) => c,
+            None => return false,
+        };
+
+        // DECISION LOGIC:
+        // Delete Event if:
+        // 1. The action is explicitly DELETE (task deleted).
+        // 2. The task is Completed or Cancelled and delete_on_completion is enabled.
+        // 3. The task has no dates (removed scheduling).
+        // 4. The task shouldn't have events (!should_create_events).
+        //
+        // When delete_on_completion is disabled:
+        // - Cancelled tasks get STATUS:CANCELLED (event kept with cancelled status)
+        // - Completed tasks keep their events with STATUS:CONFIRMED
+
+        let has_dates = task.due.is_some() || task.dtstart.is_some();
+        let keep_completed = !delete_on_completion && task.status.is_done();
+
+        let should_delete = is_delete_intent
+            || (delete_on_completion && task.status.is_done())
+            || (!has_dates && !keep_completed) // Delete if no dates AND we are not in "keep completed" mode
+            || !should_create_events; // Delete if this task shouldn't have events
+
+        if should_delete {
+            // Only count as success if we actually deleted something (not 404)
+            match client.request(Delete::new(&event_path).force()).await {
+                Ok(_) => return true, // Successfully deleted
+                Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => return false, // Didn't exist
+                Err(_) => return false, // Other error
+            }
+        } else {
+            // Create/Update Event
+            if let Some((_, ics_body)) = task.to_event_ics() {
+                // Try create first (If-None-Match: *) to avoid overwriting if we shouldn't (though here we want to).
+                // If it fails with 412 (Precondition Failed), it means it exists, so we fallback to Update (overwrite).
+                let create_req =
+                    PutResource::new(&event_path).create(ics_body.clone(), "text/calendar");
+
+                match client.request(create_req).await {
+                    Ok(_) => return true, // Successfully created
+                    Err(
+                        WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED)
+                        | WebDavError::PreconditionFailed(_),
+                    ) => {
+                        // Fallback to update (overwrite)
+                        let update_req =
+                            PutResource::new(&event_path).update(ics_body, "text/calendar", "");
+                        match client.request(update_req).await {
+                            Ok(_) => return true,   // Successfully updated
+                            Err(_) => return false, // Update failed
+                        }
+                    }
+                    Err(_) => return false, // Create failed (and not 412)
+                }
+            }
+        }
+        false // No action taken
+    }
+
+    /// Public wrapper used by other (sync) parts of the codebase that need to
+    /// request companion-event synchronization for a single task.
+    ///
+    /// This returns `Result<bool, String>` so callers can treat it like an async
+    /// fallible operation even though the underlying implementation returns a bool.
+    pub async fn sync_task_companion_event(
+        &self,
+        task: &Task,
+        config_enabled: bool,
+    ) -> Result<bool, String> {
+        // Derive delete_on_completion from persisted configuration
+        let cfg = Config::load().unwrap_or_default();
+        let delete_on_completion = cfg.delete_events_on_completion;
+
+        let res = self
+            .sync_companion_event(task, config_enabled, delete_on_completion, false)
+            .await;
+        Ok(res)
     }
 
     async fn fetch_remote_task(&self, task_href: &str) -> Option<Task> {
@@ -799,156 +1001,6 @@ impl RustyClient {
         None
     }
 
-    pub async fn get_supported_components(
-        &self,
-        calendar_href: &str,
-    ) -> Result<Vec<String>, String> {
-        if let Some(client) = &self.client {
-            // 1. Send a PROPFIND specifically for the supported-calendar-component-set
-            let req = Propfind::new(calendar_href)
-                .with_properties(&[&names::SUPPORTED_CALENDAR_COMPONENT_SET])
-                .with_depth(libdav::Depth::Zero);
-
-            let response = client.request(req).await.map_err(|e| e.to_string())?;
-
-            // 2. Parse the raw XML response
-            let xml_str = std::str::from_utf8(&response.body).map_err(|e| e.to_string())?;
-
-            let doc = Document::parse(xml_str).map_err(|e| e.to_string())?;
-
-            let mut components = Vec::new();
-
-            // 3. Traverse XML to find <comp name="..."> elements
-            for node in doc.descendants() {
-                if node.tag_name().name().eq_ignore_ascii_case("comp")
-                    && let Some(name) = node.attribute("name") {
-                        components.push(name.to_uppercase());
-                    }
-            }
-
-            Ok(components)
-        } else {
-            Err("Offline".to_string())
-        }
-    }
-
-    /// Helper to sync the companion event for a task.
-    /// Creates/Updates the event when task has dates, or deletes it when task is done/has no dates.
-    /// Returns true if an event was created/updated or deleted, false if no action was taken.
-    async fn sync_companion_event(
-        &self,
-        task: &Task,
-        config_enabled: bool,
-        delete_on_completion: bool,
-        is_delete_intent: bool,
-    ) -> bool {
-        // Skip event operations for local calendar tasks (no server to sync to)
-        if task.calendar_href.starts_with("local://") {
-            return false;
-        }
-
-        // Determine if we should create events for this task
-        // Priority: task override > global config
-        let should_create_events = task.create_event.unwrap_or(config_enabled);
-
-        // Define the companion UID and Path
-        let event_uid = format!("evt-{}", task.uid);
-        let filename = format!("{}.ics", event_uid);
-
-        // Construct URI. Task href might be full URL or relative.
-        // We assume the event lives in the same calendar collection.
-        let cal_path = if task.calendar_href.ends_with('/') {
-            task.calendar_href.clone()
-        } else {
-            // Fallback: try to extract parent dir from href
-            let p = strip_host(&task.href);
-            if let Some(idx) = p.rfind('/') {
-                p[..=idx].to_string()
-            } else {
-                task.calendar_href.clone()
-            }
-        };
-
-        let event_path = format!("{}{}", strip_host(&cal_path), filename);
-        let client = match &self.client {
-            Some(c) => c,
-            None => return false,
-        };
-
-        // DECISION LOGIC:
-        // Delete Event if:
-        // 1. The action is explicitly DELETE (task deleted).
-        // 2. The task is Completed or Cancelled and delete_on_completion is enabled.
-        // 3. The task has no dates (removed scheduling).
-        // 4. The task shouldn't have events (!should_create_events).
-        //
-        // When delete_on_completion is disabled:
-        // - Cancelled tasks get STATUS:CANCELLED (event kept with cancelled status)
-        // - Completed tasks keep their events with STATUS:CONFIRMED
-
-        let has_dates = task.due.is_some() || task.dtstart.is_some();
-        let keep_completed = !delete_on_completion && task.status.is_done();
-
-        let should_delete = is_delete_intent
-            || (delete_on_completion && task.status.is_done())
-            || (!has_dates && !keep_completed) // Delete if no dates AND we are not in "keep completed" mode
-            || !should_create_events; // Delete if this task shouldn't have events
-
-        if should_delete {
-            // Only count as success if we actually deleted something (not 404)
-            match client.request(Delete::new(&event_path).force()).await {
-                Ok(_) => return true, // Successfully deleted
-                Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => return false, // Didn't exist
-                Err(_) => return false, // Other error
-            }
-        } else {
-            // Create/Update Event
-            if let Some((_, ics_body)) = task.to_event_ics() {
-                // Try create first (If-None-Match: *) to avoid overwriting if we shouldn't (though here we want to).
-                // If it fails with 412 (Precondition Failed), it means it exists, so we fallback to Update (overwrite).
-                let create_req =
-                    PutResource::new(&event_path).create(ics_body.clone(), "text/calendar");
-
-                match client.request(create_req).await {
-                    Ok(_) => return true, // Successfully created
-                    Err(
-                        WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED)
-                        | WebDavError::PreconditionFailed(_),
-                    ) => {
-                        // Fallback to update (overwrite)
-                        let update_req =
-                            PutResource::new(&event_path).update(ics_body, "text/calendar", "");
-                        match client.request(update_req).await {
-                            Ok(_) => return true,   // Successfully updated
-                            Err(_) => return false, // Update failed
-                        }
-                    }
-                    Err(_) => return false, // Create failed (and not 412)
-                }
-            }
-        }
-        false // No action taken
-    }
-
-    /// Public wrapper to sync companion events for a task (used by backfill operations).
-    /// Returns Ok(true) if an event was created/deleted, Ok(false) if no action was taken.
-    pub async fn sync_task_companion_event(
-        &self,
-        task: &Task,
-        config_enabled: bool,
-    ) -> Result<bool, String> {
-        let config = Config::load().unwrap_or_default();
-        let action_taken = self
-            .sync_companion_event(
-                task,
-                config_enabled,
-                config.delete_events_on_completion,
-                false,
-            )
-            .await;
-        Ok(action_taken)
-    }
-
     pub async fn sync_journal(&self) -> Result<Vec<String>, String> {
         // Load and compact journal once at the start
         let mut journal = Journal::load();
@@ -966,6 +1018,10 @@ impl RustyClient {
         let events_enabled = config.create_events_for_tasks;
         let delete_on_completion = config.delete_events_on_completion;
 
+        // ADD THIS FLAG:
+        // Ensures we only check/create the recovery calendar once per sync cycle.
+        let mut recovery_cal_created_this_cycle = false;
+
         // Process actions in-memory
         while !journal.queue.is_empty() {
             let next_action = journal.queue[0].clone();
@@ -975,103 +1031,54 @@ impl RustyClient {
             let mut new_href_to_propagate: Option<(String, String)> = None;
             let mut path_for_refresh: Option<String> = None;
 
-            let result = match &next_action {
-                Action::Create(task) => {
-                    let filename = format!("{}.ics", task.uid);
-                    let full_href = if task.calendar_href.ends_with('/') {
-                        format!("{}{}", task.calendar_href, filename)
+            // Allow tests to force a sync error for this action without performing network requests.
+            // If the test hook returns Some(error_string) we skip the normal network path and
+            // treat the action as having failed with that message.
+            let test_forced_err: Option<String> = {
+                #[cfg(test)]
+                {
+                    if let Some(h) = TEST_FORCE_SYNC_ERROR.get() {
+                        if let Some(cb) = &*h.lock().unwrap() {
+                            cb(&next_action)
+                        } else {
+                            None
+                        }
                     } else {
-                        format!("{}/{}", task.calendar_href, filename)
-                    };
-                    let path = strip_host(&full_href);
-                    let ics_string = task.to_ics();
-                    match client
-                        .request(PutResource::new(&path).create(ics_string, "text/calendar"))
-                        .await
-                    {
-                        Ok(resp) => {
-                            if let Some(etag) = resp.etag {
-                                new_etag_to_propagate = Some(etag);
-                            } else {
-                                path_for_refresh = Some(path.clone());
-                            }
-                            // Important: Propagate the new href to subsequent actions
-                            new_href_to_propagate = Some((String::new(), full_href.clone()));
-
-                            // Sync companion event after successful task creation
-                            self.sync_companion_event(
-                                task,
-                                events_enabled,
-                                delete_on_completion,
-                                false,
-                            )
-                            .await;
-                            Ok(())
-                        }
-                        Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
-                        | Err(WebDavError::PreconditionFailed(_)) => {
-                            warnings.push(format!(
-                                "Creation conflict: Task '{}' already exists on server. Mark as synced.",
-                                task.summary
-                            ));
-                            path_for_refresh = Some(path.clone());
-                            // Still sync companion event even on conflict
-                            self.sync_companion_event(
-                                task,
-                                events_enabled,
-                                delete_on_completion,
-                                false,
-                            )
-                            .await;
-                            Ok(())
-                        }
-                        Err(e) => Err(format!("{:?}", e)),
+                        None
                     }
                 }
-                Action::Update(task) => {
-                    let path = strip_host(&task.href);
-                    let ics_string = task.to_ics();
+                #[cfg(not(test))]
+                {
+                    None
+                }
+            };
+            let result = if let Some(err_msg) = test_forced_err {
+                Err(err_msg)
+            } else {
+                match &next_action {
+                    Action::Create(task) => {
+                        let filename = format!("{}.ics", task.uid);
+                        let full_href = if task.calendar_href.ends_with('/') {
+                            format!("{}{}", task.calendar_href, filename)
+                        } else {
+                            format!("{}/{}", task.calendar_href, filename)
+                        };
+                        let path = strip_host(&full_href);
+                        let ics_string = task.to_ics();
+                        match client
+                            .request(PutResource::new(&path).create(ics_string, "text/calendar"))
+                            .await
+                        {
+                            Ok(resp) => {
+                                if let Some(etag) = resp.etag {
+                                    new_etag_to_propagate = Some(etag);
+                                } else {
+                                    path_for_refresh = Some(path.clone());
+                                }
+                                // Important: Propagate the new href to subsequent actions
+                                new_href_to_propagate = Some((String::new(), full_href.clone()));
 
-                    // Handle placeholder ETag by treating it as empty (unconditional update if server allows,
-                    // or standard If-Match if we had a real etag)
-                    let etag_val = if task.etag == "pending_refresh" {
-                        ""
-                    } else {
-                        &task.etag
-                    };
-
-                    match client
-                        .request(PutResource::new(&path).update(
-                            ics_string,
-                            "text/calendar; charset=utf-8; component=VTODO",
-                            etag_val,
-                        ))
-                        .await
-                    {
-                        Ok(resp) => {
-                            if let Some(etag) = resp.etag {
-                                new_etag_to_propagate = Some(etag);
-                            } else {
-                                path_for_refresh = Some(path.clone());
-                            }
-                            // Sync companion event after successful task update
-                            self.sync_companion_event(
-                                task,
-                                events_enabled,
-                                delete_on_completion,
-                                false,
-                            )
-                            .await;
-                            Ok(())
-                        }
-                        Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
-                        | Err(WebDavError::PreconditionFailed(_)) => {
-                            if let Some((resolution, msg)) =
-                                self.attempt_conflict_resolution(task).await
-                            {
-                                warnings.push(msg);
-                                conflict_resolved_action = Some(resolution);
-                                // Sync companion event after conflict resolution
+                                // Sync companion event after successful task creation
                                 self.sync_companion_event(
                                     task,
                                     events_enabled,
@@ -1080,113 +1087,20 @@ impl RustyClient {
                                 )
                                 .await;
                                 Ok(())
-                            } else {
-                                let msg = format!(
-                                    "Conflict (412) on task '{}'. Merge failed. Creating copy.",
-                                    task.summary
-                                );
-                                warnings.push(msg);
-
-                                let mut conflict_copy = task.clone();
-                                conflict_copy.uid = Uuid::new_v4().to_string();
-                                conflict_copy.summary = format!("{} (Conflict Copy)", task.summary);
-                                conflict_copy.href = String::new();
-                                conflict_copy.etag = String::new();
-                                conflict_resolved_action = Some(Action::Create(conflict_copy));
-                                Ok(())
                             }
-                        }
-                        Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
-                            conflict_resolved_action = Some(Action::Create(task.clone()));
-                            // Sync companion event when converting update to create
-                            self.sync_companion_event(
-                                task,
-                                events_enabled,
-                                delete_on_completion,
-                                false,
-                            )
-                            .await;
-                            Ok(())
-                        }
-                        Err(e) => {
-                            let msg = format!("{:?}", e);
-                            if msg.contains("412") || msg.contains("PreconditionFailed") {
-                                let w = format!(
-                                    "Conflict (412-Fallback) on task '{}'. Creating copy.",
-                                    task.summary
-                                );
-                                warnings.push(w);
-
-                                let mut conflict_copy = task.clone();
-                                conflict_copy.uid = Uuid::new_v4().to_string();
-                                conflict_copy.summary = format!("{} (Conflict Copy)", task.summary);
-                                conflict_copy.href = String::new();
-                                conflict_copy.etag = String::new();
-                                conflict_resolved_action = Some(Action::Create(conflict_copy));
-                                Ok(())
-                            } else {
-                                Err(msg)
-                            }
-                        }
-                    }
-                }
-                Action::Delete(task) => {
-                    if task.href.is_empty() {
-                        // Guard against empty hrefs (e.g. rapid Create->Delete where Create failed or pending).
-                        // If we try to DELETE "", it resolves to DELETE / which is Method Not Allowed (405).
-                        // Since it has no href, it likely doesn't exist on server (or is a ghost).
-                        // Just cleanup companion events and skip the network delete.
-                        self.sync_companion_event(task, events_enabled, delete_on_completion, true)
-                            .await;
-                        Ok(())
-                    } else {
-                        let path = strip_host(&task.href);
-
-                        // Split logic to avoid type mismatch in Delete builder
-                        let resp = if !task.etag.is_empty() && task.etag != "pending_refresh" {
-                            // Conditional Delete
-                            client
-                                .request(Delete::new(&path).with_etag(&task.etag))
-                                .await
-                        } else {
-                            // Unconditional Delete (Force)
-                            client.request(Delete::new(&path).force()).await
-                        };
-
-                        match resp {
-                            Ok(_) => {
-                                // Delete companion event when task is deleted
-                                self.sync_companion_event(
-                                    task,
-                                    events_enabled,
-                                    delete_on_completion,
-                                    true,
-                                )
-                                .await;
-                                Ok(())
-                            }
-                            Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
-                                // Also delete companion event even if task was already deleted
-                                self.sync_companion_event(
-                                    task,
-                                    events_enabled,
-                                    delete_on_completion,
-                                    true,
-                                )
-                                .await;
-                                Ok(())
-                            }
-                            Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED)) => {
+                            Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
+                            | Err(WebDavError::PreconditionFailed(_)) => {
                                 warnings.push(format!(
-                                    "Conflict on delete task '{}'. Already modified/deleted.",
+                                    "Creation conflict: Task '{}' already exists on server. Mark as synced.",
                                     task.summary
                                 ));
-                                // Delete companion event even on conflict
+                                path_for_refresh = Some(path.clone());
+                                // Still sync companion event even on conflict
                                 self.sync_companion_event(
                                     task,
                                     events_enabled,
                                     delete_on_completion,
-                                    true,
+                                    false,
                                 )
                                 .await;
                                 Ok(())
@@ -1194,75 +1108,253 @@ impl RustyClient {
                             Err(e) => Err(format!("{:?}", e)),
                         }
                     }
-                }
-                Action::Move(task, new_cal) => {
-                    let mut move_res = self.execute_move(task, new_cal, false).await;
+                    Action::Update(task) => {
+                        let path = strip_host(&task.href);
+                        let ics_string = task.to_ics();
 
-                    if let Err(ref e) = move_res
-                        && (e.contains("412") || e.contains("PreconditionFailed"))
-                    {
-                        warnings.push(format!(
-                            "Move collision for '{}'. Forcing overwrite.",
-                            task.summary
-                        ));
-                        move_res = self.execute_move(task, new_cal, true).await;
-                    }
+                        // Handle placeholder ETag by treating it as empty (unconditional update if server allows,
+                        // or standard If-Match if we had a real etag)
+                        let etag_val = if task.etag == "pending_refresh" {
+                            ""
+                        } else {
+                            &task.etag
+                        };
 
-                    match move_res {
-                        Ok(_) => {
-                            let filename = format!("{}.ics", task.uid);
-                            let new_href = if new_cal.ends_with('/') {
-                                format!("{}{}", new_cal, filename)
-                            } else {
-                                format!("{}/{}", new_cal, filename)
-                            };
-                            new_href_to_propagate = Some((task.href.clone(), new_href.clone()));
-                            path_for_refresh = Some(strip_host(&new_href));
-
-                            // Move companion event too
-                            if events_enabled || task.create_event.is_some() {
-                                let evt_uid = format!("evt-{}", task.uid);
-                                let evt_filename = format!("{}.ics", evt_uid);
-
-                                // Build old event path
-                                let old_cal_path = if task.calendar_href.ends_with('/') {
-                                    task.calendar_href.clone()
+                        match client
+                            .request(PutResource::new(&path).update(
+                                ics_string,
+                                "text/calendar; charset=utf-8; component=VTODO",
+                                etag_val,
+                            ))
+                            .await
+                        {
+                            Ok(resp) => {
+                                if let Some(etag) = resp.etag {
+                                    new_etag_to_propagate = Some(etag);
                                 } else {
-                                    format!("{}/", task.calendar_href)
-                                };
-                                let old_evt_path =
-                                    format!("{}{}", strip_host(&old_cal_path), evt_filename);
-
-                                // Try to move the event (best effort, ignore errors)
-                                if let Some(client) = &self.client {
-                                    // Delete from old location
-                                    let _ =
-                                        client.request(Delete::new(&old_evt_path).force()).await;
-                                    // Create updated task with new calendar href to generate event in new location
-                                    let mut moved_task = task.clone();
-                                    moved_task.calendar_href = new_cal.clone();
-                                    moved_task.href = new_href.clone();
+                                    path_for_refresh = Some(path.clone());
+                                }
+                                // Sync companion event after successful task update
+                                self.sync_companion_event(
+                                    task,
+                                    events_enabled,
+                                    delete_on_completion,
+                                    false,
+                                )
+                                .await;
+                                Ok(())
+                            }
+                            Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
+                            | Err(WebDavError::PreconditionFailed(_)) => {
+                                if let Some((resolution, msg)) =
+                                    self.attempt_conflict_resolution(task).await
+                                {
+                                    warnings.push(msg);
+                                    conflict_resolved_action = Some(resolution);
+                                    // Sync companion event after conflict resolution
                                     self.sync_companion_event(
-                                        &moved_task,
+                                        task,
                                         events_enabled,
                                         delete_on_completion,
                                         false,
                                     )
                                     .await;
+                                    Ok(())
+                                } else {
+                                    let msg = format!(
+                                        "Conflict (412) on task '{}'. Merge failed. Creating copy.",
+                                        task.summary
+                                    );
+                                    warnings.push(msg);
+
+                                    let mut conflict_copy = task.clone();
+                                    conflict_copy.uid = Uuid::new_v4().to_string();
+                                    conflict_copy.summary =
+                                        format!("{} (Conflict Copy)", task.summary);
+                                    conflict_copy.href = String::new();
+                                    conflict_copy.etag = String::new();
+                                    conflict_resolved_action = Some(Action::Create(conflict_copy));
+                                    Ok(())
                                 }
                             }
-
-                            Ok(())
-                        }
-                        Err(e) => {
-                            if e.contains("404") || e.contains("NotFound") || e.contains("403") {
-                                warnings.push(format!(
-                                    "Move source missing for '{}', assuming success.",
-                                    task.summary
-                                ));
+                            Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
+                                conflict_resolved_action = Some(Action::Create(task.clone()));
+                                // Sync companion event when converting update to create
+                                self.sync_companion_event(
+                                    task,
+                                    events_enabled,
+                                    delete_on_completion,
+                                    false,
+                                )
+                                .await;
                                 Ok(())
+                            }
+                            Err(e) => {
+                                let msg = format!("{:?}", e);
+                                if msg.contains("412") || msg.contains("PreconditionFailed") {
+                                    let w = format!(
+                                        "Conflict (412-Fallback) on task '{}'. Creating copy.",
+                                        task.summary
+                                    );
+                                    warnings.push(w);
+
+                                    let mut conflict_copy = task.clone();
+                                    conflict_copy.uid = Uuid::new_v4().to_string();
+                                    conflict_copy.summary =
+                                        format!("{} (Conflict Copy)", task.summary);
+                                    conflict_copy.href = String::new();
+                                    conflict_copy.etag = String::new();
+                                    conflict_resolved_action = Some(Action::Create(conflict_copy));
+                                    Ok(())
+                                } else {
+                                    Err(msg)
+                                }
+                            }
+                        }
+                    }
+                    Action::Delete(task) => {
+                        if task.href.is_empty() {
+                            // Guard against empty hrefs (e.g. rapid Create->Delete where Create failed or pending).
+                            // If we try to DELETE "", it resolves to DELETE / which is Method Not Allowed (405).
+                            // Since it has no href, it likely doesn't exist on server (or is a ghost).
+                            // Just cleanup companion events and skip the network delete.
+                            self.sync_companion_event(
+                                task,
+                                events_enabled,
+                                delete_on_completion,
+                                true,
+                            )
+                            .await;
+                            Ok(())
+                        } else {
+                            let path = strip_host(&task.href);
+
+                            // Split logic to avoid type mismatch in Delete builder
+                            let resp = if !task.etag.is_empty() && task.etag != "pending_refresh" {
+                                // Conditional Delete
+                                client
+                                    .request(Delete::new(&path).with_etag(&task.etag))
+                                    .await
                             } else {
-                                Err(e)
+                                // Unconditional Delete (Force)
+                                client.request(Delete::new(&path).force()).await
+                            };
+
+                            match resp {
+                                Ok(_) => {
+                                    // Delete companion event when task is deleted
+                                    self.sync_companion_event(
+                                        task,
+                                        events_enabled,
+                                        delete_on_completion,
+                                        true,
+                                    )
+                                    .await;
+                                    Ok(())
+                                }
+                                Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
+                                    // Also delete companion event even if task was already deleted
+                                    self.sync_companion_event(
+                                        task,
+                                        events_enabled,
+                                        delete_on_completion,
+                                        true,
+                                    )
+                                    .await;
+                                    Ok(())
+                                }
+                                Err(WebDavError::BadStatusCode(
+                                    StatusCode::PRECONDITION_FAILED,
+                                )) => {
+                                    warnings.push(format!(
+                                        "Conflict on delete task '{}'. Already modified/deleted.",
+                                        task.summary
+                                    ));
+                                    // Delete companion event even on conflict
+                                    self.sync_companion_event(
+                                        task,
+                                        events_enabled,
+                                        delete_on_completion,
+                                        true,
+                                    )
+                                    .await;
+                                    Ok(())
+                                }
+                                Err(e) => Err(format!("{:?}", e)),
+                            }
+                        }
+                    }
+                    Action::Move(task, new_cal) => {
+                        let mut move_res = self.execute_move(task, new_cal, false).await;
+
+                        if let Err(ref e) = move_res
+                            && (e.contains("412") || e.contains("PreconditionFailed"))
+                        {
+                            warnings.push(format!(
+                                "Move collision for '{}'. Forcing overwrite.",
+                                task.summary
+                            ));
+                            move_res = self.execute_move(task, new_cal, true).await;
+                        }
+
+                        match move_res {
+                            Ok(_) => {
+                                let filename = format!("{}.ics", task.uid);
+                                let new_href = if new_cal.ends_with('/') {
+                                    format!("{}{}", new_cal, filename)
+                                } else {
+                                    format!("{}/{}", new_cal, filename)
+                                };
+                                new_href_to_propagate = Some((task.href.clone(), new_href.clone()));
+                                path_for_refresh = Some(strip_host(&new_href));
+
+                                // Move companion event too
+                                if events_enabled || task.create_event.is_some() {
+                                    let evt_uid = format!("evt-{}", task.uid);
+                                    let evt_filename = format!("{}.ics", evt_uid);
+
+                                    // Build old event path
+                                    let old_cal_path = if task.calendar_href.ends_with('/') {
+                                        task.calendar_href.clone()
+                                    } else {
+                                        format!("{}/", task.calendar_href)
+                                    };
+                                    let old_evt_path =
+                                        format!("{}{}", strip_host(&old_cal_path), evt_filename);
+
+                                    // Try to move the event (best effort, ignore errors)
+                                    if let Some(client) = &self.client {
+                                        // Delete from old location
+                                        let _ = client
+                                            .request(Delete::new(&old_evt_path).force())
+                                            .await;
+                                        // Create updated task with new calendar href to generate event in new location
+                                        let mut moved_task = task.clone();
+                                        moved_task.calendar_href = new_cal.clone();
+                                        moved_task.href = new_href.clone();
+                                        self.sync_companion_event(
+                                            &moved_task,
+                                            events_enabled,
+                                            delete_on_completion,
+                                            false,
+                                        )
+                                        .await;
+                                    }
+                                }
+
+                                Ok(())
+                            }
+                            Err(e) => {
+                                if e.contains("404") || e.contains("NotFound") || e.contains("403")
+                                {
+                                    warnings.push(format!(
+                                        "Move source missing for '{}', assuming success.",
+                                        task.summary
+                                    ));
+                                    Ok(())
+                                } else {
+                                    Err(e)
+                                }
                             }
                         }
                     }
@@ -1347,11 +1439,57 @@ impl RustyClient {
                     }
                 }
                 Err(msg) => {
-                    if msg.contains("400")
-                        || msg.contains("403")
-                        || msg.contains("413")
-                        || msg.contains("415")
-                    {
+                    // If this looks like a fatal server-side error for a task resource,
+                    // move the affected task to a local recovery calendar instead of returning.
+                    if msg.contains("400") || msg.contains("403") || msg.contains("415") {
+                        let recovered_task = match &next_action {
+                            Action::Create(t) => Some(t.clone()),
+                            Action::Update(t) => Some(t.clone()),
+                            Action::Move(t, _) => Some(t.clone()),
+                            Action::Delete(_) => None,
+                        };
+
+                        if let Some(mut task) = recovered_task {
+                            let recovery_href = "local://recovery";
+
+                            // --- BEGIN NEW LOGIC ---
+                            // Ensure the recovery calendar exists in the registry so it's visible.
+                            if !recovery_cal_created_this_cycle {
+                                if let Ok(mut locals) = LocalCalendarRegistry::load()
+                                    && !locals.iter().any(|c| c.href == recovery_href)
+                                {
+                                    locals.push(CalendarListEntry {
+                                        name: "Local (Recovery)".to_string(),
+                                        href: recovery_href.to_string(),
+                                        color: Some("#DB4437".to_string()), // A distinct error color
+                                    });
+                                    let _ = LocalCalendarRegistry::save(&locals);
+                                }
+                                recovery_cal_created_this_cycle = true;
+                            }
+                            // --- END NEW LOGIC ---
+
+                            task.calendar_href = recovery_href.to_string();
+                            task.description.push_str(&format!("\n\n[Sync Error]: This task failed to sync due to a server error and was moved to a local recovery calendar to prevent data loss. Error: {}", msg));
+
+                            if let Ok(mut existing) = LocalStorage::load_for_href(recovery_href) {
+                                existing.push(task);
+                                let _ = LocalStorage::save_for_href(recovery_href, &existing);
+                            } else {
+                                let _ = LocalStorage::save_for_href(recovery_href, &[task]);
+                            }
+
+                            warnings.push("Fatal sync error. Task moved to 'Local (Recovery)'. Please check the task for details.".to_string());
+                        }
+
+                        if !journal.queue.is_empty() {
+                            journal.queue.remove(0);
+                        }
+                        continue;
+                    }
+
+                    // Preserve previous behavior for large payloads or other fatal errors by dropping the action
+                    if msg.contains("413") {
                         warnings.push(format!("Fatal error on action: {}. Dropping.", msg));
                         // Remove the failed action from in-memory queue
                         if !journal.queue.is_empty() {
@@ -1671,4 +1809,11 @@ mod tests {
             *h.lock().unwrap() = None;
         }
     }
+
+    // sync_journal recovery test moved to src/client/recovery_tests.rs
+
+    // recovery calendar visibility test moved to src/client/recovery_tests.rs
+
+    // Include the moved tests (keeps compilation and test discovery)
+    include!("tests/recovery_tests.rs");
 }
