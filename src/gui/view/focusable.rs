@@ -1,4 +1,5 @@
 // File: ./src/gui/view/focusable.rs
+
 use iced::advanced::layout;
 use iced::advanced::renderer;
 use iced::advanced::widget::{self, Operation, Tree};
@@ -15,6 +16,13 @@ use std::sync::Mutex;
 /// in all versions; a string key is stable and sufficient for lookup here.
 static FOCUS_BOUNDS: Lazy<Mutex<HashMap<String, Rectangle>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
+
+/// Clears the entire focus bounds registry.
+/// This should be called whenever the view is about to be rebuilt with a new set of items.
+pub fn clear_focus_bounds() {
+    let mut map = FOCUS_BOUNDS.lock().unwrap();
+    map.clear();
+}
 
 /// Register the bounds for a focusable widget id.
 pub fn register_focus_bounds(id: &widget::Id, rect: Rectangle) {

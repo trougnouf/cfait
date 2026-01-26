@@ -1,9 +1,11 @@
 // Common utility functions for GUI updates.
+// File: ./src/gui/update/common.rs
+
 use crate::config::Config;
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
-use crate::gui::view::focusable::{get_all_focus_bounds, get_focus_bounds};
+use crate::gui::view::focusable::{clear_focus_bounds, get_all_focus_bounds, get_focus_bounds};
 use crate::store::FilterOptions;
 use crate::system::SystemEvent;
 use chrono::{Duration, Utc};
@@ -28,6 +30,10 @@ pub fn refresh_sidebar_cache(app: &mut GuiApp) {
 }
 
 pub fn refresh_filtered_tasks(app: &mut GuiApp) {
+    // --- FIX: Clear the focus bounds cache before filtering ---
+    // This prevents stale layout data from breaking scroll calculations.
+    clear_focus_bounds();
+
     let cutoff_date = if let Some(months) = app.sort_cutoff_months {
         let now = Utc::now();
         let days = months as i64 * 30;
