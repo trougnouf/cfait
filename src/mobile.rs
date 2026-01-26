@@ -16,13 +16,13 @@ use chrono::{DateTime, Local, NaiveTime, Utc};
 use futures::stream::{self, StreamExt};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+#[cfg(target_os = "android")]
+use std::io::{Read, Write};
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-#[cfg(target_os = "android")]
-use android_logger::Config as LogConfig;
-#[cfg(target_os = "android")]
-use log::LevelFilter;
+// Android-only types are referenced with fully-qualified paths inside platform-specific blocks.
+// This avoids top-level platform-gated imports that can become unused on some targets.
 
 #[derive(Debug, uniffi::Error)]
 #[uniffi(flat_error)]
@@ -283,8 +283,8 @@ impl CfaitMobile {
     pub fn new(android_files_dir: String) -> Self {
         #[cfg(target_os = "android")]
         android_logger::init_once(
-            LogConfig::default()
-                .with_max_level(LevelFilter::Debug)
+            android_logger::Config::default()
+                .with_max_level(log::LevelFilter::Debug)
                 .with_tag("CfaitRust"),
         );
         AppPaths::init_android_path(android_files_dir);
@@ -292,6 +292,89 @@ impl CfaitMobile {
             client: Arc::new(Mutex::new(None)),
             store: Arc::new(Mutex::new(TaskStore::new())),
             alarm_index_cache: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub fn create_debug_export(&self) -> Result<String, MobileError> {
+        // Thin exported wrapper - calls internal implementation which is platform-specific.
+        self.create_debug_export_internal()
+    }
+
+    // Internal implementation not exported via UniFFI. Platform-specific behavior is gated here.
+    fn create_debug_export_internal(&self) -> Result<String, MobileError> {
+        #[cfg(target_os = "android")]
+        {
+            let data_dir = AppPaths::get_data_dir().map_err(|e| MobileError::from(e.to_string()))?;
+            let cache_dir = AppPaths::get_cache_dir().map_err(|e| MobileError::from(e.to_string()))?;
+            // --- FIX: Get the config directory ---
+            let config_dir = AppPaths::get_config_dir().map_err(|e| MobileError::from(e.to_string()))?;
+
+            let export_path = cache_dir.join("cfait_debug_export.zip");
+            let file = std::fs::File::create(&export_path).map_err(|e| MobileError::from(e.to_string()))?;
+            let mut zip = zip::ZipWriter::new(file);
+
+            let options: zip::write::FileOptions<'_, ()> = {
+                let o = zip::write::FileOptions::default();
+                o.compression_method(zip::CompressionMethod::Deflated).unix_permissions(0o755)
+            };
+
+            // Helper to add a directory's contents to the zip
+            let mut add_dir = |dir: &std::path::Path, prefix: &str| -> Result<(), MobileError> {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_file() {
+                            let file_name = path.file_name().unwrap().to_string_lossy();
+
+                            // Skip lock files and the export file itself
+                            if file_name.ends_with(".lock") || file_name == "cfait_debug_export.zip" {
+                                continue;
+                            }
+
+                            let zip_path = format!("{}{}", prefix, file_name);
+                            zip.start_file(zip_path, options).map_err(|e| MobileError::from(e.to_string()))?;
+
+                            // Special handling for config.toml to redact credentials
+                            if file_name == "config.toml" {
+                                let mut config = Config::load().unwrap_or_default();
+                                config.username = "[REDACTED]".to_string();
+                                // If Config has a password field, redact it. Otherwise ignore.
+                                // Use match to avoid compile error if field absent (but it exists in this crate).
+                                config.password = "[REDACTED]".to_string();
+                                // Serialize sanitized config
+                                let toml_str = toml::to_string_pretty(&config).unwrap_or_default();
+                                zip.write_all(toml_str.as_bytes()).map_err(|e| MobileError::from(e.to_string()))?;
+                            } else {
+                                // Copy raw file
+                                let mut f = std::fs::File::open(&path).map_err(|e| MobileError::from(e.to_string()))?;
+                                let mut buffer = Vec::new();
+                                f.read_to_end(&mut buffer).map_err(|e| MobileError::from(e.to_string()))?;
+                                zip.write_all(&buffer).map_err(|e| MobileError::from(e.to_string()))?;
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            };
+
+            // Add Data Directory (journals, local calendars)
+            add_dir(&data_dir, "data/")?;
+
+            // --- FIX: Add the Config directory ---
+            add_dir(&config_dir, "config/")?;
+
+            // Add Cache Directory (remote calendar caches)
+            add_dir(&cache_dir, "cache/")?;
+
+            zip.finish().map_err(|e| MobileError::from(e.to_string()))?;
+
+            return Ok(export_path.to_string_lossy().to_string());
+        }
+
+        #[cfg(not(target_os = "android"))]
+        {
+            // Debug export not available on non-Android targets.
+            Err(MobileError::from("Debug export is only available on Android"))
         }
     }
 

@@ -153,6 +153,7 @@ object NfIcons {
     val FLOWER = get(0xf024a)
     val BEE_FLOWER = get(0xf0fa2)
     val LINUX_FREEBSD = get(0xf30c)
+    val ARCHIVE_ARROW_UP = get(0xf125b)
     val BUG = get(0xf188)
     val WEATHER_SUNNY = get(0xf0599)
     val FROG = get(0xedf8)

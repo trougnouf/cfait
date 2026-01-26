@@ -1,4 +1,3 @@
-// Compose UI screen for application settings.
 // File: ./android/app/src/main/java/com/trougnouf/cfait/ui/SettingsScreen.kt
 package com.trougnouf.cfait.ui
 
@@ -73,6 +72,9 @@ fun SettingsScreen(
     var snoozeLong by remember { mutableStateOf("1d") }
     var createEventsForTasks by remember { mutableStateOf(false) }
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
+
+    // Separate status state for Debug section to avoid UI jumps
+    var debugStatus by remember { mutableStateOf("") }
 
     // Theme dropdown state
     var themeExpanded by remember { mutableStateOf(false) }
@@ -740,6 +742,89 @@ fun SettingsScreen(
                         }
                     }) { NfIcon(NfIcons.ADD) }
                 }
+                Spacer(Modifier.height(32.dp))
+            }
+
+            // --- Debug: Export Everything ---
+            item {
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                Text(
+                    "Debug",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    color = MaterialTheme.colorScheme.error,
+                )
+                Text(
+                    "Export all app data (config, cache, journals, databases) for debugging. Credentials will be redacted.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = androidx.compose.ui.graphics.Color.Gray,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Button(
+                    onClick = {
+                        scope.launch {
+                            try {
+                                debugStatus = "Exporting data..."
+                                // 1. Generate ZIP in internal storage (files/cache/)
+                                val zipPath = api.createDebugExport()
+                                val sourceFile = File(zipPath)
+
+                                // 2. Copy to Context.cacheDir (mapped by FileProvider)
+                                // Standard FileProvider setup usually maps <cache-path name="cache" path="."/>
+                                // which corresponds to context.cacheDir.
+                                val destFile = File(context.cacheDir, "cfait_debug_export.zip")
+
+                                // Simple stream copy
+                                sourceFile.inputStream().use { input ->
+                                    destFile.outputStream().use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+
+                                // 3. Share the file from the safe location
+                                val uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    destFile
+                                )
+
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/zip"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+
+                                val shareIntent = Intent.createChooser(intent, "Export Debug Data")
+                                context.startActivity(shareIntent)
+                                debugStatus = "Export ready"
+                            } catch (e: Exception) {
+                                debugStatus = "Export failed: ${e.message}"
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        NfIcon(NfIcons.ARCHIVE_ARROW_UP, 16.sp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Export Debug ZIP")
+                    }
+                }
+
+                // Display status message below the button
+                if (debugStatus.isNotEmpty()) {
+                    Text(
+                        text = debugStatus,
+                        color = if (debugStatus.startsWith("Export failed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 8.dp),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+
                 Spacer(Modifier.height(32.dp))
             }
         }

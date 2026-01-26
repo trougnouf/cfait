@@ -761,6 +761,10 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_connect(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_create_debug_export(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_create_debug_export_internal(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_create_local_calendar(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_create_missing_calendar_events(): Short
@@ -915,6 +919,16 @@ internal object UniffiLib {
         `pass`: RustBuffer.ByValue,
         `insecure`: Byte,
     ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_create_debug_export(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_create_debug_export_internal(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_create_local_calendar(
         `ptr`: Long,
@@ -1392,6 +1406,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_connect() != 47390.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_debug_export() != 60195.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_debug_export_internal() != 64340.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_local_calendar() != 51648.toShort()) {
@@ -2050,6 +2070,10 @@ public interface CfaitMobileInterface {
         `insecure`: kotlin.Boolean,
     ): kotlin.String
 
+    fun `createDebugExport`(): kotlin.String
+
+    fun `createDebugExportInternal`(): kotlin.String
+
     suspend fun `createLocalCalendar`(
         `name`: kotlin.String,
         `color`: kotlin.String?,
@@ -2473,6 +2497,32 @@ open class CfaitMobile :
             { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    override fun `createDebugExport`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCallWithError(MobileException) { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_debug_export(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    @Throws(MobileException::class)
+    override fun `createDebugExportInternal`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCallWithError(MobileException) { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_debug_export_internal(
+                        it,
+                        _status,
+                    )
+                }
+            },
         )
 
     @Throws(MobileException::class)
