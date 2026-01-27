@@ -209,8 +209,9 @@ fun NfIcon(
     text: String,
     size: TextUnit = 24.sp,
     color: Color = MaterialTheme.colorScheme.onSurface,
+    lineHeight: TextUnit = TextUnit.Unspecified,
 ) {
-    Text(text = text, fontFamily = NerdFont, fontSize = size, color = color)
+    Text(text = text, fontFamily = NerdFont, fontSize = size, color = color, lineHeight = lineHeight)
 }
 
 fun parseHexColor(hex: String): Color =

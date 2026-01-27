@@ -1,3 +1,4 @@
+// File: ./android/app/src/main/java/com/trougnouf/cfait/ui/TaskRow.kt
 // Compose UI component for rendering a single task row.
 package com.trougnouf.cfait.ui
 
@@ -103,7 +104,7 @@ fun TaskRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp + startPadding, end = 12.dp, top = 1.dp, bottom = 1.dp)
+                .padding(start = 12.dp + startPadding, end = 12.dp, top = 0.5.dp, bottom = 0.5.dp)
                 .combinedClickable(
                     onClick = { onClick(task.uid) },
                     onLongClick = { expanded = true },
@@ -125,12 +126,12 @@ fun TaskRow(
                 )
 
                 FlowRow(
-                    modifier = Modifier.padding(top = 2.dp),
+                    modifier = Modifier,
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
                     if (task.description.isNotEmpty()) {
-                        NfIcon(NfIcons.INFO, 10.sp, Color.Gray)
+                        NfIcon(NfIcons.INFO, size = 10.sp, color = Color.Gray, lineHeight = 10.sp)
                     }
 
                     if (task.relatedToUids.isNotEmpty() || incomingRelations.isNotEmpty()) {
@@ -139,13 +140,13 @@ fun TaskRow(
                         } else {
                             incomingRelations[0]
                         }
-                        NfIcon(getRandomRelatedIcon(task.uid, relatedUid), 10.sp, Color.Gray)
+                        NfIcon(getRandomRelatedIcon(task.uid, relatedUid), size = 10.sp, color = Color.Gray, lineHeight = 10.sp)
                     }
 
-                    if (task.isBlocked) NfIcon(NfIcons.BLOCKED, 10.sp, MaterialTheme.colorScheme.error)
+                    if (task.isBlocked) NfIcon(NfIcons.BLOCKED, size = 10.sp, color = MaterialTheme.colorScheme.error, lineHeight = 10.sp)
 
                     if (task.hasAlarms) {
-                        NfIcon(NfIcons.BELL, 10.sp, Color(0xFFFF7043))
+                        NfIcon(NfIcons.BELL, size = 10.sp, color = Color(0xFFFF7043), lineHeight = 10.sp)
                     }
 
                     // Date Display Logic
@@ -154,7 +155,7 @@ fun TaskRow(
                         val dimColor = Color(0xFFBDBDBD) // Lighter Gray
 
                         // Start Icon
-                        NfIcon(NfIcons.HOURGLASS_START, 10.sp, dimColor)
+                        NfIcon(NfIcons.HOURGLASS_START, size = 10.sp, color = dimColor, lineHeight = 10.sp)
 
                         // Format Start Date
                         val startStr = if (task.isAlldayStart) {
@@ -173,16 +174,16 @@ fun TaskRow(
 
                             if (startStr == dueStr) {
                                 // Case 2: Start == Due -> Show once
-                                Text(startStr, fontSize = 10.sp, color = dimColor)
+                                Text(startStr, fontSize = 10.sp, color = dimColor, lineHeight = 10.sp)
                             } else {
                                 // Case 1: Start != Due -> Show range
-                                Text("$startStr - $dueStr", fontSize = 10.sp, color = dimColor)
+                                Text("$startStr - $dueStr", fontSize = 10.sp, color = dimColor, lineHeight = 10.sp)
                             }
                             // End Icon
-                            NfIcon(NfIcons.HOURGLASS_END, 10.sp, dimColor)
+                            NfIcon(NfIcons.HOURGLASS_END, size = 10.sp, color = dimColor, lineHeight = 10.sp)
                         } else {
                             // Case 4: Start Only
-                            Text(startStr, fontSize = 10.sp, color = dimColor)
+                            Text(startStr, fontSize = 10.sp, color = dimColor, lineHeight = 10.sp)
                         }
 
                     } else if (!task.dueDateIso.isNullOrEmpty()) {
@@ -196,21 +197,21 @@ fun TaskRow(
                             formatIsoToLocal(task.dueDateIso!!)
                         }
 
-                        Text(displayStr, fontSize = 10.sp, color = Color.Gray)
-                        NfIcon(NfIcons.HOURGLASS_END, 10.sp, Color.Gray)
+                        Text(displayStr, fontSize = 10.sp, color = Color.Gray, lineHeight = 10.sp)
+                        NfIcon(NfIcons.HOURGLASS_END, size = 10.sp, color = Color.Gray, lineHeight = 10.sp)
                     }
 
                     if (task.durationMins != null) {
-                        Text(formatDuration(task.durationMins!!, task.durationMaxMins), fontSize = 10.sp, color = Color.Gray)
+                        Text(formatDuration(task.durationMins!!, task.durationMaxMins), fontSize = 10.sp, color = Color.Gray, lineHeight = 10.sp)
                     }
-                    if (task.isRecurring) NfIcon(NfIcons.REPEAT, 10.sp, Color.Gray)
+                    if (task.isRecurring) NfIcon(NfIcons.REPEAT, size = 10.sp, color = Color.Gray, lineHeight = 10.sp)
 
                     if (task.geo != null) {
                         IconButton(
                             onClick = { uriHandler.openUri("geo:${task.geo}") },
-                            modifier = Modifier.size(16.dp).padding(0.dp),
+                            modifier = Modifier.size(14.dp).padding(0.dp),
                         ) {
-                            NfIcon(NfIcons.MAP_LOCATION_DOT, 10.sp, Color(0xFF64B5F6))
+                            NfIcon(NfIcons.MAP_LOCATION_DOT, size = 10.sp, color = Color(0xFF64B5F6), lineHeight = 10.sp)
                         }
                     }
 
@@ -218,17 +219,17 @@ fun TaskRow(
                     if (task.location != null && task.location != hiddenLocation) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val locationColor = Color(0xFFFFB300)
-                            Text("@@", fontSize = 10.sp, color = locationColor, fontWeight = FontWeight.Bold)
-                            Text(task.location!!, fontSize = 10.sp, color = locationColor)
+                            Text("@@", fontSize = 10.sp, color = locationColor, fontWeight = FontWeight.Bold, lineHeight = 10.sp)
+                            Text(task.location!!, fontSize = 10.sp, color = locationColor, lineHeight = 10.sp)
                         }
                     }
 
                     if (task.url != null) {
                         IconButton(
                             onClick = { uriHandler.openUri(task.url!!) },
-                            modifier = Modifier.size(16.dp).padding(0.dp),
+                            modifier = Modifier.size(14.dp).padding(0.dp),
                         ) {
-                            NfIcon(NfIcons.WEB_CHECK, 10.sp, Color(0xFF4FC3F7))
+                            NfIcon(NfIcons.WEB_CHECK, size = 10.sp, color = Color(0xFF4FC3F7), lineHeight = 10.sp)
                         }
                     }
 
@@ -239,7 +240,8 @@ fun TaskRow(
                                 "#$tag",
                                 fontSize = 10.sp,
                                 color = getTagColor(tag),
-                                modifier = Modifier.padding(end = 2.dp)
+                                modifier = Modifier.padding(end = 2.dp),
+                                lineHeight = 10.sp
                             )
                         }
                     }
