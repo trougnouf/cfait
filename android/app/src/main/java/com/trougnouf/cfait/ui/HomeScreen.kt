@@ -1078,7 +1078,16 @@ fun HomeScreen(
                                 }
 
                                 if (isLoading || isManualSyncing || activeOpCount > 0 || isPullRefreshing) {
-                                    CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                                    // Wrap the spinner in a Box that mimics the size of an IconButton (48dp)
+                                    Box(
+                                        modifier = Modifier.size(48.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
                                 } else {
                                     val (icon, iconColor) =
                                         when {
