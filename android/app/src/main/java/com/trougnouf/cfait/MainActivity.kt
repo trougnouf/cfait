@@ -123,6 +123,8 @@ fun CfaitNavHost(
     var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) }
     var defaultCalHref by remember { mutableStateOf<String?>(null) }
     var hasUnsynced by remember { mutableStateOf(false) }
+    // Add state for default priority
+    var defaultPriority by remember { mutableIntStateOf(5) }
     var autoScrollUid by remember { mutableStateOf<String?>(null) }
     var refreshTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var isLoading by remember { mutableStateOf(false) }
@@ -205,10 +207,12 @@ fun CfaitNavHost(
         scope.launch {
             try {
                 refreshTick = System.currentTimeMillis()
+                val config = api.getConfig()
                 calendars = api.getCalendars()
                 tags = api.getAllTags()
                 locations = api.getAllLocations()
-                defaultCalHref = api.getConfig().defaultCalendar
+                defaultCalHref = config.defaultCalendar
+                defaultPriority = config.defaultPriority.toInt() // Fetch config value
                 hasUnsynced = api.hasUnsyncedChanges()
                 AlarmScheduler.scheduleNextAlarm(context, api)
             } catch (e: Exception) {
@@ -347,6 +351,7 @@ fun CfaitNavHost(
                 tags = tags,
                 locations = locations,
                 defaultCalHref = defaultCalHref,
+                defaultPriority = defaultPriority, // Pass it here
                 isLoading = isLoading,
                 hasUnsynced = hasUnsynced,
                 autoScrollUid = autoScrollUid,

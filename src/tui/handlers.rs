@@ -601,7 +601,7 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('+') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some(updated) = state.store.change_priority(&uid, 1)
+                    && let Some(updated) = state.store.change_priority(&uid, 1, state.default_priority)
                 {
                     state.refresh_filtered_view();
                     return Some(Action::UpdateTask(updated));
@@ -609,7 +609,7 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('-') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some(updated) = state.store.change_priority(&uid, -1)
+                    && let Some(updated) = state.store.change_priority(&uid, -1, state.default_priority)
                 {
                     state.refresh_filtered_view();
                     return Some(Action::UpdateTask(updated));

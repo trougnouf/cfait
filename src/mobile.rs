@@ -1124,8 +1124,12 @@ impl CfaitMobile {
     }
 
     pub async fn change_priority(&self, uid: String, delta: i8) -> Result<(), MobileError> {
+        // Load config to get the user's default priority preference
+        let config = Config::load().unwrap_or_default();
+        let default_prio = config.default_priority;
+
         self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| {
-            store.change_priority(id, delta)
+            store.change_priority(id, delta, default_prio)
         })
         .await
     }

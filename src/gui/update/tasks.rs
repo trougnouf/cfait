@@ -217,7 +217,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ChangePriority(index, delta) => {
             if let Some(view_task) = app.tasks.get(index) {
                 app.selected_uid = Some(view_task.uid.clone());
-                if let Some(updated) = app.store.change_priority(&view_task.uid, delta) {
+                // Pass app.default_priority from the GUI state
+                if let Some(updated) = app.store.change_priority(&view_task.uid, delta, app.default_priority) {
                     refresh_filtered_tasks(app);
                     if let Some(client) = &app.client {
                         return Task::perform(
