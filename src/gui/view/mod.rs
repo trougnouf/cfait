@@ -689,12 +689,10 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     let mut search_row = row![].align_y(iced::Alignment::Center).spacing(5);
 
     // NEW: Random Task Button
-    let random_btn = iced::widget::button(
-        icon::icon(app.random_icon).size(16)
-    )
-    .style(iced::widget::button::text)
-    .padding(6)
-    .on_press(Message::JumpToRandomTask);
+    let random_btn = iced::widget::button(icon::icon(app.random_icon).size(16))
+        .style(iced::widget::button::text)
+        .padding(6)
+        .on_press(Message::JumpToRandomTask);
 
     // Add tooltip
     search_row = search_row.push(
@@ -704,7 +702,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             tooltip::Position::Bottom,
         )
         .style(tooltip_style)
-        .delay(Duration::from_millis(700))
+        .delay(Duration::from_millis(700)),
     );
 
     let is_search_empty = app.search_value.is_empty();
@@ -818,6 +816,46 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     let input_area = view_input_area(app);
     let mut main_col = column![header_drag_area, export_ui, input_area];
+
+    // CHANGED: Insert Yanked Task Bar if active
+    if let Some(uid) = &app.yanked_uid {
+        if let Some(summary) = app.store.get_summary(uid) {
+            let yank_bar = container(
+                row![
+                    icon::icon(icon::LINK)
+                        .size(16)
+                        .style(|theme: &Theme| text::Style {
+                            color: Some(theme.extended_palette().primary.base.color)
+                        }),
+                    text("Yanked:").size(14).font(iced::Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
+                    text(summary).size(14).width(Length::Fill),
+                    button(icon::icon(icon::CROSS).size(14))
+                        .style(iced::widget::button::text)
+                        .padding(5)
+                        .on_press(Message::ClearYank)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+            )
+            .padding(10)
+            .style(|theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(palette.background.weak.color.into()),
+                    border: iced::Border {
+                        color: palette.primary.base.color,
+                        width: 1.0,
+                        radius: 4.0.into(),
+                    },
+                    ..Default::default()
+                }
+            });
+            main_col = main_col.push(yank_bar);
+        }
+    }
 
     // Existing Tag Jump
     if app.search_value.starts_with('#') {

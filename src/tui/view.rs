@@ -1014,17 +1014,25 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             .borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM)
                             .title(" Status "),
                     );
-                let help_str = match state.active_focus {
-                    Focus::Sidebar => "?:Help q:Quit Tab:Tasks ↵:Select Spc:Show/Hide *:All →:Iso",
+                // CHANGED: Dynamic help string to include yanked task summary
+                let help_text = match state.active_focus {
+                    Focus::Sidebar => {
+                        "?:Help q:Quit Tab:Tasks ↵:Select Spc:Show/Hide *:All →:Iso".to_string()
+                    }
                     Focus::Main => {
-                        if state.yanked_uid.is_some() {
-                            "YANK ACTIVE: b:Block c:Child l:Link (Esc:Clear)"
+                        if let Some(uid) = &state.yanked_uid {
+                            // Fetch summary for context
+                            let summary = state
+                                .store
+                                .get_summary(uid)
+                                .unwrap_or_else(|| "Unknown".to_string());
+                            format!("YANK: '{}' — b:Block c:Child l:Link (Esc:Clear)", summary)
                         } else {
-                            "?:Help q:Quit Tab:Side a:Add e:Edit E:Details Spc:Done d:Del y:Yank /:Find"
+                            "?:Help q:Quit Tab:Side a:Add e:Edit E:Details Spc:Done d:Del y:Yank /:Find".to_string()
                         }
                     }
                 };
-                let help = Paragraph::new(help_str).alignment(Alignment::Right).block(
+                let help = Paragraph::new(help_text).alignment(Alignment::Right).block(
                     Block::default()
                         .borders(Borders::RIGHT | Borders::TOP | Borders::BOTTOM)
                         .title(" Actions "),
