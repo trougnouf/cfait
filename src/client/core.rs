@@ -873,6 +873,8 @@ impl RustyClient {
             snapshot.alarms.clear();
             snapshot.create_event = None;
 
+            snapshot.related_to.push(task.uid.clone());
+
             // Ensure COMPLETED date is set
             if !snapshot
                 .unmapped_properties
