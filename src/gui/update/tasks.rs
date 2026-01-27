@@ -298,7 +298,56 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ClearYank => {
+            // Explicit button click: ALWAYS just clear the yank, ignore hierarchy
             app.yanked_uid = None;
+            Task::none()
+        }
+        Message::EscapePressed => {
+            // Context-aware "Back" logic
+            let mut needs_refresh = false;
+            let mut captured_action = false;
+
+            // Priority 1: Cancel active editing/creation
+            if app.editing_uid.is_some() || app.creating_child_of.is_some() {
+                app.input_value = text_editor::Content::new();
+                app.description_value = text_editor::Content::new();
+                app.editing_uid = None;
+                app.creating_child_of = None;
+                captured_action = true;
+            }
+            // Priority 2: Clear Yank
+            else if app.yanked_uid.is_some() {
+                app.yanked_uid = None;
+                captured_action = true;
+            }
+            // Priority 3: Clear Search
+            else if !app.search_value.is_empty() {
+                app.search_value.clear();
+                needs_refresh = true;
+                captured_action = true;
+            }
+            // Priority 4: Clear Filters
+            else if !app.selected_categories.is_empty() {
+                app.selected_categories.clear();
+                needs_refresh = true;
+                captured_action = true;
+            } else if !app.selected_locations.is_empty() {
+                app.selected_locations.clear();
+                needs_refresh = true;
+                captured_action = true;
+            }
+
+            if needs_refresh {
+                refresh_filtered_tasks(app);
+            }
+
+            // ALWAYS shift focus back to the task list on Escape if we were
+            // in an input field or just finished clearing a state.
+            // This enables j/k navigation immediately.
+            if captured_action || app.editing_uid.is_none() {
+                return scroll_to_selected_delayed(app);
+            }
+
             Task::none()
         }
         Message::MakeChild(target_uid) => {

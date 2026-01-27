@@ -63,6 +63,7 @@ pub enum Message {
     DemoteSelected,
     YankSelected,
     ClearYank,
+    EscapePressed,
     KeyboardCreateChild,
     KeyboardAddDependency,
     KeyboardAddRelation,

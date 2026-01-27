@@ -44,9 +44,10 @@ fn handle_hotkey(
     // Allow Escape to work even when input is captured (to cancel edit)
     if status == iced::event::Status::Captured {
         if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = evt
-            && key == keyboard::Key::Named(Named::Escape) {
-                return Some(Message::CancelEdit);
-            }
+            && key == keyboard::Key::Named(Named::Escape)
+        {
+            return Some(Message::CancelEdit);
+        }
         return None;
     }
 
@@ -98,7 +99,7 @@ fn handle_hotkey(
             keyboard::Key::Character("c") => Some(Message::KeyboardCreateChild),
             keyboard::Key::Character("b") => Some(Message::KeyboardAddDependency),
             keyboard::Key::Character("l") => Some(Message::KeyboardAddRelation),
-            keyboard::Key::Named(Named::Escape) => Some(Message::ClearYank),
+            keyboard::Key::Named(Named::Escape) => Some(Message::EscapePressed),
 
             // --- SEARCH / INPUT ---
             keyboard::Key::Character("/") => Some(Message::FocusSearch),

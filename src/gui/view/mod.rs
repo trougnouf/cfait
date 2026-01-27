@@ -818,8 +818,8 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     let mut main_col = column![header_drag_area, export_ui, input_area];
 
     // CHANGED: Insert Yanked Task Bar if active
-    if let Some(uid) = &app.yanked_uid {
-        if let Some(summary) = app.store.get_summary(uid) {
+    if let Some(uid) = &app.yanked_uid
+        && let Some(summary) = app.store.get_summary(uid) {
             let yank_bar = container(
                 row![
                     icon::icon(icon::LINK)
@@ -835,7 +835,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
                     button(icon::icon(icon::CROSS).size(14))
                         .style(iced::widget::button::text)
                         .padding(5)
-                        .on_press(Message::ClearYank)
+                        .on_press(Message::EscapePressed)
                 ]
                 .spacing(10)
                 .align_y(iced::Alignment::Center),
@@ -855,7 +855,6 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             });
             main_col = main_col.push(yank_bar);
         }
-    }
 
     // Existing Tag Jump
     if app.search_value.starts_with('#') {

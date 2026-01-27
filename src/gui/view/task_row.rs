@@ -374,7 +374,7 @@ pub fn view_task_row<'a>(
             let unlink_btn = button(icon::icon(icon::UNLINK).size(14))
                 .style(button::primary)
                 .padding(4)
-                .on_press(Message::ClearYank);
+                .on_press(Message::EscapePressed);
             actions = actions.push(
                 tooltip(unlink_btn, text("Unlink").size(12), tooltip::Position::Top)
                     .style(tooltip_style)
