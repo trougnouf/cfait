@@ -226,16 +226,31 @@ pub fn view_task_row<'a>(
                     .align_y(iced::Alignment::Center),
             );
 
-            let start_str = task.dtstart.as_ref().unwrap().format_smart();
+            let start_ref = task.dtstart.as_ref().unwrap();
+            let start_str = start_ref.format_smart();
 
             if let Some(due) = &task.due {
-                let due_str = due.format_smart();
+                // Check for same day to condense display
+                let is_same_day = start_ref.to_date_naive() == due.to_date_naive();
 
-                if start_str == due_str {
+                let due_str = if is_same_day {
+                    match due {
+                        crate::model::DateType::Specific(dt) => {
+                            dt.with_timezone(&chrono::Local).format("%H:%M").to_string()
+                        }
+                        crate::model::DateType::AllDay(_) => due.format_smart(),
+                    }
+                } else {
+                    due.format_smart()
+                };
+
+                // Check against raw format for identity equality (Same exact date/time)
+                if start_str == due.format_smart() {
                     // Case 2: Start == Due (Future) -> Show once
                     row_content = row_content.push(text(start_str).size(14).color(dim_color));
                 } else {
                     // Case 1: Start != Due (Future) -> Show range
+                    // If same day, due_str is just HH:MM here
                     row_content = row_content.push(
                         text(format!("{} - {}", start_str, due_str))
                             .size(14)

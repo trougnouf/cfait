@@ -165,19 +165,35 @@ fun TaskRow(
                         }
 
                         if (task.dueDateIso != null) {
-                            // Format Due Date
-                            val dueStr = if (task.isAlldayDue) {
+                            // Format Due Date (raw)
+                            val rawDueStr = if (task.isAlldayDue) {
                                 task.dueDateIso!!.take(10)
                             } else {
                                 formatIsoToLocal(task.dueDateIso!!)
                             }
 
-                            if (startStr == dueStr) {
+                            // Smart condense logic:
+                            // Check if date parts (first 10 chars "YYYY-MM-DD") match
+                            // and if we are not AllDay (AllDay strings are length 10, Specific are longer)
+                            val displayDueStr = if (
+                                startStr.length >= 10 &&
+                                rawDueStr.length >= 10 &&
+                                startStr.substring(0, 10) == rawDueStr.substring(0, 10) &&
+                                !task.isAlldayDue
+                            ) {
+                                // Extract just the time "HH:MM"
+                                // formatIsoToLocal returns "YYYY-MM-DD HH:MM", so drop first 11 chars
+                                if (rawDueStr.length > 11) rawDueStr.substring(11) else rawDueStr
+                            } else {
+                                rawDueStr
+                            }
+
+                            if (startStr == rawDueStr) {
                                 // Case 2: Start == Due -> Show once
                                 Text(startStr, fontSize = 10.sp, color = dimColor, lineHeight = 10.sp)
                             } else {
                                 // Case 1: Start != Due -> Show range
-                                Text("$startStr - $dueStr", fontSize = 10.sp, color = dimColor, lineHeight = 10.sp)
+                                Text("$startStr - $displayDueStr", fontSize = 10.sp, color = dimColor, lineHeight = 10.sp)
                             }
                             // End Icon
                             NfIcon(NfIcons.HOURGLASS_END, size = 10.sp, color = dimColor, lineHeight = 10.sp)

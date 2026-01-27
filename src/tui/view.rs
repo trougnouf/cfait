@@ -477,18 +477,36 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             // Construct Date String
             let (date_display_str, date_style) = if is_future_start {
-                let start_str = t.dtstart.as_ref().unwrap().format_smart();
+                let start_ref = t.dtstart.as_ref().unwrap();
+                let start_str = start_ref.format_smart();
 
                 if let Some(due) = &t.due {
-                    let due_str = due.format_smart();
-                    if start_str == due_str {
+                    // Check if they are on the same day to condense the display
+                    // Use to_date_naive() which handles Local conversion internally
+                    let is_same_day = start_ref.to_date_naive() == due.to_date_naive();
+
+                    let due_str = if is_same_day {
+                        match due {
+                            // If specific time on same day, just show HH:MM
+                            crate::model::DateType::Specific(dt) => {
+                                dt.with_timezone(&chrono::Local).format("%H:%M").to_string()
+                            }
+                            // If AllDay, format_smart returns YYYY-MM-DD, handled by the equality check below
+                            crate::model::DateType::AllDay(_) => due.format_smart(),
+                        }
+                    } else {
+                        due.format_smart()
+                    };
+
+                    // Re-check exact string match (handles AllDay==AllDay or Exact Same Time)
+                    if start_str == due.format_smart() {
                         // Case 2: Start == Due (Future)
                         (
                             format!(" ►{}⌛", start_str),
                             Style::default().fg(Color::DarkGray),
                         )
                     } else {
-                        // Case 1: Start != Due (Future)
+                        // Case 1: Start != Due (Range)
                         (
                             format!(" ►{}-{}⌛", start_str, due_str),
                             Style::default().fg(Color::DarkGray),
