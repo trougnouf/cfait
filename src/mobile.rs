@@ -15,9 +15,9 @@ use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
 use chrono::{DateTime, Local, NaiveTime, Utc};
 use futures::stream::{self, StreamExt};
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 #[cfg(target_os = "android")]
 use std::io::{Read, Write};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
@@ -304,18 +304,23 @@ impl CfaitMobile {
     fn create_debug_export_internal(&self) -> Result<String, MobileError> {
         #[cfg(target_os = "android")]
         {
-            let data_dir = AppPaths::get_data_dir().map_err(|e| MobileError::from(e.to_string()))?;
-            let cache_dir = AppPaths::get_cache_dir().map_err(|e| MobileError::from(e.to_string()))?;
+            let data_dir =
+                AppPaths::get_data_dir().map_err(|e| MobileError::from(e.to_string()))?;
+            let cache_dir =
+                AppPaths::get_cache_dir().map_err(|e| MobileError::from(e.to_string()))?;
             // --- FIX: Get the config directory ---
-            let config_dir = AppPaths::get_config_dir().map_err(|e| MobileError::from(e.to_string()))?;
+            let config_dir =
+                AppPaths::get_config_dir().map_err(|e| MobileError::from(e.to_string()))?;
 
             let export_path = cache_dir.join("cfait_debug_export.zip");
-            let file = std::fs::File::create(&export_path).map_err(|e| MobileError::from(e.to_string()))?;
+            let file = std::fs::File::create(&export_path)
+                .map_err(|e| MobileError::from(e.to_string()))?;
             let mut zip = zip::ZipWriter::new(file);
 
             let options: zip::write::FileOptions<'_, ()> = {
                 let o = zip::write::FileOptions::default();
-                o.compression_method(zip::CompressionMethod::Deflated).unix_permissions(0o755)
+                o.compression_method(zip::CompressionMethod::Deflated)
+                    .unix_permissions(0o755)
             };
 
             // Helper to add a directory's contents to the zip
@@ -327,12 +332,14 @@ impl CfaitMobile {
                             let file_name = path.file_name().unwrap().to_string_lossy();
 
                             // Skip lock files and the export file itself
-                            if file_name.ends_with(".lock") || file_name == "cfait_debug_export.zip" {
+                            if file_name.ends_with(".lock") || file_name == "cfait_debug_export.zip"
+                            {
                                 continue;
                             }
 
                             let zip_path = format!("{}{}", prefix, file_name);
-                            zip.start_file(zip_path, options).map_err(|e| MobileError::from(e.to_string()))?;
+                            zip.start_file(zip_path, options)
+                                .map_err(|e| MobileError::from(e.to_string()))?;
 
                             // Special handling for config.toml to redact credentials
                             if file_name == "config.toml" {
@@ -343,13 +350,17 @@ impl CfaitMobile {
                                 config.password = "[REDACTED]".to_string();
                                 // Serialize sanitized config
                                 let toml_str = toml::to_string_pretty(&config).unwrap_or_default();
-                                zip.write_all(toml_str.as_bytes()).map_err(|e| MobileError::from(e.to_string()))?;
+                                zip.write_all(toml_str.as_bytes())
+                                    .map_err(|e| MobileError::from(e.to_string()))?;
                             } else {
                                 // Copy raw file
-                                let mut f = std::fs::File::open(&path).map_err(|e| MobileError::from(e.to_string()))?;
+                                let mut f = std::fs::File::open(&path)
+                                    .map_err(|e| MobileError::from(e.to_string()))?;
                                 let mut buffer = Vec::new();
-                                f.read_to_end(&mut buffer).map_err(|e| MobileError::from(e.to_string()))?;
-                                zip.write_all(&buffer).map_err(|e| MobileError::from(e.to_string()))?;
+                                f.read_to_end(&mut buffer)
+                                    .map_err(|e| MobileError::from(e.to_string()))?;
+                                zip.write_all(&buffer)
+                                    .map_err(|e| MobileError::from(e.to_string()))?;
                             }
                         }
                     }
@@ -374,7 +385,9 @@ impl CfaitMobile {
         #[cfg(not(target_os = "android"))]
         {
             // Debug export not available on non-Android targets.
-            Err(MobileError::from("Debug export is only available on Android"))
+            Err(MobileError::from(
+                "Debug export is only available on Android",
+            ))
         }
     }
 
@@ -1101,8 +1114,8 @@ impl CfaitMobile {
         #[cfg(target_os = "android")]
         log::debug!("Rebuilding alarm index after adding task {}", task.uid);
 
-        let store = self.store.lock().await;
-        self.rebuild_alarm_index_sync(&store);
+        let store_for_rebuild = self.store.lock().await;
+        self.rebuild_alarm_index_sync(&store_for_rebuild);
 
         #[cfg(target_os = "android")]
         log::debug!("Alarm index rebuilt. Returning task uid: {}", task.uid);
@@ -1195,6 +1208,14 @@ impl CfaitMobile {
         } else {
             task.status = crate::model::TaskStatus::Completed;
             task.percent_complete = Some(100);
+            // Add COMPLETED date property so mobile/offline toggles include the timestamp
+            let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+            task.unmapped_properties.retain(|p| p.key != "COMPLETED");
+            task.unmapped_properties.push(crate::model::RawProperty {
+                key: "COMPLETED".to_string(),
+                value: now_str,
+                params: vec![],
+            });
         }
 
         let mut task_for_net = task.clone();
@@ -1206,10 +1227,13 @@ impl CfaitMobile {
         if let Some(client) = &*client_guard
             && let Ok((_, next_task_opt, _)) = client.toggle_task(&mut task_for_net).await
         {
+            // Lock the store once, update any history item and then the recycled task exactly once
+            let mut store = self.store.lock().await;
             if let Some(next_task) = next_task_opt {
-                let mut store = self.store.lock().await;
                 store.update_or_add_task(next_task);
             }
+            // Save recycled task (clone to satisfy borrow checker)
+            store.update_or_add_task(task_for_net.clone());
             network_success = true;
         }
 

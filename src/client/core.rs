@@ -853,51 +853,88 @@ impl RustyClient {
         &self,
         task: &mut Task,
     ) -> Result<(Task, Option<Task>, Vec<String>), String> {
-        // Logic change: Do NOT recycle the task struct in-place.
-        // Instead, handle recurrence by creating a separate next_task.
-        // This ensures the completion of the *current* task is properly synced as an Update,
-        // and the *next* task is properly synced as a Create.
+        let mut logs = Vec::new();
+        let mut history_snapshot = None;
 
-        let mut next_task_opt = None;
+        // CHECK: Is this a recurring task being completed?
+        // Note: We assume 'task' carries the DESIRED state (e.g. it is already marked Completed by the UI).
+        if task.status == TaskStatus::Completed && task.rrule.is_some() {
+            // 1. Create the History Snapshot (The record of completion)
+            // Clone the current 'Completed' state into a new object.
+            let mut snapshot = task.clone();
+            snapshot.uid = Uuid::new_v4().to_string(); // New UID for history
+            snapshot.href = String::new(); // Will be assigned on create
+            snapshot.etag = String::new();
+            snapshot.status = TaskStatus::Completed;
+            snapshot.percent_complete = Some(100);
+            snapshot.rrule = None; // History items don't recur
 
-        if task.status == TaskStatus::Completed
-            && task.rrule.is_some()
-            && let Some(next) = task.respawn()
-        {
-            next_task_opt = Some(next);
+            // Remove alarms/events from history so they don't ring/sync again
+            snapshot.alarms.clear();
+            snapshot.create_event = None;
+
+            // Ensure COMPLETED date is set
+            if !snapshot
+                .unmapped_properties
+                .iter()
+                .any(|p| p.key == "COMPLETED")
+            {
+                let now_str = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+                snapshot
+                    .unmapped_properties
+                    .push(crate::model::RawProperty {
+                        key: "COMPLETED".to_string(),
+                        value: now_str,
+                        params: vec![],
+                    });
+            }
+
+            // 2. Recycle the Main Task (The persistent object)
+            // This advances dates and resets status to NeedsAction, while keeping the original UID.
+            if task.advance_recurrence() {
+                history_snapshot = Some(snapshot);
+            }
+            // If recurrence is finished (e.g. UNTIL date passed), advance_recurrence returns false.
+            // We leave 'task' as Completed (no recycle), and don't create a snapshot (it stays as one record).
         }
 
+        // For non-recurring tasks, 'task' is already in the correct state. No logic needed.
+
+        // --- EXECUTION PHASE ---
+
+        // Local Storage Path
         if task.calendar_href.starts_with("local://") {
             let mut all =
                 LocalStorage::load_for_href(&task.calendar_href).map_err(|e| e.to_string())?;
 
-            // Update the completed task
+            // 1. Save History Snapshot (if exists)
+            if let Some(ref mut snap) = history_snapshot {
+                all.push(snap.clone());
+            }
+
+            // 2. Update Main Task
             if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
                 all[idx] = task.clone();
             }
 
-            // Append the new next task if it exists
-            if let Some(ref next) = next_task_opt {
-                all.push(next.clone());
-            }
-
             LocalStorage::save_for_href(&task.calendar_href, &all).map_err(|e| e.to_string())?;
-            return Ok((task.clone(), next_task_opt, vec![]));
+            return Ok((task.clone(), history_snapshot, vec![]));
         }
 
-        // Remote Sync:
-        // 1. Update the original task (save completion state)
-        let mut logs = self.update_task(task).await?;
+        // Remote/Network Path
 
-        // 2. Create the next task (save new recurrence instance)
-        if let Some(mut next) = next_task_opt.clone() {
-            let create_logs = self.create_task(&mut next).await?;
+        // 1. Create History Snapshot on Server
+        if let Some(ref mut snap) = history_snapshot {
+            let create_logs = self.create_task(snap).await?;
             logs.extend(create_logs);
-            // Update return value with any changes from create_task (e.g. if we want to pass back precise state)
-            next_task_opt = Some(next);
         }
 
-        Ok((task.clone(), next_task_opt, logs))
+        // 2. Update Main Task on Server
+        // (This handles both the "Recycled" state or the "Standard Completed" state)
+        let update_logs = self.update_task(task).await?;
+        logs.extend(update_logs);
+
+        Ok((task.clone(), history_snapshot, logs))
     }
 
     pub async fn move_task(

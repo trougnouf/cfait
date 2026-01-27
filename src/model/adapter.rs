@@ -131,12 +131,52 @@ impl Task {
 
     // NOTE: to_ics still generates standard VALUE=DATE for output compliance.
 
+    /// Advances the task to the next recurrence instance IN PLACE.
+    /// This preserves UID, HREF, and ETAG, satisfying "Recycling" logic.
     pub fn advance_recurrence(&mut self) -> bool {
+        // 1. Calculate the next state (which generates a new UID by default)
         if let Some(next) = self.respawn() {
+            // 2. Capture identity of the current task
+            let uid = self.uid.clone();
+            let href = self.href.clone();
+            let etag = self.etag.clone();
+            let calendar_href = self.calendar_href.clone();
+            let created_at = self.get_created_date(); // Helper to preserve CREATED if present
+
+            // 3. Adopt the new dates/properties
             *self = next;
+
+            // 4. Restore identity to ensure it is the "Same Task" just moved forward
+            self.uid = uid;
+            self.href = href;
+            self.etag = etag;
+            self.calendar_href = calendar_href;
+
+            // Preserve CREATED property in unmapped_properties if it existed before
+            if let Some(created_val) = created_at {
+                // Remove existing CREATED entries (if any) then re-add preserved one.
+                self.unmapped_properties.retain(|p| p.key != "CREATED");
+                self.unmapped_properties.push(RawProperty {
+                    key: "CREATED".to_string(),
+                    value: created_val,
+                    params: vec![],
+                });
+            }
+
+            // Increment sequence for sync protocols
+            self.sequence += 1;
+
             return true;
         }
         false
+    }
+
+    // Helper to preserve creation date if it exists in unmapped properties
+    fn get_created_date(&self) -> Option<String> {
+        self.unmapped_properties
+            .iter()
+            .find(|p| p.key == "CREATED")
+            .map(|p| p.value.clone())
     }
 
     pub fn advance_recurrence_with_cancellation(&mut self) -> bool {

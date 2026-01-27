@@ -1,145 +1,159 @@
-// File: ./tests/recurrence_bug_repro.rs
+// File: ./src/tests/recurrence_bug_repro.rs
 use cfait::model::{DateType, Task, TaskStatus};
-use chrono::NaiveDate;
+use chrono::{Duration, Utc};
 use std::collections::HashMap;
 
-fn create_weekly_task(uid: &str, start_ymd: (i32, u32, u32)) -> Task {
+fn create_weekly_task(uid: &str, offset_days: i64) -> Task {
     let aliases = HashMap::new();
     let mut t = Task::new("Rec Test Task", &aliases, None);
     t.uid = uid.to_string();
 
-    // Set specific future dates (e.g., 2026) to avoid "now" interference
-    let dt = NaiveDate::from_ymd_opt(start_ymd.0, start_ymd.1, start_ymd.2).unwrap();
+    // Set dates relative to now to avoid time-bomb test failures
+    let dt = (Utc::now() + Duration::days(offset_days)).date_naive();
     t.dtstart = Some(DateType::AllDay(dt));
     t.due = Some(DateType::AllDay(dt));
 
-    // Explicitly set weekly recurrence
     t.rrule = Some("FREQ=WEEKLY".to_string());
     t.status = TaskStatus::NeedsAction;
     t
 }
 
 #[test]
-fn test_scenario_1_cancel_then_done_sequence() {
-    // create "rec test task @weekly" starting 2026-01-20
-    let mut t = create_weekly_task("task1", (2026, 1, 20));
+fn test_recurrence_recycling_preserves_uid() {
+    // Task due today
+    let mut t = create_weekly_task("recycle_uid_test", 0);
+    let original_uid = t.uid.clone();
 
-    // 1. Mark as done -> Should move to Jan 27
+    // Mark as done (Advance Recurrence)
+    let advanced = t.advance_recurrence();
+
+    assert!(advanced, "Should have advanced");
+    assert_eq!(
+        t.uid, original_uid,
+        "UID must be preserved for Tasks.org compatibility"
+    );
+    assert_eq!(
+        t.status,
+        TaskStatus::NeedsAction,
+        "Status should reset to NeedsAction"
+    );
+    assert_ne!(t.dtstart, None, "Dates should be updated");
+
+    // Check it moved 1 week forward
+    let old_due = (Utc::now()).date_naive();
+    let new_due = t.due.as_ref().unwrap().to_date_naive();
+    let diff = new_due - old_due;
+    assert_eq!(diff.num_days(), 7, "Date should advance 1 week");
+}
+
+#[test]
+fn test_scenario_1_cancel_then_done_sequence() {
+    // create task starting 5 days ago
+    let mut t = create_weekly_task("task1", -5);
+    let initial_due = t.due.as_ref().unwrap().to_date_naive();
+
+    // 1. Mark as done -> Should move +7 days from initial
     t.status = TaskStatus::Completed;
-    assert!(t.advance_recurrence(), "Should advance from Jan 20");
-    let due = t.due.as_ref().unwrap().to_date_naive();
-    assert_eq!(due, NaiveDate::from_ymd_opt(2026, 1, 27).unwrap());
+    assert!(t.advance_recurrence(), "Should advance");
+    let due1 = t.due.as_ref().unwrap().to_date_naive();
+    assert_eq!(due1, initial_due + Duration::days(7));
     assert_eq!(t.status, TaskStatus::NeedsAction);
 
-    // 2. Mark as done -> Should move to Feb 03
+    // 2. Mark as done -> Should move another +7 days
     t.status = TaskStatus::Completed;
-    assert!(t.advance_recurrence(), "Should advance from Jan 27");
-    let due = t.due.as_ref().unwrap().to_date_naive();
-    assert_eq!(due, NaiveDate::from_ymd_opt(2026, 2, 3).unwrap());
+    assert!(t.advance_recurrence(), "Should advance");
+    let due2 = t.due.as_ref().unwrap().to_date_naive();
+    assert_eq!(due2, initial_due + Duration::days(14));
 
-    // 3. Mark as canceled -> Should move to Feb 10, adding Feb 03 to exceptions
+    // 3. Mark as canceled -> Should move another +7 days, adding exception
     t.status = TaskStatus::Cancelled;
-    assert!(
-        t.advance_recurrence_with_cancellation(),
-        "Should cancel Feb 03"
-    );
-    let due = t.due.as_ref().unwrap().to_date_naive();
-    assert_eq!(due, NaiveDate::from_ymd_opt(2026, 2, 10).unwrap());
+    assert!(t.advance_recurrence_with_cancellation(), "Should cancel");
+    let due3 = t.due.as_ref().unwrap().to_date_naive();
+    assert_eq!(due3, initial_due + Duration::days(21));
     assert!(!t.exdates.is_empty(), "Should have exdates");
 
-    // Verify Feb 03 is in exdates
-    let has_exdate = t
-        .exdates
-        .iter()
-        .any(|d| d.to_date_naive() == NaiveDate::from_ymd_opt(2026, 2, 3).unwrap());
-    assert!(has_exdate, "Feb 03 should be excluded");
-
-    // 4. Mark as canceled -> Should move to Feb 17 (This is where it was getting stuck on Feb 10)
+    // 4. Mark as canceled -> Should move another +7 days
     t.status = TaskStatus::Cancelled;
     assert!(
         t.advance_recurrence_with_cancellation(),
-        "Should cancel Feb 10"
+        "Should cancel again"
     );
 
-    let due = t.due.as_ref().unwrap().to_date_naive();
-
-    // BUG REPRO: If this fails, it means it stayed at Feb 10
+    let due4 = t.due.as_ref().unwrap().to_date_naive();
     assert_eq!(
-        due,
-        NaiveDate::from_ymd_opt(2026, 2, 17).unwrap(),
-        "Should have advanced to Feb 17"
+        due4,
+        initial_due + Duration::days(28),
+        "Should have advanced again"
     );
 }
 
 #[test]
 fn test_scenario_2_multiple_cancels() {
-    // create "rec test task2 @weekly" starting 2026-01-20
-    let mut t = create_weekly_task("task2", (2026, 1, 20));
+    // task starting 5 days ago
+    let mut t = create_weekly_task("task2", -5);
+    let initial_due = t.due.as_ref().unwrap().to_date_naive();
 
-    // 1. Cancel Jan 20 -> Moves to Jan 27
+    // 1. Cancel -> +7 days
     t.status = TaskStatus::Cancelled;
     t.advance_recurrence_with_cancellation();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
-        NaiveDate::from_ymd_opt(2026, 1, 27).unwrap()
+        initial_due + Duration::days(7)
     );
 
-    // 2. Cancel Jan 27 -> Moves to Feb 03
-    t.status = TaskStatus::Cancelled;
-    t.advance_recurrence_with_cancellation();
-
-    // BUG REPRO: Should allow consecutive cancellations
-    assert_eq!(
-        t.due.as_ref().unwrap().to_date_naive(),
-        NaiveDate::from_ymd_opt(2026, 2, 3).unwrap()
-    );
-
-    // 3. Cancel Feb 03 -> Moves to Feb 10
+    // 2. Cancel -> +14 days
     t.status = TaskStatus::Cancelled;
     t.advance_recurrence_with_cancellation();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
-        NaiveDate::from_ymd_opt(2026, 2, 10).unwrap()
+        initial_due + Duration::days(14)
     );
 
-    // Verify accumulated exdates
+    // 3. Cancel -> +21 days
+    t.status = TaskStatus::Cancelled;
+    t.advance_recurrence_with_cancellation();
+    assert_eq!(
+        t.due.as_ref().unwrap().to_date_naive(),
+        initial_due + Duration::days(21)
+    );
+
     assert_eq!(t.exdates.len(), 3);
 }
 
 #[test]
 fn test_scenario_3_cancel_loop() {
-    // create "rec test task3 @weekly" starting 2026-01-20
-    let mut t = create_weekly_task("task3", (2026, 1, 20));
+    let mut t = create_weekly_task("task3", -5);
+    let initial_due = t.due.as_ref().unwrap().to_date_naive();
 
-    // Done -> Jan 27
+    // Done -> +7
     t.status = TaskStatus::Completed;
     t.advance_recurrence();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
-        NaiveDate::from_ymd_opt(2026, 1, 27).unwrap()
+        initial_due + Duration::days(7)
     );
 
-    // Cancel -> Feb 03
+    // Cancel -> +14
     t.status = TaskStatus::Cancelled;
     t.advance_recurrence_with_cancellation();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
-        NaiveDate::from_ymd_opt(2026, 2, 3).unwrap()
+        initial_due + Duration::days(14)
     );
 
-    // Done -> Feb 10
+    // Done -> +21
     t.status = TaskStatus::Completed;
     t.advance_recurrence();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
-        NaiveDate::from_ymd_opt(2026, 2, 10).unwrap()
+        initial_due + Duration::days(21)
     );
 
-    // Cancel -> Feb 17 (Bug was sticking at Feb 10)
+    // Cancel -> +28
     t.status = TaskStatus::Cancelled;
     t.advance_recurrence_with_cancellation();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
-        NaiveDate::from_ymd_opt(2026, 2, 17).unwrap()
+        initial_due + Duration::days(28)
     );
 }

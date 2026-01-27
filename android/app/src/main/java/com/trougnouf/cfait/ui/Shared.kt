@@ -163,7 +163,7 @@ object NfIcons {
     val GNU = get(0xe779)
     val RUST = get(0xe7a8)
     val R_BOX = get(0xf0c1e)
-    val PEPPER_HOT = get(0xf08b)
+    val PEPPER_HOT = get(0xef8b)
     val SIGN_POST = get(0xf277)
 
     val RELATED_FEMALE_FEMALE = get(0xf0a5a)
