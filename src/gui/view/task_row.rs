@@ -6,7 +6,6 @@ use crate::gui::state::GuiApp;
 use crate::gui::view::COLOR_LOCATION;
 use crate::gui::view::focusable::focusable;
 use crate::model::Task as TodoTask;
-use crate::model::parser::strip_quotes;
 use chrono::Utc;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -65,56 +64,11 @@ pub fn view_task_row<'a>(
         (HashSet::new(), None)
     };
 
-    // --- ALIAS SHADOWING LOGIC START ---
-    let mut hidden_tags = parent_tags.clone();
-    let mut hidden_location = parent_location.clone();
-
-    // Helper to process a list of raw expansion strings
-    let process_expansions =
-        |targets: &Vec<String>, h_tags: &mut HashSet<String>, h_loc: &mut Option<String>| {
-            for target in targets {
-                if let Some(t) = target.strip_prefix('#') {
-                    h_tags.insert(strip_quotes(t));
-                } else if let Some(l) = target.strip_prefix("@@") {
-                    *h_loc = Some(strip_quotes(l));
-                } else if target.to_lowercase().starts_with("loc:") {
-                    *h_loc = Some(strip_quotes(&target[4..]));
-                }
-            }
-        };
-
-    // 1. Check what the current task's CATEGORIES imply
-    for cat in &task.categories {
-        if let Some(targets) = app.tag_aliases.get(cat) {
-            process_expansions(targets, &mut hidden_tags, &mut hidden_location);
-        }
-        let mut search = cat.as_str();
-        while let Some(idx) = search.rfind(':') {
-            search = &search[..idx];
-            if let Some(targets) = app.tag_aliases.get(search) {
-                process_expansions(targets, &mut hidden_tags, &mut hidden_location);
-            }
-        }
-    }
-
-    // 2. Check what the current task's LOCATION implies
-    if let Some(loc) = &task.location {
-        let key = format!("@@{}", loc);
-        if let Some(targets) = app.tag_aliases.get(&key) {
-            process_expansions(targets, &mut hidden_tags, &mut hidden_location);
-        }
-        let mut search = key.as_str();
-        while let Some(idx) = search.rfind(':') {
-            if idx < 2 {
-                break;
-            }
-            search = &search[..idx];
-            if let Some(targets) = app.tag_aliases.get(search) {
-                process_expansions(targets, &mut hidden_tags, &mut hidden_location);
-            }
-        }
-    }
-    // --- ALIAS SHADOWING LOGIC END ---
+    // --- USE CENTRALIZED LOGIC ---
+    // Delegate shadowing/visibility resolution to the core model.
+    let (visible_tags, visible_location) =
+        task.resolve_visual_attributes(&parent_tags, &parent_location, &app.tag_aliases);
+    // -----------------------------
 
     let action_style = |theme: &Theme, status: button::Status| -> button::Style {
         let palette = theme.extended_palette();
@@ -661,20 +615,20 @@ pub fn view_task_row<'a>(
         let available_width = size.width;
         let mut tags_width = 0.0;
 
-        let tags_to_hide = hidden_tags.clone();
+        // Use visible attributes computed by core model
+        // `visible_tags` and `visible_location` are owned by the outer scope.
+        let _visible_tags_set: HashSet<String> = visible_tags.iter().cloned().collect();
 
         if has_metadata {
             if is_blocked {
                 tags_width += 65.0;
             }
-            for cat in &task.categories {
-                if !tags_to_hide.contains(cat) {
-                    tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
-                }
+            // Use pre-computed visible tags (avoid checking hide-set per tag)
+            for cat in &visible_tags {
+                tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
             }
-            if let Some(l) = &task.location
-                && hidden_location.as_ref() != Some(l)
-            {
+            // Use visible location instead of checking hidden_location
+            if let Some(l) = &visible_location {
                 tags_width += (l.len() as f32 * 7.0) + 25.0;
             }
             if task.estimated_duration.is_some() {
@@ -713,10 +667,8 @@ pub fn view_task_row<'a>(
                 );
             }
 
-            for cat in &task.categories {
-                if tags_to_hide.contains(cat) {
-                    continue;
-                }
+            // Render only the visible tags (already resolved by core)
+            for cat in &visible_tags {
                 let (r, g, b) = color_utils::generate_color(cat);
                 let bg_color = Color::from_rgb(r, g, b);
 
@@ -758,9 +710,7 @@ pub fn view_task_row<'a>(
                 );
             }
 
-            if let Some(loc) = &task.location
-                && hidden_location.as_ref() != Some(loc)
-            {
+            if let Some(loc) = &visible_location {
                 // Fixed white text for location pill
                 let text_color = Color::WHITE;
 

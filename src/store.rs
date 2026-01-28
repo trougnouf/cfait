@@ -175,6 +175,14 @@ impl TaskStore {
         None
     }
 
+    /// Read-only lookup of a task by UID.
+    pub fn get_task_ref(&self, uid: &str) -> Option<&Task> {
+        let href = self.index.get(uid)?;
+        self.calendars
+            .get(href)
+            .and_then(|list| list.iter().find(|t| t.uid == uid))
+    }
+
     pub fn toggle_task(&mut self, uid: &str) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
             if task.status == TaskStatus::Completed {

@@ -1,6 +1,6 @@
 /* Renders the Terminal User Interface (TUI) layout and widgets. */
 use crate::color_utils;
-use crate::model::parser::{SyntaxType, strip_quotes, tokenize_smart_input};
+use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::store::UNCATEGORIZED_ID;
 use crate::tui::action::SidebarMode;
 use crate::tui::state::{AppState, Focus, InputMode};
@@ -368,12 +368,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let (parent_tags, parent_location) = if state.active_cal_href.is_some()
                 && let Some(p_uid) = &t.parent_uid
             {
+                // [Optimization] Use the store read-only lookup helper to avoid iterating calendars
                 let mut p_tags = HashSet::new();
                 let mut p_loc = None;
-                if let Some(href) = state.store.index.get(p_uid)
-                    && let Some(list) = state.store.calendars.get(href)
-                    && let Some(p) = list.iter().find(|pt| pt.uid == *p_uid)
-                {
+                if let Some(p) = state.store.get_task_ref(p_uid) {
                     p_tags = p.categories.iter().cloned().collect();
                     p_loc = p.location.clone();
                 }
@@ -382,56 +380,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 (HashSet::new(), None)
             };
 
-            // --- ALIAS SHADOWING LOGIC START ---
-            let mut tags_to_hide = parent_tags.clone();
-            let mut loc_to_hide = parent_location.clone();
-
-            let mut process_expansions = |targets: &Vec<String>| {
-                for target in targets {
-                    if let Some(val) = target.strip_prefix('#') {
-                        tags_to_hide.insert(strip_quotes(val));
-                    } else if let Some(val) = target.strip_prefix("@@") {
-                        loc_to_hide = Some(strip_quotes(val));
-                    } else if target.to_lowercase().starts_with("loc:") {
-                        loc_to_hide = Some(strip_quotes(&target[4..]));
-                    }
-                }
-            };
-
-            // Check Categories
-            for cat in &t.categories {
-                if let Some(targets) = state.tag_aliases.get(cat) {
-                    process_expansions(targets);
-                }
-                // Check hierarchy
-                let mut search = cat.as_str();
-                while let Some(idx) = search.rfind(':') {
-                    search = &search[..idx];
-                    if let Some(targets) = state.tag_aliases.get(search) {
-                        process_expansions(targets);
-                    }
-                }
-            }
-
-            // Check Location
-            if let Some(loc) = &t.location {
-                let key = format!("@@{}", loc);
-                if let Some(targets) = state.tag_aliases.get(&key) {
-                    process_expansions(targets);
-                }
-                // Check hierarchy
-                let mut search = key.as_str();
-                while let Some(idx) = search.rfind(':') {
-                    if idx < 2 {
-                        break;
-                    } // Don't split @@
-                    search = &search[..idx];
-                    if let Some(targets) = state.tag_aliases.get(search) {
-                        process_expansions(targets);
-                    }
-                }
-            }
-            // --- ALIAS SHADOWING LOGIC END ---
+            // --- USE CENTRALIZED LOGIC ---
+            // Delegate shadowing/visibility resolution to the core model.
+            let (visible_tags, visible_location) =
+                t.resolve_visual_attributes(&parent_tags, &parent_location, &state.tag_aliases);
+            // -----------------------------
 
             // CHANGE: Use cached field populated by filter()
             let is_blocked = t.is_blocked;
@@ -610,10 +563,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             // Build right side spans (tags and location)
             let mut right_spans = Vec::new();
 
-            // 3. Location (Hide if shadowed by alias)
-            if let Some(loc) = &t.location
-                && loc_to_hide.as_ref() != Some(loc)
-            {
+            // 3. Location (Use visible_location calculated by core)
+            if let Some(loc) = &visible_location {
                 right_spans.push(Span::styled("@@", Style::default().fg(Color::Yellow)));
                 right_spans.push(Span::styled(
                     loc.clone(),
@@ -621,29 +572,24 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 ));
             }
 
-            // 4. Tags (Hide if shadowed by alias)
-            for cat in &t.categories {
-                if !tags_to_hide.contains(cat) {
-                    let (r, g, b) = color_utils::generate_color(cat);
-                    if !right_spans.is_empty() {
-                        right_spans.push(Span::raw(" "));
-                    }
-                    right_spans.push(Span::styled(
-                        format!("#{}", cat),
-                        Style::default().fg(Color::Rgb(
-                            (r * 255.0) as u8,
-                            (g * 255.0) as u8,
-                            (b * 255.0) as u8,
-                        )),
-                    ));
+            // 4. Tags (Use visible_tags calculated by core)
+            for cat in &visible_tags {
+                let (r, g, b) = color_utils::generate_color(cat);
+                if !right_spans.is_empty() {
+                    right_spans.push(Span::raw(" "));
                 }
+                right_spans.push(Span::styled(
+                    format!("#{}", cat),
+                    Style::default().fg(Color::Rgb(
+                        (r * 255.0) as u8,
+                        (g * 255.0) as u8,
+                        (b * 255.0) as u8,
+                    )),
+                ));
             }
 
             // Calculate widths using visual width (accounts for wide chars)
-            let metadata_width: usize = metadata_spans
-                .iter()
-                .map(|s| s.content.width())
-                .sum();
+            let metadata_width: usize = metadata_spans.iter().map(|s| s.content.width()).sum();
             let right_width: usize = right_spans.iter().map(|s| s.content.width()).sum();
 
             // Calculate available width for title

@@ -131,6 +131,10 @@ pub struct MobileTask {
     pub location: Option<String>,
     pub url: Option<String>,
     pub geo: Option<String>,
+
+    // NEW FIELDS: Pre-resolved visibility for mobile UI
+    pub visible_categories: Vec<String>,
+    pub visible_location: Option<String>,
 }
 
 #[derive(uniffi::Record)]
@@ -192,7 +196,11 @@ pub struct MobileConfig {
     pub delete_events_on_completion: bool,
 }
 
-fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
+fn task_to_mobile(
+    t: &Task,
+    store: &TaskStore,
+    aliases: &HashMap<String, Vec<String>>,
+) -> MobileTask {
     let smart = t.to_smart_string();
     let status_str = format!("{:?}", t.status);
 
@@ -235,6 +243,22 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         false
     };
 
+    // --- RESOLVE VISUAL ATTRIBUTES ---
+    let (parent_tags, parent_loc) = if let Some(p_uid) = &t.parent_uid
+        && let Some(parent) = store.get_task_ref(p_uid)
+    {
+        (
+            parent.categories.iter().cloned().collect(),
+            parent.location.clone(),
+        )
+    } else {
+        (std::collections::HashSet::new(), None)
+    };
+
+    let (visible_categories, visible_location) =
+        t.resolve_visual_attributes(&parent_tags, &parent_loc, aliases);
+    // ---------------------------------
+
     MobileTask {
         uid: t.uid.clone(),
         summary: t.summary.clone(),
@@ -265,6 +289,10 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         location: t.location.clone(),
         url: t.url.clone(),
         geo: t.geo.clone(),
+
+        // NEW: Visible attributes pre-calculated for the mobile UI
+        visible_categories,
+        visible_location,
     }
 }
 
@@ -933,7 +961,7 @@ impl CfaitMobile {
 
         filtered
             .into_iter()
-            .map(|t| task_to_mobile(&t, &store))
+            .map(|t| task_to_mobile(&t, &store, &config.tag_aliases))
             .collect()
     }
 

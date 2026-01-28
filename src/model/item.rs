@@ -18,6 +18,9 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+// Used by visual attribute resolution (shadowing)
+use crate::model::parser::strip_quotes;
+
 fn default_uid() -> String {
     Uuid::new_v4().to_string()
 }
@@ -1115,6 +1118,84 @@ impl Task {
         default_reminder_time: Option<NaiveTime>,
     ) {
         super::parser::apply_smart_input(self, input, aliases, default_reminder_time);
+    }
+
+    /// Calculates which tags and locations should be VISIBLE.
+    /// Returns (visible_tags, visible_location).
+    ///
+    /// This logic hides attributes that are "shadowed" by:
+    /// 1. Inheritance from the parent task.
+    /// 2. Implication by an Alias (e.g. if #work implies #office, hide #office).
+    pub fn resolve_visual_attributes(
+        &self,
+        parent_tags: &std::collections::HashSet<String>,
+        parent_location: &Option<String>,
+        aliases: &HashMap<String, Vec<String>>,
+    ) -> (Vec<String>, Option<String>) {
+        let mut hidden_tags = parent_tags.clone();
+        let mut hidden_location = parent_location.clone();
+
+        let mut process_expansions = |targets: &Vec<String>| {
+            for target in targets {
+                if let Some(val) = target.strip_prefix('#') {
+                    hidden_tags.insert(strip_quotes(val));
+                } else if let Some(val) = target.strip_prefix("@@") {
+                    hidden_location = Some(strip_quotes(val));
+                } else if target.to_lowercase().starts_with("loc:") {
+                    hidden_location = Some(strip_quotes(&target[4..]));
+                }
+            }
+        };
+
+        // 1. Check Categories (Tags) for Aliases
+        for cat in &self.categories {
+            // Direct match
+            if let Some(targets) = aliases.get(cat) {
+                process_expansions(targets);
+            }
+            // Hierarchy match (e.g. #work:project -> check #work)
+            let mut search = cat.as_str();
+            while let Some(idx) = search.rfind(':') {
+                search = &search[..idx];
+                if let Some(targets) = aliases.get(search) {
+                    process_expansions(targets);
+                }
+            }
+        }
+
+        // 2. Check Location for Aliases
+        if let Some(loc) = &self.location {
+            let key = format!("@@{}", loc);
+            if let Some(targets) = aliases.get(&key) {
+                process_expansions(targets);
+            }
+            // Hierarchy match for location
+            let mut search = key.as_str();
+            while let Some(idx) = search.rfind(':') {
+                if idx < 2 {
+                    break;
+                } // Don't split the "@@" prefix
+                search = &search[..idx];
+                if let Some(targets) = aliases.get(search) {
+                    process_expansions(targets);
+                }
+            }
+        }
+
+        // 3. Compute Final Visible Sets
+        let visible_tags: Vec<String> = self
+            .categories
+            .iter()
+            .filter(|c| !hidden_tags.contains(*c))
+            .cloned()
+            .collect();
+
+        let visible_location = self
+            .location
+            .clone()
+            .filter(|l| hidden_location.as_ref() != Some(l));
+
+        (visible_tags, visible_location)
     }
 }
 
