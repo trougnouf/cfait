@@ -5,7 +5,7 @@ use crate::client::auth::DynamicAuthLayer;
 use crate::client::cert::NoVerifier;
 use crate::config::Config;
 use crate::journal::{Action, Journal};
-use crate::model::{CalendarListEntry, Task, TaskStatus};
+use crate::model::{CalendarListEntry, IcsAdapter, RecurrenceEngine, Task, TaskStatus};
 use crate::storage::{LocalCalendarRegistry, LocalStorage};
 
 use libdav::caldav::{FindCalendarHomeSet, FindCalendars, GetCalendarResources};
@@ -518,7 +518,7 @@ impl RustyClient {
             }
         } else {
             // Create/Update Event
-            if let Some((_, ics_body)) = task.to_event_ics() {
+            if let Some((_, ics_body)) = IcsAdapter::to_event_ics(task) {
                 // Try create first (If-None-Match: *) to avoid overwriting if we shouldn't (though here we want to).
                 // If it fails with 412 (Precondition Failed), it means it exists, so we fallback to Update (overwrite).
                 let create_req =
@@ -590,7 +590,7 @@ impl RustyClient {
                 && let Some(item) = resp.resources.into_iter().next()
                 && let Ok(content) = item.content
             {
-                return Task::from_ics(
+                return IcsAdapter::from_ics(
                     &content.data,
                     content.etag,
                     item.href,
@@ -733,7 +733,7 @@ impl RustyClient {
 
                 for item in fetched_resp.resources {
                     if let Ok(content) = item.content
-                        && let Ok(task) = Task::from_ics(
+                        && let Ok(task) = IcsAdapter::from_ics(
                             &content.data,
                             content.etag,
                             item.href,
@@ -893,7 +893,7 @@ impl RustyClient {
 
             // 2. Recycle the Main Task (The persistent object)
             // This advances dates and resets status to NeedsAction, while keeping the original UID.
-            if task.advance_recurrence() {
+            if RecurrenceEngine::advance(task) {
                 history_snapshot = Some(snapshot);
             }
             // If recurrence is finished (e.g. UNTIL date passed), advance_recurrence returns false.
@@ -1103,7 +1103,7 @@ impl RustyClient {
                             format!("{}/{}", task.calendar_href, filename)
                         };
                         let path = strip_host(&full_href);
-                        let ics_string = task.to_ics();
+                        let ics_string = IcsAdapter::to_ics(task);
                         match client
                             .request(PutResource::new(&path).create(ics_string, "text/calendar"))
                             .await
@@ -1149,7 +1149,7 @@ impl RustyClient {
                     }
                     Action::Update(task) => {
                         let path = strip_host(&task.href);
-                        let ics_string = task.to_ics();
+                        let ics_string = IcsAdapter::to_ics(task);
 
                         // Handle placeholder ETag by treating it as empty (unconditional update if server allows,
                         // or standard If-Match if we had a real etag)

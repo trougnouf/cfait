@@ -9,7 +9,7 @@
  */
 
 use crate::cache::Cache;
-use crate::model::{RawProperty, Task, TaskStatus};
+use crate::model::{RawProperty, RecurrenceEngine, Task, TaskStatus};
 use crate::storage::LocalStorage;
 use chrono::{DateTime, Utc};
 use fastrand;
@@ -180,9 +180,10 @@ impl TaskStore {
     pub fn get_task_mut(&mut self, uid: &str) -> Option<(&mut Task, String)> {
         let href = self.index.get(uid)?.clone();
         if let Some(map) = self.calendars.get_mut(&href)
-            && let Some(task) = map.get_mut(uid) {
-                return Some((task, href));
-            }
+            && let Some(task) = map.get_mut(uid)
+        {
+            return Some((task, href));
+        }
         // Inconsistent state fix
         self.index.remove(uid);
         None
@@ -224,7 +225,8 @@ impl TaskStore {
                 task.status = TaskStatus::NeedsAction;
                 task.unmapped_properties.retain(|p| p.key != "COMPLETED");
             } else if status == TaskStatus::Cancelled && task.rrule.is_some() {
-                task.advance_recurrence_with_cancellation();
+                // Use the shared recurrence engine to advance with cancellation semantics
+                RecurrenceEngine::advance_with_cancellation(task);
                 task.unmapped_properties.retain(|p| p.key != "COMPLETED");
             } else {
                 task.status = status;
@@ -294,21 +296,22 @@ impl TaskStore {
     pub fn delete_task(&mut self, uid: &str) -> Option<(Task, String)> {
         let href = self.index.get(uid)?.clone();
         if let Some(map) = self.calendars.get_mut(&href)
-            && let Some(task) = map.remove(uid) {
-                self.index.remove(uid);
+            && let Some(task) = map.remove(uid)
+        {
+            self.index.remove(uid);
 
-                // Re-serialize for storage
-                let list: Vec<Task> = map.values().cloned().collect();
+            // Re-serialize for storage
+            let list: Vec<Task> = map.values().cloned().collect();
 
-                if href.starts_with("local://") {
-                    let _ = LocalStorage::save_for_href(&href, &list);
-                } else {
-                    let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
-                    let _ = Cache::save(&href, &list, token);
-                }
-                self.rebuild_relation_index();
-                return Some((task, href));
+            if href.starts_with("local://") {
+                let _ = LocalStorage::save_for_href(&href, &list);
+            } else {
+                let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
+                let _ = Cache::save(&href, &list, token);
             }
+            self.rebuild_relation_index();
+            return Some((task, href));
+        }
         None
     }
 
@@ -486,9 +489,10 @@ impl TaskStore {
                     } else if let Some(loc) = val.strip_prefix("@@") {
                         task.location = Some(crate::model::parser::strip_quotes(loc));
                     } else if let Some(prio) = val.strip_prefix('!')
-                        && let Ok(p) = prio.parse::<u8>() {
-                            task.priority = p.min(9);
-                        }
+                        && let Ok(p) = prio.parse::<u8>()
+                    {
+                        task.priority = p.min(9);
+                    }
                     // ... etc ...
                 }
                 task.categories.sort();
@@ -779,29 +783,31 @@ impl TaskStore {
                         return false;
                     }
                     if let Some(start) = &t.dtstart
-                        && start.to_start_comparison_time() > now {
-                            return false;
-                        }
+                        && start.to_start_comparison_time() > now
+                    {
+                        return false;
+                    }
                     if check_is_blocked(t, &completed_uids) {
                         return false;
                     }
                 }
 
-                if is_blocked_mode
-                    && !check_is_blocked(t, &completed_uids) {
-                        return false;
-                    }
+                if is_blocked_mode && !check_is_blocked(t, &completed_uids) {
+                    return false;
+                }
 
                 // Category/Duration/Location checks (on references)...
                 if let Some(mins) = t.estimated_duration {
                     if let Some(min) = options.min_duration
-                        && mins < min {
-                            return false;
-                        }
+                        && mins < min
+                    {
+                        return false;
+                    }
                     if let Some(max) = options.max_duration
-                        && mins > max {
-                            return false;
-                        }
+                        && mins > max
+                    {
+                        return false;
+                    }
                 } else if !options.include_unset_duration {
                     return false;
                 }
