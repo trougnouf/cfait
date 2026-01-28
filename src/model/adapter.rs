@@ -22,7 +22,6 @@ const HANDLED_KEYS: &[&str] = &[
     "CATEGORIES",
     "RELATED-TO",
     "DTSTAMP",
-    "CREATED",
     "LAST-MODIFIED",
     "SEQUENCE",
     "PRODID",
@@ -86,6 +85,9 @@ impl Task {
                 next_task.percent_complete = None;
                 next_task.dependencies.clear();
                 next_task.sequence = 0;
+
+                // Remove COMPLETED property from unmapped properties as this is a fresh occurrence
+                next_task.unmapped_properties.retain(|p| p.key != "COMPLETED");
 
                 // Clear Alarms if they are snooze/stateful (keep user defined ones)
                 next_task
