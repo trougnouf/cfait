@@ -240,14 +240,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 new_task.etag = "pending_refresh".to_string();
             }
 
-            if let Some(list) = app.store.calendars.get_mut(&new_task.calendar_href) {
-                if let Some(idx) = list.iter().position(|t| t.uid == new_task.uid) {
-                    list[idx] = new_task.clone();
-                } else {
-                    list.push(new_task.clone());
-                }
+            if let Some(map) = app.store.calendars.get_mut(&new_task.calendar_href) {
+                // CHANGED: Use HashMap insert instead of Vec positioning
+                map.insert(new_task.uid.clone(), new_task.clone());
+
+                // Collect to Vec for saving to Cache/Disk
+                let list: Vec<_> = map.values().cloned().collect();
                 let (_, token) = Cache::load(&new_task.calendar_href).unwrap_or((vec![], None));
-                let _ = Cache::save(&new_task.calendar_href, list, token);
+                let _ = Cache::save(&new_task.calendar_href, &list, token);
             }
             refresh_filtered_tasks(app);
 

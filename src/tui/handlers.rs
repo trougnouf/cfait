@@ -75,7 +75,13 @@ pub async fn handle_key_event(
                         let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
                         // Push update to alarm actor
                         if let Some(tx) = &state.alarm_actor_tx {
-                            let all = state.store.calendars.values().flatten().cloned().collect();
+                            let all = state
+                                .store
+                                .calendars
+                                .values()
+                                .flat_map(|m| m.values())
+                                .cloned()
+                                .collect();
                             let _ = tx.try_send(SystemEvent::UpdateTasks(all));
                         }
                     }
@@ -91,7 +97,13 @@ pub async fn handle_key_event(
                         state.refresh_filtered_view();
                         let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
                         if let Some(tx) = &state.alarm_actor_tx {
-                            let all = state.store.calendars.values().flatten().cloned().collect();
+                            let all = state
+                                .store
+                                .calendars
+                                .values()
+                                .flat_map(|m| m.values())
+                                .cloned()
+                                .collect();
                             let _ = tx.try_send(SystemEvent::UpdateTasks(all));
                         }
                     }
@@ -107,7 +119,13 @@ pub async fn handle_key_event(
                         state.refresh_filtered_view();
                         let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
                         if let Some(tx) = &state.alarm_actor_tx {
-                            let all = state.store.calendars.values().flatten().cloned().collect();
+                            let all = state
+                                .store
+                                .calendars
+                                .values()
+                                .flat_map(|m| m.values())
+                                .cloned()
+                                .collect();
                             let _ = tx.try_send(SystemEvent::UpdateTasks(all));
                         }
                     }
@@ -425,7 +443,13 @@ pub async fn handle_key_event(
                         state.refresh_filtered_view();
                         let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
                         if let Some(tx) = &state.alarm_actor_tx {
-                            let all = state.store.calendars.values().flatten().cloned().collect();
+                            let all = state
+                                .store
+                                .calendars
+                                .values()
+                                .flat_map(|m| m.values())
+                                .cloned()
+                                .collect();
                             let _ = tx.try_send(SystemEvent::UpdateTasks(all));
                         }
                     }
@@ -601,7 +625,8 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('+') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some(updated) = state.store.change_priority(&uid, 1, state.default_priority)
+                    && let Some(updated) =
+                        state.store.change_priority(&uid, 1, state.default_priority)
                 {
                     state.refresh_filtered_view();
                     return Some(Action::UpdateTask(updated));
@@ -609,7 +634,10 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('-') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some(updated) = state.store.change_priority(&uid, -1, state.default_priority)
+                    && let Some(updated) =
+                        state
+                            .store
+                            .change_priority(&uid, -1, state.default_priority)
                 {
                     state.refresh_filtered_view();
                     return Some(Action::UpdateTask(updated));

@@ -68,8 +68,8 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     // This allows us to resolve parents even if they aren't in the filtered view
     let mut quick_lookup: std::collections::HashMap<String, &crate::model::Task> =
         std::collections::HashMap::new();
-    for list in app.store.calendars.values() {
-        for t in list {
+    for map in app.store.calendars.values() {
+        for t in map.values() {
             quick_lookup.insert(t.uid.clone(), t);
         }
     }
@@ -98,8 +98,13 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         // We need to send the FULL list (store.calendars.values().flat_map), not just filtered view
         // But for simplicity, let's just send the filtered list if that's what we have handy,
         // OR better: construct full list. The actor needs ALL tasks to check alarms properly.
-        let all_tasks: Vec<crate::model::Task> =
-            app.store.calendars.values().flatten().cloned().collect();
+        let all_tasks: Vec<crate::model::Task> = app
+            .store
+            .calendars
+            .values()
+            .flat_map(|m| m.values())
+            .cloned()
+            .collect();
         let _ = tx.try_send(SystemEvent::UpdateTasks(all_tasks));
     }
 }

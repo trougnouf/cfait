@@ -218,7 +218,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(view_task) = app.tasks.get(index) {
                 app.selected_uid = Some(view_task.uid.clone());
                 // Pass app.default_priority from the GUI state
-                if let Some(updated) = app.store.change_priority(&view_task.uid, delta, app.default_priority) {
+                if let Some(updated) =
+                    app.store
+                        .change_priority(&view_task.uid, delta, app.default_priority)
+                {
                     refresh_filtered_tasks(app);
                     if let Some(client) = &app.client {
                         return Task::perform(
@@ -479,8 +482,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::MigrateLocalTo(source_href, target_href) => {
-            if let Some(local_tasks) = app.store.calendars.get(&source_href) {
-                let tasks_to_move = local_tasks.clone();
+            if let Some(local_map) = app.store.calendars.get(&source_href) {
+                // CHANGED: Collect values from map
+                let tasks_to_move: Vec<_> = local_map.values().cloned().collect();
+
                 if tasks_to_move.is_empty() {
                     return Task::none();
                 }
@@ -595,8 +600,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 fn handle_offline_update(app: &mut GuiApp, task: TodoTask) {
     app.unsynced_changes = true;
     if task.calendar_href.starts_with("local://") {
-        if let Some(list) = app.store.calendars.get(&task.calendar_href) {
-            let _ = LocalStorage::save_for_href(&task.calendar_href, list);
+        if let Some(map) = app.store.calendars.get(&task.calendar_href) {
+            // CHANGED: Collect values
+            let list: Vec<_> = map.values().cloned().collect();
+            let _ = LocalStorage::save_for_href(&task.calendar_href, &list);
         }
     } else {
         let _ = Journal::push(Action::Update(task));
@@ -606,8 +613,10 @@ fn handle_offline_update(app: &mut GuiApp, task: TodoTask) {
 fn handle_offline_delete(app: &mut GuiApp, task: TodoTask) {
     app.unsynced_changes = true;
     if task.calendar_href.starts_with("local://") {
-        if let Some(list) = app.store.calendars.get(&task.calendar_href) {
-            let _ = LocalStorage::save_for_href(&task.calendar_href, list);
+        if let Some(map) = app.store.calendars.get(&task.calendar_href) {
+            // CHANGED: Collect values
+            let list: Vec<_> = map.values().cloned().collect();
+            let _ = LocalStorage::save_for_href(&task.calendar_href, &list);
         }
     } else {
         let _ = Journal::push(Action::Delete(task));

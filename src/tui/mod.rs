@@ -311,7 +311,7 @@ pub async fn run() -> Result<()> {
                         .store
                         .calendars
                         .values()
-                        .flatten()
+                        .flat_map(|m| m.values())
                         .cloned()
                         .collect();
                     let tx_clone = tx.clone();

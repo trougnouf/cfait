@@ -122,7 +122,7 @@ impl AlarmIndex {
     /// Regenerates the entire alarm index from a list of tasks.
     /// This should be called whenever the task store is loaded or significantly modified.
     pub fn rebuild_from_tasks(
-        tasks: &HashMap<String, Vec<Task>>,
+        tasks: &HashMap<String, HashMap<String, Task>>,
         auto_reminders_enabled: bool,
         default_reminder_time: &str,
     ) -> Self {
@@ -135,8 +135,9 @@ impl AlarmIndex {
         let default_time = NaiveTime::parse_from_str(default_reminder_time, "%H:%M")
             .unwrap_or_else(|_| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
 
-        for (calendar_href, task_list) in tasks {
-            for task in task_list {
+        for (calendar_href, task_map) in tasks {
+            // CHANGED: Iterate values of the inner map
+            for task in task_map.values() {
                 // Skip completed tasks
                 if task.status.is_done() {
                     continue;

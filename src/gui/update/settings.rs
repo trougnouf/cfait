@@ -424,7 +424,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some(client) = &app.client
             {
                 // Collect all tasks from all calendars
-                let all_tasks: Vec<_> = app.store.calendars.values().flatten().cloned().collect();
+                let all_tasks: Vec<_> = app
+                    .store
+                    .calendars
+                    .values()
+                    .flat_map(|m| m.values())
+                    .cloned()
+                    .collect();
 
                 return Task::perform(
                     async_backfill_events_wrapper(client.clone(), all_tasks, val),
@@ -443,7 +449,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.deleting_events = true;
 
                 // Collect all tasks from all calendars
-                let all_tasks: Vec<_> = app.store.calendars.values().flatten().cloned().collect();
+                let all_tasks: Vec<_> = app
+                    .store
+                    .calendars
+                    .values()
+                    .flat_map(|m| m.values())
+                    .cloned()
+                    .collect();
 
                 return Task::perform(
                     async_backfill_events_wrapper(client.clone(), all_tasks, false),

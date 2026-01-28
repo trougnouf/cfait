@@ -242,8 +242,8 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
 
     // --- 2. Duration Filters Logic (Moved Up) ---
     let mut dur_set = std::collections::HashSet::new();
-    for tasks in app.store.calendars.values() {
-        for t in tasks {
+    for map in app.store.calendars.values() {
+        for t in map.values() {
             if let Some(d) = t.estimated_duration {
                 dur_set.insert(d);
             }

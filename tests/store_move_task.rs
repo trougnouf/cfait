@@ -31,7 +31,7 @@ fn test_move_task_with_original_returns_original_and_updated_and_updates_store()
     let in_old = store
         .calendars
         .get("local://cal1")
-        .map(|v| v.iter().any(|x| x.uid == t.uid))
+        .map(|m| m.values().any(|x| x.uid == t.uid))
         .unwrap_or(false);
     assert!(!in_old, "Task should not remain in the old calendar");
 
@@ -39,7 +39,7 @@ fn test_move_task_with_original_returns_original_and_updated_and_updates_store()
     let in_new = store
         .calendars
         .get("local://cal2")
-        .map(|v| v.iter().any(|x| x.uid == t.uid))
+        .map(|m| m.values().any(|x| x.uid == t.uid))
         .unwrap_or(false);
     assert!(in_new, "Task should exist in the new calendar");
 }

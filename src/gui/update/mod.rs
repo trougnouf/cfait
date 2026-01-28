@@ -182,7 +182,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::InitAlarmActor(tx) => {
             app.alarm_tx = Some(tx.clone());
             if !app.tasks.is_empty() {
-                let all = app.store.calendars.values().flatten().cloned().collect();
+                let all = app.store.calendars.values().flat_map(|m| m.values()).cloned().collect();
                 let _ = tx.try_send(SystemEvent::UpdateTasks(all));
             }
             Task::none()

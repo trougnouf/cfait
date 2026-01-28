@@ -573,7 +573,12 @@ impl CfaitMobile {
     pub async fn delete_all_calendar_events(&self) -> Result<u32, MobileError> {
         let all_tasks: Vec<_> = {
             let store = self.store.lock().await;
-            store.calendars.values().flatten().cloned().collect()
+            store
+                .calendars
+                .values()
+                .flat_map(|m| m.values())
+                .cloned()
+                .collect()
         };
 
         let client = {
@@ -609,7 +614,12 @@ impl CfaitMobile {
     pub async fn create_missing_calendar_events(&self) -> Result<u32, MobileError> {
         let all_tasks: Vec<_> = {
             let store = self.store.lock().await;
-            store.calendars.values().flatten().cloned().collect()
+            store
+                .calendars
+                .values()
+                .flat_map(|m| m.values())
+                .cloned()
+                .collect()
         };
 
         let client = {
@@ -1580,8 +1590,8 @@ impl CfaitMobile {
         let store = self.store.lock().await;
         let mut global_earliest: Option<i64> = None;
 
-        for tasks in store.calendars.values() {
-            for task in tasks {
+        for tasks_map in store.calendars.values() {
+            for task in tasks_map.values() {
                 // Skip completed tasks? Usually yes for alarms.
                 if task.status.is_done() {
                     continue;
@@ -1663,8 +1673,8 @@ impl CfaitMobile {
             }
         };
 
-        for tasks in store.calendars.values() {
-            for task in tasks {
+        for tasks_map in store.calendars.values() {
+            for task in tasks_map.values() {
                 if task.status.is_done() {
                     continue;
                 }
@@ -1801,8 +1811,8 @@ impl CfaitMobile {
         let now = Utc::now();
         let mut results = Vec::new();
 
-        for tasks in store.calendars.values() {
-            for task in tasks {
+        for tasks_map in store.calendars.values() {
+            for task in tasks_map.values() {
                 if task.status.is_done() {
                     continue;
                 }
