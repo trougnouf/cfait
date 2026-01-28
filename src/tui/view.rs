@@ -1,4 +1,4 @@
-// Renders the Terminal User Interface (TUI) layout and widgets.
+/* Renders the Terminal User Interface (TUI) layout and widgets. */
 use crate::color_utils;
 use crate::model::parser::{SyntaxType, strip_quotes, tokenize_smart_input};
 use crate::store::UNCATEGORIZED_ID;
@@ -15,7 +15,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
 use std::collections::HashSet;
-use unicode_width::UnicodeWidthStr;
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 fn highlight_markdown_raw(input: &str) -> Text<'static> {
     use ratatui::text::Text;
@@ -639,12 +639,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 }
             }
 
-            // Calculate widths
+            // Calculate widths using visual width (accounts for wide chars)
             let metadata_width: usize = metadata_spans
                 .iter()
-                .map(|s| s.content.chars().count())
+                .map(|s| s.content.width())
                 .sum();
-            let right_width: usize = right_spans.iter().map(|s| s.content.chars().count()).sum();
+            let right_width: usize = right_spans.iter().map(|s| s.content.width()).sum();
 
             // Calculate available width for title
             let reserved_width = prefix_width + metadata_width + right_width;
@@ -656,17 +656,26 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 30 // minimum
             };
 
-            // Truncate title if necessary
-            let title_chars: Vec<char> = t.summary.chars().collect();
-            let (display_title, is_truncated) = if title_chars.len() > available_for_title {
-                let mut truncated = title_chars
-                    .iter()
-                    .take(available_for_title.saturating_sub(3))
-                    .collect::<String>();
-                truncated.push_str("...");
-                (truncated, true)
-            } else {
-                (t.summary.clone(), false)
+            // Truncate title if necessary using visual width (not char count)
+            let (display_title, is_truncated) = {
+                let title_width = t.summary.width();
+                if title_width > available_for_title {
+                    let mut truncated = String::new();
+                    let mut acc = 0usize;
+                    let trunc_target = available_for_title.saturating_sub(3);
+                    for c in t.summary.chars() {
+                        let cw = UnicodeWidthChar::width(c).unwrap_or(0);
+                        if acc + cw > trunc_target {
+                            break;
+                        }
+                        truncated.push(c);
+                        acc += cw;
+                    }
+                    truncated.push_str("...");
+                    (truncated, true)
+                } else {
+                    (t.summary.clone(), false)
+                }
             };
 
             // Track if the selected task was truncated
@@ -687,7 +696,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             // Add padding and right-aligned content
             if !right_spans.is_empty() {
-                let left_width: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+                let left_width: usize = spans.iter().map(|s| s.content.width()).sum();
                 let total_content = left_width + right_width;
 
                 if total_content < list_inner_width {
@@ -787,7 +796,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
     if details_width > 0 {
         for line in details_md.lines() {
-            let line_len = line.chars().count() as u16;
+            let line_len = line.width() as u16;
             if line_len == 0 {
                 required_lines += 1;
             } else {
@@ -912,7 +921,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             // 1. Calculate available width for the input text
             // Width - 2 (borders) - prefix width - 1 (cursor spacing/padding)
             let inner_width = footer_area.width.saturating_sub(2) as usize;
-            let prefix_width = prefix.chars().count();
+            let prefix_width = prefix.width();
             let input_area_width = inner_width.saturating_sub(prefix_width).saturating_sub(1);
 
             // 2. Determine Horizontal Scroll Offset
