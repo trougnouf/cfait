@@ -78,6 +78,50 @@
   </requires>
 
   <releases>
+    <release version="0.4.9" date="2026-01-28">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>(store) Group tags (and sort them) in a case-insensitive way in the tags list (requested by Christian Meixner)</li>
+          <li>Add a (weighted) random task selector ( https://codeberg.org/trougnouf/cfait/issues/17 )</li>
+          <li>(randomizer) Only pick from is:ready tasks</li>
+          <li>(sorting) Sort done/canceled tasks by most recently done/canceled first</li>
+          <li>(core) Send user agent to CalDAV server (suggested by Geoffrey Frogeye)</li>
+          <li>(android) Add export all data debug option</li>
+          <li>(core) Detect and reject non-VTODO collections</li>
+          <li>(core) Move tasks rejected by the CalDAV server to a local recovery calendar</li>
+          <li>(android) Remember tags and locations when coming back from a task's details</li>
+          <li>(recurrence) Switch from respawning to recycling + regeneration (compatibility with other clients, https://github.com/trougnouf/cfait/discussions/5 )</li>
+          <li>Make yanked task clippy/sticky (GUI, TUI)</li>
+          <li>(gui) Escape exits the input field then clears the yanked task then the search filter then the tags/locations ( https://codeberg.org/trougnouf/cfait/issues/9 )</li>
+          <li>Condense start-due datetime in task list when a task has the same date but different times</li>
+          <li>Link done recurrence snapshots to their parent</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>(rfc5545) Clamp priority to 9 ( https://codeberg.org/trougnouf/cfait/issues/22 )</li>
+          <li>(android) Show local timezone (not UTC) in tasks list ( https://codeberg.org/trougnouf/cfait/issues/23 )</li>
+          <li>(android) Add imePadding s.t. keyboard does not hide bottom of settings screen ( https://codeberg.org/trougnouf/cfait/issues/23 )</li>
+          <li>(recurrence) Preserve both start and due date(time) in recurrence</li>
+          <li>(migration) Ensure that tasks are present on the server before deleting them from the local store</li>
+          <li>(core) Propagate newly created href to journal and guard empty DELETE</li>
+          <li>(android) Ensure task migration message does not repeatedly come up</li>
+          <li>(gui) Fix auto-scroll (focus to current task) in filtered view</li>
+          <li>Fix increase/decrease priority action</li>
+          <li>(recurrence) Remove COMPLETED timestamp on recurring task recycling ( https://github.com/trougnouf/cfait/discussions/5 )</li>
+          <li>(tui) Ensure tags are not cropped; use visual width instead of char count ( https://codeberg.org/trougnouf/cfait/issues/26 )</li>
+        </ul>
+        <p>Documentation:</p>
+        <ul>
+          <li>Add disroot as a CalDAV provider</li>
+        </ul>
+        <p>Styling:</p>
+        <ul>
+          <li>(android) Tighter task list layout ( proposed by busterkeaton )</li>
+          <li>(android) Fix spacing of loading/spinning icon</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.8" date="2026-01-21">
       <description>
         <p>Features:</p>
