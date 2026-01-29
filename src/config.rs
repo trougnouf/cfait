@@ -1,5 +1,5 @@
 // Handles configuration loading, saving, and defaults.
-use crate::paths::AppPaths;
+use crate::context::{AppContext, default_shared_context};
 use crate::storage::LocalStorage;
 use anyhow::{Error, Result};
 use serde::{Deserialize, Serialize};
@@ -192,10 +192,10 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Load the configuration from disk.
+    /// Load the configuration from disk using an explicit context.
     /// Returns a contextualized error if reading or parsing fails.
-    pub fn load() -> Result<Self> {
-        let path = AppPaths::get_config_file_path()?;
+    pub fn load_with_ctx(ctx: &dyn AppContext) -> Result<Self> {
+        let path = ctx.get_config_file_path()?;
 
         // Explicitly detect missing file so callers (onboarding) can behave accordingly.
         if !path.exists() {
@@ -213,6 +213,12 @@ impl Config {
         })?;
 
         Ok(config)
+    }
+
+    /// Backwards-compatible no-arg loader that uses the default platform context.
+    pub fn load() -> Result<Self> {
+        let ctx = default_shared_context();
+        Self::load_with_ctx(ctx.as_ref())
     }
 
     /// Helper to detect whether an anyhow::Error indicates that the config file was missing.
@@ -248,8 +254,9 @@ impl Config {
         false
     }
 
-    pub fn save(&self) -> Result<()> {
-        let path = AppPaths::get_config_file_path()?;
+    /// Save configuration using an explicit context.
+    pub fn save_with_ctx(&self, ctx: &dyn AppContext) -> Result<()> {
+        let path = ctx.get_config_file_path()?;
         LocalStorage::with_lock(&path, || {
             let toml_str = toml::to_string_pretty(self)?;
             LocalStorage::atomic_write(&path, toml_str)?;
@@ -258,8 +265,21 @@ impl Config {
         Ok(())
     }
 
-    pub fn get_path_string() -> Result<String> {
-        let path = AppPaths::get_config_file_path()?;
+    /// Backwards-compatible no-arg save that uses the default platform context.
+    pub fn save(&self) -> Result<()> {
+        let ctx = default_shared_context();
+        self.save_with_ctx(ctx.as_ref())
+    }
+
+    /// Get the path string using an explicit context.
+    pub fn get_path_string_with_ctx(ctx: &dyn AppContext) -> Result<String> {
+        let path = ctx.get_config_file_path()?;
         Ok(path.to_string_lossy().to_string())
+    }
+
+    /// Backwards-compatible no-arg helper that uses the default platform context.
+    pub fn get_path_string() -> Result<String> {
+        let ctx = default_shared_context();
+        Self::get_path_string_with_ctx(ctx.as_ref())
     }
 }

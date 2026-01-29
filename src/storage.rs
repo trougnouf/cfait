@@ -1,10 +1,11 @@
+// File: ./src/storage.rs
 // Manages local file storage for tasks and calendars.
 //
 // ⚠️ VERSION BUMP REQUIRED:
 // Changes to Task struct or its nested types (Alarm, DateType, etc.) require
 // incrementing LOCAL_STORAGE_VERSION below to prevent data corruption.
+use crate::context::AppContext;
 use crate::model::{CalendarListEntry, IcsAdapter, Task};
-use crate::paths::AppPaths;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -78,14 +79,14 @@ impl LoadState {
 pub struct LocalCalendarRegistry;
 
 impl LocalCalendarRegistry {
-    fn get_path() -> Option<PathBuf> {
-        AppPaths::get_data_dir()
+    fn get_path(ctx: &dyn AppContext) -> Option<PathBuf> {
+        ctx.get_data_dir()
             .ok()
             .map(|p| p.join(LOCAL_REGISTRY_FILENAME))
     }
 
-    /// Load all local calendars from the registry
-    pub fn load() -> Result<Vec<CalendarListEntry>> {
+    /// Load all local calendars from the registry using an explicit context.
+    pub fn load_with_ctx(ctx: &dyn AppContext) -> Result<Vec<CalendarListEntry>> {
         let mut cals = vec![];
 
         // Ensure default local calendar always exists
@@ -95,7 +96,7 @@ impl LocalCalendarRegistry {
             color: None,
         };
 
-        if let Some(path) = Self::get_path()
+        if let Some(path) = Self::get_path(ctx)
             && path.exists()
             && let Ok(content) = LocalStorage::with_lock(&path, || Ok(fs::read_to_string(&path)?))
             && let Ok(registry) = serde_json::from_str::<Vec<CalendarListEntry>>(&content)
@@ -111,9 +112,16 @@ impl LocalCalendarRegistry {
         Ok(cals)
     }
 
-    /// Save all local calendars to the registry
-    pub fn save(calendars: &[CalendarListEntry]) -> Result<()> {
-        if let Some(path) = Self::get_path() {
+    /// Backwards-compatible: Load using the default platform context.
+    /// Call sites that haven't been migrated can continue calling `LocalCalendarRegistry::load()`.
+    pub fn load() -> Result<Vec<CalendarListEntry>> {
+        let ctx = crate::context::default_shared_context();
+        Self::load_with_ctx(ctx.as_ref())
+    }
+
+    /// Save all local calendars to the registry using an explicit context.
+    pub fn save_with_ctx(ctx: &dyn AppContext, calendars: &[CalendarListEntry]) -> Result<()> {
+        if let Some(path) = Self::get_path(ctx) {
             LocalStorage::with_lock(&path, || {
                 let json = serde_json::to_string_pretty(calendars)?;
                 LocalStorage::atomic_write(&path, json)?;
@@ -122,65 +130,47 @@ impl LocalCalendarRegistry {
         }
         Ok(())
     }
+
+    /// Backwards-compatible: Save using the default platform context.
+    /// Call sites that haven't been migrated can continue calling `LocalCalendarRegistry::save(...)`.
+    pub fn save(calendars: &[CalendarListEntry]) -> Result<()> {
+        let ctx = crate::context::default_shared_context();
+        Self::save_with_ctx(ctx.as_ref(), calendars)
+    }
 }
 
 #[cfg(test)]
 mod registry_tests {
     use super::*;
+    use crate::context::TestContext;
     use serial_test::serial;
 
-    // RAII guard to restore CFAIT_TEST_DIR after test
+    // RAII guard to provide an isolated TestContext for filesystem operations.
     struct TestDirGuard {
-        original_value: Option<String>,
-        temp_dir: std::path::PathBuf,
+        ctx: TestContext,
     }
 
     impl TestDirGuard {
-        fn new(test_name: &str) -> Self {
-            let original_value = std::env::var("CFAIT_TEST_DIR").ok();
-            let temp_dir = std::env::temp_dir().join(format!(
-                "cfait_test_{}_{}",
-                test_name,
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_nanos()
-            ));
-            let _ = fs::create_dir_all(&temp_dir);
+        fn new(_test_name: &str) -> Self {
+            // Create a unique test-backed context (directory created by TestContext)
+            let ctx = TestContext::new();
 
-            // Clear load state map BEFORE setting new directory to prevent test interference
+            // Clear load state map BEFORE running test to prevent interference
             if let Some(map) = LOAD_STATE_MAP.get() {
                 map.lock().unwrap().clear();
             }
 
-            unsafe {
-                std::env::set_var("CFAIT_TEST_DIR", &temp_dir);
-            }
-
-            Self {
-                original_value,
-                temp_dir,
-            }
+            Self { ctx }
         }
     }
 
     impl Drop for TestDirGuard {
         fn drop(&mut self) {
-            // Clean up temp directory
-            let _ = fs::remove_dir_all(&self.temp_dir);
-
-            // Restore original CFAIT_TEST_DIR or remove if it wasn't set
-            unsafe {
-                match &self.original_value {
-                    Some(val) => std::env::set_var("CFAIT_TEST_DIR", val),
-                    None => std::env::remove_var("CFAIT_TEST_DIR"),
-                }
-            }
-
-            // Clear load state map again to prevent leaking state to next test
+            // Clearing load state map again to prevent leaking state to next test
             if let Some(map) = LOAD_STATE_MAP.get() {
                 map.lock().unwrap().clear();
             }
+            // TestContext's Drop will clean up the temp dir
         }
     }
 
@@ -194,7 +184,8 @@ mod registry_tests {
     #[test]
     #[serial]
     fn test_multi_calendar_save_and_load() {
-        let _guard = TestDirGuard::new("multi_save_load");
+        let guard = TestDirGuard::new("multi_save_load");
+        let ctx = &guard.ctx; // Get a reference to the context
 
         // Create registry with multiple calendars
         let cal1 = CalendarListEntry {
@@ -209,29 +200,32 @@ mod registry_tests {
         };
 
         let registry = vec![cal1.clone(), cal2.clone()];
-        LocalCalendarRegistry::save(&registry).unwrap();
+        LocalCalendarRegistry::save_with_ctx(ctx, &registry).unwrap();
 
         // Create tasks for each calendar
         let task1 = create_test_task("task1", "Work task", "local://work");
         let task2 = create_test_task("task2", "Personal task", "local://personal");
 
         // Save to different calendars
-        LocalStorage::save_for_href("local://work", std::slice::from_ref(&task1)).unwrap();
-        LocalStorage::save_for_href("local://personal", std::slice::from_ref(&task2)).unwrap();
+        LocalStorage::save_for_href_with_ctx(ctx, "local://work", std::slice::from_ref(&task1))
+            .unwrap();
+        LocalStorage::save_for_href_with_ctx(ctx, "local://personal", std::slice::from_ref(&task2))
+            .unwrap();
 
         // Load and verify each calendar independently
-        let loaded_work = LocalStorage::load_for_href("local://work").unwrap();
+        let loaded_work = LocalStorage::load_for_href_with_ctx(ctx, "local://work").unwrap();
         assert_eq!(loaded_work.len(), 1);
         assert_eq!(loaded_work[0].uid, "task1");
         assert_eq!(loaded_work[0].summary, "Work task");
 
-        let loaded_personal = LocalStorage::load_for_href("local://personal").unwrap();
+        let loaded_personal =
+            LocalStorage::load_for_href_with_ctx(ctx, "local://personal").unwrap();
         assert_eq!(loaded_personal.len(), 1);
         assert_eq!(loaded_personal[0].uid, "task2");
         assert_eq!(loaded_personal[0].summary, "Personal task");
 
         // Verify registry persists (may include default local calendar)
-        let loaded_registry = LocalCalendarRegistry::load().unwrap();
+        let loaded_registry = LocalCalendarRegistry::load_with_ctx(ctx).unwrap();
         assert!(loaded_registry.len() >= 2);
         assert!(loaded_registry.iter().any(|c| c.href == "local://work"));
         assert!(loaded_registry.iter().any(|c| c.href == "local://personal"));
@@ -240,44 +234,50 @@ mod registry_tests {
     #[test]
     #[serial]
     fn test_multi_calendar_isolation() {
-        let _guard = TestDirGuard::new("multi_isolation");
+        let guard = TestDirGuard::new("multi_isolation");
+        let ctx = &guard.ctx;
 
         // Create two calendars with tasks
         let task1 = create_test_task("task1", "Calendar A task", "local://cal-a");
         let task2 = create_test_task("task2", "Calendar B task", "local://cal-b");
 
-        LocalStorage::save_for_href("local://cal-a", std::slice::from_ref(&task1)).unwrap();
-        LocalStorage::save_for_href("local://cal-b", std::slice::from_ref(&task2)).unwrap();
+        LocalStorage::save_for_href_with_ctx(ctx, "local://cal-a", std::slice::from_ref(&task1))
+            .unwrap();
+        LocalStorage::save_for_href_with_ctx(ctx, "local://cal-b", std::slice::from_ref(&task2))
+            .unwrap();
 
         // Modify calendar A
-        let mut cal_a_tasks = LocalStorage::load_for_href("local://cal-a").unwrap();
+        let mut cal_a_tasks = LocalStorage::load_for_href_with_ctx(ctx, "local://cal-a").unwrap();
         let task3 = create_test_task("task3", "Another A task", "local://cal-a");
         cal_a_tasks.push(task3);
-        LocalStorage::save_for_href("local://cal-a", &cal_a_tasks).unwrap();
+        LocalStorage::save_for_href_with_ctx(ctx, "local://cal-a", &cal_a_tasks).unwrap();
 
         // Verify calendar B is unchanged
-        let cal_b_tasks = LocalStorage::load_for_href("local://cal-b").unwrap();
+        let cal_b_tasks = LocalStorage::load_for_href_with_ctx(ctx, "local://cal-b").unwrap();
         assert_eq!(cal_b_tasks.len(), 1);
         assert_eq!(cal_b_tasks[0].uid, "task2");
 
         // Verify calendar A has two tasks
-        let cal_a_tasks = LocalStorage::load_for_href("local://cal-a").unwrap();
+        let cal_a_tasks = LocalStorage::load_for_href_with_ctx(ctx, "local://cal-a").unwrap();
         assert_eq!(cal_a_tasks.len(), 2);
     }
 
     #[test]
     #[serial]
     fn test_multi_calendar_default_compatibility() {
-        let _guard = TestDirGuard::new("multi_compat");
+        let guard = TestDirGuard::new("multi_compat");
+        let ctx = &guard.ctx;
 
         // Create task using old API (default calendar)
         let task = create_test_task("default-task", "Default task", LOCAL_CALENDAR_HREF);
 
-        LocalStorage::save(std::slice::from_ref(&task)).unwrap();
+        // --- FIX: Use explicit href API ---
+        LocalStorage::save_for_href_with_ctx(ctx, LOCAL_CALENDAR_HREF, std::slice::from_ref(&task))
+            .unwrap();
 
-        // Verify it's accessible via both APIs
-        let loaded_old = LocalStorage::load().unwrap();
-        let loaded_new = LocalStorage::load_for_href(LOCAL_CALENDAR_HREF).unwrap();
+        // --- FIX: Use explicit href API ---
+        let loaded_old = LocalStorage::load_for_href_with_ctx(ctx, LOCAL_CALENDAR_HREF).unwrap();
+        let loaded_new = LocalStorage::load_for_href_with_ctx(ctx, LOCAL_CALENDAR_HREF).unwrap();
 
         assert_eq!(loaded_old.len(), 1);
         assert_eq!(loaded_new.len(), 1);
@@ -287,22 +287,25 @@ mod registry_tests {
     #[test]
     #[serial]
     fn test_multi_calendar_independent_operations() {
-        let _guard = TestDirGuard::new("multi_independent");
+        let guard = TestDirGuard::new("multi_independent");
+        let ctx = &guard.ctx;
 
         // Create calendar A with one task
         let task_a = create_test_task("task-a", "Task A", "local://cal-a");
-        LocalStorage::save_for_href("local://cal-a", std::slice::from_ref(&task_a)).unwrap();
+        LocalStorage::save_for_href_with_ctx(ctx, "local://cal-a", std::slice::from_ref(&task_a))
+            .unwrap();
 
         // Create calendar B with one task
         let task_b = create_test_task("task-b", "Task B", "local://cal-b");
-        LocalStorage::save_for_href("local://cal-b", std::slice::from_ref(&task_b)).unwrap();
+        LocalStorage::save_for_href_with_ctx(ctx, "local://cal-b", std::slice::from_ref(&task_b))
+            .unwrap();
 
         // Verify both calendars work independently
-        let loaded_a = LocalStorage::load_for_href("local://cal-a").unwrap();
+        let loaded_a = LocalStorage::load_for_href_with_ctx(ctx, "local://cal-a").unwrap();
         assert_eq!(loaded_a.len(), 1);
         assert_eq!(loaded_a[0].uid, "task-a");
 
-        let loaded_b = LocalStorage::load_for_href("local://cal-b").unwrap();
+        let loaded_b = LocalStorage::load_for_href_with_ctx(ctx, "local://cal-b").unwrap();
         assert_eq!(loaded_b.len(), 1);
         assert_eq!(loaded_b[0].uid, "task-b");
 
@@ -310,14 +313,14 @@ mod registry_tests {
         let mut tasks_a = loaded_a;
         let task_a2 = create_test_task("task-a2", "Task A2", "local://cal-a");
         tasks_a.push(task_a2);
-        LocalStorage::save_for_href("local://cal-a", &tasks_a).unwrap();
+        LocalStorage::save_for_href_with_ctx(ctx, "local://cal-a", &tasks_a).unwrap();
 
         // Verify calendar A has 2 tasks
-        let reloaded_a = LocalStorage::load_for_href("local://cal-a").unwrap();
+        let reloaded_a = LocalStorage::load_for_href_with_ctx(ctx, "local://cal-a").unwrap();
         assert_eq!(reloaded_a.len(), 2);
 
         // Verify calendar B still has 1 task (unchanged)
-        let reloaded_b = LocalStorage::load_for_href("local://cal-b").unwrap();
+        let reloaded_b = LocalStorage::load_for_href_with_ctx(ctx, "local://cal-b").unwrap();
         assert_eq!(reloaded_b.len(), 1);
         assert_eq!(reloaded_b[0].uid, "task-b");
     }
@@ -329,9 +332,11 @@ impl LocalStorage {
     /// Returns the file path for a given local calendar href.
     /// local://default -> local.json
     /// local://<uuid>  -> local_<safe_uuid>.json
-    pub fn get_path_for_href(href: &str) -> Option<PathBuf> {
+    ///
+    /// New API: Accepts an explicit context to avoid global state.
+    pub fn get_path_for_href_with_ctx(ctx: &dyn AppContext, href: &str) -> Option<PathBuf> {
         if href == LOCAL_CALENDAR_HREF {
-            AppPaths::get_local_task_path()
+            return ctx.get_local_task_path();
         } else if href.starts_with("local://") {
             let id = href.trim_start_matches("local://");
             // Sanitize the ID to only allow alphanumeric and hyphens
@@ -339,17 +344,27 @@ impl LocalStorage {
                 .chars()
                 .filter(|c| c.is_alphanumeric() || *c == '-')
                 .collect();
-            AppPaths::get_data_dir()
+            return ctx
+                .get_data_dir()
                 .ok()
-                .map(|p| p.join(format!("local_{}.json", safe_id)))
-        } else {
-            None
+                .map(|p| p.join(format!("local_{}.json", safe_id)));
         }
+        None
+    }
+
+    /// Backwards-compatible wrapper that uses the default platform context.
+    pub fn get_path_for_href(href: &str) -> Option<PathBuf> {
+        Self::get_path_for_href_with_ctx(crate::context::default_shared_context().as_ref(), href)
+    }
+
+    /// New API: get default calendar path with explicit context.
+    pub fn get_path_with_ctx(ctx: &dyn AppContext) -> Option<PathBuf> {
+        Self::get_path_for_href_with_ctx(ctx, LOCAL_CALENDAR_HREF)
     }
 
     /// Legacy method for backward compatibility (redirects to default)
     pub fn get_path() -> Option<PathBuf> {
-        Self::get_path_for_href(LOCAL_CALENDAR_HREF)
+        Self::get_path_with_ctx(crate::context::default_shared_context().as_ref())
     }
 
     /// Imports tasks from an ICS string and merges them into the specified calendar.
@@ -577,8 +592,9 @@ impl LocalStorage {
     }
 
     /// Public load method handling any local href
-    pub fn load_for_href(href: &str) -> Result<Vec<Task>> {
-        if let Some(path) = Self::get_path_for_href(href) {
+    /// Load tasks for a specific local calendar using an explicit context.
+    pub fn load_for_href_with_ctx(ctx: &dyn AppContext, href: &str) -> Result<Vec<Task>> {
+        if let Some(path) = Self::get_path_for_href_with_ctx(ctx, href) {
             Self::load_from_path(&path, href)
         } else {
             // Unknown scheme, return empty
@@ -586,13 +602,28 @@ impl LocalStorage {
         }
     }
 
+    /// Backwards-compatible wrapper that uses the default platform context.
+    pub fn load_for_href(href: &str) -> Result<Vec<Task>> {
+        Self::load_for_href_with_ctx(crate::context::default_shared_context().as_ref(), href)
+    }
+
     /// Public save method handling any local href
-    pub fn save_for_href(href: &str, tasks: &[Task]) -> Result<()> {
-        if let Some(path) = Self::get_path_for_href(href) {
+    /// Save tasks for a specific local calendar using an explicit context.
+    pub fn save_for_href_with_ctx(ctx: &dyn AppContext, href: &str, tasks: &[Task]) -> Result<()> {
+        if let Some(path) = Self::get_path_for_href_with_ctx(ctx, href) {
             Self::save_to_path(&path, href, tasks)
         } else {
             Err(anyhow::anyhow!("Invalid local href: {}", href))
         }
+    }
+
+    /// Backwards-compatible wrapper that uses the default platform context.
+    pub fn save_for_href(href: &str, tasks: &[Task]) -> Result<()> {
+        Self::save_for_href_with_ctx(
+            crate::context::default_shared_context().as_ref(),
+            href,
+            tasks,
+        )
     }
 
     /// Save tasks to local.json (default calendar)

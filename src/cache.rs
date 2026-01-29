@@ -3,8 +3,8 @@
 // ⚠️ VERSION BUMP REQUIRED:
 // Changes to Task struct or its nested types (Alarm, DateType, etc.) require
 // incrementing CACHE_VERSION below to invalidate stale caches.
+use crate::context::{AppContext, default_shared_context};
 use crate::model::{CalendarListEntry, Task};
-use crate::paths::AppPaths;
 use crate::storage::LocalStorage;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -28,14 +28,13 @@ struct CalendarCache {
 pub struct Cache;
 
 impl Cache {
-    fn get_calendars_path() -> Option<PathBuf> {
-        AppPaths::get_cache_dir()
-            .ok()
-            .map(|p| p.join("calendars.json"))
+    // Internal variant that is explicitly passed a context. New/modern call sites should use these.
+    fn get_calendars_path_with_ctx(ctx: &dyn AppContext) -> Option<PathBuf> {
+        ctx.get_cache_dir().ok().map(|p| p.join("calendars.json"))
     }
 
-    fn get_path(key: &str) -> Option<PathBuf> {
-        AppPaths::get_cache_dir().ok().map(|dir| {
+    fn get_path_with_ctx(ctx: &dyn AppContext, key: &str) -> Option<PathBuf> {
+        ctx.get_cache_dir().ok().map(|dir| {
             let mut hasher = DefaultHasher::new();
             key.hash(&mut hasher);
             let filename = format!("tasks_{:x}.json", hasher.finish());
@@ -43,8 +42,13 @@ impl Cache {
         })
     }
 
-    pub fn save(key: &str, tasks: &[Task], sync_token: Option<String>) -> Result<()> {
-        if let Some(path) = Self::get_path(key) {
+    pub fn save_with_ctx(
+        ctx: &dyn AppContext,
+        key: &str,
+        tasks: &[Task],
+        sync_token: Option<String>,
+    ) -> Result<()> {
+        if let Some(path) = Self::get_path_with_ctx(ctx, key) {
             LocalStorage::with_lock(&path, || {
                 let data = CalendarCache {
                     version: CACHE_VERSION, // Write the current version (1)
@@ -59,8 +63,8 @@ impl Cache {
         Ok(())
     }
 
-    pub fn load(key: &str) -> Result<(Vec<Task>, Option<String>)> {
-        if let Some(path) = Self::get_path(key)
+    pub fn load_with_ctx(ctx: &dyn AppContext, key: &str) -> Result<(Vec<Task>, Option<String>)> {
+        if let Some(path) = Self::get_path_with_ctx(ctx, key)
             && path.exists()
         {
             return LocalStorage::with_lock(&path, || {
@@ -80,8 +84,8 @@ impl Cache {
         Ok((vec![], None))
     }
 
-    pub fn save_calendars(cals: &[CalendarListEntry]) -> Result<()> {
-        if let Some(path) = Self::get_calendars_path() {
+    pub fn save_calendars_with_ctx(ctx: &dyn AppContext, cals: &[CalendarListEntry]) -> Result<()> {
+        if let Some(path) = Self::get_calendars_path_with_ctx(ctx) {
             LocalStorage::with_lock(&path, || {
                 let json = serde_json::to_string_pretty(cals)?;
                 LocalStorage::atomic_write(&path, json)?;
@@ -91,8 +95,8 @@ impl Cache {
         Ok(())
     }
 
-    pub fn load_calendars() -> Result<Vec<CalendarListEntry>> {
-        if let Some(path) = Self::get_calendars_path()
+    pub fn load_calendars_with_ctx(ctx: &dyn AppContext) -> Result<Vec<CalendarListEntry>> {
+        if let Some(path) = Self::get_calendars_path_with_ctx(ctx)
             && path.exists()
         {
             return LocalStorage::with_lock(&path, || {
@@ -102,5 +106,34 @@ impl Cache {
             });
         }
         Ok(vec![])
+    }
+
+    // ---------------------------------------------------------------------
+    // Backward-compatible wrappers:
+    // Existing call sites that haven't been migrated can continue calling
+    // the original signatures (without an AppContext). These wrappers use the
+    // default shared context internally and delegate to the new `_with_ctx`
+    // implementations. When migrating files, prefer calling the `_with_ctx`
+    // methods directly and passing an explicit `&impl AppContext`.
+    // ---------------------------------------------------------------------
+
+    pub fn save(key: &str, tasks: &[Task], sync_token: Option<String>) -> Result<()> {
+        let ctx = default_shared_context();
+        Self::save_with_ctx(ctx.as_ref(), key, tasks, sync_token)
+    }
+
+    pub fn load(key: &str) -> Result<(Vec<Task>, Option<String>)> {
+        let ctx = default_shared_context();
+        Self::load_with_ctx(ctx.as_ref(), key)
+    }
+
+    pub fn save_calendars(cals: &[CalendarListEntry]) -> Result<()> {
+        let ctx = default_shared_context();
+        Self::save_calendars_with_ctx(ctx.as_ref(), cals)
+    }
+
+    pub fn load_calendars() -> Result<Vec<CalendarListEntry>> {
+        let ctx = default_shared_context();
+        Self::load_calendars_with_ctx(ctx.as_ref())
     }
 }

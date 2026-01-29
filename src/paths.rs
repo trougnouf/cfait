@@ -1,3 +1,4 @@
+// File: ./src/paths.rs
 // Manages platform-specific file paths and directory resolution.
 
 use anyhow::{Context, Result};
@@ -43,7 +44,7 @@ impl AppPaths {
 
         // 2. Test Override
         if let Ok(test_dir) = env::var("CFAIT_TEST_DIR") {
-            return Some(PathBuf::from(test_dir));
+            return Some(PathBuf::from(test_dir).join(subdir));
         }
 
         // 3. Standard OS location

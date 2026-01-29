@@ -22,8 +22,8 @@
 // Changes to AlarmIndex or AlarmIndexEntry structs require incrementing
 // the version field in AlarmIndex::default() to invalidate stale indices.
 
+use crate::context::AppContext;
 use crate::model::{AlarmTrigger, DateType, Task};
-use crate::paths::AppPaths;
 use crate::storage::LocalStorage;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
@@ -82,14 +82,14 @@ impl Default for AlarmIndex {
 
 impl AlarmIndex {
     /// Gets the path to the alarm index file
-    fn get_path() -> Option<std::path::PathBuf> {
-        AppPaths::get_alarm_index_path()
+    fn get_path(ctx: &dyn AppContext) -> Option<std::path::PathBuf> {
+        ctx.get_alarm_index_path()
     }
 
     /// Loads the alarm index from disk.
     /// Returns an empty index if the file doesn't exist or is corrupted.
-    pub fn load() -> Self {
-        let Some(path) = Self::get_path() else {
+    pub fn load(ctx: &dyn AppContext) -> Self {
+        let Some(path) = Self::get_path(ctx) else {
             return Self::default();
         };
 
@@ -107,8 +107,8 @@ impl AlarmIndex {
     }
 
     /// Saves the alarm index to disk.
-    pub fn save(&self) -> Result<()> {
-        let Some(path) = Self::get_path() else {
+    pub fn save(&self, ctx: &dyn AppContext) -> Result<()> {
+        let Some(path) = Self::get_path(ctx) else {
             anyhow::bail!("Could not determine alarm index path");
         };
 

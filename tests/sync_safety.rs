@@ -1,46 +1,76 @@
-// Safety tests for synchronization failures.
+// File: ./tests/sync_safety.rs
+/*
+ Migration of sync safety tests to use TestContext and ctx-aware APIs.
+
+ These tests create an isolated TestContext for filesystem operations (journal,
+ cache, etc.) and pass it explicitly to APIs that accept a context. Network
+ interactions are driven via mockito Server.
+*/
+
 use cfait::client::RustyClient;
+use cfait::context::{AppContext, TestContext}; // Import AppContext trait
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
 use mockito::Server;
 use std::collections::HashMap;
-use std::env;
 use std::fs;
 use tokio::sync::Mutex;
 
 static SAFETY_TEST_MUTEX: Mutex<()> = Mutex::const_new(());
 
-fn setup_safety_env(suffix: &str) -> std::path::PathBuf {
-    let temp_dir = env::temp_dir().join(format!("cfait_safety_{}_{}", suffix, std::process::id()));
-    let _ = fs::create_dir_all(&temp_dir);
-    unsafe {
-        env::set_var("CFAIT_TEST_DIR", &temp_dir);
-    }
-    if let Some(p) = Journal::get_path()
-        && p.exists()
-    {
-        let _ = fs::remove_file(p);
-    }
-    if let Ok(cache_dir) = cfait::paths::AppPaths::get_cache_dir()
-        && cache_dir.exists()
-    {
-        let _ = fs::remove_dir_all(&cache_dir);
-        let _ = fs::create_dir_all(&cache_dir);
-    }
-    temp_dir
+// RAII guard for test environment setup and teardown.
+struct TestEnvGuard {
+    ctx: TestContext,
+    original_env: Option<String>,
 }
 
-fn teardown(path: std::path::PathBuf) {
-    unsafe {
-        env::remove_var("CFAIT_TEST_DIR");
+impl TestEnvGuard {
+    fn new(_suffix: &str) -> Self {
+        // The context creates a unique temp directory.
+        let ctx = TestContext::new();
+
+        // Set the environment variable so that code using the default context
+        // (like client.sync_journal -> Journal::load) will use this temp directory.
+        let original_env = std::env::var("CFAIT_TEST_DIR").ok();
+        unsafe {
+            std::env::set_var("CFAIT_TEST_DIR", &ctx.root);
+        }
+
+        // Perform initial cleanup using the context.
+        if let Some(p) = Journal::get_path_with_ctx(&ctx)
+            && p.exists()
+        {
+            let _ = fs::remove_file(p);
+        }
+        if let Ok(cache_dir) = ctx.get_cache_dir()
+            && cache_dir.exists() {
+                let _ = fs::remove_dir_all(&cache_dir);
+                let _ = fs::create_dir_all(&cache_dir);
+            }
+
+        Self { ctx, original_env }
     }
-    let _ = fs::remove_dir_all(path);
+}
+
+impl Drop for TestEnvGuard {
+    fn drop(&mut self) {
+        // Restore the original environment variable.
+        unsafe {
+            if let Some(val) = &self.original_env {
+                std::env::set_var("CFAIT_TEST_DIR", val);
+            } else {
+                std::env::remove_var("CFAIT_TEST_DIR");
+            }
+        }
+        // The TestContext's Drop implementation will remove the temp directory.
+    }
 }
 
 #[tokio::test]
 async fn test_safety_resurrection_on_404() {
     let _guard = SAFETY_TEST_MUTEX.lock().await;
-    let temp_dir = setup_safety_env("resurrect");
+    let env_guard = TestEnvGuard::new("resurrect");
+    let ctx = &env_guard.ctx;
 
     let mut server = Server::new_async().await;
     let url = server.url();
@@ -60,6 +90,7 @@ async fn test_safety_resurrection_on_404() {
         .create_async()
         .await;
 
+    // Client construction does not require AppContext in this codebase.
     let client = RustyClient::new(&url, "u", "p", true, None).unwrap();
 
     let mut task = Task::new("Important Work", &HashMap::new(), None);
@@ -68,8 +99,12 @@ async fn test_safety_resurrection_on_404() {
     task.calendar_href = format!("{}/cal/", url);
     task.etag = "\"old-etag\"".to_string();
 
-    Journal::push(Action::Update(task)).unwrap();
+    // Push into journal using the test context
+    Journal::push_with_ctx(ctx, Action::Update(task)).unwrap();
 
+    // Run sync; the client implementation is expected to consult the journal
+    // (in this codebase it may use the default context internally). The test
+    // still asserts the expected network interactions.
     let res = client.sync_journal().await;
 
     assert!(
@@ -79,13 +114,14 @@ async fn test_safety_resurrection_on_404() {
     mock_update_404.assert();
     mock_resurrect.assert();
 
-    teardown(temp_dir);
+    // env_guard is dropped here and temp files are removed
 }
 
 #[tokio::test]
 async fn test_safety_conflict_copy_on_hard_412() {
     let _guard = SAFETY_TEST_MUTEX.lock().await;
-    let temp_dir = setup_safety_env("conflict");
+    let env_guard = TestEnvGuard::new("conflict");
+    let ctx = &env_guard.ctx;
 
     let mut server = Server::new_async().await;
     let url = server.url();
@@ -159,7 +195,9 @@ async fn test_safety_conflict_copy_on_hard_412() {
     base_task.etag = "\"old-etag\"".to_string();
     base_task.description = "Base Description".to_string();
 
-    cfait::cache::Cache::save(
+    // Save remote cache using the test context so client-side cache reads (if context-aware) will pick it up.
+    cfait::cache::Cache::save_with_ctx(
+        ctx,
         &base_task.calendar_href,
         &[base_task.clone()],
         Some("token".to_string()),
@@ -168,7 +206,9 @@ async fn test_safety_conflict_copy_on_hard_412() {
 
     let mut local_task = base_task.clone();
     local_task.description = "Local Change".to_string();
-    Journal::push(Action::Update(local_task)).unwrap();
+
+    // Push local update in the test context journal
+    Journal::push_with_ctx(ctx, Action::Update(local_task)).unwrap();
 
     let res = tokio::time::timeout(std::time::Duration::from_secs(5), client.sync_journal()).await;
 
@@ -182,5 +222,5 @@ async fn test_safety_conflict_copy_on_hard_412() {
     mock_412.assert();
     mock_create_copy.assert();
 
-    teardown(temp_dir);
+    // TestContext cleanup happens automatically.
 }

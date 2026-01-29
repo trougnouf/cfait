@@ -7,9 +7,9 @@ use crate::alarm_index::AlarmIndex;
 use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::config::Config;
+use crate::context::{AppContext, StandardContext};
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::model::{AlarmTrigger, DateType, Task};
-use crate::paths::AppPaths;
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
 use chrono::{DateTime, Local, NaiveTime, Utc};
@@ -17,6 +17,7 @@ use futures::stream::{self, StreamExt};
 use std::collections::{HashMap, HashSet};
 #[cfg(target_os = "android")]
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -305,6 +306,8 @@ pub struct CfaitMobile {
     /// In-memory cache of the alarm index to avoid repeated disk reads
     /// Updated whenever tasks are modified or loaded from cache
     alarm_index_cache: Arc<Mutex<Option<AlarmIndex>>>,
+    /// Filesystem / path resolution context (injected)
+    ctx: Arc<dyn AppContext>,
 }
 
 #[uniffi::export(async_runtime = "tokio")]
@@ -317,11 +320,15 @@ impl CfaitMobile {
                 .with_max_level(log::LevelFilter::Debug)
                 .with_tag("CfaitRust"),
         );
-        AppPaths::init_android_path(android_files_dir);
+        // Build a StandardContext with an Android override root so all paths are
+        // created under the provided files dir.
+        let ctx: Arc<dyn AppContext> =
+            Arc::new(StandardContext::new(Some(PathBuf::from(android_files_dir))));
         Self {
             client: Arc::new(Mutex::new(None)),
             store: Arc::new(Mutex::new(TaskStore::new())),
             alarm_index_cache: Arc::new(Mutex::new(None)),
+            ctx,
         }
     }
 
@@ -334,13 +341,20 @@ impl CfaitMobile {
     fn create_debug_export_internal(&self) -> Result<String, MobileError> {
         #[cfg(target_os = "android")]
         {
-            let data_dir =
-                AppPaths::get_data_dir().map_err(|e| MobileError::from(e.to_string()))?;
-            let cache_dir =
-                AppPaths::get_cache_dir().map_err(|e| MobileError::from(e.to_string()))?;
+            // Use the injected context instead of global AppPaths
+            let data_dir = self
+                .ctx
+                .get_data_dir()
+                .map_err(|e| MobileError::from(e.to_string()))?;
+            let cache_dir = self
+                .ctx
+                .get_cache_dir()
+                .map_err(|e| MobileError::from(e.to_string()))?;
             // --- FIX: Get the config directory ---
-            let config_dir =
-                AppPaths::get_config_dir().map_err(|e| MobileError::from(e.to_string()))?;
+            let config_dir = self
+                .ctx
+                .get_config_dir()
+                .map_err(|e| MobileError::from(e.to_string()))?;
 
             let export_path = cache_dir.join("cfait_debug_export.zip");
             let file = std::fs::File::create(&export_path)
@@ -373,7 +387,8 @@ impl CfaitMobile {
 
                             // Special handling for config.toml to redact credentials
                             if file_name == "config.toml" {
-                                let mut config = Config::load().unwrap_or_default();
+                                let mut config =
+                                    Config::load(self.ctx.as_ref()).unwrap_or_default();
                                 config.username = "[REDACTED]".to_string();
                                 // If Config has a password field, redact it. Otherwise ignore.
                                 // Use match to avoid compile error if field absent (but it exists in this crate).
@@ -811,13 +826,13 @@ impl CfaitMobile {
         }
 
         // Rebuild the alarm index after loading all calendars
-        let config = Config::load().unwrap_or_default();
+        let config = Config::load_with_ctx(self.ctx.as_ref()).unwrap_or_default();
         let index = AlarmIndex::rebuild_from_tasks(
             &store.calendars,
             config.auto_reminders,
             &config.default_reminder_time,
         );
-        if let Err(e) = index.save() {
+        if let Err(e) = index.save(self.ctx.as_ref()) {
             #[cfg(target_os = "android")]
             log::warn!("Failed to save alarm index: {}", e);
             #[cfg(not(target_os = "android"))]
@@ -1638,7 +1653,7 @@ impl CfaitMobile {
         drop(cached);
 
         // Fallback: Load from disk if cache miss
-        let index = AlarmIndex::load();
+        let index = AlarmIndex::load(self.ctx.as_ref());
         if !index.is_empty() {
             if let Some(timestamp) = index.get_next_alarm_timestamp() {
                 #[cfg(target_os = "android")]
@@ -1658,7 +1673,7 @@ impl CfaitMobile {
         log::warn!("Alarm index not available for next_alarm_timestamp, falling back to full scan");
 
         let store = self.store.blocking_lock();
-        let config = Config::load().unwrap_or_default();
+        let config = Config::load_with_ctx(self.ctx.as_ref()).unwrap_or_default();
         let default_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
             .unwrap_or_else(|_| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
 
@@ -1771,7 +1786,7 @@ impl CfaitMobile {
         drop(cached);
 
         // Fallback: Load from disk if cache miss
-        let index = AlarmIndex::load();
+        let index = AlarmIndex::load(self.ctx.as_ref());
         if !index.is_empty() {
             #[cfg(target_os = "android")]
             log::debug!(
@@ -1806,7 +1821,7 @@ impl CfaitMobile {
         log::warn!("Alarm index not available, falling back to full task scan (slow)");
 
         let store = self.store.blocking_lock();
-        let config = Config::load().unwrap_or_default();
+        let config = Config::load_with_ctx(self.ctx.as_ref()).unwrap_or_default();
         let default_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
             .unwrap_or_else(|_| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
 
@@ -1911,14 +1926,14 @@ impl CfaitMobile {
     /// Should be called whenever tasks are modified (add/update/delete/snooze/dismiss).
     /// Updates both the disk cache and in-memory cache.
     fn rebuild_alarm_index_sync(&self, store: &TaskStore) {
-        let config = Config::load().unwrap_or_default();
+        let config = Config::load_with_ctx(self.ctx.as_ref()).unwrap_or_default();
         let index = AlarmIndex::rebuild_from_tasks(
             &store.calendars,
             config.auto_reminders,
             &config.default_reminder_time,
         );
 
-        match index.save() {
+        match index.save(self.ctx.as_ref()) {
             Ok(_) => {
                 #[cfg(target_os = "android")]
                 log::debug!("Alarm index rebuilt with {} alarms", index.len());
