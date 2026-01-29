@@ -20,22 +20,23 @@ use iced::futures::SinkExt;
 use iced::futures::channel::mpsc::Sender;
 use iced::stream;
 use iced::{Element, Subscription, Task, Theme, font, window};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 pub fn run() -> iced::Result {
-    run_with_ics_file(None)
+    run_with_ics_file(None, None, false)
 }
 
-pub fn run_with_ics_file(ics_file_path: Option<String>) -> iced::Result {
-    // Parse CLI args for --force-ssd
-    let args: Vec<String> = std::env::args().collect();
-    let force_ssd = args.iter().any(|a| a == "--force-ssd");
-
+pub fn run_with_ics_file(
+    ics_file_path: Option<String>,
+    override_root: Option<PathBuf>,
+    force_ssd: bool,
+) -> iced::Result {
     async_ops::init_runtime();
 
     iced::application(
         // Pass force_ssd down into app initialization
-        move || GuiApp::new_with_ics(ics_file_path.clone(), force_ssd),
+        move || GuiApp::new_with_ics(ics_file_path.clone(), override_root.clone(), force_ssd),
         GuiApp::update,
         GuiApp::view,
     )
@@ -92,8 +93,12 @@ fn alarm_stream() -> impl iced::futures::Stream<Item = Message> {
 
 impl GuiApp {
     // NOTE: new_with_ics signature was updated to accept force_ssd; call sites must match.
-    fn new_with_ics(ics_file_path: Option<String>, force_ssd: bool) -> (Self, Task<Message>) {
-        let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(None));
+    fn new_with_ics(
+        ics_file_path: Option<String>,
+        override_root: Option<PathBuf>,
+        force_ssd: bool,
+    ) -> (Self, Task<Message>) {
+        let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(override_root));
         let ctx_clone = ctx.clone();
 
         let mut tasks = vec![

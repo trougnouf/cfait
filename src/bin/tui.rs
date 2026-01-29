@@ -5,14 +5,25 @@ use anyhow::Result;
 use cfait::context::{AppContext, StandardContext}; // Import AppContext traits
 use cfait::storage::LocalStorage;
 use std::env;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args: Vec<String> = env::args().collect();
+    let mut args: Vec<String> = env::args().collect();
 
-    // Create the application context (StandardContext for production use)
-    let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(None));
+    // Parse for --root argument before creating the context
+    let mut override_root: Option<PathBuf> = None;
+    if let Some(pos) = args.iter().position(|arg| arg == "--root" || arg == "-r")
+        && pos + 1 < args.len() {
+            override_root = Some(PathBuf::from(args[pos + 1].clone()));
+            // Remove the flag and its value so they don't interfere with other parsing
+            args.remove(pos); // remove flag
+            args.remove(pos); // remove value (which is now at the same index)
+        }
+
+    // Create the application context (StandardContext for production use) with the override
+    let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(override_root));
 
     // Handle help flag
     if args.len() > 1 && (args[1] == "--help" || args[1] == "-h" || args[1] == "help") {
@@ -102,7 +113,7 @@ async fn main() -> Result<()> {
     }
 
     // Normal TUI startup
-    cfait::tui::run().await
+    cfait::tui::run(ctx).await
 }
 
 fn print_help() {
@@ -112,12 +123,15 @@ fn print_help() {
     );
     println!();
     println!("USAGE:");
-    println!("    cfait                                    Start interactive TUI");
+    println!("    cfait [--root <path>]                    Start interactive TUI");
     println!(
         "    cfait export [--calendar <id>]           Export local tasks as .ics file to stdout"
     );
     println!("    cfait import <file.ics> [--calendar <id>] Import tasks from .ics file");
     println!("    cfait --help                             Show this help message");
+    println!();
+    println!("OPTIONS:");
+    println!("    -r, --root <path>    Use a different directory for config and data.");
     println!();
     println!("IMPORT COMMAND:");
     println!("    cfait import tasks.ics                        Import to default local calendar");

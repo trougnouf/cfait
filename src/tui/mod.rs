@@ -7,7 +7,7 @@ pub mod state;
 pub mod view;
 
 use crate::config;
-use crate::context::{AppContext, StandardContext};
+use crate::context::AppContext;
 use crate::system::{AlarmMessage, SystemEvent};
 use crate::tui::action::AppEvent;
 use crate::tui::state::{AppState, InputMode};
@@ -29,10 +29,7 @@ use std::{
 };
 use tokio::sync::mpsc;
 
-pub async fn run() -> Result<()> {
-    // --- 0. CONTEXT ---
-    let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(None));
-
+pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     // --- 1. PREAMBLE & CONFIG ---
     let args: Vec<String> = env::args().collect();
     if args.len() > 1 && (args[1] == "--help" || args[1] == "-h") {
