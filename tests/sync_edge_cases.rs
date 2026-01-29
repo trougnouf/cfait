@@ -1,50 +1,14 @@
-// Tests for synchronization edge cases.
 use cfait::client::RustyClient;
+use cfait::context::TestContext;
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
 use mockito::Server;
 use std::collections::HashMap;
-use std::env;
-use std::fs;
-use tokio::sync::Mutex;
-
-// Global lock to prevent tests from clobbering the shared ENV var
-// --- CHANGE HERE ---
-static TEST_MUTEX: Mutex<()> = Mutex::const_new(());
-
-fn setup_env(suffix: &str) -> std::path::PathBuf {
-    let temp_dir =
-        env::temp_dir().join(format!("cfait_test_edge_{}_{}", suffix, std::process::id()));
-    let _ = fs::create_dir_all(&temp_dir);
-
-    // UNSAFE: modifying process environment
-    unsafe {
-        env::set_var("CFAIT_TEST_DIR", &temp_dir);
-    }
-
-    // Clean potential previous run
-    if let Some(p) = Journal::get_path()
-        && p.exists()
-    {
-        let _ = fs::remove_file(p);
-    }
-    temp_dir
-}
-
-fn teardown(path: std::path::PathBuf) {
-    unsafe {
-        env::remove_var("CFAIT_TEST_DIR");
-    }
-    let _ = fs::remove_dir_all(path);
-}
+use std::sync::Arc;
 
 #[tokio::test]
 async fn test_sync_delete_404_is_success() {
-    // 0. Acquire Lock to run exclusively
-    // --- CHANGE HERE ---
-    let _guard = TEST_MUTEX.lock().await;
-
-    let temp_dir = setup_env("404");
+    let ctx = Arc::new(TestContext::new());
 
     // 1. Mock Server returning 404 Not Found for a DELETE
     let mut server = Server::new_async().await;
@@ -56,14 +20,14 @@ async fn test_sync_delete_404_is_success() {
         .await;
 
     // 2. Setup Client
-    let client = RustyClient::new(&url, "u", "p", true, None).unwrap();
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", true, None).unwrap();
 
     // 3. Add Delete Action to Journal
     let mut task = Task::new("T", &HashMap::new(), None);
     // Note: client.rs uses strip_host, so we ensure the href implies the relative path
     task.href = format!("{}/cal/task.ics", url);
     task.etag = "\"123\"".to_string();
-    Journal::push(Action::Delete(task)).unwrap();
+    Journal::push(ctx.as_ref(), Action::Delete(task)).unwrap();
 
     // 4. Sync
     let res = client.sync_journal().await;
@@ -74,19 +38,13 @@ async fn test_sync_delete_404_is_success() {
     mock.assert();
 
     // Item should be removed from journal
-    let j = Journal::load();
+    let j = Journal::load(ctx.as_ref());
     assert!(j.is_empty(), "Journal should be empty after 404 delete");
-
-    teardown(temp_dir);
 }
 
 #[tokio::test]
 async fn test_sync_500_keeps_item_in_queue() {
-    // 0. Acquire Lock to run exclusively
-    // --- CHANGE HERE ---
-    let _guard = TEST_MUTEX.lock().await;
-
-    let temp_dir = setup_env("500");
+    let ctx = Arc::new(TestContext::new());
 
     // 1. Mock Server returning 500 Error
     let mut server = Server::new_async().await;
@@ -98,13 +56,13 @@ async fn test_sync_500_keeps_item_in_queue() {
         .await;
 
     // 2. Setup Client
-    let client = RustyClient::new(&url, "u", "p", true, None).unwrap();
+    let client = RustyClient::new(ctx.clone(), &url, "u", "p", true, None).unwrap();
 
     // 3. Add Create Action
     let mut task = Task::new("T", &HashMap::new(), None);
     task.uid = "task".to_string();
     task.calendar_href = "/cal/".to_string();
-    Journal::push(Action::Create(task)).unwrap();
+    Journal::push(ctx.as_ref(), Action::Create(task)).unwrap();
 
     // 4. Sync
     let res = client.sync_journal().await;
@@ -115,12 +73,10 @@ async fn test_sync_500_keeps_item_in_queue() {
     mock.assert();
 
     // Item should REMAIN in journal because it failed
-    let j = Journal::load();
+    let j = Journal::load(ctx.as_ref());
     assert!(
         !j.is_empty(),
         "Journal should still contain the failed item"
     );
     assert_eq!(j.queue.len(), 1);
-
-    teardown(temp_dir);
 }

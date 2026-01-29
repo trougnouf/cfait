@@ -1,3 +1,4 @@
+// File: ./src/gui/update/network.rs
 // Handles network sync and connectivity messages in the GUI.
 use crate::cache::Cache;
 use crate::config::Config;
@@ -19,9 +20,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.error_msg = None;
 
             if app.client.is_some()
-                && let Ok(cfg) = Config::load()
+                && let Ok(cfg) = Config::load(app.ctx.as_ref())
             {
-                return Task::perform(connect_and_fetch_wrapper(cfg), Message::Loaded);
+                return Task::perform(
+                    connect_and_fetch_wrapper(app.ctx.clone(), cfg),
+                    Message::Loaded,
+                );
             }
             Task::none()
         }
@@ -34,10 +38,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.error_msg = None;
             }
 
-            app.unsynced_changes = !Journal::load().is_empty();
+            app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
 
             // Merge all local calendars from registry with network calendars
-            let local_cals = LocalCalendarRegistry::load().unwrap_or_default();
+            let local_cals = LocalCalendarRegistry::load(app.ctx.as_ref()).unwrap_or_default();
 
             // Add all local calendars that aren't already in the list
             for local_cal in local_cals {
@@ -68,7 +72,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         .block_on(async { client.get_tasks(&cal.href).await })
                 {
                     // Apply Journal (replays Creates/Updates/Deletes correctly)
-                    Journal::apply_to_tasks(&mut local_t, &cal.href);
+                    Journal::apply_to_tasks(app.ctx.as_ref(), &mut local_t, &cal.href);
                     app.store.insert(cal.href.clone(), local_t);
                 }
             }
@@ -78,8 +82,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if cal.href.starts_with("local://") {
                     continue;
                 }
-                if let Ok((mut cached_tasks, _)) = Cache::load(&cal.href) {
-                    Journal::apply_to_tasks(&mut cached_tasks, &cal.href);
+                if let Ok((mut cached_tasks, _)) = Cache::load(app.ctx.as_ref(), &cal.href) {
+                    Journal::apply_to_tasks(app.ctx.as_ref(), &mut cached_tasks, &cal.href);
                     app.store.insert(cal.href.clone(), cached_tasks);
                 }
             }
@@ -111,11 +115,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && href != LOCAL_CALENDAR_HREF
                 && app.error_msg.is_none()
             {
-                Journal::apply_to_tasks(&mut tasks, href);
+                Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, href);
                 app.store.insert(href.clone(), tasks);
             }
 
-            if let Ok(cfg) = Config::load() {
+            if let Ok(cfg) = Config::load(app.ctx.as_ref()) {
                 app.hide_completed = cfg.hide_completed;
                 app.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
                 app.tag_aliases = cfg.tag_aliases;
@@ -161,7 +165,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::RefreshedAll(Ok(results)) => {
             for (href, mut tasks) in results {
-                Journal::apply_to_tasks(&mut tasks, &href);
+                Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &href);
                 app.store.insert(href.clone(), tasks);
             }
 
@@ -177,7 +181,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::TasksRefreshed(Ok((href, mut tasks))) => {
             app.error_msg = None;
-            Journal::apply_to_tasks(&mut tasks, &href);
+            Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &href);
             app.store.insert(href.clone(), tasks);
 
             if app.active_cal_href.as_deref() == Some(&href) {
@@ -203,7 +207,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             app.store.update_or_add_task(updated);
 
-            app.unsynced_changes = !Journal::load().is_empty();
+            app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
             if app.unsynced_changes {
                 app.error_msg = Some("Offline: Changes queued.".to_string());
             }
@@ -246,8 +250,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
                 // Collect to Vec for saving to Cache/Disk
                 let list: Vec<_> = map.values().cloned().collect();
-                let (_, token) = Cache::load(&new_task.calendar_href).unwrap_or((vec![], None));
-                let _ = Cache::save(&new_task.calendar_href, &list, token);
+                let (_, token) = Cache::load(app.ctx.as_ref(), &new_task.calendar_href)
+                    .unwrap_or((vec![], None));
+                let _ = Cache::save(app.ctx.as_ref(), &new_task.calendar_href, &list, token);
             }
             refresh_filtered_tasks(app);
 

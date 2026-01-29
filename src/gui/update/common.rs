@@ -1,5 +1,5 @@
-// Common utility functions for GUI updates.
 // File: ./src/gui/update/common.rs
+// Common utility functions for GUI updates.
 
 use crate::config::Config;
 use crate::gui::async_ops::*;
@@ -134,7 +134,7 @@ pub fn save_config(app: &GuiApp) {
         create_events_for_tasks: app.create_events_for_tasks,
         delete_events_on_completion: app.delete_events_on_completion,
     }
-    .save();
+    .save(app.ctx.as_ref());
 }
 
 pub fn apply_alias_retroactively(

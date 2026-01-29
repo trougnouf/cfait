@@ -1,20 +1,16 @@
-// Tests for journal action propagation logic.
 use cfait::client::RustyClient;
+use cfait::context::TestContext;
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
 use mockito::Server;
 use std::collections::HashMap;
-use std::env;
 use std::fs;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn test_move_propagates_href_to_pending_update() {
     // 0. Setup Isolation
-    let temp_dir = env::temp_dir().join(format!("cfait_test_prop_{}", std::process::id()));
-    let _ = fs::create_dir_all(&temp_dir);
-    unsafe {
-        env::set_var("CFAIT_TEST_DIR", &temp_dir);
-    }
+    let ctx = Arc::new(TestContext::new());
 
     // 1. Setup Mock Server
     let mut server = Server::new_async().await;
@@ -47,7 +43,7 @@ async fn test_move_propagates_href_to_pending_update() {
         .await;
 
     // 4. Configure Client
-    let client = RustyClient::new(&url, "user", "pass", true, None).unwrap();
+    let client = RustyClient::new(ctx.clone(), &url, "user", "pass", true, None).unwrap();
 
     // 5. Setup Journal
     let mut task = Task::new("Task to Move", &HashMap::new(), None);
@@ -56,17 +52,21 @@ async fn test_move_propagates_href_to_pending_update() {
     task.href = old_href.clone();
     task.etag = "\"orig-etag\"".to_string();
 
-    if let Some(p) = Journal::get_path()
+    if let Some(p) = Journal::get_path(ctx.as_ref())
         && p.exists()
     {
         let _ = fs::remove_file(p);
     }
 
-    Journal::push(Action::Move(task.clone(), new_cal.to_string())).unwrap();
+    Journal::push(
+        ctx.as_ref(),
+        Action::Move(task.clone(), new_cal.to_string()),
+    )
+    .unwrap();
 
     let mut update_task = task.clone();
     update_task.summary = "Updated Summary".to_string();
-    Journal::push(Action::Update(update_task)).unwrap();
+    Journal::push(ctx.as_ref(), Action::Update(update_task)).unwrap();
 
     // 6. Run Sync
     println!("Starting Sync...");
@@ -78,12 +78,6 @@ async fn test_move_propagates_href_to_pending_update() {
     mock_move.assert();
     mock_update_at_new_loc.assert();
 
-    let j = Journal::load();
+    let j = Journal::load(ctx.as_ref());
     assert!(j.is_empty(), "Journal should be empty");
-
-    // CLEANUP
-    unsafe {
-        env::remove_var("CFAIT_TEST_DIR");
-    }
-    let _ = fs::remove_dir_all(&temp_dir);
 }

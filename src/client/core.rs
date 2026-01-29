@@ -4,6 +4,7 @@ use crate::cache::Cache;
 use crate::client::auth::DynamicAuthLayer;
 use crate::client::cert::NoVerifier;
 use crate::config::Config;
+use crate::context::AppContext;
 use crate::journal::{Action, Journal};
 use crate::model::{CalendarListEntry, IcsAdapter, Task, TaskStatus};
 use crate::storage::{LocalCalendarRegistry, LocalStorage};
@@ -171,10 +172,12 @@ where
 #[derive(Clone, Debug)]
 pub struct RustyClient {
     pub client: Option<CalDavClient<HttpsClient>>,
+    pub ctx: Arc<dyn AppContext>,
 }
 
 impl RustyClient {
     pub fn new(
+        ctx: Arc<dyn AppContext>,
         url: &str,
         user: &str,
         pass: &str,
@@ -182,7 +185,10 @@ impl RustyClient {
         client_type: Option<&str>,
     ) -> Result<Self, String> {
         if url.is_empty() {
-            return Ok(Self { client: None });
+            return Ok(Self {
+                client: None,
+                ctx: ctx.clone(),
+            });
         }
         let uri: Uri = url
             .parse()
@@ -243,6 +249,7 @@ impl RustyClient {
         let caldav = CalDavClient::new(webdav);
         Ok(Self {
             client: Some(caldav),
+            ctx,
         })
     }
 
@@ -269,6 +276,7 @@ impl RustyClient {
     }
 
     pub async fn connect_with_fallback(
+        ctx: Arc<dyn AppContext>,
         config: Config,
         client_type: Option<&str>,
     ) -> Result<
@@ -282,6 +290,7 @@ impl RustyClient {
         String,
     > {
         let client = Self::new(
+            ctx,
             &config.url,
             &config.username,
             &config.password,
@@ -294,7 +303,7 @@ impl RustyClient {
 
         let (calendars, warning) = match client.get_calendars().await {
             Ok(c) => {
-                let _ = Cache::save_calendars(&c);
+                let _ = Cache::save_calendars(client.ctx.as_ref(), &c);
                 (c, None)
             }
             Err(e) => {
@@ -302,7 +311,7 @@ impl RustyClient {
                     return Err(format!("Connection failed: {}", e));
                 }
                 (
-                    Cache::load_calendars().unwrap_or_default(),
+                    Cache::load_calendars(client.ctx.as_ref()).unwrap_or_default(),
                     Some("Offline mode".to_string()),
                 )
             }
@@ -331,8 +340,8 @@ impl RustyClient {
                 vec![]
             }
         } else if let Some(ref h) = active_href {
-            let (mut t, _) = Cache::load(h).unwrap_or((vec![], None));
-            Journal::apply_to_tasks(&mut t, h);
+            let (mut t, _) = Cache::load(client.ctx.as_ref(), h).unwrap_or((vec![], None));
+            Journal::apply_to_tasks(client.ctx.as_ref(), &mut t, h);
             t
         } else {
             vec![]
@@ -395,11 +404,12 @@ impl RustyClient {
             }
 
             // Load local calendars from the registry
-            if let Ok(local_cals) = LocalCalendarRegistry::load() {
+            if let Ok(local_cals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
                 for local_cal in local_cals {
                     // If this is the recovery calendar, check if it's empty
                     if local_cal.href == "local://recovery" {
-                        if let Ok(tasks) = LocalStorage::load_for_href(&local_cal.href)
+                        if let Ok(tasks) =
+                            LocalStorage::load_for_href(self.ctx.as_ref(), &local_cal.href)
                             && !tasks.is_empty()
                         {
                             // Only add it to the visible list if it has tasks
@@ -416,15 +426,16 @@ impl RustyClient {
         } else {
             // --- OFFLINE MODE: Apply the same logic to the cached/local list ---
             // FIX: Load cached remote calendars first.
-            let mut calendars = Cache::load_calendars().unwrap_or_default();
-            if let Ok(local_cals) = LocalCalendarRegistry::load() {
+            let mut calendars = Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
+            if let Ok(local_cals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
                 for local_cal in local_cals {
                     // Prevent duplicates if already in cache (unlikely but safe)
                     if calendars.iter().any(|c| c.href == local_cal.href) {
                         continue;
                     }
                     if local_cal.href == "local://recovery" {
-                        if let Ok(tasks) = LocalStorage::load_for_href(&local_cal.href)
+                        if let Ok(tasks) =
+                            LocalStorage::load_for_href(self.ctx.as_ref(), &local_cal.href)
                             && !tasks.is_empty()
                         {
                             calendars.push(local_cal);
@@ -575,7 +586,7 @@ impl RustyClient {
         config_enabled: bool,
     ) -> Result<bool, String> {
         // Derive delete_on_completion from persisted configuration
-        let cfg = Config::load().unwrap_or_default();
+        let cfg = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let delete_on_completion = cfg.delete_events_on_completion;
         let res = self
             .sync_companion_event(task, config_enabled, delete_on_completion, false)
@@ -626,21 +637,22 @@ impl RustyClient {
         apply_journal: bool,
     ) -> Result<Vec<Task>, String> {
         if calendar_href.starts_with("local://") {
-            let mut tasks =
-                LocalStorage::load_for_href(calendar_href).map_err(|e| e.to_string())?;
+            let mut tasks = LocalStorage::load_for_href(self.ctx.as_ref(), calendar_href)
+                .map_err(|e| e.to_string())?;
             if apply_journal {
-                Journal::apply_to_tasks(&mut tasks, calendar_href);
+                Journal::apply_to_tasks(self.ctx.as_ref(), &mut tasks, calendar_href);
             }
             return Ok(tasks);
         }
 
-        let (mut cached_tasks, cached_token) = Cache::load(calendar_href).unwrap_or((vec![], None));
+        let (mut cached_tasks, cached_token) =
+            Cache::load(self.ctx.as_ref(), calendar_href).unwrap_or((vec![], None));
 
         if let Some(client) = &self.client {
             let path_href = strip_host(calendar_href);
 
             let pending_deletions = if apply_journal {
-                let journal = Journal::load();
+                let journal = Journal::load(self.ctx.as_ref());
                 let mut dels = HashSet::new();
                 for action in journal.queue {
                     match action {
@@ -681,7 +693,7 @@ impl RustyClient {
                 && r_tok == c_tok
             {
                 if apply_journal {
-                    Journal::apply_to_tasks(&mut cached_tasks, calendar_href);
+                    Journal::apply_to_tasks(self.ctx.as_ref(), &mut cached_tasks, calendar_href);
                 }
                 return Ok(cached_tasks);
             }
@@ -767,13 +779,13 @@ impl RustyClient {
             }
 
             if apply_journal {
-                Journal::apply_to_tasks(&mut final_tasks, calendar_href);
+                Journal::apply_to_tasks(self.ctx.as_ref(), &mut final_tasks, calendar_href);
             }
-            let _ = Cache::save(calendar_href, &final_tasks, remote_token);
+            let _ = Cache::save(self.ctx.as_ref(), calendar_href, &final_tasks, remote_token);
             Ok(final_tasks)
         } else {
             if apply_journal {
-                Journal::apply_to_tasks(&mut cached_tasks, calendar_href);
+                Journal::apply_to_tasks(self.ctx.as_ref(), &mut cached_tasks, calendar_href);
             }
             Ok(cached_tasks)
         }
@@ -816,10 +828,11 @@ impl RustyClient {
 
     pub async fn create_task(&self, task: &mut Task) -> Result<Vec<String>, String> {
         if task.calendar_href.starts_with("local://") {
-            let mut all =
-                LocalStorage::load_for_href(&task.calendar_href).map_err(|e| e.to_string())?;
+            let mut all = LocalStorage::load_for_href(self.ctx.as_ref(), &task.calendar_href)
+                .map_err(|e| e.to_string())?;
             all.push(task.clone());
-            LocalStorage::save_for_href(&task.calendar_href, &all).map_err(|e| e.to_string())?;
+            LocalStorage::save_for_href(self.ctx.as_ref(), &task.calendar_href, &all)
+                .map_err(|e| e.to_string())?;
             return Ok(vec![]);
         }
 
@@ -832,7 +845,8 @@ impl RustyClient {
         };
         task.href = full_href;
 
-        Journal::push(Action::Create(task.clone())).map_err(|e| e.to_string())?;
+        Journal::push(self.ctx.as_ref(), Action::Create(task.clone()))
+            .map_err(|e| e.to_string())?;
         self.sync_journal().await
     }
 
@@ -840,30 +854,33 @@ impl RustyClient {
         task.sequence += 1;
 
         if task.calendar_href.starts_with("local://") {
-            let mut all =
-                LocalStorage::load_for_href(&task.calendar_href).map_err(|e| e.to_string())?;
+            let mut all = LocalStorage::load_for_href(self.ctx.as_ref(), &task.calendar_href)
+                .map_err(|e| e.to_string())?;
             if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
                 all[idx] = task.clone();
-                LocalStorage::save_for_href(&task.calendar_href, &all)
+                LocalStorage::save_for_href(self.ctx.as_ref(), &task.calendar_href, &all)
                     .map_err(|e| e.to_string())?;
             }
             return Ok(vec![]);
         }
 
-        Journal::push(Action::Update(task.clone())).map_err(|e| e.to_string())?;
+        Journal::push(self.ctx.as_ref(), Action::Update(task.clone()))
+            .map_err(|e| e.to_string())?;
         self.sync_journal().await
     }
 
     pub async fn delete_task(&self, task: &Task) -> Result<Vec<String>, String> {
         if task.calendar_href.starts_with("local://") {
-            let mut all =
-                LocalStorage::load_for_href(&task.calendar_href).map_err(|e| e.to_string())?;
+            let mut all = LocalStorage::load_for_href(self.ctx.as_ref(), &task.calendar_href)
+                .map_err(|e| e.to_string())?;
             all.retain(|t| t.uid != task.uid);
-            LocalStorage::save_for_href(&task.calendar_href, &all).map_err(|e| e.to_string())?;
+            LocalStorage::save_for_href(self.ctx.as_ref(), &task.calendar_href, &all)
+                .map_err(|e| e.to_string())?;
             return Ok(vec![]);
         }
 
-        Journal::push(Action::Delete(task.clone())).map_err(|e| e.to_string())?;
+        Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()))
+            .map_err(|e| e.to_string())?;
         self.sync_journal().await
     }
 
@@ -922,8 +939,8 @@ impl RustyClient {
 
         // Local Storage Path
         if task.calendar_href.starts_with("local://") {
-            let mut all =
-                LocalStorage::load_for_href(&task.calendar_href).map_err(|e| e.to_string())?;
+            let mut all = LocalStorage::load_for_href(self.ctx.as_ref(), &task.calendar_href)
+                .map_err(|e| e.to_string())?;
 
             // 1. Save History Snapshot (if exists)
             if let Some(ref mut snap) = history_snapshot {
@@ -935,7 +952,8 @@ impl RustyClient {
                 all[idx] = task.clone();
             }
 
-            LocalStorage::save_for_href(&task.calendar_href, &all).map_err(|e| e.to_string())?;
+            LocalStorage::save_for_href(self.ctx.as_ref(), &task.calendar_href, &all)
+                .map_err(|e| e.to_string())?;
             return Ok((task.clone(), history_snapshot, vec![]));
         }
 
@@ -1012,8 +1030,11 @@ impl RustyClient {
         }
 
         // Non-local moves use the journal/sync path
-        Journal::push(Action::Move(task.clone(), new_calendar_href.to_string()))
-            .map_err(|e| e.to_string())?;
+        Journal::push(
+            self.ctx.as_ref(),
+            Action::Move(task.clone(), new_calendar_href.to_string()),
+        )
+        .map_err(|e| e.to_string())?;
 
         let mut t = task.clone();
         t.calendar_href = new_calendar_href.to_string();
@@ -1260,7 +1281,7 @@ impl RustyClient {
 
     pub async fn sync_journal(&self) -> Result<Vec<String>, String> {
         // Load and compact journal once at the start
-        let mut journal = Journal::load();
+        let mut journal = Journal::load(self.ctx.as_ref());
         let mut tmp_j = Journal {
             queue: mem::take(&mut journal.queue),
         };
@@ -1271,7 +1292,7 @@ impl RustyClient {
         let mut warnings = Vec::new();
 
         // Load config for the create_events_for_tasks flag
-        let config = Config::load().unwrap_or_default();
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let events_enabled = config.create_events_for_tasks;
         let delete_on_completion = config.delete_events_on_completion;
 
@@ -1446,7 +1467,8 @@ impl RustyClient {
                                 let recovery_href = "local://recovery";
 
                                 if !recovery_cal_created_this_cycle {
-                                    if let Ok(mut locals) = LocalCalendarRegistry::load()
+                                    if let Ok(mut locals) =
+                                        LocalCalendarRegistry::load(self.ctx.as_ref())
                                         && !locals.iter().any(|c| c.href == recovery_href)
                                     {
                                         locals.push(CalendarListEntry {
@@ -1454,7 +1476,8 @@ impl RustyClient {
                                             href: recovery_href.to_string(),
                                             color: Some("#DB4437".to_string()),
                                         });
-                                        let _ = LocalCalendarRegistry::save(&locals);
+                                        let _ =
+                                            LocalCalendarRegistry::save(self.ctx.as_ref(), &locals);
                                     }
                                     recovery_cal_created_this_cycle = true;
                                 }
@@ -1463,12 +1486,21 @@ impl RustyClient {
                                 task.description
                                     .push_str(&format!("\n\n[Sync Error]: {}", msg));
 
-                                if let Ok(mut existing) = LocalStorage::load_for_href(recovery_href)
+                                if let Ok(mut existing) =
+                                    LocalStorage::load_for_href(self.ctx.as_ref(), recovery_href)
                                 {
                                     existing.push(task);
-                                    let _ = LocalStorage::save_for_href(recovery_href, &existing);
+                                    let _ = LocalStorage::save_for_href(
+                                        self.ctx.as_ref(),
+                                        recovery_href,
+                                        &existing,
+                                    );
                                 } else {
-                                    let _ = LocalStorage::save_for_href(recovery_href, &[task]);
+                                    let _ = LocalStorage::save_for_href(
+                                        self.ctx.as_ref(),
+                                        recovery_href,
+                                        &[task],
+                                    );
                                 }
                                 warnings.push(
                                     "Fatal sync error. Task moved to 'Local (Recovery)'."
@@ -1559,7 +1591,7 @@ impl RustyClient {
                     // Check for fatal errors that might have slipped through without a test hook
                     // (Though the new logic catches them inside handle_*)
                     // If we are here, it's a real hard network error or retryable failure.
-                    let _ = Journal::modify(|queue| {
+                    let _ = Journal::modify(self.ctx.as_ref(), |queue| {
                         *queue = journal.queue.clone();
                     });
                     return Err(msg);
@@ -1568,7 +1600,7 @@ impl RustyClient {
         }
 
         // Write final state to disk once at the end
-        Journal::modify(|queue| {
+        Journal::modify(self.ctx.as_ref(), |queue| {
             *queue = journal.queue;
         })
         .map_err(|e| e.to_string())?;
@@ -1577,7 +1609,7 @@ impl RustyClient {
     }
 
     async fn attempt_conflict_resolution(&self, local_task: &Task) -> Option<(Action, String)> {
-        let (cached_tasks, _) = Cache::load(&local_task.calendar_href).ok()?;
+        let (cached_tasks, _) = Cache::load(self.ctx.as_ref(), &local_task.calendar_href).ok()?;
         let base_task = cached_tasks.iter().find(|t| t.uid == local_task.uid)?;
 
         let server_task = self.fetch_remote_task(&local_task.href).await?;
@@ -1710,44 +1742,6 @@ mod tests {
     use serial_test::serial;
     use std::collections::HashMap;
 
-    // Helper for environment isolation in client tests to prevent pollution
-    struct TestGuard {
-        temp_dir: std::path::PathBuf,
-        original_env: Option<String>,
-    }
-
-    impl TestGuard {
-        fn new() -> Self {
-            let original_env = std::env::var("CFAIT_TEST_DIR").ok();
-            let temp_dir =
-                std::env::temp_dir().join(format!("cfait_client_test_{}", uuid::Uuid::new_v4()));
-            std::fs::create_dir_all(&temp_dir).unwrap();
-
-            // Set env var to redirect AppPaths to our temp dir
-            unsafe {
-                std::env::set_var("CFAIT_TEST_DIR", &temp_dir);
-            }
-
-            Self {
-                temp_dir,
-                original_env,
-            }
-        }
-    }
-
-    impl Drop for TestGuard {
-        fn drop(&mut self) {
-            let _ = std::fs::remove_dir_all(&self.temp_dir);
-            unsafe {
-                if let Some(val) = &self.original_env {
-                    std::env::set_var("CFAIT_TEST_DIR", val);
-                } else {
-                    std::env::remove_var("CFAIT_TEST_DIR");
-                }
-            }
-        }
-    }
-
     #[test]
     fn test_three_way_merge_preserves_new_fields() {
         let mut base = Task::new("Base Task", &HashMap::new(), None);
@@ -1778,14 +1772,19 @@ mod tests {
     #[test]
     #[serial]
     fn test_move_task_verify_success_preserves_remote_and_deletes_local() {
-        let _guard = TestGuard::new(); // Ensure clean environment
+        let ctx = std::sync::Arc::new(crate::context::TestContext::new());
 
         // Create a local task in source calendar
         let mut task = Task::new("T1", &HashMap::new(), None);
         task.uid = "uid-123".to_string();
         task.calendar_href = "local://src".to_string();
         task.summary = "Test task".to_string();
-        LocalStorage::save_for_href("local://src", std::slice::from_ref(&task)).unwrap();
+        crate::storage::LocalStorage::save_for_href(
+            ctx.as_ref(),
+            "local://src",
+            std::slice::from_ref(&task),
+        )
+        .unwrap();
 
         // Destination is a local calendar too (we're testing local->local branch)
         let dest = "local://dest";
@@ -1809,16 +1808,17 @@ mod tests {
             }));
         }
 
-        let client = RustyClient { client: None };
+        let client = RustyClient::new(ctx.clone(), "", "", "", false, None).unwrap();
         // Perform move: should create at dest (local branch), then verify via hook and delete source
         let res = futures::executor::block_on(client.move_task(&task, dest)).unwrap();
 
         // After successful move, source calendar should be empty
-        let src_tasks = LocalStorage::load_for_href("local://src").unwrap();
+        let src_tasks =
+            crate::storage::LocalStorage::load_for_href(ctx.as_ref(), "local://src").unwrap();
         assert!(src_tasks.is_empty(), "Source should be deleted");
 
         // Destination should contain the task
-        let dest_tasks = LocalStorage::load_for_href(dest).unwrap();
+        let dest_tasks = crate::storage::LocalStorage::load_for_href(ctx.as_ref(), dest).unwrap();
         assert_eq!(dest_tasks.len(), 1);
         assert_eq!(dest_tasks[0].uid, "uid-123");
         // Returned task should be server's canonical representation
@@ -1833,14 +1833,19 @@ mod tests {
     #[test]
     #[serial]
     fn test_move_task_verify_failure_preserves_local() {
-        let _guard = TestGuard::new(); // Ensure clean environment
+        let ctx = std::sync::Arc::new(crate::context::TestContext::new());
 
         // Create a local task in source calendar
         let mut task = Task::new("T2", &HashMap::new(), None);
         task.uid = "uid-456".to_string();
         task.calendar_href = "local://src2".to_string();
         task.summary = "Test task 2".to_string();
-        LocalStorage::save_for_href("local://src2", std::slice::from_ref(&task)).unwrap();
+        crate::storage::LocalStorage::save_for_href(
+            ctx.as_ref(),
+            "local://src2",
+            std::slice::from_ref(&task),
+        )
+        .unwrap();
 
         let dest = "local://dest2";
         let filename = format!("{}.ics", task.uid);
@@ -1856,12 +1861,13 @@ mod tests {
             }));
         }
 
-        let client = RustyClient { client: None };
+        let client = RustyClient::new(ctx.clone(), "", "", "", false, None).unwrap();
         let res = futures::executor::block_on(client.move_task(&task, dest));
         assert!(res.is_err(), "Move should fail verification and return Err");
 
         // Local copy should still exist
-        let src_tasks = LocalStorage::load_for_href("local://src2").unwrap();
+        let src_tasks =
+            crate::storage::LocalStorage::load_for_href(ctx.as_ref(), "local://src2").unwrap();
         assert_eq!(src_tasks.len(), 1);
         assert_eq!(src_tasks[0].uid, "uid-456");
 

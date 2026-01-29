@@ -1,6 +1,7 @@
-// Tests for HTTP Digest authentication.
 use cfait::client::RustyClient;
+use cfait::context::TestContext;
 use mockito::Server;
+use std::sync::Arc;
 
 #[tokio::test]
 async fn test_client_handles_digest_auth_challenge() {
@@ -18,9 +19,6 @@ async fn test_client_handles_digest_auth_challenge() {
         .await;
 
     // Mock 2: Retry -> Success (207 Multi-Status)
-    // IMPORTANT: We provide a body containing a ".ics" resource.
-    // This tells `discover_calendar` that it found a calendar, so it returns immediately
-    // instead of trying subsequent fallback discovery requests (which causes the test to fail).
     let success_body = r#"
         <d:multistatus xmlns:d="DAV:">
             <d:response>
@@ -43,7 +41,8 @@ async fn test_client_handles_digest_auth_challenge() {
         .create_async()
         .await;
 
-    let client = RustyClient::new(&url, "user", "pass", false, None).unwrap();
+    let ctx = Arc::new(TestContext::new());
+    let client = RustyClient::new(ctx, &url, "user", "pass", false, None).unwrap();
     let _ = client.discover_calendar().await;
 
     mock_unauthorized.assert();

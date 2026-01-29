@@ -1,3 +1,4 @@
+// File: ./src/store.rs
 /* cfait/src/store.rs
  *
  * Optimized in-memory store for tasks.
@@ -6,14 +7,20 @@
  * - `calendars` map: HashMap<CalendarHref, HashMap<Uid, Task>> for O(1) UID lookups.
  * - Filter pipeline operates on &Task references and only clones final results.
  * - get_task / get_task_mut use direct map lookups.
+ *
+ * Context injection:
+ * - TaskStore now stores an `Arc<dyn AppContext>` to perform file IO without
+ *   relying on global state.
  */
 
 use crate::cache::Cache;
+use crate::context::AppContext;
 use crate::model::{RawProperty, RecurrenceEngine, Task, TaskStatus};
 use crate::storage::LocalStorage;
 use chrono::{DateTime, Utc};
 use fastrand;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 pub const UNCATEGORIZED_ID: &str = ":::uncategorized:::";
 
@@ -88,12 +95,14 @@ pub fn select_weighted_random_index(tasks: &[Task], default_priority: u8) -> Opt
     None
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct TaskStore {
     // OPTIMIZATION: Changed inner type from Vec<Task> to HashMap<Uid, Task> for O(1) lookups
     pub calendars: HashMap<String, HashMap<String, Task>>,
     pub index: HashMap<String, String>, // UID -> CalendarHref mapping
     pub related_from_index: HashMap<String, Vec<String>>,
+    // Context for filesystem operations and test isolation
+    pub ctx: Arc<dyn AppContext>,
 }
 
 pub struct FilterOptions<'a> {
@@ -115,8 +124,14 @@ pub struct FilterOptions<'a> {
 }
 
 impl TaskStore {
-    pub fn new() -> Self {
-        Self::default()
+    /// Creates a new TaskStore with an explicit AppContext.
+    pub fn new(ctx: Arc<dyn AppContext>) -> Self {
+        Self {
+            calendars: HashMap::new(),
+            index: HashMap::new(),
+            related_from_index: HashMap::new(),
+            ctx,
+        }
     }
 
     pub fn insert(&mut self, calendar_href: String, tasks: Vec<Task>) {
@@ -152,10 +167,10 @@ impl TaskStore {
         let list: Vec<Task> = cal_map.values().cloned().collect();
 
         if href.starts_with("local://") {
-            let _ = LocalStorage::save_for_href(&href, &list);
+            let _ = LocalStorage::save_for_href(self.ctx.as_ref(), &href, &list);
         } else {
-            let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
-            let _ = Cache::save(&href, &list, token);
+            let (_, token) = Cache::load(self.ctx.as_ref(), &href).unwrap_or((vec![], None));
+            let _ = Cache::save(self.ctx.as_ref(), &href, &list, token);
         }
 
         self.rebuild_relation_index();
@@ -304,10 +319,10 @@ impl TaskStore {
             let list: Vec<Task> = map.values().cloned().collect();
 
             if href.starts_with("local://") {
-                let _ = LocalStorage::save_for_href(&href, &list);
+                let _ = LocalStorage::save_for_href(self.ctx.as_ref(), &href, &list);
             } else {
-                let (_, token) = Cache::load(&href).unwrap_or((vec![], None));
-                let _ = Cache::save(&href, &list, token);
+                let (_, token) = Cache::load(self.ctx.as_ref(), &href).unwrap_or((vec![], None));
+                let _ = Cache::save(self.ctx.as_ref(), &href, &list, token);
             }
             self.rebuild_relation_index();
             return Some((task, href));
@@ -397,10 +412,12 @@ impl TaskStore {
                 let target_list: Vec<Task> = target_map.values().cloned().collect();
 
                 if target_href.starts_with("local://") {
-                    let _ = LocalStorage::save_for_href(&target_href, &target_list);
+                    let _ =
+                        LocalStorage::save_for_href(self.ctx.as_ref(), &target_href, &target_list);
                 } else {
-                    let (_, token) = Cache::load(&target_href).unwrap_or((vec![], None));
-                    let _ = Cache::save(&target_href, &target_list, token);
+                    let (_, token) =
+                        Cache::load(self.ctx.as_ref(), &target_href).unwrap_or((vec![], None));
+                    let _ = Cache::save(self.ctx.as_ref(), &target_href, &target_list, token);
                 }
             }
 

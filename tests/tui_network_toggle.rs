@@ -1,27 +1,24 @@
+// File: ./tests/tui_network_toggle.rs
 // Integration tests for TUI network task toggling.
+use cfait::context::TestContext;
 use cfait::model::{Task, TaskStatus};
 use cfait::tui::action::{Action, AppEvent};
-use cfait::tui::network::run_network_actor;
+use cfait::tui::network::{NetworkActorConfig, run_network_actor};
 use mockito::Server;
 use std::collections::HashMap;
-use std::env;
-use std::fs;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 
 #[tokio::test]
 async fn test_tui_toggle_task_does_not_revert_status() {
-    // 1. Setup isolated environment
-    let temp_dir = env::temp_dir().join(format!("cfait_tui_toggle_{}", std::process::id()));
-    let _ = fs::create_dir_all(&temp_dir);
-    unsafe {
-        env::set_var("CFAIT_TEST_DIR", &temp_dir);
-    }
+    // 1. Setup isolated test context
+    let test_ctx = TestContext::new();
+    let ctx = Arc::new(test_ctx);
 
     // 2. Setup Mock Server
     let mut server = Server::new_async().await;
     let url = server.url();
 
-    // Mock basic PROPFIND for calendar discovery to allow client to start without error
     let _m_propfind = server
         .mock("PROPFIND", "/")
         .with_status(207)
@@ -29,8 +26,6 @@ async fn test_tui_toggle_task_does_not_revert_status() {
         .create_async()
         .await;
 
-    // The critical expectation: A PUT request updating the task to COMPLETED
-    // If the bug exists, the body will contain "STATUS:NEEDS-ACTION" (reverted)
     let task_path = "/test.ics";
     let m_put = server
         .mock("PUT", task_path)
@@ -40,7 +35,6 @@ async fn test_tui_toggle_task_does_not_revert_status() {
         .await;
 
     // 3. Prepare the Action
-    // The handler has already toggled this task to Completed in the UI
     let mut task = Task::new("Toggle Me", &HashMap::new(), None);
     task.uid = "test-uid".to_string();
     task.status = TaskStatus::Completed;
@@ -52,29 +46,27 @@ async fn test_tui_toggle_task_does_not_revert_status() {
     let (action_tx, action_rx) = mpsc::channel(10);
     let (event_tx, mut event_rx) = mpsc::channel(10);
 
+    // --- FIX: Wrap connection details in NetworkActorConfig ---
+    let config = NetworkActorConfig {
+        url: url.clone(),
+        user: "user".into(),
+        pass: "pass".into(),
+        allow_insecure: true,
+        default_cal: None,
+    };
+
     let actor_handle = tokio::spawn(async move {
-        run_network_actor(
-            url,
-            "user".into(),
-            "pass".into(),
-            true,
-            None,
-            action_rx,
-            event_tx,
-        )
-        .await;
+        run_network_actor(ctx.clone(), config, action_rx, event_tx).await;
     });
 
-    // Wait for initial events (connection status) to clear
+    // Wait for initial events
     let _ = event_rx.recv().await;
 
-    // Send the Toggle Action with the Completed task
     action_tx
         .send(Action::ToggleTask(task))
         .await
         .expect("Failed to send action");
 
-    // Wait for completion (Status: Synced.)
     loop {
         match tokio::time::timeout(std::time::Duration::from_secs(2), event_rx.recv()).await {
             Ok(Some(AppEvent::Status(s))) => {
@@ -89,15 +81,8 @@ async fn test_tui_toggle_task_does_not_revert_status() {
         }
     }
 
-    // 5. Verify Mock
-    // This asserts the network actor sent COMPLETED, not NEEDS-ACTION
     m_put.assert();
 
-    // Cleanup
     let _ = action_tx.send(Action::Quit).await;
     let _ = actor_handle.await;
-    unsafe {
-        env::remove_var("CFAIT_TEST_DIR");
-    }
-    let _ = fs::remove_dir_all(&temp_dir);
 }

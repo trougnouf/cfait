@@ -1,10 +1,13 @@
+use cfait::context::TestContext;
 use cfait::model::Task;
 use cfait::store::TaskStore;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[test]
 fn test_move_task_with_original_returns_original_and_updated_and_updates_store() {
-    let mut store = TaskStore::new();
+    let ctx = Arc::new(TestContext::new());
+    let mut store = TaskStore::new(ctx);
 
     let mut t = Task::new("Unit Test Task", &HashMap::new(), None);
     t.uid = "test-uid-1".to_string();

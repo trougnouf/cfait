@@ -1,9 +1,11 @@
+// File: ./src/gui/async_ops.rs
 // Asynchronous operations wrapper bridging sync GUI and async client.
 use crate::client::RustyClient;
 use crate::config::Config;
+use crate::context::AppContext;
 use crate::model::{CalendarListEntry, Task as TodoTask};
 use futures::stream::{self, StreamExt};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use tokio::runtime::Runtime;
 
 // Global runtime instance for bridging Iced (sync) and Client (async)
@@ -25,6 +27,7 @@ pub fn get_runtime() -> &'static Runtime {
 // --- WRAPPERS ---
 
 pub async fn connect_and_fetch_wrapper(
+    ctx: Arc<dyn AppContext>,
     config: Config,
 ) -> Result<
     (
@@ -37,7 +40,7 @@ pub async fn connect_and_fetch_wrapper(
     String,
 > {
     let rt = get_runtime();
-    rt.spawn(async { RustyClient::connect_with_fallback(config, Some("GUI")).await })
+    rt.spawn(async { RustyClient::connect_with_fallback(ctx, config, Some("GUI")).await })
         .await
         .map_err(|e| e.to_string())?
 }

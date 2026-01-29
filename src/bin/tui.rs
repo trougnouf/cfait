@@ -1,11 +1,18 @@
 // Binary entry point for the TUI application.
+
+// File: ./src/bin/tui.rs
 use anyhow::Result;
+use cfait::context::{AppContext, StandardContext}; // Import AppContext traits
 use cfait::storage::LocalStorage;
 use std::env;
+use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
+
+    // Create the application context (StandardContext for production use)
+    let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(None));
 
     // Handle help flag
     if args.len() > 1 && (args[1] == "--help" || args[1] == "-h" || args[1] == "help") {
@@ -51,7 +58,7 @@ async fn main() -> Result<()> {
         };
 
         // Import tasks
-        match LocalStorage::import_from_ics(&href, &ics_content) {
+        match LocalStorage::import_from_ics(ctx.as_ref(), &href, &ics_content) {
             Ok(count) => {
                 println!(
                     "Successfully imported {} task(s) to calendar '{}'",
@@ -82,10 +89,11 @@ async fn main() -> Result<()> {
             } else {
                 format!("local://{}", cal_id)
             };
-            LocalStorage::load_for_href(&href)?
+            LocalStorage::load_for_href(ctx.as_ref(), &href)?
         } else {
             // Export default calendar for backward compatibility
-            LocalStorage::load()?
+            // LocalStorage::load() was removed, use load_for_href with default
+            LocalStorage::load_for_href(ctx.as_ref(), cfait::storage::LOCAL_CALENDAR_HREF)?
         };
 
         let ics = LocalStorage::to_ics_string(&tasks);

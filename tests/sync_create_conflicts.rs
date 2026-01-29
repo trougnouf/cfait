@@ -1,49 +1,14 @@
-// Tests handling of creation conflicts during sync.
 use cfait::client::RustyClient;
+use cfait::context::TestContext;
 use cfait::journal::{Action, Journal};
 use cfait::model::Task;
 use mockito::Server;
 use std::collections::HashMap;
-use std::env;
-use std::fs;
-use tokio::sync::Mutex;
-
-// Global mutex to prevent environment variable race conditions between tests
-static TEST_MUTEX: Mutex<()> = Mutex::const_new(());
-
-fn setup_env(suffix: &str) -> std::path::PathBuf {
-    let temp_dir = env::temp_dir().join(format!(
-        "cfait_test_create_{}_{}",
-        suffix,
-        std::process::id()
-    ));
-    let _ = fs::create_dir_all(&temp_dir);
-
-    // Safety: Tests run serially due to the Mutex lock in the test body
-    unsafe {
-        env::set_var("CFAIT_TEST_DIR", &temp_dir);
-    }
-
-    // Ensure clean state
-    if let Some(p) = Journal::get_path()
-        && p.exists()
-    {
-        let _ = fs::remove_file(p);
-    }
-    temp_dir
-}
-
-fn teardown(path: std::path::PathBuf) {
-    unsafe {
-        env::remove_var("CFAIT_TEST_DIR");
-    }
-    let _ = fs::remove_dir_all(path);
-}
+use std::sync::Arc;
 
 #[tokio::test]
 async fn test_create_412_handled_gracefully() {
-    let _guard = TEST_MUTEX.lock().await;
-    let temp_dir = setup_env("412");
+    let ctx = Arc::new(TestContext::new());
 
     let mut server = Server::new_async().await;
     let url = server.url();
@@ -60,16 +25,16 @@ async fn test_create_412_handled_gracefully() {
         .create_async()
         .await;
 
-    // 2. Setup Client
-    let client = RustyClient::new(&url, "user", "pass", true, None).unwrap();
+    // 2. Setup Client with ctx
+    let client = RustyClient::new(ctx.clone(), &url, "user", "pass", true, None).unwrap();
 
-    // 3. Queue the Create Action
+    // 3. Queue the Create Action with ctx
     let mut task = Task::new("Stuck Task", &HashMap::new(), None);
     task.uid = task_uid.to_string();
     task.calendar_href = format!("{}/cal/", url);
     task.href = format!("{}{}", url, task_path);
 
-    Journal::push(Action::Create(task)).unwrap();
+    Journal::push(ctx.as_ref(), Action::Create(task)).unwrap();
 
     // 4. Run Sync
     let result = client.sync_journal().await;
@@ -85,19 +50,16 @@ async fn test_create_412_handled_gracefully() {
     );
 
     // CRITICAL: The journal must be empty. If it's not, the client is stuck in a loop.
-    let journal = Journal::load();
+    let journal = Journal::load(ctx.as_ref());
     assert!(
         journal.is_empty(),
         "Journal should be empty. The client failed to resolve the 412 conflict."
     );
-
-    teardown(temp_dir);
 }
 
 #[tokio::test]
 async fn test_create_500_persists() {
-    let _guard = TEST_MUTEX.lock().await;
-    let temp_dir = setup_env("500");
+    let ctx = Arc::new(TestContext::new());
 
     let mut server = Server::new_async().await;
     let url = server.url();
@@ -111,14 +73,14 @@ async fn test_create_500_persists() {
         .create_async()
         .await;
 
-    let client = RustyClient::new(&url, "user", "pass", true, None).unwrap();
+    let client = RustyClient::new(ctx.clone(), &url, "user", "pass", true, None).unwrap();
 
     let mut task = Task::new("Broken Task", &HashMap::new(), None);
     task.uid = "broken-server".to_string();
     task.calendar_href = format!("{}/cal/", url);
     task.href = format!("{}{}", url, task_path);
 
-    Journal::push(Action::Create(task)).unwrap();
+    Journal::push(ctx.as_ref(), Action::Create(task)).unwrap();
 
     let result = client.sync_journal().await;
 
@@ -128,19 +90,16 @@ async fn test_create_500_persists() {
     assert!(result.is_err(), "Sync should fail on 500");
 
     // Journal should KEEP the item (retry later)
-    let journal = Journal::load();
+    let journal = Journal::load(ctx.as_ref());
     assert!(
         !journal.is_empty(),
         "Journal should preserve items on 500 error"
     );
-
-    teardown(temp_dir);
 }
 
 #[tokio::test]
 async fn test_move_404_handled_gracefully() {
-    let _guard = TEST_MUTEX.lock().await;
-    let temp_dir = setup_env("move_404");
+    let ctx = Arc::new(TestContext::new());
 
     let mut server = Server::new_async().await;
     let url = server.url();
@@ -155,25 +114,23 @@ async fn test_move_404_handled_gracefully() {
         .create_async()
         .await;
 
-    let client = RustyClient::new(&url, "user", "pass", true, None).unwrap();
+    let client = RustyClient::new(ctx.clone(), &url, "user", "pass", true, None).unwrap();
 
     let mut task = Task::new("Moving Task", &HashMap::new(), None);
     task.uid = "moving".to_string();
     task.href = format!("{}{}", url, old_path);
     task.calendar_href = format!("{}/cal1/", url);
 
-    Journal::push(Action::Move(task, new_cal)).unwrap();
+    Journal::push(ctx.as_ref(), Action::Move(task, new_cal)).unwrap();
 
     let result = client.sync_journal().await;
 
     mock_move.assert();
     assert!(result.is_ok());
 
-    let journal = Journal::load();
+    let journal = Journal::load(ctx.as_ref());
     assert!(
         journal.is_empty(),
         "Journal should drop MOVE actions if source is 404"
     );
-
-    teardown(temp_dir);
 }

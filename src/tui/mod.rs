@@ -7,6 +7,7 @@ pub mod state;
 pub mod view;
 
 use crate::config;
+use crate::context::{AppContext, StandardContext};
 use crate::system::{AlarmMessage, SystemEvent};
 use crate::tui::action::AppEvent;
 use crate::tui::state::{AppState, InputMode};
@@ -23,11 +24,15 @@ use rpassword::prompt_password;
 use std::{
     env,
     io::{self, Write},
+    sync::Arc,
     time::Duration,
 };
-use tokio::sync::mpsc; // <-- Import the function
+use tokio::sync::mpsc;
 
 pub async fn run() -> Result<()> {
+    // --- 0. CONTEXT ---
+    let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(None));
+
     // --- 1. PREAMBLE & CONFIG ---
     let args: Vec<String> = env::args().collect();
     if args.len() > 1 && (args[1] == "--help" || args[1] == "-h") {
@@ -101,7 +106,7 @@ pub async fn run() -> Result<()> {
         default_hook(info);
     }));
 
-    let config_result = config::Config::load();
+    let config_result = config::Config::load(ctx.as_ref());
     let cfg = match config_result {
         Ok(c) => c,
         Err(e) => {
@@ -148,10 +153,8 @@ pub async fn run() -> Result<()> {
                     io::stdin().read_line(&mut user)?;
                     new_config.username = user.trim().to_string();
 
-                    // --- CHANGE STARTS HERE ---
                     let pass = prompt_password("Password: ")?;
                     new_config.password = pass;
-                    // --- CHANGE ENDS HERE ---
 
                     print!("Allow insecure SSL certificates? (y/N): ");
                     io::stdout().flush()?;
@@ -161,8 +164,10 @@ pub async fn run() -> Result<()> {
 
                     println!("\nTesting connection...");
 
+                    let ctx_clone = ctx.clone();
                     let check_result = async {
                         let client = crate::client::RustyClient::new(
+                            ctx_clone,
                             &new_config.url,
                             &new_config.username,
                             &new_config.password,
@@ -199,9 +204,9 @@ pub async fn run() -> Result<()> {
                 }
             }
 
-            if let Err(e) = new_config.save() {
+            if let Err(e) = new_config.save(ctx.as_ref()) {
                 eprintln!("Warning: Could not save config file: {}", e);
-            } else if let Ok(path) = config::Config::get_path_string() {
+            } else if let Ok(path) = config::Config::get_path_string(ctx.as_ref()) {
                 println!("Configuration saved to: {}", path);
             }
 
@@ -257,7 +262,7 @@ pub async fn run() -> Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     // --- 3. STATE INIT ---
-    let mut app_state = AppState::new();
+    let mut app_state = AppState::new_with_ctx(ctx.clone());
     app_state.hide_completed = hide_completed;
     app_state.hide_fully_completed_tags = hide_fully_completed_tags;
     app_state.sort_cutoff_months = sort_cutoff;
@@ -283,12 +288,16 @@ pub async fn run() -> Result<()> {
     let (event_tx, mut event_rx) = mpsc::channel(10);
 
     // --- 4. NETWORK THREAD ---
-    tokio::spawn(network::run_network_actor(
+    let network_config = network::NetworkActorConfig {
         url,
         user,
         pass,
         allow_insecure,
-        default_cal.clone(), // Clone for the thread
+        default_cal: default_cal.clone(),
+    };
+    tokio::spawn(network::run_network_actor(
+        ctx.clone(),
+        network_config,
         action_rx,
         event_tx,
     ));

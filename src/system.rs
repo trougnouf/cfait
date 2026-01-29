@@ -1,5 +1,7 @@
+// File: ./src/system.rs
 // Background system actor for handling alarms and notifications.
 use crate::config::Config; // Import Config
+use crate::context::StandardContext; // Import StandardContext, remove unused AppContext trait
 use crate::model::{Alarm, AlarmTrigger, DateType, Task}; // Import DateType
 use chrono::{Local, NaiveTime, Utc}; // Import Time helpers
 use notify_rust::Notification;
@@ -26,8 +28,9 @@ pub fn spawn_alarm_actor(
 ) -> mpsc::Sender<SystemEvent> {
     let (tx, mut rx) = mpsc::channel(10);
 
-    // Load config once at startup
-    let config = Config::load().unwrap_or_default();
+    // Load config once at startup using a fresh standard context (no global state)
+    let ctx = StandardContext::new(None);
+    let config = Config::load(&ctx).unwrap_or_default();
 
     // Parse default time (e.g., "08:00")
     let default_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
@@ -156,16 +159,6 @@ pub fn spawn_alarm_actor(
                                 && !fired_history.contains_key(&history_key)
                             {
                                 fired_history.insert(history_key.clone(), now.timestamp());
-
-                                // Notify UI (For implicit, we send task_uid and a special marker or just empty alarm_uid if UI supports it,
-                                // OR we create a real runtime alarm object to pass.
-                                // Since AlarmMessage takes (TaskUID, AlarmUID), and the UI looks up the alarm in the Task struct,
-                                // we have a small issue: Implicit alarms aren't in the Task struct.
-                                //
-                                // SOLUTION: We fire the OS notification, but we might skip the UI Modal for implicit
-                                // OR we push this synthetic alarm into the task copy held by the actor?
-                                // For now, let's just trigger the OS notification for implicit alarms.
-                                // To support UI Modals for implicit, the Task model would need 'runtime_alarms'.
 
                                 // 1. Notify UI (Skip for implicit to avoid lookup failure crash in UI)
                                 if !is_implicit && let Some(ui_tx) = &ui_sender {

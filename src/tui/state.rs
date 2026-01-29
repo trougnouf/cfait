@@ -1,10 +1,13 @@
+// File: ./src/tui/state.rs
 // Manages the application state for the TUI.
+use crate::context::AppContext;
 use crate::model::{CalendarListEntry, Task};
 use crate::store::{FilterOptions, TaskStore};
 use crate::system::SystemEvent;
 use crate::tui::action::SidebarMode;
 use ratatui::widgets::ListState;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use tokio::sync::mpsc; // Add import
 
 #[derive(PartialEq, Clone, Copy)]
@@ -29,6 +32,7 @@ pub enum InputMode {
 
 pub struct AppState {
     // Data
+    pub ctx: Arc<dyn AppContext>,
     pub store: TaskStore,
     pub tasks: Vec<Task>,
     pub calendars: Vec<CalendarListEntry>,
@@ -93,19 +97,31 @@ pub struct AppState {
 
 impl Default for AppState {
     fn default() -> Self {
+        // Backwards compatible default for codepaths that still call `AppState::default()`.
+        // This uses the platform default context; prefer constructing with an explicit context.
         Self::new()
     }
 }
 
 impl AppState {
+    /// Creates a new AppState with the default platform context.
     pub fn new() -> Self {
+        // Provide a convenient no-arg constructor that uses the platform default context.
+        // Call sites that need test isolation or custom roots should call `new_with_ctx`.
+        let ctx = Arc::new(crate::context::StandardContext::new(None));
+        Self::new_with_ctx(ctx)
+    }
+
+    /// Creates a new AppState with an explicit AppContext.
+    pub fn new_with_ctx(ctx: Arc<dyn AppContext>) -> Self {
         let mut l_state = ListState::default();
         l_state.select(Some(0));
         let mut c_state = ListState::default();
         c_state.select(Some(0));
 
         Self {
-            store: TaskStore::new(),
+            ctx: ctx.clone(),
+            store: TaskStore::new(ctx.clone()),
             tasks: vec![],
             calendars: vec![],
             list_state: l_state,

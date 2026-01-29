@@ -1,8 +1,6 @@
+// File: ./src/gui/mod.rs
 /*
 Entry point and setup for the GUI application.
-This file was updated to parse a `--force-ssd` CLI flag and pass it to the GUI state
-initialization. When `--force-ssd` is present the app uses server-side/native window
-decorations and disables transparency / rounded corners in the GUI.
 */
 
 pub mod async_ops;
@@ -14,6 +12,7 @@ pub mod update;
 pub mod view;
 
 use crate::config::{AppTheme, Config};
+use crate::context::{AppContext, StandardContext};
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
 use crate::system::spawn_alarm_actor;
@@ -94,9 +93,12 @@ fn alarm_stream() -> impl iced::futures::Stream<Item = Message> {
 impl GuiApp {
     // NOTE: new_with_ics signature was updated to accept force_ssd; call sites must match.
     fn new_with_ics(ics_file_path: Option<String>, force_ssd: bool) -> (Self, Task<Message>) {
+        let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(None));
+        let ctx_clone = ctx.clone();
+
         let mut tasks = vec![
             Task::perform(
-                async { Config::load().map_err(|e| e.to_string()) },
+                async move { Config::load(ctx_clone.as_ref()).map_err(|e| e.to_string()) },
                 Message::ConfigLoaded,
             ),
             font::load(icon::FONT_BYTES).map(|_| Message::FontLoaded(Ok(()))),
@@ -121,6 +123,7 @@ impl GuiApp {
 
         let app = Self {
             force_ssd,
+            ctx,
             ..Self::default()
         };
         (app, Task::batch(tasks))

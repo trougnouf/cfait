@@ -1,3 +1,4 @@
+// File: ./src/gui/update/tasks.rs
 // Handles task manipulation messages in the GUI.
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
@@ -476,7 +477,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     );
                 } else {
                     app.unsynced_changes = true;
-                    let _ = Journal::push(Action::Move(original, target_href));
+                    let _ = Journal::push(app.ctx.as_ref(), Action::Move(original, target_href));
                 }
             }
             Task::none()
@@ -603,10 +604,10 @@ fn handle_offline_update(app: &mut GuiApp, task: TodoTask) {
         if let Some(map) = app.store.calendars.get(&task.calendar_href) {
             // CHANGED: Collect values
             let list: Vec<_> = map.values().cloned().collect();
-            let _ = LocalStorage::save_for_href(&task.calendar_href, &list);
+            let _ = LocalStorage::save_for_href(app.ctx.as_ref(), &task.calendar_href, &list);
         }
     } else {
-        let _ = Journal::push(Action::Update(task));
+        let _ = Journal::push(app.ctx.as_ref(), Action::Update(task));
     }
 }
 
@@ -616,10 +617,10 @@ fn handle_offline_delete(app: &mut GuiApp, task: TodoTask) {
         if let Some(map) = app.store.calendars.get(&task.calendar_href) {
             // CHANGED: Collect values
             let list: Vec<_> = map.values().cloned().collect();
-            let _ = LocalStorage::save_for_href(&task.calendar_href, &list);
+            let _ = LocalStorage::save_for_href(app.ctx.as_ref(), &task.calendar_href, &list);
         }
     } else {
-        let _ = Journal::push(Action::Delete(task));
+        let _ = Journal::push(app.ctx.as_ref(), Action::Delete(task));
     }
 }
 
@@ -775,12 +776,18 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 return Task::batch(retroactive_sync_batch);
             } else {
                 if new_task.calendar_href.starts_with("local://") {
-                    if let Ok(mut local) = LocalStorage::load_for_href(&new_task.calendar_href) {
+                    if let Ok(mut local) =
+                        LocalStorage::load_for_href(app.ctx.as_ref(), &new_task.calendar_href)
+                    {
                         local.push(new_task.clone());
-                        let _ = LocalStorage::save_for_href(&new_task.calendar_href, &local);
+                        let _ = LocalStorage::save_for_href(
+                            app.ctx.as_ref(),
+                            &new_task.calendar_href,
+                            &local,
+                        );
                     }
                 } else {
-                    let _ = Journal::push(Action::Create(new_task.clone()));
+                    let _ = Journal::push(app.ctx.as_ref(), Action::Create(new_task.clone()));
                 }
 
                 app.unsynced_changes = true;

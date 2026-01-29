@@ -1,13 +1,16 @@
 // File: ./src/gui/state.rs
+// File: ./src/gui/state.rs
 // Manages the application state for the GUI (Iced).
 use crate::client::RustyClient;
 use crate::config::AppTheme;
+use crate::context::AppContext;
 use crate::gui::icon;
 use crate::model::{Alarm, CalendarListEntry, Task as TodoTask};
 use crate::store::TaskStore;
 use crate::system::SystemEvent;
 use iced::widget::text_editor;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use strum::IntoEnumIterator;
 use tokio::sync::mpsc;
 
@@ -43,6 +46,7 @@ pub enum ResizeDirection {
 
 pub struct GuiApp {
     pub state: AppState,
+    pub ctx: Arc<dyn AppContext>,
     pub store: TaskStore,
     pub tasks: Vec<TodoTask>,
     pub calendars: Vec<CalendarListEntry>,
@@ -215,9 +219,11 @@ impl Default for GuiApp {
             AppTheme::RustyDark
         };
 
+        let ctx = Arc::new(crate::context::StandardContext::new(None));
         Self {
+            ctx: ctx.clone(),
             state: AppState::Loading,
-            store: TaskStore::new(),
+            store: TaskStore::new(ctx.clone()),
             tasks: vec![],
             calendars: vec![],
             client: None,

@@ -1,3 +1,4 @@
+// File: ./src/client/tests/recovery_tests.rs
 // Recovery-related unit tests moved out of the large `core.rs` test block.
 //
 // This file is included by `src/client/core.rs` inside the `#[cfg(test)]`
@@ -18,12 +19,13 @@
 #[test]
 #[serial]
 fn test_sync_journal_moves_failed_task_to_recovery() {
-    let _guard = TestGuard::new();
+    // Use an explicit TestContext for filesystem isolation (no global env var mutation)
+    let ctx = std::sync::Arc::new(crate::context::TestContext::new());
 
     // Ensure registry does not contain recovery calendar initially
-    let mut regs = LocalCalendarRegistry::load().unwrap_or_default();
+    let mut regs = LocalCalendarRegistry::load(ctx.as_ref()).unwrap_or_default();
     regs.retain(|c| c.href != "local://recovery");
-    LocalCalendarRegistry::save(&regs).unwrap();
+    LocalCalendarRegistry::save(ctx.as_ref(), &regs).unwrap();
 
     // Create a task and push a Create action into the journal
     let mut task = Task::new("WillFail", &HashMap::new(), None);
@@ -31,7 +33,7 @@ fn test_sync_journal_moves_failed_task_to_recovery() {
     task.calendar_href = "https://example.com/cal/".to_string();
     task.summary = "Should fail and be recovered".to_string();
 
-    Journal::push(Action::Create(task.clone())).unwrap();
+    Journal::push(ctx.as_ref(), Action::Create(task.clone())).unwrap();
 
     // Install test force hook to cause sync_journal to treat this action as a 403 error
     let hook = TEST_FORCE_SYNC_ERROR.get_or_init(|| Mutex::new(None));
@@ -45,7 +47,15 @@ fn test_sync_journal_moves_failed_task_to_recovery() {
         }));
     }
 
-    let client = RustyClient::new("http://dummy.test", "user", "pass", false, None).unwrap();
+    let client = RustyClient::new(
+        ctx.clone(),
+        "http://dummy.test",
+        "user",
+        "pass",
+        false,
+        None,
+    )
+    .unwrap();
     // Run sync_journal; the test hook will simulate a fatal server error and the task should be moved
     let warnings = futures::executor::block_on(client.sync_journal()).unwrap();
 
@@ -58,7 +68,7 @@ fn test_sync_journal_moves_failed_task_to_recovery() {
     );
 
     // Recovery storage should contain the task
-    let recovered = LocalStorage::load_for_href("local://recovery").unwrap();
+    let recovered = LocalStorage::load_for_href(ctx.as_ref(), "local://recovery").unwrap();
     assert!(
         recovered.iter().any(|t| t.uid == "sync-err-1"),
         "Task should be moved to recovery"
@@ -77,15 +87,20 @@ fn test_sync_journal_moves_failed_task_to_recovery() {
 #[tokio::test]
 #[serial]
 async fn test_recovery_calendar_visibility() {
-    let _guard = TestGuard::new();
+    // Use an explicit TestContext for filesystem isolation (no global env var mutation)
+    let ctx = std::sync::Arc::new(crate::context::TestContext::new());
 
     // Ensure registry does not contain recovery calendar initially
-    let mut regs = LocalCalendarRegistry::load().unwrap_or_default();
+    let mut regs = LocalCalendarRegistry::load(ctx.as_ref()).unwrap_or_default();
     regs.retain(|c| c.href != "local://recovery");
-    LocalCalendarRegistry::save(&regs).unwrap();
+    LocalCalendarRegistry::save(ctx.as_ref(), &regs).unwrap();
 
-    // Use an offline client for this visibility test
-    let client = RustyClient { client: None };
+    // Use an offline client for this visibility test; attach the test ctx so client-side code
+    // that expects a context can access it if needed.
+    let client = RustyClient {
+        client: None,
+        ctx: ctx.clone(),
+    };
 
     // When recovery calendar is not present and no tasks exist, it should not be visible
     let cals = client.get_calendars().await.unwrap();
@@ -95,14 +110,14 @@ async fn test_recovery_calendar_visibility() {
     );
 
     // Add recovery calendar entry to registry but no tasks -> still should not be visible
-    let mut regs = LocalCalendarRegistry::load().unwrap_or_default();
+    let mut regs = LocalCalendarRegistry::load(ctx.as_ref()).unwrap_or_default();
     if !regs.iter().any(|c| c.href == "local://recovery") {
         regs.push(CalendarListEntry {
             name: "Local (Recovery)".to_string(),
             href: "local://recovery".to_string(),
             color: Some("#DB4437".to_string()),
         });
-        LocalCalendarRegistry::save(&regs).unwrap();
+        LocalCalendarRegistry::save(ctx.as_ref(), &regs).unwrap();
     }
 
     let cals2 = client.get_calendars().await.unwrap();
@@ -115,7 +130,12 @@ async fn test_recovery_calendar_visibility() {
     let mut task = Task::new("Recovered", &HashMap::new(), None);
     task.uid = "rec-1".to_string();
     task.calendar_href = "local://recovery".to_string();
-    LocalStorage::save_for_href("local://recovery", std::slice::from_ref(&task)).unwrap();
+    LocalStorage::save_for_href(
+        ctx.as_ref(),
+        "local://recovery",
+        std::slice::from_ref(&task),
+    )
+    .unwrap();
 
     let cals3 = client.get_calendars().await.unwrap();
     assert!(

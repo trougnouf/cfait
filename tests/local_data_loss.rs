@@ -1,22 +1,14 @@
 // Tests ensuring no data loss in local storage logic.
+use cfait::context::TestContext;
 use cfait::journal::Journal;
 use cfait::model::Task;
 use cfait::storage::LOCAL_CALENDAR_HREF;
 use std::collections::HashMap;
-use std::env;
-use std::fs;
 
 #[test]
 fn test_local_tasks_are_not_pruned_as_ghosts() {
-    // 1. Setup isolated environment
-    let temp_dir = env::temp_dir().join(format!("cfait_test_local_loss_{}", std::process::id()));
-    let _ = fs::create_dir_all(&temp_dir);
-
-    // Set the env var so the Journal looks in our temp dir (though we aren't loading from disk here,
-    // it's good practice for isolation if internal logic checks paths).
-    unsafe {
-        env::set_var("CFAIT_TEST_DIR", &temp_dir);
-    }
+    // 1. Create an isolated TestContext (handles temp dir lifecycle)
+    let ctx = TestContext::new();
 
     // 2. Create a "Local" task
     // Local tasks are stored on disk without an ETag.
@@ -29,8 +21,8 @@ fn test_local_tasks_are_not_pruned_as_ghosts() {
     let mut tasks = vec![task.clone()];
 
     // 3. Simulate the "Focus" / "Refresh" operation
-    // This calls Journal::apply_to_tasks to replay offline changes and prune ghosts.
-    Journal::apply_to_tasks(&mut tasks, LOCAL_CALENDAR_HREF);
+    // Use the context-aware Journal API to replay offline changes and prune ghosts.
+    Journal::apply_to_tasks(&ctx, &mut tasks, LOCAL_CALENDAR_HREF);
 
     // 4. Assert Data Integrity
     assert_eq!(
@@ -39,10 +31,4 @@ fn test_local_tasks_are_not_pruned_as_ghosts() {
         "Catastrophic failure: Local task was pruned because it lacked an ETag!"
     );
     assert_eq!(tasks[0].uid, "local-uid-1");
-
-    // Cleanup
-    unsafe {
-        env::remove_var("CFAIT_TEST_DIR");
-    }
-    let _ = fs::remove_dir_all(&temp_dir);
 }

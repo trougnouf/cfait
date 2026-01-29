@@ -1,25 +1,40 @@
+// File: ./src/tui/network.rs
 // Manages background network operations for the TUI.
 use crate::cache::Cache;
 use crate::client::RustyClient;
+use crate::context::AppContext;
 use crate::storage::{LocalCalendarRegistry, LocalStorage};
 use crate::tui::action::{Action, AppEvent};
+use std::sync::Arc;
 use tokio::sync::mpsc::{Receiver, Sender};
 
+pub struct NetworkActorConfig {
+    pub url: String,
+    pub user: String,
+    pub pass: String,
+    pub allow_insecure: bool,
+    pub default_cal: Option<String>,
+}
+
 pub async fn run_network_actor(
-    url: String,
-    user: String,
-    pass: String,
-    allow_insecure: bool,
-    _default_cal: Option<String>,
+    ctx: Arc<dyn AppContext>,
+    config: NetworkActorConfig,
     mut action_rx: Receiver<Action>,
     event_tx: Sender<AppEvent>,
 ) {
+    let NetworkActorConfig {
+        url,
+        user,
+        pass,
+        allow_insecure,
+        default_cal: _default_cal,
+    } = config;
     // ------------------------------------------------------------------
     // 0. LOAD CACHE IMMEDIATELY
     // ------------------------------------------------------------------
-    if let Ok(mut cached_cals) = Cache::load_calendars() {
+    if let Ok(mut cached_cals) = Cache::load_calendars(ctx.as_ref()) {
         // Load local registry and merge
-        if let Ok(locals) = LocalCalendarRegistry::load() {
+        if let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
             for loc in locals {
                 if !cached_cals.iter().any(|c| c.href == loc.href) {
                     cached_cals.push(loc);
@@ -35,10 +50,10 @@ pub async fn run_network_actor(
         // Load tasks for all local calendars
         for cal in &cached_cals {
             if cal.href.starts_with("local://") {
-                if let Ok(tasks) = LocalStorage::load_for_href(&cal.href) {
+                if let Ok(tasks) = LocalStorage::load_for_href(ctx.as_ref(), &cal.href) {
                     cached_tasks.push((cal.href.clone(), tasks));
                 }
-            } else if let Ok((tasks, _)) = Cache::load(&cal.href) {
+            } else if let Ok((tasks, _)) = Cache::load(ctx.as_ref(), &cal.href) {
                 cached_tasks.push((cal.href.clone(), tasks));
             }
         }
@@ -51,13 +66,14 @@ pub async fn run_network_actor(
     // ------------------------------------------------------------------
     // 1. CONNECT & SYNC
     // ------------------------------------------------------------------
-    let client: RustyClient = match RustyClient::new(&url, &user, &pass, allow_insecure, Some("TUI")) {
-        Ok(c) => c,
-        Err(e) => {
-            let _ = event_tx.send(AppEvent::Error(e)).await;
-            return;
-        }
-    };
+    let client: RustyClient =
+        match RustyClient::new(ctx.clone(), &url, &user, &pass, allow_insecure, Some("TUI")) {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = event_tx.send(AppEvent::Error(e)).await;
+                return;
+            }
+        };
     let _ = event_tx
         .send(AppEvent::Status("Connecting...".to_string()))
         .await;
@@ -72,7 +88,7 @@ pub async fn run_network_actor(
                         .to_string();
                 let config_advice = format!(
                     "\n\nTo fix this, please edit your config file:\n  {}",
-                    crate::config::Config::get_path_string()
+                    crate::config::Config::get_path_string(ctx.as_ref())
                         .unwrap_or_else(|_| "path unknown".to_string())
                 );
                 if !allow_insecure {
@@ -93,7 +109,7 @@ pub async fn run_network_actor(
     };
 
     // Merge locals again after network discovery
-    if let Ok(locals) = LocalCalendarRegistry::load() {
+    if let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
         for loc in locals {
             if !calendars.iter().any(|c| c.href == loc.href) {
                 calendars.push(loc);
@@ -113,10 +129,10 @@ pub async fn run_network_actor(
     let mut cached_results = Vec::new();
     for cal in &calendars {
         if cal.href.starts_with("local://") {
-            if let Ok(tasks) = LocalStorage::load_for_href(&cal.href) {
+            if let Ok(tasks) = LocalStorage::load_for_href(ctx.as_ref(), &cal.href) {
                 cached_results.push((cal.href.clone(), tasks));
             }
-        } else if let Ok((tasks, _)) = Cache::load(&cal.href) {
+        } else if let Ok((tasks, _)) = Cache::load(ctx.as_ref(), &cal.href) {
             cached_results.push((cal.href.clone(), tasks));
         }
     }
@@ -263,7 +279,7 @@ pub async fn run_network_actor(
                 };
 
                 // Merge local calendars from registry
-                if let Ok(locals) = LocalCalendarRegistry::load() {
+                if let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
                     for loc in locals {
                         if !calendars.iter().any(|c| c.href == loc.href) {
                             calendars.push(loc);
@@ -343,7 +359,7 @@ pub async fn run_network_actor(
             }
             Action::MigrateLocal(source_href, target_href) => {
                 // Export from specified local calendar to target CalDAV calendar
-                if let Ok(local_tasks) = LocalStorage::load_for_href(&source_href) {
+                if let Ok(local_tasks) = LocalStorage::load_for_href(ctx.as_ref(), &source_href) {
                     let _ = event_tx
                         .send(AppEvent::Status(format!(
                             "Exporting {} tasks from {}...",

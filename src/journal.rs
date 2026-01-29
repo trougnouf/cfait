@@ -3,14 +3,12 @@
  *
  * Offline action journal for syncing changes.
  *
- * This module was refactored to remove global path singletons and instead
- * accept an explicit `AppContext` for resolving filesystem locations.
- *
- * It still provides backward-compatible wrappers that use the default
- * platform context to ease incremental migration.
+ * This module uses an explicit `AppContext` for resolving filesystem locations.
+ * All public IO functions take a `&dyn AppContext` argument; there are no
+ * hidden globals here.
  */
 
-use crate::context::{AppContext, default_shared_context};
+use crate::context::AppContext;
 use crate::model::Task;
 use crate::storage::LocalStorage;
 use anyhow::Result;
@@ -19,8 +17,6 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
-/// Actions recorded in the offline journal.
-/// These are applied in order when syncing with the server.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Action {
     Create(Task),
@@ -29,36 +25,31 @@ pub enum Action {
     Move(Task, String),
 }
 
-/// Journal structure containing queued actions.
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Journal {
     pub queue: Vec<Action>,
 }
 
 impl Journal {
-    /// Internal helper: path-aware retrieval of the journal file path.
-    pub fn get_path_with_ctx(ctx: &dyn AppContext) -> Option<PathBuf> {
+    /// Return the on-disk journal path for the given context, if available.
+    pub fn get_path(ctx: &dyn AppContext) -> Option<PathBuf> {
         ctx.get_journal_path()
     }
 
-    /// Backwards-compatible: use default context to get journal path.
-    pub fn get_path() -> Option<PathBuf> {
-        default_shared_context().get_journal_path()
-    }
-
-    /// Internal loader that assumes the file exists and is locked by caller.
+    /// Internal helper: load journal structure from a path without acquiring locks.
     fn load_internal(path: &PathBuf) -> Self {
         if path.exists()
             && let Ok(content) = fs::read_to_string(path)
-                && let Ok(journal) = serde_json::from_str(&content) {
-                    return journal;
-                }
+            && let Ok(journal) = serde_json::from_str(&content)
+        {
+            return journal;
+        }
         Self::default()
     }
 
-    /// Load the journal using an explicit context.
-    pub fn load_with_ctx(ctx: &dyn AppContext) -> Self {
-        if let Some(path) = Self::get_path_with_ctx(ctx) {
+    /// Load the journal from disk using the provided context.
+    pub fn load(ctx: &dyn AppContext) -> Self {
+        if let Some(path) = Self::get_path(ctx) {
             if !path.exists() {
                 return Self::default();
             }
@@ -68,18 +59,12 @@ impl Journal {
         Self::default()
     }
 
-    /// Backwards-compatible: Load using the default platform context.
-    pub fn load() -> Self {
-        let ctx = default_shared_context();
-        Self::load_with_ctx(ctx.as_ref())
-    }
-
-    /// Modify the journal using an explicit context.
-    pub fn modify_with_ctx<F>(ctx: &dyn AppContext, f: F) -> Result<()>
+    /// Modify the journal by applying a closure to the queue, persisting changes.
+    pub fn modify<F>(ctx: &dyn AppContext, f: F) -> Result<()>
     where
         F: FnOnce(&mut Vec<Action>),
     {
-        if let Some(path) = Self::get_path_with_ctx(ctx) {
+        if let Some(path) = Self::get_path(ctx) {
             LocalStorage::with_lock(&path, || {
                 let mut journal = Self::load_internal(&path);
                 f(&mut journal.queue);
@@ -91,35 +76,17 @@ impl Journal {
         Ok(())
     }
 
-    /// Backwards-compatible: modify using default context.
-    pub fn modify<F>(f: F) -> Result<()>
-    where
-        F: FnOnce(&mut Vec<Action>),
-    {
-        let ctx = default_shared_context();
-        Self::modify_with_ctx(ctx.as_ref(), f)
+    /// Push a new action into the journal.
+    pub fn push(ctx: &dyn AppContext, action: Action) -> Result<()> {
+        Self::modify(ctx, |queue| queue.push(action))
     }
 
-    /// Push an action using an explicit context.
-    pub fn push_with_ctx(ctx: &dyn AppContext, action: Action) -> Result<()> {
-        Self::modify_with_ctx(ctx, |queue| queue.push(action))
-    }
-
-    /// Backwards-compatible: push using default context.
-    pub fn push(action: Action) -> Result<()> {
-        let ctx = default_shared_context();
-        Self::push_with_ctx(ctx.as_ref(), action)
-    }
-
-    /// Returns true if the journal is empty.
+    /// Is the in-memory journal empty?
     pub fn is_empty(&self) -> bool {
         self.queue.is_empty()
     }
 
-    /// Squash redundant actions for the same task (last-write-wins semantics).
-    /// Examples:
-    ///   [Create(A), Update(A'), Update(A'')] -> [Create(A'')]
-    ///   [Create(A), Delete(A)] -> []
+    /// Compact the journal by merging redundant operations for the same UID.
     pub fn compact(&mut self) {
         let mut uid_map: HashMap<String, usize> = HashMap::new();
         let mut compacted: Vec<Option<Action>> = Vec::new();
@@ -134,32 +101,29 @@ impl Journal {
 
             let mut merged = false;
             if let Some(&idx) = uid_map.get(&uid)
-                && let Some(prev) = &compacted[idx] {
-                    match (prev, &action) {
-                        (Action::Create(_), Action::Update(t)) => {
-                            // Upgrade the Create to include the updates
-                            compacted[idx] = Some(Action::Create(t.clone()));
-                            merged = true;
-                        }
-                        (Action::Update(_), Action::Update(t)) => {
-                            // Replace old update with new update (Last write wins)
-                            compacted[idx] = Some(Action::Update(t.clone()));
-                            merged = true;
-                        }
-                        (Action::Create(_), Action::Delete(_)) => {
-                            // Created then Deleted -> Cancel out entirely
-                            compacted[idx] = None;
-                            uid_map.remove(&uid);
-                            merged = true;
-                        }
-                        (Action::Update(_), Action::Delete(t)) => {
-                            // Updated then Deleted -> Just Delete
-                            compacted[idx] = Some(Action::Delete(t.clone()));
-                            merged = true;
-                        }
-                        _ => {}
+                && let Some(prev) = &compacted[idx]
+            {
+                match (prev, &action) {
+                    (Action::Create(_), Action::Update(t)) => {
+                        compacted[idx] = Some(Action::Create(t.clone()));
+                        merged = true;
                     }
+                    (Action::Update(_), Action::Update(t)) => {
+                        compacted[idx] = Some(Action::Update(t.clone()));
+                        merged = true;
+                    }
+                    (Action::Create(_), Action::Delete(_)) => {
+                        compacted[idx] = None;
+                        uid_map.remove(&uid);
+                        merged = true;
+                    }
+                    (Action::Update(_), Action::Delete(t)) => {
+                        compacted[idx] = Some(Action::Delete(t.clone()));
+                        merged = true;
+                    }
+                    _ => {}
                 }
+            }
 
             if !merged {
                 compacted.push(Some(action));
@@ -170,17 +134,13 @@ impl Journal {
         self.queue = compacted.into_iter().flatten().collect();
     }
 
-    /// Apply pending journal actions to an in-memory list of tasks.
-    /// This also performs ghost-pruning (removing remote tasks without ETag)
-    /// while being careful to preserve pending creations from the journal.
-    pub fn apply_to_tasks_with_ctx(
-        ctx: &dyn AppContext,
-        tasks: &mut Vec<Task>,
-        calendar_href: &str,
-    ) {
-        let journal = Self::load_with_ctx(ctx);
+    /// Apply journaled actions to an existing task list for a given calendar.
+    ///
+    /// This merges creates/updates/deletes/moves into `tasks` in-memory so the
+    /// caller can present or operate on the final state prior to syncing.
+    pub fn apply_to_tasks(ctx: &dyn AppContext, tasks: &mut Vec<Task>, calendar_href: &str) {
+        let journal = Self::load(ctx);
 
-        // 1. Identify valid pending creations to protect them from pruning
         let mut pending_uids = HashSet::new();
         for action in &journal.queue {
             match action {
@@ -198,8 +158,7 @@ impl Journal {
             }
         }
 
-        // 2. Ghost Pruning: Remove tasks with no ETag that are NOT in the journal.
-        // Explicitly skip pruning for ALL Local Calendars, as local tasks never have ETags.
+        // For remote calendars, drop entries without an etag unless they are pending in the journal.
         if !calendar_href.starts_with("local://") {
             tasks.retain(|t| !t.etag.is_empty() || pending_uids.contains(&t.uid));
         }
@@ -208,7 +167,6 @@ impl Journal {
             return;
         }
 
-        // 3. Apply Actions (Last-Write-Wins via HashMap)
         let mut task_map: HashMap<String, Task> =
             tasks.drain(..).map(|t| (t.uid.clone(), t)).collect();
 
@@ -242,11 +200,5 @@ impl Journal {
         }
 
         *tasks = task_map.into_values().collect();
-    }
-
-    /// Backwards-compatible: apply journal actions using default context.
-    pub fn apply_to_tasks(tasks: &mut Vec<Task>, calendar_href: &str) {
-        let ctx = default_shared_context();
-        Self::apply_to_tasks_with_ctx(ctx.as_ref(), tasks, calendar_href)
     }
 }

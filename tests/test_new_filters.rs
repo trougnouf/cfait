@@ -1,8 +1,10 @@
 // Tests for newer filter features (relative dates, etc.).
+use cfait::context::TestContext;
 use cfait::model::{Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
 use chrono::{Datelike, Duration, Local};
 use std::collections::HashSet;
+use std::sync::Arc;
 
 #[test]
 fn test_relative_start_date_parsing() {
@@ -111,7 +113,10 @@ fn test_is_ready_token_consumed() {
 
 #[test]
 fn test_is_ready_filters_future_start_dates() {
-    let mut store = TaskStore::new();
+    // Create a TestContext and TaskStore with it
+    let ctx = Arc::new(TestContext::new());
+    let mut store = TaskStore::new(ctx.clone());
+
     let aliases = std::collections::HashMap::new();
     // Use UTC to avoid timezone issues where "yesterday" in local time is still "today" in UTC
     let now = chrono::Utc::now().date_naive();
@@ -176,7 +181,10 @@ fn test_is_ready_filters_future_start_dates() {
 
 #[test]
 fn test_is_ready_filters_blocked_tasks() {
-    let mut store = TaskStore::new();
+    // Create a TestContext and TaskStore with it
+    let ctx = Arc::new(TestContext::new());
+    let mut store = TaskStore::new(ctx.clone());
+
     let aliases = std::collections::HashMap::new();
 
     // Create a dependency task that is not done
@@ -227,7 +235,10 @@ fn test_is_ready_filters_blocked_tasks() {
 
 #[test]
 fn test_is_ready_combines_with_other_filters() {
-    let mut store = TaskStore::new();
+    // Create a TestContext and TaskStore with it
+    let ctx = Arc::new(TestContext::new());
+    let mut store = TaskStore::new(ctx.clone());
+
     let aliases = std::collections::HashMap::new();
     let now = Local::now().date_naive();
 

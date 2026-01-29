@@ -139,7 +139,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         // --- BUTTONS ---
 
         // Load config for presets
-        let (s1, s2) = if let Ok(cfg) = crate::config::Config::load() {
+        let (s1, s2) = if let Ok(cfg) = crate::config::Config::load(app.ctx.as_ref()) {
             (cfg.snooze_short_mins, cfg.snooze_long_mins)
         } else {
             (15, 60)
@@ -819,42 +819,43 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     // CHANGED: Insert Yanked Task Bar if active
     if let Some(uid) = &app.yanked_uid
-        && let Some(summary) = app.store.get_summary(uid) {
-            let yank_bar = container(
-                row![
-                    icon::icon(icon::LINK)
-                        .size(16)
-                        .style(|theme: &Theme| text::Style {
-                            color: Some(theme.extended_palette().primary.base.color)
-                        }),
-                    text("Yanked:").size(14).font(iced::Font {
-                        weight: iced::font::Weight::Bold,
-                        ..Default::default()
+        && let Some(summary) = app.store.get_summary(uid)
+    {
+        let yank_bar = container(
+            row![
+                icon::icon(icon::LINK)
+                    .size(16)
+                    .style(|theme: &Theme| text::Style {
+                        color: Some(theme.extended_palette().primary.base.color)
                     }),
-                    text(summary).size(14).width(Length::Fill),
-                    button(icon::icon(icon::CROSS).size(14))
-                        .style(iced::widget::button::text)
-                        .padding(5)
-                        .on_press(Message::EscapePressed)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
-            )
-            .padding(10)
-            .style(|theme: &Theme| {
-                let palette = theme.extended_palette();
-                container::Style {
-                    background: Some(palette.background.weak.color.into()),
-                    border: iced::Border {
-                        color: palette.primary.base.color,
-                        width: 1.0,
-                        radius: 4.0.into(),
-                    },
+                text("Yanked:").size(14).font(iced::Font {
+                    weight: iced::font::Weight::Bold,
                     ..Default::default()
-                }
-            });
-            main_col = main_col.push(yank_bar);
-        }
+                }),
+                text(summary).size(14).width(Length::Fill),
+                button(icon::icon(icon::CROSS).size(14))
+                    .style(iced::widget::button::text)
+                    .padding(5)
+                    .on_press(Message::EscapePressed)
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(10)
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                background: Some(palette.background.weak.color.into()),
+                border: iced::Border {
+                    color: palette.primary.base.color,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            }
+        });
+        main_col = main_col.push(yank_bar);
+    }
 
     // Existing Tag Jump
     if app.search_value.starts_with('#') {

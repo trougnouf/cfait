@@ -1,12 +1,14 @@
-// Tests for start grace period functionality
+use cfait::context::TestContext;
 use cfait::model::{Alarm, DateType, Task};
 use cfait::store::{FilterOptions, TaskStore};
 use chrono::{Duration, Utc};
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 #[test]
 fn test_start_grace_period_keeps_tasks_in_active_section() {
-    let mut store = TaskStore::new();
+    let ctx = Arc::new(TestContext::new());
+    let mut store = TaskStore::new(ctx);
     let aliases = HashMap::new();
     let now = Utc::now();
 
@@ -74,7 +76,8 @@ fn test_start_grace_period_keeps_tasks_in_active_section() {
 
 #[test]
 fn test_grace_period_zero_pushes_all_future_starts() {
-    let mut store = TaskStore::new();
+    let ctx = Arc::new(TestContext::new());
+    let mut store = TaskStore::new(ctx);
     let aliases = HashMap::new();
     let now = Utc::now();
 
@@ -127,7 +130,8 @@ fn test_grace_period_zero_pushes_all_future_starts() {
 
 #[test]
 fn test_acknowledged_alarm_keeps_task_in_active_section() {
-    let mut store = TaskStore::new();
+    let ctx = Arc::new(TestContext::new());
+    let mut store = TaskStore::new(ctx);
     let aliases = HashMap::new();
     let now = Utc::now();
 
@@ -198,7 +202,8 @@ fn test_acknowledged_alarm_keeps_task_in_active_section() {
 
 #[test]
 fn test_any_acknowledged_alarm_keeps_task_active() {
-    let mut store = TaskStore::new();
+    let ctx = Arc::new(TestContext::new());
+    let mut store = TaskStore::new(ctx);
     let aliases = HashMap::new();
     let now = Utc::now();
 
@@ -287,7 +292,8 @@ fn test_recurring_task_with_fresh_dates_goes_to_future() {
     normal_task.priority = 5;
     normal_task.calendar_href = "cal1".to_string();
 
-    let mut store = TaskStore::new();
+    let ctx = Arc::new(TestContext::new());
+    let mut store = TaskStore::new(ctx);
     store.add_task(recurring_task.clone());
     store.add_task(normal_task.clone());
 

@@ -1,6 +1,7 @@
+// File: ./src/tui/handlers.rs
 // Handles keyboard input and system events for the TUI.
 use crate::config::Config;
-use crate::model::parser::{extract_inline_aliases, parse_duration, validate_alias_integrity};
+use crate::model::parser::{extract_inline_aliases, validate_alias_integrity};
 use crate::model::{Task, TaskStatus};
 use crate::storage::LOCAL_CALENDAR_HREF;
 use crate::system::SystemEvent;
@@ -169,9 +170,9 @@ pub async fn handle_key_event(
                             let _ = action_tx.send(Action::UpdateTask(t)).await;
                         }
                     }
-                    if let Ok(mut cfg) = Config::load() {
+                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
                         cfg.tag_aliases = state.tag_aliases.clone();
-                        let _ = cfg.save();
+                        let _ = cfg.save(state.ctx.as_ref());
                     }
                 }
 
@@ -228,7 +229,7 @@ pub async fn handle_key_event(
 
                 if let Some(href) = target_href {
                     // Load config to get time
-                    let config = Config::load().unwrap_or_default();
+                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let def_time =
                         NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
@@ -279,9 +280,9 @@ pub async fn handle_key_event(
                             let _ = action_tx.send(Action::UpdateTask(mod_t)).await;
                         }
                     }
-                    if let Ok(mut cfg) = Config::load() {
+                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
                         cfg.tag_aliases = state.tag_aliases.clone();
-                        let _ = cfg.save();
+                        let _ = cfg.save(state.ctx.as_ref());
                     }
                 }
 
@@ -292,7 +293,7 @@ pub async fn handle_key_event(
                 if let Some(uid) = target_uid
                     && let Some((t, _)) = state.store.get_task_mut(&uid)
                 {
-                    let config = Config::load().unwrap_or_default();
+                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let def_time =
                         NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
                     t.apply_smart_input(&clean_input, &state.tag_aliases, def_time);
@@ -431,7 +432,7 @@ pub async fn handle_key_event(
         InputMode::Snoozing => match key.code {
             KeyCode::Enter if !state.input_buffer.is_empty() => {
                 // Parse custom snooze duration
-                if let Some(mins) = parse_duration(&state.input_buffer) {
+                if let Some(mins) = crate::model::parser::parse_duration(&state.input_buffer) {
                     if let Some((task, alarm_uid)) = state.active_alarm.clone()
                         && let Some((t, _)) = state.store.get_task_mut(&task.uid)
                         && t.snooze_alarm(&alarm_uid, mins)
@@ -572,24 +573,24 @@ pub async fn handle_key_event(
                 } else if state.active_focus == Focus::Sidebar
                     && state.sidebar_mode == SidebarMode::Calendars
                 {
-                    let target_cal = if let Some(idx) = state.cal_state.selected() {
+                    let target_href = if let Some(idx) = state.cal_state.selected() {
                         let filtered = state.get_filtered_calendars();
                         filtered.get(idx).map(|c| c.href.clone())
                     } else {
                         None
                     };
 
-                    if let Some(href) = target_cal
-                        && state.active_cal_href.as_ref() != Some(&href)
-                    {
-                        if state.hidden_calendars.contains(&href) {
-                            state.hidden_calendars.remove(&href);
-                            let _ = action_tx.send(Action::ToggleCalendarVisibility(href)).await;
-                        } else {
-                            state.hidden_calendars.insert(href);
+                    if let Some(href) = target_href
+                        && state.active_cal_href.as_ref() != Some(&href) {
+                            if state.hidden_calendars.contains(&href) {
+                                state.hidden_calendars.remove(&href);
+                                let _ =
+                                    action_tx.send(Action::ToggleCalendarVisibility(href)).await;
+                            } else {
+                                state.hidden_calendars.insert(href);
+                            }
+                            state.refresh_filtered_view();
                         }
-                        state.refresh_filtered_view();
-                    }
                 }
             }
             KeyCode::Char('s') => {
