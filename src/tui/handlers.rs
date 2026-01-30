@@ -52,6 +52,20 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
     }
 }
 
+// Helper to notify the alarm system of local changes immediately
+fn update_alarms(state: &AppState) {
+    if let Some(tx) = &state.alarm_actor_tx {
+        let all = state
+            .store
+            .calendars
+            .values()
+            .flat_map(|m| m.values())
+            .cloned()
+            .collect();
+        let _ = tx.try_send(SystemEvent::UpdateTasks(all));
+    }
+}
+
 pub async fn handle_key_event(
     key: KeyEvent,
     state: &mut AppState,
@@ -75,16 +89,7 @@ pub async fn handle_key_event(
                         // Push update to backend
                         let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
                         // Push update to alarm actor
-                        if let Some(tx) = &state.alarm_actor_tx {
-                            let all = state
-                                .store
-                                .calendars
-                                .values()
-                                .flat_map(|m| m.values())
-                                .cloned()
-                                .collect();
-                            let _ = tx.try_send(SystemEvent::UpdateTasks(all));
-                        }
+                        update_alarms(state);
                     }
                     return None;
                 }
@@ -97,16 +102,7 @@ pub async fn handle_key_event(
                         state.active_alarm = None;
                         state.refresh_filtered_view();
                         let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                        if let Some(tx) = &state.alarm_actor_tx {
-                            let all = state
-                                .store
-                                .calendars
-                                .values()
-                                .flat_map(|m| m.values())
-                                .cloned()
-                                .collect();
-                            let _ = tx.try_send(SystemEvent::UpdateTasks(all));
-                        }
+                        update_alarms(state);
                     }
                     return None;
                 }
@@ -119,16 +115,7 @@ pub async fn handle_key_event(
                         state.active_alarm = None;
                         state.refresh_filtered_view();
                         let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                        if let Some(tx) = &state.alarm_actor_tx {
-                            let all = state
-                                .store
-                                .calendars
-                                .values()
-                                .flat_map(|m| m.values())
-                                .cloned()
-                                .collect();
-                            let _ = tx.try_send(SystemEvent::UpdateTasks(all));
-                        }
+                        update_alarms(state);
                     }
                     return None;
                 }
@@ -240,6 +227,7 @@ pub async fn handle_key_event(
                     let new_uid = task.uid.clone();
                     state.store.add_task(task.clone());
                     state.refresh_filtered_view();
+                    update_alarms(state);
 
                     if let Some(idx) = state.tasks.iter().position(|t| t.uid == new_uid) {
                         state.list_state.select(Some(idx));
@@ -299,6 +287,7 @@ pub async fn handle_key_event(
                     t.apply_smart_input(&clean_input, &state.tag_aliases, def_time);
                     let clone = t.clone();
                     state.refresh_filtered_view();
+                    update_alarms(state);
                     state.mode = InputMode::Normal;
                     state.reset_input();
                     return Some(Action::UpdateTask(clone));
@@ -443,16 +432,7 @@ pub async fn handle_key_event(
                         state.reset_input();
                         state.refresh_filtered_view();
                         let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                        if let Some(tx) = &state.alarm_actor_tx {
-                            let all = state
-                                .store
-                                .calendars
-                                .values()
-                                .flat_map(|m| m.values())
-                                .cloned()
-                                .collect();
-                            let _ = tx.try_send(SystemEvent::UpdateTasks(all));
-                        }
+                        update_alarms(state);
                     }
                 } else {
                     state.message = format!("Invalid duration: '{}'", state.input_buffer);
@@ -568,6 +548,7 @@ pub async fn handle_key_event(
                         && let Some(updated) = state.store.toggle_task(&uid)
                     {
                         state.refresh_filtered_view();
+                        update_alarms(state);
                         return Some(Action::ToggleTask(updated));
                     }
                 } else if state.active_focus == Focus::Sidebar
@@ -581,16 +562,16 @@ pub async fn handle_key_event(
                     };
 
                     if let Some(href) = target_href
-                        && state.active_cal_href.as_ref() != Some(&href) {
-                            if state.hidden_calendars.contains(&href) {
-                                state.hidden_calendars.remove(&href);
-                                let _ =
-                                    action_tx.send(Action::ToggleCalendarVisibility(href)).await;
-                            } else {
-                                state.hidden_calendars.insert(href);
-                            }
-                            state.refresh_filtered_view();
+                        && state.active_cal_href.as_ref() != Some(&href)
+                    {
+                        if state.hidden_calendars.contains(&href) {
+                            state.hidden_calendars.remove(&href);
+                            let _ = action_tx.send(Action::ToggleCalendarVisibility(href)).await;
+                        } else {
+                            state.hidden_calendars.insert(href);
                         }
+                        state.refresh_filtered_view();
+                    }
                 }
             }
             KeyCode::Char('s') => {
@@ -621,6 +602,7 @@ pub async fn handle_key_event(
                     && let Some(updated) = state.store.set_status(&uid, TaskStatus::Cancelled)
                 {
                     state.refresh_filtered_view();
+                    update_alarms(state);
                     return Some(Action::MarkCancelled(updated));
                 }
             }
@@ -649,6 +631,7 @@ pub async fn handle_key_event(
                     && let Some((deleted, _)) = state.store.delete_task(&uid)
                 {
                     state.refresh_filtered_view();
+                    update_alarms(state);
                     return Some(Action::DeleteTask(deleted));
                 }
             }
@@ -1087,6 +1070,11 @@ pub async fn handle_key_event(
                         .move_task(&selected_task.uid, target_href.clone())
                 {
                     state.refresh_filtered_view();
+                    // Update alarms immediately if needed (task moved, though move doesn't clear completion)
+                    // Moving a task keeps its alarms but might change visibility.
+                    // For safety, re-sync alarms.
+                    update_alarms(state);
+
                     state.message = "Moving task...".to_string();
                     state.mode = InputMode::Normal;
                     return Some(Action::MoveTask(original_task, target_href.clone()));
