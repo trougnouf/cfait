@@ -690,7 +690,7 @@ impl Task {
         parent_tags: &std::collections::HashSet<String>,
         parent_location: &Option<String>,
         aliases: &HashMap<String, Vec<String>>,
-    ) -> (std::collections::HashSet<String>, Option<String>) {
+    ) -> (Vec<String>, Option<String>) {
         use crate::model::parser::strip_quotes;
         let mut hidden_tags = parent_tags.clone();
         let mut hidden_location = parent_location.clone();
@@ -737,7 +737,27 @@ impl Task {
             }
         }
 
-        (hidden_tags, hidden_location)
+        // Calculate Visible Tags (All - Hidden)
+        let mut visible_tags = Vec::new();
+        for cat in &self.categories {
+            if !hidden_tags.contains(cat) {
+                visible_tags.push(cat.clone());
+            }
+        }
+        visible_tags.sort(); // Ensure stable order for UI
+
+        // Calculate Visible Location
+        let visible_location = if let Some(loc) = &self.location {
+            if hidden_location.as_ref() != Some(loc) {
+                Some(loc.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        (visible_tags, visible_location)
     }
 }
 

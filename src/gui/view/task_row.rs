@@ -617,7 +617,6 @@ pub fn view_task_row<'a>(
 
         // Use visible attributes computed by core model
         // `visible_tags` and `visible_location` are owned by the outer scope.
-        let _visible_tags_set: HashSet<String> = visible_tags.iter().cloned().collect();
 
         if has_metadata {
             if is_blocked {

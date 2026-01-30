@@ -256,10 +256,8 @@ fn task_to_mobile(
         (std::collections::HashSet::new(), None)
     };
 
-    let (visible_categories_set, visible_location) =
+    let (visible_categories, visible_location) =
         t.resolve_visual_attributes(&parent_tags, &parent_loc, aliases);
-    let mut visible_categories: Vec<String> = visible_categories_set.into_iter().collect();
-    visible_categories.sort();
     // ---------------------------------
 
     MobileTask {
