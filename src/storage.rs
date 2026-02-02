@@ -124,25 +124,36 @@ impl LocalStorage {
         None
     }
 
+    /// Imports tasks from an ICS string and merges them into the specified calendar.
+    /// Returns the number of tasks successfully imported.
     pub fn import_from_ics(
         ctx: &dyn AppContext,
         calendar_href: &str,
         ics_content: &str,
     ) -> Result<usize> {
         let mut imported_tasks = Vec::new();
+        // Normalize line endings to \r\n for consistent parsing
         let normalized_content = ics_content.replace("\r\n", "\n").replace('\n', "\r\n");
+
+        // Split by VTODO blocks and parse each
         let parts: Vec<&str> = normalized_content.split("BEGIN:VTODO").collect();
 
         for component in parts.iter().skip(1) {
             if !component.contains("END:VTODO") {
                 continue;
             }
+
+            // Extract just the VTODO content (everything up to and including END:VTODO)
             let vtodo_end = match component.find("END:VTODO") {
                 Some(pos) => pos + "END:VTODO".len(),
                 None => continue,
             };
             let vtodo_content = &component[..vtodo_end];
+
+            // Reconstruct a valid VTODO block
             let vtodo = format!("BEGIN:VTODO{}", vtodo_content);
+
+            // Always wrap in a proper VCALENDAR for parsing
             let full_ics = format!(
                 "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//cfait//cfait//EN\r\n{}\r\nEND:VCALENDAR",
                 vtodo
@@ -163,7 +174,16 @@ impl LocalStorage {
 
         let mut existing_tasks = Self::load_for_href(ctx, calendar_href)?;
         let count = imported_tasks.len();
-        existing_tasks.extend(imported_tasks);
+
+        // Upsert tasks: replace existing ones with the same UID, append new ones
+        for imported in imported_tasks {
+            if let Some(idx) = existing_tasks.iter().position(|t| t.uid == imported.uid) {
+                existing_tasks[idx] = imported;
+            } else {
+                existing_tasks.push(imported);
+            }
+        }
+
         Self::save_for_href(ctx, calendar_href, &existing_tasks)?;
 
         Ok(count)
@@ -242,6 +262,7 @@ impl LocalStorage {
         Ok(())
     }
 
+    /// Load tasks from a specific file path (Internal)
     fn load_from_path(path: &Path, href: &str) -> Result<Vec<Task>> {
         if !path.exists() {
             LoadState::set(href, LoadState::Success);
@@ -249,7 +270,7 @@ impl LocalStorage {
         }
         let result = Self::with_lock(path, || {
             let json = fs::read_to_string(path)?;
-            let (tasks, needs_upgrade) =
+            let (mut tasks, mut needs_save) =
                 if let Ok(data) = serde_json::from_str::<LocalStorageData>(&json) {
                     if data.version == LOCAL_STORAGE_VERSION {
                         (data.tasks, false)
@@ -259,7 +280,44 @@ impl LocalStorage {
                 } else {
                     (Self::migrate_v1_to_v2(&json)?, true)
                 };
-            if needs_upgrade {
+
+            // DEDUPLICATION FIX (v0.4.10)
+            // Remove duplicate tasks by UID, keeping the last occurrence (matching TaskStore behavior).
+            // This fixes data corruption from previous versions where imports appended duplicates.
+            let len_before = tasks.len();
+            let mut uid_to_index = HashMap::new();
+
+            // Iterate to find indices of the *last* occurrence of each UID
+            for (i, t) in tasks.iter().enumerate() {
+                uid_to_index.insert(t.uid.clone(), i);
+            }
+
+            if uid_to_index.len() < len_before {
+                let mut indices: Vec<usize> = uid_to_index.into_values().collect();
+                indices.sort_unstable();
+
+                let mut deduped = Vec::with_capacity(indices.len());
+                for i in indices {
+                    deduped.push(tasks[i].clone());
+                }
+                tasks = deduped;
+                needs_save = true;
+
+                #[cfg(target_os = "android")]
+                log::info!(
+                    "Repaired {} duplicate tasks in {}",
+                    len_before - tasks.len(),
+                    href
+                );
+                #[cfg(not(target_os = "android"))]
+                eprintln!(
+                    "Repaired {} duplicate tasks in {}",
+                    len_before - tasks.len(),
+                    href
+                );
+            }
+
+            if needs_save {
                 let data = LocalStorageData {
                     version: LOCAL_STORAGE_VERSION,
                     tasks: tasks.clone(),
@@ -267,6 +325,7 @@ impl LocalStorage {
                 let upgraded_json = serde_json::to_string_pretty(&data)?;
                 Self::atomic_write(path, upgraded_json)?;
             }
+
             Ok(tasks)
         });
         match &result {
