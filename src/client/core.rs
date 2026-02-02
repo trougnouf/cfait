@@ -289,6 +289,9 @@ impl RustyClient {
         ),
         String,
     > {
+        // Clone the config here so we can modify and save it later if needed.
+        let mut config_for_saving = config.clone();
+
         let client = Self::new(
             ctx,
             &config.url,
@@ -301,21 +304,75 @@ impl RustyClient {
 
         let _ = client.sync_journal().await;
 
-        let (calendars, warning) = match client.get_calendars().await {
-            Ok(c) => {
-                let _ = Cache::save_calendars(client.ctx.as_ref(), &c);
-                (c, None)
+        // Destructure the new tuple return type: ((calendars, corrected_url), warning)
+        let ((calendars, corrected_url_opt), warning) = match client.get_calendars().await {
+            Ok((c, corrected_url)) => {
+                if c.is_empty() {
+                    // CRUCIAL: Add helpful hint for empty calendar list.
+                    let helpful_msg =
+                        "Connection successful, but no Task calendars found. Check your URL."
+                            .to_string();
+                    ((c, corrected_url), Some(helpful_msg))
+                } else {
+                    let _ = Cache::save_calendars(client.ctx.as_ref(), &c);
+                    ((c, corrected_url), None)
+                }
             }
             Err(e) => {
-                if e.contains("InvalidCertificate") {
-                    return Err(format!("Connection failed: {}", e));
+                let error_msg = e.to_string();
+                let mut specific_warning = None;
+
+                if error_msg.contains("InvalidCertificate") {
+                    return Err(format!(
+                        "Connection failed: Invalid TLS Certificate. {}",
+                        error_msg
+                    ));
                 }
-                (
-                    Cache::load_calendars(client.ctx.as_ref()).unwrap_or_default(),
-                    Some("Offline mode".to_string()),
-                )
+
+                // Check for common authentication failures indicated by libdav/HTTP status codes
+                if error_msg.contains("Unauthorized")
+                    || error_msg.contains("Forbidden")
+                    || error_msg.contains("401")
+                    || error_msg.contains("403")
+                {
+                    specific_warning =
+                        Some("Authentication failed. Check username and password.".to_string());
+                } else if error_msg.contains("NotFound") || error_msg.contains("404") {
+                    specific_warning = Some(
+                        "The CalDAV resource or user principal was not found (404). Check the URL."
+                            .to_string(),
+                    );
+                } else if error_msg.contains("Timeout") {
+                    specific_warning =
+                        Some("Connection timed out. Check network or server address.".to_string());
+                }
+
+                // Fallback: load cache and set general network error warning
+                let cals = Cache::load_calendars(client.ctx.as_ref()).unwrap_or_default();
+
+                let final_warning = specific_warning.unwrap_or_else(|| {
+                    // Provide a general message including the original error detail for better context
+                    format!("Offline mode (Network or server error: {}).", error_msg)
+                });
+
+                ((cals, None), Some(final_warning))
             }
         };
+
+        // ** AUTO-SAVE CORRECTED URL **
+        if let Some(corrected_url) = corrected_url_opt {
+            config_for_saving.url = corrected_url;
+            let ctx_clone = client.ctx.clone();
+            tokio::spawn(async move {
+                if let Err(e) = config_for_saving.save(ctx_clone.as_ref()) {
+                    // Log failure to save, but don't block the user.
+                    #[cfg(not(target_os = "android"))]
+                    eprintln!("[Warning] Failed to auto-save corrected URL: {}", e);
+                    #[cfg(target_os = "android")]
+                    log::warn!("Failed to auto-save corrected URL: {}", e);
+                }
+            });
+        }
 
         let mut active_href = None;
         if let Some(def_cal) = &config.default_calendar
@@ -350,60 +407,110 @@ impl RustyClient {
         Ok((client, calendars, tasks, active_href, warning))
     }
 
-    pub async fn get_calendars(&self) -> Result<Vec<CalendarListEntry>, String> {
+    // Helper to encapsulate the core discovery logic
+    async fn perform_calendar_discovery(
+        &self,
+        _discovery_path: &str,
+    ) -> Result<Vec<CalendarListEntry>, String> {
+        let client = self.client.as_ref().ok_or("Offline")?;
+
+        let principal_res = client
+            .find_current_user_principal()
+            .await
+            .map_err(|e| format!("{:?}", e))?;
+        let Some(principal) = principal_res else {
+            return Err("No current user principal found.".to_string());
+        };
+
+        let home_set_resp = client
+            .request(FindCalendarHomeSet::new(&principal))
+            .await
+            .map_err(|e| format!("{:?}", e))?;
+
+        let home_url = home_set_resp
+            .home_sets
+            .first()
+            .ok_or("No calendar home set found.")?;
+
+        let cals_resp = client
+            .request(FindCalendars::new(home_url))
+            .await
+            .map_err(|e| format!("{:?}", e))?;
+
+        let mut calendars = Vec::new();
+        for col in cals_resp.calendars {
+            let name = client
+                .request(GetProperty::new(&col.href, &names::DISPLAY_NAME))
+                .await
+                .ok()
+                .and_then(|r| r.value)
+                .unwrap_or_else(|| col.href.clone());
+
+            let color = client
+                .request(GetProperty::new(&col.href, &APPLE_COLOR))
+                .await
+                .ok()
+                .and_then(|r| r.value);
+
+            // Query supported components
+            let comps = self
+                .get_supported_components(&col.href)
+                .await
+                .unwrap_or_default();
+
+            // Only include calendars that explicitly advertise VTODO support.
+            if comps.iter().any(|c| c.eq_ignore_ascii_case("VTODO")) {
+                calendars.push(CalendarListEntry {
+                    name,
+                    href: col.href,
+                    color,
+                });
+            }
+        }
+        Ok(calendars)
+    }
+
+    // NEW SIGNATURE: returns Option<String> for corrected URL if applicable
+    pub async fn get_calendars(&self) -> Result<(Vec<CalendarListEntry>, Option<String>), String> {
         if let Some(client) = &self.client {
-            let principal = client
-                .find_current_user_principal()
-                .await
-                .map_err(|e| format!("{:?}", e))?
-                .ok_or("No principal")?;
+            let user_configured_path = client.base_url().path();
+            let mut corrected_url = None;
 
-            let home_set_resp = client
-                .request(FindCalendarHomeSet::new(&principal))
+            // 1. Attempt discovery using the user's configured URL/path first
+            let mut calendars = self
+                .perform_calendar_discovery(user_configured_path)
                 .await
                 .map_err(|e| format!("{:?}", e))?;
 
-            let home_url = home_set_resp.home_sets.first().ok_or("No home set")?;
+            // 2. Fallback check: If initial discovery yielded 0 results,
+            //    and the configured path was *not* the server root, try at the server root.
+            if calendars.is_empty() && user_configured_path != "/" {
+                match self.perform_calendar_discovery("/").await {
+                    Ok(fallback_cals) => {
+                        // If the fallback found calendars, use them.
+                        if !fallback_cals.is_empty() {
+                            calendars = fallback_cals;
 
-            let cals_resp = client
-                .request(FindCalendars::new(home_url))
-                .await
-                .map_err(|e| format!("{:?}", e))?;
-
-            let mut calendars = Vec::new();
-            for col in cals_resp.calendars {
-                let name = client
-                    .request(GetProperty::new(&col.href, &names::DISPLAY_NAME))
-                    .await
-                    .ok()
-                    .and_then(|r| r.value)
-                    .unwrap_or_else(|| col.href.clone());
-
-                let color = client
-                    .request(GetProperty::new(&col.href, &APPLE_COLOR))
-                    .await
-                    .ok()
-                    .and_then(|r| r.value);
-
-                // Query supported components and only include calendars that advertise VTODO
-                let comps = self
-                    .get_supported_components(&col.href)
-                    .await
-                    .unwrap_or_default();
-
-                // Only include calendars that explicitly advertise VTODO support.
-                // If a server does not advertise VTODO (components list missing or only VEVENT),
-                // we skip it to avoid showing event-only calendars in the task UI.
-                if comps.iter().any(|c| c.eq_ignore_ascii_case("VTODO")) {
-                    calendars.push(CalendarListEntry {
-                        name,
-                        href: col.href,
-                        color,
-                    });
+                            // *** AUTO-CORRECTION: Construct the corrected root URL to save. ***
+                            let base_uri = client.base_url();
+                            if let (Some(scheme), Some(authority)) =
+                                (base_uri.scheme(), base_uri.authority())
+                            {
+                                corrected_url = Some(format!("{}://{}", scheme, authority));
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // Log fallback error but continue with what we have
+                        #[cfg(not(target_os = "android"))]
+                        eprintln!("Warning: Root-path discovery failed: {:?}", e);
+                        #[cfg(target_os = "android")]
+                        log::warn!("Warning: Root-path discovery failed: {:?}", e);
+                    }
                 }
             }
 
-            // Load local calendars from the registry
+            // ... [Existing Local Calendar Registry Loading Logic (retained)] ...
             if let Ok(local_cals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
                 for local_cal in local_cals {
                     // If this is the recovery calendar, check if it's empty
@@ -422,10 +529,9 @@ impl RustyClient {
                 }
             }
 
-            Ok(calendars)
+            Ok((calendars, corrected_url))
         } else {
-            // --- OFFLINE MODE: Apply the same logic to the cached/local list ---
-            // FIX: Load cached remote calendars first.
+            // --- OFFLINE MODE: Return tuple matching new signature ---
             let mut calendars = Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
             if let Ok(local_cals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
                 for local_cal in local_cals {
@@ -445,7 +551,7 @@ impl RustyClient {
                     }
                 }
             }
-            Ok(calendars)
+            Ok((calendars, None))
         }
     }
 

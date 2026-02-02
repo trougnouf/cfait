@@ -103,7 +103,7 @@ async fn test_recovery_calendar_visibility() {
     };
 
     // When recovery calendar is not present and no tasks exist, it should not be visible
-    let cals = client.get_calendars().await.unwrap();
+    let (cals, _) = client.get_calendars().await.unwrap();
     assert!(
         !cals.iter().any(|c| c.href == "local://recovery"),
         "Recovery calendar should not be visible when absent and empty"
@@ -120,10 +120,10 @@ async fn test_recovery_calendar_visibility() {
         LocalCalendarRegistry::save(ctx.as_ref(), &regs).unwrap();
     }
 
-    let cals2 = client.get_calendars().await.unwrap();
+    let (cals2, _) = client.get_calendars().await.unwrap();
     assert!(
         !cals2.iter().any(|c| c.href == "local://recovery"),
-        "Recovery calendar should not be visible when empty"
+        "Recovery calendar should not be visible when present but empty"
     );
 
     // Add a recovered task to the recovery storage -> calendar should become visible
@@ -137,9 +137,9 @@ async fn test_recovery_calendar_visibility() {
     )
     .unwrap();
 
-    let cals3 = client.get_calendars().await.unwrap();
+    let (cals3, _) = client.get_calendars().await.unwrap();
     assert!(
         cals3.iter().any(|c| c.href == "local://recovery"),
-        "Recovery calendar should be visible when it contains tasks"
+        "Recovery calendar should be visible when it has tasks"
     );
 }

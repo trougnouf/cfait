@@ -79,7 +79,7 @@ pub async fn run_network_actor(
         .await;
 
     let mut calendars = match client.get_calendars().await {
-        Ok(cals) => cals,
+        Ok((cals, _)) => cals,
         Err(e) => {
             let err_str = e.to_string();
             if err_str.contains("InvalidCertificate") {
@@ -271,7 +271,7 @@ pub async fn run_network_actor(
                     .await;
 
                 let mut calendars = match client.get_calendars().await {
-                    Ok(c) => c,
+                    Ok((c, _)) => c,
                     Err(e) => {
                         let _ = event_tx.send(AppEvent::Error(e)).await;
                         vec![]
