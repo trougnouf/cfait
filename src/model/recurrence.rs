@@ -1,6 +1,6 @@
 // File: ./src/model/recurrence.rs
 use crate::model::item::{Alarm, DateType, RawProperty, Task, TaskStatus};
-use chrono::Utc;
+use chrono::{Local, Utc};
 use rrule::RRuleSet;
 use std::collections::HashSet; // Import HashSet for deduplication
 use std::str::FromStr;
@@ -95,8 +95,22 @@ impl RecurrenceEngine {
         }
 
         if let Ok(rrule_set) = RRuleSet::from_str(&rrule_string) {
-            let now = Utc::now();
-            let search_floor = std::cmp::max(now, seed_dt_utc);
+            // FIX: Determine "Now" based on the task type.
+            // For AllDay tasks, we must respect the user's Local date.
+            // If it is Jan 27 8PM Local, it is still Jan 27. Even if it is Jan 28 1AM UTC.
+            let comparison_now = match seed_date_type {
+                DateType::AllDay(_) => {
+                    // Get Local date, set to midnight, convert to UTC to match rrule domain
+                    Local::now()
+                        .date_naive()
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap()
+                        .and_utc()
+                }
+                DateType::Specific(_) => Utc::now(),
+            };
+
+            let search_floor = std::cmp::max(comparison_now, seed_dt_utc);
 
             let next_occurrence = rrule_set
                 .into_iter()
