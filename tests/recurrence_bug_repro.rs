@@ -67,15 +67,15 @@ fn test_scenario_1_cancel_then_done_sequence() {
 
     // 3. Mark as canceled -> Should move another +7 days, adding exception
     t.status = TaskStatus::Cancelled;
-    assert!(t.advance_recurrence_with_cancellation(), "Should cancel");
+    assert!(t.advance_recurrence(), "Should cancel");
     let due3 = t.due.as_ref().unwrap().to_date_naive();
     assert_eq!(due3, initial_due + Duration::days(21));
-    assert!(!t.exdates.is_empty(), "Should have exdates");
+    assert!(t.exdates.is_empty(), "Should not have exdates with new implementation");
 
     // 4. Mark as canceled -> Should move another +7 days
     t.status = TaskStatus::Cancelled;
     assert!(
-        t.advance_recurrence_with_cancellation(),
+        t.advance_recurrence(),
         "Should cancel again"
     );
 
@@ -95,7 +95,7 @@ fn test_scenario_2_multiple_cancels() {
 
     // 1. Cancel -> +7 days
     t.status = TaskStatus::Cancelled;
-    t.advance_recurrence_with_cancellation();
+    t.advance_recurrence();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(7)
@@ -103,7 +103,7 @@ fn test_scenario_2_multiple_cancels() {
 
     // 2. Cancel -> +14 days
     t.status = TaskStatus::Cancelled;
-    t.advance_recurrence_with_cancellation();
+    t.advance_recurrence();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(14)
@@ -111,13 +111,13 @@ fn test_scenario_2_multiple_cancels() {
 
     // 3. Cancel -> +21 days
     t.status = TaskStatus::Cancelled;
-    t.advance_recurrence_with_cancellation();
+    t.advance_recurrence();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(21)
     );
 
-    assert_eq!(t.exdates.len(), 3);
+    assert_eq!(t.exdates.len(), 0);
 }
 
 #[test]
@@ -135,7 +135,7 @@ fn test_scenario_3_cancel_loop() {
 
     // Cancel -> +14
     t.status = TaskStatus::Cancelled;
-    t.advance_recurrence_with_cancellation();
+    t.advance_recurrence();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(14)
@@ -151,7 +151,7 @@ fn test_scenario_3_cancel_loop() {
 
     // Cancel -> +28
     t.status = TaskStatus::Cancelled;
-    t.advance_recurrence_with_cancellation();
+    t.advance_recurrence();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(28)

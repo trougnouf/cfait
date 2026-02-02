@@ -2,6 +2,7 @@
 use crate::model::item::{Alarm, DateType, RawProperty, Task, TaskStatus};
 use chrono::Utc;
 use rrule::RRuleSet;
+use std::collections::HashSet; // Import HashSet for deduplication
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -15,24 +16,81 @@ impl RecurrenceEngine {
         let seed_date_type = task.dtstart.as_ref().or(task.due.as_ref())?;
 
         // Normalize seed to UTC DateTime for calculation
-        // For AllDay, we force UTC Midnight (T000000Z) to ensure stable arithmetic
+        // For AllDay, prefer to preserve an available specific time component (if present
+        // elsewhere on the task) to avoid losing the user's intended time when computing
+        // recurrences. Fallback to UTC midnight for pure AllDay seeds.
         let seed_dt_utc = match seed_date_type {
-            DateType::AllDay(d) => d.and_hms_opt(0, 0, 0).unwrap().and_utc(),
+            DateType::AllDay(d) => {
+                // Try to find a specific time on the task (prefer dtstart then due).
+                // If either field has a specific DateTime, use its time component with the AllDay date.
+                // We use UTC time components directly to ensure stability across timezones.
+                let specific_time_opt = match (task.dtstart.as_ref(), task.due.as_ref()) {
+                    (Some(DateType::Specific(dt)), _) => Some(dt.time()),
+                    (_, Some(DateType::Specific(dt))) => Some(dt.time()),
+                    _ => None,
+                };
+
+                if let Some(time) = specific_time_opt {
+                    // Combine the AllDay date with the discovered UTC time component.
+                    d.and_time(time).and_utc()
+                } else {
+                    // No specific time found: treat as pure AllDay at UTC midnight.
+                    d.and_hms_opt(0, 0, 0).unwrap().and_utc()
+                }
+            }
             DateType::Specific(dt) => *dt,
         };
 
         // Construct RRULE string using strict UTC format for calculation stability.
         let dtstart_str = seed_dt_utc.format("%Y%m%dT%H%M%SZ").to_string();
-        let mut rrule_string = format!("DTSTART:{}\nRRULE:{}\n", dtstart_str, rule_str);
 
-        // Add EXDATEs normalized to UTC matching DTSTART
+        // FIX 1: Sanitize rule string.
+        // If the stored rule already starts with "RRULE:", strip it to avoid double prefixing.
+        let clean_rule = rule_str.trim();
+        let mut final_rule_part = if clean_rule.to_uppercase().starts_with("RRULE:") {
+            clean_rule[6..].to_string()
+        } else {
+            clean_rule.to_string()
+        };
+
+        // FIX 4 (CRITICAL): Normalize UNTIL to DateTime if DTSTART is DateTime.
+        // The rrule crate (and RFC 5545) requires UNTIL to match the type of DTSTART.
+        // Since we force DTSTART to be a UTC DateTime above, we MUST ensure UNTIL is also
+        // a UTC DateTime. If parser provided "UNTIL=20261231", we must convert it to
+        // "UNTIL=20261231T235959Z".
+        if let Some(idx) = final_rule_part.find("UNTIL=") {
+            let until_val_start = idx + 6;
+            // Find end of UNTIL value (semicolon or end of string)
+            let until_val_end = final_rule_part[until_val_start..]
+                .find(';')
+                .map(|i| until_val_start + i)
+                .unwrap_or(final_rule_part.len());
+
+            let until_val = &final_rule_part[until_val_start..until_val_end];
+
+            // If UNTIL is Date-only (8 chars, no 'T'), upgrade it to End-of-Day UTC
+            if until_val.len() == 8 && !until_val.contains('T') {
+                let new_until = format!("{}T235959Z", until_val);
+                final_rule_part.replace_range(until_val_start..until_val_end, &new_until);
+            }
+        }
+
+        let mut rrule_string = format!("DTSTART:{}\nRRULE:{}\n", dtstart_str, final_rule_part);
+
+        // FIX 2: Deduplicate EXDATEs.
+        // The user's file had multiple identical exdates. We use a HashSet to ensure uniqueness
+        // before feeding them into the RRuleSet parser.
         if !task.exdates.is_empty() {
+            let mut seen_exdates = HashSet::new();
             for ex in &task.exdates {
                 let ex_utc = match ex {
                     DateType::AllDay(d) => d.and_hms_opt(0, 0, 0).unwrap().and_utc(),
                     DateType::Specific(dt) => *dt,
                 };
-                rrule_string.push_str(&format!("EXDATE:{}\n", ex_utc.format("%Y%m%dT%H%M%SZ")));
+                let ex_str = ex_utc.format("%Y%m%dT%H%M%SZ").to_string();
+                if seen_exdates.insert(ex_str.clone()) {
+                    rrule_string.push_str(&format!("EXDATE:{}\n", ex_str));
+                }
             }
         }
 
@@ -64,6 +122,11 @@ impl RecurrenceEngine {
                 next_task
                     .alarms
                     .retain(|a: &Alarm| !a.is_snooze() && a.acknowledged.is_none());
+
+                // FIX 3: Ensure exdates in the *new* task are clean (deduplicated)
+                // We keep the exdates in the new task so history is preserved, but we might as well clean them up.
+                next_task.exdates.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                next_task.exdates.dedup();
 
                 let duration = if let Some(old_due) = &task.due {
                     match old_due {
@@ -132,33 +195,6 @@ impl RecurrenceEngine {
             }
 
             task.sequence += 1;
-            return true;
-        }
-        false
-    }
-
-    pub fn advance_with_cancellation(task: &mut Task) -> bool {
-        // Add current occurrence date to exdates BEFORE calculation
-        let seed_dt = task.dtstart.as_ref().or(task.due.as_ref()).cloned();
-        if let Some(current_date) = seed_dt {
-            task.exdates.push(current_date);
-        }
-
-        if let Some(next) = Self::next_occurrence(task) {
-            let uid = task.uid.clone();
-            let href = task.href.clone();
-            let etag = task.etag.clone();
-            let calendar_href = task.calendar_href.clone();
-            let old_seq = task.sequence;
-
-            *task = next;
-
-            task.uid = uid;
-            task.href = href;
-            task.etag = etag;
-            task.calendar_href = calendar_href;
-            task.sequence = old_seq + 1;
-
             return true;
         }
         false

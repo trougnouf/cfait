@@ -973,6 +973,42 @@ impl RustyClient {
         Ok((task.clone(), history_snapshot, logs))
     }
 
+    /// Terminate a task by applying a terminal status (Completed or Cancelled).
+    ///
+    /// This centralizes the network-side logic for both creating a history snapshot
+    /// (for recurring tasks) and updating the recycled/updated task on the server.
+    pub async fn terminate_task(
+        &self,
+        task: &mut Task,
+        status: TaskStatus,
+    ) -> Result<(Task, Option<Task>, Vec<String>), String> {
+        let (primary, secondary) = task.recycle(status);
+        let mut logs: Vec<String> = Vec::new();
+
+        // 1. Save Primary (History or simple update)
+        if primary.uid != task.uid {
+            // primary is a new history snapshot -> create
+            let mut p = primary.clone();
+            let l = self.create_task(&mut p).await?;
+            logs.extend(l);
+        } else {
+            // primary refers to the original UID -> update
+            let mut p = primary.clone();
+            let l = self.update_task(&mut p).await?;
+            logs.extend(l);
+        }
+
+        // 2. Save Secondary (Recycled next instance) if present
+        if let Some(sec) = &secondary {
+            let mut s = sec.clone();
+            // Secondary is an update to the existing recurring task identity
+            let l = self.update_task(&mut s).await?;
+            logs.extend(l);
+        }
+
+        Ok((primary, secondary, logs))
+    }
+
     pub async fn move_task(
         &self,
         task: &Task,

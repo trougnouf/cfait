@@ -15,7 +15,7 @@
 
 use crate::cache::Cache;
 use crate::context::AppContext;
-use crate::model::{RawProperty, RecurrenceEngine, Task, TaskStatus};
+use crate::model::{Task, TaskStatus};
 use crate::storage::LocalStorage;
 use chrono::{DateTime, Utc};
 use fastrand;
@@ -210,56 +210,37 @@ impl TaskStore {
         self.calendars.get(href).and_then(|map| map.get(uid))
     }
 
-    pub fn toggle_task(&mut self, uid: &str) -> Option<Task> {
-        // ... (unchanged, uses get_task_mut internally which is now fast)
-        if let Some((task, _)) = self.get_task_mut(uid) {
-            if task.status == TaskStatus::Completed {
-                task.status = TaskStatus::NeedsAction;
-                task.percent_complete = None;
-                task.unmapped_properties.retain(|p| p.key != "COMPLETED");
-            } else {
-                task.status = TaskStatus::Completed;
-                task.percent_complete = Some(100);
-                let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
-                task.unmapped_properties.retain(|p| p.key != "COMPLETED");
-                task.unmapped_properties.push(RawProperty {
-                    key: "COMPLETED".to_string(),
-                    value: now_str,
-                    params: vec![],
-                });
-            }
-            return Some(task.clone());
-        }
-        None
+    pub fn toggle_task(&mut self, uid: &str) -> Option<(Task, Option<Task>)> {
+        let current_status = self.get_task_ref(uid)?.status;
+        let next_status = if current_status == TaskStatus::Completed {
+            TaskStatus::NeedsAction
+        } else {
+            TaskStatus::Completed
+        };
+        self.set_status(uid, next_status)
     }
 
     // ... [Other status/modification methods like set_status, etc. use get_task_mut and remain unchanged] ...
-    pub fn set_status(&mut self, uid: &str, status: TaskStatus) -> Option<Task> {
-        if let Some((task, _)) = self.get_task_mut(uid) {
-            if task.status == status {
-                task.status = TaskStatus::NeedsAction;
-                task.unmapped_properties.retain(|p| p.key != "COMPLETED");
-            } else if status == TaskStatus::Cancelled && task.rrule.is_some() {
-                // Use the shared recurrence engine to advance with cancellation semantics
-                RecurrenceEngine::advance_with_cancellation(task);
-                task.unmapped_properties.retain(|p| p.key != "COMPLETED");
-            } else {
-                task.status = status;
-                if status == TaskStatus::Completed || status == TaskStatus::Cancelled {
-                    let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
-                    task.unmapped_properties.retain(|p| p.key != "COMPLETED");
-                    task.unmapped_properties.push(RawProperty {
-                        key: "COMPLETED".to_string(),
-                        value: now_str,
-                        params: vec![],
-                    });
-                } else {
-                    task.unmapped_properties.retain(|p| p.key != "COMPLETED");
-                }
-            }
-            return Some(task.clone());
+    pub fn set_status(&mut self, uid: &str, status: TaskStatus) -> Option<(Task, Option<Task>)> {
+        // 1. Get copy of task to modify
+        let (task_ref, _href) = self.get_task_mut(uid)?;
+        let task_copy = task_ref.clone();
+
+        // 2. Perform logic (recycle or simple update) via model-level helper
+        let (primary, secondary) = task_copy.recycle(status);
+
+        // 3. Save Primary (This is either the history item OR the simple updated task)
+        self.update_or_add_task(primary.clone());
+
+        // 4. Save Secondary (This is the Recycled/Next instance if it exists)
+        if let Some(sec) = &secondary {
+            self.update_or_add_task(sec.clone());
         }
-        None
+
+        // Note: For recurring tasks, 'primary' is the history (cancelled/done),
+        // and 'secondary' is the next active task.
+        // For non-recurring, 'primary' is the updated task, 'secondary' is None.
+        Some((primary, secondary))
     }
 
     pub fn set_status_in_process(&mut self, uid: &str) -> Option<Task> {

@@ -3742,6 +3742,8 @@ data class MobileTask(
     var `location`: kotlin.String?,
     var `url`: kotlin.String?,
     var `geo`: kotlin.String?,
+    var `visibleCategories`: List<kotlin.String>,
+    var `visibleLocation`: kotlin.String?,
 ) {
     companion object
 }
@@ -3781,6 +3783,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
 
     override fun allocationSize(value: MobileTask) =
@@ -3813,7 +3817,9 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterBoolean.allocationSize(value.`isPaused`) +
                 FfiConverterOptionalString.allocationSize(value.`location`) +
                 FfiConverterOptionalString.allocationSize(value.`url`) +
-                FfiConverterOptionalString.allocationSize(value.`geo`)
+                FfiConverterOptionalString.allocationSize(value.`geo`) +
+                FfiConverterSequenceString.allocationSize(value.`visibleCategories`) +
+                FfiConverterOptionalString.allocationSize(value.`visibleLocation`)
         )
 
     override fun write(
@@ -3849,6 +3855,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterOptionalString.write(value.`location`, buf)
         FfiConverterOptionalString.write(value.`url`, buf)
         FfiConverterOptionalString.write(value.`geo`, buf)
+        FfiConverterSequenceString.write(value.`visibleCategories`, buf)
+        FfiConverterOptionalString.write(value.`visibleLocation`, buf)
     }
 }
 

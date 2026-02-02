@@ -1207,16 +1207,71 @@ impl CfaitMobile {
 
     pub async fn set_status_process(&self, uid: String) -> Result<(), MobileError> {
         self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| {
-            store.set_status(id, crate::model::TaskStatus::InProcess)
+            store.set_status_in_process(id)
         })
         .await
     }
 
     pub async fn set_status_cancelled(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| {
-            store.set_status(id, crate::model::TaskStatus::Cancelled)
-        })
-        .await
+        // 1. Local Mutation (Optimistic Update)
+        let mut store = self.store.lock().await;
+        // This now returns (History, Optional<Next>) thanks to the model-level recycle logic
+        let result = store.set_status(&uid, crate::model::TaskStatus::Cancelled);
+
+        // Grab copies for network sync
+        let (primary, secondary) = match result {
+            Some(r) => r,
+            None => return Err(MobileError::from("Task not found")),
+        };
+        drop(store); // Release lock
+
+        // 2. Network Sync
+        let client_guard = self.client.lock().await;
+        if let Some(client) = &*client_guard {
+            // If secondary exists, primary is the new history (needs creation),
+            // and secondary is the recycled task (needs update).
+            if let Some(mut next) = secondary.clone() {
+                let mut hist = primary.clone();
+                // Best-effort sync; we don't fail the mobile operation on network errors here
+                let _ = client.create_task(&mut hist).await;
+                let _ = client.update_task(&mut next).await;
+            } else {
+                // Non-recurring, just update
+                let mut t = primary.clone();
+                let _ = client.update_task(&mut t).await;
+            }
+        } else {
+            // Offline journaling
+            if primary.calendar_href.starts_with("local://") {
+                // LocalStorage already handled by store.set_status calling update_or_add_task
+            } else {
+                // We need to push to journal manually since we bypassed client
+                if let Some(next) = &secondary {
+                    crate::journal::Journal::push(
+                        self.ctx.as_ref(),
+                        crate::journal::Action::Create(primary.clone()),
+                    )
+                    .map_err(MobileError::from)?;
+                    crate::journal::Journal::push(
+                        self.ctx.as_ref(),
+                        crate::journal::Action::Update(next.clone()),
+                    )
+                    .map_err(MobileError::from)?;
+                } else {
+                    crate::journal::Journal::push(
+                        self.ctx.as_ref(),
+                        crate::journal::Action::Update(primary.clone()),
+                    )
+                    .map_err(MobileError::from)?;
+                }
+            }
+        }
+
+        // 3. Rebuild Alarm Index
+        let store = self.store.lock().await;
+        self.rebuild_alarm_index_sync(&store);
+
+        Ok(())
     }
 
     pub async fn pause_task(&self, uid: String) -> Result<(), MobileError> {

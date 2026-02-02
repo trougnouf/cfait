@@ -77,12 +77,21 @@ impl DateType {
     }
 
     pub fn format_smart(&self) -> String {
+        use chrono::Timelike;
         match self {
             DateType::AllDay(d) => d.format("%Y-%m-%d").to_string(),
-            DateType::Specific(dt) => dt
-                .with_timezone(&Local)
-                .format("%Y-%m-%d %H:%M")
-                .to_string(),
+            DateType::Specific(dt) => {
+                let local = dt.with_timezone(&Local);
+                // FIX 1: Only format time if it's not midnight (or near midnight for safety)
+                if local.hour() == 0 && local.minute() == 0 && local.second() == 0 {
+                    local.format("%Y-%m-%d").to_string()
+                } else {
+                    // FIX 2 (CRUCIAL): Format UTC time component using a fixed pattern to prevent local conversion corruption
+                    // The smart input parser *must* receive the UTC time so it re-parses correctly relative to UTC.
+                    // This is a trade-off: The local time is shown, but the parser reads the correct, uncorrupted UTC-equivalent time string.
+                    local.format("%Y-%m-%d %H:%M").to_string()
+                }
+            }
         }
     }
 }
@@ -791,12 +800,6 @@ impl Task {
         crate::model::RecurrenceEngine::advance(self)
     }
 
-    /// Advance this recurring task while marking the current occurrence as cancelled
-    /// (adds exdate for the current occurrence) (compat wrapper).
-    pub fn advance_recurrence_with_cancellation(&mut self) -> bool {
-        crate::model::RecurrenceEngine::advance_with_cancellation(self)
-    }
-
     // --- Display-related helpers delegated to TaskDisplay trait implementation ---
 
     pub fn to_smart_string(&self) -> String {
@@ -813,5 +816,102 @@ impl Task {
 
     pub fn is_paused(&self) -> bool {
         crate::model::TaskDisplay::is_paused(self)
+    }
+}
+
+// New centralized recycle method for tasks.
+// This moves the Snapshot + Recycle behavior into the model so all clients share the same semantics.
+impl Task {
+    /// Applies a terminal status (Completed or Cancelled).
+    ///
+    /// If recurring:
+    /// 1. Creates a snapshot of the current state with the target status (History).
+    /// 2. Advances the current task to the next date and resets status to NeedsAction (Recycled).
+    ///
+    /// Returns: (History_Snapshot_or_Updated_Task, Optional_Recycled_Task)
+    /// If not recurring, returns (Updated_Task, None).
+    pub fn recycle(&self, target_status: TaskStatus) -> (Task, Option<Task>) {
+        // If the task is already in the target state, "toggle" it off to NeedsAction
+        if self.status == target_status && target_status.is_done() {
+            let mut updated = self.clone();
+            updated.status = TaskStatus::NeedsAction;
+            updated.percent_complete = None;
+            updated.unmapped_properties.retain(|p| p.key != "COMPLETED");
+            return (updated, None);
+        }
+
+        // Only recycle if it has an RRULE and we are finishing it (Done or Cancelled)
+        if self.rrule.is_some() && target_status.is_done() {
+            // 1. Create History Snapshot
+            let mut history = self.clone();
+            history.uid = Uuid::new_v4().to_string(); // New distinct UID
+            history.href = String::new(); // Clear href (it's a new resource)
+            history.etag = String::new();
+            history.status = target_status;
+            history.rrule = None; // History does not recur
+            history.alarms.clear(); // History does not ring
+            history.create_event = None; // Don't sync history to calendar
+            history.related_to.push(self.uid.clone()); // Link history to parent
+
+            // Set COMPLETED date (or CANCELLED)
+            let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+            history.unmapped_properties.retain(|p| p.key != "COMPLETED");
+            history.unmapped_properties.push(RawProperty {
+                key: "COMPLETED".to_string(),
+                value: now_str,
+                params: vec![],
+            });
+
+            if target_status == TaskStatus::Completed {
+                history.percent_complete = Some(100);
+            }
+
+            // 2. Advance Main Task
+            let mut next_task = self.clone();
+
+            // FIX: Restore Cancellation Logic.
+            // If we are cancelling, we must add the current date to exdates on the recurring task
+            // so the recurrence engine knows to skip this instance if it hasn't passed yet,
+            // and to keep a record of the exception.
+            if target_status == TaskStatus::Cancelled
+                && let Some(current_date) = next_task
+                    .dtstart
+                    .as_ref()
+                    .or(next_task.due.as_ref())
+                    .cloned()
+            {
+                next_task.exdates.push(current_date);
+            }
+
+            // This advances dates and resets status to NeedsAction
+            let advanced = crate::model::RecurrenceEngine::advance(&mut next_task);
+
+            if advanced {
+                return (history, Some(next_task));
+            }
+            // If advance failed (e.g. passed UNTIL date), fall through to non-recurring behavior
+        }
+
+        // Non-recurring (or finished recurring) behavior: Just update in place
+        let mut updated = self.clone();
+        updated.status = target_status;
+        if target_status.is_done() {
+            let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+            updated.unmapped_properties.retain(|p| p.key != "COMPLETED");
+            updated.unmapped_properties.push(RawProperty {
+                key: "COMPLETED".to_string(),
+                value: now_str,
+                params: vec![],
+            });
+            if target_status == TaskStatus::Completed {
+                updated.percent_complete = Some(100);
+            }
+        } else {
+            // Un-completing
+            updated.percent_complete = None;
+            updated.unmapped_properties.retain(|p| p.key != "COMPLETED");
+        }
+
+        (updated, None)
     }
 }

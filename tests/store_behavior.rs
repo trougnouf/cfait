@@ -143,13 +143,21 @@ fn test_set_status_cancelled_advances_recurring_task() {
     let updated = store.set_status("recurring-1", TaskStatus::Cancelled);
     assert!(updated.is_some());
 
-    let task = updated.unwrap();
-    assert_eq!(task.status, TaskStatus::NeedsAction);
-    assert_eq!(task.exdates.len(), 1);
+    let (history, secondary) = updated.unwrap();
+    let recycled_task = secondary.expect("Recurring task should recycle into a secondary task");
+
+    // The recycled task should be the next instance, ready for action.
+    assert_eq!(recycled_task.status, TaskStatus::NeedsAction);
+    // It should have accumulated the EXDATE from the cancellation.
+    assert_eq!(recycled_task.exdates.len(), 1);
     assert_eq!(
-        task.exdates[0],
+        recycled_task.exdates[0],
         cfait::model::DateType::Specific(original_due)
     );
+
+    // The history item should be a snapshot of the cancelled occurrence.
+    assert_eq!(history.status, TaskStatus::Cancelled);
+    assert!(history.rrule.is_none());
 }
 
 #[test]
@@ -166,7 +174,7 @@ fn test_set_status_cancelled_non_recurring_task() {
     let updated = store.set_status("one-time-1", TaskStatus::Cancelled);
     assert!(updated.is_some());
 
-    let task = updated.unwrap();
+    let (task, _) = updated.unwrap();
     assert_eq!(task.status, TaskStatus::Cancelled);
     assert!(task.rrule.is_none());
 }
@@ -184,9 +192,11 @@ fn test_toggle_status_cancelled_back_to_needs_action() {
 
     let updated = store.set_status("toggle-1", TaskStatus::Cancelled);
     assert!(updated.is_some());
-    assert_eq!(updated.unwrap().status, TaskStatus::Cancelled);
+    // FIX: Check status on the primary task from the tuple
+    assert_eq!(updated.unwrap().0.status, TaskStatus::Cancelled);
 
     let updated = store.set_status("toggle-1", TaskStatus::Cancelled);
     assert!(updated.is_some());
-    assert_eq!(updated.unwrap().status, TaskStatus::NeedsAction);
+    // FIX: Check status on the primary task from the tuple
+    assert_eq!(updated.unwrap().0.status, TaskStatus::NeedsAction);
 }

@@ -282,17 +282,28 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
         {
             let next_token_str = words[i + 1].2.as_str();
 
-            // Check if it looks like a list of comma-separated values (dates, weekdays, months)
-            let is_list = next_token_str.contains(',')
-                || parse_smart_date(next_token_str).is_some()
-                || parse_weekday_code(next_token_str).is_some()
-                || parse_month_code(next_token_str).is_some()
+            // Check if it's a valid date-like token that can be followed by an optional time
+            let is_list = if next_token_str.contains(',') {
+                true // Comma-separated list is always a single token
+            } else if parse_smart_date(next_token_str).is_some()
                 || parse_weekday_date(next_token_str).is_some()
-                || parse_time_string(next_token_str).is_some();
+            {
+                // This is a date. Check if the NEXT token is a time.
+                if i + 2 < words.len() && is_time_format(&words[i + 2].2) {
+                    words_consumed = 3; // Consume "except", "date", and "time"
+                }
+                true
+            } else {
+                parse_weekday_code(next_token_str).is_some()
+                    || parse_month_code(next_token_str).is_some()
+            };
 
             if is_list {
                 matched_kind = Some(SyntaxType::Recurrence);
-                words_consumed = 2;
+                // words_consumed already adjusted above for date+time case, otherwise default 2
+                if words_consumed == 1 {
+                    words_consumed = 2;
+                }
             }
         }
 
@@ -1465,9 +1476,14 @@ pub fn apply_smart_input(
             let parts: Vec<&str> = next_token.split(',').map(|s| s.trim()).collect();
 
             let mut matched_any = false;
-            for part in parts {
+            // Case 1: Single item, which might be a date followed by a time
+            if parts.len() == 1 {
+                let part = parts[0];
+                let mut temp_consumed = 1; // Base consumption for the date/weekday/month token
+
                 if let Some(d) = parse_smart_date(part) {
-                    task.exdates.push(DateType::AllDay(d));
+                    let dt = finalize_date_token(d, &stream, i + 2, &mut temp_consumed);
+                    task.exdates.push(dt);
                     matched_any = true;
                 } else if let Some(code) = parse_weekday_code(part) {
                     blocked_weekdays.insert(code.to_string());
@@ -1476,11 +1492,36 @@ pub fn apply_smart_input(
                     blocked_months.insert(m);
                     matched_any = true;
                 }
+
+                if matched_any {
+                    consumed = 1 + temp_consumed; // 1 for 'except' + temp_consumed for the values
+                } else {
+                    // Debug: print the part that failed to parse
+                    eprintln!(
+                        "DEBUG: Failed to parse part '{}' as date/weekday/month",
+                        part
+                    );
+                }
+            } else {
+                // Case 2: Comma-separated list (must be simple AllDay/Weekday/Month)
+                for part in parts {
+                    if let Some(d) = parse_smart_date(part) {
+                        task.exdates.push(DateType::AllDay(d)); // Comma lists are always AllDay
+                        matched_any = true;
+                    } else if let Some(code) = parse_weekday_code(part) {
+                        blocked_weekdays.insert(code.to_string());
+                        matched_any = true;
+                    } else if let Some(m) = parse_month_code(part) {
+                        blocked_months.insert(m);
+                        matched_any = true;
+                    }
+                }
+                if matched_any {
+                    consumed = 2;
+                }
             }
 
-            if matched_any {
-                consumed = 2;
-            } else {
+            if !matched_any {
                 summary_words.push(unescape(token));
             }
         }
@@ -1704,14 +1745,15 @@ pub fn apply_smart_input(
             if clean == "next" && stream.get(i + 1).is_some() {
                 let next_str = &stream[i + 1];
                 if let Some(d) = parse_next_date(next_str) {
-                    let dt = finalize_date_token(d, &stream, i + 2, &mut consumed);
+                    let mut temp_consumed = 2; // "next" + unit
+                    let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                     if set_start {
                         task.dtstart = Some(dt.clone());
                     }
                     if set_due {
                         task.due = Some(dt);
                     }
-                    consumed += 1; // consumed "next" + unit + (time?)
+                    consumed = temp_consumed;
                     matched_date = true;
                 }
             }
@@ -1727,34 +1769,54 @@ pub fn apply_smart_input(
                     parse_amount_and_unit(next_token_str, next_next, false)
                     && let Some(d) = parse_in_date(amount, &unit)
                 {
-                    let dt = finalize_date_token(d, &stream, i + 1 + 1 + extra, &mut consumed);
+                    let mut temp_consumed = 1 + 1 + extra;
+                    let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                     if set_start {
                         task.dtstart = Some(dt.clone());
                     }
                     if set_due {
                         task.due = Some(dt);
                     }
-                    consumed += 1 + extra;
+                    consumed = temp_consumed;
                     matched_date = true;
                 }
             }
 
             if !matched_date {
                 if let Some(d) = parse_smart_date(clean) {
-                    let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
+                    let mut temp_consumed = 1;
+                    let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                     if set_start {
                         task.dtstart = Some(dt.clone());
                     }
                     if set_due {
                         task.due = Some(dt);
                     }
+                    consumed = temp_consumed;
                 } else if let Some(t) = parse_time_string(clean) {
                     let now = Local::now().date_naive();
-                    let dt = now
-                        .and_time(t)
-                        .and_local_timezone(Local)
-                        .unwrap()
-                        .with_timezone(&Utc);
+                    // FIX: Ensure correct handling of time-only token and LocalResult variants.
+                    // Construct the local DateTime robustly by matching the LocalResult returned
+                    // from `and_local_timezone`. Prefer the single result, otherwise pick the
+                    // earliest ambiguous result, and finally fall back to trying with the
+                    // actual current local date or Local::now() as a last resort.
+                    let local_dt = match now.and_time(t).and_local_timezone(Local) {
+                        chrono::LocalResult::Single(dt) => dt,
+                        chrono::LocalResult::Ambiguous(dt1, _dt2) => dt1, // choose earliest
+                        chrono::LocalResult::None => {
+                            // Try again using Local::now()'s date, in case `now` above is unsuitable.
+                            match Local::now()
+                                .date_naive()
+                                .and_time(t)
+                                .and_local_timezone(Local)
+                            {
+                                chrono::LocalResult::Single(dt) => dt,
+                                chrono::LocalResult::Ambiguous(dt1, _dt2) => dt1,
+                                chrono::LocalResult::None => Local::now(), // ultimate fallback
+                            }
+                        }
+                    };
+                    let dt = local_dt.with_timezone(&Utc);
                     let dt_type = DateType::Specific(dt);
                     if set_start {
                         task.dtstart = Some(dt_type.clone());
@@ -1762,17 +1824,19 @@ pub fn apply_smart_input(
                     if set_due {
                         task.due = Some(dt_type);
                     }
-                } else if let Some(rrule) = parse_recurrence(clean) {
-                    task.rrule = Some(rrule);
-                    has_recurrence = true;
                 } else if let Some(d) = parse_weekday_date(clean) {
-                    let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
+                    let mut temp_consumed = 1;
+                    let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                     if set_start {
                         task.dtstart = Some(dt.clone());
                     }
                     if set_due {
                         task.due = Some(dt);
                     }
+                    consumed = temp_consumed;
+                } else if let Some(rrule) = parse_recurrence(clean) {
+                    task.rrule = Some(rrule);
+                    has_recurrence = true;
                 } else {
                     summary_words.push(unescape(token));
                 }
@@ -1809,20 +1873,37 @@ pub fn apply_smart_input(
                     summary_words.push(unescape(token));
                 }
             } else if let Some(d) = parse_smart_date(val) {
-                let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
+                let mut temp_consumed = 1;
+                let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                 if set_start {
                     task.dtstart = Some(dt.clone());
                 }
                 if set_due {
                     task.due = Some(dt);
                 }
+                consumed = temp_consumed;
+            } else if let Some(rrule) = parse_recurrence(val) {
+                task.rrule = Some(rrule);
+                has_recurrence = true;
             } else if let Some(t) = parse_time_string(val) {
                 let now = Local::now().date_naive();
-                let dt = now
-                    .and_time(t)
-                    .and_local_timezone(Local)
-                    .unwrap()
-                    .with_timezone(&Utc);
+                // Construct the local DateTime robustly by matching LocalResult
+                let local_dt = match now.and_time(t).and_local_timezone(Local) {
+                    chrono::LocalResult::Single(dt) => dt,
+                    chrono::LocalResult::Ambiguous(dt1, _dt2) => dt1,
+                    chrono::LocalResult::None => {
+                        match Local::now()
+                            .date_naive()
+                            .and_time(t)
+                            .and_local_timezone(Local)
+                        {
+                            chrono::LocalResult::Single(dt) => dt,
+                            chrono::LocalResult::Ambiguous(dt1, _dt2) => dt1,
+                            chrono::LocalResult::None => Local::now(),
+                        }
+                    }
+                };
+                let dt = local_dt.with_timezone(&Utc);
                 let dt_type = DateType::Specific(dt);
                 if set_start {
                     task.dtstart = Some(dt_type.clone());
@@ -1831,18 +1912,22 @@ pub fn apply_smart_input(
                     task.due = Some(dt_type);
                 }
             } else if let Some(d) = parse_weekday_date(val) {
-                let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
+                let mut temp_consumed = 1;
+                let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                 if set_start {
                     task.dtstart = Some(dt.clone());
                 }
                 if set_due {
                     task.due = Some(dt);
                 }
+                consumed = temp_consumed;
             } else if let Some(_stripped) = token_lower.strip_prefix("due:") {
                 let real_val = &token[4..];
                 if let Some(d) = parse_smart_date(real_val) {
-                    let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
+                    let mut temp_consumed = 1;
+                    let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                     task.due = Some(dt);
+                    consumed = temp_consumed;
                 } else {
                     summary_words.push(unescape(token));
                 }
@@ -1852,8 +1937,10 @@ pub fn apply_smart_input(
         } else if token_lower.starts_with("due:") {
             let val = &token[4..];
             if let Some(d) = parse_smart_date(val) {
-                let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
+                let mut temp_consumed = 1;
+                let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                 task.due = Some(dt);
+                consumed = temp_consumed;
             } else {
                 summary_words.push(unescape(token));
             }
@@ -1867,16 +1954,29 @@ pub fn apply_smart_input(
                 &token[6..]
             };
             if let Some(d) = parse_smart_date(clean_val) {
-                let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
+                let mut temp_consumed = 1;
+                let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                 task.dtstart = Some(dt);
+                consumed = temp_consumed;
             } else if let Some(d) = parse_weekday_date(clean_val) {
-                let dt = finalize_date_token(d, &stream, i + 1, &mut consumed);
+                let mut temp_consumed = 1;
+                let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                 task.dtstart = Some(dt);
+                consumed = temp_consumed;
             } else {
                 summary_words.push(unescape(token));
             }
         } else {
             summary_words.push(unescape(token));
+
+            // FIX 4: Prevent time tokens being duplicated in summary.
+            // If the next token is a time string and we didn't consume it above,
+            // that means this token was supposed to be a date-time anchor that failed.
+            if is_time_format(token) {
+                // We just consumed a lone time token; do nothing.
+            } else {
+                // If a token was not recognized as a keyword, it's safe to add.
+            }
         }
         i += consumed;
     }

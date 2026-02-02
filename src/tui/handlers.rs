@@ -545,11 +545,11 @@ pub async fn handle_key_event(
             KeyCode::Char(' ') => {
                 if state.active_focus == Focus::Main {
                     if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                        && let Some(updated) = state.store.toggle_task(&uid)
+                        && let Some((primary, _secondary)) = state.store.toggle_task(&uid)
                     {
                         state.refresh_filtered_view();
                         update_alarms(state);
-                        return Some(Action::ToggleTask(updated));
+                        return Some(Action::ToggleTask(primary));
                     }
                 } else if state.active_focus == Focus::Sidebar
                     && state.sidebar_mode == SidebarMode::Calendars
@@ -599,11 +599,22 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('x') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some(updated) = state.store.set_status(&uid, TaskStatus::Cancelled)
+                    && let Some((primary, secondary)) =
+                        state.store.set_status(&uid, TaskStatus::Cancelled)
                 {
                     state.refresh_filtered_view();
                     update_alarms(state);
-                    return Some(Action::MarkCancelled(updated));
+
+                    // If this was a recurring task that recycled, `secondary` is the
+                    // next active instance. For UI updates prefer showing the active
+                    // recycled task when present; otherwise show the primary updated task.
+                    let to_report = if let Some(next) = secondary {
+                        next
+                    } else {
+                        primary
+                    };
+
+                    return Some(Action::MarkCancelled(to_report));
                 }
             }
             KeyCode::Char('+') => {

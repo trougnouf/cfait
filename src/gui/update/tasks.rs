@@ -80,15 +80,46 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(view_task) = app.tasks.get(index) {
                 let uid = view_task.uid.clone();
                 app.selected_uid = Some(uid.clone());
-                if let Some(updated) = app.store.toggle_task(&uid) {
+                if let Some((primary, secondary)) = app.store.toggle_task(&uid) {
                     refresh_filtered_tasks(app);
                     if let Some(client) = &app.client {
-                        return Task::perform(
-                            async_toggle_wrapper(client.clone(), updated),
-                            |res| Message::SyncToggleComplete(Box::new(res)),
-                        );
+                        let mut commands = vec![];
+                        if let Some(sec) = secondary {
+                            // Recurring path: create history (primary), update main (secondary)
+                            commands.push(Task::perform(
+                                async_create_wrapper(client.clone(), primary),
+                                Message::SyncSaved,
+                            ));
+                            commands.push(Task::perform(
+                                async_update_wrapper(client.clone(), sec),
+                                Message::SyncSaved,
+                            ));
+                        } else {
+                            // Non-recurring: just update the primary task
+                            commands.push(Task::perform(
+                                async_update_wrapper(client.clone(), primary),
+                                Message::SyncSaved,
+                            ));
+                        }
+                        return Task::batch(commands);
                     } else {
-                        handle_offline_update(app, updated);
+                        // Offline logic
+                        if let Some(sec) = secondary {
+                            let _ = crate::journal::Journal::push(
+                                app.ctx.as_ref(),
+                                Action::Create(primary),
+                            );
+                            let _ = crate::journal::Journal::push(
+                                app.ctx.as_ref(),
+                                Action::Update(sec),
+                            );
+                        } else {
+                            let _ = crate::journal::Journal::push(
+                                app.ctx.as_ref(),
+                                Action::Update(primary),
+                            );
+                        }
+                        app.unsynced_changes = true;
                     }
                 }
             }
@@ -239,15 +270,42 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetTaskStatus(index, new_status) => {
             if let Some(view_task) = app.tasks.get(index) {
                 app.selected_uid = Some(view_task.uid.clone());
-                if let Some(updated) = app.store.set_status(&view_task.uid, new_status) {
+                // This now returns (primary_task, optional_secondary_task)
+                if let Some((primary, secondary)) = app.store.set_status(&view_task.uid, new_status)
+                {
                     refresh_filtered_tasks(app);
                     if let Some(client) = &app.client {
-                        return Task::perform(
-                            async_update_wrapper(client.clone(), updated),
-                            Message::SyncSaved,
-                        );
+                        let mut commands = vec![];
+                        if let Some(sec) = secondary {
+                            // Recurring path: create history (primary), update main (secondary)
+                            commands.push(Task::perform(
+                                async_create_wrapper(client.clone(), primary),
+                                Message::SyncSaved,
+                            ));
+                            commands.push(Task::perform(
+                                async_update_wrapper(client.clone(), sec),
+                                Message::SyncSaved,
+                            ));
+                        } else {
+                            // Non-recurring: just update the primary task
+                            commands.push(Task::perform(
+                                async_update_wrapper(client.clone(), primary),
+                                Message::SyncSaved,
+                            ));
+                        }
+                        return Task::batch(commands);
                     } else {
-                        handle_offline_update(app, updated);
+                        // Offline logic
+                        if let Some(sec) = secondary {
+                            let _ =
+                                crate::journal::Journal::push(app.ctx.as_ref(), Action::Create(primary));
+                            let _ =
+                                crate::journal::Journal::push(app.ctx.as_ref(), Action::Update(sec));
+                        } else {
+                            let _ =
+                                crate::journal::Journal::push(app.ctx.as_ref(), Action::Update(primary));
+                        }
+                        app.unsynced_changes = true;
                     }
                 }
             }
