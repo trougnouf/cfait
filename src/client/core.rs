@@ -3,6 +3,7 @@
 use crate::cache::Cache;
 use crate::client::auth::DynamicAuthLayer;
 use crate::client::cert::NoVerifier;
+use crate::client::redirect::FollowRedirectLayer;
 use crate::config::Config;
 use crate::context::AppContext;
 use crate::journal::{Action, Journal};
@@ -36,13 +37,15 @@ pub const APPLE_COLOR: PropertyName =
     PropertyName::new("http://apple.com/ns/ical/", "calendar-color");
 
 use crate::client::auth::DynamicAuthService;
+use crate::client::redirect::FollowRedirectService;
 
-// Updated type alias to include UserAgentService
-type HttpsClient = DynamicAuthService<
-    UserAgentService<
-        Client<
-            hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
-            String,
+type HttpsClient = FollowRedirectService<
+    DynamicAuthService<
+        UserAgentService<
+            Client<
+                hyper_rustls::HttpsConnector<hyper_util::client::legacy::connect::HttpConnector>,
+                String,
+            >,
         >,
     >,
 >;
@@ -93,7 +96,6 @@ impl StepResult {
         self
     }
 }
-// -----------------------------------
 
 fn strip_host(href: &str) -> String {
     if let Ok(uri) = href.parse::<Uri>()
@@ -245,7 +247,11 @@ impl RustyClient {
         let auth_client =
             DynamicAuthLayer::new(user.to_string(), pass.to_string()).layer(ua_client);
 
-        let webdav = WebDavClient::new(uri, auth_client.clone());
+        // ADDED: Wrap the auth client with the FollowRedirectLayer.
+        // This handles 301/302/307/308 redirects automatically.
+        let redirect_client = FollowRedirectLayer::new(10).layer(auth_client);
+
+        let webdav = WebDavClient::new(uri, redirect_client.clone());
         let caldav = CalDavClient::new(webdav);
         Ok(Self {
             client: Some(caldav),
