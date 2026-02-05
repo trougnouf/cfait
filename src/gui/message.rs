@@ -115,7 +115,7 @@ pub enum Message {
     JumpToLocation(String),
     JumpToTask(String),
     JumpToRandomTask, // Jump to a weighted-random task
-    SnapToSelected,
+    SnapToSelected { focus: bool },
     TagHovered(Option<String>),
     FocusTag(String),
     FocusLocation(String),

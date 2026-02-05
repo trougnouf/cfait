@@ -46,7 +46,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             if let Some(task) = app.tasks.get(next_idx) {
                 app.selected_uid = Some(task.uid.clone());
-                return scroll_to_selected(app);
+                return scroll_to_selected(app, true);
             }
             Task::none()
         }
@@ -64,7 +64,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             if let Some(task) = app.tasks.get(prev_idx) {
                 app.selected_uid = Some(task.uid.clone());
-                return scroll_to_selected(app);
+                return scroll_to_selected(app, true);
             }
             Task::none()
         }
@@ -108,7 +108,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             };
             if let Some(task) = app.tasks.get(next_idx) {
                 app.selected_uid = Some(task.uid.clone());
-                return scroll_to_selected(app);
+                return scroll_to_selected(app, true);
             }
             Task::none()
         }
@@ -128,7 +128,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             };
             if let Some(task) = app.tasks.get(prev_idx) {
                 app.selected_uid = Some(task.uid.clone());
-                return scroll_to_selected(app);
+                return scroll_to_selected(app, true);
             }
             Task::none()
         }
@@ -494,7 +494,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 // 5. USE DELAYED SCROLL
                 // We use delayed here because if we just un-hid the calendar or cleared filters,
                 // the row widget does not exist in the current frame.
-                return scroll_to_selected_delayed(app);
+                return scroll_to_selected_delayed(app, true);
             }
             Task::none()
         }
@@ -528,11 +528,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             // 2. Select Weighted Random Task
             if let Some(idx) = select_weighted_random_index(&app.tasks, app.default_priority)
-                && let Some(task) = app.tasks.get(idx) {
-                    app.selected_uid = Some(task.uid.clone());
-                    // 3. Scroll to it
-                    return scroll_to_selected(app);
-                }
+                && let Some(task) = app.tasks.get(idx)
+            {
+                app.selected_uid = Some(task.uid.clone());
+                // 3. Scroll to it
+                return scroll_to_selected(app, true);
+            }
             Task::none()
         }
         _ => Task::none(),

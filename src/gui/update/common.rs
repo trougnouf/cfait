@@ -171,7 +171,7 @@ pub fn apply_alias_retroactively(
 ///    focus the widget id and snap the scrollable to the relative offset (batched).
 /// 2) If only Id is present, focus it (ensures keyboard focus).
 /// 3) If only index known, snap_to relative offset as a fallback.
-pub fn scroll_to_selected(app: &GuiApp) -> Task<Message> {
+pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
     if let Some(uid) = &app.selected_uid {
         let id_opt = app.task_ids.get(uid).cloned();
         let idx_opt = app.tasks.iter().position(|t| t.uid == *uid);
@@ -219,7 +219,11 @@ pub fn scroll_to_selected(app: &GuiApp) -> Task<Message> {
                     let snap =
                         operation::snap_to(app.scrollable_id.clone(), RelativeOffset { x: 0.0, y });
 
-                    return Task::batch(vec![snap, operation::focus(id)]);
+                    if focus {
+                        return Task::batch(vec![snap, operation::focus(id)]);
+                    } else {
+                        return snap;
+                    }
                 }
             }
 
@@ -242,7 +246,11 @@ pub fn scroll_to_selected(app: &GuiApp) -> Task<Message> {
 
             let snap = operation::snap_to(app.scrollable_id.clone(), RelativeOffset { x: 0.0, y });
 
-            return Task::batch(vec![snap, operation::focus(id)]);
+            if focus {
+                return Task::batch(vec![snap, operation::focus(id)]);
+            } else {
+                return snap;
+            }
         }
 
         // If we only have the index, center using the same index-based pixel heuristic.
@@ -267,9 +275,10 @@ pub fn scroll_to_selected(app: &GuiApp) -> Task<Message> {
         }
 
         // If we only have the widget Id, focus it (last resort).
-        if let Some(id) = id_opt {
-            return operation::focus(id);
-        }
+        if let Some(id) = id_opt
+            && focus {
+                return operation::focus(id);
+            }
     }
 
     //eprintln!("scroll_to_selected: no selected uid");
@@ -283,7 +292,7 @@ pub fn scroll_to_selected(app: &GuiApp) -> Task<Message> {
 /// A single delayed attempt may still miss on some platforms/conditions. Emit a small batch
 /// of delayed triggers (at increasing delays) so the focus attempt has multiple chances across
 /// subsequent frames to succeed.
-pub fn scroll_to_selected_delayed(_app: &GuiApp) -> Task<Message> {
+pub fn scroll_to_selected_delayed(_app: &GuiApp, focus: bool) -> Task<Message> {
     // Try to emit SnapToSelected as soon as the focusable row reports its layout bounds.
     // Strategy:
     // 1. If we know which UID is selected and we have a cached widget Id for it, poll the
@@ -317,7 +326,7 @@ pub fn scroll_to_selected_delayed(_app: &GuiApp) -> Task<Message> {
                     std::thread::sleep(StdDuration::from_millis(50));
                 }
             },
-            |_| Message::SnapToSelected,
+            move |_| Message::SnapToSelected { focus },
         );
     }
 
@@ -327,19 +336,19 @@ pub fn scroll_to_selected_delayed(_app: &GuiApp) -> Task<Message> {
             async {
                 std::thread::sleep(StdDuration::from_millis(120));
             },
-            |_| Message::SnapToSelected,
+            move |_| Message::SnapToSelected { focus },
         ),
         Task::perform(
             async {
                 std::thread::sleep(StdDuration::from_millis(360));
             },
-            |_| Message::SnapToSelected,
+            move |_| Message::SnapToSelected { focus },
         ),
         Task::perform(
             async {
                 std::thread::sleep(StdDuration::from_millis(720));
             },
-            |_| Message::SnapToSelected,
+            move |_| Message::SnapToSelected { focus },
         ),
     ])
 }

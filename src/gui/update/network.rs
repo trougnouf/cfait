@@ -139,7 +139,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let _ = tx.try_send(SystemEvent::EnableAlarms);
             }
 
-            let scroll_cmd = scroll_to_selected(app);
+            let scroll_cmd = scroll_to_selected(app, true);
 
             if app.error_msg.is_none() {
                 app.loading = true;
@@ -172,7 +172,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             app.loading = false;
 
-            scroll_to_selected(app)
+            scroll_to_selected(app, true)
         }
         Message::RefreshedAll(Err(e)) => {
             app.error_msg = Some(format!("Sync warning: {}", e));
@@ -187,7 +187,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.active_cal_href.as_deref() == Some(&href) {
                 refresh_filtered_tasks(app);
                 app.loading = false;
-                return scroll_to_selected(app);
+                return scroll_to_selected(app, true);
             }
             Task::none()
         }

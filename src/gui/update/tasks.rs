@@ -297,13 +297,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     } else {
                         // Offline logic
                         if let Some(sec) = secondary {
-                            let _ =
-                                crate::journal::Journal::push(app.ctx.as_ref(), Action::Create(primary));
-                            let _ =
-                                crate::journal::Journal::push(app.ctx.as_ref(), Action::Update(sec));
+                            let _ = crate::journal::Journal::push(
+                                app.ctx.as_ref(),
+                                Action::Create(primary),
+                            );
+                            let _ = crate::journal::Journal::push(
+                                app.ctx.as_ref(),
+                                Action::Update(sec),
+                            );
                         } else {
-                            let _ =
-                                crate::journal::Journal::push(app.ctx.as_ref(), Action::Update(primary));
+                            let _ = crate::journal::Journal::push(
+                                app.ctx.as_ref(),
+                                Action::Update(primary),
+                            );
                         }
                         app.unsynced_changes = true;
                     }
@@ -408,7 +414,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // in an input field or just finished clearing a state.
             // This enables j/k navigation immediately.
             if captured_action || app.editing_uid.is_none() {
-                return scroll_to_selected_delayed(app);
+                return scroll_to_selected_delayed(app, true);
             }
 
             Task::none()
@@ -820,7 +826,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
             // Use a delayed scroll helper: waiting a short interval allows the view to
             // rebuild and register the new row widget before attempting to focus it.
-            let scroll_cmd = scroll_to_selected_delayed(app);
+            let scroll_cmd = scroll_to_selected_delayed(app, false);
 
             if let Some(client) = &app.client {
                 let create_cmd = Task::perform(
