@@ -246,6 +246,16 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             ]
             .spacing(10)
             .align_y(iced::Alignment::Center),
+            // Added Refresh Row
+            row![
+                text("Auto-refresh interval:").width(Length::Fixed(200.0)),
+                text_input("30m", &app.ob_auto_refresh_input)
+                    .on_input(Message::SetAutoRefreshInterval)
+                    .width(Length::Fixed(60.0))
+                    .padding(5)
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
             text("").size(5),
             text("Calendar Integration").size(20),
             {

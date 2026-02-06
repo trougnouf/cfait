@@ -109,16 +109,24 @@ Requires [Android NDK](https://developer.android.com/ndk/downloads) and [cargo-n
 export ANDROID_NDK_HOME=/path/to/android-ndk
 export ANDROID_NDK_ROOT=/path/to/android-ndk
 
-# Build native libraries for Android architectures
+# Build native libraries for Android architectures (these are the release libs that go into the APK)
 cargo ndk -t aarch64-linux-android -t x86_64-linux-android \
   -o ./android/app/src/main/jniLibs build --release --lib --features mobile
 
-# Generate Kotlin bindings
+# Build a host (local) library for UniFFI bindgen to read
+# NOTE: The UniFFI metadata extractor can fail on release builds that are stripped or
+# use aggressive LTO. To reliably generate Kotlin bindings, build the host library in
+# debug mode and let uniffi-bindgen read `target/debug/libcfait.so`.
+cargo build --lib --features mobile
+
+# Generate Kotlin bindings using the host/debug library
+# This does NOT change the Android release libs you built above (those are still packaged
+# into the APK). The debug host library is used only locally so bindgen can extract metadata.
 cargo run --features mobile --bin uniffi-bindgen generate \
-  --library target/aarch64-linux-android/release/libcfait.so \
+  --library target/debug/libcfait.so \
   --language kotlin --out-dir ./android/app/src/main/java --config uniffi.toml
 
-# Build APK using Gradle
+# Build APK using Gradle (packages the release native libraries built earlier)
 cd android
 ./gradlew assembleRelease
 ```

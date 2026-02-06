@@ -40,6 +40,7 @@ chrono = { version = "0.4", features = ["serde"] }
 icalendar = "0.17"
 uuid = { version = "1.19", features = ["v4"] }
 tokio = { version = "1", features = ["full"] }
+camino = "1.0"
 libdav = "0.10"
 http = "1.4"
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "tokio"] }
@@ -68,6 +69,7 @@ unicode-width = "0.2"
 # --- ANDROID / INTEROP ---
 uniffi = { version = "0.31", features = ["tokio", "build", "cli"], optional = true }
 uniffi_bindgen = { version = "0.31",  optional = true }
+uniffi_meta = "0.31"
 
 
 # --- TUI ONLY (Optional) ---
@@ -97,6 +99,7 @@ mockito = "1.7" # For mocking the HTTP server
 tokio = { version = "1", features = ["full"] }
 uuid = { version = "1.19", features = ["v4"] }
 serial_test = "3.0"
+uniffi_meta = "0.31"
 # Required to run the bindgen binary
 
 [features]
@@ -119,6 +122,11 @@ required-features = ["gui"]
 [[bin]]
 name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
+required-features = ["mobile"]
+
+[[bin]]
+name = "inspect_bindgen"
+path = "tools/inspect_bindgen.rs"
 required-features = ["mobile"]
 
 [profile.release]

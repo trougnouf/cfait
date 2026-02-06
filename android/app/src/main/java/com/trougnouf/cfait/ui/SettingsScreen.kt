@@ -69,14 +69,12 @@ fun SettingsScreen(
     var autoRemind by remember { mutableStateOf(true) }
     var defTime by remember { mutableStateOf("09:00") }
     var snoozeShort by remember { mutableStateOf("1h") }
-    var snoozeLong by remember { mutableStateOf("1d") }
+    // Long snooze removed from UI state
+    var autoRefresh by remember { mutableStateOf("30m") }
     var createEventsForTasks by remember { mutableStateOf(false) }
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
 
-    // Separate status state for Debug section to avoid UI jumps
     var debugStatus by remember { mutableStateOf("") }
-
-    // Theme dropdown state
     var themeExpanded by remember { mutableStateOf(false) }
     val themeOptions = remember {
         val list = mutableListOf(
@@ -134,7 +132,7 @@ fun SettingsScreen(
         autoRemind = cfg.autoReminders
         defTime = cfg.defaultReminderTime
         snoozeShort = formatDuration(cfg.snoozeShort)
-        snoozeLong = formatDuration(cfg.snoozeLong)
+        autoRefresh = formatDuration(cfg.autoRefreshInterval)
         createEventsForTasks = cfg.createEventsForTasks
         deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
 
@@ -179,14 +177,19 @@ fun SettingsScreen(
         val startGraceInt = startGracePeriodDays.trim().toUIntOrNull() ?: 1u
 
         val sShort = api.parseDurationString(snoozeShort) ?: 60u
-        val sLong = api.parseDurationString(snoozeLong) ?: 1440u
+        val aRefresh = api.parseDurationString(autoRefresh) ?: 30u
 
+        // FIX: Ensure arguments match Rust signature exactly:
+        // url, user, pass, insecure, hide_completed, disabled_cals, sort, days, prio,
+        // default_prio, grace, auto_reminders, default_time, snooze_short, create_events,
+        // delete_events, auto_refresh
         api.saveConfig(
             url, user, pass, insecure, hideCompleted,
             disabledSet.toList(), sortInt,
             daysInt, prioInt, defaultPrioInt, startGraceInt,
-            autoRemind, defTime, sShort, sLong,
-            createEventsForTasks, deleteEventsOnCompletion
+            autoRemind, defTime, sShort,
+            createEventsForTasks, deleteEventsOnCompletion,
+            aRefresh
         )
     }
 
@@ -224,7 +227,6 @@ fun SettingsScreen(
             )
         },
     ) { p ->
-        // Add .imePadding() to ensure content remains visible above the keyboard
         LazyColumn(modifier = Modifier.padding(p).imePadding().padding(16.dp)) {
             item {
                 Text(
@@ -312,7 +314,6 @@ fun SettingsScreen(
                 }
             }
 
-            // --- APPEARANCE SECTION ---
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
@@ -365,7 +366,6 @@ fun SettingsScreen(
                     }
                 }
             }
-            // ---------------------------
 
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
@@ -411,14 +411,9 @@ fun SettingsScreen(
                                 singleLine = true
                             )
                         }
-                        Text(
-                            "Tasks starting within this period stay visible (not pushed to Future).",
-                            fontSize = 12.sp,
-                            color = androidx.compose.ui.graphics.Color.Gray
-                        )
 
                         Text(
-                            "Urgency Rules (shown at top):",
+                            "Urgency Rules:",
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(top = 16.dp)
                         )
@@ -432,11 +427,6 @@ fun SettingsScreen(
                                 singleLine = true
                             )
                         }
-                        Text(
-                            "Tasks due within this range show at top.",
-                            fontSize = 12.sp,
-                            color = androidx.compose.ui.graphics.Color.Gray
-                        )
 
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                             Text("Priority <= (!):", modifier = Modifier.weight(1f))
@@ -448,11 +438,6 @@ fun SettingsScreen(
                                 singleLine = true
                             )
                         }
-                        Text(
-                            "Priorities at or below this value show at top.",
-                            fontSize = 12.sp,
-                            color = androidx.compose.ui.graphics.Color.Gray
-                        )
 
                         Text(
                             "Priority Settings:",
@@ -469,11 +454,6 @@ fun SettingsScreen(
                                 singleLine = true
                             )
                         }
-                        Text(
-                            "Tasks without priority (0) sort as this value.",
-                            fontSize = 12.sp,
-                            color = androidx.compose.ui.graphics.Color.Gray
-                        )
 
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                             Text("Priority cutoff (months):", modifier = Modifier.weight(1f))
@@ -485,11 +465,6 @@ fun SettingsScreen(
                                 singleLine = true
                             )
                         }
-                        Text(
-                            "Tasks due within this range are shown before undated tasks.",
-                            fontSize = 12.sp,
-                            color = androidx.compose.ui.graphics.Color.Gray
-                        )
                     }
                 }
             }
@@ -507,12 +482,6 @@ fun SettingsScreen(
                     Checkbox(checked = autoRemind, onCheckedChange = { autoRemind = it })
                     Text("Auto-remind on Due/Start")
                 }
-                Text(
-                    "Only if no specific alarms are set.",
-                    fontSize = 12.sp,
-                    color = androidx.compose.ui.graphics.Color.Gray,
-                    modifier = Modifier.padding(start = 12.dp)
-                )
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                     Text("Default time (HH:MM):", modifier = Modifier.weight(1f))
@@ -525,7 +494,7 @@ fun SettingsScreen(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                    Text("Snooze Presets:", modifier = Modifier.weight(1f))
+                    Text("Snooze Preset:", modifier = Modifier.weight(1f))
                     OutlinedTextField(
                         value = snoozeShort,
                         onValueChange = { snoozeShort = it },
@@ -533,13 +502,16 @@ fun SettingsScreen(
                         singleLine = true,
                         placeholder = { Text("1h") }
                     )
-                    Spacer(Modifier.width(8.dp))
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                    Text("Auto-refresh interval:", modifier = Modifier.weight(1f))
                     OutlinedTextField(
-                        value = snoozeLong,
-                        onValueChange = { snoozeLong = it },
+                        value = autoRefresh,
+                        onValueChange = { autoRefresh = it },
                         modifier = Modifier.width(70.dp),
                         singleLine = true,
-                        placeholder = { Text("1d") }
+                        placeholder = { Text("30m") }
                     )
                 }
 
@@ -559,12 +531,6 @@ fun SettingsScreen(
                     )
                     Text("Create calendar events for tasks with dates")
                 }
-                Text(
-                    "Events will be retroactively created. Use +cal/-cal per task to override.",
-                    fontSize = 12.sp,
-                    color = androidx.compose.ui.graphics.Color.Gray,
-                    modifier = Modifier.padding(start = 12.dp)
-                )
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                     Checkbox(
@@ -574,12 +540,6 @@ fun SettingsScreen(
                     )
                     Text("Delete events when tasks are completed")
                 }
-                Text(
-                    "Regardless, events are always deleted when tasks are deleted.",
-                    fontSize = 12.sp,
-                    color = androidx.compose.ui.graphics.Color.Gray,
-                    modifier = Modifier.padding(start = 12.dp)
-                )
 
                 Button(
                     onClick = onDeleteEvents,
@@ -745,7 +705,6 @@ fun SettingsScreen(
                 Spacer(Modifier.height(32.dp))
             }
 
-            // --- Debug: Export Everything ---
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
@@ -765,23 +724,16 @@ fun SettingsScreen(
                         scope.launch {
                             try {
                                 debugStatus = "Exporting data..."
-                                // 1. Generate ZIP in internal storage (files/cache/)
                                 val zipPath = api.createDebugExport()
                                 val sourceFile = File(zipPath)
-
-                                // 2. Copy to Context.cacheDir (mapped by FileProvider)
-                                // Standard FileProvider setup usually maps <cache-path name="cache" path="."/>
-                                // which corresponds to context.cacheDir.
                                 val destFile = File(context.cacheDir, "cfait_debug_export.zip")
 
-                                // Simple stream copy
                                 sourceFile.inputStream().use { input ->
                                     destFile.outputStream().use { output ->
                                         input.copyTo(output)
                                     }
                                 }
 
-                                // 3. Share the file from the safe location
                                 val uri = FileProvider.getUriForFile(
                                     context,
                                     "${context.packageName}.fileprovider",
@@ -815,7 +767,6 @@ fun SettingsScreen(
                     }
                 }
 
-                // Display status message below the button
                 if (debugStatus.isNotEmpty()) {
                     Text(
                         text = debugStatus,

@@ -154,6 +154,8 @@ pub enum Message {
     // --- Alarms & Reminders ---
     InitAlarmActor(mpsc::Sender<SystemEvent>),
     AlarmSignalReceived(Arc<AlarmMessage>),
+    CompleteTaskFromAlarm(String, String), // TaskUID, AlarmUID
+    CancelTaskFromAlarm(String, String),   // TaskUID, AlarmUID
     SnoozeAlarm(String, String, u32),
     DismissAlarm(String, String),
     SnoozeCustomInput(String),
@@ -162,6 +164,7 @@ pub enum Message {
     SetDefaultReminderTime(String),
     SetSnoozeShort(String),
     SetSnoozeLong(String),
+    SetAutoRefreshInterval(String), // Added
     SetCreateEventsForTasks(bool),
     SetDeleteEventsOnCompletion(bool),
     DeleteAllCalendarEvents,

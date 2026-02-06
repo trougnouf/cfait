@@ -133,6 +133,7 @@ pub fn save_config(app: &GuiApp) {
         snooze_long_mins: app.snooze_long_mins,
         create_events_for_tasks: app.create_events_for_tasks,
         delete_events_on_completion: app.delete_events_on_completion,
+        auto_refresh_interval_mins: app.auto_refresh_interval_mins,
     }
     .save(app.ctx.as_ref());
 }
@@ -276,9 +277,10 @@ pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
 
         // If we only have the widget Id, focus it (last resort).
         if let Some(id) = id_opt
-            && focus {
-                return operation::focus(id);
-            }
+            && focus
+        {
+            return operation::focus(id);
+        }
     }
 
     //eprintln!("scroll_to_selected: no selected uid");

@@ -182,6 +182,25 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         .spacing(5)
         .align_y(iced::Alignment::Center);
 
+        let done_btn = button(text("Done").size(14).font(iced::Font {
+            weight: iced::font::Weight::Bold,
+            ..Default::default()
+        }))
+        .style(iced::widget::button::success)
+        .padding([8, 16])
+        .on_press(Message::CompleteTaskFromAlarm(
+            task.uid.clone(),
+            alarm.uid.clone(),
+        ));
+
+        let cancel_btn = button(text("Cancel Task").size(14))
+            .style(iced::widget::button::danger)
+            .padding([8, 16])
+            .on_press(Message::CancelTaskFromAlarm(
+                task.uid.clone(),
+                alarm.uid.clone(),
+            ));
+
         let dismiss_btn = button(text("Dismiss").size(14).font(iced::Font {
             weight: iced::font::Weight::Bold,
             ..Default::default()
@@ -195,7 +214,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 .spacing(10)
                 .align_y(iced::Alignment::Center),
             Space::new().height(10),
-            dismiss_btn
+            row![done_btn, cancel_btn, dismiss_btn].spacing(10)
         ]
         .align_x(iced::Alignment::Center);
 

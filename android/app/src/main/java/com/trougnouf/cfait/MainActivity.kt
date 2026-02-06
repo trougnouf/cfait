@@ -34,6 +34,12 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import java.util.concurrent.TimeUnit
+import com.trougnouf.cfait.workers.PeriodicSyncWorker
 import com.trougnouf.cfait.core.MobileCalendar
 import com.trougnouf.cfait.core.MobileLocation
 import com.trougnouf.cfait.core.MobileTag
@@ -139,6 +145,22 @@ fun CfaitNavHost(
     val calendarWorkInfo by workManager
         .getWorkInfosForUniqueWorkLiveData(CalendarSyncWorker.UNIQUE_WORK_NAME)
         .observeAsState()
+
+    // Schedule a periodic background sync worker to keep remote changes and alarms up-to-date.
+    // Uses a 30-minute interval; WorkManager will coalesce as appropriate.
+    val periodicSyncRequest = PeriodicWorkRequestBuilder<PeriodicSyncWorker>(30, TimeUnit.MINUTES)
+        .setConstraints(
+            Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+        )
+        .build()
+
+    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        "cfait_periodic_sync",
+        ExistingPeriodicWorkPolicy.KEEP,
+        periodicSyncRequest
+    )
 
     val currentWorkInfo = calendarWorkInfo?.firstOrNull()
     val isCalendarSyncRunning =

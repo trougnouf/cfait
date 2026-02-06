@@ -51,10 +51,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.create_events_for_tasks = config.create_events_for_tasks;
             app.delete_events_on_completion = config.delete_events_on_completion;
             app.snooze_long_mins = config.snooze_long_mins;
+            app.auto_refresh_interval_mins = config.auto_refresh_interval_mins; // Added
 
             // Initialize inputs with formatted strings
             app.ob_snooze_short_input = format_duration_compact(config.snooze_short_mins);
             app.ob_snooze_long_input = format_duration_compact(config.snooze_long_mins);
+            app.ob_auto_refresh_input = format_duration_compact(config.auto_refresh_interval_mins); // Added
 
             let mut cached_cals = Cache::load_calendars(app.ctx.as_ref()).unwrap_or_default();
 
@@ -177,6 +179,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 snooze_long_mins: app.snooze_long_mins,
                 create_events_for_tasks: app.create_events_for_tasks,
                 delete_events_on_completion: app.delete_events_on_completion,
+                auto_refresh_interval_mins: app.auto_refresh_interval_mins,
             });
 
             config_to_save.url = app.ob_url.clone();
@@ -197,6 +200,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             config_to_save.snooze_long_mins = app.snooze_long_mins;
             config_to_save.create_events_for_tasks = app.create_events_for_tasks;
             config_to_save.delete_events_on_completion = app.delete_events_on_completion;
+            config_to_save.auto_refresh_interval_mins = app.auto_refresh_interval_mins;
 
             let _ = config_to_save.save(app.ctx.as_ref());
 
@@ -269,6 +273,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 snooze_long_mins: app.snooze_long_mins,
                 create_events_for_tasks: app.create_events_for_tasks,
                 delete_events_on_completion: app.delete_events_on_completion,
+                auto_refresh_interval_mins: app.auto_refresh_interval_mins,
             };
 
             let _ = config_to_save.save(app.ctx.as_ref());
@@ -419,6 +424,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_snooze_long_input = val.clone();
             if let Some(n) = parse_duration(&val) {
                 app.snooze_long_mins = n;
+                save_config(app);
+            }
+            Task::none()
+        }
+        // Added Handler
+        Message::SetAutoRefreshInterval(val) => {
+            app.ob_auto_refresh_input = val.clone();
+            if let Some(n) = parse_duration(&val) {
+                app.auto_refresh_interval_mins = n;
                 save_config(app);
             }
             Task::none()

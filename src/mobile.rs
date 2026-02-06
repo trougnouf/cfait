@@ -1,3 +1,4 @@
+// File: ./src/mobile.rs
 /* cfait/src/mobile.rs
  *
  * UniFFI interface for exposing core logic to mobile platforms (Android).
@@ -21,9 +22,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
-
-// Android-only types are referenced with fully-qualified paths inside platform-specific blocks.
-// This avoids top-level platform-gated imports that can become unused on some targets.
 
 #[derive(Debug, uniffi::Error)]
 #[uniffi(flat_error)]
@@ -96,7 +94,6 @@ impl From<SyntaxType> for MobileSyntaxType {
 #[derive(uniffi::Record)]
 pub struct MobileSyntaxToken {
     pub kind: MobileSyntaxType,
-    // Change u32 -> i32 for compatibility with Kotlin String indices
     pub start: i32,
     pub end: i32,
 }
@@ -109,7 +106,7 @@ pub struct MobileTask {
     pub is_done: bool,
     pub priority: u8,
     pub due_date_iso: Option<String>,
-    pub is_allday_due: bool, // NEW
+    pub is_allday_due: bool,
     pub start_date_iso: Option<String>,
     pub is_allday_start: bool,
     pub has_alarms: bool,
@@ -132,8 +129,6 @@ pub struct MobileTask {
     pub location: Option<String>,
     pub url: Option<String>,
     pub geo: Option<String>,
-
-    // NEW FIELDS: Pre-resolved visibility for mobile UI
     pub visible_categories: Vec<String>,
     pub visible_location: Option<String>,
 }
@@ -192,9 +187,9 @@ pub struct MobileConfig {
     pub auto_reminders: bool,
     pub default_reminder_time: String,
     pub snooze_short: u32,
-    pub snooze_long: u32,
     pub create_events_for_tasks: bool,
     pub delete_events_on_completion: bool,
+    pub auto_refresh_interval: u32,
 }
 
 fn task_to_mobile(
@@ -205,7 +200,6 @@ fn task_to_mobile(
     let smart = t.to_smart_string();
     let status_str = format!("{:?}", t.status);
 
-    // CHANGE: Use cached field populated by filter()
     let is_blocked = t.is_blocked;
     let blocked_by_names = t
         .dependencies
@@ -236,7 +230,6 @@ fn task_to_mobile(
         .iter()
         .all(|a| a.acknowledged.is_some() || a.is_snooze());
 
-    // Calculate future start flag
     let now = Utc::now();
     let is_future_start = if let Some(start) = &t.dtstart {
         start.to_start_comparison_time() > now
@@ -244,7 +237,6 @@ fn task_to_mobile(
         false
     };
 
-    // --- RESOLVE VISUAL ATTRIBUTES ---
     let (parent_tags, parent_loc) = if let Some(p_uid) = &t.parent_uid
         && let Some(parent) = store.get_task_ref(p_uid)
     {
@@ -258,7 +250,6 @@ fn task_to_mobile(
 
     let (visible_categories, visible_location) =
         t.resolve_visual_attributes(&parent_tags, &parent_loc, aliases);
-    // ---------------------------------
 
     MobileTask {
         uid: t.uid.clone(),
@@ -290,8 +281,6 @@ fn task_to_mobile(
         location: t.location.clone(),
         url: t.url.clone(),
         geo: t.geo.clone(),
-
-        // NEW: Visible attributes pre-calculated for the mobile UI
         visible_categories,
         visible_location,
     }
@@ -301,14 +290,11 @@ fn task_to_mobile(
 pub struct CfaitMobile {
     client: Arc<Mutex<Option<RustyClient>>>,
     store: Arc<Mutex<TaskStore>>,
-    /// In-memory cache of the alarm index to avoid repeated disk reads
-    /// Updated whenever tasks are modified or loaded from cache
     alarm_index_cache: Arc<Mutex<Option<AlarmIndex>>>,
-    /// Filesystem / path resolution context (injected)
     ctx: Arc<dyn AppContext>,
 }
 
-#[uniffi::export(async_runtime = "tokio")]
+#[uniffi::export]
 impl CfaitMobile {
     #[uniffi::constructor]
     pub fn new(android_files_dir: String) -> Self {
@@ -318,8 +304,6 @@ impl CfaitMobile {
                 .with_max_level(log::LevelFilter::Debug)
                 .with_tag("CfaitRust"),
         );
-        // Build a StandardContext with an Android override root so all paths are
-        // created under the provided files dir. This is the FFI boundary.
         let ctx: Arc<dyn AppContext> =
             Arc::new(StandardContext::new(Some(PathBuf::from(android_files_dir))));
         Self {
@@ -331,138 +315,7 @@ impl CfaitMobile {
     }
 
     pub fn create_debug_export(&self) -> Result<String, MobileError> {
-        // Thin exported wrapper - calls internal implementation which is platform-specific.
         self.create_debug_export_internal()
-    }
-
-    // Internal implementation not exported via UniFFI. Platform-specific behavior is gated here.
-    fn create_debug_export_internal(&self) -> Result<String, MobileError> {
-        #[cfg(target_os = "android")]
-        {
-            // Use the injected context instead of global AppPaths
-            let data_dir = self
-                .ctx
-                .get_data_dir()
-                .map_err(|e| MobileError::from(e.to_string()))?;
-            let cache_dir = self
-                .ctx
-                .get_cache_dir()
-                .map_err(|e| MobileError::from(e.to_string()))?;
-            // --- FIX: Get the config directory ---
-            let config_dir = self
-                .ctx
-                .get_config_dir()
-                .map_err(|e| MobileError::from(e.to_string()))?;
-
-            let export_path = cache_dir.join("cfait_debug_export.zip");
-            let file = std::fs::File::create(&export_path)
-                .map_err(|e| MobileError::from(e.to_string()))?;
-            let mut zip = zip::ZipWriter::new(file);
-
-            let options: zip::write::FileOptions<'_, ()> = {
-                let o = zip::write::FileOptions::default();
-                o.compression_method(zip::CompressionMethod::Deflated)
-                    .unix_permissions(0o755)
-            };
-
-            // Helper to add a directory's contents to the zip
-            let mut add_dir = |dir: &std::path::Path, prefix: &str| -> Result<(), MobileError> {
-                if let Ok(entries) = std::fs::read_dir(dir) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if path.is_file() {
-                            let file_name = path.file_name().unwrap().to_string_lossy();
-
-                            // Skip lock files and the export file itself
-                            if file_name.ends_with(".lock") || file_name == "cfait_debug_export.zip"
-                            {
-                                continue;
-                            }
-
-                            let zip_path = format!("{}{}", prefix, file_name);
-                            zip.start_file(zip_path, options)
-                                .map_err(|e| MobileError::from(e.to_string()))?;
-
-                            // Special handling for config.toml to redact credentials
-                            if file_name == "config.toml" {
-                                let mut config =
-                                    Config::load(self.ctx.as_ref()).unwrap_or_default();
-                                config.username = "[REDACTED]".to_string();
-                                // If Config has a password field, redact it. Otherwise ignore.
-                                // Use match to avoid compile error if field absent (but it exists in this crate).
-                                config.password = "[REDACTED]".to_string();
-                                // Serialize sanitized config
-                                let toml_str = toml::to_string_pretty(&config).unwrap_or_default();
-                                zip.write_all(toml_str.as_bytes())
-                                    .map_err(|e| MobileError::from(e.to_string()))?;
-                            } else {
-                                // Copy raw file
-                                let mut f = std::fs::File::open(&path)
-                                    .map_err(|e| MobileError::from(e.to_string()))?;
-                                let mut buffer = Vec::new();
-                                f.read_to_end(&mut buffer)
-                                    .map_err(|e| MobileError::from(e.to_string()))?;
-                                zip.write_all(&buffer)
-                                    .map_err(|e| MobileError::from(e.to_string()))?;
-                            }
-                        }
-                    }
-                }
-                Ok(())
-            };
-
-            // Add Data Directory (journals, local calendars)
-            add_dir(&data_dir, "data/")?;
-
-            // --- FIX: Add the Config directory ---
-            add_dir(&config_dir, "config/")?;
-
-            // Add Cache Directory (remote calendar caches)
-            add_dir(&cache_dir, "cache/")?;
-
-            zip.finish().map_err(|e| MobileError::from(e.to_string()))?;
-
-            return Ok(export_path.to_string_lossy().to_string());
-        }
-
-        #[cfg(not(target_os = "android"))]
-        {
-            // Debug export not available on non-Android targets.
-            Err(MobileError::from(
-                "Debug export is only available on Android",
-            ))
-        }
-    }
-
-    pub async fn add_alias(&self, key: String, tags: Vec<String>) -> Result<(), MobileError> {
-        let mut c = Config::load(self.ctx.as_ref()).unwrap_or_default();
-
-        crate::model::validate_alias_integrity(&key, &tags, &c.tag_aliases)
-            .map_err(MobileError::from)?;
-
-        c.tag_aliases.insert(key.clone(), tags.clone());
-        c.save(self.ctx.as_ref()).map_err(MobileError::from)?;
-
-        let mut store = self.store.lock().await;
-        let modified = store.apply_alias_retroactively(&key, &tags);
-        drop(store);
-
-        if !modified.is_empty() {
-            let client_guard = self.client.lock().await;
-            if let Some(client) = &*client_guard {
-                for mut t in modified {
-                    let _ = client.update_task(&mut t).await;
-                }
-            } else {
-                for t in modified {
-                    let _ = crate::journal::Journal::push(
-                        self.ctx.as_ref(),
-                        crate::journal::Action::Update(t),
-                    );
-                }
-            }
-        }
-        Ok(())
     }
 
     pub fn has_unsynced_changes(&self) -> bool {
@@ -482,31 +335,25 @@ impl CfaitMobile {
     ) -> Result<String, MobileError> {
         let count = LocalStorage::import_from_ics(self.ctx.as_ref(), &calendar_href, &ics_content)
             .map_err(|e| MobileError::from(e.to_string()))?;
-
         Ok(format!("Successfully imported {} task(s)", count))
     }
 
     pub fn parse_smart_string(&self, input: String) -> Vec<MobileSyntaxToken> {
         let tokens = tokenize_smart_input(&input);
-
         let mut byte_to_utf16 = std::collections::BTreeMap::new();
         let mut byte_pos = 0;
         let mut utf16_pos = 0;
-
         byte_to_utf16.insert(0, 0);
-
         for c in input.chars() {
             byte_pos += c.len_utf8();
             utf16_pos += c.len_utf16();
-            byte_to_utf16.insert(byte_pos, utf16_pos as i32); // Cast to i32 here
+            byte_to_utf16.insert(byte_pos, utf16_pos as i32);
         }
-
         tokens
             .into_iter()
             .map(|t| {
                 let start_16 = *byte_to_utf16.get(&t.start).unwrap_or(&0);
                 let end_16 = *byte_to_utf16.get(&t.end).unwrap_or(&start_16);
-
                 MobileSyntaxToken {
                     kind: MobileSyntaxType::from(t.kind),
                     start: start_16,
@@ -534,9 +381,9 @@ impl CfaitMobile {
             auto_reminders: c.auto_reminders,
             default_reminder_time: c.default_reminder_time,
             snooze_short: c.snooze_short_mins,
-            snooze_long: c.snooze_long_mins,
             create_events_for_tasks: c.create_events_for_tasks,
             delete_events_on_completion: c.delete_events_on_completion,
+            auto_refresh_interval: c.auto_refresh_interval_mins,
         }
     }
 
@@ -561,9 +408,9 @@ impl CfaitMobile {
         auto_reminders: bool,
         default_reminder_time: String,
         snooze_short: u32,
-        snooze_long: u32,
         create_events_for_tasks: bool,
         delete_events_on_completion: bool,
+        auto_refresh_interval: u32,
     ) -> Result<(), MobileError> {
         let mut c = Config::load(self.ctx.as_ref()).unwrap_or_default();
         c.url = url;
@@ -582,180 +429,54 @@ impl CfaitMobile {
         c.auto_reminders = auto_reminders;
         c.default_reminder_time = default_reminder_time;
         c.snooze_short_mins = snooze_short;
-        c.snooze_long_mins = snooze_long;
         c.create_events_for_tasks = create_events_for_tasks;
         c.delete_events_on_completion = delete_events_on_completion;
+        c.auto_refresh_interval_mins = auto_refresh_interval;
         c.save(self.ctx.as_ref()).map_err(MobileError::from)
     }
 
-    pub async fn delete_all_calendar_events(&self) -> Result<u32, MobileError> {
-        let all_tasks: Vec<_> = {
-            let store = self.store.lock().await;
-            store
-                .calendars
-                .values()
-                .flat_map(|m| m.values())
-                .cloned()
-                .collect()
-        };
-
-        let client = {
-            let client_opt = self.client.lock().await;
-            client_opt
-                .as_ref()
-                .ok_or_else(|| MobileError::from("Offline"))?
-                .clone()
-        };
-
-        // NEW CONCURRENT LOGIC
-        let futures = all_tasks.into_iter().map(|task| {
-            let c = client.clone();
-            async move {
-                match c.sync_task_companion_event(&task, false).await {
-                    Ok(true) => 1,
-                    _ => 0,
-                }
+    pub fn get_calendars(&self) -> Vec<MobileCalendar> {
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let disabled_set: HashSet<String> = config.disabled_calendars.iter().cloned().collect();
+        let mut result = Vec::new();
+        if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
+            for loc in locals {
+                result.push(MobileCalendar {
+                    name: loc.name,
+                    href: loc.href.clone(),
+                    color: loc.color,
+                    is_visible: !config.hidden_calendars.contains(&loc.href),
+                    is_local: true,
+                    is_disabled: disabled_set.contains(&loc.href),
+                });
             }
-        });
-
-        // Run 8 concurrent requests
-        let count = stream::iter(futures)
-            .buffer_unordered(8)
-            .collect::<Vec<u32>>()
-            .await
-            .iter()
-            .sum();
-
-        Ok(count)
-    }
-
-    pub async fn create_missing_calendar_events(&self) -> Result<u32, MobileError> {
-        let all_tasks: Vec<_> = {
-            let store = self.store.lock().await;
-            store
-                .calendars
-                .values()
-                .flat_map(|m| m.values())
-                .cloned()
-                .collect()
-        };
-
-        let client = {
-            let client_opt = self.client.lock().await;
-            client_opt
-                .as_ref()
-                .ok_or_else(|| MobileError::from("Offline"))?
-                .clone()
-        };
-
-        // NEW CONCURRENT LOGIC
-        let futures = all_tasks.into_iter().map(|task| {
-            let c = client.clone();
-            async move {
-                match c.sync_task_companion_event(&task, true).await {
-                    Ok(true) => 1,
-                    _ => 0,
+        }
+        if let Ok(cals) = crate::cache::Cache::load_calendars(self.ctx.as_ref()) {
+            for c in cals {
+                if c.href.starts_with("local://") {
+                    continue;
                 }
+                result.push(MobileCalendar {
+                    name: c.name,
+                    href: c.href.clone(),
+                    color: c.color,
+                    is_visible: !config.hidden_calendars.contains(&c.href),
+                    is_local: false,
+                    is_disabled: disabled_set.contains(&c.href),
+                });
             }
-        });
-
-        // Run 8 concurrent requests
-        let count = stream::iter(futures)
-            .buffer_unordered(8)
-            .collect::<Vec<u32>>()
-            .await
-            .iter()
-            .sum();
-
-        Ok(count)
-    }
-
-    pub async fn add_dependency(
-        &self,
-        task_uid: String,
-        blocker_uid: String,
-    ) -> Result<(), MobileError> {
-        if task_uid == blocker_uid {
-            return Err(MobileError::from("Cannot depend on self"));
         }
-        self.apply_store_mutation(task_uid, |store: &mut TaskStore, id: &str| {
-            store.add_dependency(id, blocker_uid)
-        })
-        .await
-    }
-
-    pub async fn remove_dependency(
-        &self,
-        task_uid: String,
-        blocker_uid: String,
-    ) -> Result<(), MobileError> {
-        self.apply_store_mutation(task_uid, |store: &mut TaskStore, id: &str| {
-            store.remove_dependency(id, &blocker_uid)
-        })
-        .await
-    }
-
-    pub async fn set_parent(
-        &self,
-        child_uid: String,
-        parent_uid: Option<String>,
-    ) -> Result<(), MobileError> {
-        if let Some(p) = &parent_uid
-            && *p == child_uid
-        {
-            return Err(MobileError::from("Cannot be child of self"));
-        }
-        self.apply_store_mutation(child_uid, |store: &mut TaskStore, id: &str| {
-            store.set_parent(id, parent_uid)
-        })
-        .await
-    }
-
-    pub async fn add_related_to(
-        &self,
-        task_uid: String,
-        related_uid: String,
-    ) -> Result<(), MobileError> {
-        if task_uid == related_uid {
-            return Err(MobileError::from("Cannot relate to self"));
-        }
-        self.apply_store_mutation(task_uid, |store: &mut TaskStore, id: &str| {
-            store.add_related_to(id, related_uid)
-        })
-        .await
-    }
-
-    pub async fn remove_related_to(
-        &self,
-        task_uid: String,
-        related_uid: String,
-    ) -> Result<(), MobileError> {
-        self.apply_store_mutation(task_uid, |store: &mut TaskStore, id: &str| {
-            store.remove_related_to(id, &related_uid)
-        })
-        .await
-    }
-
-    /// Get all tasks that have a related_to link to the given task
-    pub async fn get_tasks_related_to(&self, uid: String) -> Vec<MobileRelatedTask> {
-        let store = self.store.lock().await;
-        store
-            .get_tasks_related_to(&uid)
-            .into_iter()
-            .map(|(uid, summary)| MobileRelatedTask { uid, summary })
-            .collect()
+        result
     }
 
     pub fn isolate_calendar(&self, href: String) -> Result<(), MobileError> {
         let mut config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let all_cals = self.get_calendars();
-        let mut new_hidden = vec![];
-        for cal in all_cals {
-            if cal.href != href {
-                new_hidden.push(cal.href.clone());
-            }
-        }
-        config.hidden_calendars = new_hidden;
+        config.hidden_calendars = self
+            .get_calendars()
+            .iter()
+            .filter(|c| c.href != href)
+            .map(|c| c.href.clone())
+            .collect();
         config.default_calendar = Some(href);
         config.save(self.ctx.as_ref()).map_err(MobileError::from)
     }
@@ -769,7 +490,6 @@ impl CfaitMobile {
     pub fn set_default_calendar(&self, href: String) -> Result<(), MobileError> {
         let mut config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         config.default_calendar = Some(href.clone());
-        // Ensure the write calendar is always visible
         config.hidden_calendars.retain(|h| h != &href);
         config.save(self.ctx.as_ref()).map_err(MobileError::from)
     }
@@ -787,8 +507,6 @@ impl CfaitMobile {
     pub fn load_from_cache(&self) {
         let mut store = self.store.blocking_lock();
         store.clear();
-
-        // Load all local calendars
         if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
             for loc in locals {
                 match LocalStorage::load_for_href(self.ctx.as_ref(), &loc.href) {
@@ -802,26 +520,17 @@ impl CfaitMobile {
                     }
                     Err(e) => {
                         #[cfg(target_os = "android")]
-                        log::error!(
-                            "Failed to load {} - this may indicate data corruption or format incompatibility: {}",
-                            loc.href,
-                            e
-                        );
+                        log::error!("Failed to load {} - data corruption: {}", loc.href, e);
                         #[cfg(not(target_os = "android"))]
-                        eprintln!(
-                            "Failed to load {} - this may indicate data corruption or format incompatibility: {}",
-                            loc.href, e
-                        );
+                        eprintln!("Failed to load {} - data corruption: {}", loc.href, e);
                     }
                 }
             }
         }
-
-        // Load remote calendars
         if let Ok(cals) = Cache::load_calendars(self.ctx.as_ref()) {
             for cal in cals {
                 if cal.href.starts_with("local://") {
-                    continue; // Skip locals, already loaded from registry
+                    continue;
                 }
                 if let Ok((mut tasks, _)) = Cache::load(self.ctx.as_ref(), &cal.href) {
                     crate::journal::Journal::apply_to_tasks(
@@ -833,8 +542,6 @@ impl CfaitMobile {
                 }
             }
         }
-
-        // Rebuild the alarm index after loading all calendars
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let index = AlarmIndex::rebuild_from_tasks(
             &store.calendars,
@@ -845,14 +552,330 @@ impl CfaitMobile {
             #[cfg(target_os = "android")]
             log::warn!("Failed to save alarm index: {}", e);
             #[cfg(not(target_os = "android"))]
-            let _ = e; // Suppress unused variable warning
+            let _ = e;
         } else {
             #[cfg(target_os = "android")]
             log::debug!("Alarm index rebuilt with {} alarms", index.len());
         }
-
-        // Cache the index in memory to avoid double disk reads
         *self.alarm_index_cache.blocking_lock() = Some(index);
+    }
+
+    pub fn get_next_alarm_timestamp(&self) -> Option<i64> {
+        let cached = self.alarm_index_cache.blocking_lock();
+        if let Some(ref index) = *cached
+            && !index.is_empty()
+        {
+            if let Some(timestamp) = index.get_next_alarm_timestamp() {
+                return Some(timestamp as i64);
+            }
+            return None;
+        }
+        drop(cached);
+        let index = AlarmIndex::load(self.ctx.as_ref());
+        if !index.is_empty() {
+            if let Some(timestamp) = index.get_next_alarm_timestamp() {
+                *self.alarm_index_cache.blocking_lock() = Some(index);
+                return Some(timestamp as i64);
+            }
+            return None;
+        }
+        let store = self.store.blocking_lock();
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let default_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
+            .unwrap_or_else(|_| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+        let now = Utc::now();
+        let mut global_earliest: Option<i64> = None;
+
+        let check_ts = |ts: i64, current_earliest: &mut Option<i64>| {
+            if ts > now.timestamp()
+                && (current_earliest.is_none() || ts < current_earliest.unwrap())
+            {
+                *current_earliest = Some(ts);
+            }
+        };
+
+        for tasks_map in store.calendars.values() {
+            for task in tasks_map.values() {
+                if task.status.is_done() {
+                    continue;
+                }
+                if let Some(ts) = task.next_trigger_timestamp() {
+                    check_ts(ts, &mut global_earliest);
+                }
+                if config.auto_reminders
+                    && !task
+                        .alarms
+                        .iter()
+                        .any(|a| a.acknowledged.is_none() && !a.is_snooze())
+                {
+                    let mut check_implicit = |dt: DateTime<Utc>| {
+                        if !task.has_alarm_at(dt) {
+                            check_ts(dt.timestamp(), &mut global_earliest);
+                        }
+                    };
+                    if let Some(due) = &task.due {
+                        let dt = match due {
+                            DateType::Specific(t) => *t,
+                            DateType::AllDay(d) => d
+                                .and_time(default_time)
+                                .and_local_timezone(Local)
+                                .unwrap()
+                                .with_timezone(&Utc),
+                        };
+                        check_implicit(dt);
+                    }
+                    if let Some(start) = &task.dtstart {
+                        let dt = match start {
+                            DateType::Specific(t) => *t,
+                            DateType::AllDay(d) => d
+                                .and_time(default_time)
+                                .and_local_timezone(Local)
+                                .unwrap()
+                                .with_timezone(&Utc),
+                        };
+                        check_implicit(dt);
+                    }
+                }
+            }
+        }
+        global_earliest
+    }
+
+    pub fn get_firing_alarms(&self) -> Vec<MobileAlarmInfo> {
+        let cached = self.alarm_index_cache.blocking_lock();
+        if let Some(ref index) = *cached
+            && !index.is_empty()
+        {
+            #[cfg(target_os = "android")]
+            log::debug!(
+                "Using cached alarm index for fast lookup ({} alarms)",
+                index.len()
+            );
+            let firing = index.get_firing_alarms();
+            if !firing.is_empty() {
+                #[cfg(target_os = "android")]
+                log::info!("Found {} firing alarms via cached index", firing.len());
+                return firing
+                    .into_iter()
+                    .map(|e| MobileAlarmInfo {
+                        task_uid: e.task_uid,
+                        alarm_uid: e.alarm_uid,
+                        title: e.task_title,
+                        body: e.description.unwrap_or("Reminder".to_string()),
+                    })
+                    .collect();
+            } else {
+                #[cfg(target_os = "android")]
+                log::debug!("No firing alarms in cached index");
+                return Vec::new();
+            }
+        }
+        drop(cached);
+        let index = AlarmIndex::load(self.ctx.as_ref());
+        if !index.is_empty() {
+            #[cfg(target_os = "android")]
+            log::debug!(
+                "Using disk alarm index for fast lookup ({} alarms)",
+                index.len()
+            );
+            let firing = index.get_firing_alarms();
+            if !firing.is_empty() {
+                #[cfg(target_os = "android")]
+                log::info!("Found {} firing alarms via disk index", firing.len());
+                *self.alarm_index_cache.blocking_lock() = Some(index);
+                return firing
+                    .into_iter()
+                    .map(|e| MobileAlarmInfo {
+                        task_uid: e.task_uid,
+                        alarm_uid: e.alarm_uid,
+                        title: e.task_title,
+                        body: e.description.unwrap_or("Reminder".to_string()),
+                    })
+                    .collect();
+            } else {
+                #[cfg(target_os = "android")]
+                log::debug!("No firing alarms in disk index");
+                return Vec::new();
+            }
+        }
+        #[cfg(target_os = "android")]
+        log::warn!("Alarm index not available, falling back to full scan");
+        let store = self.store.blocking_lock();
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let default_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
+            .unwrap_or_else(|_| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+        let now = Utc::now();
+        let mut results = Vec::new();
+        for tasks_map in store.calendars.values() {
+            for task in tasks_map.values() {
+                if task.status.is_done() {
+                    continue;
+                }
+                for alarm in &task.alarms {
+                    if alarm.acknowledged.is_some() {
+                        continue;
+                    }
+                    let trigger_dt = match alarm.trigger {
+                        AlarmTrigger::Absolute(dt) => dt,
+                        AlarmTrigger::Relative(mins) => {
+                            if let Some(DateType::Specific(dt)) =
+                                task.due.as_ref().or(task.dtstart.as_ref())
+                            {
+                                *dt + chrono::Duration::minutes(mins as i64)
+                            } else {
+                                continue;
+                            }
+                        }
+                    };
+                    if trigger_dt <= now && (now - trigger_dt).num_minutes() < 120 {
+                        results.push(MobileAlarmInfo {
+                            task_uid: task.uid.clone(),
+                            alarm_uid: alarm.uid.clone(),
+                            title: task.summary.clone(),
+                            body: alarm.description.clone().unwrap_or("Reminder".to_string()),
+                        });
+                    }
+                }
+                if config.auto_reminders && !task.alarms.iter().any(|a| a.acknowledged.is_none()) {
+                    let mut check_implicit = |dt: DateTime<Utc>, desc: &str, type_key: &str| {
+                        if !task.has_alarm_at(dt) && dt <= now && (now - dt).num_minutes() < 120 {
+                            let synth_id =
+                                format!("implicit_{}:|{}|{}", type_key, dt.to_rfc3339(), task.uid);
+                            results.push(MobileAlarmInfo {
+                                task_uid: task.uid.clone(),
+                                alarm_uid: synth_id,
+                                title: task.summary.clone(),
+                                body: desc.to_string(),
+                            });
+                        }
+                    };
+                    if let Some(due) = &task.due {
+                        let dt = match due {
+                            DateType::Specific(t) => *t,
+                            DateType::AllDay(d) => d
+                                .and_time(default_time)
+                                .and_local_timezone(Local)
+                                .unwrap()
+                                .with_timezone(&Utc),
+                        };
+                        check_implicit(dt, "Due now", "due");
+                    }
+                    if let Some(start) = &task.dtstart {
+                        let dt = match start {
+                            DateType::Specific(t) => *t,
+                            DateType::AllDay(d) => d
+                                .and_time(default_time)
+                                .and_local_timezone(Local)
+                                .unwrap()
+                                .with_timezone(&Utc),
+                        };
+                        check_implicit(dt, "Task starting", "start");
+                    }
+                }
+            }
+        }
+        results
+    }
+}
+
+// Block 2: Asynchronous functions
+#[uniffi::export(async_runtime = "tokio")]
+impl CfaitMobile {
+    pub async fn add_alias(&self, key: String, tags: Vec<String>) -> Result<(), MobileError> {
+        let mut c = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        crate::model::validate_alias_integrity(&key, &tags, &c.tag_aliases)
+            .map_err(MobileError::from)?;
+        c.tag_aliases.insert(key.clone(), tags.clone());
+        c.save(self.ctx.as_ref()).map_err(MobileError::from)?;
+        let mut store = self.store.lock().await;
+        let modified = store.apply_alias_retroactively(&key, &tags);
+        drop(store);
+        if !modified.is_empty() {
+            let client_guard = self.client.lock().await;
+            if let Some(client) = &*client_guard {
+                for mut t in modified {
+                    let _ = client.update_task(&mut t).await;
+                }
+            } else {
+                for t in modified {
+                    let _ = crate::journal::Journal::push(
+                        self.ctx.as_ref(),
+                        crate::journal::Action::Update(t),
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn add_dependency(
+        &self,
+        task_uid: String,
+        blocker_uid: String,
+    ) -> Result<(), MobileError> {
+        if task_uid == blocker_uid {
+            return Err(MobileError::from("Cannot depend on self"));
+        }
+        self.apply_store_mutation(task_uid, |store, id| store.add_dependency(id, blocker_uid))
+            .await
+    }
+
+    pub async fn remove_dependency(
+        &self,
+        task_uid: String,
+        blocker_uid: String,
+    ) -> Result<(), MobileError> {
+        self.apply_store_mutation(task_uid, |store, id| {
+            store.remove_dependency(id, &blocker_uid)
+        })
+        .await
+    }
+
+    pub async fn set_parent(
+        &self,
+        child_uid: String,
+        parent_uid: Option<String>,
+    ) -> Result<(), MobileError> {
+        if let Some(p) = &parent_uid
+            && *p == child_uid
+        {
+            return Err(MobileError::from("Cannot be child of self"));
+        }
+        self.apply_store_mutation(child_uid, |store, id| store.set_parent(id, parent_uid))
+            .await
+    }
+
+    pub async fn add_related_to(
+        &self,
+        task_uid: String,
+        related_uid: String,
+    ) -> Result<(), MobileError> {
+        if task_uid == related_uid {
+            return Err(MobileError::from("Cannot relate to self"));
+        }
+        self.apply_store_mutation(task_uid, |store, id| store.add_related_to(id, related_uid))
+            .await
+    }
+
+    pub async fn remove_related_to(
+        &self,
+        task_uid: String,
+        related_uid: String,
+    ) -> Result<(), MobileError> {
+        self.apply_store_mutation(task_uid, |store, id| {
+            store.remove_related_to(id, &related_uid)
+        })
+        .await
+    }
+
+    pub async fn get_tasks_related_to(&self, uid: String) -> Vec<MobileRelatedTask> {
+        self.store
+            .lock()
+            .await
+            .get_tasks_related_to(&uid)
+            .into_iter()
+            .map(|(uid, summary)| MobileRelatedTask { uid, summary })
+            .collect()
     }
 
     pub async fn sync(&self) -> Result<String, MobileError> {
@@ -877,55 +900,16 @@ impl CfaitMobile {
         self.apply_connection(config).await
     }
 
-    pub fn get_calendars(&self) -> Vec<MobileCalendar> {
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let disabled_set: HashSet<String> = config.disabled_calendars.iter().cloned().collect();
-        let mut result = Vec::new();
-
-        // Load local registry
-        if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
-            for loc in locals {
-                result.push(MobileCalendar {
-                    name: loc.name,
-                    href: loc.href.clone(),
-                    color: loc.color,
-                    is_visible: !config.hidden_calendars.contains(&loc.href),
-                    is_local: true,
-                    is_disabled: disabled_set.contains(&loc.href),
-                });
-            }
-        }
-
-        // Load remote calendars
-        if let Ok(cals) = crate::cache::Cache::load_calendars(self.ctx.as_ref()) {
-            for c in cals {
-                if c.href.starts_with("local://") {
-                    continue; // Skip locals, already added from registry
-                }
-                result.push(MobileCalendar {
-                    name: c.name,
-                    href: c.href.clone(),
-                    color: c.color,
-                    is_visible: !config.hidden_calendars.contains(&c.href),
-                    is_local: false,
-                    is_disabled: disabled_set.contains(&c.href),
-                });
-            }
-        }
-        result
-    }
-
     pub async fn get_all_tags(&self) -> Vec<MobileTag> {
         let store = self.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let empty_includes = HashSet::new();
         let mut hidden_cals: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden_cals.extend(config.disabled_calendars);
         store
             .get_all_categories(
                 config.hide_completed,
                 config.hide_fully_completed_tags,
-                &empty_includes,
+                &HashSet::new(),
                 &hidden_cals,
             )
             .into_iter()
@@ -942,7 +926,6 @@ impl CfaitMobile {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut hidden_cals: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden_cals.extend(config.disabled_calendars);
-
         store
             .get_all_locations(config.hide_completed, &hidden_cals)
             .into_iter()
@@ -961,27 +944,16 @@ impl CfaitMobile {
     ) -> Vec<MobileTask> {
         let store = self.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-
-        let mut selected_categories = HashSet::new();
-        for tag in filter_tags {
-            selected_categories.insert(tag);
-        }
-        let mut selected_locations = HashSet::new();
-        for l in filter_locations {
-            selected_locations.insert(l);
-        }
-
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
         let cutoff_date = config
             .sort_cutoff_months
-            .map(|months| chrono::Utc::now() + chrono::Duration::days(months as i64 * 30));
-
+            .map(|m| Utc::now() + chrono::Duration::days(m as i64 * 30));
         let filtered = store.filter(FilterOptions {
             active_cal_href: None,
             hidden_calendars: &hidden,
-            selected_categories: &selected_categories,
-            selected_locations: &selected_locations,
+            selected_categories: &filter_tags.into_iter().collect(),
+            selected_locations: &filter_locations.into_iter().collect(),
             match_all_categories: false,
             search_term: &search_query,
             hide_completed_global: config.hide_completed,
@@ -994,7 +966,6 @@ impl CfaitMobile {
             default_priority: config.default_priority,
             start_grace_period_days: config.start_grace_period_days,
         });
-
         filtered
             .into_iter()
             .map(|t| task_to_mobile(&t, &store, &config.tag_aliases))
@@ -1009,27 +980,16 @@ impl CfaitMobile {
     ) -> Option<String> {
         let store = self.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-
-        let mut selected_categories = HashSet::new();
-        for tag in filter_tags {
-            selected_categories.insert(tag);
-        }
-        let mut selected_locations = HashSet::new();
-        for l in filter_locations {
-            selected_locations.insert(l);
-        }
-
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
         let cutoff_date = config
             .sort_cutoff_months
-            .map(|months| chrono::Utc::now() + chrono::Duration::days(months as i64 * 30));
-
+            .map(|m| Utc::now() + chrono::Duration::days(m as i64 * 30));
         let filtered = store.filter(FilterOptions {
             active_cal_href: None,
             hidden_calendars: &hidden,
-            selected_categories: &selected_categories,
-            selected_locations: &selected_locations,
+            selected_categories: &filter_tags.into_iter().collect(),
+            selected_locations: &filter_locations.into_iter().collect(),
             match_all_categories: false,
             search_term: &search_query,
             hide_completed_global: config.hide_completed,
@@ -1042,8 +1002,6 @@ impl CfaitMobile {
             default_priority: config.default_priority,
             start_grace_period_days: config.start_grace_period_days,
         });
-
-        // Use the shared core logic which handles weights and ignores done tasks
         let idx = crate::store::select_weighted_random_index(&filtered, config.default_priority)?;
         filtered.get(idx).map(|t| t.uid.clone())
     }
@@ -1054,37 +1012,22 @@ impl CfaitMobile {
 
     pub async fn add_task_smart(&self, input: String) -> Result<String, MobileError> {
         #[cfg(target_os = "android")]
-        log::debug!("add_task_smart() called with input: '{}'", input);
-
-        // Load mutable config so we can update aliases if present
+        log::debug!("add_task_smart: '{}'", input);
         let mut config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-
-        // 1. Extract aliases from inline input (e.g., "#alias:=#real")
-        // Returns (clean_input, new_aliases_map)
         let (clean_input, new_aliases) = crate::model::extract_inline_aliases(&input);
-
         if !new_aliases.is_empty() {
-            // Validate
             for (k, v) in &new_aliases {
                 crate::model::validate_alias_integrity(k, v, &config.tag_aliases)
                     .map_err(MobileError::from)?;
             }
-
-            // Update config
             config.tag_aliases.extend(new_aliases.clone());
             config.save(self.ctx.as_ref()).map_err(MobileError::from)?;
-
-            // Apply retroactive updates to store
             let mut store = self.store.lock().await;
-            let mut all_modified = Vec::new();
-
-            for (key, tags) in &new_aliases {
-                let modified = store.apply_alias_retroactively(key, tags);
-                all_modified.extend(modified);
-            }
+            let all_modified: Vec<_> = new_aliases
+                .iter()
+                .flat_map(|(key, tags)| store.apply_alias_retroactively(key, tags))
+                .collect();
             drop(store);
-
-            // Sync modified tasks
             if !all_modified.is_empty() {
                 let client_guard = self.client.lock().await;
                 if let Some(client) = &*client_guard {
@@ -1100,70 +1043,49 @@ impl CfaitMobile {
                     }
                 }
             }
-
-            // CHECK: Was this a pure definition?
-            // If the remaining input is just the alias key itself (single token starting with #, @@, or loc:),
-            // and no other text, we assume the user only wanted to define the alias, not create a task named "#alias".
             let trimmed = clean_input.trim();
-            let is_pure_definition = trimmed.is_empty()
+            if trimmed.is_empty()
                 || (!trimmed.contains(' ')
                     && (trimmed.starts_with('#')
                         || trimmed.starts_with("@@")
-                        || trimmed.to_lowercase().starts_with("loc:")));
-
-            if is_pure_definition {
+                        || trimmed.to_lowercase().starts_with("loc:")))
+            {
                 return Ok("ALIAS_UPDATED".to_string());
             }
         }
-
-        // If input is empty after extraction (no aliases or not handled above), we are done
         if clean_input.trim().is_empty() {
             return Ok("".to_string());
         }
-
-        // Parse time from config
         let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
-
-        // Create task with cleaned input and updated aliases
         let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
-
         #[cfg(target_os = "android")]
         log::debug!(
-            "Created task: uid={}, summary='{}', has_alarms={}",
+            "Created task: uid={}, summary='{}', alarms={}",
             task.uid,
             task.summary,
             !task.alarms.is_empty()
         );
-
-        let target_href = config
+        task.calendar_href = config
             .default_calendar
             .clone()
             .unwrap_or(LOCAL_CALENDAR_HREF.to_string());
-        task.calendar_href = target_href.clone();
-
         self.store.lock().await.add_task(task.clone());
-
         let guard = self.client.lock().await;
         let mut network_success = false;
-
         if let Some(client) = &*guard
             && client.create_task(&mut task).await.is_ok()
         {
-            // Assign a placeholder etag to prevent ghost pruning.
             if task.etag.is_empty() {
                 task.etag = "pending_refresh".to_string();
             }
-
             self.store.lock().await.update_or_add_task(task.clone());
             network_success = true;
-
             #[cfg(target_os = "android")]
             log::debug!(
-                "Task {} created on network, assigned placeholder etag to prevent ghost pruning",
+                "Task {} created on network, placeholder etag assigned",
                 task.uid
             );
         }
-
         if !network_success {
             if task.calendar_href.starts_with("local://") {
                 let mut all = LocalStorage::load_for_href(self.ctx.as_ref(), &task.calendar_href)
@@ -1180,115 +1102,80 @@ impl CfaitMobile {
             }
             self.store.lock().await.update_or_add_task(task.clone());
         }
-
-        // Rebuild alarm index after adding task
         #[cfg(target_os = "android")]
-        log::debug!("Rebuilding alarm index after adding task {}", task.uid);
-
+        log::debug!("Rebuilding alarm index after adding {}", task.uid);
         let store_for_rebuild = self.store.lock().await;
         self.rebuild_alarm_index_sync(&store_for_rebuild);
-
         #[cfg(target_os = "android")]
-        log::debug!("Alarm index rebuilt. Returning task uid: {}", task.uid);
-
+        log::debug!("Alarm index rebuilt. Returning uid: {}", task.uid);
         Ok(task.uid)
     }
 
     pub async fn change_priority(&self, uid: String, delta: i8) -> Result<(), MobileError> {
-        // Load config to get the user's default priority preference
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let default_prio = config.default_priority;
-
-        self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| {
-            store.change_priority(id, delta, default_prio)
+        self.apply_store_mutation(uid, |store, id| {
+            store.change_priority(id, delta, config.default_priority)
         })
         .await
     }
 
     pub async fn set_status_process(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| {
-            store.set_status_in_process(id)
-        })
-        .await
+        self.apply_store_mutation(uid, |store, id| store.set_status_in_process(id))
+            .await
     }
 
     pub async fn set_status_cancelled(&self, uid: String) -> Result<(), MobileError> {
-        // 1. Local Mutation (Optimistic Update)
         let mut store = self.store.lock().await;
-        // This now returns (History, Optional<Next>) thanks to the model-level recycle logic
-        let result = store.set_status(&uid, crate::model::TaskStatus::Cancelled);
-
-        // Grab copies for network sync
-        let (primary, secondary) = match result {
-            Some(r) => r,
-            None => return Err(MobileError::from("Task not found")),
-        };
-        drop(store); // Release lock
-
-        // 2. Network Sync
+        let (primary, secondary) = store
+            .set_status(&uid, crate::model::TaskStatus::Cancelled)
+            .ok_or(MobileError::from("Task not found"))?;
+        drop(store);
         let client_guard = self.client.lock().await;
         if let Some(client) = &*client_guard {
-            // If secondary exists, primary is the new history (needs creation),
-            // and secondary is the recycled task (needs update).
             if let Some(mut next) = secondary.clone() {
                 let mut hist = primary.clone();
-                // Best-effort sync; we don't fail the mobile operation on network errors here
                 let _ = client.create_task(&mut hist).await;
                 let _ = client.update_task(&mut next).await;
             } else {
-                // Non-recurring, just update
                 let mut t = primary.clone();
                 let _ = client.update_task(&mut t).await;
             }
-        } else {
-            // Offline journaling
-            if primary.calendar_href.starts_with("local://") {
-                // LocalStorage already handled by store.set_status calling update_or_add_task
+        } else if !primary.calendar_href.starts_with("local://") {
+            if let Some(next) = &secondary {
+                crate::journal::Journal::push(
+                    self.ctx.as_ref(),
+                    crate::journal::Action::Create(primary.clone()),
+                )
+                .map_err(MobileError::from)?;
+                crate::journal::Journal::push(
+                    self.ctx.as_ref(),
+                    crate::journal::Action::Update(next.clone()),
+                )
+                .map_err(MobileError::from)?;
             } else {
-                // We need to push to journal manually since we bypassed client
-                if let Some(next) = &secondary {
-                    crate::journal::Journal::push(
-                        self.ctx.as_ref(),
-                        crate::journal::Action::Create(primary.clone()),
-                    )
-                    .map_err(MobileError::from)?;
-                    crate::journal::Journal::push(
-                        self.ctx.as_ref(),
-                        crate::journal::Action::Update(next.clone()),
-                    )
-                    .map_err(MobileError::from)?;
-                } else {
-                    crate::journal::Journal::push(
-                        self.ctx.as_ref(),
-                        crate::journal::Action::Update(primary.clone()),
-                    )
-                    .map_err(MobileError::from)?;
-                }
+                crate::journal::Journal::push(
+                    self.ctx.as_ref(),
+                    crate::journal::Action::Update(primary.clone()),
+                )
+                .map_err(MobileError::from)?;
             }
         }
-
-        // 3. Rebuild Alarm Index
         let store = self.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
-
         Ok(())
     }
 
     pub async fn pause_task(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| store.pause_task(id))
+        self.apply_store_mutation(uid, |s, id| s.pause_task(id))
             .await
     }
-
     pub async fn stop_task(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| store.stop_task(id))
+        self.apply_store_mutation(uid, |s, id| s.stop_task(id))
             .await
     }
-
     pub async fn start_task(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(uid, |store: &mut TaskStore, id: &str| {
-            store.set_status_in_process(id)
-        })
-        .await
+        self.apply_store_mutation(uid, |s, id| s.set_status_in_process(id))
+            .await
     }
 
     pub async fn update_task_smart(
@@ -1298,8 +1185,7 @@ impl CfaitMobile {
     ) -> Result<(), MobileError> {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
-
-        self.apply_store_mutation(uid, |t: &mut TaskStore, id: &str| {
+        self.apply_store_mutation(uid, |t, id| {
             if let Some((task, _)) = t.get_task_mut(id) {
                 task.apply_smart_input(&smart_input, &config.tag_aliases, def_time);
                 Some(task.clone())
@@ -1315,7 +1201,7 @@ impl CfaitMobile {
         uid: String,
         description: String,
     ) -> Result<(), MobileError> {
-        self.apply_store_mutation(uid, |t: &mut TaskStore, id: &str| {
+        self.apply_store_mutation(uid, |t, id| {
             if let Some((task, _)) = t.get_task_mut(id) {
                 task.description = description;
                 Some(task.clone())
@@ -1331,14 +1217,12 @@ impl CfaitMobile {
         let (task, _) = store
             .get_task_mut(&uid)
             .ok_or(MobileError::from("Task not found"))?;
-
         if task.status.is_done() {
             task.status = crate::model::TaskStatus::NeedsAction;
             task.percent_complete = None;
         } else {
             task.status = crate::model::TaskStatus::Completed;
             task.percent_complete = Some(100);
-            // Add COMPLETED date property so mobile/offline toggles include the timestamp
             let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
             task.unmapped_properties.retain(|p| p.key != "COMPLETED");
             task.unmapped_properties.push(crate::model::RawProperty {
@@ -1347,34 +1231,28 @@ impl CfaitMobile {
                 params: vec![],
             });
         }
-
         let mut task_for_net = task.clone();
         drop(store);
-
         let client_guard = self.client.lock().await;
         let mut network_success = false;
-
         if let Some(client) = &*client_guard
             && let Ok((_, next_task_opt, _)) = client.toggle_task(&mut task_for_net).await
         {
-            // Lock the store once, update any history item and then the recycled task exactly once
             let mut store = self.store.lock().await;
-            if let Some(next_task) = next_task_opt {
-                store.update_or_add_task(next_task);
+            if let Some(next) = next_task_opt {
+                store.update_or_add_task(next);
             }
-            // Save recycled task (clone to satisfy borrow checker)
             store.update_or_add_task(task_for_net.clone());
             network_success = true;
         }
-
         if !network_success {
             if task_for_net.calendar_href.starts_with("local://") {
-                let cal_href = task_for_net.calendar_href.clone();
+                let href = task_for_net.calendar_href.clone();
                 let mut local =
-                    LocalStorage::load_for_href(self.ctx.as_ref(), &cal_href).unwrap_or_default();
+                    LocalStorage::load_for_href(self.ctx.as_ref(), &href).unwrap_or_default();
                 if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
                     local[idx] = task_for_net;
-                    LocalStorage::save_for_href(self.ctx.as_ref(), &cal_href, &local)
+                    LocalStorage::save_for_href(self.ctx.as_ref(), &href, &local)
                         .map_err(MobileError::from)?;
                 }
             } else {
@@ -1385,52 +1263,35 @@ impl CfaitMobile {
                 .map_err(MobileError::from)?;
             }
         }
-
-        // Rebuild alarm index after toggling task
         let store = self.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
-
         Ok(())
     }
 
     pub async fn move_task(&self, uid: String, new_cal_href: String) -> Result<(), MobileError> {
-        let client_guard = self.client.lock().await;
         let mut store = self.store.lock().await;
-
-        // Use the atomic store API that returns both the original (pre-mutation)
-        // and updated (post-mutation) task so we don't need to clone/look up
-        // the original separately and risk races.
-        let (original_task, _updated_task) = store
+        let (original, _) = store
             .move_task(&uid, new_cal_href.clone())
             .ok_or(MobileError::from("Task not found"))?;
-
         drop(store);
+        let client_guard = self.client.lock().await;
 
         let mut network_success = false;
-        // Pass the original (pre-mutation) task to the client so the backend
-        // / journal can identify the source calendar.
-        if let Some(client) = &*client_guard
-            && client
-                .move_task(&original_task, &new_cal_href)
-                .await
-                .is_ok()
+        if let Some(client) = client_guard.as_ref()
+            && client.move_task(&original, &new_cal_href).await.is_ok()
         {
             network_success = true;
         }
 
         if !network_success && !new_cal_href.starts_with("local://") {
-            // Pass the original (pre-mutation) task to the Journal
             crate::journal::Journal::push(
                 self.ctx.as_ref(),
-                crate::journal::Action::Move(original_task, new_cal_href),
+                crate::journal::Action::Move(original, new_cal_href),
             )
             .map_err(MobileError::from)?;
         }
-
-        // Rebuild alarm index after moving task
         let store = self.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
-
         Ok(())
     }
 
@@ -1440,11 +1301,10 @@ impl CfaitMobile {
             .delete_task(&uid)
             .ok_or(MobileError::from("Task not found"))?;
         drop(store);
-
         let client_guard = self.client.lock().await;
-        let mut network_success = false;
 
-        if let Some(client) = &*client_guard
+        let mut network_success = false;
+        if let Some(client) = client_guard.as_ref()
             && client.delete_task(&task).await.is_ok()
         {
             network_success = true;
@@ -1454,36 +1314,33 @@ impl CfaitMobile {
             crate::journal::Journal::push(self.ctx.as_ref(), crate::journal::Action::Delete(task))
                 .map_err(MobileError::from)?;
         }
-
-        // Rebuild alarm index after deleting task
         let store = self.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
-
         Ok(())
     }
 
     pub async fn migrate_local_to(
         &self,
-        source_calendar_href: String,
-        target_calendar_href: String,
+        source_href: String,
+        target_href: String,
     ) -> Result<String, MobileError> {
-        let client_guard = self.client.lock().await;
-        let client = client_guard
+        let client = self
+            .client
+            .lock()
+            .await
             .as_ref()
-            .ok_or(MobileError::from("Client not connected"))?;
-
-        let local_tasks = LocalStorage::load_for_href(self.ctx.as_ref(), &source_calendar_href)
+            .ok_or(MobileError::from("Client not connected"))?
+            .clone();
+        let tasks = LocalStorage::load_for_href(self.ctx.as_ref(), &source_href)
             .map_err(|e| MobileError::from(e.to_string()))?;
-        if local_tasks.is_empty() {
-            return Ok("No local tasks to migrate.".to_string());
+        if tasks.is_empty() {
+            return Ok("No tasks to migrate.".to_string());
         }
-
         let count = client
-            .migrate_tasks(local_tasks, &target_calendar_href)
+            .migrate_tasks(tasks, &target_href)
             .await
             .map_err(MobileError::from)?;
-
-        Ok(format!("Successfully migrated {} tasks.", count))
+        Ok(format!("Migrated {} tasks.", count))
     }
 
     pub async fn create_local_calendar(
@@ -1493,24 +1350,15 @@ impl CfaitMobile {
     ) -> Result<String, MobileError> {
         let mut locals = LocalCalendarRegistry::load(self.ctx.as_ref())
             .map_err(|e| MobileError::from(e.to_string()))?;
-
-        let id = Uuid::new_v4().to_string();
-        let href = format!("local://{}", id);
-
-        let new_cal = crate::model::CalendarListEntry {
+        let href = format!("local://{}", Uuid::new_v4());
+        locals.push(crate::model::CalendarListEntry {
             name,
             href: href.clone(),
             color,
-        };
-
-        locals.push(new_cal);
+        });
         LocalCalendarRegistry::save(self.ctx.as_ref(), &locals)
             .map_err(|e| MobileError::from(e.to_string()))?;
-
-        // Update in-memory store
-        let mut store = self.store.lock().await;
-        store.insert(href.clone(), vec![]);
-
+        self.store.lock().await.insert(href.clone(), vec![]);
         Ok(href)
     }
 
@@ -1522,50 +1370,37 @@ impl CfaitMobile {
     ) -> Result<(), MobileError> {
         let mut locals = LocalCalendarRegistry::load(self.ctx.as_ref())
             .map_err(|e| MobileError::from(e.to_string()))?;
-
         if let Some(cal) = locals.iter_mut().find(|c| c.href == href) {
             cal.name = name;
             cal.color = color;
             LocalCalendarRegistry::save(self.ctx.as_ref(), &locals)
                 .map_err(|e| MobileError::from(e.to_string()))?;
-
-            // Note: We don't need to update the Store for name/color changes as those are metadata,
-            // but we might want to trigger a refresh in the UI.
-            return Ok(());
+            Ok(())
+        } else {
+            Err(MobileError::from("Calendar not found"))
         }
-
-        Err(MobileError::from("Calendar not found"))
     }
 
     pub async fn delete_local_calendar(&self, href: String) -> Result<(), MobileError> {
         if href == LOCAL_CALENDAR_HREF {
-            return Err(MobileError::from("Cannot delete default local calendar"));
+            return Err(MobileError::from("Cannot delete default calendar"));
         }
-
         let mut locals = LocalCalendarRegistry::load(self.ctx.as_ref())
             .map_err(|e| MobileError::from(e.to_string()))?;
-
         if let Some(idx) = locals.iter().position(|c| c.href == href) {
             locals.remove(idx);
             LocalCalendarRegistry::save(self.ctx.as_ref(), &locals)
                 .map_err(|e| MobileError::from(e.to_string()))?;
-
-            // Remove data file
             if let Some(path) = LocalStorage::get_path_for_href(self.ctx.as_ref(), &href) {
                 let _ = std::fs::remove_file(path);
             }
-
-            // Update in-memory store
             let mut store = self.store.lock().await;
             store.remove(&href);
-
-            // Rebuild alarm index to remove alarms from deleted calendar
             self.rebuild_alarm_index_sync(&store);
-
-            return Ok(());
+            Ok(())
+        } else {
+            Err(MobileError::from("Calendar not found"))
         }
-
-        Err(MobileError::from("Calendar not found"))
     }
 
     pub async fn snooze_alarm(
@@ -1576,23 +1411,20 @@ impl CfaitMobile {
     ) -> Result<(), MobileError> {
         self.apply_store_mutation(task_uid.clone(), |store, id| {
             if let Some((task, _)) = store.get_task_mut(id) {
-                // Check for implicit alarm
-                if alarm_uid.starts_with("implicit_") {
-                    let parts: Vec<&str> = alarm_uid.split('|').collect();
-                    if parts.len() >= 2
-                        && let Ok(dt) = DateTime::parse_from_rfc3339(parts[1])
-                    {
-                        let utc_dt = dt.with_timezone(&Utc);
-                        let desc = if alarm_uid.contains("implicit_due") {
-                            "Due now"
-                        } else {
-                            "Starting"
-                        };
-                        task.snooze_implicit_alarm(utc_dt, desc.to_string(), minutes);
-                        return Some(task.clone());
-                    }
+                if alarm_uid.starts_with("implicit_")
+                    && let Some(dt) = alarm_uid
+                        .split('|')
+                        .nth(1)
+                        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+                {
+                    let desc = if alarm_uid.contains("due") {
+                        "Due now"
+                    } else {
+                        "Starting"
+                    };
+                    task.snooze_implicit_alarm(dt.with_timezone(&Utc), desc.to_string(), minutes);
+                    return Some(task.clone());
                 }
-
                 if task.snooze_alarm(&alarm_uid, minutes) {
                     return Some(task.clone());
                 }
@@ -1600,11 +1432,8 @@ impl CfaitMobile {
             None
         })
         .await?;
-
-        // Rebuild alarm index after snoozing alarm
         let store = self.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
-
         Ok(())
     }
 
@@ -1614,396 +1443,220 @@ impl CfaitMobile {
         alarm_uid: String,
     ) -> Result<(), MobileError> {
         #[cfg(target_os = "android")]
-        log::debug!(
-            "dismiss_alarm called: task_uid={}, alarm_uid={}",
-            task_uid,
-            alarm_uid
-        );
-
+        log::debug!("dismiss_alarm: task={}, alarm={}", task_uid, alarm_uid);
         self.apply_store_mutation(task_uid.clone(), |store, id| {
             if let Some((task, _)) = store.get_task_mut(id) {
                 #[cfg(target_os = "android")]
                 log::debug!(
-                    "Found task '{}' with {} alarms before dismiss",
+                    "Found task '{}', alarms: {}",
                     task.summary,
                     task.alarms.len()
                 );
-
-                // Implicit Alarm Handling
-                if alarm_uid.starts_with("implicit_") {
-                    let parts: Vec<&str> = alarm_uid.split('|').collect();
-                    if parts.len() >= 2
-                        && let Ok(dt) = DateTime::parse_from_rfc3339(parts[1])
-                    {
-                        let utc_dt = dt.with_timezone(&Utc);
-                        let desc = if alarm_uid.contains("implicit_due") {
-                            "Due now"
-                        } else {
-                            "Starting"
-                        };
-                        task.dismiss_implicit_alarm(utc_dt, desc.to_string());
-                        #[cfg(target_os = "android")]
-                        log::debug!("Dismissed implicit alarm: {}", alarm_uid);
-                        return Some(task.clone());
-                    }
+                if alarm_uid.starts_with("implicit_")
+                    && let Some(dt) = alarm_uid
+                        .split('|')
+                        .nth(1)
+                        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+                {
+                    let desc = if alarm_uid.contains("due") {
+                        "Due now"
+                    } else {
+                        "Starting"
+                    };
+                    task.dismiss_implicit_alarm(dt.with_timezone(&Utc), desc.to_string());
+                    #[cfg(target_os = "android")]
+                    log::debug!("Dismissed implicit alarm");
+                    return Some(task.clone());
                 }
-
                 if task.dismiss_alarm(&alarm_uid) {
                     #[cfg(target_os = "android")]
-                    log::debug!(
-                        "Successfully dismissed explicit alarm, task now has {} alarms",
-                        task.alarms.len()
-                    );
+                    log::debug!("Dismissed explicit alarm, new count: {}", task.alarms.len());
                     return Some(task.clone());
-                } else {
-                    #[cfg(target_os = "android")]
-                    log::warn!("dismiss_alarm returned false - alarm not found or not dismissible");
                 }
-            } else {
-                #[cfg(target_os = "android")]
-                log::warn!("Task {} not found in store during dismiss", id);
             }
             None
         })
         .await?;
-
-        // Rebuild alarm index after dismissing alarm
         #[cfg(target_os = "android")]
-        log::debug!("Rebuilding alarm index after dismissing alarm");
-
+        log::debug!("Rebuilding alarm index after dismiss");
         let store = self.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
-
         #[cfg(target_os = "android")]
-        log::debug!("dismiss_alarm completed successfully");
-
+        log::debug!("Dismiss successful");
         Ok(())
     }
 
-    /// Used by Android WorkManager to schedule the next wakeup
-    /// Returns: timestamp (seconds) of the very next alarm across ALL tasks
     pub async fn get_next_global_alarm_time(&self) -> Option<i64> {
         let store = self.store.lock().await;
-        let mut global_earliest: Option<i64> = None;
-
-        for tasks_map in store.calendars.values() {
-            for task in tasks_map.values() {
-                // Skip completed tasks? Usually yes for alarms.
+        let mut earliest: Option<i64> = None;
+        for map in store.calendars.values() {
+            for task in map.values() {
                 if task.status.is_done() {
                     continue;
                 }
-
-                if let Some(ts) = task.next_trigger_timestamp() {
-                    match global_earliest {
-                        Some(current) if ts < current => global_earliest = Some(ts),
-                        None => global_earliest = Some(ts),
-                        _ => {}
-                    }
+                if let Some(ts) = task.next_trigger_timestamp()
+                    && (earliest.is_none() || ts < earliest.unwrap())
+                {
+                    earliest = Some(ts);
                 }
             }
         }
-        global_earliest
+        earliest
     }
 
-    /// Returns the timestamp (seconds) of the next alarm (explicit or implicit).
-    /// Used by Android to schedule AlarmManager.
-    ///
-    /// PERFORMANCE OPTIMIZATION: Uses the alarm index cache for fast lookups.
-    /// - Without cache: O(N) - must scan all tasks
-    /// - With cache: O(1) - direct lookup of next alarm from sorted index
-    ///
-    /// Falls back to full scan if index is missing.
-    pub fn get_next_alarm_timestamp(&self) -> Option<i64> {
-        // Try in-memory cache first (avoids disk read)
-        let cached = self.alarm_index_cache.blocking_lock();
-        if let Some(ref index) = *cached
-            && !index.is_empty()
-        {
-            if let Some(timestamp) = index.get_next_alarm_timestamp() {
-                #[cfg(target_os = "android")]
-                log::debug!("Next alarm timestamp from cached index: {}", timestamp);
-                return Some(timestamp as i64);
-            } else {
-                #[cfg(target_os = "android")]
-                log::debug!("No future alarms in cached index");
-                return None;
-            }
-        }
-        drop(cached);
-
-        // Fallback: Load from disk if cache miss
-        let index = AlarmIndex::load(self.ctx.as_ref());
-        if !index.is_empty() {
-            if let Some(timestamp) = index.get_next_alarm_timestamp() {
-                #[cfg(target_os = "android")]
-                log::debug!("Next alarm timestamp from disk index: {}", timestamp);
-                // Update cache for next time
-                *self.alarm_index_cache.blocking_lock() = Some(index);
-                return Some(timestamp as i64);
-            } else {
-                #[cfg(target_os = "android")]
-                log::debug!("No future alarms in disk index");
-                return None;
-            }
-        }
-
-        // Final fallback: Index doesn't exist, do full scan
-        #[cfg(target_os = "android")]
-        log::warn!("Alarm index not available for next_alarm_timestamp, falling back to full scan");
-
-        let store = self.store.blocking_lock();
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let default_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
-            .unwrap_or_else(|_| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
-
-        let now = Utc::now();
-        let mut global_earliest: Option<i64> = None;
-
-        let check_ts = |ts: i64, current_earliest: &mut Option<i64>| {
-            if ts > now.timestamp() {
-                match current_earliest {
-                    Some(e) if ts < *e => *current_earliest = Some(ts),
-                    None => *current_earliest = Some(ts),
-                    _ => {}
-                }
-            }
+    pub async fn delete_all_calendar_events(&self) -> Result<u32, MobileError> {
+        let all_tasks: Vec<_> = {
+            self.store
+                .lock()
+                .await
+                .calendars
+                .values()
+                .flat_map(|m| m.values())
+                .cloned()
+                .collect()
         };
-
-        for tasks_map in store.calendars.values() {
-            for task in tasks_map.values() {
-                if task.status.is_done() {
-                    continue;
-                }
-
-                // 1. Explicit Alarms
-                if let Some(ts) = task.next_trigger_timestamp() {
-                    check_ts(ts, &mut global_earliest);
-                }
-
-                // 2. Implicit Alarms
-                if config.auto_reminders {
-                    // Only check if no active explicit alarms exist
-                    let has_active_explicit = task
-                        .alarms
-                        .iter()
-                        .any(|a| a.acknowledged.is_none() && !a.is_snooze());
-
-                    if !has_active_explicit {
-                        if let Some(due) = &task.due {
-                            let dt = match due {
-                                DateType::Specific(t) => *t,
-                                DateType::AllDay(d) => d
-                                    .and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc),
-                            };
-                            // Only if not dismissed
-                            if !task.has_alarm_at(dt) {
-                                check_ts(dt.timestamp(), &mut global_earliest);
-                            }
-                        }
-                        if let Some(start) = &task.dtstart {
-                            let dt = match start {
-                                DateType::Specific(t) => *t,
-                                DateType::AllDay(d) => d
-                                    .and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc),
-                            };
-                            if !task.has_alarm_at(dt) {
-                                check_ts(dt.timestamp(), &mut global_earliest);
-                            }
-                        }
-                    }
+        let client = {
+            self.client
+                .lock()
+                .await
+                .as_ref()
+                .ok_or(MobileError::from("Offline"))?
+                .clone()
+        };
+        let futures = all_tasks.into_iter().map(|t| {
+            let c = client.clone();
+            async move {
+                if c.sync_task_companion_event(&t, false)
+                    .await
+                    .unwrap_or(false)
+                {
+                    1
+                } else {
+                    0
                 }
             }
-        }
-        global_earliest
+        });
+        Ok(stream::iter(futures)
+            .buffer_unordered(8)
+            .collect::<Vec<u32>>()
+            .await
+            .iter()
+            .sum())
     }
 
-    /// Called by Android when the AlarmManager wakes up.
-    /// Returns all alarms that should be firing NOW (with a small grace period).
-    ///
-    /// PERFORMANCE OPTIMIZATION: Uses the alarm index cache for fast lookups.
-    /// - Without cache: O(N) - must parse all tasks (~2-3 seconds for 1000 tasks)
-    /// - With cache: O(1) or O(log N) - direct lookup (~30-50ms)
-    ///
-    /// Falls back to full scan if index is missing or corrupted.
-    pub fn get_firing_alarms(&self) -> Vec<MobileAlarmInfo> {
-        // Try in-memory cache first (avoids disk read)
-        let cached = self.alarm_index_cache.blocking_lock();
-        if let Some(ref index) = *cached
-            && !index.is_empty()
-        {
-            #[cfg(target_os = "android")]
-            log::debug!(
-                "Using cached alarm index for fast lookup ({} alarms indexed)",
-                index.len()
-            );
-            let firing = index.get_firing_alarms();
-
-            if !firing.is_empty() {
-                #[cfg(target_os = "android")]
-                log::info!("Found {} firing alarm(s) via cached index", firing.len());
-                return firing
-                    .into_iter()
-                    .map(|entry| MobileAlarmInfo {
-                        task_uid: entry.task_uid,
-                        alarm_uid: entry.alarm_uid,
-                        title: entry.task_title,
-                        body: entry.description.unwrap_or_else(|| "Reminder".to_string()),
-                    })
-                    .collect();
-            } else {
-                #[cfg(target_os = "android")]
-                log::debug!("No firing alarms found in cached index");
-                return Vec::new();
-            }
-        }
-        drop(cached);
-
-        // Fallback: Load from disk if cache miss
-        let index = AlarmIndex::load(self.ctx.as_ref());
-        if !index.is_empty() {
-            #[cfg(target_os = "android")]
-            log::debug!(
-                "Using disk alarm index for fast lookup ({} alarms indexed)",
-                index.len()
-            );
-            let firing = index.get_firing_alarms();
-
-            if !firing.is_empty() {
-                #[cfg(target_os = "android")]
-                log::info!("Found {} firing alarm(s) via disk index", firing.len());
-                // Update cache for next time
-                *self.alarm_index_cache.blocking_lock() = Some(index);
-                return firing
-                    .into_iter()
-                    .map(|entry| MobileAlarmInfo {
-                        task_uid: entry.task_uid,
-                        alarm_uid: entry.alarm_uid,
-                        title: entry.task_title,
-                        body: entry.description.unwrap_or_else(|| "Reminder".to_string()),
-                    })
-                    .collect();
-            } else {
-                #[cfg(target_os = "android")]
-                log::debug!("No firing alarms found in disk index");
-                return Vec::new();
-            }
-        }
-
-        // Final fallback: Index doesn't exist or is empty, do full scan
-        #[cfg(target_os = "android")]
-        log::warn!("Alarm index not available, falling back to full task scan (slow)");
-
-        let store = self.store.blocking_lock();
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let default_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
-            .unwrap_or_else(|_| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
-
-        let now = Utc::now();
-        let mut results = Vec::new();
-
-        for tasks_map in store.calendars.values() {
-            for task in tasks_map.values() {
-                if task.status.is_done() {
-                    continue;
-                }
-
-                // Check Explicit
-                for alarm in &task.alarms {
-                    // Do NOT filter out snoozes here.
-                    if alarm.acknowledged.is_some() {
-                        continue;
-                    }
-
-                    let trigger_dt = match alarm.trigger {
-                        AlarmTrigger::Absolute(dt) => dt,
-                        AlarmTrigger::Relative(mins) => {
-                            let anchor = if let Some(DateType::Specific(d)) = task.due {
-                                d
-                            } else if let Some(DateType::Specific(s)) = task.dtstart {
-                                s
-                            } else {
-                                continue;
-                            };
-                            anchor + chrono::Duration::minutes(mins as i64)
-                        }
-                    };
-
-                    // Fire if in past (within 2 hours grace to avoid old spam)
-                    if trigger_dt <= now && (now - trigger_dt).num_minutes() < 120 {
-                        results.push(MobileAlarmInfo {
-                            task_uid: task.uid.clone(),
-                            alarm_uid: alarm.uid.clone(),
-                            title: task.summary.clone(),
-                            body: alarm
-                                .description
-                                .clone()
-                                .unwrap_or_else(|| "Reminder".to_string()),
-                        });
-                    }
-                }
-
-                // Check Implicit
-                if config.auto_reminders {
-                    // Count snooze alarms as active so we don't double-fire
-                    let has_active_explicit = task.alarms.iter().any(|a| a.acknowledged.is_none());
-                    if !has_active_explicit {
-                        // Helper for check
-                        let mut check_implicit = |dt: DateTime<Utc>, desc: &str, type_key: &str| {
-                            if !task.has_alarm_at(dt) && dt <= now && (now - dt).num_minutes() < 120
-                            {
-                                let ts_str = dt.to_rfc3339();
-                                // Synthetic ID generation matching `system.rs`
-                                let synth_id =
-                                    format!("implicit_{}:|{}|{}", type_key, ts_str, task.uid);
-                                results.push(MobileAlarmInfo {
-                                    task_uid: task.uid.clone(),
-                                    alarm_uid: synth_id,
-                                    title: task.summary.clone(),
-                                    body: desc.to_string(),
-                                });
-                            }
-                        };
-
-                        if let Some(due) = &task.due {
-                            let dt = match due {
-                                DateType::Specific(t) => *t,
-                                DateType::AllDay(d) => d
-                                    .and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc),
-                            };
-                            check_implicit(dt, "Due now", "due");
-                        }
-                        if let Some(start) = &task.dtstart {
-                            let dt = match start {
-                                DateType::Specific(t) => *t,
-                                DateType::AllDay(d) => d
-                                    .and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc),
-                            };
-                            check_implicit(dt, "Task starting", "start");
-                        }
-                    }
+    pub async fn create_missing_calendar_events(&self) -> Result<u32, MobileError> {
+        let all_tasks: Vec<_> = {
+            self.store
+                .lock()
+                .await
+                .calendars
+                .values()
+                .flat_map(|m| m.values())
+                .cloned()
+                .collect()
+        };
+        let client = {
+            self.client
+                .lock()
+                .await
+                .as_ref()
+                .ok_or(MobileError::from("Offline"))?
+                .clone()
+        };
+        let futures = all_tasks.into_iter().map(|t| {
+            let c = client.clone();
+            async move {
+                if c.sync_task_companion_event(&t, true).await.unwrap_or(false) {
+                    1
+                } else {
+                    0
                 }
             }
-        }
-        results
+        });
+        Ok(stream::iter(futures)
+            .buffer_unordered(8)
+            .collect::<Vec<u32>>()
+            .await
+            .iter()
+            .sum())
     }
 }
 
 impl CfaitMobile {
-    /// Helper method to rebuild the alarm index from the current task store.
-    /// Should be called whenever tasks are modified (add/update/delete/snooze/dismiss).
-    /// Updates both the disk cache and in-memory cache.
+    // Internal implementation not exported via UniFFI. Platform-specific behavior is gated here.
+    fn create_debug_export_internal(&self) -> Result<String, MobileError> {
+        #[cfg(target_os = "android")]
+        {
+            let data_dir = self
+                .ctx
+                .get_data_dir()
+                .map_err(|e| MobileError::from(e.to_string()))?;
+            let cache_dir = self
+                .ctx
+                .get_cache_dir()
+                .map_err(|e| MobileError::from(e.to_string()))?;
+            let config_dir = self
+                .ctx
+                .get_config_dir()
+                .map_err(|e| MobileError::from(e.to_string()))?;
+            let export_path = cache_dir.join("cfait_debug_export.zip");
+            let file = std::fs::File::create(&export_path)
+                .map_err(|e| MobileError::from(e.to_string()))?;
+            let mut zip = zip::ZipWriter::new(file);
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Deflated)
+                .unix_permissions(0o755);
+            let mut add_dir = |dir: &std::path::Path, prefix: &str| -> Result<(), MobileError> {
+                if let Ok(entries) = std::fs::read_dir(dir) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_file() {
+                            let file_name = path.file_name().unwrap().to_string_lossy();
+                            if file_name.ends_with(".lock") || file_name == "cfait_debug_export.zip"
+                            {
+                                continue;
+                            }
+                            zip.start_file(format!("{}{}", prefix, file_name), options)
+                                .map_err(|e| MobileError::from(e.to_string()))?;
+                            if file_name == "config.toml" {
+                                let mut config =
+                                    Config::load(self.ctx.as_ref()).unwrap_or_default();
+                                config.username = "[REDACTED]".to_string();
+                                config.password = "[REDACTED]".to_string();
+                                zip.write_all(
+                                    toml::to_string_pretty(&config)
+                                        .unwrap_or_default()
+                                        .as_bytes(),
+                                )
+                                .map_err(|e| MobileError::from(e.to_string()))?;
+                            } else {
+                                let mut f = std::fs::File::open(&path)
+                                    .map_err(|e| MobileError::from(e.to_string()))?;
+                                let mut buffer = Vec::new();
+                                f.read_to_end(&mut buffer)
+                                    .map_err(|e| MobileError::from(e.to_string()))?;
+                                zip.write_all(&buffer)
+                                    .map_err(|e| MobileError::from(e.to_string()))?;
+                            }
+                        }
+                    }
+                }
+                Ok(())
+            };
+            add_dir(&data_dir, "data/")?;
+            add_dir(&config_dir, "config/")?;
+            add_dir(&cache_dir, "cache/")?;
+            zip.finish().map_err(|e| MobileError::from(e.to_string()))?;
+            return Ok(export_path.to_string_lossy().to_string());
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            Err(MobileError::from(
+                "Debug export is only available on Android",
+            ))
+        }
+    }
+
     fn rebuild_alarm_index_sync(&self, store: &TaskStore) {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let index = AlarmIndex::rebuild_from_tasks(
@@ -2011,37 +1664,30 @@ impl CfaitMobile {
             config.auto_reminders,
             &config.default_reminder_time,
         );
-
         match index.save(self.ctx.as_ref()) {
             Ok(_) => {
                 #[cfg(target_os = "android")]
                 log::debug!("Alarm index rebuilt with {} alarms", index.len());
-                // Update in-memory cache
                 *self.alarm_index_cache.blocking_lock() = Some(index);
             }
             Err(e) => {
                 #[cfg(target_os = "android")]
                 log::warn!("Failed to save alarm index: {}", e);
                 #[cfg(not(target_os = "android"))]
-                let _ = e; // Suppress unused variable warning
+                let _ = e;
             }
         }
     }
 
     async fn apply_connection(&self, config: Config) -> Result<String, MobileError> {
-        let (client, cals, _, _, warning_from_fallback) =
+        let (client, cals, _, _, warning) =
             RustyClient::connect_with_fallback(self.ctx.clone(), config, Some("Android"))
                 .await
                 .map_err(MobileError::from)?;
-
         *self.client.lock().await = Some(client.clone());
-
         let fetch_result = client.get_all_tasks(&cals).await;
-
         let mut store = self.store.lock().await;
         store.clear();
-
-        // Load all local calendars
         if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
             for loc in locals {
                 match LocalStorage::load_for_href(self.ctx.as_ref(), &loc.href) {
@@ -2055,24 +1701,16 @@ impl CfaitMobile {
                     }
                     Err(e) => {
                         #[cfg(target_os = "android")]
-                        log::error!(
-                            "Failed to load {} - this may indicate data corruption or format incompatibility: {}",
-                            loc.href,
-                            e
-                        );
+                        log::error!("Failed to load {} - data corruption: {}", loc.href, e);
                         #[cfg(not(target_os = "android"))]
-                        eprintln!(
-                            "Failed to load {} - this may indicate data corruption or format incompatibility: {}",
-                            loc.href, e
-                        );
+                        eprintln!("Failed to load {} - data corruption: {}", loc.href, e);
                     }
                 }
             }
         }
-
         match fetch_result {
             Ok(results) => {
-                let mut fetched_hrefs: HashSet<String> = HashSet::new();
+                let mut fetched_hrefs = HashSet::new();
                 for (href, mut tasks) in results {
                     crate::journal::Journal::apply_to_tasks(self.ctx.as_ref(), &mut tasks, &href);
                     store.insert(href.clone(), tasks);
@@ -2081,8 +1719,7 @@ impl CfaitMobile {
                 for cal in &cals {
                     if !cal.href.starts_with("local://")
                         && !fetched_hrefs.contains(&cal.href)
-                        && let Ok((mut cached, _)) =
-                            crate::cache::Cache::load(self.ctx.as_ref(), &cal.href)
+                        && let Ok((mut cached, _)) = Cache::load(self.ctx.as_ref(), &cal.href)
                     {
                         crate::journal::Journal::apply_to_tasks(
                             self.ctx.as_ref(),
@@ -2097,8 +1734,7 @@ impl CfaitMobile {
                 for cal in &cals {
                     if !cal.href.starts_with("local://")
                         && !store.calendars.contains_key(&cal.href)
-                        && let Ok((mut cached, _)) =
-                            crate::cache::Cache::load(self.ctx.as_ref(), &cal.href)
+                        && let Ok((mut cached, _)) = Cache::load(self.ctx.as_ref(), &cal.href)
                     {
                         crate::journal::Journal::apply_to_tasks(
                             self.ctx.as_ref(),
@@ -2108,16 +1744,12 @@ impl CfaitMobile {
                         store.insert(cal.href.clone(), cached);
                     }
                 }
-                // Even on error, we must rebuild index for whatever data we loaded from cache
                 self.rebuild_alarm_index_sync(&store);
                 return Err(MobileError::from(e));
             }
         }
-
-        // Rebuild the alarm index now that the store is updated
         self.rebuild_alarm_index_sync(&store);
-
-        Ok(warning_from_fallback.unwrap_or_else(|| "Connected".to_string()))
+        Ok(warning.unwrap_or_else(|| "Connected".to_string()))
     }
 
     async fn apply_store_mutation<F>(&self, uid: String, mutator: F) -> Result<(), MobileError>
@@ -2125,44 +1757,36 @@ impl CfaitMobile {
         F: FnOnce(&mut TaskStore, &str) -> Option<Task>,
     {
         let mut store = self.store.lock().await;
-        let updated_task = mutator(&mut store, &uid)
-            .ok_or(MobileError::from("Task not found or mutation failed"))?;
-
-        let mut task_for_net = updated_task.clone();
+        let mut task_for_net =
+            mutator(&mut store, &uid).ok_or(MobileError::from("Mutation failed"))?;
         drop(store);
-
         let client_guard = self.client.lock().await;
         let mut network_success = false;
-
         if let Some(client) = &*client_guard
             && client.update_task(&mut task_for_net).await.is_ok()
         {
-            // Assign a placeholder etag to prevent ghost pruning.
-            // Similar to add_task_smart, we need to ensure the task has a non-empty etag
-            // to survive ghost pruning when AlarmWorker creates a fresh CfaitMobile instance.
             if task_for_net.etag.is_empty() {
                 task_for_net.etag = "pending_refresh".to_string();
             }
-
-            let mut store = self.store.lock().await;
-            store.update_or_add_task(task_for_net.clone());
+            self.store
+                .lock()
+                .await
+                .update_or_add_task(task_for_net.clone());
             network_success = true;
-
             #[cfg(target_os = "android")]
             log::debug!(
-                "Task {} updated on network, assigned placeholder etag to prevent ghost pruning",
+                "Task {} updated on network, placeholder etag assigned",
                 task_for_net.uid
             );
         }
-
         if !network_success {
             if task_for_net.calendar_href.starts_with("local://") {
-                let cal_href = task_for_net.calendar_href.clone();
+                let href = task_for_net.calendar_href.clone();
                 let mut local =
-                    LocalStorage::load_for_href(self.ctx.as_ref(), &cal_href).unwrap_or_default();
+                    LocalStorage::load_for_href(self.ctx.as_ref(), &href).unwrap_or_default();
                 if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
                     local[idx] = task_for_net;
-                    LocalStorage::save_for_href(self.ctx.as_ref(), &cal_href, &local)
+                    LocalStorage::save_for_href(self.ctx.as_ref(), &href, &local)
                         .map_err(MobileError::from)?;
                 }
             } else {

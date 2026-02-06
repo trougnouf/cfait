@@ -1,5 +1,5 @@
-// Central message handler dispatching to specific update modules.
 // File: ./src/gui/update/mod.rs
+// Central message handler dispatching to specific update modules.
 pub mod common;
 pub mod network;
 pub mod settings;
@@ -41,6 +41,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetDefaultReminderTime(_)
         | Message::SetSnoozeShort(_)
         | Message::SetSnoozeLong(_)
+        | Message::SetAutoRefreshInterval(_) // Added
         | Message::SetCreateEventsForTasks(_)
         | Message::SetDeleteEventsOnCompletion(_)
         | Message::DeleteAllCalendarEvents
@@ -98,7 +99,10 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleActiveSelected
         | Message::StopSelected
         | Message::CancelSelected
-        | Message::ChangePrioritySelected(_) => tasks::handle(app, message),
+        | Message::ChangePrioritySelected(_)
+        | Message::CompleteTaskFromAlarm(_, _) // Added
+        | Message::CancelTaskFromAlarm(_, _)   // Added
+        => tasks::handle(app, message),
 
         // --- View & Navigation Messages ---
         Message::TabPressed(_)

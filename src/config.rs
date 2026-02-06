@@ -1,3 +1,4 @@
+// File: ./src/config.rs
 // Handles configuration loading, saving, and defaults.
 use crate::context::AppContext;
 use crate::storage::LocalStorage;
@@ -17,20 +18,19 @@ fn default_cutoff() -> Option<u32> {
 
 fn default_urgent_days() -> u32 {
     1
-} // Tomorrow
+}
 fn default_urgent_prio() -> u8 {
     1
-} // !1
+}
 
 fn default_start_grace_period() -> u32 {
     1
-} // 1 day grace period for start dates
+}
 
 fn default_priority() -> u8 {
     5
-} // Normal priority
+}
 
-// Add default helpers
 fn default_auto_remind() -> bool {
     true
 }
@@ -39,10 +39,10 @@ fn default_remind_time() -> String {
 }
 fn default_snooze_1() -> u32 {
     60
-} // 1 hour
+}
 fn default_snooze_2() -> u32 {
     1440
-} // 1 day
+}
 
 fn default_create_events() -> bool {
     false
@@ -50,6 +50,10 @@ fn default_create_events() -> bool {
 
 fn default_delete_events_on_completion() -> bool {
     false
+}
+
+fn default_refresh_interval() -> u32 {
+    30
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
@@ -159,6 +163,9 @@ pub struct Config {
 
     #[serde(default = "default_delete_events_on_completion")]
     pub delete_events_on_completion: bool,
+
+    #[serde(default = "default_refresh_interval")]
+    pub auto_refresh_interval_mins: u32,
 }
 
 impl Default for Config {
@@ -187,6 +194,7 @@ impl Default for Config {
             snooze_long_mins: 1440,
             create_events_for_tasks: false,
             delete_events_on_completion: false,
+            auto_refresh_interval_mins: 30,
         }
     }
 }

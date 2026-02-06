@@ -31,6 +31,18 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
         _ => None,
     }));
 
+    // Auto-refresh subscription (configurable)
+    // If config load succeeds and interval > 0, subscribe to a periodic timer that maps to Message::Refresh.
+    if let Ok(cfg) = crate::config::Config::load(app.ctx.as_ref())
+        && cfg.auto_refresh_interval_mins > 0 {
+            subs.push(
+                iced::time::every(std::time::Duration::from_secs(
+                    cfg.auto_refresh_interval_mins as u64 * 60,
+                ))
+                .map(|_| Message::Refresh),
+            );
+        }
+
     Subscription::batch(subs)
 }
 

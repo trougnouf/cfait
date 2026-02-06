@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.RemoteInput
 import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -41,12 +42,21 @@ class NotificationActionReceiver : BroadcastReceiver() {
             Log.w("CfaitNotificationAction", "Could not cancel notification due to SecurityException", e)
         }
 
+        // Check for RemoteInput (Custom Snooze)
+        val remoteInput = RemoteInput.getResultsFromIntent(intent)
+        val customInput = remoteInput?.getCharSequence("snooze_custom_duration")?.toString()
+
         // Prepare input data for the worker, passing along the specific action.
-        val inputData = Data.Builder()
+        val dataBuilder = Data.Builder()
             .putString(NotificationActionWorker.KEY_ACTION, action)
             .putString(NotificationActionWorker.KEY_TASK_UID, taskUid)
             .putString(NotificationActionWorker.KEY_ALARM_UID, alarmUid)
-            .build()
+
+        if (customInput != null) {
+            dataBuilder.putString(NotificationActionWorker.KEY_CUSTOM_INPUT, customInput)
+        }
+
+        val inputData = dataBuilder.build()
 
         // Create a work request for the NotificationActionWorker.
         // We do not use .setExpedited() here to avoid potential crashes on Android 12+

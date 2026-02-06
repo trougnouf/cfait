@@ -300,6 +300,10 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     ));
 
     // --- 5. UI LOOP ---
+    let mut last_refresh = std::time::Instant::now();
+    let refresh_interval =
+        std::time::Duration::from_secs(cfg.auto_refresh_interval_mins as u64 * 60);
+
     loop {
         terminal.draw(|f| draw(f, &mut app_state))?;
 
@@ -345,6 +349,10 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
         }
 
         // C. Input Events
+        if last_refresh.elapsed() >= refresh_interval {
+            let _ = action_tx.send(crate::tui::action::Action::Refresh).await;
+            last_refresh = std::time::Instant::now();
+        }
         if crossterm::event::poll(Duration::from_millis(50))? {
             let event = event::read()?;
             match event {

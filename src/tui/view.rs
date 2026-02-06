@@ -1161,6 +1161,18 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 ),
                 Span::raw("Dismiss    "),
                 Span::styled(
+                    " [c] ",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("Done    "),
+                Span::styled(
+                    " [x] ",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("Cancel    "),
+                Span::styled(
                     " [1] ",
                     Style::default()
                         .fg(Color::Yellow)

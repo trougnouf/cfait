@@ -588,6 +588,34 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             // Redirect to standard snooze handler
             handle(app, Message::SnoozeAlarm(t_uid, a_uid, mins))
         }
+        Message::CompleteTaskFromAlarm(t_uid, a_uid) => {
+            // Remove from modal stack
+            app.ringing_tasks
+                .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
+
+            // Re-use standard toggle logic by finding task index and delegating to ToggleTask
+            if let Some(idx) = app.tasks.iter().position(|t| t.uid == t_uid) {
+                // If it's already done, do nothing. Otherwise request toggle (complete).
+                if !app.tasks[idx].status.is_done() {
+                    return handle(app, Message::ToggleTask(idx, true));
+                }
+            }
+            Task::none()
+        }
+        Message::CancelTaskFromAlarm(t_uid, a_uid) => {
+            // Remove from modal stack
+            app.ringing_tasks
+                .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
+
+            // Delegate to SetTaskStatus if we can find the task index
+            if let Some(idx) = app.tasks.iter().position(|t| t.uid == t_uid) {
+                return handle(
+                    app,
+                    Message::SetTaskStatus(idx, crate::model::TaskStatus::Cancelled),
+                );
+            }
+            Task::none()
+        }
         Message::SnoozeAlarm(t_uid, a_uid, mins) => {
             if let Some((task, _)) = app.store.get_task_mut(&t_uid) {
                 let mut changed = false;

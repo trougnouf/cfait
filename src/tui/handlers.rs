@@ -119,6 +119,45 @@ pub async fn handle_key_event(
                     }
                     return None;
                 }
+                KeyCode::Char('c') => {
+                    /* Complete */
+                    if let Some((t, _)) = state.store.get_task_mut(&task.uid) {
+                        // Dismiss alarm first (optional but clean)
+                        t.dismiss_alarm(&alarm_uid);
+                        let uid = t.uid.clone();
+                        // Close popup
+                        state.active_alarm = None;
+                        // Use ToggleTask action to handle logic
+                        if let Some((primary, _)) = state.store.toggle_task(&uid) {
+                            state.refresh_filtered_view();
+                            update_alarms(state);
+                            return Some(Action::ToggleTask(primary));
+                        }
+                    }
+                    return None;
+                }
+                KeyCode::Char('x') => {
+                    /* Cancel */
+                    if let Some((t, _)) = state.store.get_task_mut(&task.uid) {
+                        t.dismiss_alarm(&alarm_uid);
+                        let uid = t.uid.clone();
+                        state.active_alarm = None;
+
+                        if let Some((primary, secondary)) =
+                            state.store.set_status(&uid, TaskStatus::Cancelled)
+                        {
+                            state.refresh_filtered_view();
+                            update_alarms(state);
+                            let target = if let Some(sec) = secondary {
+                                sec
+                            } else {
+                                primary
+                            };
+                            return Some(Action::MarkCancelled(target));
+                        }
+                    }
+                    return None;
+                }
                 KeyCode::Char('S') | KeyCode::Char('s') => {
                     // Enter custom snooze mode
                     state.mode = InputMode::Snoozing;

@@ -1,5 +1,4 @@
 // File: ./src/gui/state.rs
-// File: ./src/gui/state.rs
 // Manages the application state for the GUI (Iced).
 use crate::client::RustyClient;
 use crate::config::AppTheme;
@@ -174,9 +173,13 @@ pub struct GuiApp {
     // Settings input buffers for duration strings
     pub ob_snooze_short_input: String,
     pub ob_snooze_long_input: String,
+    pub ob_auto_refresh_input: String, // Added
 
     // ADDED: Force Server-Side Decorations
     pub force_ssd: bool,
+
+    // ADDED: Auto Refresh
+    pub auto_refresh_interval_mins: u32,
 }
 
 impl Default for GuiApp {
@@ -313,9 +316,13 @@ impl Default for GuiApp {
             deleting_events: false,
             ob_snooze_short_input: "1h".to_string(),
             ob_snooze_long_input: "1d".to_string(),
+            ob_auto_refresh_input: "30m".to_string(), // Added default
 
             // ADDED: Force Server-Side Decorations
             force_ssd: false,
+
+            // ADDED: Auto Refresh
+            auto_refresh_interval_mins: 30,
 
             // Double click tracking
             last_click: None, // Added

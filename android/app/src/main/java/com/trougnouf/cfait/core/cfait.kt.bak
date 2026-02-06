@@ -763,6 +763,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_create_debug_export(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_create_debug_export_internal(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_create_local_calendar(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_create_missing_calendar_events(): Short
@@ -923,6 +925,11 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_create_debug_export_internal(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
     external fun uniffi_cfait_fn_method_cfaitmobile_create_local_calendar(
         `ptr`: Long,
         `name`: RustBuffer.ByValue,
@@ -1025,8 +1032,8 @@ internal object UniffiLib {
 
     external fun uniffi_cfait_fn_method_cfaitmobile_migrate_local_to(
         `ptr`: Long,
-        `sourceHref`: RustBuffer.ByValue,
-        `targetHref`: RustBuffer.ByValue,
+        `sourceCalendarHref`: RustBuffer.ByValue,
+        `targetCalendarHref`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_move_task(
@@ -1404,6 +1411,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_debug_export() != 60195.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_debug_export_internal() != 64340.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_local_calendar() != 51648.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1437,19 +1447,19 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_config() != 49237.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms() != 46005.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms() != 2940.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp() != 17664.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp() != 25550.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time() != 15513.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time() != 32010.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid() != 32270.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 40919.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 33904.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 41024.toShort()) {
@@ -1467,7 +1477,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_load_from_cache() != 45631.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_migrate_local_to() != 42795.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_migrate_local_to() != 35988.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_move_task() != 19055.toShort()) {
@@ -1491,7 +1501,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_related_to() != 37228.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 58765.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 62664.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility() != 45711.toShort()) {
@@ -2062,6 +2072,8 @@ public interface CfaitMobileInterface {
 
     fun `createDebugExport`(): kotlin.String
 
+    fun `createDebugExportInternal`(): kotlin.String
+
     suspend fun `createLocalCalendar`(
         `name`: kotlin.String,
         `color`: kotlin.String?,
@@ -2090,10 +2102,34 @@ public interface CfaitMobileInterface {
 
     fun `getConfig`(): MobileConfig
 
+    /**
+     * Called by Android when the AlarmManager wakes up.
+     * Returns all alarms that should be firing NOW (with a small grace period).
+     *
+     * PERFORMANCE OPTIMIZATION: Uses the alarm index cache for fast lookups.
+     * - Without cache: O(N) - must parse all tasks (~2-3 seconds for 1000 tasks)
+     * - With cache: O(1) or O(log N) - direct lookup (~30-50ms)
+     *
+     * Falls back to full scan if index is missing or corrupted.
+     */
     fun `getFiringAlarms`(): List<MobileAlarmInfo>
 
+    /**
+     * Returns the timestamp (seconds) of the next alarm (explicit or implicit).
+     * Used by Android to schedule AlarmManager.
+     *
+     * PERFORMANCE OPTIMIZATION: Uses the alarm index cache for fast lookups.
+     * - Without cache: O(N) - must scan all tasks
+     * - With cache: O(1) - direct lookup of next alarm from sorted index
+     *
+     * Falls back to full scan if index is missing.
+     */
     fun `getNextAlarmTimestamp`(): kotlin.Long?
 
+    /**
+     * Used by Android WorkManager to schedule the next wakeup
+     * Returns: timestamp (seconds) of the very next alarm across ALL tasks
+     */
     suspend fun `getNextGlobalAlarmTime`(): kotlin.Long?
 
     suspend fun `getRandomTaskUid`(
@@ -2102,6 +2138,9 @@ public interface CfaitMobileInterface {
         `searchQuery`: kotlin.String,
     ): kotlin.String?
 
+    /**
+     * Get all tasks that have a related_to link to the given task
+     */
     suspend fun `getTasksRelatedTo`(`uid`: kotlin.String): List<MobileRelatedTask>
 
     suspend fun `getViewTasks`(
@@ -2122,8 +2161,8 @@ public interface CfaitMobileInterface {
     fun `loadFromCache`()
 
     suspend fun `migrateLocalTo`(
-        `sourceHref`: kotlin.String,
-        `targetHref`: kotlin.String,
+        `sourceCalendarHref`: kotlin.String,
+        `targetCalendarHref`: kotlin.String,
     ): kotlin.String
 
     suspend fun `moveTask`(
@@ -2474,6 +2513,19 @@ open class CfaitMobile :
         )
 
     @Throws(MobileException::class)
+    override fun `createDebugExportInternal`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCallWithError(MobileException) { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_debug_export_internal(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `createLocalCalendar`(
         `name`: kotlin.String,
@@ -2664,6 +2716,16 @@ open class CfaitMobile :
             },
         )
 
+    /**
+     * Called by Android when the AlarmManager wakes up.
+     * Returns all alarms that should be firing NOW (with a small grace period).
+     *
+     * PERFORMANCE OPTIMIZATION: Uses the alarm index cache for fast lookups.
+     * - Without cache: O(N) - must parse all tasks (~2-3 seconds for 1000 tasks)
+     * - With cache: O(1) or O(log N) - direct lookup (~30-50ms)
+     *
+     * Falls back to full scan if index is missing or corrupted.
+     */
     override fun `getFiringAlarms`(): List<MobileAlarmInfo> =
         FfiConverterSequenceTypeMobileAlarmInfo.lift(
             callWithHandle {
@@ -2676,6 +2738,16 @@ open class CfaitMobile :
             },
         )
 
+    /**
+     * Returns the timestamp (seconds) of the next alarm (explicit or implicit).
+     * Used by Android to schedule AlarmManager.
+     *
+     * PERFORMANCE OPTIMIZATION: Uses the alarm index cache for fast lookups.
+     * - Without cache: O(N) - must scan all tasks
+     * - With cache: O(1) - direct lookup of next alarm from sorted index
+     *
+     * Falls back to full scan if index is missing.
+     */
     override fun `getNextAlarmTimestamp`(): kotlin.Long? =
         FfiConverterOptionalLong.lift(
             callWithHandle {
@@ -2688,6 +2760,10 @@ open class CfaitMobile :
             },
         )
 
+    /**
+     * Used by Android WorkManager to schedule the next wakeup
+     * Returns: timestamp (seconds) of the very next alarm across ALL tasks
+     */
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `getNextGlobalAlarmTime`(): kotlin.Long? =
         uniffiRustCallAsync(
@@ -2729,6 +2805,9 @@ open class CfaitMobile :
             UniffiNullRustCallStatusErrorHandler,
         )
 
+    /**
+     * Get all tasks that have a related_to link to the given task
+     */
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `getTasksRelatedTo`(`uid`: kotlin.String): List<MobileRelatedTask> =
         uniffiRustCallAsync(
@@ -2826,15 +2905,15 @@ open class CfaitMobile :
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `migrateLocalTo`(
-        `sourceHref`: kotlin.String,
-        `targetHref`: kotlin.String,
+        `sourceCalendarHref`: kotlin.String,
+        `targetCalendarHref`: kotlin.String,
     ): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_migrate_local_to(
                     uniffiHandle,
-                    FfiConverterString.lower(`sourceHref`),
-                    FfiConverterString.lower(`targetHref`),
+                    FfiConverterString.lower(`sourceCalendarHref`),
+                    FfiConverterString.lower(`targetCalendarHref`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
@@ -3417,9 +3496,9 @@ data class MobileConfig(
     var `autoReminders`: kotlin.Boolean,
     var `defaultReminderTime`: kotlin.String,
     var `snoozeShort`: kotlin.UInt,
+    var `snoozeLong`: kotlin.UInt,
     var `createEventsForTasks`: kotlin.Boolean,
     var `deleteEventsOnCompletion`: kotlin.Boolean,
-    var `autoRefreshInterval`: kotlin.UInt,
 ) {
     companion object
 }
@@ -3445,9 +3524,9 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterBoolean.read(buf),
             FfiConverterString.read(buf),
             FfiConverterUInt.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
 
     override fun allocationSize(value: MobileConfig) =
@@ -3467,9 +3546,9 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterBoolean.allocationSize(value.`autoReminders`) +
                 FfiConverterString.allocationSize(value.`defaultReminderTime`) +
                 FfiConverterUInt.allocationSize(value.`snoozeShort`) +
+                FfiConverterUInt.allocationSize(value.`snoozeLong`) +
                 FfiConverterBoolean.allocationSize(value.`createEventsForTasks`) +
-                FfiConverterBoolean.allocationSize(value.`deleteEventsOnCompletion`) +
-                FfiConverterUInt.allocationSize(value.`autoRefreshInterval`)
+                FfiConverterBoolean.allocationSize(value.`deleteEventsOnCompletion`)
         )
 
     override fun write(
@@ -3491,9 +3570,9 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterBoolean.write(value.`autoReminders`, buf)
         FfiConverterString.write(value.`defaultReminderTime`, buf)
         FfiConverterUInt.write(value.`snoozeShort`, buf)
+        FfiConverterUInt.write(value.`snoozeLong`, buf)
         FfiConverterBoolean.write(value.`createEventsForTasks`, buf)
         FfiConverterBoolean.write(value.`deleteEventsOnCompletion`, buf)
-        FfiConverterUInt.write(value.`autoRefreshInterval`, buf)
     }
 }
 
