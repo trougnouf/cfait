@@ -20,6 +20,7 @@ import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileSyntaxType
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
@@ -290,7 +291,7 @@ fun formatDuration(
 
 fun formatIsoToLocal(isoString: String): String {
     return try {
-        val instant = Instant.parse(isoString)
+        val instant = OffsetDateTime.parse(isoString).toInstant()
         val zone = ZoneId.systemDefault()
         val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
         instant.atZone(zone).format(formatter)
