@@ -5,6 +5,7 @@ pub mod client;
 pub mod color_utils;
 pub mod config;
 pub mod context;
+pub mod controller;
 pub mod journal;
 pub mod model;
 pub mod storage;

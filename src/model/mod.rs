@@ -3,6 +3,7 @@ pub mod adapter;
 pub mod display;
 pub mod item;
 pub mod matcher;
+pub mod merge;
 pub mod parser;
 pub mod recurrence;
 

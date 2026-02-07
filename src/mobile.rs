@@ -1,14 +1,10 @@
 // File: ./src/mobile.rs
-/* cfait/src/mobile.rs
- *
- * UniFFI interface for exposing core logic to mobile platforms (Android).
- */
-
 use crate::alarm_index::AlarmIndex;
 use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::config::Config;
 use crate::context::{AppContext, StandardContext};
+use crate::controller::TaskController;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::model::{AlarmTrigger, DateType, Task};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
@@ -16,12 +12,13 @@ use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
 use chrono::{DateTime, Local, NaiveTime, Utc};
 use futures::stream::{self, StreamExt};
 use std::collections::{HashMap, HashSet};
-#[cfg(target_os = "android")]
-use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
+
+#[cfg(target_os = "android")]
+use std::io::{Read, Write};
 
 #[derive(Debug, uniffi::Error)]
 #[uniffi(flat_error)]
@@ -288,8 +285,7 @@ fn task_to_mobile(
 
 #[derive(uniffi::Object)]
 pub struct CfaitMobile {
-    client: Arc<Mutex<Option<RustyClient>>>,
-    store: Arc<Mutex<TaskStore>>,
+    controller: TaskController,
     alarm_index_cache: Arc<Mutex<Option<AlarmIndex>>>,
     ctx: Arc<dyn AppContext>,
 }
@@ -306,9 +302,13 @@ impl CfaitMobile {
         );
         let ctx: Arc<dyn AppContext> =
             Arc::new(StandardContext::new(Some(PathBuf::from(android_files_dir))));
+
+        let store = Arc::new(Mutex::new(TaskStore::new(ctx.clone())));
+        let client = Arc::new(Mutex::new(None));
+        let controller = TaskController::new(store, client, ctx.clone());
+
         Self {
-            client: Arc::new(Mutex::new(None)),
-            store: Arc::new(Mutex::new(TaskStore::new(ctx.clone()))),
+            controller,
             alarm_index_cache: Arc::new(Mutex::new(None)),
             ctx,
         }
@@ -505,7 +505,7 @@ impl CfaitMobile {
     }
 
     pub fn load_from_cache(&self) {
-        let mut store = self.store.blocking_lock();
+        let mut store = self.controller.store.blocking_lock();
         store.clear();
         if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
             for loc in locals {
@@ -579,7 +579,7 @@ impl CfaitMobile {
             }
             return None;
         }
-        let store = self.store.blocking_lock();
+        let store = self.controller.store.blocking_lock();
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let default_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
             .unwrap_or_else(|_| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
@@ -700,7 +700,7 @@ impl CfaitMobile {
         }
         #[cfg(target_os = "android")]
         log::warn!("Alarm index not available, falling back to full scan");
-        let store = self.store.blocking_lock();
+        let store = self.controller.store.blocking_lock();
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let default_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
             .unwrap_or_else(|_| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
@@ -718,13 +718,14 @@ impl CfaitMobile {
                     let trigger_dt = match alarm.trigger {
                         AlarmTrigger::Absolute(dt) => dt,
                         AlarmTrigger::Relative(mins) => {
-                            if let Some(DateType::Specific(dt)) =
-                                task.due.as_ref().or(task.dtstart.as_ref())
-                            {
-                                *dt + chrono::Duration::minutes(mins as i64)
+                            let anchor = if let Some(DateType::Specific(d)) = task.due {
+                                d
+                            } else if let Some(DateType::Specific(s)) = task.dtstart {
+                                s
                             } else {
                                 continue;
-                            }
+                            };
+                            anchor + chrono::Duration::minutes(mins as i64)
                         }
                     };
                     if trigger_dt <= now && (now - trigger_dt).num_minutes() < 120 {
@@ -787,22 +788,16 @@ impl CfaitMobile {
             .map_err(MobileError::from)?;
         c.tag_aliases.insert(key.clone(), tags.clone());
         c.save(self.ctx.as_ref()).map_err(MobileError::from)?;
-        let mut store = self.store.lock().await;
+        let mut store = self.controller.store.lock().await;
         let modified = store.apply_alias_retroactively(&key, &tags);
         drop(store);
         if !modified.is_empty() {
-            let client_guard = self.client.lock().await;
-            if let Some(client) = &*client_guard {
-                for mut t in modified {
-                    let _ = client.update_task(&mut t).await;
-                }
-            } else {
-                for t in modified {
-                    let _ = crate::journal::Journal::push(
-                        self.ctx.as_ref(),
-                        crate::journal::Action::Update(t),
-                    );
-                }
+            for t in modified {
+                // Delegate to Controller
+                self.controller
+                    .update_task(t)
+                    .await
+                    .map_err(MobileError::from)?;
             }
         }
         Ok(())
@@ -869,7 +864,8 @@ impl CfaitMobile {
     }
 
     pub async fn get_tasks_related_to(&self, uid: String) -> Vec<MobileRelatedTask> {
-        self.store
+        self.controller
+            .store
             .lock()
             .await
             .get_tasks_related_to(&uid)
@@ -901,7 +897,7 @@ impl CfaitMobile {
     }
 
     pub async fn get_all_tags(&self) -> Vec<MobileTag> {
-        let store = self.store.lock().await;
+        let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut hidden_cals: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden_cals.extend(config.disabled_calendars);
@@ -922,7 +918,7 @@ impl CfaitMobile {
     }
 
     pub async fn get_all_locations(&self) -> Vec<MobileLocation> {
-        let store = self.store.lock().await;
+        let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut hidden_cals: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden_cals.extend(config.disabled_calendars);
@@ -942,7 +938,7 @@ impl CfaitMobile {
         filter_locations: Vec<String>,
         search_query: String,
     ) -> Vec<MobileTask> {
-        let store = self.store.lock().await;
+        let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
@@ -978,7 +974,7 @@ impl CfaitMobile {
         filter_locations: Vec<String>,
         search_query: String,
     ) -> Option<String> {
-        let store = self.store.lock().await;
+        let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
@@ -1022,25 +1018,18 @@ impl CfaitMobile {
             }
             config.tag_aliases.extend(new_aliases.clone());
             config.save(self.ctx.as_ref()).map_err(MobileError::from)?;
-            let mut store = self.store.lock().await;
+            let mut store = self.controller.store.lock().await;
             let all_modified: Vec<_> = new_aliases
                 .iter()
                 .flat_map(|(key, tags)| store.apply_alias_retroactively(key, tags))
                 .collect();
             drop(store);
             if !all_modified.is_empty() {
-                let client_guard = self.client.lock().await;
-                if let Some(client) = &*client_guard {
-                    for mut t in all_modified {
-                        let _ = client.update_task(&mut t).await;
-                    }
-                } else {
-                    for t in all_modified {
-                        let _ = crate::journal::Journal::push(
-                            self.ctx.as_ref(),
-                            crate::journal::Action::Update(t),
-                        );
-                    }
+                for t in all_modified {
+                    self.controller
+                        .update_task(t)
+                        .await
+                        .map_err(MobileError::from)?;
                 }
             }
             let trimmed = clean_input.trim();
@@ -1069,46 +1058,20 @@ impl CfaitMobile {
             .default_calendar
             .clone()
             .unwrap_or(LOCAL_CALENDAR_HREF.to_string());
-        self.store.lock().await.add_task(task.clone());
-        let guard = self.client.lock().await;
-        let mut network_success = false;
-        if let Some(client) = &*guard
-            && client.create_task(&mut task).await.is_ok()
-        {
-            if task.etag.is_empty() {
-                task.etag = "pending_refresh".to_string();
-            }
-            self.store.lock().await.update_or_add_task(task.clone());
-            network_success = true;
-            #[cfg(target_os = "android")]
-            log::debug!(
-                "Task {} created on network, placeholder etag assigned",
-                task.uid
-            );
-        }
-        if !network_success {
-            if task.calendar_href.starts_with("local://") {
-                let mut all = LocalStorage::load_for_href(self.ctx.as_ref(), &task.calendar_href)
-                    .unwrap_or_default();
-                all.push(task.clone());
-                LocalStorage::save_for_href(self.ctx.as_ref(), &task.calendar_href, &all)
-                    .map_err(MobileError::from)?;
-            } else {
-                crate::journal::Journal::push(
-                    self.ctx.as_ref(),
-                    crate::journal::Action::Create(task.clone()),
-                )
-                .map_err(MobileError::from)?;
-            }
-            self.store.lock().await.update_or_add_task(task.clone());
-        }
+
+        let uid = self
+            .controller
+            .create_task(task)
+            .await
+            .map_err(MobileError::from)?;
+
         #[cfg(target_os = "android")]
-        log::debug!("Rebuilding alarm index after adding {}", task.uid);
-        let store_for_rebuild = self.store.lock().await;
+        log::debug!("Rebuilding alarm index after adding {}", uid);
+        let store_for_rebuild = self.controller.store.lock().await;
         self.rebuild_alarm_index_sync(&store_for_rebuild);
         #[cfg(target_os = "android")]
-        log::debug!("Alarm index rebuilt. Returning uid: {}", task.uid);
-        Ok(task.uid)
+        log::debug!("Alarm index rebuilt. Returning uid: {}", uid);
+        Ok(uid)
     }
 
     pub async fn change_priority(&self, uid: String, delta: i8) -> Result<(), MobileError> {
@@ -1125,42 +1088,35 @@ impl CfaitMobile {
     }
 
     pub async fn set_status_cancelled(&self, uid: String) -> Result<(), MobileError> {
-        let mut store = self.store.lock().await;
+        let mut store = self.controller.store.lock().await;
+        // Logic similar to toggle, using recycle
         let (primary, secondary) = store
             .set_status(&uid, crate::model::TaskStatus::Cancelled)
             .ok_or(MobileError::from("Task not found"))?;
         drop(store);
-        let client_guard = self.client.lock().await;
-        if let Some(client) = &*client_guard {
-            if let Some(mut next) = secondary.clone() {
-                let mut hist = primary.clone();
-                let _ = client.create_task(&mut hist).await;
-                let _ = client.update_task(&mut next).await;
-            } else {
-                let mut t = primary.clone();
-                let _ = client.update_task(&mut t).await;
-            }
-        } else if !primary.calendar_href.starts_with("local://") {
-            if let Some(next) = &secondary {
-                crate::journal::Journal::push(
-                    self.ctx.as_ref(),
-                    crate::journal::Action::Create(primary.clone()),
-                )
+
+        // Delegate to Controller Logic manually since we have two objects (history + next)
+
+        if let Some(sec) = secondary {
+            // Recurring task: primary is History (New), sec is Next (Existing)
+            self.controller
+                .create_task(primary) // Changed from update_task
+                .await
                 .map_err(MobileError::from)?;
-                crate::journal::Journal::push(
-                    self.ctx.as_ref(),
-                    crate::journal::Action::Update(next.clone()),
-                )
+
+            self.controller
+                .update_task(sec)
+                .await
                 .map_err(MobileError::from)?;
-            } else {
-                crate::journal::Journal::push(
-                    self.ctx.as_ref(),
-                    crate::journal::Action::Update(primary.clone()),
-                )
+        } else {
+            // Non-recurring: primary is existing task updated
+            self.controller
+                .update_task(primary)
+                .await
                 .map_err(MobileError::from)?;
-            }
         }
-        let store = self.store.lock().await;
+
+        let store = self.controller.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
         Ok(())
     }
@@ -1213,108 +1169,32 @@ impl CfaitMobile {
     }
 
     pub async fn toggle_task(&self, uid: String) -> Result<(), MobileError> {
-        let mut store = self.store.lock().await;
-        let (task, _) = store
-            .get_task_mut(&uid)
-            .ok_or(MobileError::from("Task not found"))?;
-        if task.status.is_done() {
-            task.status = crate::model::TaskStatus::NeedsAction;
-            task.percent_complete = None;
-        } else {
-            task.status = crate::model::TaskStatus::Completed;
-            task.percent_complete = Some(100);
-            let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
-            task.unmapped_properties.retain(|p| p.key != "COMPLETED");
-            task.unmapped_properties.push(crate::model::RawProperty {
-                key: "COMPLETED".to_string(),
-                value: now_str,
-                params: vec![],
-            });
-        }
-        let mut task_for_net = task.clone();
-        drop(store);
-        let client_guard = self.client.lock().await;
-        let mut network_success = false;
-        if let Some(client) = &*client_guard
-            && let Ok((_, next_task_opt, _)) = client.toggle_task(&mut task_for_net).await
-        {
-            let mut store = self.store.lock().await;
-            if let Some(next) = next_task_opt {
-                store.update_or_add_task(next);
-            }
-            store.update_or_add_task(task_for_net.clone());
-            network_success = true;
-        }
-        if !network_success {
-            if task_for_net.calendar_href.starts_with("local://") {
-                let href = task_for_net.calendar_href.clone();
-                let mut local =
-                    LocalStorage::load_for_href(self.ctx.as_ref(), &href).unwrap_or_default();
-                if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
-                    local[idx] = task_for_net;
-                    LocalStorage::save_for_href(self.ctx.as_ref(), &href, &local)
-                        .map_err(MobileError::from)?;
-                }
-            } else {
-                crate::journal::Journal::push(
-                    self.ctx.as_ref(),
-                    crate::journal::Action::Update(task_for_net),
-                )
-                .map_err(MobileError::from)?;
-            }
-        }
-        let store = self.store.lock().await;
+        self.controller
+            .toggle_task(uid)
+            .await
+            .map_err(MobileError::from)?;
+        let store = self.controller.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
         Ok(())
     }
 
     pub async fn move_task(&self, uid: String, new_cal_href: String) -> Result<(), MobileError> {
-        let mut store = self.store.lock().await;
-        let (original, _) = store
-            .move_task(&uid, new_cal_href.clone())
-            .ok_or(MobileError::from("Task not found"))?;
-        drop(store);
-        let client_guard = self.client.lock().await;
-
-        let mut network_success = false;
-        if let Some(client) = client_guard.as_ref()
-            && client.move_task(&original, &new_cal_href).await.is_ok()
-        {
-            network_success = true;
-        }
-
-        if !network_success && !new_cal_href.starts_with("local://") {
-            crate::journal::Journal::push(
-                self.ctx.as_ref(),
-                crate::journal::Action::Move(original, new_cal_href),
-            )
+        self.controller
+            .move_task(uid, new_cal_href)
+            .await
             .map_err(MobileError::from)?;
-        }
-        let store = self.store.lock().await;
+
+        let store = self.controller.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
         Ok(())
     }
 
     pub async fn delete_task(&self, uid: String) -> Result<(), MobileError> {
-        let mut store = self.store.lock().await;
-        let (task, href) = store
-            .delete_task(&uid)
-            .ok_or(MobileError::from("Task not found"))?;
-        drop(store);
-        let client_guard = self.client.lock().await;
-
-        let mut network_success = false;
-        if let Some(client) = client_guard.as_ref()
-            && client.delete_task(&task).await.is_ok()
-        {
-            network_success = true;
-        }
-
-        if !network_success && !href.starts_with("local://") {
-            crate::journal::Journal::push(self.ctx.as_ref(), crate::journal::Action::Delete(task))
-                .map_err(MobileError::from)?;
-        }
-        let store = self.store.lock().await;
+        self.controller
+            .delete_task(uid)
+            .await
+            .map_err(MobileError::from)?;
+        let store = self.controller.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
         Ok(())
     }
@@ -1325,6 +1205,7 @@ impl CfaitMobile {
         target_href: String,
     ) -> Result<String, MobileError> {
         let client = self
+            .controller
             .client
             .lock()
             .await
@@ -1358,7 +1239,11 @@ impl CfaitMobile {
         });
         LocalCalendarRegistry::save(self.ctx.as_ref(), &locals)
             .map_err(|e| MobileError::from(e.to_string()))?;
-        self.store.lock().await.insert(href.clone(), vec![]);
+        self.controller
+            .store
+            .lock()
+            .await
+            .insert(href.clone(), vec![]);
         Ok(href)
     }
 
@@ -1394,7 +1279,7 @@ impl CfaitMobile {
             if let Some(path) = LocalStorage::get_path_for_href(self.ctx.as_ref(), &href) {
                 let _ = std::fs::remove_file(path);
             }
-            let mut store = self.store.lock().await;
+            let mut store = self.controller.store.lock().await;
             store.remove(&href);
             self.rebuild_alarm_index_sync(&store);
             Ok(())
@@ -1432,7 +1317,7 @@ impl CfaitMobile {
             None
         })
         .await?;
-        let store = self.store.lock().await;
+        let store = self.controller.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
         Ok(())
     }
@@ -1479,7 +1364,7 @@ impl CfaitMobile {
         .await?;
         #[cfg(target_os = "android")]
         log::debug!("Rebuilding alarm index after dismiss");
-        let store = self.store.lock().await;
+        let store = self.controller.store.lock().await;
         self.rebuild_alarm_index_sync(&store);
         #[cfg(target_os = "android")]
         log::debug!("Dismiss successful");
@@ -1487,7 +1372,7 @@ impl CfaitMobile {
     }
 
     pub async fn get_next_global_alarm_time(&self) -> Option<i64> {
-        let store = self.store.lock().await;
+        let store = self.controller.store.lock().await;
         let mut earliest: Option<i64> = None;
         for map in store.calendars.values() {
             for task in map.values() {
@@ -1506,7 +1391,8 @@ impl CfaitMobile {
 
     pub async fn delete_all_calendar_events(&self) -> Result<u32, MobileError> {
         let all_tasks: Vec<_> = {
-            self.store
+            self.controller
+                .store
                 .lock()
                 .await
                 .calendars
@@ -1516,7 +1402,8 @@ impl CfaitMobile {
                 .collect()
         };
         let client = {
-            self.client
+            self.controller
+                .client
                 .lock()
                 .await
                 .as_ref()
@@ -1546,7 +1433,8 @@ impl CfaitMobile {
 
     pub async fn create_missing_calendar_events(&self) -> Result<u32, MobileError> {
         let all_tasks: Vec<_> = {
-            self.store
+            self.controller
+                .store
                 .lock()
                 .await
                 .calendars
@@ -1556,7 +1444,8 @@ impl CfaitMobile {
                 .collect()
         };
         let client = {
-            self.client
+            self.controller
+                .client
                 .lock()
                 .await
                 .as_ref()
@@ -1582,7 +1471,126 @@ impl CfaitMobile {
     }
 }
 
+// Separated impl block for internal non-exported methods
 impl CfaitMobile {
+    // Generic mutator helper
+    async fn apply_store_mutation<F>(&self, uid: String, mutator: F) -> Result<(), MobileError>
+    where
+        F: FnOnce(&mut TaskStore, &str) -> Option<Task>,
+    {
+        // Lock store, apply mutation to get updated task
+        let mut store = self.controller.store.lock().await;
+        let task_to_save = mutator(&mut store, &uid).ok_or(MobileError::from("Task not found"))?;
+        drop(store); // Unlock
+
+        // Send to Controller
+        self.controller
+            .update_task(task_to_save)
+            .await
+            .map_err(MobileError::from)?;
+
+        let store_locked = self.controller.store.lock().await;
+        self.rebuild_alarm_index_sync(&store_locked);
+
+        Ok(())
+    }
+
+    // ... [Read operations like get_view_tasks use self.controller.store.lock().await] ...
+    async fn apply_connection(&self, config: Config) -> Result<String, MobileError> {
+        let (client, cals, _, _, warning) =
+            RustyClient::connect_with_fallback(self.ctx.clone(), config, Some("Android"))
+                .await
+                .map_err(MobileError::from)?;
+        *self.controller.client.lock().await = Some(client.clone());
+        let fetch_result = client.get_all_tasks(&cals).await;
+        let mut store = self.controller.store.lock().await;
+        store.clear();
+        if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
+            for loc in locals {
+                match LocalStorage::load_for_href(self.ctx.as_ref(), &loc.href) {
+                    Ok(mut tasks) => {
+                        crate::journal::Journal::apply_to_tasks(
+                            self.ctx.as_ref(),
+                            &mut tasks,
+                            &loc.href,
+                        );
+                        store.insert(loc.href, tasks);
+                    }
+                    Err(e) => {
+                        #[cfg(target_os = "android")]
+                        log::error!("Failed to load {} - data corruption: {}", loc.href, e);
+                        #[cfg(not(target_os = "android"))]
+                        eprintln!("Failed to load {} - data corruption: {}", loc.href, e);
+                    }
+                }
+            }
+        }
+        match fetch_result {
+            Ok(results) => {
+                let mut fetched_hrefs = HashSet::new();
+                for (href, mut tasks) in results {
+                    crate::journal::Journal::apply_to_tasks(self.ctx.as_ref(), &mut tasks, &href);
+                    store.insert(href.clone(), tasks);
+                    fetched_hrefs.insert(href);
+                }
+                for cal in &cals {
+                    if !cal.href.starts_with("local://")
+                        && !fetched_hrefs.contains(&cal.href)
+                        && let Ok((mut cached, _)) = Cache::load(self.ctx.as_ref(), &cal.href)
+                    {
+                        crate::journal::Journal::apply_to_tasks(
+                            self.ctx.as_ref(),
+                            &mut cached,
+                            &cal.href,
+                        );
+                        store.insert(cal.href.clone(), cached);
+                    }
+                }
+            }
+            Err(e) => {
+                for cal in &cals {
+                    if !cal.href.starts_with("local://")
+                        && !store.calendars.contains_key(&cal.href)
+                        && let Ok((mut cached, _)) = Cache::load(self.ctx.as_ref(), &cal.href)
+                    {
+                        crate::journal::Journal::apply_to_tasks(
+                            self.ctx.as_ref(),
+                            &mut cached,
+                            &cal.href,
+                        );
+                        store.insert(cal.href.clone(), cached);
+                    }
+                }
+                self.rebuild_alarm_index_sync(&store);
+                return Err(MobileError::from(e));
+            }
+        }
+        self.rebuild_alarm_index_sync(&store);
+        Ok(warning.unwrap_or_else(|| "Connected".to_string()))
+    }
+
+    fn rebuild_alarm_index_sync(&self, store: &TaskStore) {
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let index = AlarmIndex::rebuild_from_tasks(
+            &store.calendars,
+            config.auto_reminders,
+            &config.default_reminder_time,
+        );
+        match index.save(self.ctx.as_ref()) {
+            Ok(_) => {
+                #[cfg(target_os = "android")]
+                log::debug!("Alarm index rebuilt with {} alarms", index.len());
+                *self.alarm_index_cache.blocking_lock() = Some(index);
+            }
+            Err(e) => {
+                #[cfg(target_os = "android")]
+                log::warn!("Failed to save alarm index: {}", e);
+                #[cfg(not(target_os = "android"))]
+                let _ = e;
+            }
+        }
+    }
+
     // Internal implementation not exported via UniFFI. Platform-specific behavior is gated here.
     fn create_debug_export_internal(&self) -> Result<String, MobileError> {
         #[cfg(target_os = "android")]
@@ -1655,148 +1663,5 @@ impl CfaitMobile {
                 "Debug export is only available on Android",
             ))
         }
-    }
-
-    fn rebuild_alarm_index_sync(&self, store: &TaskStore) {
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let index = AlarmIndex::rebuild_from_tasks(
-            &store.calendars,
-            config.auto_reminders,
-            &config.default_reminder_time,
-        );
-        match index.save(self.ctx.as_ref()) {
-            Ok(_) => {
-                #[cfg(target_os = "android")]
-                log::debug!("Alarm index rebuilt with {} alarms", index.len());
-                *self.alarm_index_cache.blocking_lock() = Some(index);
-            }
-            Err(e) => {
-                #[cfg(target_os = "android")]
-                log::warn!("Failed to save alarm index: {}", e);
-                #[cfg(not(target_os = "android"))]
-                let _ = e;
-            }
-        }
-    }
-
-    async fn apply_connection(&self, config: Config) -> Result<String, MobileError> {
-        let (client, cals, _, _, warning) =
-            RustyClient::connect_with_fallback(self.ctx.clone(), config, Some("Android"))
-                .await
-                .map_err(MobileError::from)?;
-        *self.client.lock().await = Some(client.clone());
-        let fetch_result = client.get_all_tasks(&cals).await;
-        let mut store = self.store.lock().await;
-        store.clear();
-        if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
-            for loc in locals {
-                match LocalStorage::load_for_href(self.ctx.as_ref(), &loc.href) {
-                    Ok(mut tasks) => {
-                        crate::journal::Journal::apply_to_tasks(
-                            self.ctx.as_ref(),
-                            &mut tasks,
-                            &loc.href,
-                        );
-                        store.insert(loc.href, tasks);
-                    }
-                    Err(e) => {
-                        #[cfg(target_os = "android")]
-                        log::error!("Failed to load {} - data corruption: {}", loc.href, e);
-                        #[cfg(not(target_os = "android"))]
-                        eprintln!("Failed to load {} - data corruption: {}", loc.href, e);
-                    }
-                }
-            }
-        }
-        match fetch_result {
-            Ok(results) => {
-                let mut fetched_hrefs = HashSet::new();
-                for (href, mut tasks) in results {
-                    crate::journal::Journal::apply_to_tasks(self.ctx.as_ref(), &mut tasks, &href);
-                    store.insert(href.clone(), tasks);
-                    fetched_hrefs.insert(href);
-                }
-                for cal in &cals {
-                    if !cal.href.starts_with("local://")
-                        && !fetched_hrefs.contains(&cal.href)
-                        && let Ok((mut cached, _)) = Cache::load(self.ctx.as_ref(), &cal.href)
-                    {
-                        crate::journal::Journal::apply_to_tasks(
-                            self.ctx.as_ref(),
-                            &mut cached,
-                            &cal.href,
-                        );
-                        store.insert(cal.href.clone(), cached);
-                    }
-                }
-            }
-            Err(e) => {
-                for cal in &cals {
-                    if !cal.href.starts_with("local://")
-                        && !store.calendars.contains_key(&cal.href)
-                        && let Ok((mut cached, _)) = Cache::load(self.ctx.as_ref(), &cal.href)
-                    {
-                        crate::journal::Journal::apply_to_tasks(
-                            self.ctx.as_ref(),
-                            &mut cached,
-                            &cal.href,
-                        );
-                        store.insert(cal.href.clone(), cached);
-                    }
-                }
-                self.rebuild_alarm_index_sync(&store);
-                return Err(MobileError::from(e));
-            }
-        }
-        self.rebuild_alarm_index_sync(&store);
-        Ok(warning.unwrap_or_else(|| "Connected".to_string()))
-    }
-
-    async fn apply_store_mutation<F>(&self, uid: String, mutator: F) -> Result<(), MobileError>
-    where
-        F: FnOnce(&mut TaskStore, &str) -> Option<Task>,
-    {
-        let mut store = self.store.lock().await;
-        let mut task_for_net =
-            mutator(&mut store, &uid).ok_or(MobileError::from("Mutation failed"))?;
-        drop(store);
-        let client_guard = self.client.lock().await;
-        let mut network_success = false;
-        if let Some(client) = &*client_guard
-            && client.update_task(&mut task_for_net).await.is_ok()
-        {
-            if task_for_net.etag.is_empty() {
-                task_for_net.etag = "pending_refresh".to_string();
-            }
-            self.store
-                .lock()
-                .await
-                .update_or_add_task(task_for_net.clone());
-            network_success = true;
-            #[cfg(target_os = "android")]
-            log::debug!(
-                "Task {} updated on network, placeholder etag assigned",
-                task_for_net.uid
-            );
-        }
-        if !network_success {
-            if task_for_net.calendar_href.starts_with("local://") {
-                let href = task_for_net.calendar_href.clone();
-                let mut local =
-                    LocalStorage::load_for_href(self.ctx.as_ref(), &href).unwrap_or_default();
-                if let Some(idx) = local.iter().position(|t| t.uid == task_for_net.uid) {
-                    local[idx] = task_for_net;
-                    LocalStorage::save_for_href(self.ctx.as_ref(), &href, &local)
-                        .map_err(MobileError::from)?;
-                }
-            } else {
-                crate::journal::Journal::push(
-                    self.ctx.as_ref(),
-                    crate::journal::Action::Update(task_for_net),
-                )
-                .map_err(MobileError::from)?;
-            }
-        }
-        Ok(())
     }
 }
