@@ -8,7 +8,7 @@ use crate::gui::state::GuiApp;
 use crate::gui::view::focusable::{clear_focus_bounds, get_all_focus_bounds, get_focus_bounds};
 use crate::store::FilterOptions;
 use crate::system::SystemEvent;
-use chrono::{Duration, Utc};
+
 use iced::Task;
 use iced::widget::operation;
 use iced::widget::scrollable::RelativeOffset;
@@ -34,13 +34,9 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     // This prevents stale layout data from breaking scroll calculations.
     clear_focus_bounds();
 
-    let cutoff_date = if let Some(months) = app.sort_cutoff_months {
-        let now = Utc::now();
-        let days = months as i64 * 30;
-        Some(now + Duration::days(days))
-    } else {
-        None
-    };
+    let cutoff_date = app
+        .sort_cutoff_months
+        .map(|m| chrono::Utc::now() + chrono::Duration::days(m as i64 * 30));
 
     app.tasks = app.store.filter(FilterOptions {
         active_cal_href: None, // This is now handled by hidden_calendars
@@ -109,33 +105,35 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     }
 }
 
-pub fn save_config(app: &GuiApp) {
-    let _ = Config {
-        url: app.ob_url.clone(),
-        username: app.ob_user.clone(),
-        password: app.ob_pass.clone(),
-        default_calendar: app.ob_default_cal.clone(),
-        hide_completed: app.hide_completed,
-        hide_fully_completed_tags: app.hide_fully_completed_tags,
-        allow_insecure_certs: app.ob_insecure,
-        hidden_calendars: app.hidden_calendars.iter().cloned().collect(),
-        disabled_calendars: app.disabled_calendars.iter().cloned().collect(),
-        tag_aliases: app.tag_aliases.clone(),
-        sort_cutoff_months: app.sort_cutoff_months,
-        theme: app.current_theme,
-        urgent_days_horizon: app.urgent_days,
-        urgent_priority_threshold: app.urgent_prio,
-        default_priority: app.default_priority,
-        start_grace_period_days: app.start_grace_period_days,
-        auto_reminders: app.auto_reminders,
-        default_reminder_time: app.default_reminder_time.clone(),
-        snooze_short_mins: app.snooze_short_mins,
-        snooze_long_mins: app.snooze_long_mins,
-        create_events_for_tasks: app.create_events_for_tasks,
-        delete_events_on_completion: app.delete_events_on_completion,
-        auto_refresh_interval_mins: app.auto_refresh_interval_mins,
-    }
-    .save(app.ctx.as_ref());
+pub fn save_config(app: &mut GuiApp) -> Config {
+    let mut cfg = Config::load(app.ctx.as_ref()).unwrap_or_default();
+
+    cfg.url = app.ob_url.clone();
+    cfg.username = app.ob_user.clone();
+    cfg.password = app.ob_pass.clone();
+    cfg.default_calendar = app.ob_default_cal.clone();
+    cfg.allow_insecure_certs = app.ob_insecure;
+    cfg.hidden_calendars = app.hidden_calendars.iter().cloned().collect();
+    cfg.disabled_calendars = app.disabled_calendars.iter().cloned().collect();
+    cfg.hide_completed = app.hide_completed;
+    cfg.hide_fully_completed_tags = app.hide_fully_completed_tags;
+    cfg.tag_aliases = app.tag_aliases.clone();
+    cfg.sort_cutoff_months = app.sort_cutoff_months;
+    cfg.theme = app.current_theme;
+    cfg.urgent_days_horizon = app.urgent_days;
+    cfg.urgent_priority_threshold = app.urgent_prio;
+    cfg.default_priority = app.default_priority;
+    cfg.start_grace_period_days = app.start_grace_period_days;
+    cfg.auto_reminders = app.auto_reminders;
+    cfg.default_reminder_time = app.default_reminder_time.clone();
+    cfg.snooze_short_mins = app.snooze_short_mins;
+    cfg.snooze_long_mins = app.snooze_long_mins;
+    cfg.create_events_for_tasks = app.create_events_for_tasks;
+    cfg.delete_events_on_completion = app.delete_events_on_completion;
+    cfg.auto_refresh_interval_mins = app.auto_refresh_interval_mins;
+
+    let _ = cfg.save(app.ctx.as_ref());
+    cfg
 }
 
 pub fn apply_alias_retroactively(

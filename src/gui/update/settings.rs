@@ -1,7 +1,7 @@
 // File: ./src/gui/update/settings.rs
 // Handles settings-related messages and updates in the GUI.
 use crate::cache::Cache;
-use crate::config::Config;
+
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
@@ -155,52 +155,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.sort_cutoff_months = Some(n);
             }
 
-            let mut config_to_save = Config::load(app.ctx.as_ref()).unwrap_or_else(|_| Config {
-                url: String::new(),
-                username: String::new(),
-                password: String::new(),
-                default_calendar: None,
-                allow_insecure_certs: false,
-                hidden_calendars: Vec::new(),
-                disabled_calendars: Vec::new(),
-                hide_completed: app.hide_completed,
-                hide_fully_completed_tags: app.hide_fully_completed_tags,
-                tag_aliases: app.tag_aliases.clone(),
-                sort_cutoff_months: Some(2),
-                theme: app.current_theme,
-                urgent_days_horizon: app.urgent_days,
-                urgent_priority_threshold: app.urgent_prio,
-                default_priority: app.default_priority,
-                start_grace_period_days: app.start_grace_period_days,
-                // NEW FIELDS
-                auto_reminders: app.auto_reminders,
-                default_reminder_time: app.default_reminder_time.clone(),
-                snooze_short_mins: app.snooze_short_mins,
-                snooze_long_mins: app.snooze_long_mins,
-                create_events_for_tasks: app.create_events_for_tasks,
-                delete_events_on_completion: app.delete_events_on_completion,
-                auto_refresh_interval_mins: app.auto_refresh_interval_mins,
-            });
-
-            config_to_save.url = app.ob_url.clone();
-            config_to_save.username = app.ob_user.clone();
-            config_to_save.password = app.ob_pass.clone();
-            config_to_save.default_calendar = app.ob_default_cal.clone();
-            config_to_save.allow_insecure_certs = app.ob_insecure;
-            config_to_save.hidden_calendars = app.hidden_calendars.iter().cloned().collect();
-            config_to_save.disabled_calendars = app.disabled_calendars.iter().cloned().collect();
-            config_to_save.hide_completed = app.hide_completed;
-            config_to_save.hide_fully_completed_tags = app.hide_fully_completed_tags;
-            config_to_save.tag_aliases = app.tag_aliases.clone();
-            config_to_save.sort_cutoff_months = app.sort_cutoff_months;
-            config_to_save.theme = app.current_theme;
-            config_to_save.auto_reminders = app.auto_reminders;
-            config_to_save.default_reminder_time = app.default_reminder_time.clone();
-            config_to_save.snooze_short_mins = app.snooze_short_mins;
-            config_to_save.snooze_long_mins = app.snooze_long_mins;
-            config_to_save.create_events_for_tasks = app.create_events_for_tasks;
-            config_to_save.delete_events_on_completion = app.delete_events_on_completion;
-            config_to_save.auto_refresh_interval_mins = app.auto_refresh_interval_mins;
+            let config_to_save = save_config(app);
 
             let _ = config_to_save.save(app.ctx.as_ref());
 
@@ -213,7 +168,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             )
         }
         Message::OpenSettings => {
-            if let Ok(cfg) = Config::load(app.ctx.as_ref()) {
+            if let Ok(cfg) = crate::config::Config::load(app.ctx.as_ref()) {
                 app.ob_url = cfg.url;
                 app.ob_user = cfg.username;
                 app.ob_pass = cfg.password;
@@ -248,33 +203,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_user.clear();
             app.ob_pass.clear();
 
-            let config_to_save = Config {
-                url: String::new(),
-                username: String::new(),
-                password: String::new(),
-                default_calendar: None,
-                allow_insecure_certs: false,
-                hidden_calendars: Vec::new(),
-                disabled_calendars: Vec::new(),
-                hide_completed: app.hide_completed,
-                hide_fully_completed_tags: app.hide_fully_completed_tags,
-                tag_aliases: app.tag_aliases.clone(),
-                sort_cutoff_months: app.sort_cutoff_months,
-                theme: app.current_theme,
-                urgent_days_horizon: app.urgent_days,
-                urgent_priority_threshold: app.urgent_prio,
-                default_priority: app.default_priority,
-                start_grace_period_days: app.start_grace_period_days,
-
-                // NEW FIELDS
-                auto_reminders: app.auto_reminders,
-                default_reminder_time: app.default_reminder_time.clone(),
-                snooze_short_mins: app.snooze_short_mins,
-                snooze_long_mins: app.snooze_long_mins,
-                create_events_for_tasks: app.create_events_for_tasks,
-                delete_events_on_completion: app.delete_events_on_completion,
-                auto_refresh_interval_mins: app.auto_refresh_interval_mins,
-            };
+            let config_to_save = save_config(app);
 
             let _ = config_to_save.save(app.ctx.as_ref());
 

@@ -4,9 +4,13 @@ use std::path::PathBuf;
 
 fn main() -> iced::Result {
     let args: Vec<String> = std::env::args().collect();
+    let binary_name = args
+        .first()
+        .cloned()
+        .unwrap_or_else(|| "cfait-gui".to_string());
 
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
-        print_help();
+        cfait::cli::print_help(&binary_name);
         return Ok(());
     }
 
@@ -39,23 +43,4 @@ fn main() -> iced::Result {
     }
 
     cfait::gui::run_with_ics_file(ics_file_path, override_root, force_ssd)
-}
-
-fn print_help() {
-    println!(
-        "Cfait v{} - A powerful, fast and elegant CalDAV task manager (GUI)",
-        env!("CARGO_PKG_VERSION")
-    );
-    println!();
-    println!("USAGE:");
-    println!("    cfait-gui [--root <path>] [--force-ssd] [path/to/file.ics]");
-    println!();
-    println!("OPTIONS:");
-    println!("    <path/to/file.ics>    Open an ICS file on startup to import it.");
-    println!("    -r, --root <path>     Use a different directory for config and data.");
-    println!("    --force-ssd           Force server-side (native) window decorations.");
-    println!("    -h, --help            Show this help message.");
-    println!();
-    println!("This will open the graphical interface. For detailed smart input syntax and other");
-    println!("command-line operations (like import/export), see 'cfait --help'.");
 }

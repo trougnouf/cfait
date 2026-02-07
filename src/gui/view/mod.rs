@@ -6,7 +6,6 @@ pub mod settings;
 pub mod sidebar;
 pub mod syntax;
 pub mod task_row; // Added module export
-
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp, ResizeDirection, SidebarMode};
@@ -14,7 +13,6 @@ use crate::gui::view::help::view_help;
 use crate::gui::view::settings::view_settings;
 use crate::gui::view::sidebar::{view_sidebar_calendars, view_sidebar_categories};
 use crate::gui::view::task_row::view_task_row;
-
 use iced::alignment::Horizontal;
 // --- Import for resize interaction ---
 use iced::mouse;

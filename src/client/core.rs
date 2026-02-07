@@ -1,13 +1,29 @@
 // File: ./src/client/core.rs
-// Core logic for CalDAV communication, sync, and task management.
+/*
+File: ./src/client/core.rs
+
+Core networking and high-level CalDAV client APIs.
+
+This file focuses on:
+- Constructing the HTTP/CalDAV client
+- High-level operations (connect_with_fallback, discover, fetch tasks,
+  create/update/delete wrappers that journal + trigger sync)
+- Utilities used across the client
+
+Journal processing and low-level sync step implementations (handle_create,
+handle_update, handle_delete, handle_move, sync_journal, conflict resolution,
+etc.) have been moved into `src/client/sync.rs` to reduce duplication and keep
+responsibilities clear.
+*/
+
 use crate::cache::Cache;
 
 use crate::client::auth::DynamicAuthLayer;
 use crate::client::cert::NoVerifier;
+use crate::client::middleware::{UserAgentLayer, UserAgentService};
 use crate::config::Config;
 use crate::context::AppContext;
 use crate::journal::{Action, Journal};
-use crate::model::merge::three_way_merge;
 use crate::model::{CalendarListEntry, IcsAdapter, Task, TaskStatus};
 use crate::storage::{LocalCalendarRegistry, LocalStorage};
 
@@ -18,21 +34,20 @@ use libdav::{CalDavClient, PropertyName, names};
 use roxmltree::Document;
 
 use futures::stream::{self, StreamExt};
-use http::{Request, StatusCode, Uri};
+use http::Uri;
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use std::collections::{HashMap, HashSet};
-use std::mem;
 use std::sync::Arc;
-use std::task::{Context, Poll};
-use tower_layer::Layer;
-use tower_service::Service;
 use uuid::Uuid;
 
 #[cfg(not(target_os = "android"))]
 use rustls_native_certs;
 
+use tower_layer::Layer;
+
+// Re-exports used elsewhere in the crate
 pub const GET_CTAG: PropertyName = PropertyName::new("http://calendarserver.org/ns/", "getctag");
 pub const APPLE_COLOR: PropertyName =
     PropertyName::new("http://apple.com/ns/ical/", "calendar-color");
@@ -42,7 +57,7 @@ use crate::client::auth::DynamicAuthService;
 
 // Concrete HttpsClient type used throughout the crate. This is a FollowRedirect
 // wrapper around the DynamicAuthService -> UserAgentService -> hyper Client.
-type HttpsClient = FollowRedirectService<
+pub(crate) type HttpsClient = FollowRedirectService<
     DynamicAuthService<
         UserAgentService<
             Client<
@@ -53,54 +68,33 @@ type HttpsClient = FollowRedirectService<
     >,
 >;
 
-#[cfg(test)]
-use std::sync::{Mutex, OnceLock};
+// -----------------------------
+// Test hooks (test-only)
+// These are provided so unit/integration tests can inject deterministic
+// behavior into network/fetch paths. Kept in this module so tests that refer
+// to `cfait::client::core::test_hooks::...` keep working.
+#[cfg(any(test, feature = "test_hooks"))]
+pub mod test_hooks {
+    use super::Task;
+    use crate::journal::Action;
+    use std::sync::{Mutex, OnceLock};
 
-#[cfg(test)]
-type FetchRemoteHook = Box<dyn Fn(&str) -> Option<Task> + Send + Sync + 'static>;
-#[cfg(test)]
-type ForceSyncErrorHook = Box<dyn Fn(&Action) -> Option<String> + Send + Sync + 'static>;
+    pub type FetchRemoteHook = Box<dyn Fn(&str) -> Option<Task> + Send + Sync + 'static>;
+    pub type ForceSyncErrorHook = Box<dyn Fn(&Action) -> Option<String> + Send + Sync + 'static>;
 
-/// Test hook to simulate fetch_remote_task responses in unit tests.
-#[cfg(test)]
-static TEST_FETCH_REMOTE_HOOK: OnceLock<Mutex<Option<FetchRemoteHook>>> = OnceLock::new();
+    /// Test hook to simulate fetch_remote_task responses in unit tests.
+    pub static TEST_FETCH_REMOTE_HOOK: OnceLock<Mutex<Option<FetchRemoteHook>>> = OnceLock::new();
 
-/// Test hook to force a synthetic sync error for a given Action during tests.
-#[cfg(test)]
-static TEST_FORCE_SYNC_ERROR: OnceLock<Mutex<Option<ForceSyncErrorHook>>> = OnceLock::new();
-
-// --- Internal Sync Outcome Types ---
-enum StepOutcome {
-    Success {
-        etag: Option<String>,
-        href: Option<String>,
-        refresh_path: Option<String>,
-    },
-    RetryWith(Box<Action>),
-    Discard,
-    RecoveryNeeded(String),
+    /// Test hook to force a synthetic sync error for a given Action during tests.
+    pub static TEST_FORCE_SYNC_ERROR: OnceLock<Mutex<Option<ForceSyncErrorHook>>> = OnceLock::new();
 }
 
-struct StepResult {
-    outcome: StepOutcome,
-    warnings: Vec<String>,
-}
+#[cfg(any(test, feature = "test_hooks"))]
+pub use test_hooks::{TEST_FETCH_REMOTE_HOOK, TEST_FORCE_SYNC_ERROR};
 
-impl StepResult {
-    fn new(outcome: StepOutcome) -> Self {
-        Self {
-            outcome,
-            warnings: Vec::new(),
-        }
-    }
+// -----------------------------
 
-    fn with_warning(mut self, w: String) -> Self {
-        self.warnings.push(w);
-        self
-    }
-}
-
-fn strip_host(href: &str) -> String {
+pub(crate) fn strip_host(href: &str) -> String {
     if let Ok(uri) = href.parse::<Uri>()
         && (uri.scheme().is_some() || uri.authority().is_some())
     {
@@ -112,68 +106,9 @@ fn strip_host(href: &str) -> String {
     href.to_string()
 }
 
-fn actions_match_identity(a: &Action, b: &Action) -> bool {
-    match (a, b) {
-        (Action::Create(t1), Action::Create(t2)) => t1.uid == t2.uid,
-        (Action::Update(t1), Action::Update(t2)) => t1.uid == t2.uid && t1.sequence == t2.sequence,
-        (Action::Delete(t1), Action::Delete(t2)) => t1.uid == t2.uid,
-        (Action::Move(t1, d1), Action::Move(t2, d2)) => t1.uid == t2.uid && d1 == d2,
-        _ => false,
-    }
-}
-
-// --- User Agent Middleware ---
-
-#[derive(Clone, Debug)]
-pub struct UserAgentLayer {
-    pub user_agent: String,
-}
-
-impl UserAgentLayer {
-    pub fn new(user_agent: String) -> Self {
-        Self { user_agent }
-    }
-}
-
-impl<S> Layer<S> for UserAgentLayer {
-    type Service = UserAgentService<S>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        UserAgentService {
-            inner,
-            user_agent: self.user_agent.clone(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct UserAgentService<S> {
-    inner: S,
-    user_agent: String,
-}
-
-impl<S, ReqBody> Service<Request<ReqBody>> for UserAgentService<S>
-where
-    S: Service<Request<ReqBody>>,
-{
-    type Response = S::Response;
-    type Error = S::Error;
-    type Future = S::Future;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
-        if let Ok(val) = http::HeaderValue::from_str(&self.user_agent) {
-            req.headers_mut().insert(http::header::USER_AGENT, val);
-        }
-        self.inner.call(req)
-    }
-}
-
 // -----------------------------
-
+// High-level RustyClient - network construction and high-level APIs.
+// Lower-level sync steps are implemented in src/client/sync.rs (impl RustyClient there).
 #[derive(Clone, Debug)]
 pub struct RustyClient {
     pub client: Option<CalDavClient<HttpsClient>>,
@@ -181,6 +116,8 @@ pub struct RustyClient {
 }
 
 impl RustyClient {
+    /// Construct a new client. If `url` is empty, this returns an "offline" client
+    /// (client == None) which is used for local-only operations.
     pub fn new(
         ctx: Arc<dyn AppContext>,
         url: &str,
@@ -195,12 +132,12 @@ impl RustyClient {
                 ctx: ctx.clone(),
             });
         }
+
         let uri: Uri = url
             .parse()
             .map_err(|e: http::uri::InvalidUri| e.to_string())?;
 
         let tls_config_builder = rustls::ClientConfig::builder();
-
         let tls_config = if insecure {
             tls_config_builder
                 .dangerous()
@@ -238,38 +175,40 @@ impl RustyClient {
 
         let http_client = Client::builder(TokioExecutor::new()).build(https_connector);
 
-        // Construct User-Agent string (optionally include client_type)
+        // Build a deterministic User-Agent string
         let version = env!("CARGO_PKG_VERSION");
         let ua_string = if let Some(ctype) = client_type {
             format!("Cfait/{} ({})", version, ctype)
         } else {
             format!("Cfait/{}", version)
         };
-        let ua_client = UserAgentLayer::new(ua_string).layer(http_client);
 
+        let ua_client = UserAgentLayer::new(ua_string).layer(http_client);
         let auth_client =
             DynamicAuthLayer::new(user.to_string(), pass.to_string()).layer(ua_client);
-
-        // Use the default/standard follow-redirect policy provided by tower-http.
-        // `FollowRedirect::new` uses the library's `Standard` policy internally.
         let redirect_client = FollowRedirectService::new(auth_client);
 
         let webdav = WebDavClient::new(uri, redirect_client.clone());
         let caldav = CalDavClient::new(webdav);
+
         Ok(Self {
             client: Some(caldav),
             ctx,
         })
     }
 
+    /// Attempts to automatically discover the primary calendar for the user.
+    /// Returns a path string on success.
     pub async fn discover_calendar(&self) -> Result<String, String> {
         if let Some(client) = &self.client {
             let base_path = client.base_url().path().to_string();
+            // Fast heuristic: if any resource in base path ends with .ics treat it as calendar root
             if let Ok(response) = client.request(ListResources::new(&base_path)).await
                 && response.resources.iter().any(|r| r.href.ends_with(".ics"))
             {
                 return Ok(base_path);
             }
+            // Fallback to principal/home-set discovery
             if let Ok(Some(principal)) = client.find_current_user_principal().await
                 && let Ok(response) = client.request(FindCalendarHomeSet::new(&principal)).await
                 && let Some(home_url) = response.home_sets.first()
@@ -284,6 +223,9 @@ impl RustyClient {
         }
     }
 
+    /// The primary entry point for UIs to connect.
+    /// This function handles connection, discovery, fallback to cache on error,
+    /// and initial data loading.
     pub async fn connect_with_fallback(
         ctx: Arc<dyn AppContext>,
         config: Config,
@@ -298,11 +240,11 @@ impl RustyClient {
         ),
         String,
     > {
-        // Clone the config here so we can modify and save it later if needed.
+        // Clone config so we can update/save if we detect an auto-corrected root.
         let mut config_for_saving = config.clone();
 
         let client = Self::new(
-            ctx,
+            ctx.clone(),
             &config.url,
             &config.username,
             &config.password,
@@ -311,13 +253,15 @@ impl RustyClient {
         )
         .map_err(|e| e.to_string())?;
 
+        // Ensure any queued actions are attempted as we connect.
+        // The sync implementation lives in src/client/sync.rs as `impl RustyClient`.
+        // Call it if available; ignore errors here so connect remains resilient.
         let _ = client.sync_journal().await;
 
-        // Destructure the new tuple return type: ((calendars, corrected_url), warning)
+        // Attempt to fetch calendars and optionally auto-correct URL/prefixes
         let ((calendars, corrected_url_opt), warning) = match client.get_calendars().await {
             Ok((c, corrected_url)) => {
                 if c.is_empty() {
-                    // CRUCIAL: Add helpful hint for empty calendar list.
                     let helpful_msg =
                         "Connection successful, but no Task calendars found. Check your URL."
                             .to_string();
@@ -330,15 +274,12 @@ impl RustyClient {
             Err(e) => {
                 let error_msg = e.to_string();
                 let mut specific_warning = None;
-
                 if error_msg.contains("InvalidCertificate") {
                     return Err(format!(
                         "Connection failed: Invalid TLS Certificate. {}",
                         error_msg
                     ));
                 }
-
-                // Check for common authentication failures indicated by libdav/HTTP status codes
                 if error_msg.contains("Unauthorized")
                     || error_msg.contains("Forbidden")
                     || error_msg.contains("401")
@@ -356,11 +297,9 @@ impl RustyClient {
                         Some("Connection timed out. Check network or server address.".to_string());
                 }
 
-                // Fallback: load cache and set general network error warning
                 let cals = Cache::load_calendars(client.ctx.as_ref()).unwrap_or_default();
 
                 let final_warning = specific_warning.unwrap_or_else(|| {
-                    // Provide a general message including the original error detail for better context
                     format!("Offline mode (Network or server error: {}).", error_msg)
                 });
 
@@ -368,13 +307,12 @@ impl RustyClient {
             }
         };
 
-        // ** AUTO-SAVE CORRECTED URL **
+        // If discovery produced a corrected root URL, persist it asynchronously.
         if let Some(corrected_url) = corrected_url_opt {
             config_for_saving.url = corrected_url;
             let ctx_clone = client.ctx.clone();
             tokio::spawn(async move {
                 if let Err(e) = config_for_saving.save(ctx_clone.as_ref()) {
-                    // Log failure to save, but don't block the user.
                     #[cfg(not(target_os = "android"))]
                     eprintln!("[Warning] Failed to auto-save corrected URL: {}", e);
                     #[cfg(target_os = "android")]
@@ -383,7 +321,8 @@ impl RustyClient {
             });
         }
 
-        let mut active_href = None;
+        // Determine active/default calendar href (if configured)
+        let mut active_href: Option<String> = None;
         if let Some(def_cal) = &config.default_calendar
             && let Some(found) = calendars
                 .iter()
@@ -399,6 +338,7 @@ impl RustyClient {
             active_href = Some(href);
         }
 
+        // If no warning, fetch tasks for the active calendar (best-effort)
         let tasks = if warning.is_none() {
             if let Some(ref h) = active_href {
                 client.get_tasks(h).await.unwrap_or_default()
@@ -406,6 +346,7 @@ impl RustyClient {
                 vec![]
             }
         } else if let Some(ref h) = active_href {
+            // Fallback: load tasks from cache + apply journal if present
             let (mut t, _) = Cache::load(client.ctx.as_ref(), h).unwrap_or((vec![], None));
             Journal::apply_to_tasks(client.ctx.as_ref(), &mut t, h);
             t
@@ -416,7 +357,7 @@ impl RustyClient {
         Ok((client, calendars, tasks, active_href, warning))
     }
 
-    // Helper to encapsulate the core discovery logic
+    // Helper to encapsulate the core discovery logic (used by get_calendars)
     async fn perform_calendar_discovery(
         &self,
         _discovery_path: &str,
@@ -461,13 +402,11 @@ impl RustyClient {
                 .ok()
                 .and_then(|r| r.value);
 
-            // Query supported components
             let comps = self
                 .get_supported_components(&col.href)
                 .await
                 .unwrap_or_default();
 
-            // Only include calendars that explicitly advertise VTODO support.
             if comps.iter().any(|c| c.eq_ignore_ascii_case("VTODO")) {
                 calendars.push(CalendarListEntry {
                     name,
@@ -479,60 +418,42 @@ impl RustyClient {
         Ok(calendars)
     }
 
-    // NEW SIGNATURE: returns Option<String> for corrected URL if applicable
+    /// Get calendars (remote + local), with optional auto-corrected URL returned.
     pub async fn get_calendars(&self) -> Result<(Vec<CalendarListEntry>, Option<String>), String> {
-        if let Some(client) = &self.client {
-            let user_configured_path = client.base_url().path();
+        if let Some(_client) = &self.client {
+            // attempt discovery at configured path
+            let user_configured_path = self.client.as_ref().unwrap().base_url().path();
             let mut corrected_url = None;
 
-            // 1. Attempt discovery using the user's configured URL/path first
             let mut calendars = self
                 .perform_calendar_discovery(user_configured_path)
                 .await
                 .map_err(|e| format!("{:?}", e))?;
 
-            // 2. Fallback check: If initial discovery yielded 0 results,
-            //    and the configured path was *not* the server root, try at the server root.
-            if calendars.is_empty() && user_configured_path != "/" {
-                match self.perform_calendar_discovery("/").await {
-                    Ok(fallback_cals) => {
-                        // If the fallback found calendars, use them.
-                        if !fallback_cals.is_empty() {
-                            calendars = fallback_cals;
-
-                            // *** AUTO-CORRECTION: Construct the corrected root URL to save. ***
-                            let base_uri = client.base_url();
-                            if let (Some(scheme), Some(authority)) =
-                                (base_uri.scheme(), base_uri.authority())
-                            {
-                                corrected_url = Some(format!("{}://{}", scheme, authority));
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        // Log fallback error but continue with what we have
-                        #[cfg(not(target_os = "android"))]
-                        eprintln!("Warning: Root-path discovery failed: {:?}", e);
-                        #[cfg(target_os = "android")]
-                        log::warn!("Warning: Root-path discovery failed: {:?}", e);
-                    }
+            // Fallback: if nothing found, try server root and offer corrected root URL
+            if calendars.is_empty()
+                && user_configured_path != "/"
+                && let Ok(fallback) = self.perform_calendar_discovery("/").await
+                && !fallback.is_empty()
+            {
+                calendars = fallback;
+                let base_uri = self.client.as_ref().unwrap().base_url();
+                if let (Some(scheme), Some(authority)) = (base_uri.scheme(), base_uri.authority()) {
+                    corrected_url = Some(format!("{}://{}", scheme, authority));
                 }
             }
 
-            // ... [Existing Local Calendar Registry Loading Logic (retained)] ...
+            // Include local calendars; but only show recovery if it contains tasks
             if let Ok(local_cals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
                 for local_cal in local_cals {
-                    // If this is the recovery calendar, check if it's empty
                     if local_cal.href == "local://recovery" {
                         if let Ok(tasks) =
                             LocalStorage::load_for_href(self.ctx.as_ref(), &local_cal.href)
                             && !tasks.is_empty()
                         {
-                            // Only add it to the visible list if it has tasks
                             calendars.push(local_cal);
                         }
                     } else {
-                        // For all other local calendars, add them unconditionally
                         calendars.push(local_cal);
                     }
                 }
@@ -540,11 +461,10 @@ impl RustyClient {
 
             Ok((calendars, corrected_url))
         } else {
-            // --- OFFLINE MODE: Return tuple matching new signature ---
+            // Offline mode: return cached + local calendars
             let mut calendars = Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
             if let Ok(local_cals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
                 for local_cal in local_cals {
-                    // Prevent duplicates if already in cache (unlikely but safe)
                     if calendars.iter().any(|c| c.href == local_cal.href) {
                         continue;
                     }
@@ -568,19 +488,20 @@ impl RustyClient {
         &self,
         calendar_href: &str,
     ) -> Result<Vec<String>, String> {
-        if let Some(client) = &self.client {
-            // 1. Send a PROPFIND specifically for the supported-calendar-component-set
+        if let Some(_client) = &self.client {
             let req = Propfind::new(calendar_href)
                 .with_properties(&[&names::SUPPORTED_CALENDAR_COMPONENT_SET])
                 .with_depth(libdav::Depth::Zero);
-            let response = client.request(req).await.map_err(|e| e.to_string())?;
-
-            // 2. Parse the raw XML response
+            let response = self
+                .client
+                .as_ref()
+                .unwrap()
+                .request(req)
+                .await
+                .map_err(|e| e.to_string())?;
             let xml_str = std::str::from_utf8(&response.body).map_err(|e| e.to_string())?;
             let doc = Document::parse(xml_str).map_err(|e| e.to_string())?;
             let mut components = Vec::new();
-
-            // 3. Traverse XML to find <comp name="..."> elements
             for node in doc.descendants() {
                 if node.tag_name().name().eq_ignore_ascii_case("comp")
                     && let Some(name) = node.attribute("name")
@@ -594,35 +515,28 @@ impl RustyClient {
         }
     }
 
-    /// Helper to sync the companion event for a task.
-    /// Creates/Updates the event when task has dates, or deletes it when task is done/has no dates.
-    /// Returns true if an event was created/updated or deleted, false if no action was taken.
-    async fn sync_companion_event(
+    /// Sync companion event for a single task (creates/updates/deletes calendar event
+    /// corresponding to the task). This is high-level convenience; underlying network
+    /// errors are mapped to boolean success/failure.
+    pub(crate) async fn sync_companion_event(
         &self,
         task: &Task,
         config_enabled: bool,
         delete_on_completion: bool,
         is_delete_intent: bool,
     ) -> bool {
-        // Skip event operations for local calendar tasks (no server to sync to)
+        // Local calendars don't have server-side events
         if task.calendar_href.starts_with("local://") {
             return false;
         }
 
-        // Determine if we should create events for this task
-        // Priority: task override > global config
         let should_create_events = task.create_event.unwrap_or(config_enabled);
-
-        // Define the companion UID and Path
         let event_uid = format!("evt-{}", task.uid);
         let filename = format!("{}.ics", event_uid);
 
-        // Construct URI. Task href might be full URL or relative.
-        // We assume the event lives in the same calendar collection.
         let cal_path = if task.calendar_href.ends_with('/') {
             task.calendar_href.clone()
         } else {
-            // Fallback: try to extract parent dir from href
             let p = strip_host(&task.href);
             if let Some(idx) = p.rfind('/') {
                 p[..=idx].to_string()
@@ -631,76 +545,49 @@ impl RustyClient {
             }
         };
         let event_path = format!("{}{}", strip_host(&cal_path), filename);
+
         let client = match &self.client {
             Some(c) => c,
             None => return false,
         };
 
-        // DECISION LOGIC:
-        // Delete Event if:
-        // 1. The action is explicitly DELETE (task deleted).
-        // 2. The task is Completed or Cancelled and delete_on_completion is enabled.
-        // 3. The task has no dates (removed scheduling).
-        // 4. The task shouldn't have events (!should_create_events).
-        //
-        // When delete_on_completion is disabled:
-        // - Cancelled tasks get STATUS:CANCELLED (event kept with cancelled status)
-        // - Completed tasks keep their events with STATUS:CONFIRMED
-
         let has_dates = task.due.is_some() || task.dtstart.is_some();
         let keep_completed = !delete_on_completion && task.status.is_done();
 
         let should_delete = is_delete_intent
-             || (delete_on_completion && task.status.is_done())
-             || (!has_dates && !keep_completed) // Delete if no dates AND we are not in "keep completed" mode
-             || !should_create_events; // Delete if this task shouldn't have events
+            || (delete_on_completion && task.status.is_done())
+            || (!has_dates && !keep_completed)
+            || !should_create_events;
 
         if should_delete {
-            // Only count as success if we actually deleted something (not 404)
-            match client.request(Delete::new(&event_path).force()).await {
-                Ok(_) => return true, // Successfully deleted
-                Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => return false, // Didn't exist
-                Err(_) => return false, // Other error
-            }
-        } else {
-            // Create/Update Event
-            if let Some((_, ics_body)) = IcsAdapter::to_event_ics(task) {
-                // Try create first (If-None-Match: *) to avoid overwriting if we shouldn't (though here we want to).
-                // If it fails with 412 (Precondition Failed), it means it exists, so we fallback to Update (overwrite).
-                let create_req =
-                    PutResource::new(&event_path).create(ics_body.clone(), "text/calendar");
-                match client.request(create_req).await {
-                    Ok(_) => return true, // Successfully created
-                    Err(
-                        WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED)
-                        | WebDavError::PreconditionFailed(_),
-                    ) => {
-                        // Fallback to update (overwrite)
-                        let update_req =
-                            PutResource::new(&event_path).update(ics_body, "text/calendar", "");
-                        match client.request(update_req).await {
-                            Ok(_) => return true,   // Successfully updated
-                            Err(_) => return false, // Update failed
-                        }
-                    }
-                    Err(_) => return false, // Create failed (and not 412)
+            return match client.request(Delete::new(&event_path).force()).await {
+                Ok(_) => true,
+                Err(WebDavError::BadStatusCode(http::StatusCode::NOT_FOUND)) => false,
+                Err(_) => false,
+            };
+        } else if let Some((_, ics_body)) = IcsAdapter::to_event_ics(task) {
+            let create_req =
+                PutResource::new(&event_path).create(ics_body.clone(), "text/calendar");
+            match client.request(create_req).await {
+                Ok(_) => return true,
+                Err(WebDavError::BadStatusCode(http::StatusCode::PRECONDITION_FAILED))
+                | Err(WebDavError::PreconditionFailed(_)) => {
+                    let update_req =
+                        PutResource::new(&event_path).update(ics_body, "text/calendar", "");
+                    return client.request(update_req).await.is_ok();
                 }
+                Err(_) => return false,
             }
         }
-        false // No action taken
+        false
     }
 
-    /// Public wrapper used by other (sync) parts of the codebase that need to
-    /// request companion-event synchronization for a single task.
-    ///
-    /// This returns `Result<bool, String>` so callers can treat it like an async
-    /// fallible operation even though the underlying implementation returns a bool.
+    /// Public wrapper for convenience
     pub async fn sync_task_companion_event(
         &self,
         task: &Task,
         config_enabled: bool,
     ) -> Result<bool, String> {
-        // Derive delete_on_completion from persisted configuration
         let cfg = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let delete_on_completion = cfg.delete_events_on_completion;
         let res = self
@@ -709,12 +596,12 @@ impl RustyClient {
         Ok(res)
     }
 
-    async fn fetch_remote_task(&self, task_href: &str) -> Option<Task> {
-        // Test hook: if set, defer to injected function to simulate server responses.
-        #[cfg(test)]
+    pub(crate) async fn fetch_remote_task(&self, task_href: &str) -> Option<Task> {
+        // Test hook injection (tests can override)
+        #[cfg(any(test, feature = "test_hooks"))]
         {
-            if let Some(m) = TEST_FETCH_REMOTE_HOOK.get()
-                && let Some(cb) = &*m.lock().unwrap()
+            if let Some(h) = TEST_FETCH_REMOTE_HOOK.get()
+                && let Some(cb) = &*h.lock().unwrap()
             {
                 return cb(task_href);
             }
@@ -751,6 +638,7 @@ impl RustyClient {
         calendar_href: &str,
         apply_journal: bool,
     ) -> Result<Vec<Task>, String> {
+        // Local calendar short-circuit
         if calendar_href.starts_with("local://") {
             let mut tasks = LocalStorage::load_for_href(self.ctx.as_ref(), calendar_href)
                 .map_err(|e| e.to_string())?;
@@ -760,12 +648,14 @@ impl RustyClient {
             return Ok(tasks);
         }
 
+        // Attempt to load cache and compare tokens
         let (mut cached_tasks, cached_token) =
             Cache::load(self.ctx.as_ref(), calendar_href).unwrap_or((vec![], None));
 
         if let Some(client) = &self.client {
             let path_href = strip_host(calendar_href);
 
+            // Build a pending-deletions set from the in-disk journal (if requested)
             let pending_deletions = if apply_journal {
                 let journal = Journal::load(self.ctx.as_ref());
                 let mut dels = HashSet::new();
@@ -785,6 +675,7 @@ impl RustyClient {
                 HashSet::new()
             };
 
+            // Fetch remote sync token
             let remote_token = if let Ok(resp) = client
                 .request(GetProperty::new(&path_href, &GET_CTAG))
                 .await
@@ -799,10 +690,10 @@ impl RustyClient {
                 None
             };
 
+            // Fast-path: if tokens match and there are no unsynced "ghosts"
             let has_ghosts = cached_tasks
                 .iter()
                 .any(|t| t.etag.is_empty() && !t.href.is_empty());
-
             if !has_ghosts
                 && let (Some(r_tok), Some(c_tok)) = (&remote_token, &cached_token)
                 && r_tok == c_tok
@@ -813,6 +704,7 @@ impl RustyClient {
                 return Ok(cached_tasks);
             }
 
+            // Otherwise, enumerate & multiget as needed
             let list_resp = client
                 .request(ListResources::new(&path_href))
                 .await
@@ -906,8 +798,16 @@ impl RustyClient {
         }
     }
 
+    // --- High-level public APIs that UIs call ---
+    // These functions push to the Journal for remote calendars (or write local storage
+    // for local calendars), then trigger `sync_journal()` which is implemented in the
+    // dedicated sync module. Keeping the optimistic in-memory store updates should
+    // happen at the Store/Controller layer (higher up) — these functions perform the
+    // persistence/journaling/network steps.
+
     pub async fn get_tasks(&self, calendar_href: &str) -> Result<Vec<Task>, String> {
-        let _ = self.sync_journal().await.ok();
+        // Best-effort: ensure pending journal processed first
+        let _ = self.sync_journal().await;
         self.fetch_calendar_tasks_internal(calendar_href, true)
             .await
     }
@@ -917,7 +817,6 @@ impl RustyClient {
         calendars: &[CalendarListEntry],
     ) -> Result<Vec<(String, Vec<Task>)>, String> {
         let _ = self.sync_journal().await;
-
         let hrefs: Vec<String> = calendars.iter().map(|c| c.href.clone()).collect();
         let futures = hrefs.into_iter().map(|href| {
             let client = self.clone();
@@ -1003,27 +902,23 @@ impl RustyClient {
         &self,
         task: &mut Task,
     ) -> Result<(Task, Option<Task>, Vec<String>), String> {
+        // This method implements the higher-level recurring/termination logic and then
+        // delegates persistence/sync to the usual create/update paths.
         let mut logs = Vec::new();
         let mut history_snapshot = None;
 
-        // CHECK: Is this a recurring task being completed?
-        // Note: We assume 'task' carries the DESIRED state (e.g. it is already marked Completed by the UI).
         if task.status == TaskStatus::Completed && task.rrule.is_some() {
-            // 1. Create the History Snapshot (The record of completion)
-            // Clone the current 'Completed' state into a new object.
             let mut snapshot = task.clone();
-            snapshot.uid = Uuid::new_v4().to_string(); // New UID for history
-            snapshot.href = String::new(); // Will be assigned on create
+            snapshot.uid = Uuid::new_v4().to_string();
+            snapshot.href = String::new();
             snapshot.etag = String::new();
             snapshot.status = TaskStatus::Completed;
             snapshot.percent_complete = Some(100);
-            snapshot.rrule = None; // History items don't recur
-            // Remove alarms/events from history so they don't ring/sync again
+            snapshot.rrule = None;
             snapshot.alarms.clear();
             snapshot.create_event = None;
             snapshot.related_to.push(task.uid.clone());
 
-            // Ensure COMPLETED date is set
             if !snapshot
                 .unmapped_properties
                 .iter()
@@ -1039,30 +934,20 @@ impl RustyClient {
                     });
             }
 
-            // 2. Recycle the Main Task (The persistent object)
-            // This advances dates and resets status to NeedsAction, while keeping the original UID.
             if crate::model::RecurrenceEngine::advance(task) {
                 history_snapshot = Some(snapshot);
             }
-            // If recurrence is finished (e.g. UNTIL date passed), advance_recurrence returns false.
-            // We leave 'task' as Completed (no recycle), and don't create a snapshot (it stays as one record).
         }
 
-        // For non-recurring tasks, 'task' is already in the correct state. No logic needed.
-
-        // --- EXECUTION PHASE ---
-
-        // Local Storage Path
+        // Local path short-circuit
         if task.calendar_href.starts_with("local://") {
             let mut all = LocalStorage::load_for_href(self.ctx.as_ref(), &task.calendar_href)
                 .map_err(|e| e.to_string())?;
 
-            // 1. Save History Snapshot (if exists)
             if let Some(ref mut snap) = history_snapshot {
                 all.push(snap.clone());
             }
 
-            // 2. Update Main Task
             if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
                 all[idx] = task.clone();
             }
@@ -1072,26 +957,18 @@ impl RustyClient {
             return Ok((task.clone(), history_snapshot, vec![]));
         }
 
-        // Remote/Network Path
-
-        // 1. Create History Snapshot on Server
+        // Remote path: create history snapshot then update main task
         if let Some(ref mut snap) = history_snapshot {
             let create_logs = self.create_task(snap).await?;
             logs.extend(create_logs);
         }
 
-        // 2. Update Main Task on Server
-        // (This handles both the "Recycled" state or the "Standard Completed" state)
         let update_logs = self.update_task(task).await?;
         logs.extend(update_logs);
 
         Ok((task.clone(), history_snapshot, logs))
     }
 
-    /// Terminate a task by applying a terminal status (Completed or Cancelled).
-    ///
-    /// This centralizes the network-side logic for both creating a history snapshot
-    /// (for recurring tasks) and updating the recycled/updated task on the server.
     pub async fn terminate_task(
         &self,
         task: &mut Task,
@@ -1100,23 +977,18 @@ impl RustyClient {
         let (primary, secondary) = task.recycle(status);
         let mut logs: Vec<String> = Vec::new();
 
-        // 1. Save Primary (History or simple update)
         if primary.uid != task.uid {
-            // primary is a new history snapshot -> create
             let mut p = primary.clone();
             let l = self.create_task(&mut p).await?;
             logs.extend(l);
         } else {
-            // primary refers to the original UID -> update
             let mut p = primary.clone();
             let l = self.update_task(&mut p).await?;
             logs.extend(l);
         }
 
-        // 2. Save Secondary (Recycled next instance) if present
         if let Some(sec) = &secondary {
             let mut s = sec.clone();
-            // Secondary is an update to the existing recurring task identity
             let l = self.update_task(&mut s).await?;
             logs.extend(l);
         }
@@ -1129,24 +1001,19 @@ impl RustyClient {
         task: &Task,
         new_calendar_href: &str,
     ) -> Result<(Task, Vec<String>), String> {
-        // Handle Local -> Remote Migration (the dangerous path)
+        // Local->remote migration: attempt create+verify, otherwise journal a move.
         if task.calendar_href.starts_with("local://") {
             let mut new_task = task.clone();
             new_task.calendar_href = new_calendar_href.to_string();
-
-            // 1. Calculate the expected remote HREF so we know where to verify
             let cal_path = new_calendar_href.trim_end_matches('/');
             let filename = format!("{}.ics", task.uid);
             let expected_remote_href = format!("{}/{}", cal_path, filename);
 
-            // Reset metadata for new location (create_task will set href/etag if successful)
             new_task.href = String::new();
             new_task.etag = String::new();
 
-            // 2. Attempt Creation
             let logs = self.create_task(&mut new_task).await?;
 
-            // 3. Verification Step: Attempt to fetch the specific task back from the server
             let verify_target = if !new_task.href.is_empty() {
                 new_task.href.clone()
             } else {
@@ -1155,38 +1022,30 @@ impl RustyClient {
 
             match self.fetch_remote_task(&verify_target).await {
                 Some(remote_task) => {
-                    // 4. Identity check: make sure the returned task is the one we uploaded
                     if remote_task.uid != task.uid {
                         return Err(format!(
-                            "Migration Verification Failed: Server returned a task with UID '{}' but we uploaded '{}'. Local copy preserved.",
+                            "Migration Verification Failed: Server returned UID '{}' but uploaded '{}'. Local preserved.",
                             remote_task.uid, task.uid
                         ));
                     }
-
-                    // 5. Safe to delete local copy now that server confirms presence
-                    self.delete_task(task).await?;
-
-                    // Return the server's canonical representation and the logs
+                    let _ = self.delete_task(task).await?;
                     return Ok((remote_task, logs));
                 }
                 None => {
-                    // The server did not return the uploaded resource immediately.
-                    // SAFE DEFAULT: Do not delete local copy to avoid data loss.
                     return Err(format!(
-                        "Migration Verification Failed: Task '{}' uploaded but could not be retrieved from server immediately. Local copy preserved to prevent data loss.",
+                        "Migration Verification Failed: Task '{}' uploaded but not retrievable immediately. Local preserved.",
                         task.summary
                     ));
                 }
             }
         }
 
-        // Non-local moves use the journal/sync path
+        // Otherwise, queue a Move action in the journal and trigger sync.
         Journal::push(
             self.ctx.as_ref(),
             Action::Move(task.clone(), new_calendar_href.to_string()),
         )
         .map_err(|e| e.to_string())?;
-
         let mut t = task.clone();
         t.calendar_href = new_calendar_href.to_string();
         let logs = self.sync_journal().await?;
@@ -1204,9 +1063,6 @@ impl RustyClient {
             async move { client.move_task(&task, &target).await.ok() }
         });
 
-        // Use buffer_unordered(1) to force effectively sequential processing.
-        // This avoids potential race conditions on the local.json file when multiple
-        // concurrent moves try to delete local tasks at the same time after verification.
         let mut stream = stream::iter(futures).buffer_unordered(1);
         let mut count = 0;
         while let Some(res) = stream.next().await {
@@ -1217,7 +1073,7 @@ impl RustyClient {
         Ok(count)
     }
 
-    async fn fetch_etag(&self, path: &str) -> Option<String> {
+    pub(crate) async fn fetch_etag(&self, path: &str) -> Option<String> {
         if let Some(client) = &self.client
             && let Ok(resp) = client
                 .request(GetProperty::new(path, &names::GETETAG))
@@ -1228,712 +1084,13 @@ impl RustyClient {
         None
     }
 
-    async fn handle_create(
-        &self,
-        client: &CalDavClient<HttpsClient>,
-        task: &Task,
-    ) -> Result<StepResult, String> {
-        let filename = format!("{}.ics", task.uid);
-        let full_href = if task.calendar_href.ends_with('/') {
-            format!("{}{}", task.calendar_href, filename)
-        } else {
-            format!("{}/{}", task.calendar_href, filename)
-        };
-        let path = strip_host(&full_href);
-        let ics_string = IcsAdapter::to_ics(task);
-
-        match client
-            .request(PutResource::new(&path).create(ics_string, "text/calendar"))
-            .await
-        {
-            Ok(resp) => {
-                let outcome = StepOutcome::Success {
-                    etag: resp.etag,
-                    href: Some(full_href),
-                    refresh_path: Some(path),
-                };
-                Ok(StepResult::new(outcome))
-            }
-            Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
-            | Err(WebDavError::PreconditionFailed(_)) => {
-                // Conflict: already exists. Mark successful to remove from queue.
-                Ok(StepResult::new(StepOutcome::Success {
-                    etag: None,
-                    href: None,
-                    refresh_path: Some(path),
-                })
-                .with_warning(format!(
-                    "Creation conflict: Task '{}' already exists on server. Mark as synced.",
-                    task.summary
-                )))
-            }
-            Err(e) => Err(format!("{:?}", e)),
-        }
-    }
-
-    async fn handle_update(
-        &self,
-        client: &CalDavClient<HttpsClient>,
-        task: &Task,
-    ) -> Result<StepResult, String> {
-        let path = strip_host(&task.href);
-        let ics_string = IcsAdapter::to_ics(task);
-        let etag_val = if task.etag == "pending_refresh" {
-            ""
-        } else {
-            &task.etag
-        };
-
-        match client
-            .request(PutResource::new(&path).update(
-                ics_string,
-                "text/calendar; charset=utf-8; component=VTODO",
-                etag_val,
-            ))
-            .await
-        {
-            Ok(resp) => Ok(StepResult::new(StepOutcome::Success {
-                etag: resp.etag,
-                href: None,
-                refresh_path: Some(path),
-            })),
-            Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
-            | Err(WebDavError::PreconditionFailed(_)) => {
-                if let Some((resolution, msg)) = self.attempt_conflict_resolution(task).await {
-                    Ok(
-                        StepResult::new(StepOutcome::RetryWith(Box::new(resolution)))
-                            .with_warning(msg),
-                    )
-                } else {
-                    // Force copy logic
-                    let mut conflict_copy = task.clone();
-                    conflict_copy.uid = Uuid::new_v4().to_string();
-                    conflict_copy.summary = format!("{} (Conflict Copy)", task.summary);
-                    conflict_copy.href = String::new();
-                    conflict_copy.etag = String::new();
-                    Ok(
-                        StepResult::new(StepOutcome::RetryWith(Box::new(Action::Create(
-                            conflict_copy,
-                        ))))
-                        .with_warning(format!(
-                            "Conflict (412) on task '{}'. Merge failed. Creating copy.",
-                            task.summary
-                        )),
-                    )
-                }
-            }
-            Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
-                // Resurrect if missing
-                Ok(StepResult::new(StepOutcome::RetryWith(Box::new(
-                    Action::Create(task.clone()),
-                ))))
-            }
-            Err(e) => {
-                let msg = format!("{:?}", e);
-                if msg.contains("412") || msg.contains("PreconditionFailed") {
-                    let mut conflict_copy = task.clone();
-                    conflict_copy.uid = Uuid::new_v4().to_string();
-                    conflict_copy.summary = format!("{} (Conflict Copy)", task.summary);
-                    conflict_copy.href = String::new();
-                    conflict_copy.etag = String::new();
-                    Ok(
-                        StepResult::new(StepOutcome::RetryWith(Box::new(Action::Create(
-                            conflict_copy,
-                        ))))
-                        .with_warning(format!(
-                            "Conflict (412-Fallback) on task '{}'. Creating copy.",
-                            task.summary
-                        )),
-                    )
-                } else {
-                    Err(msg)
-                }
-            }
-        }
-    }
-
-    async fn handle_delete(
-        &self,
-        client: &CalDavClient<HttpsClient>,
-        task: &Task,
-    ) -> Result<StepResult, String> {
-        if task.href.is_empty() {
-            return Ok(StepResult::new(StepOutcome::Discard));
-        }
-        let path = strip_host(&task.href);
-
-        let resp = if !task.etag.is_empty() && task.etag != "pending_refresh" {
-            client
-                .request(Delete::new(&path).with_etag(&task.etag))
-                .await
-        } else {
-            client.request(Delete::new(&path).force()).await
-        };
-
-        match resp {
-            Ok(_) => Ok(StepResult::new(StepOutcome::Success {
-                etag: None,
-                href: None,
-                refresh_path: None,
-            })),
-            Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
-                Ok(StepResult::new(StepOutcome::Discard))
-            }
-            Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED)) => {
-                Ok(StepResult::new(StepOutcome::Success {
-                    etag: None,
-                    href: None,
-                    refresh_path: None,
-                })
-                .with_warning(format!(
-                    "Conflict on delete task '{}'. Already modified/deleted.",
-                    task.summary
-                )))
-            }
-            Err(e) => Err(format!("{:?}", e)),
-        }
-    }
-
-    async fn handle_move(&self, task: &Task, new_cal: &str) -> Result<StepResult, String> {
-        let mut move_res = self.execute_move(task, new_cal, false).await;
-
-        if let Err(ref e) = move_res
-            && (e.contains("412") || e.contains("PreconditionFailed"))
-        {
-            move_res = self.execute_move(task, new_cal, true).await;
-        }
-
-        match move_res {
-            Ok(_) => {
-                let filename = format!("{}.ics", task.uid);
-                let new_href = if new_cal.ends_with('/') {
-                    format!("{}{}", new_cal, filename)
-                } else {
-                    format!("{}/{}", new_cal, filename)
-                };
-                Ok(StepResult::new(StepOutcome::Success {
-                    etag: None,
-                    href: Some(new_href.clone()),
-                    refresh_path: Some(strip_host(&new_href)),
-                }))
-            }
-            Err(e) => {
-                if e.contains("404") || e.contains("NotFound") || e.contains("403") {
-                    Ok(StepResult::new(StepOutcome::Discard).with_warning(format!(
-                        "Move source missing for '{}', assuming success.",
-                        task.summary
-                    )))
-                } else {
-                    Err(e)
-                }
-            }
-        }
-    }
-
-    pub async fn sync_journal(&self) -> Result<Vec<String>, String> {
-        // Load and compact journal once at the start
-        let mut journal = Journal::load(self.ctx.as_ref());
-        let mut tmp_j = Journal {
-            queue: mem::take(&mut journal.queue),
-        };
-        tmp_j.compact();
-        journal.queue = tmp_j.queue;
-
-        let client = self.client.as_ref().ok_or("Offline")?;
-        let mut warnings = Vec::new();
-
-        // Load config for the create_events_for_tasks flag
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let events_enabled = config.create_events_for_tasks;
-        let delete_on_completion = config.delete_events_on_completion;
-
-        // ADD THIS FLAG:
-        // Ensures we only check/create the recovery calendar once per sync cycle.
-        let mut recovery_cal_created_this_cycle = false;
-
-        // Process actions in-memory
-        while !journal.queue.is_empty() {
-            let next_action = journal.queue[0].clone();
-            let mut conflict_resolved_action: Option<Action> = None;
-            let mut new_etag_to_propagate: Option<String> = None;
-            let mut new_href_to_propagate: Option<(String, String)> = None;
-            let mut path_for_refresh: Option<String> = None;
-
-            // Allow tests to force a sync error for this action without performing network requests.
-            // If the test hook returns Some(error_string) we skip the normal network path and
-            // treat the action as having failed with that message.
-            let test_forced_err: Option<String> = {
-                #[cfg(test)]
-                {
-                    if let Some(h) = TEST_FORCE_SYNC_ERROR.get() {
-                        if let Some(cb) = &*h.lock().unwrap() {
-                            cb(&next_action)
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    }
-                }
-                #[cfg(not(test))]
-                {
-                    None
-                }
-            };
-
-            let step_result = if let Some(err_msg) = test_forced_err {
-                if err_msg.contains("400") || err_msg.contains("403") || err_msg.contains("415") {
-                    Ok(StepResult::new(StepOutcome::RecoveryNeeded(err_msg)))
-                } else if err_msg.contains("413") {
-                    Ok(StepResult::new(StepOutcome::Discard).with_warning(err_msg))
-                } else {
-                    Err(err_msg)
-                }
-            } else {
-                match &next_action {
-                    Action::Create(t) => self.handle_create(client, t).await,
-                    Action::Update(t) => self.handle_update(client, t).await,
-                    Action::Delete(t) => self.handle_delete(client, t).await,
-                    Action::Move(t, new_cal) => self.handle_move(t, new_cal).await,
-                }
-            };
-
-            match step_result {
-                Ok(res) => {
-                    warnings.extend(res.warnings);
-
-                    match res.outcome {
-                        StepOutcome::Success {
-                            etag,
-                            href,
-                            refresh_path,
-                        } => {
-                            // Sync companion event if successful
-                            match &next_action {
-                                Action::Move(t, new_cal) => {
-                                    // Move companion event too
-                                    if events_enabled || t.create_event.is_some() {
-                                        let evt_uid = format!("evt-{}", t.uid);
-                                        let evt_filename = format!("{}.ics", evt_uid);
-                                        let old_cal_path = if t.calendar_href.ends_with('/') {
-                                            t.calendar_href.clone()
-                                        } else {
-                                            format!("{}/", t.calendar_href)
-                                        };
-                                        let old_evt_path = format!(
-                                            "{}{}",
-                                            strip_host(&old_cal_path),
-                                            evt_filename
-                                        );
-
-                                        // Try to move the event (best effort, ignore errors)
-                                        // Delete from old location
-                                        let _ = client
-                                            .request(Delete::new(&old_evt_path).force())
-                                            .await;
-                                        // Create updated task with new calendar href
-                                        if let Some(new_h) = &href {
-                                            let mut moved_task = t.clone();
-                                            moved_task.calendar_href = new_cal.clone();
-                                            moved_task.href = new_h.clone();
-                                            self.sync_companion_event(
-                                                &moved_task,
-                                                events_enabled,
-                                                delete_on_completion,
-                                                false,
-                                            )
-                                            .await;
-                                        }
-                                    }
-                                }
-                                Action::Create(t) | Action::Update(t) => {
-                                    self.sync_companion_event(
-                                        t,
-                                        events_enabled,
-                                        delete_on_completion,
-                                        false,
-                                    )
-                                    .await;
-                                }
-                                Action::Delete(t) => {
-                                    self.sync_companion_event(
-                                        t,
-                                        events_enabled,
-                                        delete_on_completion,
-                                        true,
-                                    )
-                                    .await;
-                                }
-                            }
-
-                            new_etag_to_propagate = etag;
-                            path_for_refresh = refresh_path;
-                            if let Some(h) = href {
-                                let old = match &next_action {
-                                    Action::Create(t) => t.href.clone(), // Doesn't matter for create
-                                    Action::Move(t, _) => t.href.clone(),
-                                    _ => String::new(),
-                                };
-                                new_href_to_propagate = Some((old, h));
-                            }
-                        }
-                        StepOutcome::RetryWith(act) => {
-                            // Dereference the box to get the action
-                            conflict_resolved_action = Some(*act);
-                            // If we resolved a conflict or are creating a copy, try to sync event for the new state
-                            if let Action::Create(t) | Action::Update(t) =
-                                &conflict_resolved_action.as_ref().unwrap()
-                            {
-                                self.sync_companion_event(
-                                    t,
-                                    events_enabled,
-                                    delete_on_completion,
-                                    false,
-                                )
-                                .await;
-                            }
-                        }
-                        StepOutcome::Discard => {
-                            // Sync event anyway (e.g. ensure delete on 404)
-                            if let Action::Delete(t) = &next_action {
-                                self.sync_companion_event(
-                                    t,
-                                    events_enabled,
-                                    delete_on_completion,
-                                    true,
-                                )
-                                .await;
-                            }
-                        }
-                        StepOutcome::RecoveryNeeded(msg) => {
-                            // Move to recovery calendar
-                            let recovered_task = match &next_action {
-                                Action::Create(t) => Some(t.clone()),
-                                Action::Update(t) => Some(t.clone()),
-                                Action::Move(t, _) => Some(t.clone()),
-                                Action::Delete(_) => None,
-                            };
-
-                            if let Some(mut task) = recovered_task {
-                                let recovery_href = "local://recovery";
-
-                                if !recovery_cal_created_this_cycle {
-                                    if let Ok(mut locals) =
-                                        LocalCalendarRegistry::load(self.ctx.as_ref())
-                                        && !locals.iter().any(|c| c.href == recovery_href)
-                                    {
-                                        locals.push(CalendarListEntry {
-                                            name: "Local (Recovery)".to_string(),
-                                            href: recovery_href.to_string(),
-                                            color: Some("#DB4437".to_string()),
-                                        });
-                                        let _ =
-                                            LocalCalendarRegistry::save(self.ctx.as_ref(), &locals);
-                                    }
-                                    recovery_cal_created_this_cycle = true;
-                                }
-
-                                task.calendar_href = recovery_href.to_string();
-                                task.description
-                                    .push_str(&format!("\n\n[Sync Error]: {}", msg));
-
-                                if let Ok(mut existing) =
-                                    LocalStorage::load_for_href(self.ctx.as_ref(), recovery_href)
-                                {
-                                    existing.push(task);
-                                    let _ = LocalStorage::save_for_href(
-                                        self.ctx.as_ref(),
-                                        recovery_href,
-                                        &existing,
-                                    );
-                                } else {
-                                    let _ = LocalStorage::save_for_href(
-                                        self.ctx.as_ref(),
-                                        recovery_href,
-                                        &[task],
-                                    );
-                                }
-                                warnings.push(
-                                    "Fatal sync error. Task moved to 'Local (Recovery)'."
-                                        .to_string(),
-                                );
-                            }
-                            // Fall through to remove action from queue
-                        }
-                    }
-
-                    // --- Propagate & Cleanup ---
-                    if new_etag_to_propagate.is_none()
-                        && let Some(path) = path_for_refresh
-                        && let Some(fetched) = self.fetch_etag(&path).await
-                    {
-                        new_etag_to_propagate = Some(fetched);
-                    }
-
-                    // Update in-memory queue instead of writing to disk each time
-                    let should_remove = if let Some(head) = journal.queue.first() {
-                        actions_match_identity(head, &next_action)
-                    } else {
-                        false
-                    };
-
-                    if !should_remove {
-                        continue;
-                    }
-
-                    journal.queue.remove(0);
-
-                    if let Some(act) = conflict_resolved_action {
-                        journal.queue.insert(0, act);
-                    }
-
-                    if let Some(etag) = new_etag_to_propagate {
-                        let target_uid = match &next_action {
-                            Action::Create(t) | Action::Update(t) => t.uid.clone(),
-                            Action::Move(t, _) => t.uid.clone(),
-                            _ => String::new(),
-                        };
-                        if !target_uid.is_empty() {
-                            for item in journal.queue.iter_mut() {
-                                match item {
-                                    Action::Update(t) | Action::Delete(t) => {
-                                        if t.uid == target_uid {
-                                            t.etag = etag.clone();
-                                        }
-                                    }
-                                    Action::Move(t, _) => {
-                                        if t.uid == target_uid {
-                                            t.etag = etag.clone();
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                    }
-
-                    if let Some((old_href, new_href)) = new_href_to_propagate {
-                        let target_uid = match &next_action {
-                            Action::Move(t, _) => t.uid.clone(),
-                            Action::Create(t) => t.uid.clone(),
-                            _ => String::new(),
-                        };
-                        for item in journal.queue.iter_mut() {
-                            match item {
-                                Action::Update(t) | Action::Delete(t) => {
-                                    if t.uid == target_uid || t.href == old_href {
-                                        t.href = new_href.clone();
-                                        if let Some(last_slash) = new_href.rfind('/') {
-                                            t.calendar_href = new_href[..=last_slash].to_string();
-                                        }
-                                    }
-                                }
-                                Action::Move(t, _) => {
-                                    if t.uid == target_uid {
-                                        t.href = new_href.clone();
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                    }
-                }
-                Err(msg) => {
-                    // Check for fatal errors that might have slipped through without a test hook
-                    // (Though the new logic catches them inside handle_*)
-                    // If we are here, it's a real hard network error or retryable failure.
-                    let _ = Journal::modify(self.ctx.as_ref(), |queue| {
-                        *queue = journal.queue.clone();
-                    });
-                    return Err(msg);
-                }
-            }
-        }
-
-        // Write final state to disk once at the end
-        Journal::modify(self.ctx.as_ref(), |queue| {
-            *queue = journal.queue;
-        })
-        .map_err(|e| e.to_string())?;
-
-        Ok(warnings)
-    }
-
-    async fn attempt_conflict_resolution(&self, local_task: &Task) -> Option<(Action, String)> {
-        let (cached_tasks, _) = Cache::load(self.ctx.as_ref(), &local_task.calendar_href).ok()?;
-        let base_task = cached_tasks.iter().find(|t| t.uid == local_task.uid)?;
-
-        let server_task = self.fetch_remote_task(&local_task.href).await?;
-
-        if let Some(merged) = three_way_merge(base_task, local_task, &server_task) {
-            let msg = format!(
-                "Conflict (412) on '{}' resolved via 3-way merge.",
-                local_task.summary
-            );
-            return Some((Action::Update(merged), msg));
-        }
-
-        None
-    }
-
-    async fn execute_move(
-        &self,
-        task: &Task,
-        new_calendar_href: &str,
-        overwrite: bool,
-    ) -> Result<(), String> {
-        let client = self.client.as_ref().ok_or("Offline")?;
-        let destination = if new_calendar_href.ends_with('/') {
-            format!("{}{}.ics", new_calendar_href, task.uid)
-        } else {
-            format!("{}/{}.ics", new_calendar_href, task.uid)
-        };
-        let source_path = strip_host(&task.href);
-        let source_uri = client
-            .webdav_client
-            .relative_uri(&source_path)
-            .map_err(|e| format!("Invalid source URI: {}", e))?;
-
-        let base = client.webdav_client.base_url();
-        let scheme = base.scheme_str().unwrap_or("https");
-        let authority = base.authority().map(|a| a.as_str()).unwrap_or("");
-        let dest_path = strip_host(&destination);
-        let clean_dest_path = if dest_path.starts_with('/') {
-            dest_path
-        } else {
-            format!("/{}", dest_path)
-        };
-        let absolute_destination = format!("{}://{}{}", scheme, authority, clean_dest_path);
-
-        let req = Request::builder()
-            .method("MOVE")
-            .uri(source_uri)
-            .header("Destination", absolute_destination)
-            .header("Overwrite", if overwrite { "T" } else { "F" })
-            .body(String::new())
-            .map_err(|e| e.to_string())?;
-        let (parts, _) = client
-            .webdav_client
-            .request_raw(req)
-            .await
-            .map_err(|e| format!("{:?}", e))?;
-        if parts.status.is_success() {
-            Ok(())
-        } else {
-            Err(format!("MOVE failed: {}", parts.status))
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serial_test::serial;
-    use std::collections::HashMap;
-
-    #[test]
-    #[serial]
-    fn test_move_task_verify_success_preserves_remote_and_deletes_local() {
-        let ctx = std::sync::Arc::new(crate::context::TestContext::new());
-
-        // Create a local task in source calendar
-        let mut task = Task::new("T1", &HashMap::new(), None);
-        task.uid = "uid-123".to_string();
-        task.calendar_href = "local://src".to_string();
-        task.summary = "Test task".to_string();
-        crate::storage::LocalStorage::save_for_href(
-            ctx.as_ref(),
-            "local://src",
-            std::slice::from_ref(&task),
-        )
-        .unwrap();
-
-        // Destination is a local calendar too (we're testing local->local branch verification logic)
-        // Note: The client treats the "remote" fetch as the verification step.
-        let dest = "local://dest";
-        let filename = format!("{}.ics", task.uid);
-        let expected_remote_href = format!("{}/{}", dest.trim_end_matches('/'), filename);
-
-        // Install test hook to simulate fetch_remote_task returning the uploaded task
-        let hook = TEST_FETCH_REMOTE_HOOK.get_or_init(|| Mutex::new(None));
-        {
-            let mut guard = hook.lock().unwrap();
-            let t_clone = task.clone();
-            *guard = Some(Box::new(move |href: &str| {
-                if href == expected_remote_href {
-                    let mut rt = t_clone.clone();
-                    rt.calendar_href = dest.to_string();
-                    rt.href = expected_remote_href.clone();
-                    Some(rt)
-                } else {
-                    None
-                }
-            }));
-        }
-
-        let client = RustyClient::new(ctx.clone(), "", "", "", false, None).unwrap();
-        // Perform move: should create at dest, then verify via hook and delete source
-        let res = futures::executor::block_on(client.move_task(&task, dest)).unwrap();
-
-        // After successful move, source calendar should be empty
-        let src_tasks =
-            crate::storage::LocalStorage::load_for_href(ctx.as_ref(), "local://src").unwrap();
-        assert!(src_tasks.is_empty(), "Source should be deleted");
-
-        // Destination should contain the task (simulated by Store usually, but here we just check client logic success)
-        // Returned task should be server's canonical representation
-        assert_eq!(res.0.uid, "uid-123");
-
-        // Clear hook
-        if let Some(h) = TEST_FETCH_REMOTE_HOOK.get() {
-            *h.lock().unwrap() = None;
-        }
-    }
-
-    #[test]
-    #[serial]
-    fn test_move_task_verify_failure_preserves_local() {
-        let ctx = std::sync::Arc::new(crate::context::TestContext::new());
-
-        // Create a local task in source calendar
-        let mut task = Task::new("T2", &HashMap::new(), None);
-        task.uid = "uid-456".to_string();
-        task.calendar_href = "local://src2".to_string();
-        task.summary = "Test task 2".to_string();
-        crate::storage::LocalStorage::save_for_href(
-            ctx.as_ref(),
-            "local://src2",
-            std::slice::from_ref(&task),
-        )
-        .unwrap();
-
-        let dest = "local://dest2";
-        let filename = format!("{}.ics", task.uid);
-        let expected_remote_href = format!("{}/{}", dest.trim_end_matches('/'), filename);
-
-        // Install hook that returns None to simulate missing remote resource
-        let hook = TEST_FETCH_REMOTE_HOOK.get_or_init(|| Mutex::new(None));
-        {
-            let mut guard = hook.lock().unwrap();
-            *guard = Some(Box::new(move |href: &str| {
-                assert_eq!(href, expected_remote_href);
-                None
-            }));
-        }
-
-        let client = RustyClient::new(ctx.clone(), "", "", "", false, None).unwrap();
-        let res = futures::executor::block_on(client.move_task(&task, dest));
-        assert!(res.is_err(), "Move should fail verification and return Err");
-
-        // Local copy should still exist
-        let src_tasks =
-            crate::storage::LocalStorage::load_for_href(ctx.as_ref(), "local://src2").unwrap();
-        assert_eq!(src_tasks.len(), 1);
-        assert_eq!(src_tasks[0].uid, "uid-456");
-
-        // Clear hook
-        if let Some(h) = TEST_FETCH_REMOTE_HOOK.get() {
-            *h.lock().unwrap() = None;
-        }
-    }
+    // Note: The following methods are implemented in src/client/sync.rs:
+    // - handle_create, handle_update, handle_delete, handle_move
+    // - sync_journal
+    // - attempt_conflict_resolution
+    // - execute_move
+    //
+    // They remain part of the RustyClient impl but are defined in the dedicated
+    // sync module to avoid duplication and to keep the synchronization logic
+    // consolidated.
 }

@@ -1,6 +1,7 @@
 // Crate root library declaration and module exports.
 pub mod alarm_index;
 pub mod cache;
+pub mod cli;
 pub mod client;
 pub mod color_utils;
 pub mod config;

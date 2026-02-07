@@ -811,7 +811,7 @@ impl CfaitMobile {
         if task_uid == blocker_uid {
             return Err(MobileError::from("Cannot depend on self"));
         }
-        self.apply_store_mutation(task_uid, |store, id| store.add_dependency(id, blocker_uid))
+        self.apply_store_mutation(&task_uid, |store, id| store.add_dependency(id, blocker_uid))
             .await
     }
 
@@ -820,7 +820,7 @@ impl CfaitMobile {
         task_uid: String,
         blocker_uid: String,
     ) -> Result<(), MobileError> {
-        self.apply_store_mutation(task_uid, |store, id| {
+        self.apply_store_mutation(&task_uid, |store, id| {
             store.remove_dependency(id, &blocker_uid)
         })
         .await
@@ -836,7 +836,7 @@ impl CfaitMobile {
         {
             return Err(MobileError::from("Cannot be child of self"));
         }
-        self.apply_store_mutation(child_uid, |store, id| store.set_parent(id, parent_uid))
+        self.apply_store_mutation(&child_uid, |store, id| store.set_parent(id, parent_uid))
             .await
     }
 
@@ -848,7 +848,7 @@ impl CfaitMobile {
         if task_uid == related_uid {
             return Err(MobileError::from("Cannot relate to self"));
         }
-        self.apply_store_mutation(task_uid, |store, id| store.add_related_to(id, related_uid))
+        self.apply_store_mutation(&task_uid, |store, id| store.add_related_to(id, related_uid))
             .await
     }
 
@@ -857,7 +857,7 @@ impl CfaitMobile {
         task_uid: String,
         related_uid: String,
     ) -> Result<(), MobileError> {
-        self.apply_store_mutation(task_uid, |store, id| {
+        self.apply_store_mutation(&task_uid, |store, id| {
             store.remove_related_to(id, &related_uid)
         })
         .await
@@ -1076,14 +1076,14 @@ impl CfaitMobile {
 
     pub async fn change_priority(&self, uid: String, delta: i8) -> Result<(), MobileError> {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        self.apply_store_mutation(uid, |store, id| {
+        self.apply_store_mutation(&uid, |store, id| {
             store.change_priority(id, delta, config.default_priority)
         })
         .await
     }
 
     pub async fn set_status_process(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(uid, |store, id| store.set_status_in_process(id))
+        self.apply_store_mutation(&uid, |store, id| store.set_status_in_process(id))
             .await
     }
 
@@ -1122,15 +1122,15 @@ impl CfaitMobile {
     }
 
     pub async fn pause_task(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(uid, |s, id| s.pause_task(id))
+        self.apply_store_mutation(&uid, |s, id| s.pause_task(id))
             .await
     }
     pub async fn stop_task(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(uid, |s, id| s.stop_task(id))
+        self.apply_store_mutation(&uid, |s, id| s.stop_task(id))
             .await
     }
     pub async fn start_task(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(uid, |s, id| s.set_status_in_process(id))
+        self.apply_store_mutation(&uid, |s, id| s.set_status_in_process(id))
             .await
     }
 
@@ -1141,7 +1141,7 @@ impl CfaitMobile {
     ) -> Result<(), MobileError> {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let def_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
-        self.apply_store_mutation(uid, |t, id| {
+        self.apply_store_mutation(&uid, |t, id| {
             if let Some((task, _)) = t.get_task_mut(id) {
                 task.apply_smart_input(&smart_input, &config.tag_aliases, def_time);
                 Some(task.clone())
@@ -1157,7 +1157,7 @@ impl CfaitMobile {
         uid: String,
         description: String,
     ) -> Result<(), MobileError> {
-        self.apply_store_mutation(uid, |t, id| {
+        self.apply_store_mutation(&uid, |t, id| {
             if let Some((task, _)) = t.get_task_mut(id) {
                 task.description = description;
                 Some(task.clone())
@@ -1170,7 +1170,7 @@ impl CfaitMobile {
 
     pub async fn toggle_task(&self, uid: String) -> Result<(), MobileError> {
         self.controller
-            .toggle_task(uid)
+            .toggle_task(&uid)
             .await
             .map_err(MobileError::from)?;
         let store = self.controller.store.lock().await;
@@ -1180,7 +1180,7 @@ impl CfaitMobile {
 
     pub async fn move_task(&self, uid: String, new_cal_href: String) -> Result<(), MobileError> {
         self.controller
-            .move_task(uid, new_cal_href)
+            .move_task(&uid, &new_cal_href)
             .await
             .map_err(MobileError::from)?;
 
@@ -1191,7 +1191,7 @@ impl CfaitMobile {
 
     pub async fn delete_task(&self, uid: String) -> Result<(), MobileError> {
         self.controller
-            .delete_task(uid)
+            .delete_task(&uid)
             .await
             .map_err(MobileError::from)?;
         let store = self.controller.store.lock().await;
@@ -1294,7 +1294,7 @@ impl CfaitMobile {
         alarm_uid: String,
         minutes: u32,
     ) -> Result<(), MobileError> {
-        self.apply_store_mutation(task_uid.clone(), |store, id| {
+        self.apply_store_mutation(&task_uid, |store, id| {
             if let Some((task, _)) = store.get_task_mut(id) {
                 if alarm_uid.starts_with("implicit_")
                     && let Some(dt) = alarm_uid
@@ -1329,7 +1329,7 @@ impl CfaitMobile {
     ) -> Result<(), MobileError> {
         #[cfg(target_os = "android")]
         log::debug!("dismiss_alarm: task={}, alarm={}", task_uid, alarm_uid);
-        self.apply_store_mutation(task_uid.clone(), |store, id| {
+        self.apply_store_mutation(&task_uid, |store, id| {
             if let Some((task, _)) = store.get_task_mut(id) {
                 #[cfg(target_os = "android")]
                 log::debug!(
@@ -1474,13 +1474,13 @@ impl CfaitMobile {
 // Separated impl block for internal non-exported methods
 impl CfaitMobile {
     // Generic mutator helper
-    async fn apply_store_mutation<F>(&self, uid: String, mutator: F) -> Result<(), MobileError>
+    async fn apply_store_mutation<F>(&self, uid: &str, mutator: F) -> Result<(), MobileError>
     where
         F: FnOnce(&mut TaskStore, &str) -> Option<Task>,
     {
         // Lock store, apply mutation to get updated task
         let mut store = self.controller.store.lock().await;
-        let task_to_save = mutator(&mut store, &uid).ok_or(MobileError::from("Task not found"))?;
+        let task_to_save = mutator(&mut store, uid).ok_or(MobileError::from("Task not found"))?;
         drop(store); // Unlock
 
         // Send to Controller

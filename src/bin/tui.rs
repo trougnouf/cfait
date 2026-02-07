@@ -11,23 +11,25 @@ use std::sync::Arc;
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut args: Vec<String> = env::args().collect();
+    let binary_name = args.first().cloned().unwrap_or_else(|| "cfait".to_string());
 
     // Parse for --root argument before creating the context
     let mut override_root: Option<PathBuf> = None;
     if let Some(pos) = args.iter().position(|arg| arg == "--root" || arg == "-r")
-        && pos + 1 < args.len() {
-            override_root = Some(PathBuf::from(args[pos + 1].clone()));
-            // Remove the flag and its value so they don't interfere with other parsing
-            args.remove(pos); // remove flag
-            args.remove(pos); // remove value (which is now at the same index)
-        }
+        && pos + 1 < args.len()
+    {
+        override_root = Some(PathBuf::from(args[pos + 1].clone()));
+        // Remove the flag and its value so they don't interfere with other parsing
+        args.remove(pos); // remove flag
+        args.remove(pos); // remove value (which is now at the same index)
+    }
 
     // Create the application context (StandardContext for production use) with the override
     let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(override_root));
 
     // Handle help flag
     if args.len() > 1 && (args[1] == "--help" || args[1] == "-h" || args[1] == "help") {
-        print_help();
+        cfait::cli::print_help(&binary_name);
         return Ok(());
     }
 
@@ -116,75 +118,5 @@ async fn main() -> Result<()> {
     cfait::tui::run(ctx).await
 }
 
-fn print_help() {
-    println!(
-        "Cfait v{} - A powerful, fast and elegant CalDAV task manager (TUI)",
-        env!("CARGO_PKG_VERSION")
-    );
-    println!();
-    println!("USAGE:");
-    println!("    cfait [--root <path>]                    Start interactive TUI");
-    println!(
-        "    cfait export [--calendar <id>]           Export local tasks as .ics file to stdout"
-    );
-    println!("    cfait import <file.ics> [--calendar <id>] Import tasks from .ics file");
-    println!("    cfait --help                             Show this help message");
-    println!();
-    println!("OPTIONS:");
-    println!("    -r, --root <path>    Use a different directory for config and data.");
-    println!();
-    println!("IMPORT COMMAND:");
-    println!("    cfait import tasks.ics                        Import to default local calendar");
-    println!("    cfait import tasks.ics --calendar <id>        Import to specific local calendar");
-    println!("    cfait import backup.ics --calendar my-cal     Import to 'my-cal' calendar");
-    println!();
-    println!("EXPORT COMMAND:");
-    println!("    cfait export                              Export default local calendar");
-    println!("    cfait export --calendar <id>              Export specific local calendar");
-    println!("    cfait export > backup.ics                 Save tasks to file");
-    println!("    cfait export --calendar my-cal > my.ics   Export specific calendar to file");
-    println!("    cfait export | grep 'SUMMARY'             Filter output");
-    println!();
-    println!("KEYBINDINGS:");
-    println!("    Press '?' inside the app for full interactive help");
-    println!();
-    println!("SMART INPUT SYNTAX:");
-    println!("    !1-9              Priority (1=highest, 9=lowest)");
-    println!("    #tag              Add category/tag (supports hierarchy: #work:project)");
-    println!("    @@location        Add location (supports hierarchy: @@home:office)");
-    println!("    @date             Set due date (@tomorrow, @2d, @next friday)");
-    println!("    ^date             Set start date (^next week, ^2025-01-01)");
-    println!("    ~duration         Set duration (~30m, ~1.5h, ~1h-2h)");
-    println!("    @daily            Recurrence (@daily, @weekly, @every 3 days)");
-    println!("    until <date>      End date for recurrence (@daily until 2025-12-31)");
-    println!("    except <date>     Skip dates (@daily except 2025-12-25,2026-01-01)");
-    println!("    except <weekday>  Exclude weekdays (@daily except mo,tue or saturdays,sundays)");
-    println!("    except <month>    Exclude months (@monthly except oct,nov,dec)");
-    println!("    @friday           Next weekday (@friday = @next friday)");
-    println!("    @next X           Next week/month/year (@next week, @next month)");
-    println!("    \"in\" optional     @2 weeks = @in 2 weeks (the word \"in\" is optional)");
-    println!("    #alias:=#tags     Define tag alias inline (retroactive)");
-    println!("    @@alias:=#tags    Define location alias (@@aldi:=#groceries,#shopping)");
-    println!("    url:              Attach URL");
-    println!("    geo:              Add coordinates");
-    println!("    desc:             Add description");
-    println!("    rem:10m           Relative reminder (before due date, adjusts)");
-    println!("    rem:in 5m         Relative from now (becomes absolute)");
-    println!("    rem:next friday   Next occurrence (becomes absolute)");
-    println!("    rem:8am           Absolute reminder (fixed time)");
-    println!("    +cal              Force create calendar event (override global setting)");
-    println!("    -cal              Prevent calendar event creation (override global setting)");
-    println!("    \\#text            Escape special characters");
-    println!();
-    println!("EXAMPLES:");
-    println!("    Buy cookies !1 @2025-01-16 #shopping rem:2025-01-16 8am");
-    println!("    Exercise @daily ~30m #health rem:8am");
-    println!("    Meeting @tomorrow 2pm ~1h +cal (force create calendar event)");
-    println!("    Plant plum tree #tree_planting !3 ~2h @@home:garden");
-    println!("    #tree_planting:=#gardening,@@home");
-    println!("    @@aldi:=#groceries,#shopping (location alias)");
-    println!();
-    println!("MORE INFO:");
-    println!("    Repository: https://codeberg.org/trougnouf/cfait");
-    println!("    License:    GPL-3.0");
-}
+// Help printing is provided by the shared CLI module:
+// use `cfait::cli::print_help(&binary_name)` instead.

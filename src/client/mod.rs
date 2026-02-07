@@ -3,6 +3,8 @@
 pub mod auth;
 pub mod cert;
 pub mod core;
+pub mod middleware;
+pub mod sync;
 
 // Re-export follow-redirect middleware from tower-http so the rest of the crate
 // can import the same types it previously expected from the `redirect` module.

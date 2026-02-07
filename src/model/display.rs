@@ -8,6 +8,30 @@ pub trait TaskDisplay {
     fn is_paused(&self) -> bool;
 }
 
+/// Function to get a random relationship icon based on the relationship pair
+/// Takes both UIDs to ensure both sides of the relationship see the same icon
+pub fn random_related_icon(uid1: &str, uid2: &str) -> char {
+    // Sort UIDs to ensure consistent ordering regardless of direction
+    let (first, second) = if uid1 < uid2 {
+        (uid1, uid2)
+    } else {
+        (uid2, uid1)
+    };
+
+    // Hash the sorted pair
+    let hash: u32 = first
+        .bytes()
+        .chain(second.bytes())
+        .fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32));
+
+    // Deterministic selection among three relationship icons
+    match hash % 3 {
+        0 => '\u{f0a5a}',
+        1 => '\u{f0a5e}',
+        _ => '\u{f02e8}',
+    }
+}
+
 impl TaskDisplay for Task {
     fn is_paused(&self) -> bool {
         self.status == TaskStatus::NeedsAction

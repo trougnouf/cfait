@@ -107,6 +107,7 @@ default = ["tui"]
 tui = ["dep:ratatui", "dep:crossterm", "dep:rpassword", "dep:tui-markdown"]
 gui = ["dep:iced", "dep:iced_aw", "dep:rfd"]
 mobile = ["dep:uniffi", "dep:uniffi_bindgen"]
+test_hooks = []
 
 
 

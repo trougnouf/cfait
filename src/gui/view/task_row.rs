@@ -6,6 +6,7 @@ use crate::gui::state::GuiApp;
 use crate::gui::view::COLOR_LOCATION;
 use crate::gui::view::focusable::focusable;
 use crate::model::Task as TodoTask;
+use crate::model::display::random_related_icon;
 use chrono::Utc;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -278,11 +279,11 @@ pub fn view_task_row<'a>(
 
     if has_related || has_incoming_related {
         let related_icon_name = if !task.related_to.is_empty() {
-            icon::random_related_icon(&task.uid, &task.related_to[0])
+            random_related_icon(&task.uid, &task.related_to[0])
         } else if has_incoming_related {
             let incoming = app.store.get_tasks_related_to(&task.uid);
             if !incoming.is_empty() {
-                icon::random_related_icon(&task.uid, &incoming[0].0)
+                random_related_icon(&task.uid, &incoming[0].0)
             } else {
                 icon::LINK
             }
@@ -325,11 +326,10 @@ pub fn view_task_row<'a>(
                 .style(tooltip_style)
                 .delay(Duration::from_millis(700)),
             );
-            let related_btn =
-                button(icon::icon(icon::random_related_icon(&task.uid, yanked)).size(14))
-                    .style(action_style)
-                    .padding(4)
-                    .on_press(Message::AddRelatedTo(task.uid.clone()));
+            let related_btn = button(icon::icon(random_related_icon(&task.uid, yanked)).size(14))
+                .style(action_style)
+                .padding(4)
+                .on_press(Message::AddRelatedTo(task.uid.clone()));
             actions = actions.push(
                 tooltip(
                     related_btn,
@@ -1042,7 +1042,7 @@ pub fn view_task_row<'a>(
                             .on_press(Message::JumpToTask(related_uid.clone()));
 
                     let related_row = row![
-                        icon::icon(icon::random_related_icon(&task.uid, related_uid)).size(12),
+                        icon::icon(random_related_icon(&task.uid, related_uid)).size(12),
                         name_btn,
                         tooltip(
                             remove_related_btn,
@@ -1084,7 +1084,7 @@ pub fn view_task_row<'a>(
                     .on_press(Message::JumpToTask(related_uid.clone()));
 
                     let related_row = row![
-                        icon::icon(icon::random_related_icon(&task.uid, &related_uid)).size(12),
+                        icon::icon(random_related_icon(&task.uid, &related_uid)).size(12),
                         name_btn,
                         tooltip(
                             remove_related_btn,
