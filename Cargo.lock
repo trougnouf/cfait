@@ -2538,6 +2538,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "iri-string"
+version = "0.7.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c91338f0783edbd6195decb37bae672fd3b165faffb89bf7b9e6942f8b1a731a"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
 name = "iso8601"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5599,9 +5609,13 @@ dependencies = [
  "base64",
  "bitflags 2.10.0",
  "bytes",
+ "futures-util",
  "http",
+ "http-body",
+ "iri-string",
  "mime",
  "pin-project-lite",
+ "tower",
  "tower-layer",
  "tower-service",
 ]

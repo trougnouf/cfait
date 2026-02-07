@@ -45,7 +45,7 @@ libdav = "0.10"
 http = "1.4"
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "tokio"] }
 hyper-rustls = { version = "0.27", features = ["native-tokio"] }
-tower-http = { version = "0.6", features = ["auth"] }
+tower-http = { version = "0.6", features = ["auth", "follow-redirect"] }
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.9"
@@ -107,6 +107,8 @@ default = ["tui"]
 tui = ["dep:ratatui", "dep:crossterm", "dep:rpassword", "dep:tui-markdown"]
 gui = ["dep:iced", "dep:iced_aw", "dep:rfd"]
 mobile = ["dep:uniffi", "dep:uniffi_bindgen"]
+
+
 
 [[bin]]
 name = "cfait"

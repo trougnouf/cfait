@@ -1,9 +1,9 @@
 // File: ./src/client/core.rs
 // Core logic for CalDAV communication, sync, and task management.
 use crate::cache::Cache;
+
 use crate::client::auth::DynamicAuthLayer;
 use crate::client::cert::NoVerifier;
-use crate::client::redirect::FollowRedirectLayer;
 use crate::config::Config;
 use crate::context::AppContext;
 use crate::journal::{Action, Journal};
@@ -36,9 +36,11 @@ pub const GET_CTAG: PropertyName = PropertyName::new("http://calendarserver.org/
 pub const APPLE_COLOR: PropertyName =
     PropertyName::new("http://apple.com/ns/ical/", "calendar-color");
 
+use crate::client::FollowRedirectService;
 use crate::client::auth::DynamicAuthService;
-use crate::client::redirect::FollowRedirectService;
 
+// Concrete HttpsClient type used throughout the crate. This is a FollowRedirect
+// wrapper around the DynamicAuthService -> UserAgentService -> hyper Client.
 type HttpsClient = FollowRedirectService<
     DynamicAuthService<
         UserAgentService<
@@ -247,9 +249,9 @@ impl RustyClient {
         let auth_client =
             DynamicAuthLayer::new(user.to_string(), pass.to_string()).layer(ua_client);
 
-        // ADDED: Wrap the auth client with the FollowRedirectLayer.
-        // This handles 301/302/307/308 redirects automatically.
-        let redirect_client = FollowRedirectLayer::new(10).layer(auth_client);
+        // Use the default/standard follow-redirect policy provided by tower-http.
+        // `FollowRedirect::new` uses the library's `Standard` policy internally.
+        let redirect_client = FollowRedirectService::new(auth_client);
 
         let webdav = WebDavClient::new(uri, redirect_client.clone());
         let caldav = CalDavClient::new(webdav);
