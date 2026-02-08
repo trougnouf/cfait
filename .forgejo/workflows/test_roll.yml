@@ -1,0 +1,119 @@
+name: Test and Rolling Release
+
+on:
+  push:
+    branches:
+      - "master" # The rolling release will happen here
+      - "**" # Tests will still run on all branches
+    tags-ignore:
+      - "**"
+  pull_request:
+
+jobs:
+  # --- JOB 1: TESTS (Runs on all branches) ---
+  test:
+    runs-on: self-hosted-arch
+    container:
+      image: local/arch-builder
+      volumes:
+        - cargo-registry:/usr/local/cargo/registry
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run unit tests
+        run: cargo test --all-features --verbose
+
+      - name: Run linter (clippy)
+        run: cargo clippy --all-features -- -D warnings
+
+  # --- JOB 2: ROLLING ANDROID BUILD (Only runs on 'master' and only if 'test' passes) ---
+  rolling-android:
+    needs: test
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: self-hosted-ubuntu
+    container:
+      image: local/ubuntu-builder
+      volumes:
+        - cargo-registry:/usr/local/cargo/registry
+        - gradle-cache:/root/.gradle
+      env:
+        RUSTFLAGS: "--remap-path-prefix ${{ github.workspace }}=/c --remap-path-prefix /usr/local/cargo=/cargo -C link-arg=-Wl,--build-id=none"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore Keystore
+        run: echo "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" | base64 --decode > cfait-rolling.keystore
+
+      - name: Build Rust JNI Libs
+        run: |
+          cargo ndk \
+            -t aarch64-linux-android \
+            -t armv7-linux-androideabi \
+            -t x86_64-linux-android \
+            -o ./android/app/src/main/jniLibs \
+            --platform 28 \
+            build --release --lib --features mobile
+
+      - name: Build Signed Android APK
+        env:
+          KEYSTORE_FILE: "${{ github.workspace }}/cfait-rolling.keystore"
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Update Rolling Release on Codeberg
+        env:
+          TEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          # 1. Login
+          tea login add --name codeberg --url ${{ github.server_url }} --token ${{ secrets.RELEASE_TOKEN }}
+
+          TAG_NAME="rolling"
+          REPO="${{ github.repository }}"
+
+          # 2. Find the APK
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+
+          if [ -z "$APK_PATH" ]; then
+            echo "❌ Error: APK file not found!"
+            ls -R android/app/build/outputs/apk/
+            exit 1
+          fi
+          echo "Found APK: $APK_PATH"
+
+          # 3. Clean up previous release/tag
+          echo "Cleaning up old rolling release..."
+          tea release delete --repo "$REPO" --confirm "$TAG_NAME" || true
+          git push origin :refs/tags/"$TAG_NAME" || true
+          git tag -d "$TAG_NAME" || true
+
+          # 4. Create and push new tag
+          git tag "$TAG_NAME"
+          git push origin "$TAG_NAME"
+
+          # 5. Create the release (without assets)
+          echo "Creating new release for tag '$TAG_NAME'..."
+          tea release create \
+            --repo "$REPO" \
+            --title "Rolling Development Build" \
+            --tag "$TAG_NAME" \
+            --prerelease \
+            --note "Automated signed build. Verified by CI. Commit: ${{ github.sha }}"
+
+          # 6. Upload the APK as an asset
+          echo "Uploading asset '$APK_PATH'..."
+          tea release assets create \
+            --repo "$REPO" \
+            "$TAG_NAME" \
+            "$APK_PATH"
+
+          echo "✅ Rolling release updated successfully."
