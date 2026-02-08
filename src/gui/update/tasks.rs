@@ -4,7 +4,8 @@ use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{GuiApp, SidebarMode};
 use crate::gui::update::common::{
-    apply_alias_retroactively, refresh_filtered_tasks, save_config, scroll_to_selected_delayed,
+    apply_alias_retroactively, refresh_filtered_tasks, save_config, scroll_to_selected,
+    scroll_to_selected_delayed,
 };
 use crate::journal::{Action, Journal};
 use crate::model::{Task as TodoTask, extract_inline_aliases};
@@ -190,6 +191,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::YankSelected => {
             if let Some(uid) = &app.selected_uid {
                 app.yanked_uid = Some(uid.clone());
+                // Keep the view stable on the selected task
+                return scroll_to_selected(app, false);
             }
             Task::none()
         }
@@ -375,8 +378,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::YankTask(uid) => {
-            app.yanked_uid = Some(uid);
-            Task::none()
+            app.yanked_uid = Some(uid.clone());
+            app.selected_uid = Some(uid);
+            scroll_to_selected(app, false)
         }
         Message::ClearYank => {
             // Explicit button click: ALWAYS just clear the yank, ignore hierarchy
