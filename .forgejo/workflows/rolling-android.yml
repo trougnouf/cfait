@@ -1,0 +1,85 @@
+name: Rolling Android Build
+
+on:
+  push:
+    branches:
+      - "master"
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy-rolling:
+    runs-on: self-hosted-ubuntu
+    container:
+      image: local/ubuntu-builder
+      volumes:
+        - cargo-registry:/usr/local/cargo/registry
+        - gradle-cache:/root/.gradle
+      env:
+        RUSTFLAGS: "--remap-path-prefix ${{ github.workspace }}=/c --remap-path-prefix /usr/local/cargo=/cargo -C link-arg=-Wl,--build-id=none"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Restore Keystore
+        run: echo "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" | base64 --decode > cfait-rolling.keystore
+
+      - name: Build Rust JNI Libs
+        run: |
+          cargo ndk \
+            -t aarch64-linux-android \
+            -t armv7-linux-androideabi \
+            -t x86_64-linux-android \
+            -o ./android/app/src/main/jniLibs \
+            --platform 28 \
+            build --release --lib --features mobile
+
+      - name: Build Signed Android Artifacts
+        env:
+          KEYSTORE_FILE: "${{ github.workspace }}/cfait-rolling.keystore"
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          cd android
+          chmod +x gradlew
+          # We build the Release APK just like the production release
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Prepare Artifacts
+        run: |
+          mkdir -p dist-rolling
+          # We use a static name so the download link never changes
+          find android/app/build/outputs/apk/release -name '*.apk' -exec cp {} "dist-rolling/cfait-android-rolling-signed.apk" \;
+
+      - name: Update Rolling Release
+        env:
+          TEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          tea login add --name codeberg --url ${{ github.server_url }} --token ${{ secrets.RELEASE_TOKEN }}
+
+          TAG_NAME="rolling"
+
+          # 1. Delete existing release (if it exists)
+          tea release delete --repo ${{ github.repository }} --confirm "$TAG_NAME" || true
+
+          # 2. Force delete the tag locally and remotely to move it to the latest commit
+          git tag -d "$TAG_NAME" || true
+          git push origin :refs/tags/"$TAG_NAME" || true
+
+          # 3. Create new tag at current commit
+          git tag "$TAG_NAME"
+          git push origin "$TAG_NAME"
+
+          # 4. Create new release
+          tea release create \
+            --repo "${{ github.repository }}" \
+            --title "Rolling Development Build" \
+            --tag "$TAG_NAME" \
+            --prerelease \
+            --note "Automated signed build of the latest commit: ${{ github.sha }}"
+
+          # 5. Upload the signed APK
+          tea release assets create --repo ${{ github.repository }} "$TAG_NAME" "dist-rolling/cfait-android-rolling-signed.apk"
