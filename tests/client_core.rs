@@ -12,7 +12,7 @@ use std::sync::Mutex;
 // These hooks are necessary for some legacy tests. New tests should avoid them.
 // The library exposes test hooks behind `test_hooks`; import them from there.
 // Use the `test_hooks` module path which matches how the hooks are declared in the core module.
-use cfait::client::core::test_hooks::{TEST_FETCH_REMOTE_HOOK, TEST_FORCE_SYNC_ERROR};
+use cfait::client::core::{TEST_FETCH_REMOTE_HOOK, TEST_FORCE_SYNC_ERROR};
 
 // --- RECOVERY TESTS (previously in a separate file) ---
 

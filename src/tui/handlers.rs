@@ -998,7 +998,28 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Enter => {
-                if state.active_focus == Focus::Sidebar {
+                // If the main list has focus, handle virtual expand/collapse rows first.
+                if state.active_focus == Focus::Main {
+                    // Clone the virtual state to drop the immutable borrow of `state`
+                    let virtual_state_opt =
+                        state.get_selected_task().map(|t| t.virtual_state.clone());
+
+                    if let Some(virtual_state) = virtual_state_opt {
+                        match virtual_state {
+                            crate::model::VirtualState::Expand(key) => {
+                                state.expanded_done_groups.insert(key);
+                                state.refresh_filtered_view();
+                                return None;
+                            }
+                            crate::model::VirtualState::Collapse(key) => {
+                                state.expanded_done_groups.remove(&key);
+                                state.refresh_filtered_view();
+                                return None;
+                            }
+                            _ => {}
+                        }
+                    }
+                } else if state.active_focus == Focus::Sidebar {
                     match state.sidebar_mode {
                         SidebarMode::Calendars => {
                             let target_href = if let Some(idx) = state.cal_state.selected() {

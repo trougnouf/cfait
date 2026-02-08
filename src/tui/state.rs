@@ -93,6 +93,9 @@ pub struct AppState {
     pub unsynced_changes: bool,
     pub alarm_actor_tx: Option<mpsc::Sender<SystemEvent>>,
     pub active_alarm: Option<(Task, String)>, // (Task, AlarmUID) to render popup
+
+    // NEW: Expanded Done Groups (keys are parent UIDs; empty string for root group)
+    pub expanded_done_groups: HashSet<String>,
 }
 
 impl Default for AppState {
@@ -173,6 +176,9 @@ impl AppState {
             unsynced_changes: false, // Default false
             alarm_actor_tx: None,
             active_alarm: None,
+
+            // NEW: track expanded completed groups (keys are parent UIDs, empty string for roots)
+            expanded_done_groups: HashSet::new(),
         }
     }
 
@@ -201,6 +207,9 @@ impl AppState {
         let mut effective_hidden = self.hidden_calendars.clone();
         effective_hidden.extend(self.disabled_calendars.clone());
 
+        // Load config to get limits
+        let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+
         self.tasks = self.store.filter(FilterOptions {
             active_cal_href: None, // Logic handled by hidden_calendars
             selected_categories: &self.selected_categories,
@@ -217,6 +226,10 @@ impl AppState {
             urgent_prio: self.urgent_prio,
             default_priority: self.default_priority,
             start_grace_period_days: self.start_grace_period_days,
+            // NEW: pass expanded groups and configured limits
+            expanded_done_groups: &self.expanded_done_groups,
+            max_done_roots: config.max_done_roots,
+            max_done_subtasks: config.max_done_subtasks,
         });
 
         let len = self.tasks.len();

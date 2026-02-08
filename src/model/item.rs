@@ -1,8 +1,17 @@
-// File: ./src/model/item.rs
+/*
+File: cfait/src/model/item.rs
+
+This file contains the core Task data model used across clients. It has been
+updated to include a lightweight "virtual" task concept (used to represent
+expand/collapse placeholders for truncated completed-task groups), together
+with hierarchy organization helpers that inject those virtual tasks into the
+flattened view.
+*/
+
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 fn default_uid() -> String {
@@ -82,13 +91,10 @@ impl DateType {
             DateType::AllDay(d) => d.format("%Y-%m-%d").to_string(),
             DateType::Specific(dt) => {
                 let local = dt.with_timezone(&Local);
-                // FIX 1: Only format time if it's not midnight (or near midnight for safety)
+                // Only format time if it's not midnight (or near midnight for safety)
                 if local.hour() == 0 && local.minute() == 0 && local.second() == 0 {
                     local.format("%Y-%m-%d").to_string()
                 } else {
-                    // FIX 2 (CRUCIAL): Format UTC time component using a fixed pattern to prevent local conversion corruption
-                    // The smart input parser *must* receive the UTC time so it re-parses correctly relative to UTC.
-                    // This is a trade-off: The local time is shown, but the parser reads the correct, uncorrupted UTC-equivalent time string.
                     local.format("%Y-%m-%d %H:%M").to_string()
                 }
             }
@@ -192,6 +198,15 @@ where
     }
 }
 
+// Virtual State for expand/collapse rows
+#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
+pub enum VirtualState {
+    #[default]
+    None,
+    Expand(String),   // Contains parent_uid (empty for root)
+    Collapse(String), // Contains parent_uid (empty for root)
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Task {
     pub uid: String,
@@ -247,6 +262,10 @@ pub struct Task {
     pub effective_due: Option<DateType>,
     #[serde(skip)]
     pub effective_dtstart: Option<DateType>,
+
+    // NEW FIELD: virtual state for placeholder rows
+    #[serde(skip)]
+    pub virtual_state: VirtualState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -293,6 +312,15 @@ pub fn compare_sortkeys(a: &SortKey, b: &SortKey, default_prio: u8) -> Ordering 
             .cmp(&norm_prio(b.prio))
             .then_with(|| compare_dates(&a.due, &b.due)),
     }
+}
+
+// Context struct to bundle shared state for hierarchy logic, fixing clippy warnings.
+struct HierarchyContext<'a> {
+    children_map: &'a HashMap<String, Vec<Task>>,
+    result: &'a mut Vec<Task>,
+    visited_uids: &'a mut HashSet<String>,
+    expanded_groups: &'a HashSet<String>,
+    max_done_subtasks: usize,
 }
 
 impl Task {
@@ -354,6 +382,7 @@ impl Task {
             effective_priority: 0,
             effective_due: None,
             effective_dtstart: None,
+            virtual_state: VirtualState::None,
         };
         task.apply_smart_input(input, aliases, default_reminder_time);
         task
@@ -493,15 +522,22 @@ impl Task {
         compare_sortkeys(&a, &b, default_priority).then_with(|| self.summary.cmp(&other.summary))
     }
 
-    pub fn organize_hierarchy(mut tasks: Vec<Task>, default_priority: u8) -> Vec<Task> {
-        let present_uids: std::collections::HashSet<String> =
-            tasks.iter().map(|t| t.uid.clone()).collect();
+    /// Organize a flat vector of tasks into a flattened, display-ordered list that
+    /// respects parent/child hierarchy and injects "virtual" expand/collapse rows
+    /// when completed-subtask groups are truncated.
+    pub fn organize_hierarchy(
+        mut tasks: Vec<Task>,
+        default_priority: u8,
+        expanded_groups: &HashSet<String>,
+        max_done_roots: usize,
+        max_done_subtasks: usize,
+    ) -> Vec<Task> {
+        let present_uids: HashSet<String> = tasks.iter().map(|t| t.uid.clone()).collect();
         let mut children_map: HashMap<String, Vec<Task>> = HashMap::new();
         let mut roots: Vec<Task> = Vec::new();
 
         tasks.sort_by(|a, b| a.compare_for_sort(b, default_priority));
 
-        let total_tasks = tasks.len();
         for mut task in tasks {
             let is_orphan = match &task.parent_uid {
                 Some(p_uid) => !present_uids.contains(p_uid),
@@ -520,44 +556,152 @@ impl Task {
         }
 
         let mut result = Vec::new();
-        let mut visited_uids = std::collections::HashSet::new();
+        let mut visited_uids = HashSet::new();
 
-        for root in roots {
-            Self::append_task_and_children(&root, &mut result, &children_map, 0, &mut visited_uids);
-        }
+        // Helper to process a list of tasks (mix of done/active) with truncation.
+        fn process_group(
+            raw_group: Vec<Task>,
+            parent_uid: String, // "" for roots
+            limit: usize,
+            is_root: bool,
+            context: &mut HierarchyContext,
+            depth: usize,
+        ) {
+            let (active, done): (Vec<Task>, Vec<Task>) =
+                raw_group.into_iter().partition(|t| !t.status.is_done());
 
-        if result.len() < total_tasks {
-            for tasks_vec in children_map.into_values() {
-                for mut task in tasks_vec {
-                    if !visited_uids.contains(&task.uid) {
-                        task.depth = 0;
-                        result.push(task);
+            // Add all active tasks
+            for task in active {
+                Task::append_task_and_children(&task, context, depth);
+            }
+
+            // Process done tasks
+            if done.is_empty() {
+                return;
+            }
+
+            // For roots we use empty string as the key
+            let effective_key = if is_root {
+                "".to_string()
+            } else {
+                parent_uid.clone()
+            };
+            let is_expanded = context.expanded_groups.contains(&effective_key);
+
+            if is_expanded {
+                // Show ALL done tasks + Collapse Button
+                for task in done {
+                    Task::append_task_and_children(&task, context, depth);
+                }
+                // Add Collapse Virtual Task
+                let mut collapse = Task::new("Collapse", &HashMap::new(), None);
+                collapse.uid = format!("virtual-collapse-{}", effective_key);
+                collapse.virtual_state = VirtualState::Collapse(effective_key);
+                collapse.depth = depth;
+                collapse.parent_uid = if is_root { None } else { Some(parent_uid) };
+                context.result.push(collapse);
+            } else {
+                // Check limit
+                if done.len() > limit {
+                    // Show limit-1 tasks
+                    let count_to_show = limit.saturating_sub(1);
+                    let mut iter = done.into_iter();
+
+                    for _ in 0..count_to_show {
+                        if let Some(task) = iter.next() {
+                            Task::append_task_and_children(&task, context, depth);
+                        }
+                    }
+
+                    // Add Expand Button
+                    let mut expand = Task::new("Expand", &HashMap::new(), None);
+                    expand.uid = format!("virtual-expand-{}", effective_key);
+                    expand.virtual_state = VirtualState::Expand(effective_key);
+                    expand.depth = depth;
+                    expand.parent_uid = if is_root { None } else { Some(parent_uid) };
+                    context.result.push(expand);
+                } else {
+                    // Show all (under limit)
+                    for task in done {
+                        Task::append_task_and_children(&task, context, depth);
                     }
                 }
             }
         }
 
+        let mut context = HierarchyContext {
+            children_map: &children_map,
+            result: &mut result,
+            visited_uids: &mut visited_uids,
+            expanded_groups,
+            max_done_subtasks,
+        };
+
+        process_group(roots, "".to_string(), max_done_roots, true, &mut context, 0);
+
+        // NOTE: We DO NOT iterate `children_map` to recover unvisited items here.
+        // If a task is in `children_map`, its parent is in `present_uids`.
+        // If that parent was not processed (e.g. it was a "Done" task inside a collapsed group),
+        // then its children MUST also be hidden.
+        // Promoting them to roots here would break the "Collapse" behavior.
+
         result
     }
 
-    fn append_task_and_children(
-        task: &Task,
-        result: &mut Vec<Task>,
-        map: &HashMap<String, Vec<Task>>,
-        depth: usize,
-        visited: &mut std::collections::HashSet<String>,
-    ) {
-        if visited.contains(&task.uid) {
+    /// Append a task and its children to the result vector. This helper now supports
+    /// injecting virtual expand/collapse tasks for completed-subtask truncation.
+    fn append_task_and_children(task: &Task, context: &mut HierarchyContext, depth: usize) {
+        if context.visited_uids.contains(&task.uid) {
             return;
         }
-        visited.insert(task.uid.clone());
+        context.visited_uids.insert(task.uid.clone());
 
         let mut t = task.clone();
         t.depth = depth;
-        result.push(t);
-        if let Some(children) = map.get(&task.uid) {
-            for child in children {
-                Self::append_task_and_children(child, result, map, depth + 1, visited);
+        context.result.push(t);
+
+        if let Some(children) = context.children_map.get(&task.uid) {
+            let (active, done): (Vec<Task>, Vec<Task>) =
+                children.iter().cloned().partition(|t| !t.status.is_done());
+
+            // Active children always shown
+            for child in active {
+                Self::append_task_and_children(&child, context, depth + 1);
+            }
+
+            if !done.is_empty() {
+                let is_expanded = context.expanded_groups.contains(&task.uid);
+                if is_expanded {
+                    for child in done {
+                        Self::append_task_and_children(&child, context, depth + 1);
+                    }
+                    // Collapse button
+                    let mut collapse = Task::new("Collapse", &HashMap::new(), None);
+                    collapse.uid = format!("virtual-collapse-{}", task.uid);
+                    collapse.virtual_state = VirtualState::Collapse(task.uid.clone());
+                    collapse.depth = depth + 1;
+                    collapse.parent_uid = Some(task.uid.clone());
+                    context.result.push(collapse);
+                } else if done.len() > context.max_done_subtasks {
+                    let show = context.max_done_subtasks.saturating_sub(1);
+                    let mut iter = done.into_iter();
+                    for _ in 0..show {
+                        if let Some(c) = iter.next() {
+                            Self::append_task_and_children(&c, context, depth + 1);
+                        }
+                    }
+                    // Expand button
+                    let mut expand = Task::new("Expand", &HashMap::new(), None);
+                    expand.uid = format!("virtual-expand-{}", task.uid);
+                    expand.virtual_state = VirtualState::Expand(task.uid.clone());
+                    expand.depth = depth + 1;
+                    expand.parent_uid = Some(task.uid.clone());
+                    context.result.push(expand);
+                } else {
+                    for child in done {
+                        Self::append_task_and_children(&child, context, depth + 1);
+                    }
+                }
             }
         }
     }
@@ -693,10 +837,10 @@ impl Task {
         self.alarms.push(snooze);
     }
 
-    // --- REFACTORED: Use shared model logic ---
+    // --- resolve_visual_attributes shared model logic ---
     pub fn resolve_visual_attributes(
         &self,
-        parent_tags: &std::collections::HashSet<String>,
+        parent_tags: &HashSet<String>,
         parent_location: &Option<String>,
         aliases: &HashMap<String, Vec<String>>,
     ) -> (Vec<String>, Option<String>) {
@@ -770,10 +914,7 @@ impl Task {
     }
 }
 
-// Backward-compatible wrappers so existing call-sites/tests continue to work.
-// These delegate to the new modules/traits (`IcsAdapter`, `RecurrenceEngine`, `TaskDisplay`)
-// introduced during the refactor. Keeping these thin wrappers preserves the old public
-// API surface for tests and external consumers.
+// Backward-compatible wrappers delegating to the new modules introduced during refactor.
 impl Task {
     /// Parse a VCALENDAR/ICS string into a Task (compat wrapper).
     pub fn from_ics(
@@ -819,17 +960,10 @@ impl Task {
     }
 }
 
-// New centralized recycle method for tasks.
-// This moves the Snapshot + Recycle behavior into the model so all clients share the same semantics.
+// Centralized recycle method moving Snapshot + Recycle behavior into the model.
 impl Task {
     /// Applies a terminal status (Completed or Cancelled).
-    ///
-    /// If recurring:
-    /// 1. Creates a snapshot of the current state with the target status (History).
-    /// 2. Advances the current task to the next date and resets status to NeedsAction (Recycled).
-    ///
     /// Returns: (History_Snapshot_or_Updated_Task, Optional_Recycled_Task)
-    /// If not recurring, returns (Updated_Task, None).
     pub fn recycle(&self, target_status: TaskStatus) -> (Task, Option<Task>) {
         // If the task is already in the target state, "toggle" it off to NeedsAction
         if self.status == target_status && target_status.is_done() {
@@ -869,10 +1003,7 @@ impl Task {
             // 2. Advance Main Task
             let mut next_task = self.clone();
 
-            // FIX: Restore Cancellation Logic.
-            // If we are cancelling, we must add the current date to exdates on the recurring task
-            // so the recurrence engine knows to skip this instance if it hasn't passed yet,
-            // and to keep a record of the exception.
+            // If cancelling, add current date to exdates so the instance is skipped.
             if target_status == TaskStatus::Cancelled
                 && let Some(current_date) = next_task
                     .dtstart
@@ -883,13 +1014,12 @@ impl Task {
                 next_task.exdates.push(current_date);
             }
 
-            // This advances dates and resets status to NeedsAction
+            // Advance dates and reset status
             let advanced = crate::model::RecurrenceEngine::advance(&mut next_task);
 
             if advanced {
                 return (history, Some(next_task));
             }
-            // If advance failed (e.g. passed UNTIL date), fall through to non-recurring behavior
         }
 
         // Non-recurring (or finished recurring) behavior: Just update in place
@@ -907,7 +1037,6 @@ impl Task {
                 updated.percent_complete = Some(100);
             }
         } else {
-            // Un-completing
             updated.percent_complete = None;
             updated.unmapped_properties.retain(|p| p.key != "COMPLETED");
         }

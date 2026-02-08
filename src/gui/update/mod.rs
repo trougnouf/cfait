@@ -41,7 +41,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetDefaultReminderTime(_)
         | Message::SetSnoozeShort(_)
         | Message::SetSnoozeLong(_)
-        | Message::SetAutoRefreshInterval(_) // Added
+        | Message::SetAutoRefreshInterval(_)
         | Message::SetCreateEventsForTasks(_)
         | Message::SetDeleteEventsOnCompletion(_)
         | Message::DeleteAllCalendarEvents
@@ -59,7 +59,11 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::LocalCalendarNameChanged(_, _)
         | Message::OpenColorPicker(_, _)
         | Message::CancelColorPicker
-        | Message::SubmitColorPicker(_) => settings::handle(app, message),
+        | Message::SubmitColorPicker(_)
+        // NEW: Route advanced settings messages
+        | Message::ToggleAdvancedSettings(_)
+        | Message::SetMaxDoneRoots(_)
+        | Message::SetMaxDoneSubtasks(_) => settings::handle(app, message),
 
         // --- Task Logic Messages ---
         Message::InputChanged(_)
@@ -100,9 +104,9 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::StopSelected
         | Message::CancelSelected
         | Message::ChangePrioritySelected(_)
-        | Message::CompleteTaskFromAlarm(_, _) // Added
-        | Message::CancelTaskFromAlarm(_, _)   // Added
-        => tasks::handle(app, message),
+        | Message::CompleteTaskFromAlarm(_, _)
+        | Message::CancelTaskFromAlarm(_, _)
+        | Message::ToggleDoneGroup(_) => tasks::handle(app, message),
 
         // --- View & Navigation Messages ---
         Message::TabPressed(_)

@@ -49,6 +49,9 @@ fn test_start_grace_period_keeps_tasks_in_active_section() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 2, // 2-day grace period
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     };
 
     let filtered = store.filter(options);
@@ -111,6 +114,9 @@ fn test_grace_period_zero_pushes_all_future_starts() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 0, // No grace period
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     };
 
     let filtered = store.filter(options);
@@ -177,6 +183,9 @@ fn test_acknowledged_alarm_keeps_task_in_active_section() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1, // 1-day grace period
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     };
 
     let filtered = store.filter(options);
@@ -250,6 +259,9 @@ fn test_any_acknowledged_alarm_keeps_task_active() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1, // 1-day grace period
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     };
 
     let filtered = store.filter(options);
@@ -313,6 +325,9 @@ fn test_recurring_task_with_fresh_dates_goes_to_future() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     };
 
     let filtered = store.filter(options);

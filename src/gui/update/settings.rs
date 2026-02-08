@@ -58,6 +58,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_snooze_long_input = format_duration_compact(config.snooze_long_mins);
             app.ob_auto_refresh_input = format_duration_compact(config.auto_refresh_interval_mins); // Added
 
+            // --- LOAD ADVANCED SETTINGS INPUTS ---
+            app.ob_max_done_roots_input = config.max_done_roots.to_string();
+            app.ob_max_done_subtasks_input = config.max_done_subtasks.to_string();
+
             let mut cached_cals = Cache::load_calendars(app.ctx.as_ref()).unwrap_or_default();
 
             // Merge locals into main calendar list
@@ -366,6 +370,29 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
+        // NEW HANDLERS: Advanced Settings toggles and inputs
+        Message::ToggleAdvancedSettings(val) => {
+            app.show_advanced_settings = val;
+            Task::none()
+        }
+        Message::SetMaxDoneRoots(val) => {
+            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
+                app.ob_max_done_roots_input = val;
+                save_config(app);
+                refresh_filtered_tasks(app);
+            }
+            Task::none()
+        }
+        Message::SetMaxDoneSubtasks(val) => {
+            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
+                app.ob_max_done_subtasks_input = val;
+                save_config(app);
+                refresh_filtered_tasks(app);
+            }
+            Task::none()
+        }
+
         Message::SetCreateEventsForTasks(val) => {
             let was_disabled = !app.create_events_for_tasks;
             app.create_events_for_tasks = val;

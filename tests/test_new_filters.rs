@@ -167,6 +167,9 @@ fn test_is_ready_filters_future_start_dates() {
         urgent_prio: 5,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     };
 
     let filtered = store.filter(options);
@@ -221,6 +224,9 @@ fn test_is_ready_filters_blocked_tasks() {
         urgent_prio: 5,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     };
 
     let filtered = store.filter(options);
@@ -281,6 +287,9 @@ fn test_is_ready_combines_with_other_filters() {
         urgent_prio: 5,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     };
 
     let filtered = store.filter(options);

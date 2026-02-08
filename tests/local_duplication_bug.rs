@@ -63,6 +63,10 @@ fn test_reproduce_android_local_revert_bug() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        // Newly required fields in FilterOptions:
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     });
 
     let visible_task = filtered
@@ -85,4 +89,3 @@ fn test_reproduce_android_local_revert_bug() {
         "BUG: Task status was reverted to the stale duplicate!"
     );
 }
-

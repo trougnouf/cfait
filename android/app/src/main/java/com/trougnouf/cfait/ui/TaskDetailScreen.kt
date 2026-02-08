@@ -50,7 +50,7 @@ fun TaskDetailScreen(
 
     fun reload() {
         scope.launch {
-            val all = api.getViewTasks(emptyList(), emptyList(), "")
+            val all = api.getViewTasks(emptyList(), emptyList(), "", emptyList())
             task = all.find { it.uid == uid }
             task?.let {
                 smartInput = it.smartString
@@ -122,10 +122,11 @@ fun TaskDetailScreen(
             )
         },
     ) { p ->
-        Column(modifier = Modifier
-            .padding(p)
-            .imePadding()
-            .padding(start = 16.dp, top = 16.dp, end = 16.dp)
+        Column(
+            modifier = Modifier
+                .padding(p)
+                .imePadding()
+                .padding(start = 16.dp, top = 16.dp, end = 16.dp)
         ) {
             OutlinedTextField(
                 value = smartInput,

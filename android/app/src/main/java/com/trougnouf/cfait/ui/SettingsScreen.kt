@@ -44,6 +44,7 @@ fun SettingsScreen(
     api: CfaitMobile,
     onBack: () -> Unit,
     onHelp: () -> Unit,
+    onAdvanced: () -> Unit,
     isCalendarBusy: Boolean,
     onDeleteEvents: () -> Unit,
     onCreateEvents: () -> Unit,
@@ -73,6 +74,10 @@ fun SettingsScreen(
     var autoRefresh by remember { mutableStateOf("30m") }
     var createEventsForTasks by remember { mutableStateOf(false) }
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
+
+    // NEW STATES
+    var maxDoneRoots by remember { mutableStateOf("20") }
+    var maxDoneSubtasks by remember { mutableStateOf("5") }
 
     var debugStatus by remember { mutableStateOf("") }
     var themeExpanded by remember { mutableStateOf(false) }
@@ -136,6 +141,10 @@ fun SettingsScreen(
         createEventsForTasks = cfg.createEventsForTasks
         deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
 
+        // Load advanced values
+        maxDoneRoots = cfg.maxDoneRoots.toString()
+        maxDoneSubtasks = cfg.maxDoneSubtasks.toString()
+
         if (isInitialLoad) {
             initialCreateEventsState = cfg.createEventsForTasks
             isInitialLoad = false
@@ -179,17 +188,22 @@ fun SettingsScreen(
         val sShort = api.parseDurationString(snoozeShort) ?: 60u
         val aRefresh = api.parseDurationString(autoRefresh) ?: 30u
 
+        // NEW: parse advanced numeric inputs
+        val maxRootsInt = maxDoneRoots.trim().toUIntOrNull() ?: 20u
+        val maxSubtasksInt = maxDoneSubtasks.trim().toUIntOrNull() ?: 5u
+
         // FIX: Ensure arguments match Rust signature exactly:
         // url, user, pass, insecure, hide_completed, disabled_cals, sort, days, prio,
         // default_prio, grace, auto_reminders, default_time, snooze_short, create_events,
-        // delete_events, auto_refresh
+        // delete_events, auto_refresh, max_done_roots, max_done_subtasks
         api.saveConfig(
             url, user, pass, insecure, hideCompleted,
             disabledSet.toList(), sortInt,
             daysInt, prioInt, defaultPrioInt, startGraceInt,
             autoRemind, defTime, sShort,
             createEventsForTasks, deleteEventsOnCompletion,
-            aRefresh
+            aRefresh,
+            maxRootsInt, maxSubtasksInt
         )
     }
 
@@ -707,76 +721,29 @@ fun SettingsScreen(
 
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
-                Text(
-                    "Debug",
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                    color = MaterialTheme.colorScheme.error,
-                )
-                Text(
-                    "Export all app data (config, cache, journals, databases) for debugging. Credentials will be redacted.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = androidx.compose.ui.graphics.Color.Gray,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-                Button(
-                    onClick = {
-                        scope.launch {
-                            try {
-                                debugStatus = "Exporting data..."
-                                val zipPath = api.createDebugExport()
-                                val sourceFile = File(zipPath)
-                                val destFile = File(context.cacheDir, "cfait_debug_export.zip")
-
-                                sourceFile.inputStream().use { input ->
-                                    destFile.outputStream().use { output ->
-                                        input.copyTo(output)
-                                    }
-                                }
-
-                                val uri = FileProvider.getUriForFile(
-                                    context,
-                                    "${context.packageName}.fileprovider",
-                                    destFile
-                                )
-
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "application/zip"
-                                    putExtra(Intent.EXTRA_STREAM, uri)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-
-                                val shareIntent = Intent.createChooser(intent, "Export Debug Data")
-                                context.startActivity(shareIntent)
-                                debugStatus = "Export ready"
-                            } catch (e: Exception) {
-                                debugStatus = "Export failed: ${e.message}"
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer
-                    )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onAdvanced() }
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        NfIcon(NfIcons.ARCHIVE_ARROW_UP, 16.sp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Export Debug ZIP")
+                    Column {
+                        Text(
+                            "Advanced Settings",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            "Display limits, debug tools",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
+                    NfIcon(NfIcons.ARROW_RIGHT, 16.sp)
                 }
-
-                if (debugStatus.isNotEmpty()) {
-                    Text(
-                        text = debugStatus,
-                        color = if (debugStatus.startsWith("Export failed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 8.dp),
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-
-                Spacer(Modifier.height(32.dp))
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
             }
         }
     }

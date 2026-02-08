@@ -38,6 +38,9 @@ fn test_search_includes_non_matching_children() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     });
 
     assert_eq!(results.len(), 2);
@@ -85,6 +88,9 @@ fn test_search_includes_deep_hierarchy() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     });
 
     assert_eq!(results.len(), 3);
@@ -124,6 +130,9 @@ fn test_child_match_does_not_force_parent_if_parent_does_not_match() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     });
 
     assert_eq!(results.len(), 1);
@@ -175,6 +184,9 @@ fn test_multiple_parents_with_children() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     });
 
     assert_eq!(results.len(), 2);
@@ -222,6 +234,9 @@ fn test_sibling_match_only_includes_matching_sibling() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     });
 
     assert_eq!(results.len(), 1);
@@ -262,6 +277,9 @@ fn test_empty_search_shows_all_tasks() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     });
 
     assert_eq!(results.len(), 2);
@@ -302,6 +320,9 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     });
 
     assert_eq!(results.len(), 2);
@@ -322,6 +343,9 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &HashSet::new(),
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     });
 
     assert_eq!(results_hidden.len(), 1);

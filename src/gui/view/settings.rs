@@ -308,6 +308,69 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     // Data Management is now merged into Local Calendar UI below
     let data_management_ui: Element<_> = Space::new().width(0).into();
 
+    // --- NEW ADVANCED SETTINGS UI ---
+    let advanced_ui: Element<_> = if is_settings {
+        let content = if app.show_advanced_settings {
+            column![
+                row![
+                    text("Max completed tasks (Roots):").width(Length::Fixed(200.0)),
+                    text_input("20", &app.ob_max_done_roots_input)
+                        .on_input(Message::SetMaxDoneRoots)
+                        .width(Length::Fixed(60.0))
+                        .padding(5)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+                text("Limits how many completed tasks are shown at the root level before truncating.")
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
+
+                Space::new().height(10),
+
+                row![
+                    text("Max completed subtasks:").width(Length::Fixed(200.0)),
+                    text_input("5", &app.ob_max_done_subtasks_input)
+                        .on_input(Message::SetMaxDoneSubtasks)
+                        .width(Length::Fixed(60.0))
+                        .padding(5)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+                text("Limits how many completed subtasks are shown inside a parent before truncating.")
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
+            ]
+            .spacing(5)
+            .padding(10)
+        } else {
+            column![]
+        };
+
+        column![
+            button(
+                row![
+                    text("Advanced Settings").size(16),
+                    Space::new().width(Length::Fill),
+                    icon::icon(if app.show_advanced_settings {
+                        icon::ARROW_EXPAND_UP // reuse chevron up-ish icon
+                    } else {
+                        icon::ARROW_EXPAND_DOWN // reuse chevron down-ish icon
+                    })
+                    .size(14)
+                ]
+                .align_y(iced::Alignment::Center)
+            )
+            .width(Length::Fill)
+            .style(iced::widget::button::text)
+            .on_press(Message::ToggleAdvancedSettings(!app.show_advanced_settings)),
+            content
+        ]
+        .spacing(5)
+        .into()
+    } else {
+        Space::new().width(0).into()
+    };
+
     let aliases_ui: Element<_> = if is_settings {
         let mut list_col = column![text("Tag aliases").size(20)].spacing(10);
         for (key, vals) in &app.tag_aliases {
@@ -568,6 +631,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         notifications_ui,
         sorting_ui,
         aliases_ui,
+        advanced_ui,
         // 3. Bottom Actions (Offline Mode for onboarding)
         offline_button_or_space,
     ]

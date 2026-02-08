@@ -180,3 +180,19 @@ pub const TAGS_HEADER: char = '\u{f04fb}'; // nf-md-tag_multiple
 pub const RELATED_FEMALE_FEMALE: char = '\u{f0a5a}'; // nf-md-human_female_female
 pub const RELATED_MALE_MALE: char = '\u{f0a5e}'; // nf-md-human_male_male
 pub const RELATED_MALE_FEMALE: char = '\u{f02e8}'; // nf-md-human_male_female
+
+// Expansion Icons (used for virtual expand/collapse rows)
+// These are Nerd Font glyph codepoints for arrow expand down/up (md icons)
+pub const ARROW_EXPAND_DOWN: char = '\u{f0796}';
+pub const ARROW_EXPAND_UP: char = '\u{f0799}';
+
+// Fallback ASCII versions for environments that don't have the Nerd Font available.
+// Clients may choose to use these when rendering in basic terminals or font-limited UIs.
+pub const ARROW_EXPAND_DOWN_FALLBACK: char = 'v';
+pub const ARROW_EXPAND_UP_FALLBACK: char = '^';
+
+// Compatibility aliases: some modules/clients expect `VIRTUAL_*` names.
+// Keep these as simple aliases to the canonical ARROW_* constants to avoid
+// duplicating codepoints across the codebase.
+pub const VIRTUAL_EXPAND_DOWN: char = ARROW_EXPAND_DOWN;
+pub const VIRTUAL_EXPAND_UP: char = ARROW_EXPAND_UP;

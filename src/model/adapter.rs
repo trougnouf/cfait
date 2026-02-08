@@ -389,8 +389,7 @@ impl IcsAdapter {
                         if let Ok(dt) = NaiveDateTime::parse_from_str(part, "%Y%m%dT%H%M%SZ") {
                             exdates.push(DateType::Specific(Utc.from_utc_datetime(&dt)));
                         }
-                    } else if let Ok(dt) = NaiveDateTime::parse_from_str(part, "%Y%m%dT%H%M%S")
-                    {
+                    } else if let Ok(dt) = NaiveDateTime::parse_from_str(part, "%Y%m%dT%H%M%S") {
                         let local = chrono::Local
                             .from_local_datetime(&dt)
                             .earliest()
@@ -682,6 +681,7 @@ impl IcsAdapter {
             effective_priority: 0,
             effective_due: None,
             effective_dtstart: None,
+            virtual_state: crate::model::VirtualState::None,
         })
     }
 

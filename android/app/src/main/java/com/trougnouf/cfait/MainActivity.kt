@@ -47,6 +47,7 @@ import com.trougnouf.cfait.ui.HelpScreen
 import com.trougnouf.cfait.ui.HomeScreen
 import com.trougnouf.cfait.ui.IcsImportScreen
 import com.trougnouf.cfait.ui.SettingsScreen
+import com.trougnouf.cfait.ui.AdvancedSettingsScreen
 import com.trougnouf.cfait.ui.TaskDetailScreen
 import com.trougnouf.cfait.util.AlarmScheduler
 import com.trougnouf.cfait.workers.AlarmWorker
@@ -134,6 +135,21 @@ fun CfaitNavHost(
     var autoScrollUid by remember { mutableStateOf<String?>(null) }
     var refreshTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var isLoading by remember { mutableStateOf(false) }
+
+    // Lift state for advanced settings so it persists across navigation
+    var maxDoneRoots by remember { mutableStateOf("20") }
+    var maxDoneSubtasks by remember { mutableStateOf("5") }
+
+    // Init from config on load
+    LaunchedEffect(Unit) {
+        try {
+            val cfg = api.getConfig()
+            maxDoneRoots = cfg.maxDoneRoots.toString()
+            maxDoneSubtasks = cfg.maxDoneSubtasks.toString()
+        } catch (e: Exception) {
+            // ignore init errors here
+        }
+    }
 
     // ICS Import State
     var icsContentToImport by remember { mutableStateOf<String?>(null) }
@@ -418,11 +434,55 @@ fun CfaitNavHost(
                     refreshLists()
                 },
                 onHelp = { navController.navigate("help") },
+                onAdvanced = { navController.navigate("settings/advanced") },
                 isCalendarBusy = isLoading || isCalendarSyncRunning,
                 onDeleteEvents = { handleDeleteEvents() },
                 onCreateEvents = { handleCreateMissingEvents() },
                 currentTheme = currentTheme,
                 onThemeChange = onThemeChange
+            )
+        }
+
+        composable("settings/advanced") {
+            // Load fresh on entry
+            var localRoots by remember { mutableStateOf("20") }
+            var localSubs by remember { mutableStateOf("5") }
+
+            LaunchedEffect(Unit) {
+                try {
+                    val cfg = api.getConfig()
+                    localRoots = cfg.maxDoneRoots.toString()
+                    localSubs = cfg.maxDoneSubtasks.toString()
+                } catch (e: Exception) {
+                    // ignore
+                }
+            }
+
+            AdvancedSettingsScreen(
+                api = api,
+                maxDoneRoots = localRoots,
+                maxDoneSubtasks = localSubs,
+                onMaxDoneRootsChange = { localRoots = it },
+                onMaxDoneSubtasksChange = { localSubs = it },
+                onBack = {
+                    // Save on exit
+                    try {
+                        val cfg = api.getConfig()
+                        val r = localRoots.toUIntOrNull() ?: 20u
+                        val s = localSubs.toUIntOrNull() ?: 5u
+                        api.saveConfig(
+                            cfg.url, cfg.username, "", cfg.allowInsecure, cfg.hideCompleted,
+                            cfg.disabledCalendars, cfg.sortCutoffMonths, cfg.urgentDays, cfg.urgentPrio,
+                            cfg.defaultPriority, cfg.startGracePeriodDays, cfg.autoReminders,
+                            cfg.defaultReminderTime, cfg.snoozeShort, cfg.createEventsForTasks,
+                            cfg.deleteEventsOnCompletion, cfg.autoRefreshInterval,
+                            r, s // New values
+                        )
+                    } catch (e: Exception) {
+                        // swallow save error
+                    }
+                    navController.popBackStack()
+                }
             )
         }
         composable("help") {

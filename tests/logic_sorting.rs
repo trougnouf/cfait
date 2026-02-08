@@ -1,7 +1,7 @@
 // Tests for task sorting logic.
 use cfait::model::{DateType, Task, TaskStatus};
 use chrono::{Duration, Utc};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 fn task(summary: &str) -> Task {
     Task::new(summary, &HashMap::new(), None)
@@ -43,18 +43,8 @@ fn test_sorting_status_trumps_everything() {
     critical.priority = 1;
     critical.status = TaskStatus::NeedsAction;
 
-    // Active should come FIRST (Less) despite lower priority
-    // Note: With new urgency logic, if critical is !1 and urgency threshold is !1,
-    // critical MIGHT come first depending on exact logic order.
-    // The implementation puts Urgency > Active.
-    // Let's verify the expectation based on your request:
-    // "tasks that are due today/tomorrow/overdue and tasks with priority !1 are shown first"
-    // So Critical (!1) should actually beat Active (!9) now.
-
-    // Let's adjust the test to respect the new logic:
-    // Active (InProcess) vs Critical (!1, NeedsAction)
-    // Urgency check: Active (!9) -> False. Critical (!1) -> True.
-    // Result: Critical < Active.
+    // With the urgency logic, tasks that are urgent may beat started tasks.
+    // Expect critical urgent task to sort before active started task here.
     assert_eq!(
         critical.compare_with_cutoff(&active, None, 1, 1, 5, 1),
         std::cmp::Ordering::Less
@@ -117,7 +107,8 @@ fn test_hierarchy_organization() {
     let tasks = vec![child.clone(), parent.clone()];
 
     // This function rebuilds the visual list (flattened tree)
-    let organized = Task::organize_hierarchy(tasks, 5);
+    // Updated signature includes expanded_done_groups, max_done_roots, max_done_subtasks.
+    let organized = Task::organize_hierarchy(tasks, 5, &HashSet::new(), usize::MAX, usize::MAX);
 
     assert_eq!(organized.len(), 2);
     assert_eq!(organized[0].summary, "Parent");

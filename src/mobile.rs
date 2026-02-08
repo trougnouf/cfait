@@ -126,6 +126,15 @@ pub struct MobileTask {
     pub location: Option<String>,
     pub url: Option<String>,
     pub geo: Option<String>,
+
+    // NEW: Virtual task hinting for clients to render expand/collapse rows
+    // Values are:
+    //  - "none"     -> not a virtual row
+    //  - "expand"   -> an expand placeholder; `virtual_payload` contains parent key
+    //  - "collapse" -> a collapse placeholder; `virtual_payload` contains parent key
+    pub virtual_type: String,
+    pub virtual_payload: String,
+
     pub visible_categories: Vec<String>,
     pub visible_location: Option<String>,
 }
@@ -187,6 +196,8 @@ pub struct MobileConfig {
     pub create_events_for_tasks: bool,
     pub delete_events_on_completion: bool,
     pub auto_refresh_interval: u32,
+    pub max_done_roots: u32,
+    pub max_done_subtasks: u32,
 }
 
 fn task_to_mobile(
@@ -248,6 +259,13 @@ fn task_to_mobile(
     let (visible_categories, visible_location) =
         t.resolve_visual_attributes(&parent_tags, &parent_loc, aliases);
 
+    // Map the internal virtual state to simple strings for mobile clients
+    let (v_type, v_payload) = match &t.virtual_state {
+        crate::model::VirtualState::None => ("none".to_string(), "".to_string()),
+        crate::model::VirtualState::Expand(k) => ("expand".to_string(), k.clone()),
+        crate::model::VirtualState::Collapse(k) => ("collapse".to_string(), k.clone()),
+    };
+
     MobileTask {
         uid: t.uid.clone(),
         summary: t.summary.clone(),
@@ -278,6 +296,11 @@ fn task_to_mobile(
         location: t.location.clone(),
         url: t.url.clone(),
         geo: t.geo.clone(),
+
+        // Virtual hint fields for mobile/GUI clients
+        virtual_type: v_type,
+        virtual_payload: v_payload,
+
         visible_categories,
         visible_location,
     }
@@ -384,6 +407,8 @@ impl CfaitMobile {
             create_events_for_tasks: c.create_events_for_tasks,
             delete_events_on_completion: c.delete_events_on_completion,
             auto_refresh_interval: c.auto_refresh_interval_mins,
+            max_done_roots: c.max_done_roots as u32,
+            max_done_subtasks: c.max_done_subtasks as u32,
         }
     }
 
@@ -411,6 +436,9 @@ impl CfaitMobile {
         create_events_for_tasks: bool,
         delete_events_on_completion: bool,
         auto_refresh_interval: u32,
+        // NEW ARGUMENTS
+        max_done_roots: u32,
+        max_done_subtasks: u32,
     ) -> Result<(), MobileError> {
         let mut c = Config::load(self.ctx.as_ref()).unwrap_or_default();
         c.url = url;
@@ -432,6 +460,11 @@ impl CfaitMobile {
         c.create_events_for_tasks = create_events_for_tasks;
         c.delete_events_on_completion = delete_events_on_completion;
         c.auto_refresh_interval_mins = auto_refresh_interval;
+
+        // Save new values
+        c.max_done_roots = max_done_roots as usize;
+        c.max_done_subtasks = max_done_subtasks as usize;
+
         c.save(self.ctx.as_ref()).map_err(MobileError::from)
     }
 
@@ -937,11 +970,17 @@ impl CfaitMobile {
         filter_tags: Vec<String>,
         filter_locations: Vec<String>,
         search_query: String,
+        // NEW: caller-provided list of expanded done-group keys
+        expanded_groups: Vec<String>,
     ) -> Vec<MobileTask> {
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
+
+        // Convert expanded vector into a set for efficient lookup
+        let expanded_set: HashSet<String> = expanded_groups.into_iter().collect();
+
         let cutoff_date = config
             .sort_cutoff_months
             .map(|m| Utc::now() + chrono::Duration::days(m as i64 * 30));
@@ -961,6 +1000,11 @@ impl CfaitMobile {
             urgent_prio: config.urgent_priority_threshold,
             default_priority: config.default_priority,
             start_grace_period_days: config.start_grace_period_days,
+
+            // NEW: pass expansion state and configured limits into the store filter
+            expanded_done_groups: &expanded_set,
+            max_done_roots: config.max_done_roots,
+            max_done_subtasks: config.max_done_subtasks,
         });
         filtered
             .into_iter()
@@ -997,6 +1041,9 @@ impl CfaitMobile {
             urgent_prio: config.urgent_priority_threshold,
             default_priority: config.default_priority,
             start_grace_period_days: config.start_grace_period_days,
+            expanded_done_groups: &HashSet::new(),
+            max_done_roots: config.max_done_roots,
+            max_done_subtasks: config.max_done_subtasks,
         });
         let idx = crate::store::select_weighted_random_index(&filtered, config.default_priority)?;
         filtered.get(idx).map(|t| t.uid.clone())

@@ -121,6 +121,9 @@ pub struct FilterOptions<'a> {
     pub urgent_prio: u8,
     pub default_priority: u8,
     pub start_grace_period_days: u32,
+    pub expanded_done_groups: &'a HashSet<String>,
+    pub max_done_roots: usize,
+    pub max_done_subtasks: usize,
 }
 
 impl TaskStore {
@@ -1056,6 +1059,12 @@ impl TaskStore {
             t.effective_dtstart = eff.start;
         }
 
-        Task::organize_hierarchy(final_tasks_processed, options.default_priority)
+        Task::organize_hierarchy(
+            final_tasks_processed,
+            options.default_priority,
+            options.expanded_done_groups,
+            options.max_done_roots,
+            options.max_done_subtasks,
+        )
     }
 }

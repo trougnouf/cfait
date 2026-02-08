@@ -38,8 +38,11 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         .sort_cutoff_months
         .map(|m| chrono::Utc::now() + chrono::Duration::days(m as i64 * 30));
 
+    // Load config so we can respect the global limits for showing completed groups/subtasks.
+    let config = Config::load(app.ctx.as_ref()).unwrap_or_default();
+
     app.tasks = app.store.filter(FilterOptions {
-        active_cal_href: None, // This is now handled by hidden_calendars
+        active_cal_href: app.active_cal_href.as_deref(),
         hidden_calendars: &app.hidden_calendars,
         selected_categories: &app.selected_categories,
         selected_locations: &app.selected_locations,
@@ -54,6 +57,9 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         urgent_prio: app.urgent_prio,
         default_priority: app.default_priority,
         start_grace_period_days: app.start_grace_period_days,
+        expanded_done_groups: &app.expanded_done_groups,
+        max_done_roots: config.max_done_roots,
+        max_done_subtasks: config.max_done_subtasks,
     });
 
     // 2. Build Parent Attribute Cache (O(N))
@@ -131,6 +137,10 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.create_events_for_tasks = app.create_events_for_tasks;
     cfg.delete_events_on_completion = app.delete_events_on_completion;
     cfg.auto_refresh_interval_mins = app.auto_refresh_interval_mins;
+
+    // Save new values from Advanced Settings inputs
+    cfg.max_done_roots = app.ob_max_done_roots_input.parse().unwrap_or(20);
+    cfg.max_done_subtasks = app.ob_max_done_subtasks_input.parse().unwrap_or(5);
 
     let _ = cfg.save(app.ctx.as_ref());
     cfg

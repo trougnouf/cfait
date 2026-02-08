@@ -1,3 +1,4 @@
+// File: ./android/app/src/main/java/com/trougnouf/cfait/ui/HomeScreen.kt
 /*
 File: ./android/app/src/main/java/com/trougnouf/cfait/ui/HomeScreen.kt
 This file contains the HomeScreen composable with the random-jump behavior.
@@ -85,6 +86,9 @@ fun HomeScreen(
 
     var filterTags by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
     var filterLocations by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
+
+    // NEW: State to track which "done" groups are expanded.
+    var expandedGroups by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
 
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
@@ -315,7 +319,8 @@ fun HomeScreen(
                 tasks = api.getViewTasks(
                     filterTags.toList(),
                     filterLocations.toList(),
-                    searchQuery
+                    searchQuery,
+                    expandedGroups.toList() // Pass the new argument
                 )
                 aliases = api.getConfig().tagAliases
             } catch (_: Exception) {
@@ -323,7 +328,18 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(searchQuery, filterTags, filterLocations, isLoading, calendars, tags, locations, refreshTick) {
+    // React to changes in filters, sync status, AND expanded groups
+    LaunchedEffect(
+        searchQuery,
+        filterTags,
+        filterLocations,
+        isLoading,
+        calendars,
+        tags,
+        locations,
+        refreshTick,
+        expandedGroups
+    ) {
         updateTaskList()
     }
 
@@ -460,7 +476,8 @@ fun HomeScreen(
                         val newTasks = api.getViewTasks(
                             filterTags.toList(),
                             filterLocations.toList(),
-                            searchQuery
+                            searchQuery,
+                            expandedGroups.toList() // Pass expanded groups
                         )
                         tasks = newTasks
 
@@ -522,6 +539,7 @@ fun HomeScreen(
                                 }
                                 t.copy(priority = p.toUByte())
                             }
+
                             "prio_down" -> {
                                 var p = t.priority.toInt()
                                 // If unset, start at passed defaultPriority. Otherwise decrease importance (increase number).
@@ -1222,28 +1240,39 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             items(tasks, key = { it.uid }) { task ->
-                                val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+                                if (task.virtualType == "none") {
+                                    val calColor = calColorMap[task.calendarHref] ?: Color.Gray
 
-                                // Resolve parent info for inheritance hiding
-                                val parent = task.parentUid?.let { taskMap[it] }
-                                val pCats = parent?.categories ?: emptyList()
-                                val pLoc = parent?.location
+                                    // Resolve parent info for inheritance hiding
+                                    val parent = task.parentUid?.let { taskMap[it] }
+                                    val pCats = parent?.categories ?: emptyList()
+                                    val pLoc = parent?.location
 
-                                TaskRow(
-                                    task = task,
-                                    calColor = calColor,
-                                    isDark = isDark,
-                                    onToggle = { toggleTask(task) },
-                                    onAction = { act -> onTaskAction(act, task) },
-                                    onClick = onTaskClick,
-                                    yankedUid = yankedUid,
-                                    enabledCalendarCount = enabledCalendarCount,
-                                    parentCategories = pCats,
-                                    parentLocation = pLoc,
-                                    aliasMap = aliases,
-                                    isHighlighted = task.uid == highlightedUid,
-                                    incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
-                                )
+                                    TaskRow(
+                                        task = task,
+                                        calColor = calColor,
+                                        isDark = isDark,
+                                        onToggle = { toggleTask(task) },
+                                        onAction = { act -> onTaskAction(act, task) },
+                                        onClick = onTaskClick,
+                                        yankedUid = yankedUid,
+                                        enabledCalendarCount = enabledCalendarCount,
+                                        parentCategories = pCats,
+                                        parentLocation = pLoc,
+                                        aliasMap = aliases,
+                                        isHighlighted = task.uid == highlightedUid,
+                                        incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
+                                    )
+                                } else {
+                                    VirtualTaskRow(task = task) {
+                                        val key = task.virtualPayload
+                                        expandedGroups = if (expandedGroups.contains(key)) {
+                                            expandedGroups - key
+                                        } else {
+                                            expandedGroups + key
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

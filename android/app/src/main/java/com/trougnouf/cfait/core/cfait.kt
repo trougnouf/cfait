@@ -998,6 +998,7 @@ internal object UniffiLib {
         `filterTags`: RustBuffer.ByValue,
         `filterLocations`: RustBuffer.ByValue,
         `searchQuery`: RustBuffer.ByValue,
+        `expandedGroups`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_has_unsynced_changes(
@@ -1089,6 +1090,8 @@ internal object UniffiLib {
         `createEventsForTasks`: Byte,
         `deleteEventsOnCompletion`: Byte,
         `autoRefreshInterval`: Int,
+        `maxDoneRoots`: Int,
+        `maxDoneSubtasks`: Int,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
@@ -1452,7 +1455,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 40919.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 41024.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 22815.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_unsynced_changes() != 21802.toShort()) {
@@ -1491,7 +1494,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_related_to() != 37228.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 58765.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 32031.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility() != 45711.toShort()) {
@@ -2108,6 +2111,7 @@ public interface CfaitMobileInterface {
         `filterTags`: List<kotlin.String>,
         `filterLocations`: List<kotlin.String>,
         `searchQuery`: kotlin.String,
+        `expandedGroups`: List<kotlin.String>,
     ): List<MobileTask>
 
     fun `hasUnsyncedChanges`(): kotlin.Boolean
@@ -2167,6 +2171,8 @@ public interface CfaitMobileInterface {
         `createEventsForTasks`: kotlin.Boolean,
         `deleteEventsOnCompletion`: kotlin.Boolean,
         `autoRefreshInterval`: kotlin.UInt,
+        `maxDoneRoots`: kotlin.UInt,
+        `maxDoneSubtasks`: kotlin.UInt,
     )
 
     fun `setCalendarVisibility`(
@@ -2752,6 +2758,7 @@ open class CfaitMobile :
         `filterTags`: List<kotlin.String>,
         `filterLocations`: List<kotlin.String>,
         `searchQuery`: kotlin.String,
+        `expandedGroups`: List<kotlin.String>,
     ): List<MobileTask> =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -2760,6 +2767,7 @@ open class CfaitMobile :
                     FfiConverterSequenceString.lower(`filterTags`),
                     FfiConverterSequenceString.lower(`filterLocations`),
                     FfiConverterString.lower(`searchQuery`),
+                    FfiConverterSequenceString.lower(`expandedGroups`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
@@ -2988,6 +2996,8 @@ open class CfaitMobile :
         `createEventsForTasks`: kotlin.Boolean,
         `deleteEventsOnCompletion`: kotlin.Boolean,
         `autoRefreshInterval`: kotlin.UInt,
+        `maxDoneRoots`: kotlin.UInt,
+        `maxDoneSubtasks`: kotlin.UInt,
     ) = callWithHandle {
         uniffiRustCallWithError(MobileException) { _status ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_save_config(
@@ -3009,6 +3019,8 @@ open class CfaitMobile :
                 FfiConverterBoolean.lower(`createEventsForTasks`),
                 FfiConverterBoolean.lower(`deleteEventsOnCompletion`),
                 FfiConverterUInt.lower(`autoRefreshInterval`),
+                FfiConverterUInt.lower(`maxDoneRoots`),
+                FfiConverterUInt.lower(`maxDoneSubtasks`),
                 _status,
             )
         }
@@ -3420,6 +3432,8 @@ data class MobileConfig(
     var `createEventsForTasks`: kotlin.Boolean,
     var `deleteEventsOnCompletion`: kotlin.Boolean,
     var `autoRefreshInterval`: kotlin.UInt,
+    var `maxDoneRoots`: kotlin.UInt,
+    var `maxDoneSubtasks`: kotlin.UInt,
 ) {
     companion object
 }
@@ -3448,6 +3462,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
         )
 
     override fun allocationSize(value: MobileConfig) =
@@ -3469,7 +3485,9 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterUInt.allocationSize(value.`snoozeShort`) +
                 FfiConverterBoolean.allocationSize(value.`createEventsForTasks`) +
                 FfiConverterBoolean.allocationSize(value.`deleteEventsOnCompletion`) +
-                FfiConverterUInt.allocationSize(value.`autoRefreshInterval`)
+                FfiConverterUInt.allocationSize(value.`autoRefreshInterval`) +
+                FfiConverterUInt.allocationSize(value.`maxDoneRoots`) +
+                FfiConverterUInt.allocationSize(value.`maxDoneSubtasks`)
         )
 
     override fun write(
@@ -3494,6 +3512,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterBoolean.write(value.`createEventsForTasks`, buf)
         FfiConverterBoolean.write(value.`deleteEventsOnCompletion`, buf)
         FfiConverterUInt.write(value.`autoRefreshInterval`, buf)
+        FfiConverterUInt.write(value.`maxDoneRoots`, buf)
+        FfiConverterUInt.write(value.`maxDoneSubtasks`, buf)
     }
 }
 
@@ -3663,6 +3683,8 @@ data class MobileTask(
     var `location`: kotlin.String?,
     var `url`: kotlin.String?,
     var `geo`: kotlin.String?,
+    var `virtualType`: kotlin.String,
+    var `virtualPayload`: kotlin.String,
     var `visibleCategories`: List<kotlin.String>,
     var `visibleLocation`: kotlin.String?,
 ) {
@@ -3704,6 +3726,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterOptionalString.read(buf),
         )
@@ -3739,6 +3763,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterOptionalString.allocationSize(value.`location`) +
                 FfiConverterOptionalString.allocationSize(value.`url`) +
                 FfiConverterOptionalString.allocationSize(value.`geo`) +
+                FfiConverterString.allocationSize(value.`virtualType`) +
+                FfiConverterString.allocationSize(value.`virtualPayload`) +
                 FfiConverterSequenceString.allocationSize(value.`visibleCategories`) +
                 FfiConverterOptionalString.allocationSize(value.`visibleLocation`)
         )
@@ -3776,6 +3802,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterOptionalString.write(value.`location`, buf)
         FfiConverterOptionalString.write(value.`url`, buf)
         FfiConverterOptionalString.write(value.`geo`, buf)
+        FfiConverterString.write(value.`virtualType`, buf)
+        FfiConverterString.write(value.`virtualPayload`, buf)
         FfiConverterSequenceString.write(value.`visibleCategories`, buf)
         FfiConverterOptionalString.write(value.`visibleLocation`, buf)
     }

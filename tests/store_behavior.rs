@@ -44,6 +44,9 @@ fn test_filter_by_tag() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &empty_set,
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     });
 
     assert_eq!(results.len(), 1);
@@ -79,6 +82,9 @@ fn test_filter_hierarchical_tags() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &empty_set,
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     });
 
     assert_eq!(results.len(), 1);
@@ -120,6 +126,9 @@ fn test_hide_hidden_calendars() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        expanded_done_groups: &empty_set,
+        max_done_roots: usize::MAX,
+        max_done_subtasks: usize::MAX,
     });
 
     assert_eq!(results.len(), 1);

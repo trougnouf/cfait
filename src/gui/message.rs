@@ -95,6 +95,8 @@ pub enum Message {
     TabPressed(bool),
     OpenHelp,
     CloseHelp,
+    // Virtual group toggles (expand/collapse) for completed/cancelled grouping
+    ToggleDoneGroup(String),
 
     // --- Navigation & Actions ---
     YankTask(String),
@@ -165,6 +167,12 @@ pub enum Message {
     SetSnoozeShort(String),
     SetSnoozeLong(String),
     SetAutoRefreshInterval(String), // Added
+
+    // --- Advanced Settings ---
+    ToggleAdvancedSettings(bool),
+    SetMaxDoneRoots(String),
+    SetMaxDoneSubtasks(String),
+
     SetCreateEventsForTasks(bool),
     SetDeleteEventsOnCompletion(bool),
     DeleteAllCalendarEvents,

@@ -100,6 +100,7 @@ pub struct GuiApp {
     pub editing_uid: Option<String>,
     pub creating_child_of: Option<String>,
     pub expanded_tasks: HashSet<String>,
+    pub expanded_done_groups: HashSet<String>,
     pub unsynced_changes: bool,
 
     // Computed State (Persisted for view borrowing)
@@ -174,6 +175,11 @@ pub struct GuiApp {
     pub ob_snooze_short_input: String,
     pub ob_snooze_long_input: String,
     pub ob_auto_refresh_input: String, // Added
+
+    // NEW: Advanced Settings Inputs
+    pub show_advanced_settings: bool,
+    pub ob_max_done_roots_input: String,
+    pub ob_max_done_subtasks_input: String,
 
     // ADDED: Force Server-Side Decorations
     pub force_ssd: bool,
@@ -268,6 +274,7 @@ impl Default for GuiApp {
             editing_uid: None,
             creating_child_of: None,
             expanded_tasks: HashSet::new(),
+            expanded_done_groups: HashSet::new(),
             unsynced_changes: false,
 
             current_placeholder: "Add a task...".to_string(),
@@ -317,6 +324,11 @@ impl Default for GuiApp {
             ob_snooze_short_input: "1h".to_string(),
             ob_snooze_long_input: "1d".to_string(),
             ob_auto_refresh_input: "30m".to_string(), // Added default
+
+            // NEW: Advanced Settings Inputs
+            show_advanced_settings: false,
+            ob_max_done_roots_input: "20".to_string(),
+            ob_max_done_subtasks_input: "5".to_string(),
 
             // ADDED: Force Server-Side Decorations
             force_ssd: false,

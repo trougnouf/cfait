@@ -90,7 +90,9 @@ pub mod test_hooks {
 }
 
 #[cfg(any(test, feature = "test_hooks"))]
-pub use test_hooks::{TEST_FETCH_REMOTE_HOOK, TEST_FORCE_SYNC_ERROR};
+pub use test_hooks::{
+    FetchRemoteHook, ForceSyncErrorHook, TEST_FETCH_REMOTE_HOOK, TEST_FORCE_SYNC_ERROR,
+};
 
 // -----------------------------
 

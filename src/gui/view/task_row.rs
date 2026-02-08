@@ -28,6 +28,53 @@ pub fn view_task_row<'a>(
     task: &'a TodoTask,
     row_id: iced::widget::Id, // <-- CHANGED: Accept ID as argument
 ) -> Element<'a, Message> {
+    // Handle Virtual Task rows (expand/collapse placeholders) first.
+    // These are injected by the model as lightweight rows; render as a simple button
+    // with the proper arrow icon and send a ToggleDoneGroup message when clicked.
+    use crate::model::VirtualState;
+
+    match &task.virtual_state {
+        VirtualState::Expand(key) => {
+            let indent_size = if app.active_cal_href.is_some() {
+                task.depth * 12
+            } else {
+                0
+            };
+            let indent = Space::new().width(Length::Fixed(indent_size as f32));
+
+            let btn = button(
+                icon::icon(icon::ARROW_EXPAND_DOWN)
+                    .size(16)
+                    .color(Color::from_rgb(0.5, 0.5, 0.8)),
+            )
+            .style(iced::widget::button::text)
+            .width(Length::Fill)
+            .on_press(Message::ToggleDoneGroup(key.clone()));
+
+            return row![indent, btn].into();
+        }
+        VirtualState::Collapse(key) => {
+            let indent_size = if app.active_cal_href.is_some() {
+                task.depth * 12
+            } else {
+                0
+            };
+            let indent = Space::new().width(Length::Fixed(indent_size as f32));
+
+            let btn = button(
+                icon::icon(icon::ARROW_EXPAND_UP)
+                    .size(16)
+                    .color(Color::from_rgb(0.5, 0.5, 0.8)),
+            )
+            .style(iced::widget::button::text)
+            .width(Length::Fill)
+            .on_press(Message::ToggleDoneGroup(key.clone()));
+
+            return row![indent, btn].into();
+        }
+        _ => {}
+    }
+
     // CHANGE: Use the pre-calculated field instead of calling app.store.is_blocked(task)
     // app.store.is_blocked(task) triggers an O(N) scan. task.is_blocked is O(1).
     let is_blocked = task.is_blocked;

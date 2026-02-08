@@ -125,6 +125,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
+        // Toggle expand/collapse for virtual done-group rows injected by the model.
+        Message::ToggleDoneGroup(key) => {
+            if app.expanded_done_groups.contains(&key) {
+                app.expanded_done_groups.remove(&key);
+            } else {
+                app.expanded_done_groups.insert(key.clone());
+            }
+            // Rebuild the filtered/task view to reflect expansion changes.
+            refresh_filtered_tasks(app);
+            Task::none()
+        }
         Message::DeleteTask(index) => {
             if let Some(view_task) = app.tasks.get(index)
                 && let Some((deleted_task, _)) = app.store.delete_task(&view_task.uid)
