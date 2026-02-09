@@ -80,44 +80,52 @@ jobs:
           TAG_NAME="rolling"
           REPO="${{ github.repository }}"
 
-          # 2. Find the APK
+          # 2. Find and stage the APK
           APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
-
           if [ -z "$APK_PATH" ]; then
             echo "❌ Error: APK file not found!"
-            ls -R android/app/build/outputs/apk/
             exit 1
           fi
-          echo "Found APK: $APK_PATH"
 
-          # 3. Clean up previous release/tag
-          echo "Cleaning up old rolling release..."
+          # Clean staging folder
+          mkdir -p rolling-dist
+          cp "$APK_PATH" "rolling-dist/cfait-android-rolling.apk"
+
+          # 3. Delete the old release (using your release.yml syntax)
+          echo "Cleaning up old release..."
           tea release delete --repo "$REPO" --confirm "$TAG_NAME" || true
+
+          # Pause to let the server database purge the record
+          sleep 5
+
+          # 4. Update the tag
+          echo "Updating git tag..."
           git push origin :refs/tags/"$TAG_NAME" || true
           git tag -d "$TAG_NAME" || true
-
-          # 4. Create and push new tag
           git tag "$TAG_NAME"
           git push origin "$TAG_NAME"
 
-          # --- FIX: Wait for the server to process the new tag ---
-          echo "Waiting 5 seconds for tag to propagate on the server..."
+          # Pause to let the server index the new tag
           sleep 5
 
-          # 5. Create the release (without assets)
-          echo "Creating new release for tag '$TAG_NAME'..."
+          # 5. Create the release using ONLY flags (fixes 'title is empty')
+          echo "Creating new release..."
           tea release create \
             --repo "$REPO" \
-            --title "Rolling Development Build" \
             --tag "$TAG_NAME" \
-            --prerelease \
-            --note "Automated signed build. Verified by CI. Commit: ${{ github.sha }}"
+            --title "Rolling Development Build" \
+            --note "Automated signed build from commit ${{ github.sha }}" \
+            --prerelease
 
-          # 6. Upload the APK as an asset
-          echo "Uploading asset '$APK_PATH'..."
-          tea release assets create \
-            --repo "$REPO" \
-            "$TAG_NAME" \
-            "$APK_PATH"
+          # 6. Upload the APK using your release.yml syntax
+          echo "Uploading APK..."
+          cd rolling-dist
+          tea release assets create --repo "$REPO" "$TAG_NAME" "cfait-android-rolling.apk"
+          cd ..
 
-          echo "✅ Rolling release updated successfully."
+          # 7. Detailed Verification
+          echo "--- VERIFICATION ---"
+          tea release view --repo "$REPO" "$TAG_NAME"
+          echo "--- END VERIFICATION ---"
+
+          echo "✅ Rolling release process complete."
