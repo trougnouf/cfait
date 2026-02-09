@@ -793,6 +793,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_task_by_uid(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks(): Short
@@ -986,6 +988,11 @@ internal object UniffiLib {
         `filterTags`: RustBuffer.ByValue,
         `filterLocations`: RustBuffer.ByValue,
         `searchQuery`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_task_by_uid(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_tasks_related_to(
@@ -1450,6 +1457,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid() != 32270.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_task_by_uid() != 45186.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 40919.toShort()) {
@@ -2105,6 +2115,8 @@ public interface CfaitMobileInterface {
         `searchQuery`: kotlin.String,
     ): kotlin.String?
 
+    suspend fun `getTaskByUid`(`uid`: kotlin.String): MobileTask?
+
     suspend fun `getTasksRelatedTo`(`uid`: kotlin.String): List<MobileRelatedTask>
 
     suspend fun `getViewTasks`(
@@ -2731,6 +2743,24 @@ open class CfaitMobile :
             { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
             { FfiConverterOptionalString.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
+
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `getTaskByUid`(`uid`: kotlin.String): MobileTask? =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_task_by_uid(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterOptionalTypeMobileTask.lift(it) },
             // Error FFI converter
             UniffiNullRustCallStatusErrorHandler,
         )
@@ -3977,6 +4007,38 @@ public object FfiConverterOptionalString : FfiConverterRustBuffer<kotlin.String?
         } else {
             buf.put(1)
             FfiConverterString.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeMobileTask : FfiConverterRustBuffer<MobileTask?> {
+    override fun read(buf: ByteBuffer): MobileTask? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeMobileTask.read(buf)
+    }
+
+    override fun allocationSize(value: MobileTask?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeMobileTask.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: MobileTask?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeMobileTask.write(value, buf)
         }
     }
 }

@@ -50,8 +50,9 @@ fun TaskDetailScreen(
 
     fun reload() {
         scope.launch {
-            val all = api.getViewTasks(emptyList(), emptyList(), "", emptyList())
-            task = all.find { it.uid == uid }
+            // FIX: Use direct lookup instead of searching in the filtered view list.
+            // This ensures completed/hidden tasks can still be opened and edited.
+            task = api.getTaskByUid(uid)
             task?.let {
                 smartInput = it.smartString
                 description = it.description

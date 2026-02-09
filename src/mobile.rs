@@ -965,6 +965,19 @@ impl CfaitMobile {
             .collect()
     }
 
+    // NEW: Direct lookup to support opening specific tasks (e.g. via notification or deep link)
+    // regardless of current view filters (hidden/completed/collapsed).
+    pub async fn get_task_by_uid(&self, uid: String) -> Option<MobileTask> {
+        let store = self.controller.store.lock().await;
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+
+        if let Some(task) = store.get_task_ref(&uid) {
+            Some(task_to_mobile(task, &store, &config.tag_aliases))
+        } else {
+            None
+        }
+    }
+
     pub async fn get_view_tasks(
         &self,
         filter_tags: Vec<String>,
