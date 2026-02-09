@@ -116,7 +116,20 @@ impl RustyClient {
         client: &CalDavClient<HttpsClient>,
         task: &Task,
     ) -> Result<StepResult, String> {
-        let path = strip_host(&task.href);
+        // FIX: Handle "Ghost Update" where href is missing.
+        // Reconstruct the correct path from the calendar_href and UID.
+        let path = if task.href.is_empty() {
+            let filename = format!("{}.ics", task.uid);
+            let cal_path = strip_host(&task.calendar_href);
+            if cal_path.ends_with('/') {
+                format!("{}{}", cal_path, filename)
+            } else {
+                format!("{}/{}", cal_path, filename)
+            }
+        } else {
+            strip_host(&task.href)
+        };
+
         let ics_string = IcsAdapter::to_ics(task);
         let etag_val = if task.etag == "pending_refresh" {
             ""
@@ -132,11 +145,26 @@ impl RustyClient {
             ))
             .await
         {
-            Ok(resp) => Ok(StepResult::new(StepOutcome::Success {
-                etag: resp.etag,
-                href: None,
-                refresh_path: Some(path),
-            })),
+            Ok(resp) => {
+                // If we reconstructed the path, we must ensure we update the HREF in the success outcome
+                // so subsequent actions use the correct path.
+                let new_href = if task.href.is_empty() {
+                    let filename = format!("{}.ics", task.uid);
+                    if task.calendar_href.ends_with('/') {
+                        Some(format!("{}{}", task.calendar_href, filename))
+                    } else {
+                        Some(format!("{}/{}", task.calendar_href, filename))
+                    }
+                } else {
+                    None
+                };
+
+                Ok(StepResult::new(StepOutcome::Success {
+                    etag: resp.etag,
+                    href: new_href,
+                    refresh_path: Some(path),
+                }))
+            }
             Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
             | Err(WebDavError::PreconditionFailed(_)) => {
                 if let Some((resolution, msg)) = self.attempt_conflict_resolution(task).await {
@@ -427,6 +455,8 @@ impl RustyClient {
                                 let old = match &next_action {
                                     Action::Create(t) => t.href.clone(), // Doesn't matter for create
                                     Action::Move(t, _) => t.href.clone(),
+                                    // For Update, propagate if we fixed a missing href
+                                    Action::Update(t) => t.href.clone(),
                                     _ => String::new(),
                                 };
                                 new_href_to_propagate = Some((old, h));
@@ -571,12 +601,16 @@ impl RustyClient {
                         let target_uid = match &next_action {
                             Action::Move(t, _) => t.uid.clone(),
                             Action::Create(t) => t.uid.clone(),
+                            Action::Update(t) => t.uid.clone(),
                             _ => String::new(),
                         };
                         for item in journal.queue.iter_mut() {
                             match item {
                                 Action::Update(t) | Action::Delete(t) => {
-                                    if t.uid == target_uid || t.href == old_href {
+                                    // Match by UID or old HREF
+                                    if t.uid == target_uid
+                                        || (!old_href.is_empty() && t.href == old_href)
+                                    {
                                         t.href = new_href.clone();
                                         if let Some(last_slash) = new_href.rfind('/') {
                                             t.calendar_href = new_href[..=last_slash].to_string();
