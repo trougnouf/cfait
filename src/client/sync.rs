@@ -98,7 +98,16 @@ impl RustyClient {
                     task.summary
                 )))
             }
-            Err(e) => Err(format!("{:?}", e)),
+            Err(e) => {
+                let msg = format!("{:?}", e);
+                if msg.contains("403") || msg.contains("400") || msg.contains("415") {
+                    return Ok(StepResult::new(StepOutcome::RecoveryNeeded(msg)));
+                }
+                if msg.contains("413") {
+                    return Ok(StepResult::new(StepOutcome::Discard).with_warning(msg));
+                }
+                Err(msg)
+            }
         }
     }
 
@@ -176,6 +185,10 @@ impl RustyClient {
                             task.summary
                         )),
                     )
+                } else if msg.contains("403") || msg.contains("400") || msg.contains("415") {
+                    Ok(StepResult::new(StepOutcome::RecoveryNeeded(msg)))
+                } else if msg.contains("413") {
+                    Ok(StepResult::new(StepOutcome::Discard).with_warning(msg))
                 } else {
                     Err(msg)
                 }
@@ -221,7 +234,16 @@ impl RustyClient {
                     task.summary
                 )))
             }
-            Err(e) => Err(format!("{:?}", e)),
+            Err(e) => {
+                let msg = format!("{:?}", e);
+                if msg.contains("403") || msg.contains("400") || msg.contains("415") {
+                    // For delete, if we can't delete due to permissions, just discard from queue
+                    // to prevent blocking. We can't easily recover a deleted task state.
+                    Ok(StepResult::new(StepOutcome::Discard).with_warning(msg))
+                } else {
+                    Err(msg)
+                }
+            }
         }
     }
 
@@ -254,6 +276,8 @@ impl RustyClient {
                         "Move source missing for '{}', assuming success.",
                         task.summary
                     )))
+                } else if e.contains("400") || e.contains("415") {
+                    Ok(StepResult::new(StepOutcome::RecoveryNeeded(e)))
                 } else {
                     Err(e)
                 }

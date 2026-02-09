@@ -1,3 +1,4 @@
+// File: ./src/journal.rs
 /*
  * cfait/src/journal.rs
  *
@@ -119,6 +120,11 @@ impl Journal {
                     }
                     (Action::Update(_), Action::Delete(t)) => {
                         compacted[idx] = Some(Action::Delete(t.clone()));
+                        merged = true;
+                    }
+                    (Action::Create(_), Action::Create(t)) => {
+                        // Merge duplicates: keep the newer version (last wins)
+                        compacted[idx] = Some(Action::Create(t.clone()));
                         merged = true;
                     }
                     _ => {}

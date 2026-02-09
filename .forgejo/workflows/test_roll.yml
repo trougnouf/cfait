@@ -100,6 +100,10 @@ jobs:
           git tag "$TAG_NAME"
           git push origin "$TAG_NAME"
 
+          # --- FIX: Wait for the server to process the new tag ---
+          echo "Waiting 5 seconds for tag to propagate on the server..."
+          sleep 5
+
           # 5. Create the release (without assets)
           echo "Creating new release for tag '$TAG_NAME'..."
           tea release create \
