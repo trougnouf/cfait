@@ -423,10 +423,19 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     )
                 }
             } else if let Some(d) = &t.due {
+                // --- CHANGED START ---
+                let is_overdue = !t.status.is_done() && d.to_comparison_time() < now;
+                let style = if is_overdue {
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::Blue)
+                };
+
                 (
                     format!(" @{}⌛", d.format_smart()),
-                    Style::default().fg(Color::Blue),
+                    style,
                 )
+                // --- CHANGED END ---
             } else {
                 (String::new(), Style::default())
             };

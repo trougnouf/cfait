@@ -219,7 +219,21 @@ pub fn view_task_row<'a>(
 
         // Define colors
         let dim_color = Color::from_rgb(0.7, 0.7, 0.7); // For future
-        let due_color = Color::from_rgb(0.5, 0.5, 0.5); // For active/due
+
+        // --- CHANGED START ---
+        // Check for Overdue
+        let is_overdue = if let Some(d) = &task.due {
+            !task.status.is_done() && d.to_comparison_time() < now
+        } else {
+            false
+        };
+
+        let due_color = if is_overdue {
+            Color::from_rgb(0.8, 0.2, 0.2) // Red
+        } else {
+            Color::from_rgb(0.5, 0.5, 0.5) // Gray
+        };
+        // --- CHANGED END ---
 
         if is_future_start {
             // Start Icon

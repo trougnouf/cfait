@@ -20,6 +20,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.core.MobileTask
+import java.time.Instant
+import java.time.OffsetDateTime
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -206,6 +208,19 @@ fun TaskRow(
                         // Case 3: Due Only (or Started)
                         // Note: Removed generic CALENDAR icon check to rely on the new hourglass_end
 
+                        // --- CHANGED START ---
+                        val isOverdue = remember(task.dueDateIso, task.isDone) {
+                            if (task.isDone) false
+                            else try {
+                                val due = OffsetDateTime.parse(task.dueDateIso).toInstant()
+                                due.isBefore(Instant.now())
+                            } catch (e: Exception) {
+                                false
+                            }
+                        }
+
+                        val dateColor = if (isOverdue) MaterialTheme.colorScheme.error else Color.Gray
+
                         // Format Due Date
                         val displayStr = if (task.isAlldayDue) {
                             task.dueDateIso!!.take(10)
@@ -213,8 +228,9 @@ fun TaskRow(
                             formatIsoToLocal(task.dueDateIso!!)
                         }
 
-                        Text(displayStr, fontSize = 10.sp, color = Color.Gray, lineHeight = 10.sp)
-                        NfIcon(NfIcons.HOURGLASS_END, size = 10.sp, color = Color.Gray, lineHeight = 10.sp)
+                        Text(displayStr, fontSize = 10.sp, color = dateColor, lineHeight = 10.sp)
+                        NfIcon(NfIcons.HOURGLASS_END, size = 10.sp, color = dateColor, lineHeight = 10.sp)
+                        // --- CHANGED END ---
                     }
 
                     if (task.durationMins != null) {
