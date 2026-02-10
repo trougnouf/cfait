@@ -53,6 +53,7 @@ pub const APPLE_COLOR: PropertyName =
     PropertyName::new("http://apple.com/ns/ical/", "calendar-color");
 
 use crate::client::FollowRedirectService;
+use crate::client::FollowRedirectLayer;
 use crate::client::auth::DynamicAuthService;
 
 // Concrete HttpsClient type used throughout the crate. This is a FollowRedirect
@@ -188,7 +189,7 @@ impl RustyClient {
         let ua_client = UserAgentLayer::new(ua_string).layer(http_client);
         let auth_client =
             DynamicAuthLayer::new(user.to_string(), pass.to_string()).layer(ua_client);
-        let redirect_client = FollowRedirectService::new(auth_client);
+        let redirect_client = FollowRedirectLayer::new(10).layer(auth_client);
 
         let webdav = WebDavClient::new(uri, redirect_client.clone());
         let caldav = CalDavClient::new(webdav);

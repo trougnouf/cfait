@@ -5,12 +5,11 @@ pub mod cert;
 pub mod core;
 pub mod middleware;
 pub mod sync;
+pub mod redirect; // Restore this module
 
-// Re-export follow-redirect middleware from tower-http so the rest of the crate
-// can import the same types it previously expected from the `redirect` module.
-pub use tower_http::follow_redirect::{
-    FollowRedirect as FollowRedirectService, FollowRedirectLayer, RequestUri,
+// Restore exports from local module
+pub use crate::client::redirect::{
+    FollowRedirectService, FollowRedirectLayer,
 };
 
-// Use crate path to be safe, or relative
 pub use crate::client::core::{GET_CTAG, RustyClient};
