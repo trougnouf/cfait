@@ -108,7 +108,7 @@ jobs:
           tea release create \
             --repo "$REPO" \
             --title "Rolling Development Build" \
-            --note "Automated signed build\nCommit: ${{ github.sha }}" \
+            --note "Automated signed build, commit: ${{ github.sha }}" \
             --prerelease \
             --asset "$APK_PATH" \
             "$TAG_NAME"

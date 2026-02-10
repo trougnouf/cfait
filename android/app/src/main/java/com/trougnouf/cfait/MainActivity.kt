@@ -53,6 +53,7 @@ import com.trougnouf.cfait.util.AlarmScheduler
 import com.trougnouf.cfait.workers.AlarmWorker
 import com.trougnouf.cfait.workers.CalendarMigrationWorker
 import com.trougnouf.cfait.workers.CalendarSyncWorker
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -147,6 +148,7 @@ fun CfaitNavHost(
             maxDoneRoots = cfg.maxDoneRoots.toString()
             maxDoneSubtasks = cfg.maxDoneSubtasks.toString()
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             // ignore init errors here
         }
     }
@@ -183,15 +185,23 @@ fun CfaitNavHost(
         currentWorkInfo?.state == WorkInfo.State.RUNNING || currentWorkInfo?.state == WorkInfo.State.ENQUEUED
 
     // React to completion to show Toasts
+    // NOTE: Suppress toasts on FAILED for periodic/background sync to avoid alarming the user.
     LaunchedEffect(currentWorkInfo?.state) {
-        if (currentWorkInfo?.state == WorkInfo.State.SUCCEEDED) {
-            val msg = currentWorkInfo.outputData.getString(CalendarSyncWorker.OUTPUT_MESSAGE)
-            if (msg != null) {
-                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+        try {
+            if (currentWorkInfo?.state == WorkInfo.State.SUCCEEDED) {
+                val msg = currentWorkInfo.outputData.getString(CalendarSyncWorker.OUTPUT_MESSAGE)
+                if (msg != null) {
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                }
+            } else if (currentWorkInfo?.state == WorkInfo.State.FAILED) {
+                // FLAW FIX: Do not show a toast for periodic/background sync failures.
+                // Log the failure for diagnostics instead.
+                val msg = currentWorkInfo.outputData.getString(CalendarSyncWorker.OUTPUT_MESSAGE) ?: "Unknown error"
+                android.util.Log.w("CfaitMain", "Periodic calendar sync failed: $msg")
             }
-        } else if (currentWorkInfo?.state == WorkInfo.State.FAILED) {
-            val msg = currentWorkInfo.outputData.getString(CalendarSyncWorker.OUTPUT_MESSAGE) ?: "Unknown error"
-            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            android.util.Log.e("CfaitMain", "Error handling WorkManager state change", e)
         }
     }
 
@@ -203,23 +213,28 @@ fun CfaitNavHost(
     val currentMigration = migrationWorkInfo?.firstOrNull()
 
     LaunchedEffect(currentMigration?.state) {
-        if (currentMigration?.state == WorkInfo.State.SUCCEEDED) {
-            val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
-            Toast.makeText(context, msg ?: "Migration complete", Toast.LENGTH_LONG).show()
+        try {
+            if (currentMigration?.state == WorkInfo.State.SUCCEEDED) {
+                val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
+                Toast.makeText(context, msg ?: "Migration complete", Toast.LENGTH_LONG).show()
 
-            // Force refresh UI
-            val intent = Intent("com.trougnouf.cfait.REFRESH_UI")
-            intent.setPackage(context.packageName)
-            context.sendBroadcast(intent)
+                // Force refresh UI
+                val intent = Intent("com.trougnouf.cfait.REFRESH_UI")
+                intent.setPackage(context.packageName)
+                context.sendBroadcast(intent)
 
-            // Prune the work so the Toast doesn't appear on next launch
-            workManager.pruneWork()
-        } else if (currentMigration?.state == WorkInfo.State.FAILED) {
-            val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
-            Toast.makeText(context, msg ?: "Migration failed", Toast.LENGTH_LONG).show()
+                // Prune the work so the Toast doesn't appear on next launch
+                workManager.pruneWork()
+            } else if (currentMigration?.state == WorkInfo.State.FAILED) {
+                val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
+                Toast.makeText(context, msg ?: "Migration failed", Toast.LENGTH_LONG).show()
 
-            // Prune failed work too so user can retry immediately without UI glitch
-            workManager.pruneWork()
+                // Prune failed work too so user can retry immediately without UI glitch
+                workManager.pruneWork()
+            }
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            android.util.Log.e("CfaitMain", "Error observing migration worker", e)
         }
     }
     // --------------------------------
@@ -254,6 +269,7 @@ fun CfaitNavHost(
                 hasUnsynced = api.hasUnsyncedChanges()
                 AlarmScheduler.scheduleNextAlarm(context, api)
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 android.util.Log.e("CfaitMain", "Exception in refreshLists", e)
             }
         }
@@ -293,6 +309,8 @@ fun CfaitNavHost(
                     request
                 )
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                android.util.Log.e("CfaitMain", "fastStart failed", e)
             }
             isLoading = false
         }
@@ -305,6 +323,7 @@ fun CfaitNavHost(
                 api.updateTaskDescription(uid, desc)
                 refreshLists()
             } catch (e: Exception) {
+                if (e is CancellationException) throw e // IGNORE CANCELLATION (don't show to user)
                 Toast.makeText(context, "Background sync failed: ${e.message}", Toast.LENGTH_LONG).show()
                 refreshLists()
             }
@@ -374,6 +393,7 @@ fun CfaitNavHost(
                             Toast.makeText(context, "Failed to read ICS file", Toast.LENGTH_LONG).show()
                         }
                     } catch (e: Exception) {
+                        if (e is CancellationException) throw e
                         Toast.makeText(context, "Error opening file: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
@@ -454,6 +474,7 @@ fun CfaitNavHost(
                     localRoots = cfg.maxDoneRoots.toString()
                     localSubs = cfg.maxDoneSubtasks.toString()
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     // ignore
                 }
             }
@@ -479,6 +500,7 @@ fun CfaitNavHost(
                             r, s // New values
                         )
                     } catch (e: Exception) {
+                        if (e is CancellationException) throw e
                         // swallow save error
                     }
                     navController.popBackStack()
@@ -506,6 +528,7 @@ fun CfaitNavHost(
                                     popUpTo("home") { inclusive = false }
                                 }
                             } catch (e: Exception) {
+                                if (e is CancellationException) throw e
                                 Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
                             }
                         }
