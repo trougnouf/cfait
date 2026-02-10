@@ -710,12 +710,18 @@ pub async fn handle_key_event(
                 if state.active_focus == Focus::Main
                     && let Some(task) = state.get_selected_task()
                 {
+                    // Fix: Define these inside the block to resolve scope errors
                     let uid = task.uid.clone();
                     let summary = task.summary.clone();
 
                     let mut initial_input = String::new();
                     for cat in &task.categories {
-                        initial_input.push_str(&format!("#{} ", cat));
+                        // Parity: Use quote_value to handle spaces correctly
+                        initial_input.push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
+                    }
+                    // Parity: Add Location inheritance
+                    if let Some(loc) = &task.location {
+                        initial_input.push_str(&format!("@@{} ", crate::model::parser::quote_value(loc)));
                     }
 
                     state.input_buffer = initial_input;

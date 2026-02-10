@@ -510,6 +510,20 @@ fun HomeScreen(
         if (action == "create_child") {
             creatingChildUid = task.uid
             yankedUid = null
+
+            // Pre-fill the input field with parent tags and location
+            val sb = StringBuilder()
+            // Helper to quote values containing spaces for smart syntax
+            fun quote(s: String): String =
+                if (s.contains(" ") || s.contains("\"")) "\"${s.replace("\"", "\\\"")}\"" else s
+
+            task.categories.forEach { cat ->
+                sb.append("#${quote(cat)} ")
+            }
+            task.location?.let { loc ->
+                sb.append("@@${quote(loc)} ")
+            }
+            newTaskText = sb.toString()
             return
         }
 

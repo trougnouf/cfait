@@ -51,7 +51,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let mut initial_input = String::new();
             if let Some((parent, _)) = app.store.get_task_mut(&parent_uid) {
                 for cat in &parent.categories {
-                    initial_input.push_str(&format!("#{} ", cat));
+                    initial_input.push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
+                }
+                // Parity: Add Location inheritance
+                if let Some(loc) = &parent.location {
+                    initial_input.push_str(&format!("@@{} ", crate::model::parser::quote_value(loc)));
                 }
             }
 
