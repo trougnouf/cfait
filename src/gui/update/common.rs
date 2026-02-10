@@ -42,7 +42,10 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     let config = Config::load(app.ctx.as_ref()).unwrap_or_default();
 
     app.tasks = app.store.filter(FilterOptions {
-        active_cal_href: app.active_cal_href.as_deref(),
+        // FIX: Pass None instead of active_cal_href.
+        // Passing active_cal_href forces the store to filter EXCLUSIVELY to that calendar.
+        // We want to show all calendars that aren't hidden (unified view).
+        active_cal_href: None,
         hidden_calendars: &app.hidden_calendars,
         selected_categories: &app.selected_categories,
         selected_locations: &app.selected_locations,
