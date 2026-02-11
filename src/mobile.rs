@@ -67,6 +67,8 @@ pub enum MobileSyntaxType {
     Geo,
     Description,
     Reminder,
+    Calendar,
+    Filter,
 }
 
 impl From<SyntaxType> for MobileSyntaxType {
@@ -84,6 +86,8 @@ impl From<SyntaxType> for MobileSyntaxType {
             SyntaxType::Geo => MobileSyntaxType::Geo,
             SyntaxType::Description => MobileSyntaxType::Description,
             SyntaxType::Reminder => MobileSyntaxType::Reminder,
+            SyntaxType::Calendar => MobileSyntaxType::Calendar,
+            SyntaxType::Filter => MobileSyntaxType::Filter,
         }
     }
 }
@@ -361,8 +365,8 @@ impl CfaitMobile {
         Ok(format!("Successfully imported {} task(s)", count))
     }
 
-    pub fn parse_smart_string(&self, input: String) -> Vec<MobileSyntaxToken> {
-        let tokens = tokenize_smart_input(&input);
+    pub fn parse_smart_string(&self, input: String, is_search: bool) -> Vec<MobileSyntaxToken> {
+        let tokens = tokenize_smart_input(&input, is_search);
         let mut byte_to_utf16 = std::collections::BTreeMap::new();
         let mut byte_pos = 0;
         let mut utf16_pos = 0;
@@ -679,15 +683,8 @@ impl CfaitMobile {
         if let Some(ref index) = *cached
             && !index.is_empty()
         {
-            #[cfg(target_os = "android")]
-            log::debug!(
-                "Using cached alarm index for fast lookup ({} alarms)",
-                index.len()
-            );
             let firing = index.get_firing_alarms();
             if !firing.is_empty() {
-                #[cfg(target_os = "android")]
-                log::info!("Found {} firing alarms via cached index", firing.len());
                 return firing
                     .into_iter()
                     .map(|e| MobileAlarmInfo {
@@ -698,23 +695,14 @@ impl CfaitMobile {
                     })
                     .collect();
             } else {
-                #[cfg(target_os = "android")]
-                log::debug!("No firing alarms in cached index");
                 return Vec::new();
             }
         }
         drop(cached);
         let index = AlarmIndex::load(self.ctx.as_ref());
         if !index.is_empty() {
-            #[cfg(target_os = "android")]
-            log::debug!(
-                "Using disk alarm index for fast lookup ({} alarms)",
-                index.len()
-            );
             let firing = index.get_firing_alarms();
             if !firing.is_empty() {
-                #[cfg(target_os = "android")]
-                log::info!("Found {} firing alarms via disk index", firing.len());
                 *self.alarm_index_cache.blocking_lock() = Some(index);
                 return firing
                     .into_iter()
@@ -726,13 +714,9 @@ impl CfaitMobile {
                     })
                     .collect();
             } else {
-                #[cfg(target_os = "android")]
-                log::debug!("No firing alarms in disk index");
                 return Vec::new();
             }
         }
-        #[cfg(target_os = "android")]
-        log::warn!("Alarm index not available, falling back to full scan");
         let store = self.controller.store.blocking_lock();
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let default_time = NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")

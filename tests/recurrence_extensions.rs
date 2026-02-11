@@ -396,7 +396,7 @@ fn test_syntax_highlighting_for_until() {
     use cfait::model::parser::{SyntaxType, tokenize_smart_input};
 
     let input = "Task @daily until 2025-12-31";
-    let tokens = tokenize_smart_input(input);
+    let tokens = tokenize_smart_input(input, false); // Fix: Added false
 
     // Should have a Recurrence token that includes "until"
     let recurrence_tokens: Vec<_> = tokens
@@ -413,7 +413,7 @@ fn test_syntax_highlighting_for_except() {
     use cfait::model::parser::{SyntaxType, tokenize_smart_input};
 
     let input = "Task @daily except 2025-01-15";
-    let tokens = tokenize_smart_input(input);
+    let tokens = tokenize_smart_input(input, false); // Fix: Added false
 
     // Should have recurrence tokens
     let recurrence_tokens: Vec<_> = tokens
@@ -645,7 +645,7 @@ fn test_syntax_highlighting_for_multiple_weekdays() {
     use cfait::model::parser::{SyntaxType, tokenize_smart_input};
 
     let input = "Meeting @every monday,tuesday,friday #work";
-    let tokens = tokenize_smart_input(input);
+    let tokens = tokenize_smart_input(input, false); // Fix: Added false
 
     // Should have recurrence tokens
     let recurrence_tokens: Vec<_> = tokens

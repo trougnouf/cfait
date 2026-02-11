@@ -410,8 +410,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 captured_action = true;
             }
             // Priority 3: Clear Search
-            else if !app.search_value.is_empty() {
-                app.search_value.clear();
+            else if !app.search_value.text().is_empty() {
+                // Reset the text_editor content rather than calling clear on String
+                app.search_value = text_editor::Content::new();
                 needs_refresh = true;
                 captured_action = true;
             }

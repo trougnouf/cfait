@@ -596,8 +596,9 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     let active_count = app.tasks.iter().filter(|t| !t.status.is_done()).count();
     let mut subtitle = format!("{} Tasks", active_count);
 
-    if !app.search_value.is_empty() {
-        subtitle.push_str(&format!(" | Search: '{}'", app.search_value));
+    let search_text = app.search_value.text();
+    if !search_text.is_empty() {
+        subtitle.push_str(&format!(" | Search: '{}'", search_text));
     } else if !app.selected_categories.is_empty() {
         let tag_count = app.selected_categories.len();
         if tag_count == 1 {
@@ -695,12 +696,20 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         .center_x(Length::Fill)
         .center_y(Length::Shrink);
 
-    let search_input = iced::widget::text_input("Search...", &app.search_value)
-        .id("header_search_input") // Stable ID prevents focus loss
-        .on_input(Message::SearchChanged)
+    let is_dark_mode = app.theme().extended_palette().is_dark;
+
+    let search_input = text_editor(&app.search_value)
+        .id("header_search_input")
+        .placeholder("Search...")
+        .on_action(Message::SearchChanged)
+        .highlight_with::<self::syntax::SmartInputHighlighter>(
+            (is_dark_mode, true),
+            |highlight, _theme| *highlight
+        )
         .padding(5)
-        .size(14)
-        .width(Length::Fixed(180.0));
+        // Make it look like a single line input
+        .height(Length::Fixed(32.0))
+        .font(iced::Font::DEFAULT);
 
     // --- UPDATED SEARCH BAR LOGIC ---
     let mut search_row = row![].align_y(iced::Alignment::Center).spacing(5);
@@ -722,15 +731,15 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         .delay(Duration::from_millis(700)),
     );
 
-    let is_search_empty = app.search_value.is_empty();
+    let is_search_empty = app.search_value.text().is_empty();
     let (search_icon_char, icon_color, on_press) = if is_search_empty {
-        (icon::SEARCH, Color::from_rgb(0.4, 0.4, 0.4), None) // Gray, no action
+        (icon::SEARCH, Color::from_rgb(0.4, 0.4, 0.4), None)
     } else {
         (
             icon::SEARCH_STOP,
             app.theme().extended_palette().background.base.text,
-            Some(Message::SearchChanged(String::new())),
-        ) // theme-aware clear action color
+            Some(Message::ClearSearch),
+        )
     };
 
     let mut clear_btn =
@@ -875,8 +884,8 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     }
 
     // Existing Tag Jump
-    if app.search_value.starts_with('#') {
-        let tag = app.search_value.trim_start_matches('#').trim().to_string();
+    if search_text.starts_with('#') {
+        let tag = search_text.trim_start_matches('#').trim().to_string();
         if !tag.is_empty() {
             main_col = main_col.push(
                 container(
@@ -904,11 +913,11 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     }
 
     // Location Jump Button
-    if app.search_value.starts_with("@@") || app.search_value.starts_with("loc:") {
-        let raw = if app.search_value.starts_with("@@") {
-            app.search_value.trim_start_matches("@@")
+    if search_text.starts_with("@@") || search_text.starts_with("loc:") {
+        let raw = if search_text.starts_with("@@") {
+            search_text.trim_start_matches("@@")
         } else {
-            app.search_value.trim_start_matches("loc:")
+            search_text.trim_start_matches("loc:")
         };
         let loc = raw.trim().to_string();
 
@@ -1009,9 +1018,10 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .id("main_input")
         .placeholder(&app.current_placeholder)
         .on_action(Message::InputChanged)
-        .highlight_with::<self::syntax::SmartInputHighlighter>(is_dark_mode, |highlight, _theme| {
-            *highlight
-        })
+        .highlight_with::<self::syntax::SmartInputHighlighter>(
+            (is_dark_mode, false),
+            |highlight, _theme| *highlight
+        )
         .padding(10)
         .height(Length::Fixed(45.0))
         .font(iced::Font::DEFAULT);

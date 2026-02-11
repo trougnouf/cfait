@@ -1,4 +1,5 @@
-// Tests for smart input processing.
+/* Updated: Pass is_search = false to tokenizer calls in tests so highlighting logic treats these as input mode. */
+ // Tests for smart input processing.
 use cfait::model::{
     Task,
     parser::{SyntaxType, tokenize_smart_input},
@@ -191,7 +192,7 @@ fn test_natural_date_parsing_in_keyword() {
 #[test]
 fn test_syntax_highlighting_tokens_for_in_keyword() {
     let input = "Buy food @in 2 days #chores";
-    let tokens = tokenize_smart_input(input);
+    let tokens = tokenize_smart_input(input, false);
 
     let due_token = tokens.iter().find(|t| t.kind == SyntaxType::DueDate);
     assert!(due_token.is_some(), "DueDate token for '@in' was not found");
@@ -203,7 +204,7 @@ fn test_syntax_highlighting_tokens_for_in_keyword() {
 fn test_reminder_syntax_highlighting_with_time() {
     // Test rem:tomorrow 16:00
     let input = "test rem:tomorrow 16:00";
-    let tokens = tokenize_smart_input(input);
+    let tokens = tokenize_smart_input(input, false);
 
     let reminder_token = tokens.iter().find(|t| t.kind == SyntaxType::Reminder);
     assert!(
@@ -222,7 +223,7 @@ fn test_reminder_syntax_highlighting_with_time() {
 fn test_reminder_syntax_highlighting_with_full_date() {
     // Test rem:2025-12-27 09:00
     let input = "meeting rem:2025-12-27 09:00";
-    let tokens = tokenize_smart_input(input);
+    let tokens = tokenize_smart_input(input, false);
 
     let reminder_token = tokens.iter().find(|t| t.kind == SyntaxType::Reminder);
     assert!(
@@ -241,7 +242,7 @@ fn test_reminder_syntax_highlighting_with_full_date() {
 fn test_reminder_syntax_highlighting_rem_in() {
     // Test rem:in 5m
     let input = "Pizza rem:in 5m";
-    let tokens = tokenize_smart_input(input);
+    let tokens = tokenize_smart_input(input, false);
 
     let reminder_token = tokens.iter().find(|t| t.kind == SyntaxType::Reminder);
     assert!(
@@ -260,7 +261,7 @@ fn test_reminder_syntax_highlighting_rem_in() {
 fn test_reminder_syntax_highlighting_with_space() {
     // Test rem: tomorrow 16:00 (space after colon)
     let input = "test rem: tomorrow 16:00";
-    let tokens = tokenize_smart_input(input);
+    let tokens = tokenize_smart_input(input, false);
 
     let reminder_token = tokens.iter().find(|t| t.kind == SyntaxType::Reminder);
     assert!(
@@ -279,7 +280,7 @@ fn test_reminder_syntax_highlighting_with_space() {
 fn test_reminder_syntax_highlighting_time_only() {
     // Test rem:today (just time)
     let input = "call rem:14:30";
-    let tokens = tokenize_smart_input(input);
+    let tokens = tokenize_smart_input(input, false);
 
     let reminder_token = tokens.iter().find(|t| t.kind == SyntaxType::Reminder);
     assert!(

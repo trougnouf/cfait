@@ -38,7 +38,8 @@ pub enum Message {
     // --- Input & Editing ---
     InputChanged(text_editor::Action),
     DescriptionChanged(text_editor::Action),
-    SearchChanged(String),
+    SearchChanged(text_editor::Action),
+    ClearSearch,
     SubmitTask,
     ToggleTask(usize, bool),
     DeleteTask(usize),

@@ -1,3 +1,4 @@
+// File: ./src/model/parser.rs
 // Logic for parsing smart input strings into task properties.
 use crate::model::{Alarm, DateType, Task};
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, Utc};
@@ -17,6 +18,8 @@ pub enum SyntaxType {
     Geo,
     Description,
     Reminder,
+    Calendar, // +cal, -cal
+    Filter,   // is:done, < / > operators, duration filters, etc.
 }
 
 #[derive(Debug)]
@@ -198,7 +201,7 @@ fn is_time_format(s: &str) -> bool {
     parse_time_string(s).is_some()
 }
 
-pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
+pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxToken> {
     let mut tokens = Vec::new();
     let words = split_input_respecting_quotes(input);
 
@@ -221,8 +224,25 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
 
         let word_lower = word.to_lowercase();
 
+        // 0. Search-only filters (e.g., is:done, !<3, ~>1h) -> ONLY if searching
+        if is_search_query
+            && (word_lower.starts_with("is:")
+                || ((word.starts_with('!')
+                    || word.starts_with('~')
+                    || word.starts_with('@')
+                    || word.starts_with("due:")
+                    || word.starts_with('^')
+                    || word.starts_with("start:"))
+                    && (word.contains('<') || word.contains('>'))))
+            {
+                matched_kind = Some(SyntaxType::Filter);
+            }
+
         // 1. Recurrence
-        if (word == "@every" || word == "rec:every") && i + 1 < words.len() {
+        if matched_kind.is_none()
+            && (word == "@every" || word == "rec:every")
+            && i + 1 < words.len()
+        {
             let next_token_str = words[i + 1].2.as_str();
             let next_next = if i + 2 < words.len() {
                 Some(words[i + 2].2.as_str())
@@ -244,14 +264,15 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                     words_consumed = 2;
                 }
             }
-        } else if word == "@daily"
-            || word == "@weekly"
-            || word == "@monthly"
-            || word == "@yearly"
-            || word == "rec:daily"
-            || word == "rec:weekly"
-            || word == "rec:monthly"
-            || word == "rec:yearly"
+        } else if matched_kind.is_none()
+            && (word == "@daily"
+                || word == "@weekly"
+                || word == "@monthly"
+                || word == "@yearly"
+                || word == "rec:daily"
+                || word == "rec:weekly"
+                || word == "rec:monthly"
+                || word == "rec:yearly")
         {
             matched_kind = Some(SyntaxType::Recurrence);
             has_recurrence = true;
@@ -491,6 +512,8 @@ pub fn tokenize_smart_input(input: &str) -> Vec<SyntaxToken> {
                 || (word.starts_with("[[") && word.ends_with("]]"))
             {
                 matched_kind = Some(SyntaxType::Url);
+            } else if word == "+cal" || word == "-cal" {
+                matched_kind = Some(SyntaxType::Calendar);
             } else if word_lower.starts_with("geo:") {
                 matched_kind = Some(SyntaxType::Geo);
                 if word.ends_with(',') && i + 1 < words.len() {

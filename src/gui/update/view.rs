@@ -303,8 +303,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             Task::none()
         }
-        Message::SearchChanged(val) => {
-            app.search_value = val;
+        Message::SearchChanged(action) => {
+            app.search_value.perform(action);
             refresh_filtered_tasks(app);
             Task::none()
         }
@@ -389,7 +389,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.sidebar_mode = SidebarMode::Categories;
             app.selected_categories.clear();
             app.selected_categories.insert(tag.clone());
-            app.search_value.clear();
+            app.search_value = iced::widget::text_editor::Content::new();
             refresh_filtered_tasks(app);
             // DO NOT scroll sidebar here, as user just clicked the arrow
             Task::none()
@@ -398,7 +398,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.sidebar_mode = SidebarMode::Locations;
             app.selected_locations.clear();
             app.selected_locations.insert(loc.clone());
-            app.search_value.clear();
+            app.search_value = iced::widget::text_editor::Content::new();
             refresh_filtered_tasks(app);
             // DO NOT scroll sidebar here
             Task::none()
@@ -409,7 +409,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.sidebar_mode = SidebarMode::Categories;
             app.selected_categories.clear();
             app.selected_categories.insert(tag.clone());
-            app.search_value.clear();
+            app.search_value = iced::widget::text_editor::Content::new();
             refresh_filtered_tasks(app);
 
             // Auto-scroll logic is kept for JumpTo...
@@ -434,7 +434,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.sidebar_mode = SidebarMode::Locations;
             app.selected_locations.clear();
             app.selected_locations.insert(loc.clone());
-            app.search_value.clear();
+            app.search_value = iced::widget::text_editor::Content::new();
             refresh_filtered_tasks(app);
 
             let all_locs = &app.cached_locations;
@@ -470,8 +470,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
 
                 // 3. Clear filters that might hide the task
-                if !app.search_value.is_empty() {
-                    app.search_value.clear();
+                if !app.search_value.text().is_empty() {
+                    app.search_value = iced::widget::text_editor::Content::new();
                     needs_refresh = true;
                 }
                 if !app.selected_categories.is_empty() {

@@ -1052,6 +1052,7 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_parse_smart_string(
         `ptr`: Long,
         `input`: RustBuffer.ByValue,
+        `isSearch`: Byte,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -1489,7 +1490,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_parse_duration_string() != 35361.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string() != 35691.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string() != 30291.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_pause_task() != 18676.toShort()) {
@@ -2149,7 +2150,10 @@ public interface CfaitMobileInterface {
 
     fun `parseDurationString`(`val`: kotlin.String): kotlin.UInt?
 
-    fun `parseSmartString`(`input`: kotlin.String): List<MobileSyntaxToken>
+    fun `parseSmartString`(
+        `input`: kotlin.String,
+        `isSearch`: kotlin.Boolean,
+    ): List<MobileSyntaxToken>
 
     suspend fun `pauseTask`(`uid`: kotlin.String)
 
@@ -2919,13 +2923,17 @@ open class CfaitMobile :
             },
         )
 
-    override fun `parseSmartString`(`input`: kotlin.String): List<MobileSyntaxToken> =
+    override fun `parseSmartString`(
+        `input`: kotlin.String,
+        `isSearch`: kotlin.Boolean,
+    ): List<MobileSyntaxToken> =
         FfiConverterSequenceTypeMobileSyntaxToken.lift(
             callWithHandle {
                 uniffiRustCall { _status ->
                     UniffiLib.uniffi_cfait_fn_method_cfaitmobile_parse_smart_string(
                         it,
                         FfiConverterString.lower(`input`),
+                        FfiConverterBoolean.lower(`isSearch`),
                         _status,
                     )
                 }
@@ -3889,6 +3897,8 @@ enum class MobileSyntaxType {
     GEO,
     DESCRIPTION,
     REMINDER,
+    CALENDAR,
+    FILTER,
     ;
 
     companion object

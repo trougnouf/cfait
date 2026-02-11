@@ -41,6 +41,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     // Load config so we can respect the global limits for showing completed groups/subtasks.
     let config = Config::load(app.ctx.as_ref()).unwrap_or_default();
 
+    let search_text = app.search_value.text();
     app.tasks = app.store.filter(FilterOptions {
         // FIX: Pass None instead of active_cal_href.
         // Passing active_cal_href forces the store to filter EXCLUSIVELY to that calendar.
@@ -50,7 +51,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         selected_categories: &app.selected_categories,
         selected_locations: &app.selected_locations,
         match_all_categories: app.match_all_categories,
-        search_term: &app.search_value,
+        search_term: &search_text,
         hide_completed_global: app.hide_completed,
         cutoff_date,
         min_duration: app.filter_min_duration,

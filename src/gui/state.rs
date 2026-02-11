@@ -96,7 +96,7 @@ pub struct GuiApp {
     // Inputs - Main
     pub input_value: text_editor::Content,
     pub description_value: text_editor::Content,
-    pub search_value: String,
+    pub search_value: text_editor::Content,
     pub editing_uid: Option<String>,
     pub creating_child_of: Option<String>,
     pub expanded_tasks: HashSet<String>,
@@ -270,7 +270,7 @@ impl Default for GuiApp {
 
             input_value: text_editor::Content::new(),
             description_value: text_editor::Content::new(),
-            search_value: String::new(),
+            search_value: text_editor::Content::new(),
             editing_uid: None,
             creating_child_of: None,
             expanded_tasks: HashSet::new(),

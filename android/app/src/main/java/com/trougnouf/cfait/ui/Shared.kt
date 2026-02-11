@@ -304,6 +304,7 @@ fun formatIsoToLocal(isoString: String): String {
 class SmartSyntaxTransformation(
     val api: CfaitMobile,
     val isDark: Boolean,
+    val isSearch: Boolean = false
 ) : VisualTransformation {
     private val COLOR_DUE = Color(0xFF42A5F5)
     private val COLOR_START = Color(0xFF66BB6A)
@@ -319,7 +320,7 @@ class SmartSyntaxTransformation(
         val builder = AnnotatedString.Builder(raw)
 
         try {
-            val tokens = api.parseSmartString(raw)
+            val tokens = api.parseSmartString(raw, isSearch)
 
             for (token in tokens) {
                 if (token.start >= raw.length || token.end > raw.length) continue
@@ -374,6 +375,14 @@ class SmartSyntaxTransformation(
                             COLOR_REMINDER
                         }
 
+                        MobileSyntaxType.CALENDAR -> {
+                            Color(0xFFE91E63) // Pink
+                        }
+
+                        MobileSyntaxType.FILTER -> {
+                            Color(0xFF00BCD4)
+                        }
+
                         else -> {
                             null
                         }
@@ -381,18 +390,21 @@ class SmartSyntaxTransformation(
 
                 if (spanColor != null) {
                     val weight =
-                        if (token.kind == MobileSyntaxType.PRIORITY || token.kind == MobileSyntaxType.TAG) {
+                        if (token.kind == MobileSyntaxType.PRIORITY
+                            || token.kind == MobileSyntaxType.TAG
+                            || token.kind == MobileSyntaxType.CALENDAR
+                        ) {
                             FontWeight.Bold
                         } else {
                             FontWeight.Normal
                         }
 
-                    builder.addStyle(
-                        SpanStyle(color = spanColor, fontWeight = weight),
-                        token.start,
-                        token.end,
-                    )
-                }
+                builder.addStyle(
+                    SpanStyle(color = spanColor, fontWeight = weight),
+                    token.start,
+                    token.end,
+                )
+            }
             }
         } catch (e: Exception) {
         }

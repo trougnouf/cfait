@@ -967,6 +967,7 @@ fun HomeScreen(
                                 onValueChange = { searchQuery = it },
                                 placeholder = { Text("Search...") },
                                 singleLine = true,
+                                visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark, true) }, // Added
                                 colors =
                                     TextFieldDefaults.colors(
                                         focusedContainerColor = Color.Transparent,

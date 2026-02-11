@@ -1,3 +1,4 @@
+// File: ./src/gui/view/syntax.rs
 // Implements syntax highlighting for the smart input editor.
 use crate::color_utils;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
@@ -8,32 +9,36 @@ use std::ops::Range;
 // 1. Add state field
 pub struct SmartInputHighlighter {
     is_dark: bool,
+    is_search: bool,
 }
 
 impl Default for SmartInputHighlighter {
     fn default() -> Self {
-        Self { is_dark: true } // Default to dark if unknown
+        Self { is_dark: true, is_search: false } // Default: dark=true, search=false
     }
 }
 
 impl Highlighter for SmartInputHighlighter {
-    // 2. Change Settings from () to bool (is_dark)
-    type Settings = bool;
+    // Settings: (is_dark, is_search)
+    type Settings = (bool, bool); // (is_dark, is_search)
     type Highlight = highlighter::Format<Font>;
     type Iterator<'a> = std::vec::IntoIter<(Range<usize>, Self::Highlight)>;
 
-    // 3. Initialize with the setting
     fn new(settings: &Self::Settings) -> Self {
-        Self { is_dark: *settings }
+        Self {
+            is_dark: settings.0,
+            is_search: settings.1,
+        }
     }
 
-    // 4. Update state when view rebuilds
     fn update(&mut self, settings: &Self::Settings) {
-        self.is_dark = *settings;
+        self.is_dark = settings.0;
+        self.is_search = settings.1;
     }
 
     fn highlight_line(&mut self, line: &str) -> Self::Iterator<'_> {
-        let tokens = tokenize_smart_input(line);
+        // Pass context to tokenizer
+        let tokens = tokenize_smart_input(line, self.is_search);
 
         let spans: Vec<(Range<usize>, Self::Highlight)> = tokens
             .into_iter()
@@ -104,6 +109,17 @@ impl Highlighter for SmartInputHighlighter {
                     },
                     SyntaxType::Reminder => highlighter::Format {
                         color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
+                    SyntaxType::Filter => highlighter::Format {
+                        color: Some(Color::from_rgb(0.0, 0.8, 0.8)), // Cyan
+                        font: None,
+                    },
+                    SyntaxType::Calendar => highlighter::Format { // Added handler
+                        color: Some(Color::from_rgb(0.91, 0.11, 0.38)), // #E91E63 Pink
                         font: Some(Font {
                             weight: iced::font::Weight::Bold,
                             ..Default::default()
