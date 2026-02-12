@@ -181,7 +181,7 @@ pub struct GuiApp {
     pub ob_max_done_roots_input: String,
     pub ob_max_done_subtasks_input: String,
 
-    // ADDED: Force Server-Side Decorations
+    // Force Server-Side Decorations
     pub force_ssd: bool,
 
     // ADDED: Auto Refresh
@@ -330,8 +330,20 @@ impl Default for GuiApp {
             ob_max_done_roots_input: "20".to_string(),
             ob_max_done_subtasks_input: "5".to_string(),
 
-            // ADDED: Force Server-Side Decorations
-            force_ssd: false,
+            // Force Server-Side Decorations
+            // Default to true on Windows 10 so native (server-side) decorations are used there.
+            force_ssd: {
+                #[cfg(target_os = "windows")]
+                {
+                    let info = os_info::get();
+                    matches!(info.os_type(), os_info::Type::Windows)
+                        && info.version().to_string().starts_with("10")
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    false
+                }
+            },
 
             // ADDED: Auto Refresh
             auto_refresh_interval_mins: 30,

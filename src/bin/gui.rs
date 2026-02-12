@@ -16,7 +16,25 @@ fn main() -> iced::Result {
 
     let mut override_root: Option<PathBuf> = None;
     let mut ics_file_path: Option<String> = None;
-    let mut force_ssd = false;
+    // Detect Windows 10 specifically: enable server-side (native) decorations by default on Win10.
+    // Users can override this behavior with --force-csd (force client-side decorations)
+    // or --force-ssd to explicitly force server-side decorations.
+    let mut force_ssd: bool = {
+        #[cfg(target_os = "windows")]
+        {
+            // Lightweight runtime detection using `os_info`.
+            // Treat reported Windows versions whose version string starts with "10"
+            // as Windows 10 (e.g., "10", "10.0", "10.0.19041").
+            let info = os_info::get();
+            matches!(info.os_type(), os_info::Type::Windows)
+                && info.version().to_string().starts_with("10")
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            // On non-Windows platforms, don't reference `os_info` and default to false.
+            false
+        }
+    };
 
     let mut i = 1;
     while i < args.len() {
@@ -29,6 +47,9 @@ fn main() -> iced::Result {
             }
             "--force-ssd" => {
                 force_ssd = true;
+            }
+            "--force-csd" => {
+                force_ssd = false;
             }
             arg if !arg.starts_with('-') => {
                 // If it's not a flag, assume it's the ICS file path.

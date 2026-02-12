@@ -13,7 +13,7 @@ pub fn print_help(binary_name: &str) {
     println!("USAGE:");
     if is_gui {
         println!(
-            "    {} [--root <path>] [--force-ssd] [path/to/file.ics]",
+            "    {} [--root <path>] [--force-ssd] [--force-csd] [path/to/file.ics]",
             binary_name
         );
     } else {
@@ -30,6 +30,9 @@ pub fn print_help(binary_name: &str) {
     println!("    -r, --root <path>     Use a different directory for config and data.");
     if is_gui {
         println!("    --force-ssd           Force server-side (native) window decorations.");
+        println!(
+            "    --force-csd           Force client-side (custom) window decorations (override)."
+        );
     }
     println!("    -h, --help            Show this help message.");
     println!();
