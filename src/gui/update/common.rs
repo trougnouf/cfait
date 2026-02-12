@@ -41,13 +41,17 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     // Load config so we can respect the global limits for showing completed groups/subtasks.
     let config = Config::load(app.ctx.as_ref()).unwrap_or_default();
 
+    // Create an effective set of all calendars that should be hidden from the task view.
+    let mut effective_hidden = app.hidden_calendars.clone();
+    effective_hidden.extend(app.disabled_calendars.clone());
+
     let search_text = app.search_value.text();
     app.tasks = app.store.filter(FilterOptions {
         // FIX: Pass None instead of active_cal_href.
         // Passing active_cal_href forces the store to filter EXCLUSIVELY to that calendar.
         // We want to show all calendars that aren't hidden (unified view).
         active_cal_href: None,
-        hidden_calendars: &app.hidden_calendars,
+        hidden_calendars: &effective_hidden,
         selected_categories: &app.selected_categories,
         selected_locations: &app.selected_locations,
         match_all_categories: app.match_all_categories,
