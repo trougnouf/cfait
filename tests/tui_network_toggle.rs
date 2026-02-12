@@ -63,14 +63,14 @@ async fn test_tui_toggle_task_does_not_revert_status() {
     let _ = event_rx.recv().await;
 
     action_tx
-        .send(Action::ToggleTask(task))
+        .send(Action::UpdateTask(task))
         .await
         .expect("Failed to send action");
 
     loop {
         match tokio::time::timeout(std::time::Duration::from_secs(2), event_rx.recv()).await {
             Ok(Some(AppEvent::Status(s))) => {
-                if s == "Synced." {
+                if s == "Saved." {
                     break;
                 }
             }

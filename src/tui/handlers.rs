@@ -127,11 +127,29 @@ pub async fn handle_key_event(
                         let uid = t.uid.clone();
                         // Close popup
                         state.active_alarm = None;
-                        // Use ToggleTask action to handle logic
-                        if let Some((primary, _)) = state.store.toggle_task(&uid) {
+                        // Compute changes locally in the store
+                        if let Some((primary, secondary, children)) = state.store.toggle_task(&uid)
+                        {
                             state.refresh_filtered_view();
                             update_alarms(state);
-                            return Some(Action::ToggleTask(primary));
+
+                            // Dispatch explicit persistence actions to the network actor
+                            if let Some(sec) = secondary {
+                                // Recurring: create history, update next instance
+                                let _ = action_tx.send(Action::CreateTask(primary)).await;
+                                let _ = action_tx.send(Action::UpdateTask(sec)).await;
+                            } else {
+                                // Non-recurring: update the primary task
+                                let _ = action_tx.send(Action::UpdateTask(primary)).await;
+                            }
+
+                            // Persist any children that were auto-reset by the store
+                            for child in children {
+                                let _ = action_tx.send(Action::UpdateTask(child)).await;
+                            }
+
+                            // We've dispatched persistence actions; no single intent to return.
+                            return None;
                         }
                     }
                     return None;
@@ -143,17 +161,24 @@ pub async fn handle_key_event(
                         let uid = t.uid.clone();
                         state.active_alarm = None;
 
-                        if let Some((primary, secondary)) =
+                        // Apply cancel logic in-store (may produce history + next + reset children)
+                        if let Some((primary, secondary, children)) =
                             state.store.set_status(&uid, TaskStatus::Cancelled)
                         {
                             state.refresh_filtered_view();
                             update_alarms(state);
-                            let target = if let Some(sec) = secondary {
-                                sec
+
+                            // Persist results via explicit actions
+                            if let Some(sec) = secondary {
+                                let _ = action_tx.send(Action::CreateTask(primary)).await;
+                                let _ = action_tx.send(Action::UpdateTask(sec)).await;
                             } else {
-                                primary
-                            };
-                            return Some(Action::MarkCancelled(target));
+                                let _ = action_tx.send(Action::UpdateTask(primary)).await;
+                            }
+
+                            for child in children {
+                                let _ = action_tx.send(Action::UpdateTask(child)).await;
+                            }
                         }
                     }
                     return None;
@@ -584,12 +609,26 @@ pub async fn handle_key_event(
             KeyCode::Char(' ') => {
                 if state.active_focus == Focus::Main {
                     if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                        && let Some((primary, _secondary)) = state.store.toggle_task(&uid)
-                    {
-                        state.refresh_filtered_view();
-                        update_alarms(state);
-                        return Some(Action::ToggleTask(primary));
-                    }
+                        && let Some((primary, secondary, children)) = state.store.toggle_task(&uid)
+                        {
+                            state.refresh_filtered_view();
+                            update_alarms(state);
+
+                            // Dispatch persistence actions computed by the store
+                            if let Some(sec) = secondary {
+                                let _ = action_tx.send(Action::CreateTask(primary)).await;
+                                let _ = action_tx.send(Action::UpdateTask(sec)).await;
+                            } else {
+                                let _ = action_tx.send(Action::UpdateTask(primary)).await;
+                            }
+
+                            for child in children {
+                                let _ = action_tx.send(Action::UpdateTask(child)).await;
+                            }
+
+                            // Local state already updated; no single intent to return.
+                            return None;
+                        }
                 } else if state.active_focus == Focus::Sidebar
                     && state.sidebar_mode == SidebarMode::Calendars
                 {
@@ -638,23 +677,24 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('x') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some((primary, secondary)) =
+                    && let Some((primary, secondary, children)) =
                         state.store.set_status(&uid, TaskStatus::Cancelled)
-                {
-                    state.refresh_filtered_view();
-                    update_alarms(state);
+                    {
+                        state.refresh_filtered_view();
+                        update_alarms(state);
 
-                    // If this was a recurring task that recycled, `secondary` is the
-                    // next active instance. For UI updates prefer showing the active
-                    // recycled task when present; otherwise show the primary updated task.
-                    let to_report = if let Some(next) = secondary {
-                        next
-                    } else {
-                        primary
-                    };
+                        // Persist the computed mutations
+                        if let Some(sec) = secondary {
+                            let _ = action_tx.send(Action::CreateTask(primary)).await;
+                            let _ = action_tx.send(Action::UpdateTask(sec)).await;
+                        } else {
+                            let _ = action_tx.send(Action::UpdateTask(primary)).await;
+                        }
 
-                    return Some(Action::MarkCancelled(to_report));
-                }
+                        for child in children {
+                            let _ = action_tx.send(Action::UpdateTask(child)).await;
+                        }
+                    }
             }
             KeyCode::Char('+') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
@@ -717,11 +757,13 @@ pub async fn handle_key_event(
                     let mut initial_input = String::new();
                     for cat in &task.categories {
                         // Parity: Use quote_value to handle spaces correctly
-                        initial_input.push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
+                        initial_input
+                            .push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
                     }
                     // Parity: Add Location inheritance
                     if let Some(loc) = &task.location {
-                        initial_input.push_str(&format!("@@{} ", crate::model::parser::quote_value(loc)));
+                        initial_input
+                            .push_str(&format!("@@{} ", crate::model::parser::quote_value(loc)));
                     }
 
                     state.input_buffer = initial_input;

@@ -51,11 +51,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let mut initial_input = String::new();
             if let Some((parent, _)) = app.store.get_task_mut(&parent_uid) {
                 for cat in &parent.categories {
-                    initial_input.push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
+                    initial_input
+                        .push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
                 }
                 // Parity: Add Location inheritance
                 if let Some(loc) = &parent.location {
-                    initial_input.push_str(&format!("@@{} ", crate::model::parser::quote_value(loc)));
+                    initial_input
+                        .push_str(&format!("@@{} ", crate::model::parser::quote_value(loc)));
                 }
             }
 
@@ -85,7 +87,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(view_task) = app.tasks.get(index) {
                 let uid = view_task.uid.clone();
                 app.selected_uid = Some(uid.clone());
-                if let Some((primary, secondary)) = app.store.toggle_task(&uid) {
+                if let Some((primary, secondary, children)) = app.store.toggle_task(&uid) {
                     refresh_filtered_tasks(app);
                     if let Some(client) = &app.client {
                         let mut commands = vec![];
@@ -106,6 +108,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                                 Message::SyncSaved,
                             ));
                         }
+                        // NEW: Sync reset children that were auto-reset by the store
+                        for child in children {
+                            commands.push(Task::perform(
+                                async_update_wrapper(client.clone(), child),
+                                Message::SyncSaved,
+                            ));
+                        }
                         return Task::batch(commands);
                     } else {
                         // Offline logic
@@ -122,6 +131,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             let _ = crate::journal::Journal::push(
                                 app.ctx.as_ref(),
                                 Action::Update(primary),
+                            );
+                        }
+                        // NEW: Journal reset children so they will be synced later
+                        for child in children {
+                            let _ = crate::journal::Journal::push(
+                                app.ctx.as_ref(),
+                                Action::Update(child),
                             );
                         }
                         app.unsynced_changes = true;
@@ -289,8 +305,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetTaskStatus(index, new_status) => {
             if let Some(view_task) = app.tasks.get(index) {
                 app.selected_uid = Some(view_task.uid.clone());
-                // This now returns (primary_task, optional_secondary_task)
-                if let Some((primary, secondary)) = app.store.set_status(&view_task.uid, new_status)
+                // This now returns (primary_task, optional_secondary_task, Vec<children>)
+                if let Some((primary, secondary, children)) =
+                    app.store.set_status(&view_task.uid, new_status)
                 {
                     refresh_filtered_tasks(app);
                     if let Some(client) = &app.client {
@@ -312,9 +329,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                                 Message::SyncSaved,
                             ));
                         }
+                        // Sync any reset children that were returned by the store
+                        for child in children {
+                            commands.push(Task::perform(
+                                async_update_wrapper(client.clone(), child),
+                                Message::SyncSaved,
+                            ));
+                        }
                         return Task::batch(commands);
                     } else {
-                        // Offline logic
+                        // Offline logic: journal the appropriate actions so background sync persists them
                         if let Some(sec) = secondary {
                             let _ = crate::journal::Journal::push(
                                 app.ctx.as_ref(),
@@ -328,6 +352,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             let _ = crate::journal::Journal::push(
                                 app.ctx.as_ref(),
                                 Action::Update(primary),
+                            );
+                        }
+                        // Journal any children updates as well
+                        for child in children {
+                            let _ = crate::journal::Journal::push(
+                                app.ctx.as_ref(),
+                                Action::Update(child),
                             );
                         }
                         app.unsynced_changes = true;

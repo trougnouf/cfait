@@ -1141,29 +1141,38 @@ impl CfaitMobile {
 
     pub async fn set_status_cancelled(&self, uid: String) -> Result<(), MobileError> {
         let mut store = self.controller.store.lock().await;
-        // Logic similar to toggle, using recycle
-        let (primary, secondary) = store
+        // Apply cancellation logic in the store (may produce history + next + reset children)
+        let (primary, secondary, children) = store
             .set_status(&uid, crate::model::TaskStatus::Cancelled)
             .ok_or(MobileError::from("Task not found"))?;
         drop(store);
 
-        // Delegate to Controller Logic manually since we have two objects (history + next)
-
+        // Persist resulting tasks via the controller's persistence/update API.
+        // The store already updated in-memory state; here we instruct the controller
+        // to persist those changes (online or journal fallback).
         if let Some(sec) = secondary {
-            // Recurring task: primary is History (New), sec is Next (Existing)
+            // Recurring: primary is history (treated as created snapshot), sec is next instance.
+            // Use create_task for new history, update_task for existing next instance.
             self.controller
-                .create_task(primary) // Changed from update_task
+                .create_task(primary)
                 .await
                 .map_err(MobileError::from)?;
-
             self.controller
                 .update_task(sec)
                 .await
                 .map_err(MobileError::from)?;
         } else {
-            // Non-recurring: primary is existing task updated
+            // Non-recurring: primary is the updated existing task
             self.controller
                 .update_task(primary)
+                .await
+                .map_err(MobileError::from)?;
+        }
+
+        // Persist any children that were auto-reset by the store.
+        for child in children {
+            self.controller
+                .update_task(child)
                 .await
                 .map_err(MobileError::from)?;
         }

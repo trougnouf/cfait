@@ -10,6 +10,13 @@
  * Context injection:
  * - TaskStore now stores an `Arc<dyn AppContext>` to perform file IO without
  *   relying on global state.
+ *
+ * NOTE: This file includes a small behavioral change: `set_status` and
+ * `toggle_task` now automatically reset completed children (set them to
+ * `NeedsAction`, clear percent_complete and remove `COMPLETED` unmapped
+ * property) when a recurring parent task is completed and a next-instance
+ * (secondary) is created. The function returns the list of reset children
+ * so callers can persist/sync them.
  */
 
 use crate::cache::Cache;
@@ -212,7 +219,10 @@ impl TaskStore {
         self.calendars.get(href).and_then(|map| map.get(uid))
     }
 
-    pub fn toggle_task(&mut self, uid: &str) -> Option<(Task, Option<Task>)> {
+    /// Toggle the task status (Completed <-> NeedsAction).
+    /// CHANGED: returns the optional secondary task (next instance for recurrences)
+    /// and a Vec of any children that were auto-reset as part of a recurring completion.
+    pub fn toggle_task(&mut self, uid: &str) -> Option<(Task, Option<Task>, Vec<Task>)> {
         let current_status = self.get_task_ref(uid)?.status;
         let next_status = if current_status == TaskStatus::Completed {
             TaskStatus::NeedsAction
@@ -222,13 +232,23 @@ impl TaskStore {
         self.set_status(uid, next_status)
     }
 
-    // ... [Other status/modification methods like set_status, etc. use get_task_mut and remain unchanged] ...
-    pub fn set_status(&mut self, uid: &str, status: TaskStatus) -> Option<(Task, Option<Task>)> {
+    /// Set status for a given task uid.
+    /// CHANGED: Signature returns a Vec<Task> containing any child tasks that were auto-reset.
+    pub fn set_status(
+        &mut self,
+        uid: &str,
+        status: TaskStatus,
+    ) -> Option<(Task, Option<Task>, Vec<Task>)> {
         // 1. Get copy of task to modify
         let (task_ref, _href) = self.get_task_mut(uid)?;
         let task_copy = task_ref.clone();
 
+        // Check if this is a recurring completion that requires child reset
+        let should_reset_children = task_copy.rrule.is_some() && status.is_done();
+
         // 2. Perform logic (recycle or simple update) via model-level helper
+        // NOTE: `recycle` is a model-level helper that returns (primary, secondary)
+        // where `primary` is the history/updated task and `secondary` is the next instance.
         let (primary, secondary) = task_copy.recycle(status);
 
         // 3. Save Primary (This is either the history item OR the simple updated task)
@@ -239,10 +259,55 @@ impl TaskStore {
             self.update_or_add_task(sec.clone());
         }
 
-        // Note: For recurring tasks, 'primary' is the history (cancelled/done),
-        // and 'secondary' is the next active task.
-        // For non-recurring, 'primary' is the updated task, 'secondary' is None.
-        Some((primary, secondary))
+        // 5. Reset ALL Descendants if applicable
+        let mut reset_children: Vec<Task> = Vec::new();
+
+        if should_reset_children && secondary.is_some() {
+            // Build adjacency map for full hierarchy traversal (Parent -> Vec<Children>)
+            // We scan all calendars because children might technically live in different lists (though rare)
+            let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+            for map in self.calendars.values() {
+                for t in map.values() {
+                    if let Some(p) = &t.parent_uid {
+                        adjacency.entry(p.clone()).or_default().push(t.uid.clone());
+                    }
+                }
+            }
+
+            // BFS Traversal to find all descendants
+            let mut queue = vec![uid.to_string()];
+            let mut descendants = HashSet::new();
+
+            while let Some(parent) = queue.pop() {
+                if let Some(children) = adjacency.get(&parent) {
+                    for child_uid in children {
+                        if descendants.insert(child_uid.clone()) {
+                            queue.push(child_uid.clone());
+                        }
+                    }
+                }
+            }
+
+            // Reset found descendants
+            for child_uid in descendants {
+                if let Some((child, _)) = self.get_task_mut(&child_uid) {
+                    // Only modify if it's actually done
+                    if child.status.is_done() {
+                        child.status = TaskStatus::NeedsAction;
+                        child.percent_complete = None;
+                        child
+                            .unmapped_properties
+                            .retain(|p| p.key.to_uppercase() != "COMPLETED");
+
+                        let child_copy = child.clone();
+                        self.update_or_add_task(child_copy.clone());
+                        reset_children.push(child_copy);
+                    }
+                }
+            }
+        }
+
+        Some((primary, secondary, reset_children))
     }
 
     pub fn set_status_in_process(&mut self, uid: &str) -> Option<Task> {
@@ -339,7 +404,8 @@ impl TaskStore {
         None
     }
 
-    // ... [Setters remain unchanged, just relying on get_task_mut] ...
+    // ... [Other setters remain unchanged and rely on get_task_mut] ...
+
     pub fn set_parent(&mut self, child_uid: &str, parent_uid: Option<String>) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(child_uid) {
             task.parent_uid = parent_uid;
@@ -435,7 +501,6 @@ impl TaskStore {
         None
     }
 
-    // ... [apply_alias_retroactively adapted for map values] ...
     pub fn apply_alias_retroactively(
         &mut self,
         alias_key: &str,
@@ -614,7 +679,6 @@ impl TaskStore {
         result
     }
 
-    // Updated helper for map iteration
     pub fn get_all_locations(
         &self,
         _hide_completed: bool,
@@ -675,16 +739,16 @@ impl TaskStore {
         // O(1) Lookup
         let href = self.index.get(uid)?;
         self.calendars
-            .get(href)?
-            .get(uid)
+            .get(href)
+            .and_then(|m| m.get(uid))
             .map(|t| t.summary.clone())
     }
 
     pub fn is_task_done(&self, uid: &str) -> Option<bool> {
         let href = self.index.get(uid)?;
         self.calendars
-            .get(href)?
-            .get(uid)
+            .get(href)
+            .and_then(|m| m.get(uid))
             .map(|t| t.status.is_done())
     }
 

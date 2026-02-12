@@ -90,11 +90,20 @@ pub async fn async_delete_wrapper(client: RustyClient, task: TodoTask) -> Result
 }
 
 pub async fn async_toggle_wrapper(
-    client: RustyClient,
-    mut task: TodoTask,
+    _client: RustyClient,
+    _task: TodoTask,
 ) -> Result<(TodoTask, Option<TodoTask>), String> {
-    let (_, next, _) = client.toggle_task(&mut task).await?;
-    Ok((task, next))
+    // Note: toggle behavior (recurrence/history/child-reset) has been moved from
+    // the network client into the in-memory TaskStore / TaskController.
+    //
+    // The GUI should compute the mutations by calling the store (e.g. `store.toggle_task(uid)`)
+    // to obtain the primary, optional secondary, and any affected children, then
+    // dispatch explicit persistence actions (create/update) via the controller/client
+    // using the existing `async_create_wrapper` / `async_update_wrapper` helpers.
+    //
+    // This wrapper intentionally returns an error to catch any remaining direct uses
+    // of `client.toggle_task` and to guide the caller to the new store/controller flow.
+    Err("toggle moved to TaskStore/TaskController: compute mutations via the store and persist them using create/update flows".to_string())
 }
 
 pub async fn async_move_wrapper(

@@ -1,4 +1,13 @@
-// Defines actions and events for TUI interaction and state updates.
+/*
+File: ./src/tui/action.rs
+
+Defines actions and events for TUI interaction and state updates.
+
+This version removes the intent-style Toggle/Mark variants. The TUI now
+performs store mutations locally and emits explicit Create/Update/Delete
+actions for the network actor to persist.
+*/
+
 use crate::model::{CalendarListEntry, Task};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -13,9 +22,6 @@ pub enum Action {
     SwitchCalendar(String),
     CreateTask(Task),
     UpdateTask(Task),
-    ToggleTask(Task),
-    MarkInProcess(Task),
-    MarkCancelled(Task),
     DeleteTask(Task),
     Refresh,
     Quit,

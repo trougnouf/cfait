@@ -101,12 +101,13 @@ impl TaskController {
     }
 
     pub async fn toggle_task(&self, uid: &str) -> Result<Vec<String>, String> {
+        // 1. Acquire store lock and validate existence + derive next status
         let mut store = self.store.lock().await;
 
-        let (primary, _) = store
+        let (primary_ref, _) = store
             .get_task_mut(uid)
             .ok_or("Task not found".to_string())?;
-        let current_status = primary.status;
+        let current_status = primary_ref.status;
 
         let next_status = if current_status.is_done() {
             crate::model::TaskStatus::NeedsAction
@@ -114,22 +115,42 @@ impl TaskController {
             crate::model::TaskStatus::Completed
         };
 
-        // 3. Store logic (Recycle/Snapshot)
-        let (primary, secondary) = store.set_status(uid, next_status).unwrap();
-        drop(store); // release lock before async persistence
+        // 2. Apply business logic inside the store (recycle/advance/reset children).
+        // This returns the primary (history or updated), optional secondary (next instance),
+        // and any child tasks that were reset as part of a recurring completion.
+        // Unwrap is safe because we validated task existence above.
+        let (primary, secondary, children) = store
+            .set_status(uid, next_status)
+            .ok_or("Failed to set status".to_string())?;
+        // Drop the store lock before performing async network/disk operations.
+        drop(store);
 
-        // Persist the change(s), aggregating warnings
+        // 3. Persist all resulting mutations via persist_change.
+        // Aggregate warnings/messages from each persistence attempt.
         let mut all_warnings: Vec<String> = Vec::new();
+
         if let Some(sec) = secondary {
+            // Recurrence advanced: primary is a history snapshot (Create), secondary is updated (Update)
             if let Ok(w) = self.persist_change(Action::Create(primary)).await {
                 all_warnings.extend(w);
             }
             if let Ok(w) = self.persist_change(Action::Update(sec)).await {
                 all_warnings.extend(w);
             }
-        } else if let Ok(w) = self.persist_change(Action::Update(primary)).await {
-            all_warnings.extend(w);
+        } else {
+            // Simple toggle: primary is the updated task (Update)
+            if let Ok(w) = self.persist_change(Action::Update(primary)).await {
+                all_warnings.extend(w);
+            }
         }
+
+        // 4. Persist any children that were auto-reset by the store
+        for child in children {
+            if let Ok(w) = self.persist_change(Action::Update(child)).await {
+                all_warnings.extend(w);
+            }
+        }
+
         Ok(all_warnings)
     }
 

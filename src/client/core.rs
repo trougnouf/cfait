@@ -24,7 +24,7 @@ use crate::client::middleware::{UserAgentLayer, UserAgentService};
 use crate::config::Config;
 use crate::context::AppContext;
 use crate::journal::{Action, Journal};
-use crate::model::{CalendarListEntry, IcsAdapter, Task, TaskStatus};
+use crate::model::{CalendarListEntry, IcsAdapter, Task};
 use crate::storage::{LocalCalendarRegistry, LocalStorage};
 
 use libdav::caldav::{FindCalendarHomeSet, FindCalendars, GetCalendarResources};
@@ -40,7 +40,6 @@ use hyper_util::client::legacy::Client;
 use hyper_util::rt::TokioExecutor;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use uuid::Uuid;
 
 #[cfg(not(target_os = "android"))]
 use rustls_native_certs;
@@ -52,8 +51,8 @@ pub const GET_CTAG: PropertyName = PropertyName::new("http://calendarserver.org/
 pub const APPLE_COLOR: PropertyName =
     PropertyName::new("http://apple.com/ns/ical/", "calendar-color");
 
-use crate::client::FollowRedirectService;
 use crate::client::FollowRedirectLayer;
+use crate::client::FollowRedirectService;
 use crate::client::auth::DynamicAuthService;
 
 // Concrete HttpsClient type used throughout the crate. This is a FollowRedirect
@@ -899,104 +898,6 @@ impl RustyClient {
         Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()))
             .map_err(|e| e.to_string())?;
         self.sync_journal().await
-    }
-
-    pub async fn toggle_task(
-        &self,
-        task: &mut Task,
-    ) -> Result<(Task, Option<Task>, Vec<String>), String> {
-        // This method implements the higher-level recurring/termination logic and then
-        // delegates persistence/sync to the usual create/update paths.
-        let mut logs = Vec::new();
-        let mut history_snapshot = None;
-
-        if task.status == TaskStatus::Completed && task.rrule.is_some() {
-            let mut snapshot = task.clone();
-            snapshot.uid = Uuid::new_v4().to_string();
-            snapshot.href = String::new();
-            snapshot.etag = String::new();
-            snapshot.status = TaskStatus::Completed;
-            snapshot.percent_complete = Some(100);
-            snapshot.rrule = None;
-            snapshot.alarms.clear();
-            snapshot.create_event = None;
-            snapshot.related_to.push(task.uid.clone());
-
-            if !snapshot
-                .unmapped_properties
-                .iter()
-                .any(|p| p.key == "COMPLETED")
-            {
-                let now_str = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
-                snapshot
-                    .unmapped_properties
-                    .push(crate::model::RawProperty {
-                        key: "COMPLETED".to_string(),
-                        value: now_str,
-                        params: vec![],
-                    });
-            }
-
-            if crate::model::RecurrenceEngine::advance(task) {
-                history_snapshot = Some(snapshot);
-            }
-        }
-
-        // Local path short-circuit
-        if task.calendar_href.starts_with("local://") {
-            let mut all = LocalStorage::load_for_href(self.ctx.as_ref(), &task.calendar_href)
-                .map_err(|e| e.to_string())?;
-
-            if let Some(ref mut snap) = history_snapshot {
-                all.push(snap.clone());
-            }
-
-            if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
-                all[idx] = task.clone();
-            }
-
-            LocalStorage::save_for_href(self.ctx.as_ref(), &task.calendar_href, &all)
-                .map_err(|e| e.to_string())?;
-            return Ok((task.clone(), history_snapshot, vec![]));
-        }
-
-        // Remote path: create history snapshot then update main task
-        if let Some(ref mut snap) = history_snapshot {
-            let create_logs = self.create_task(snap).await?;
-            logs.extend(create_logs);
-        }
-
-        let update_logs = self.update_task(task).await?;
-        logs.extend(update_logs);
-
-        Ok((task.clone(), history_snapshot, logs))
-    }
-
-    pub async fn terminate_task(
-        &self,
-        task: &mut Task,
-        status: TaskStatus,
-    ) -> Result<(Task, Option<Task>, Vec<String>), String> {
-        let (primary, secondary) = task.recycle(status);
-        let mut logs: Vec<String> = Vec::new();
-
-        if primary.uid != task.uid {
-            let mut p = primary.clone();
-            let l = self.create_task(&mut p).await?;
-            logs.extend(l);
-        } else {
-            let mut p = primary.clone();
-            let l = self.update_task(&mut p).await?;
-            logs.extend(l);
-        }
-
-        if let Some(sec) = &secondary {
-            let mut s = sec.clone();
-            let l = self.update_task(&mut s).await?;
-            logs.extend(l);
-        }
-
-        Ok((primary, secondary, logs))
     }
 
     pub async fn move_task(
