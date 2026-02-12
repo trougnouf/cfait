@@ -1853,6 +1853,26 @@ public object FfiConverterInt : FfiConverter<Int, Int> {
 /**
  * @suppress
  */
+public object FfiConverterULong : FfiConverter<ULong, Long> {
+    override fun lift(value: Long): ULong = value.toULong()
+
+    override fun read(buf: ByteBuffer): ULong = lift(buf.getLong())
+
+    override fun lower(value: ULong): Long = value.toLong()
+
+    override fun allocationSize(value: ULong) = 8UL
+
+    override fun write(
+        value: ULong,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(value.toLong())
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterLong : FfiConverter<Long, Long> {
     override fun lift(value: Long): Long = value
 
@@ -3721,6 +3741,8 @@ data class MobileTask(
     var `location`: kotlin.String?,
     var `url`: kotlin.String?,
     var `geo`: kotlin.String?,
+    var `timeSpentSeconds`: kotlin.ULong,
+    var `lastStartedAt`: kotlin.Long?,
     var `virtualType`: kotlin.String,
     var `virtualPayload`: kotlin.String,
     var `visibleCategories`: List<kotlin.String>,
@@ -3764,6 +3786,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterOptionalLong.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterSequenceString.read(buf),
@@ -3801,6 +3825,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterOptionalString.allocationSize(value.`location`) +
                 FfiConverterOptionalString.allocationSize(value.`url`) +
                 FfiConverterOptionalString.allocationSize(value.`geo`) +
+                FfiConverterULong.allocationSize(value.`timeSpentSeconds`) +
+                FfiConverterOptionalLong.allocationSize(value.`lastStartedAt`) +
                 FfiConverterString.allocationSize(value.`virtualType`) +
                 FfiConverterString.allocationSize(value.`virtualPayload`) +
                 FfiConverterSequenceString.allocationSize(value.`visibleCategories`) +
@@ -3840,6 +3866,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterOptionalString.write(value.`location`, buf)
         FfiConverterOptionalString.write(value.`url`, buf)
         FfiConverterOptionalString.write(value.`geo`, buf)
+        FfiConverterULong.write(value.`timeSpentSeconds`, buf)
+        FfiConverterOptionalLong.write(value.`lastStartedAt`, buf)
         FfiConverterString.write(value.`virtualType`, buf)
         FfiConverterString.write(value.`virtualPayload`, buf)
         FfiConverterSequenceString.write(value.`visibleCategories`, buf)

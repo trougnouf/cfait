@@ -459,6 +459,7 @@ pub fn view_task_row<'a>(
     if task.status != crate::model::TaskStatus::Completed
         && task.status != crate::model::TaskStatus::Cancelled
     {
+        // Use the wrapper method to fix error E0599
         let (action_icon, next_action_msg, tooltip_text) =
             if task.status == crate::model::TaskStatus::InProcess {
                 (
@@ -638,7 +639,8 @@ pub fn view_task_row<'a>(
     .style(move |_theme, status| {
         let palette = _theme.extended_palette();
         let base_active = button::Style {
-            background: Some(bg_color.into()),
+            // FIX: Explicitly specify Background variant to resolve inference error
+            background: Some(iced::Background::Color(bg_color)),
             text_color: palette.background.base.text,
             border: iced::Border {
                 color: custom_border_color,
@@ -803,8 +805,18 @@ pub fn view_task_row<'a>(
                 tags_row = tags_row.push(loc_btn);
             }
 
-            if let Some(min) = task.estimated_duration {
-                // Helper closure for formatting (same logic as model)
+            // DURATION PILL (Updated)
+            // Calculate actual spent time (stored + current session)
+            let now_ts = Utc::now().timestamp();
+            let current_session = task
+                .last_started_at
+                .map(|start| (now_ts - start).max(0) as u64)
+                .unwrap_or(0);
+            let total_seconds = task.time_spent_seconds + current_session;
+            let total_mins = (total_seconds / 60) as u32;
+
+            if total_mins > 0 || task.estimated_duration.is_some() {
+                // Helper closure for formatting
                 let fmt_dur = |m: u32| -> String {
                     if m >= 525600 {
                         format!("{}y", m / 525600)
@@ -821,24 +833,56 @@ pub fn view_task_row<'a>(
                     }
                 };
 
-                let label = if let Some(max) = task.estimated_duration_max {
-                    if max > min {
-                        format!("~{}-{}", fmt_dur(min), fmt_dur(max))
+                // Build Estimation String
+                let est_label = if let Some(min) = task.estimated_duration {
+                    if let Some(max) = task.estimated_duration_max {
+                        if max > min {
+                            format!("~{}-{}", fmt_dur(min), fmt_dur(max))
+                        } else {
+                            format!("~{}", fmt_dur(min))
+                        }
                     } else {
                         format!("~{}", fmt_dur(min))
                     }
                 } else {
-                    format!("~{}", fmt_dur(min))
+                    String::new()
+                };
+
+                // Build Final Label: "Spent / Est" or just "Spent" or just "Est"
+                let label = if total_mins > 0 {
+                    if !est_label.is_empty() {
+                        format!("{} / {}", fmt_dur(total_mins), est_label)
+                    } else {
+                        fmt_dur(total_mins)
+                    }
+                } else {
+                    est_label
+                };
+
+                // Style the duration/estimate pill. If the task is actively tracking time,
+                // tint the pill to draw attention.
+                let dur_bg = if task.last_started_at.is_some() {
+                    // subtle green for active tracking
+                    Color::from_rgb(0.25, 0.50, 0.25)
+                } else {
+                    // neutral gray when inactive
+                    Color::from_rgb(0.50, 0.50, 0.50)
+                };
+                let dur_border = if task.last_started_at.is_some() {
+                    Color::from_rgb(0.25, 0.60, 0.25)
+                } else {
+                    Color::BLACK.scale_alpha(0.05)
                 };
 
                 tags_row = tags_row.push(
                     container(text(label).size(10).style(|theme: &Theme| text::Style {
                         color: Some(theme.extended_palette().background.base.text),
                     }))
-                    .style(|_| container::Style {
-                        background: Some(Color::from_rgb(0.5, 0.5, 0.5).into()),
+                    .style(move |_| container::Style {
+                        background: Some(dur_bg.into()),
                         border: iced::Border {
                             radius: 4.0.into(),
+                            color: dur_border,
                             ..Default::default()
                         },
                         ..Default::default()

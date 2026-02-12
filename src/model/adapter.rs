@@ -4,6 +4,9 @@ use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
 use icalendar::{Calendar, CalendarComponent, Component, Event, Todo, TodoStatus};
 use uuid::Uuid;
 
+/// List of property keys we explicitly handle when mapping to/from ICS.
+/// Time-tracking properties `X-TIME-SPENT` and `X-LAST-START` are included here
+/// so they are not treated as unmapped custom properties.
 const HANDLED_KEYS: &[&str] = &[
     "UID",
     "SUMMARY",
@@ -29,6 +32,9 @@ const HANDLED_KEYS: &[&str] = &[
     "URL",
     "GEO",
     "X-CFAIT-CREATE-EVENT",
+    // Time-tracking properties we explicitly understand
+    "X-TIME-SPENT",
+    "X-LAST-START",
     "EXDATE",
 ];
 
@@ -52,6 +58,7 @@ impl IcsAdapter {
             todo.add_property("URL", u);
         }
         if let Some(g) = &task.geo {
+            // ICS GEO uses ';' separator sometimes - we stored as "lat,lon"
             let geo_val: String = g.replace(',', ";");
             todo.add_property("GEO", &geo_val);
         }
@@ -156,6 +163,14 @@ impl IcsAdapter {
                 "X-CFAIT-CREATE-EVENT",
                 if create_event { "TRUE" } else { "FALSE" },
             );
+        }
+
+        // Emit time-tracking properties (if present)
+        if task.time_spent_seconds > 0 {
+            todo.add_property("X-TIME-SPENT", task.time_spent_seconds.to_string());
+        }
+        if let Some(ts) = task.last_started_at {
+            todo.add_property("X-LAST-START", ts.to_string());
         }
 
         for raw in &task.unmapped_properties {
@@ -402,8 +417,42 @@ impl IcsAdapter {
             }
         }
 
+        // Helper to parse iCal durations like PT1H30M or P1DT etc. Return total minutes.
+        let parse_ics_duration = |val: &str| -> i32 {
+            // Very small state machine to parse ISO 8601 durations (subset).
+            // We'll accept patterns like PnW, PnDTnHnM, PTnHnM, etc.
+            let mut minutes: i32 = 0;
+            let mut num_buf = String::new();
+            let mut in_time = false;
+            for c in val.chars() {
+                match c {
+                    'P' | 'p' => {}
+                    'T' | 't' => {
+                        in_time = true;
+                    }
+                    d if d.is_ascii_digit() => {
+                        num_buf.push(d);
+                    }
+                    unit if !num_buf.is_empty() => {
+                        if let Ok(n) = num_buf.parse::<i32>() {
+                            match unit {
+                                'W' => minutes += n * 7 * 24 * 60,
+                                'D' => minutes += n * 24 * 60,
+                                'H' if in_time => minutes += n * 60,
+                                'M' if in_time => minutes += n,
+                                _ => {}
+                            }
+                        }
+                        num_buf.clear();
+                    }
+                    _ => {}
+                }
+            }
+            minutes
+        };
+
         let parse_dur = |val: &str| -> Option<u32> {
-            let mut minutes = 0;
+            let mut minutes = 0u32;
             let mut num_buf = String::new();
             let mut in_time = false;
             for c in val.chars() {
@@ -646,6 +695,13 @@ impl IcsAdapter {
             }
         }
 
+        // Parse time-tracking fields from properties
+        let time_spent_seconds = get_prop("X-TIME-SPENT")
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(0);
+
+        let last_started_at = get_prop("X-LAST-START").and_then(|v| v.parse::<i64>().ok());
+
         Ok(Task {
             uid,
             summary,
@@ -671,10 +727,12 @@ impl IcsAdapter {
             location,
             url,
             geo,
+            time_spent_seconds,
+            last_started_at,
             unmapped_properties,
             sequence,
-            raw_components,
             raw_alarms: Vec::new(),
+            raw_components,
             create_event,
             is_blocked: false,
             sort_rank: 0,
@@ -849,59 +907,4 @@ impl IcsAdapter {
 
         Some((event_uid, calendar.to_string()))
     }
-}
-
-fn parse_ics_duration(val: &str) -> i32 {
-    let val = val.trim();
-    if val.is_empty() {
-        return 0;
-    }
-
-    let mut minutes = 0;
-    let mut digits = String::new();
-    let mut neg = false;
-
-    let mut chars = val.chars().peekable();
-    if let Some(&c) = chars.peek() {
-        if c == '-' {
-            neg = true;
-            chars.next();
-        } else if c == '+' {
-            chars.next();
-        }
-    }
-
-    if let Some(&c) = chars.peek()
-        && c == 'P'
-    {
-        chars.next();
-    }
-
-    let mut in_time = false;
-
-    for c in chars {
-        if c.is_ascii_digit() {
-            digits.push(c);
-        } else if c == 'T' {
-            in_time = true;
-        } else {
-            let amt = digits.parse::<i32>().unwrap_or(0);
-            digits.clear();
-            match c {
-                'W' => minutes += amt * 7 * 24 * 60,
-                'D' => minutes += amt * 24 * 60,
-                'H' => minutes += amt * 60,
-                'M' => {
-                    if in_time {
-                        minutes += amt;
-                    } else {
-                        minutes += amt * 30 * 24 * 60;
-                    }
-                }
-                'S' => {}
-                _ => {}
-            }
-        }
-    }
-    if neg { -minutes } else { minutes }
 }

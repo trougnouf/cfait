@@ -308,6 +308,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             Task::none()
         }
+        Message::ClearSearch => {
+            // FIX: Actually clear the text editor content
+            app.search_value = iced::widget::text_editor::Content::new();
+            refresh_filtered_tasks(app);
+            Task::none()
+        }
         Message::SetMinDuration(val) => {
             app.filter_min_duration = val;
             refresh_filtered_tasks(app);

@@ -1,4 +1,3 @@
-// File: ./src/store.rs
 /* cfait/src/store.rs
  *
  * Optimized in-memory store for tasks.
@@ -249,6 +248,10 @@ impl TaskStore {
     pub fn set_status_in_process(&mut self, uid: &str) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
             task.status = TaskStatus::InProcess;
+            // START TIMER
+            if task.last_started_at.is_none() {
+                task.last_started_at = Some(Utc::now().timestamp());
+            }
             return Some(task.clone());
         }
         None
@@ -257,6 +260,17 @@ impl TaskStore {
     pub fn pause_task(&mut self, uid: &str) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
             task.status = TaskStatus::NeedsAction;
+
+            // STOP TIMER AND ACCUMULATE
+            if let Some(start) = task.last_started_at {
+                let now = Utc::now().timestamp();
+                if now > start {
+                    task.time_spent_seconds =
+                        task.time_spent_seconds.saturating_add((now - start) as u64);
+                }
+                task.last_started_at = None;
+            }
+
             let current = task.percent_complete.unwrap_or(0);
             if current == 0 {
                 task.percent_complete = Some(50);
@@ -270,6 +284,17 @@ impl TaskStore {
         if let Some((task, _)) = self.get_task_mut(uid) {
             task.status = TaskStatus::NeedsAction;
             task.percent_complete = None;
+
+            // STOP TIMER AND ACCUMULATE
+            if let Some(start) = task.last_started_at {
+                let now = Utc::now().timestamp();
+                if now > start {
+                    task.time_spent_seconds =
+                        task.time_spent_seconds.saturating_add((now - start) as u64);
+                }
+                task.last_started_at = None;
+            }
+
             return Some(task.clone());
         }
         None

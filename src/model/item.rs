@@ -1,3 +1,4 @@
+// File: ./src/model/item.rs
 /*
 File: cfait/src/model/item.rs
 
@@ -6,6 +7,12 @@ updated to include a lightweight "virtual" task concept (used to represent
 expand/collapse placeholders for truncated completed-task groups), together
 with hierarchy organization helpers that inject those virtual tasks into the
 flattened view.
+
+Additionally this version adds lightweight time-tracking fields:
+- `time_spent_seconds` accumulates committed seconds of work
+- `last_started_at` holds an optional unix timestamp when the timer was last started
+The `recycle` method now commits any running timer before creating history
+snapshots for recurring tasks and resets timing for the next occurrence.
 */
 
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
@@ -242,6 +249,13 @@ pub struct Task {
     pub location: Option<String>,
     pub url: Option<String>,
     pub geo: Option<String>,
+
+    // Time-tracking fields
+    #[serde(default)]
+    pub time_spent_seconds: u64,
+    #[serde(default)]
+    pub last_started_at: Option<i64>, // Unix timestamp
+
     #[serde(default)]
     pub unmapped_properties: Vec<RawProperty>,
     #[serde(default)]
@@ -372,6 +386,8 @@ impl Task {
             location: None,
             url: None,
             geo: None,
+            time_spent_seconds: 0,
+            last_started_at: None,
             unmapped_properties: Vec::new(),
             sequence: 0,
             raw_alarms: Vec::new(),
@@ -912,6 +928,105 @@ impl Task {
 
         (visible_tags, visible_location)
     }
+
+    /// Applies a terminal status (Completed or Cancelled).
+    /// Returns: (History_Snapshot_or_Updated_Task, Optional_Recycled_Task)
+    pub fn recycle(&self, target_status: TaskStatus) -> (Task, Option<Task>) {
+        // 0. COMMIT TIME TRACKING
+        // Before creating history or updating, if the task was running, finalize the time.
+        let mut base_task = self.clone();
+        if let Some(start_ts) = base_task.last_started_at {
+            let now = Utc::now().timestamp();
+            if now > start_ts {
+                base_task.time_spent_seconds = base_task
+                    .time_spent_seconds
+                    .saturating_add((now - start_ts) as u64);
+            }
+            base_task.last_started_at = None;
+        }
+
+        // If the task is already in the target state, "toggle" it off to NeedsAction
+        if base_task.status == target_status && target_status.is_done() {
+            let mut updated = base_task.clone();
+            updated.status = TaskStatus::NeedsAction;
+            updated.percent_complete = None;
+            updated.unmapped_properties.retain(|p| p.key != "COMPLETED");
+            return (updated, None);
+        }
+
+        // Only recycle if it has an RRULE and we are finishing it (Done or Cancelled)
+        if base_task.rrule.is_some() && target_status.is_done() {
+            // 1. Create History Snapshot (uses the committed time from base_task)
+            let mut history = base_task.clone();
+            history.uid = Uuid::new_v4().to_string(); // New distinct UID
+            history.href = String::new(); // Clear href (it's a new resource)
+            history.etag = String::new();
+            history.status = target_status;
+            history.rrule = None; // History does not recur
+            history.alarms.clear(); // History does not ring
+            history.create_event = None; // Don't sync history to calendar
+            history.related_to.push(base_task.uid.clone()); // Link history to parent
+
+            // Set COMPLETED date (or CANCELLED)
+            let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+            history.unmapped_properties.retain(|p| p.key != "COMPLETED");
+            history.unmapped_properties.push(RawProperty {
+                key: "COMPLETED".to_string(),
+                value: now_str,
+                params: vec![],
+            });
+
+            if target_status == TaskStatus::Completed {
+                history.percent_complete = Some(100);
+            }
+
+            // 2. Advance Main Task
+            let mut next_task = base_task.clone();
+
+            // RESET TIME FOR NEXT INSTANCE
+            next_task.time_spent_seconds = 0;
+            next_task.last_started_at = None;
+
+            // If cancelling, add current date to exdates so the instance is skipped.
+            if target_status == TaskStatus::Cancelled
+                && let Some(current_date) = next_task
+                    .dtstart
+                    .as_ref()
+                    .or(next_task.due.as_ref())
+                    .cloned()
+            {
+                next_task.exdates.push(current_date);
+            }
+
+            // Advance dates and reset status
+            let advanced = crate::model::RecurrenceEngine::advance(&mut next_task);
+
+            if advanced {
+                return (history, Some(next_task));
+            }
+        }
+
+        // Non-recurring: Just update in place (using the committed time from base_task)
+        let mut updated = base_task.clone();
+        updated.status = target_status;
+        if target_status.is_done() {
+            let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+            updated.unmapped_properties.retain(|p| p.key != "COMPLETED");
+            updated.unmapped_properties.push(RawProperty {
+                key: "COMPLETED".to_string(),
+                value: now_str,
+                params: vec![],
+            });
+            if target_status == TaskStatus::Completed {
+                updated.percent_complete = Some(100);
+            }
+        } else {
+            updated.percent_complete = None;
+            updated.unmapped_properties.retain(|p| p.key != "COMPLETED");
+        }
+
+        (updated, None)
+    }
 }
 
 // Backward-compatible wrappers delegating to the new modules introduced during refactor.
@@ -957,90 +1072,5 @@ impl Task {
 
     pub fn is_paused(&self) -> bool {
         crate::model::TaskDisplay::is_paused(self)
-    }
-}
-
-// Centralized recycle method moving Snapshot + Recycle behavior into the model.
-impl Task {
-    /// Applies a terminal status (Completed or Cancelled).
-    /// Returns: (History_Snapshot_or_Updated_Task, Optional_Recycled_Task)
-    pub fn recycle(&self, target_status: TaskStatus) -> (Task, Option<Task>) {
-        // If the task is already in the target state, "toggle" it off to NeedsAction
-        if self.status == target_status && target_status.is_done() {
-            let mut updated = self.clone();
-            updated.status = TaskStatus::NeedsAction;
-            updated.percent_complete = None;
-            updated.unmapped_properties.retain(|p| p.key != "COMPLETED");
-            return (updated, None);
-        }
-
-        // Only recycle if it has an RRULE and we are finishing it (Done or Cancelled)
-        if self.rrule.is_some() && target_status.is_done() {
-            // 1. Create History Snapshot
-            let mut history = self.clone();
-            history.uid = Uuid::new_v4().to_string(); // New distinct UID
-            history.href = String::new(); // Clear href (it's a new resource)
-            history.etag = String::new();
-            history.status = target_status;
-            history.rrule = None; // History does not recur
-            history.alarms.clear(); // History does not ring
-            history.create_event = None; // Don't sync history to calendar
-            history.related_to.push(self.uid.clone()); // Link history to parent
-
-            // Set COMPLETED date (or CANCELLED)
-            let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
-            history.unmapped_properties.retain(|p| p.key != "COMPLETED");
-            history.unmapped_properties.push(RawProperty {
-                key: "COMPLETED".to_string(),
-                value: now_str,
-                params: vec![],
-            });
-
-            if target_status == TaskStatus::Completed {
-                history.percent_complete = Some(100);
-            }
-
-            // 2. Advance Main Task
-            let mut next_task = self.clone();
-
-            // If cancelling, add current date to exdates so the instance is skipped.
-            if target_status == TaskStatus::Cancelled
-                && let Some(current_date) = next_task
-                    .dtstart
-                    .as_ref()
-                    .or(next_task.due.as_ref())
-                    .cloned()
-            {
-                next_task.exdates.push(current_date);
-            }
-
-            // Advance dates and reset status
-            let advanced = crate::model::RecurrenceEngine::advance(&mut next_task);
-
-            if advanced {
-                return (history, Some(next_task));
-            }
-        }
-
-        // Non-recurring (or finished recurring) behavior: Just update in place
-        let mut updated = self.clone();
-        updated.status = target_status;
-        if target_status.is_done() {
-            let now_str = Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
-            updated.unmapped_properties.retain(|p| p.key != "COMPLETED");
-            updated.unmapped_properties.push(RawProperty {
-                key: "COMPLETED".to_string(),
-                value: now_str,
-                params: vec![],
-            });
-            if target_status == TaskStatus::Completed {
-                updated.percent_complete = Some(100);
-            }
-        } else {
-            updated.percent_complete = None;
-            updated.unmapped_properties.retain(|p| p.key != "COMPLETED");
-        }
-
-        (updated, None)
     }
 }

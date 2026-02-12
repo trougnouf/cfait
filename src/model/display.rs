@@ -1,5 +1,6 @@
 // File: ./src/model/display.rs
 use crate::model::item::{Task, TaskStatus};
+use chrono::Utc; // Import Utc for live calculation
 
 pub trait TaskDisplay {
     fn to_smart_string(&self) -> String;
@@ -68,15 +69,38 @@ impl TaskDisplay for Task {
             }
         }
 
-        if let Some(min) = self.estimated_duration {
+        // Calculate actual spent time (stored + current session)
+        let now_ts = Utc::now().timestamp();
+        let current_session = self
+            .last_started_at
+            .map(|start| (now_ts - start).max(0) as u64)
+            .unwrap_or(0);
+        let total_seconds = self.time_spent_seconds + current_session;
+        let total_mins = (total_seconds / 60) as u32;
+
+        let est_str = if let Some(min) = self.estimated_duration {
             if let Some(max) = self.estimated_duration_max
                 && max > min
             {
-                return format!("[~{}-{}]", fmt_min(min), fmt_min(max));
+                format!("~{}-{}", fmt_min(min), fmt_min(max))
+            } else {
+                format!("~{}", fmt_min(min))
             }
-            return format!("[~{}]", fmt_min(min));
+        } else {
+            String::new()
+        };
+
+        if total_mins > 0 {
+            if !est_str.is_empty() {
+                format!("[{} / {}]", fmt_min(total_mins), est_str)
+            } else {
+                format!("[{}]", fmt_min(total_mins))
+            }
+        } else if !est_str.is_empty() {
+            format!("[{}]", est_str)
+        } else {
+            String::new()
         }
-        String::new()
     }
 
     fn to_smart_string(&self) -> String {
@@ -182,6 +206,19 @@ impl TaskDisplay for Task {
 
         if let Some(create_event) = self.create_event {
             s.push_str(if create_event { " +cal" } else { " -cal" });
+        }
+
+        // Output spent time
+        if self.time_spent_seconds > 0 {
+            // Round to nearest minute for display
+            let mins = self.time_spent_seconds / 60;
+            if mins > 0 {
+                if mins.is_multiple_of(60) {
+                    s.push_str(&format!(" spent:{}h", mins / 60));
+                } else {
+                    s.push_str(&format!(" spent:{}m", mins));
+                }
+            }
         }
 
         s

@@ -30,6 +30,9 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
     merge_field!(location);
     merge_field!(url);
     merge_field!(geo);
+    // Time-tracking fields: prefer local changes when server did not modify them.
+    merge_field!(time_spent_seconds);
+    merge_field!(last_started_at);
 
     if local.categories != base.categories {
         let mut new_cats = server.categories.clone();

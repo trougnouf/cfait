@@ -131,6 +131,10 @@ pub struct MobileTask {
     pub url: Option<String>,
     pub geo: Option<String>,
 
+    // Time-tracking fields exposed to mobile clients
+    pub time_spent_seconds: u64,
+    pub last_started_at: Option<i64>,
+
     // NEW: Virtual task hinting for clients to render expand/collapse rows
     // Values are:
     //  - "none"     -> not a virtual row
@@ -300,6 +304,10 @@ fn task_to_mobile(
         location: t.location.clone(),
         url: t.url.clone(),
         geo: t.geo.clone(),
+
+        // Time-tracking values
+        time_spent_seconds: t.time_spent_seconds,
+        last_started_at: t.last_started_at,
 
         // Virtual hint fields for mobile/GUI clients
         virtual_type: v_type,

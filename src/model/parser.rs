@@ -234,9 +234,9 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
                     || word.starts_with('^')
                     || word.starts_with("start:"))
                     && (word.contains('<') || word.contains('>'))))
-            {
-                matched_kind = Some(SyntaxType::Filter);
-            }
+        {
+            matched_kind = Some(SyntaxType::Filter);
+        }
 
         // 1. Recurrence
         if matched_kind.is_none()
@@ -525,6 +525,9 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
             } else if word.starts_with('!') && word.len() > 1 && word[1..].parse::<u8>().is_ok() {
                 matched_kind = Some(SyntaxType::Priority);
             } else if word.starts_with('~') || word_lower.starts_with("est:") {
+                matched_kind = Some(SyntaxType::Duration);
+            } else if word_lower.starts_with("spent:") {
+                // New logic for spent:
                 matched_kind = Some(SyntaxType::Duration);
             } else if word.starts_with('#') {
                 matched_kind = Some(SyntaxType::Tag);
@@ -1359,6 +1362,7 @@ fn is_special_token(word: &str) -> bool {
         || lower.starts_with("rec:")
         || lower.starts_with("est:")
         || lower.starts_with("rem:")
+        || lower.starts_with("spent:")
         || lower.starts_with("until")
         || lower.starts_with("except")
     {
@@ -1387,6 +1391,11 @@ pub fn apply_smart_input(
     task.categories.clear();
     task.alarms.clear(); // Reset alarms
     task.exdates.clear(); // Reset exdates
+    // Reset time-spent so explicit `spent:` tokens can override it on edit.
+    // We deliberately preserve `last_started_at` so an actively running timer
+    // is not stopped by editing the smart string unless the user explicitly
+    // includes a token that stops it.
+    task.time_spent_seconds = 0;
 
     let user_tokens: Vec<String> = split_input_respecting_quotes(input)
         .into_iter()
@@ -1663,8 +1672,15 @@ pub fn apply_smart_input(
                 summary_words.push(unescape(token));
             }
         }
-        // 3. New Fields (@@, loc:, url:, geo:, desc:, !, ~)
-        else if token.starts_with("@@") {
+        // 3. New Fields (@@, loc:, url:, geo:, desc:, !, ~, spent:)
+        else if let Some(val) = token_lower.strip_prefix("spent:") {
+            // Allow formats like `spent:30m` or `spent:1h`
+            if let Some(mins) = parse_duration(val) {
+                task.time_spent_seconds = (mins as u64) * 60;
+            } else {
+                summary_words.push(unescape(token));
+            }
+        } else if token.starts_with("@@") {
             let val = strip_quotes(token.trim_start_matches("@@"));
             if val.is_empty() {
                 summary_words.push(unescape(token));

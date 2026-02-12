@@ -142,10 +142,20 @@ fun TaskRow(
                         } else {
                             incomingRelations[0]
                         }
-                        NfIcon(getRandomRelatedIcon(task.uid, relatedUid), size = 10.sp, color = Color.Gray, lineHeight = 10.sp)
+                        NfIcon(
+                            getRandomRelatedIcon(task.uid, relatedUid),
+                            size = 10.sp,
+                            color = Color.Gray,
+                            lineHeight = 10.sp
+                        )
                     }
 
-                    if (task.isBlocked) NfIcon(NfIcons.BLOCKED, size = 10.sp, color = MaterialTheme.colorScheme.error, lineHeight = 10.sp)
+                    if (task.isBlocked) NfIcon(
+                        NfIcons.BLOCKED,
+                        size = 10.sp,
+                        color = MaterialTheme.colorScheme.error,
+                        lineHeight = 10.sp
+                    )
 
                     if (task.hasAlarms) {
                         NfIcon(NfIcons.BELL, size = 10.sp, color = Color(0xFFFF7043), lineHeight = 10.sp)
@@ -195,7 +205,12 @@ fun TaskRow(
                                 Text(startStr, fontSize = 10.sp, color = dimColor, lineHeight = 10.sp)
                             } else {
                                 // Case 1: Start != Due -> Show range
-                                Text("$startStr - $displayDueStr", fontSize = 10.sp, color = dimColor, lineHeight = 10.sp)
+                                Text(
+                                    "$startStr - $displayDueStr",
+                                    fontSize = 10.sp,
+                                    color = dimColor,
+                                    lineHeight = 10.sp
+                                )
                             }
                             // End Icon
                             NfIcon(NfIcons.HOURGLASS_END, size = 10.sp, color = dimColor, lineHeight = 10.sp)
@@ -233,8 +248,41 @@ fun TaskRow(
                         // --- CHANGED END ---
                     }
 
-                    if (task.durationMins != null) {
-                        Text(formatDuration(task.durationMins!!, task.durationMaxMins), fontSize = 10.sp, color = Color.Gray, lineHeight = 10.sp)
+                    // DURATION DISPLAY
+                    // Calculate Total Spent (Stored + Live)
+                    var liveDurationMins by remember(task.timeSpentSeconds, task.lastStartedAt) {
+                        mutableStateOf((task.timeSpentSeconds / 60u).toInt())
+                    }
+
+                    if (task.lastStartedAt != null) {
+                        LaunchedEffect(task.lastStartedAt) {
+                            while (true) {
+                                val now = System.currentTimeMillis() / 1000
+                                val start = task.lastStartedAt!!
+                                val currentSession = if (now > start) now - start else 0
+                                val totalSeconds = task.timeSpentSeconds.toLong() + currentSession
+                                liveDurationMins = (totalSeconds / 60).toInt()
+                                kotlinx.coroutines.delay(60000) // Update every minute
+                            }
+                        }
+                    }
+
+                    if (liveDurationMins > 0 || task.durationMins != null) {
+                        val spentStr = if (liveDurationMins > 0) formatDuration(liveDurationMins.toUInt()) else ""
+                        val estStr = if (task.durationMins != null) {
+                            formatDuration(task.durationMins!!, task.durationMaxMins)
+                        } else ""
+
+                        val label = when {
+                            spentStr.isNotEmpty() && estStr.isNotEmpty() -> "$spentStr / $estStr"
+                            spentStr.isNotEmpty() -> spentStr
+                            else -> estStr
+                        }
+
+                        // Use a specific color for active tracking to draw attention
+                        val durColor = if (task.lastStartedAt != null) Color(0xFF66BB6A) else Color.Gray
+
+                        Text(label, fontSize = 10.sp, color = durColor, lineHeight = 10.sp)
                     }
                     if (task.isRecurring) NfIcon(NfIcons.REPEAT, size = 10.sp, color = Color.Gray, lineHeight = 10.sp)
 
@@ -243,7 +291,12 @@ fun TaskRow(
                             onClick = { uriHandler.openUri("geo:${task.geo}") },
                             modifier = Modifier.size(14.dp).padding(0.dp),
                         ) {
-                            NfIcon(NfIcons.MAP_LOCATION_DOT, size = 10.sp, color = Color(0xFF64B5F6), lineHeight = 10.sp)
+                            NfIcon(
+                                NfIcons.MAP_LOCATION_DOT,
+                                size = 10.sp,
+                                color = Color(0xFF64B5F6),
+                                lineHeight = 10.sp
+                            )
                         }
                     }
 
@@ -251,7 +304,13 @@ fun TaskRow(
                     if (task.location != null && task.location != hiddenLocation) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             val locationColor = Color(0xFFFFB300)
-                            Text("@@", fontSize = 10.sp, color = locationColor, fontWeight = FontWeight.Bold, lineHeight = 10.sp)
+                            Text(
+                                "@@",
+                                fontSize = 10.sp,
+                                color = locationColor,
+                                fontWeight = FontWeight.Bold,
+                                lineHeight = 10.sp
+                            )
                             Text(task.location!!, fontSize = 10.sp, color = locationColor, lineHeight = 10.sp)
                         }
                     }
