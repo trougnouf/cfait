@@ -383,6 +383,10 @@ class SmartSyntaxTransformation(
                             Color(0xFF00BCD4)
                         }
 
+                        MobileSyntaxType.OPERATOR -> {
+                            Color(0xFFFF4081) // Pink/Magenta Accent
+                        }
+
                         else -> {
                             null
                         }
@@ -393,18 +397,19 @@ class SmartSyntaxTransformation(
                         if (token.kind == MobileSyntaxType.PRIORITY
                             || token.kind == MobileSyntaxType.TAG
                             || token.kind == MobileSyntaxType.CALENDAR
+                            || token.kind == MobileSyntaxType.OPERATOR
                         ) {
                             FontWeight.Bold
                         } else {
                             FontWeight.Normal
                         }
 
-                builder.addStyle(
-                    SpanStyle(color = spanColor, fontWeight = weight),
-                    token.start,
-                    token.end,
-                )
-            }
+                    builder.addStyle(
+                        SpanStyle(color = spanColor, fontWeight = weight),
+                        token.start,
+                        token.end,
+                    )
+                }
             }
         } catch (e: Exception) {
         }

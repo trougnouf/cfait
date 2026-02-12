@@ -3927,6 +3927,7 @@ enum class MobileSyntaxType {
     REMINDER,
     CALENDAR,
     FILTER,
+    OPERATOR,
     ;
 
     companion object

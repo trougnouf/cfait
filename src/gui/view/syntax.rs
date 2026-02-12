@@ -14,7 +14,10 @@ pub struct SmartInputHighlighter {
 
 impl Default for SmartInputHighlighter {
     fn default() -> Self {
-        Self { is_dark: true, is_search: false } // Default: dark=true, search=false
+        Self {
+            is_dark: true,
+            is_search: false,
+        } // Default: dark=true, search=false
     }
 }
 
@@ -118,7 +121,15 @@ impl Highlighter for SmartInputHighlighter {
                         color: Some(Color::from_rgb(0.0, 0.8, 0.8)), // Cyan
                         font: None,
                     },
-                    SyntaxType::Calendar => highlighter::Format { // Added handler
+                    SyntaxType::Operator => highlighter::Format {
+                        color: Some(Color::from_rgb(1.0, 0.0, 1.0)), // Magenta for boolean ops
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
+                    SyntaxType::Calendar => highlighter::Format {
+                        // Added handler
                         color: Some(Color::from_rgb(0.91, 0.11, 0.38)), // #E91E63 Pink
                         font: Some(Font {
                             weight: iced::font::Weight::Bold,

@@ -20,6 +20,7 @@ pub enum SyntaxType {
     Reminder,
     Calendar, // +cal, -cal
     Filter,   // is:done, < / > operators, duration filters, etc.
+    Operator, // Boolean / operator tokens: |, -, (, ), AND/OR/NOT
 }
 
 #[derive(Debug)]
@@ -224,18 +225,37 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
 
         let word_lower = word.to_lowercase();
 
-        // 0. Search-only filters (e.g., is:done, !<3, ~>1h) -> ONLY if searching
-        if is_search_query
-            && (word_lower.starts_with("is:")
-                || ((word.starts_with('!')
-                    || word.starts_with('~')
-                    || word.starts_with('@')
-                    || word.starts_with("due:")
-                    || word.starts_with('^')
-                    || word.starts_with("start:"))
-                    && (word.contains('<') || word.contains('>'))))
-        {
-            matched_kind = Some(SyntaxType::Filter);
+        // 0. Search-only filters (MOVED UP and EXPANDED)
+        if is_search_query {
+            // Check for Boolean Operators, parentheses, and textual boolean operators
+            // Combine branches to avoid duplicate blocks (fixes clippy: if_same_then_else)
+            if word == "|"
+                || word == "("
+                || word == ")"
+                || word.eq_ignore_ascii_case("and")
+                || word.eq_ignore_ascii_case("or")
+                || word.eq_ignore_ascii_case("not")
+            {
+                matched_kind = Some(SyntaxType::Operator);
+            } else {
+                // Check for negation prefix "-"
+                if word.starts_with('-') && word.len() > 1 {
+                    // e.g. -#tag, -is:done
+                    matched_kind = Some(SyntaxType::Filter);
+                }
+                // Existing Filter logic
+                else if word_lower.starts_with("is:")
+                    || ((word.starts_with('!')
+                        || word.starts_with('~')
+                        || word.starts_with('@')
+                        || word.starts_with("due:")
+                        || word.starts_with('^')
+                        || word.starts_with("start:"))
+                        && (word.contains('<') || word.contains('>')))
+                {
+                    matched_kind = Some(SyntaxType::Filter);
+                }
+            }
         }
 
         // 1. Recurrence

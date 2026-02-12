@@ -431,10 +431,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     Style::default().fg(Color::Blue)
                 };
 
-                (
-                    format!(" @{}⌛", d.format_smart()),
-                    style,
-                )
+                (format!(" @{}⌛", d.format_smart()), style)
                 // --- CHANGED END ---
             } else {
                 (String::new(), Style::default())
@@ -817,7 +814,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             if state.mode == InputMode::EditingDescription {
                 input_spans.push(Span::raw("Press Enter for newline. Esc / Ctrl+S to save."));
             } else {
-                let tokens = tokenize_smart_input(&visible_text, state.mode == InputMode::Searching);
+                let tokens =
+                    tokenize_smart_input(&visible_text, state.mode == InputMode::Searching);
                 for token in tokens {
                     let text = &visible_text[token.start..token.end];
                     let style = match token.kind {
@@ -851,6 +849,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         SyntaxType::Geo => Style::default().fg(Color::DarkGray),
                         SyntaxType::Description => Style::default().fg(Color::Gray),
                         SyntaxType::Reminder => Style::default().fg(Color::LightRed),
+                        SyntaxType::Operator => Style::default().fg(Color::Magenta), // Highlight boolean/operator tokens
                         SyntaxType::Calendar => Style::default().fg(Color::Magenta), // Added for +cal/-cal
                         SyntaxType::Filter => Style::default().fg(Color::Cyan), // Added for search operators / filters
                     };

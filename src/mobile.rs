@@ -69,6 +69,7 @@ pub enum MobileSyntaxType {
     Reminder,
     Calendar,
     Filter,
+    Operator,
 }
 
 impl From<SyntaxType> for MobileSyntaxType {
@@ -88,6 +89,7 @@ impl From<SyntaxType> for MobileSyntaxType {
             SyntaxType::Reminder => MobileSyntaxType::Reminder,
             SyntaxType::Calendar => MobileSyntaxType::Calendar,
             SyntaxType::Filter => MobileSyntaxType::Filter,
+            SyntaxType::Operator => MobileSyntaxType::Operator,
         }
     }
 }
