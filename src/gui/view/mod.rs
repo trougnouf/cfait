@@ -430,7 +430,13 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             }
         };
 
-    // Icons for tabs
+    // Determine whether filters produced an empty visible list while the store has tasks.
+    // This lets us attribute the emptiness to search / tag / location filters.
+    let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
+    let is_tag_error = is_filter_empty && !app.selected_categories.is_empty();
+    let is_loc_error = is_filter_empty && !app.selected_locations.is_empty();
+
+    // Icons for tabs - show error color on the tab icon if that tab is responsible for the empty result.
     let btn_cals =
         button(container(icon::icon(icon::CALENDARS_HEADER).size(18)).center_x(Length::Fill))
             .padding(8)
@@ -442,7 +448,17 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             })
             .on_press(Message::SidebarModeChanged(SidebarMode::Calendars));
 
-    let btn_tags = button(container(icon::icon(icon::TAGS_HEADER).size(18)).center_x(Length::Fill))
+    // Tag tab: if tags are the culprit, color the tag icon red (when inactive) to attribute the empty state.
+    let tag_icon = {
+        if is_tag_error && app.sidebar_mode != SidebarMode::Categories {
+            icon::icon(icon::TAGS_HEADER)
+                .size(18)
+                .color(Color::from_rgb(0.9, 0.2, 0.2))
+        } else {
+            icon::icon(icon::TAGS_HEADER).size(18)
+        }
+    };
+    let btn_tags = button(container(tag_icon).center_x(Length::Fill))
         .padding(8)
         .width(Length::Fill)
         .style(if app.sidebar_mode == SidebarMode::Categories {
@@ -452,16 +468,25 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         })
         .on_press(Message::SidebarModeChanged(SidebarMode::Categories));
 
-    let btn_locs =
-        button(container(icon::icon(app.location_tab_icon).size(18)).center_x(Length::Fill))
-            .padding(8)
-            .width(Length::Fill)
-            .style(if app.sidebar_mode == SidebarMode::Locations {
-                active_style
-            } else {
-                button::text
-            })
-            .on_press(Message::SidebarModeChanged(SidebarMode::Locations));
+    // Locations tab: if locations are the culprit, color the icon red (when inactive).
+    let loc_icon = {
+        if is_loc_error && app.sidebar_mode != SidebarMode::Locations {
+            icon::icon(app.location_tab_icon)
+                .size(18)
+                .color(Color::from_rgb(0.9, 0.2, 0.2))
+        } else {
+            icon::icon(app.location_tab_icon).size(18)
+        }
+    };
+    let btn_locs = button(container(loc_icon).center_x(Length::Fill))
+        .padding(8)
+        .width(Length::Fill)
+        .style(if app.sidebar_mode == SidebarMode::Locations {
+            active_style
+        } else {
+            button::text
+        })
+        .on_press(Message::SidebarModeChanged(SidebarMode::Locations));
 
     let tabs = row![btn_cals, btn_tags, btn_locs].spacing(2);
 
@@ -704,7 +729,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         .on_action(Message::SearchChanged)
         .highlight_with::<self::syntax::SmartInputHighlighter>(
             (is_dark_mode, true),
-            |highlight, _theme| *highlight
+            |highlight, _theme| *highlight,
         )
         .padding(5)
         // Make it look like a single line input
@@ -731,15 +756,21 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         .delay(Duration::from_millis(700)),
     );
 
+    // If filters produced no results but the store has tasks, this indicates the
+    // active filters/search likely caused the empty result. Highlight search accordingly.
+    let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
     let is_search_empty = app.search_value.text().is_empty();
+    let is_search_error = is_filter_empty && !is_search_empty;
+
     let (search_icon_char, icon_color, on_press) = if is_search_empty {
         (icon::SEARCH, Color::from_rgb(0.4, 0.4, 0.4), None)
     } else {
-        (
-            icon::SEARCH_STOP,
-            app.theme().extended_palette().background.base.text,
-            Some(Message::ClearSearch),
-        )
+        let icon_col = if is_search_error {
+            Color::from_rgb(0.9, 0.2, 0.2) // Red when search is the culprit
+        } else {
+            app.theme().extended_palette().background.base.text
+        };
+        (icon::SEARCH_STOP, icon_col, Some(Message::ClearSearch))
     };
 
     let mut clear_btn =
@@ -751,8 +782,23 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         clear_btn = clear_btn.on_press(msg);
     }
 
+    // Wrap the input so we can apply a red border when search is the suspected culprit.
+    let search_input_container = container(search_input).padding(0);
+    let final_search_widget = if is_search_error {
+        search_input_container.style(|_| container::Style {
+            border: iced::Border {
+                color: Color::from_rgb(0.9, 0.2, 0.2),
+                width: 1.5,
+                radius: 4.0.into(),
+            },
+            ..Default::default()
+        })
+    } else {
+        search_input_container
+    };
+
     search_row = search_row.push(clear_btn);
-    search_row = search_row.push(search_input);
+    search_row = search_row.push(final_search_widget);
     // --------------------------------
 
     let window_controls = if app.force_ssd {
@@ -1020,7 +1066,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .on_action(Message::InputChanged)
         .highlight_with::<self::syntax::SmartInputHighlighter>(
             (is_dark_mode, false),
-            |highlight, _theme| *highlight
+            |highlight, _theme| *highlight,
         )
         .padding(10)
         .height(Length::Fixed(45.0))

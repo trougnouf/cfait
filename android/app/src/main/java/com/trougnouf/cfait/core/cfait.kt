@@ -799,6 +799,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_has_any_tasks(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_has_unsynced_changes(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_import_local_ics(): Short
@@ -1007,6 +1009,11 @@ internal object UniffiLib {
         `searchQuery`: RustBuffer.ByValue,
         `expandedGroups`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_has_any_tasks(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
 
     external fun uniffi_cfait_fn_method_cfaitmobile_has_unsynced_changes(
         `ptr`: Long,
@@ -1467,6 +1474,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 22815.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_any_tasks() != 42815.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_unsynced_changes() != 21802.toShort()) {
@@ -2146,6 +2156,12 @@ public interface CfaitMobileInterface {
         `searchQuery`: kotlin.String,
         `expandedGroups`: List<kotlin.String>,
     ): List<MobileTask>
+
+    /**
+     * Returns true if the in-memory store contains any tasks across any calendars.
+     * This is useful for clients to distinguish "no data at all" from "filters produced no results".
+     */
+    fun `hasAnyTasks`(): kotlin.Boolean
 
     fun `hasUnsyncedChanges`(): kotlin.Boolean
 
@@ -2831,6 +2847,22 @@ open class CfaitMobile :
             { FfiConverterSequenceTypeMobileTask.lift(it) },
             // Error FFI converter
             UniffiNullRustCallStatusErrorHandler,
+        )
+
+    /**
+     * Returns true if the in-memory store contains any tasks across any calendars.
+     * This is useful for clients to distinguish "no data at all" from "filters produced no results".
+     */
+    override fun `hasAnyTasks`(): kotlin.Boolean =
+        FfiConverterBoolean.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_has_any_tasks(
+                        it,
+                        _status,
+                    )
+                }
+            },
         )
 
     override fun `hasUnsyncedChanges`(): kotlin.Boolean =
@@ -3735,6 +3767,8 @@ data class MobileTask(
     var `statusString`: kotlin.String,
     var `blockedByNames`: List<kotlin.String>,
     var `blockedByUids`: List<kotlin.String>,
+    var `blockingUids`: List<kotlin.String>,
+    var `blockingNames`: List<kotlin.String>,
     var `relatedToUids`: List<kotlin.String>,
     var `relatedToNames`: List<kotlin.String>,
     var `isPaused`: kotlin.Boolean,
@@ -3782,6 +3816,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
@@ -3819,6 +3855,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterString.allocationSize(value.`statusString`) +
                 FfiConverterSequenceString.allocationSize(value.`blockedByNames`) +
                 FfiConverterSequenceString.allocationSize(value.`blockedByUids`) +
+                FfiConverterSequenceString.allocationSize(value.`blockingUids`) +
+                FfiConverterSequenceString.allocationSize(value.`blockingNames`) +
                 FfiConverterSequenceString.allocationSize(value.`relatedToUids`) +
                 FfiConverterSequenceString.allocationSize(value.`relatedToNames`) +
                 FfiConverterBoolean.allocationSize(value.`isPaused`) +
@@ -3860,6 +3898,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterString.write(value.`statusString`, buf)
         FfiConverterSequenceString.write(value.`blockedByNames`, buf)
         FfiConverterSequenceString.write(value.`blockedByUids`, buf)
+        FfiConverterSequenceString.write(value.`blockingUids`, buf)
+        FfiConverterSequenceString.write(value.`blockingNames`, buf)
         FfiConverterSequenceString.write(value.`relatedToUids`, buf)
         FfiConverterSequenceString.write(value.`relatedToNames`, buf)
         FfiConverterBoolean.write(value.`isPaused`, buf)

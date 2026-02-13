@@ -9,6 +9,7 @@ android/app/release/
 android/build/
 .gradle/
 android/.gradle/
+.kotlin
 
 # Android - Local Configuration
 local.properties

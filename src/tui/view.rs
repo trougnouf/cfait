@@ -175,7 +175,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .split(h_chunks[1]);
 
     // Sidebar title/items
-    let sidebar_style = if state.active_focus == Focus::Sidebar {
+    // Determine if filters produced empty result while store has tasks
+    let is_filter_empty = state.tasks.is_empty() && state.store.has_any_tasks();
+    // Default border style for sidebar (may be overridden per-tab below)
+    let mut sidebar_border_style = if state.active_focus == Focus::Sidebar {
         Style::default().fg(Color::Yellow)
     } else {
         Style::default()
@@ -262,6 +265,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     }
                 })
                 .collect();
+            // ATTRIBUTION: If empty AND tags are selected -> Red Border
+            if is_filter_empty && !state.selected_categories.is_empty() {
+                sidebar_border_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
+            }
             let logic = if state.match_all_categories {
                 "AND"
             } else {
@@ -289,6 +296,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     ListItem::new(Line::from(spans))
                 })
                 .collect();
+            // ATTRIBUTION: If empty AND locations are selected -> Red Border
+            if is_filter_empty && !state.selected_locations.is_empty() {
+                sidebar_border_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
+            }
             ("  Locations ".to_string(), items)
         }
     };
@@ -298,7 +309,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             Block::default()
                 .borders(Borders::ALL)
                 .title(sidebar_title)
-                .border_style(sidebar_style),
+                .border_style(sidebar_border_style),
         )
         .highlight_style(
             Style::default()
@@ -771,8 +782,16 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         | InputMode::Editing
         | InputMode::Searching
         | InputMode::EditingDescription => {
+            // Determine input title and color. If filters are the culprit, make search show red.
             let (mut title_str, prefix, color) = match state.mode {
-                InputMode::Searching => (" Search ".to_string(), "/ ", Color::Green),
+                InputMode::Searching => {
+                    let is_search_culprit = is_filter_empty && !state.input_buffer.is_empty();
+                    if is_search_culprit {
+                        (" Search (No Results) ".to_string(), "/ ", Color::Red)
+                    } else {
+                        (" Search ".to_string(), "/ ", Color::Green)
+                    }
+                }
                 InputMode::Editing => (" Edit Title ".to_string(), "> ", Color::Magenta),
                 InputMode::EditingDescription => {
                     (" Edit Description ".to_string(), "📝 ", Color::Blue)

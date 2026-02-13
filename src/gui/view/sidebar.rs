@@ -180,15 +180,33 @@ fn format_mins(m: u32) -> String {
 // --- CATEGORIES ---
 pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     let all_cats = &app.cached_categories;
-    let has_selection = !app.selected_categories.is_empty();
 
     // --- 1. Header Logic ---
+    let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
+    let has_selection = !app.selected_categories.is_empty();
+
     let clear_btn = if has_selection {
-        button(icon::icon(icon::CLEAR_ALL).size(16))
+        if is_filter_empty {
+            // Error state: color button icon red
+            button(
+                icon::icon(icon::CLEAR_ALL)
+                    .size(16)
+                    .style(move |_| text::Style {
+                        color: Some(Color::from_rgb(0.9, 0.2, 0.2)),
+                    }),
+            )
             .style(button::text)
             .padding(5)
             .on_press(Message::ClearAllTags)
+        } else {
+            // Normal active state
+            button(icon::icon(icon::CLEAR_ALL).size(16))
+                .style(button::text)
+                .padding(5)
+                .on_press(Message::ClearAllTags)
+        }
     } else {
+        // Disabled state
         button(
             icon::icon(icon::CLEAR_ALL)
                 .size(16)
@@ -450,11 +468,27 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
     let all_locs = &app.cached_locations;
     let has_selection = !app.selected_locations.is_empty();
 
+    // Highlight clear button red if selected locations are likely the cause of an empty result.
+    let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
     let clear_btn = if has_selection {
-        button(icon::icon(icon::CLEAR_ALL).size(16))
+        // If filters produced an empty result and locations are selected, color the clear button red to attribute.
+        if is_filter_empty {
+            button(
+                icon::icon(icon::CLEAR_ALL)
+                    .size(16)
+                    .style(move |_| text::Style {
+                        color: Some(Color::from_rgb(0.9, 0.2, 0.2)),
+                    }),
+            )
             .style(button::text)
             .padding(5)
             .on_press(Message::ClearAllLocations)
+        } else {
+            button(icon::icon(icon::CLEAR_ALL).size(16))
+                .style(button::text)
+                .padding(5)
+                .on_press(Message::ClearAllLocations)
+        }
     } else {
         button(
             icon::icon(icon::CLEAR_ALL)

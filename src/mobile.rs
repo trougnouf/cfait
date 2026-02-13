@@ -371,6 +371,12 @@ impl CfaitMobile {
         !crate::journal::Journal::load(self.ctx.as_ref()).is_empty()
     }
 
+    /// Returns true if the in-memory store contains any tasks across any calendars.
+    /// This is useful for clients to distinguish "no data at all" from "filters produced no results".
+    pub fn has_any_tasks(&self) -> bool {
+        self.controller.store.blocking_lock().has_any_tasks()
+    }
+
     pub fn export_local_ics(&self, calendar_href: String) -> Result<String, MobileError> {
         let tasks = LocalStorage::load_for_href(self.ctx.as_ref(), &calendar_href)
             .map_err(|e| MobileError::from(e.to_string()))?;

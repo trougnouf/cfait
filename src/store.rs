@@ -146,6 +146,12 @@ impl TaskStore {
         }
     }
 
+    /// Efficiently checks if there are any tasks in the store across all calendars.
+    /// Used to differentiate between "App is empty" and "Filters matched nothing".
+    pub fn has_any_tasks(&self) -> bool {
+        self.calendars.values().any(|map| !map.is_empty())
+    }
+
     pub fn insert(&mut self, calendar_href: String, tasks: Vec<Task>) {
         let mut map = HashMap::new();
         for task in tasks {
