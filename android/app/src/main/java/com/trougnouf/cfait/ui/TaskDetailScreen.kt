@@ -195,6 +195,55 @@ fun TaskDetailScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
 
+            // NEW: Blocking (Successors) - tasks that are blocked BY this task
+            if (task!!.blockingNames.isNotEmpty()) {
+                Text(
+                    "Blocking (Successors):",
+                    color = MaterialTheme.colorScheme.tertiary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+
+                val blockingPairs = task!!.blockingNames.zip(task!!.blockingUids)
+
+                blockingPairs.forEach { (name, blockedUid) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(vertical = 2.dp)
+                    ) {
+                        // UNLINK BUTTON (remove THIS task from the OTHER task's dependency list)
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    // To unblock, remove this task.uid from the blocked task's dependencies
+                                    api.removeDependency(blockedUid, task!!.uid)
+                                    reload()
+                                }
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            NfIcon(NfIcons.UNLINK, 12.sp, MaterialTheme.colorScheme.tertiary)
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
+                        // NAVIGATION AREA
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clickable { onNavigate(blockedUid) }
+                                .padding(4.dp)
+                        ) {
+                            // Use Down Arrow to indicate successor flow
+                            NfIcon(NfIcons.HAND_STOP, 12.sp, androidx.compose.ui.graphics.Color.Gray)
+                            Spacer(Modifier.width(4.dp))
+                            Text(name, fontSize = 14.sp)
+                        }
+                    }
+                }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
+
             if (task!!.relatedToNames.isNotEmpty()) {
                 Text(
                     "Related to:",

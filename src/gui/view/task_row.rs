@@ -1163,6 +1163,54 @@ pub fn view_task_row<'a>(
                 }
             }
 
+            // [INSERTED] Blocking (Successors) - Tasks waiting on THIS task
+            let blocking_tasks = app.store.get_tasks_blocking(&task.uid);
+            if !blocking_tasks.is_empty() {
+                details_col = details_col.push(
+                    text("[Blocking]:")
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.4, 0.8)),
+                );
+                for (blocked_uid, blocked_name) in blocking_tasks {
+                    // Action: Remove dependency from the blocked task (to \"unblock\")
+                    let remove_block_btn = button(icon::icon(icon::UNLINK).size(10))
+                        .style(button::danger)
+                        .padding(2)
+                        .on_press(Message::RemoveDependency(
+                            blocked_uid.clone(),
+                            task.uid.clone(),
+                        ));
+
+                    let name_btn = button(
+                        text(blocked_name)
+                            .size(12)
+                            .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                    )
+                    .style(button::text)
+                    .padding(0)
+                    .on_press(Message::JumpToTask(blocked_uid.clone()));
+
+                    let blocking_row = row![
+                        // Hand-stop to indicate this task blocks another
+                        icon::icon(icon::HAND_STOP)
+                            .size(12)
+                            .color(Color::from_rgb(0.5, 0.5, 0.5)),
+                        name_btn,
+                        tooltip(
+                            remove_block_btn,
+                            text("Unblock (remove dependency)").size(12),
+                            tooltip::Position::Top
+                        )
+                        .style(tooltip_style)
+                        .delay(Duration::from_millis(700))
+                    ]
+                    .spacing(5)
+                    .align_y(iced::Alignment::Center);
+
+                    details_col = details_col.push(blocking_row);
+                }
+            }
+
             // Incoming relations (others → this task)
             let incoming_related = app.store.get_tasks_related_to(&task.uid);
             if !incoming_related.is_empty() {

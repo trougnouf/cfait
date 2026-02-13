@@ -126,6 +126,9 @@ pub struct MobileTask {
     pub status_string: String,
     pub blocked_by_names: Vec<String>,
     pub blocked_by_uids: Vec<String>,
+    // NEW FIELDS: Tasks that this task is blocking (successors)
+    pub blocking_uids: Vec<String>,
+    pub blocking_names: Vec<String>,
     pub related_to_uids: Vec<String>,
     pub related_to_names: Vec<String>,
     pub is_paused: bool,
@@ -225,6 +228,12 @@ fn task_to_mobile(
         .filter_map(|uid| store.get_summary(uid))
         .collect();
 
+    // NEW: Determine tasks that THIS task is blocking (successors) via reverse index
+    let blocking_pairs = store.get_tasks_blocking(&t.uid);
+    // Unzip into parallel vectors: (uids, names)
+    let (blocking_uids, blocking_names): (Vec<String>, Vec<String>) =
+        blocking_pairs.into_iter().unzip();
+
     let related_to_names = t
         .related_to
         .iter()
@@ -300,6 +309,9 @@ fn task_to_mobile(
         status_string: status_str,
         blocked_by_names,
         blocked_by_uids: t.dependencies.clone(),
+        // NEW: expose blocking (successors) to mobile clients
+        blocking_uids,
+        blocking_names,
         related_to_uids: t.related_to.clone(),
         related_to_names,
         is_paused: t.is_paused(),

@@ -87,6 +87,7 @@ pub const BANK: char = '\u{f0a27}'; // nf-md-bank_transfer
 pub const BITCOIN: char = '\u{f10f}'; // nf-fa-bitcoin
 pub const LITECOIN: char = '\u{f0a61}'; // nf-md-litecoin
 pub const ETHEREUM: char = '\u{ed58}'; // nf-fa-ethereum
+pub const HAND_STOP: char = '\u{f256}'; // nf-fa-hand_stop_o
 
 // --- NEW FIELD ICONS (Updated) ---
 pub const LOCATION: char = '\u{ef4b}'; // Default European Earth
@@ -170,6 +171,7 @@ pub const RANDOM_ICONS: &[char] = &[
     '\u{e7a8}',  // nf-dev-rust
     '\u{ef8b}',  // nf-fa-pepper_hot
     '\u{f277}',  // nf-fa-signs_post
+    '\u{f07e0}', // nf-md-mushroom_outline (duplicate to pad)
 ];
 
 // NEW HEADER ICONS per request

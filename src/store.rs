@@ -107,6 +107,8 @@ pub struct TaskStore {
     pub calendars: HashMap<String, HashMap<String, Task>>,
     pub index: HashMap<String, String>, // UID -> CalendarHref mapping
     pub related_from_index: HashMap<String, Vec<String>>,
+    // Maps a Task UID -> List of tasks that are blocked BY this task
+    pub blocking_index: HashMap<String, Vec<String>>,
     // Context for filesystem operations and test isolation
     pub ctx: Arc<dyn AppContext>,
 }
@@ -139,6 +141,7 @@ impl TaskStore {
             calendars: HashMap::new(),
             index: HashMap::new(),
             related_from_index: HashMap::new(),
+            blocking_index: HashMap::new(),
             ctx,
         }
     }
@@ -189,6 +192,7 @@ impl TaskStore {
         self.calendars.clear();
         self.index.clear();
         self.related_from_index.clear();
+        self.blocking_index.clear();
     }
 
     pub fn remove(&mut self, calendar_href: &str) {
@@ -418,8 +422,16 @@ impl TaskStore {
         if let Some((task, _)) = self.get_task_mut(task_uid)
             && !task.dependencies.contains(&dep_uid)
         {
-            task.dependencies.push(dep_uid);
-            return Some(task.clone());
+            task.dependencies.push(dep_uid.clone());
+            // Clone the modified task so we can return it after releasing the borrow
+            let task_clone = task.clone();
+            // Release the mutable borrow on `task` before mutating other fields on `self`
+            // Update reverse blocking index: dep_uid (the dependency) is blocking task_uid
+            self.blocking_index
+                .entry(dep_uid)
+                .or_default()
+                .push(task_uid.to_string());
+            return Some(task_clone);
         }
         None
     }
@@ -429,7 +441,17 @@ impl TaskStore {
             && let Some(pos) = task.dependencies.iter().position(|d| d == dep_uid)
         {
             task.dependencies.remove(pos);
-            return Some(task.clone());
+            // Clone the modified task so we can return it after releasing the borrow
+            let task_clone = task.clone();
+            // Release the mutable borrow on `task` before mutating other fields on `self`
+            // Update reverse blocking index: remove this task from the dep_uid entry
+            if let Some(list) = self.blocking_index.get_mut(dep_uid) {
+                list.retain(|u| u != task_uid);
+                if list.is_empty() {
+                    self.blocking_index.remove(dep_uid);
+                }
+            }
+            return Some(task_clone);
         }
         None
     }
@@ -788,22 +810,54 @@ impl TaskStore {
         }
     }
 
+    /// Returns tasks that are blocked BY the given uid (i.e. successors).
+    pub fn get_tasks_blocking(&self, uid: &str) -> Vec<(String, String)> {
+        if let Some(blocked_uids) = self.blocking_index.get(uid) {
+            blocked_uids
+                .iter()
+                .filter_map(|blocked_uid| {
+                    self.get_summary(blocked_uid)
+                        .map(|summary| (blocked_uid.clone(), summary))
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
     pub fn rebuild_relation_index(&mut self) {
         self.related_from_index.clear();
+        self.blocking_index.clear();
+
         let mut relationships = Vec::new();
+        let mut blocking_rels = Vec::new();
+
         // Iterate map values
         for map in self.calendars.values() {
             for task in map.values() {
                 for target in &task.related_to {
                     relationships.push((target.clone(), task.uid.clone()));
                 }
+                // If `task` depends on `dep_uid`, then `dep_uid` is BLOCKING `task`.
+                for dep_uid in &task.dependencies {
+                    blocking_rels.push((dep_uid.clone(), task.uid.clone()));
+                }
             }
         }
+
         for (target, source) in relationships {
             self.related_from_index
                 .entry(target)
                 .or_default()
                 .push(source);
+        }
+
+        // Populate reverse dependency (blocking) map
+        for (blocker, blocked) in blocking_rels {
+            self.blocking_index
+                .entry(blocker)
+                .or_default()
+                .push(blocked);
         }
     }
 

@@ -630,7 +630,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
 
         if !task.dependencies.is_empty() {
-            details_md.push_str("### Blocked By\n");
+            details_md.push_str("### Blocked By (Predecessors)\n");
             for dep_uid in &task.dependencies {
                 let name = state
                     .store
@@ -639,6 +639,16 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
                 let check = if is_done { "[x]" } else { "[ ]" };
                 details_md.push_str(&format!("- {} {}\n", check, name));
+            }
+            details_md.push('\n');
+        }
+
+        // NEW: Blocking Section (Successors) - tasks that are blocked BY this task
+        let blocking_tasks = state.store.get_tasks_blocking(&task.uid);
+        if !blocking_tasks.is_empty() {
+            details_md.push_str("### Blocking (Successors)\n");
+            for (_uid, name) in blocking_tasks {
+                details_md.push_str(&format!("- ⬇ {}\n", name));
             }
             details_md.push('\n');
         }
