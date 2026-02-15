@@ -355,7 +355,7 @@ fun TaskRow(
                             Text(
                                 "#$tag",
                                 fontSize = 10.sp,
-                                color = getTagColor(tag),
+                                color = getTagColor(tag, isDark),
                                 modifier = Modifier.padding(end = 2.dp),
                                 lineHeight = 10.sp
                             )

@@ -228,11 +228,17 @@ fun parseHexColor(hex: String): Color =
         Color.Gray
     }
 
-fun getTagColor(tag: String): Color {
+fun getTagColor(tag: String, isDark: Boolean): Color {
     val hash = tag.hashCode()
     val h = (kotlin.math.abs(hash) % 360).toFloat()
-    return Color.hsv(h, 0.6f, 0.5f)
+
+    // Dynamic Saturation and Value based on theme
+    val s = if (isDark) 0.6f else 0.9f // Lower saturation in dark mode for better legibility
+    val v = if (isDark) 0.9f else 0.4f // High brightness for dark mode, Low brightness for light mode
+
+    return Color.hsv(h, s, v)
 }
+
 
 fun getTaskTextColor(
     prio: Int,
@@ -357,7 +363,7 @@ class SmartSyntaxTransformation(
                         MobileSyntaxType.TAG -> {
                             val sub = raw.substring(token.start, token.end)
                             val tagName = sub.trimStart('#').replace("\"", "")
-                            getTagColor(tagName)
+                            getTagColor(tagName, isDark)
                         }
 
                         MobileSyntaxType.LOCATION -> {

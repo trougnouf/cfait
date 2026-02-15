@@ -513,6 +513,7 @@ fun HomeScreen(
 
             // Pre-fill the input field with parent tags and location
             val sb = StringBuilder()
+
             // Helper to quote values containing spaces for smart syntax
             fun quote(s: String): String =
                 if (s.contains(" ") || s.contains("\"")) "\"${s.replace("\"", "\\\"")}\"" else s
@@ -880,7 +881,7 @@ fun HomeScreen(
                                 val displayName = if (isUncat) "Uncategorized" else "#${tag.name}"
                                 val targetKey = if (isUncat) ":::uncategorized:::" else tag.name
                                 val isSelected = filterTags.contains(targetKey)
-                                val color = if (isUncat) Color.Gray else getTagColor(tag.name)
+                                val color = if (isUncat) Color.Gray else getTagColor(tag.name, isDark)
 
                                 // GUI icons style
                                 val iconStr = if (isSelected) NfIcons.TAG_CHECK else NfIcons.TAG_OUTLINE
@@ -967,7 +968,13 @@ fun HomeScreen(
                                 onValueChange = { searchQuery = it },
                                 placeholder = { Text("Search...") },
                                 singleLine = true,
-                                visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark, true) }, // Added
+                                visualTransformation = remember(isDark) {
+                                    SmartSyntaxTransformation(
+                                        api,
+                                        isDark,
+                                        true
+                                    )
+                                }, // Added
                                 colors =
                                     TextFieldDefaults.colors(
                                         focusedContainerColor = Color.Transparent,
