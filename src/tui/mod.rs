@@ -261,6 +261,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     // --- 3. STATE INIT ---
     let mut app_state = AppState::new_with_ctx(ctx.clone());
     app_state.hide_completed = hide_completed;
+    app_state.strikethrough_completed = cfg.strikethrough_completed;
     app_state.hide_fully_completed_tags = hide_fully_completed_tags;
     app_state.sort_cutoff_months = sort_cutoff;
     app_state.tag_aliases = tag_aliases;

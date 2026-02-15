@@ -63,7 +63,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         // NEW: Route advanced settings messages
         | Message::ToggleAdvancedSettings(_)
         | Message::SetMaxDoneRoots(_)
-        | Message::SetMaxDoneSubtasks(_) => settings::handle(app, message),
+        | Message::SetMaxDoneSubtasks(_)
+        | Message::SetStrikethroughCompleted(_) => settings::handle(app, message),
 
         // --- Task Logic Messages ---
         Message::InputChanged(_)

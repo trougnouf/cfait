@@ -55,6 +55,7 @@ pub struct AppState {
     pub match_all_categories: bool,
     pub hide_completed: bool,
     pub hide_fully_completed_tags: bool,
+    pub strikethrough_completed: bool,
     pub sort_cutoff_months: Option<u32>,
 
     pub urgent_days: u32,
@@ -142,6 +143,7 @@ impl AppState {
             selected_locations: HashSet::new(), // Init
             match_all_categories: false,
             hide_completed: false,
+            strikethrough_completed: false,
             hide_fully_completed_tags: false,
             sort_cutoff_months: Some(2),
             urgent_days: 1,

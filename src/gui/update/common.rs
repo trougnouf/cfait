@@ -144,6 +144,7 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.snooze_long_mins = app.snooze_long_mins;
     cfg.create_events_for_tasks = app.create_events_for_tasks;
     cfg.delete_events_on_completion = app.delete_events_on_completion;
+    cfg.strikethrough_completed = app.strikethrough_completed;
     cfg.auto_refresh_interval_mins = app.auto_refresh_interval_mins;
 
     // Save new values from Advanced Settings inputs

@@ -137,6 +137,8 @@ pub struct Config {
     pub disabled_calendars: Vec<String>,
     #[serde(default)]
     pub hide_completed: bool,
+    #[serde(default)]
+    pub strikethrough_completed: bool,
     #[serde(default = "default_true")]
     pub hide_fully_completed_tags: bool,
     #[serde(default = "default_cutoff")]
@@ -207,6 +209,7 @@ impl Default for Config {
             create_events_for_tasks: false,
             delete_events_on_completion: false,
             auto_refresh_interval_mins: 30,
+            strikethrough_completed: false,
             max_done_roots: 20,
             max_done_subtasks: 5,
         }

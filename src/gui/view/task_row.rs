@@ -12,7 +12,9 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use super::tooltip_style;
-use iced::widget::{Space, button, column, container, responsive, row, text, tooltip};
+use iced::widget::{
+    Space, button, column, container, responsive, rich_text, row, span, text, tooltip,
+};
 use iced::{Border, Color, Element, Length, Theme};
 
 // Imports for custom widget (NoPointer)
@@ -938,11 +940,34 @@ pub fn view_task_row<'a>(
             (available_width - tags_width - padding_safety) > required_title_space
         };
 
-        let summary_text = text(&task.summary)
-            .size(20)
-            .color(color)
-            .width(Length::Fill)
-            .wrapping(iced::widget::text::Wrapping::Word);
+        let is_done_or_cancelled =
+            task.status.is_done() || task.status == crate::model::TaskStatus::Cancelled;
+        // Use 25% transparency (75% opacity) for dimming completed/cancelled titles.
+        // Alpha = 0.75 keeps the text more readable while still dimming it.
+        let title_color = if is_done_or_cancelled {
+            Color { a: 0.75, ..color }
+        } else {
+            color
+        };
+
+        let summary_text: Element<'a, Message> = if app.strikethrough_completed
+            && task.status.is_done()
+        {
+            Into::<Element<'a, Message>>::into(
+                rich_text![span::<Message, iced::Font>(task.summary.clone()).strikethrough(true)]
+                    .size(20)
+                    .color(title_color)
+                    .width(Length::Fill),
+            )
+        } else {
+            Into::<Element<'a, Message>>::into(
+                text(&task.summary)
+                    .size(20)
+                    .color(title_color)
+                    .width(Length::Fill)
+                    .wrapping(iced::widget::text::Wrapping::Word),
+            )
+        };
 
         if place_inline {
             row![

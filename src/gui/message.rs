@@ -176,6 +176,7 @@ pub enum Message {
 
     SetCreateEventsForTasks(bool),
     SetDeleteEventsOnCompletion(bool),
+    SetStrikethroughCompleted(bool),
     DeleteAllCalendarEvents,
     BackfillEventsComplete(Result<usize, String>),
 

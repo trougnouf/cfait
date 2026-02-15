@@ -52,6 +52,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.delete_events_on_completion = config.delete_events_on_completion;
             app.snooze_long_mins = config.snooze_long_mins;
             app.auto_refresh_interval_mins = config.auto_refresh_interval_mins; // Added
+            app.strikethrough_completed = config.strikethrough_completed;
 
             // Initialize inputs with formatted strings
             app.ob_snooze_short_input = format_duration_compact(config.snooze_short_mins);
@@ -421,6 +422,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::SetDeleteEventsOnCompletion(val) => {
             app.delete_events_on_completion = val;
+            save_config(app);
+            Task::none()
+        }
+
+        Message::SetStrikethroughCompleted(val) => {
+            app.strikethrough_completed = val;
             save_config(app);
             Task::none()
         }

@@ -370,22 +370,60 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             // Styling
             let is_blocked = t.is_blocked;
-            let base_style = if is_blocked {
-                Style::default().fg(Color::DarkGray)
+
+            // Compute a base color (as Color) based on priority / blocked state.
+            // We'll build the style from this color so we can dim it for done/cancelled tasks.
+            let mut base_color = if is_blocked {
+                Color::DarkGray
             } else {
                 match t.priority {
-                    1 => Style::default().fg(Color::Red),
-                    2 => Style::default().fg(Color::Rgb(255, 69, 0)),
-                    3 => Style::default().fg(Color::Rgb(255, 140, 0)),
-                    4 => Style::default().fg(Color::Rgb(255, 190, 0)),
-                    5 => Style::default().fg(Color::Yellow),
-                    6 => Style::default().fg(Color::Rgb(238, 232, 170)),
-                    7 => Style::default().fg(Color::Rgb(176, 196, 222)),
-                    8 => Style::default().fg(Color::Rgb(112, 128, 144)),
-                    9 => Style::default().fg(Color::Rgb(47, 79, 79)),
-                    _ => Style::default(),
+                    1 => Color::Red,
+                    2 => Color::Rgb(255, 69, 0),
+                    3 => Color::Rgb(255, 140, 0),
+                    4 => Color::Rgb(255, 190, 0),
+                    5 => Color::Yellow,
+                    6 => Color::Rgb(238, 232, 170),
+                    7 => Color::Rgb(176, 196, 222),
+                    8 => Color::Rgb(112, 128, 144),
+                    9 => Color::Rgb(47, 79, 79),
+                    _ => Color::White,
                 }
             };
+
+            // If task is done or cancelled, dim the color by blending toward the background (black).
+            // A 25% transparency effect (i.e. 75% opacity) is approximated by scaling RGB by 0.75.
+            let is_done_or_cancelled =
+                t.status.is_done() || t.status == crate::model::TaskStatus::Cancelled;
+            if is_done_or_cancelled {
+                base_color = match base_color {
+                    Color::Rgb(r, g, b) => Color::Rgb(
+                        ((r as f32) * 0.75) as u8,
+                        ((g as f32) * 0.75) as u8,
+                        ((b as f32) * 0.75) as u8,
+                    ),
+                    // For named/constant colors, approximate by scaling their RGB equivalents.
+                    Color::Red => Color::Rgb((255.0 * 0.75) as u8, 0, 0),
+                    Color::Yellow => Color::Rgb((255.0 * 0.75) as u8, (255.0 * 0.75) as u8, 0),
+                    Color::DarkGray => Color::Rgb(
+                        (105.0 * 0.75) as u8,
+                        (105.0 * 0.75) as u8,
+                        (105.0 * 0.75) as u8,
+                    ),
+                    Color::White => Color::Rgb(
+                        (255.0 * 0.75) as u8,
+                        (255.0 * 0.75) as u8,
+                        (255.0 * 0.75) as u8,
+                    ),
+                    // Fallback: leave as-is if we don't recognize the variant.
+                    other => other,
+                };
+            }
+
+            let mut base_style = Style::default().fg(base_color);
+
+            if t.status.is_done() && state.strikethrough_completed {
+                base_style = base_style.add_modifier(Modifier::CROSSED_OUT);
+            }
 
             let bracket_style = Style::default();
             let full_symbol = t.checkbox_symbol();

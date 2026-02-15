@@ -339,6 +339,11 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 text("Limits how many completed subtasks are shown inside a parent before truncating.")
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.6)),
+
+                // New checkbox to control strikethrough (cross-off) of completed tasks
+                checkbox(app.strikethrough_completed)
+                    .label("Cross-off (strikethrough) done tasks")
+                    .on_toggle(Message::SetStrikethroughCompleted),
             ]
             .spacing(5)
             .padding(10)
