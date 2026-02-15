@@ -50,7 +50,7 @@ pub fn spawn_alarm_actor(
             // Only check for alarms if enabled
             if alarms_enabled {
                 for task in &tasks {
-                    if task.status.is_done() {
+                    if task.status.is_done() || task.status == crate::model::TaskStatus::InProcess {
                         continue;
                     }
 

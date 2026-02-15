@@ -42,8 +42,7 @@ class AlarmWorker(
                         alarm.title,
                         alarm.body,
                         alarm.taskUid,
-                        alarm.alarmUid,
-                        config.snoozeShort
+                        alarm.alarmUid
                     )
                 }
             }
@@ -56,23 +55,14 @@ class AlarmWorker(
         }
     }
 
-    private fun formatMins(mins: UInt): String {
-        val m = mins.toInt()
-        return if (m >= 60) {
-            val h = m / 60
-            if (m % 60 == 0) "${h}h" else "${h}h ${m % 60}m"
-        } else {
-            "${m}m"
-        }
-    }
+    // formatMins removed — snooze preset is no longer provided by the notification UI
 
     private fun showNotification(
         context: Context,
         title: String,
         body: String,
         taskUid: String,
-        alarmUid: String,
-        shortMins: UInt
+        alarmUid: String
     ) {
         if (ActivityCompat.checkSelfPermission(
                 context,
@@ -92,23 +82,10 @@ class AlarmWorker(
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        // 1. Snooze Default (Short)
-        val snoozeDefaultIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = NotificationActionWorker.ACTION_SNOOZE_DEFAULT
-            putExtra("T_UID", taskUid)
-            putExtra("A_UID", alarmUid)
-        }
-        val snoozeDefaultPending = PendingIntent.getBroadcast(
-            context,
-            (taskUid + "SD").hashCode(),
-            snoozeDefaultIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // 2. Snooze Custom (Inline Reply)
+        // 1. Snooze Custom (Inline Reply) - Primary snooze action
         val snoozeCustomKey = "snooze_custom_duration"
         val remoteInput = RemoteInput.Builder(snoozeCustomKey)
-            .setLabel("Duration (e.g. 30m, 1h)")
+            .setLabel("Snooze (e.g. 15m, 1h)")
             .build()
 
         val snoozeCustomIntent = Intent(context, NotificationActionReceiver::class.java).apply {
@@ -120,14 +97,27 @@ class AlarmWorker(
             context,
             (taskUid + "SC").hashCode(),
             snoozeCustomIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE // Mutable for RemoteInput
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
 
-        val customAction = NotificationCompat.Action.Builder(
+        val customSnoozeAction = NotificationCompat.Action.Builder(
             R.drawable.ic_launcher_foreground,
             "Snooze...",
             snoozeCustomPending
         ).addRemoteInput(remoteInput).build()
+
+        // 2. Start Action (Replaces preset snooze)
+        val startIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionWorker.ACTION_START
+            putExtra("T_UID", taskUid)
+            putExtra("A_UID", alarmUid)
+        }
+        val startPending = PendingIntent.getBroadcast(
+            context,
+            (taskUid + "START").hashCode(),
+            startIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         // 3. Done Action
         val doneIntent = Intent(context, NotificationActionReceiver::class.java).apply {
@@ -139,19 +129,6 @@ class AlarmWorker(
             context,
             (taskUid + "DONE").hashCode(),
             doneIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // 4. Cancel Action
-        val cancelIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            action = NotificationActionWorker.ACTION_CANCEL
-            putExtra("T_UID", taskUid)
-            putExtra("A_UID", alarmUid)
-        }
-        val cancelPending = PendingIntent.getBroadcast(
-            context,
-            (taskUid + "CANCEL").hashCode(),
-            cancelIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -176,10 +153,10 @@ class AlarmWorker(
             .setContentIntent(tapPending)
             .setDeleteIntent(deletePending) // Swipe = Dismiss
             .setAutoCancel(true)
-            .addAction(R.drawable.ic_launcher_foreground, "Snooze (${formatMins(shortMins)})", snoozeDefaultPending)
-            .addAction(customAction)
+            // ACTION ORDER: Snooze..., Start, Done
+            .addAction(customSnoozeAction)
+            .addAction(R.drawable.ic_launcher_foreground, "Start", startPending)
             .addAction(R.drawable.ic_launcher_foreground, "Done", donePending)
-            .addAction(R.drawable.ic_launcher_foreground, "Cancel", cancelPending)
             .build()
 
         NotificationManagerCompat.from(context).notify(alarmUid.hashCode(), notification)

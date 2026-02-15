@@ -661,9 +661,11 @@ impl CfaitMobile {
 
         for tasks_map in store.calendars.values() {
             for task in tasks_map.values() {
-                if task.status.is_done() {
+                // UPDATE: Skip InProcess here
+                if task.status.is_done() || task.status == crate::model::TaskStatus::InProcess {
                     continue;
                 }
+
                 if let Some(ts) = task.next_trigger_timestamp() {
                     check_ts(ts, &mut global_earliest);
                 }
@@ -673,6 +675,7 @@ impl CfaitMobile {
                         .iter()
                         .any(|a| a.acknowledged.is_none() && !a.is_snooze())
                 {
+                    // ... [implicit check logic remains same] ...
                     let mut check_implicit = |dt: DateTime<Utc>| {
                         if !task.has_alarm_at(dt) {
                             check_ts(dt.timestamp(), &mut global_earliest);
@@ -753,9 +756,11 @@ impl CfaitMobile {
         let mut results = Vec::new();
         for tasks_map in store.calendars.values() {
             for task in tasks_map.values() {
-                if task.status.is_done() {
+                // UPDATE: Skip InProcess here
+                if task.status.is_done() || task.status == crate::model::TaskStatus::InProcess {
                     continue;
                 }
+
                 for alarm in &task.alarms {
                     if alarm.acknowledged.is_some() {
                         continue;
@@ -782,7 +787,12 @@ impl CfaitMobile {
                         });
                     }
                 }
-                if config.auto_reminders && !task.alarms.iter().any(|a| a.acknowledged.is_none()) {
+                if config.auto_reminders
+                    && !task
+                        .alarms
+                        .iter()
+                        .any(|a| a.acknowledged.is_none() && !a.is_snooze())
+                {
                     let mut check_implicit = |dt: DateTime<Utc>, desc: &str, type_key: &str| {
                         if !task.has_alarm_at(dt) && dt <= now && (now - dt).num_minutes() < 120 {
                             let synth_id =

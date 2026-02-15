@@ -69,8 +69,6 @@ fun SettingsScreen(
     var startGracePeriodDays by remember { mutableStateOf("1") }
     var autoRemind by remember { mutableStateOf(true) }
     var defTime by remember { mutableStateOf("09:00") }
-    var snoozeShort by remember { mutableStateOf("1h") }
-    // Long snooze removed from UI state
     var autoRefresh by remember { mutableStateOf("30m") }
     var createEventsForTasks by remember { mutableStateOf(false) }
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
@@ -136,7 +134,6 @@ fun SettingsScreen(
         startGracePeriodDays = cfg.startGracePeriodDays.toString()
         autoRemind = cfg.autoReminders
         defTime = cfg.defaultReminderTime
-        snoozeShort = formatDuration(cfg.snoozeShort)
         autoRefresh = formatDuration(cfg.autoRefreshInterval)
         createEventsForTasks = cfg.createEventsForTasks
         deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
@@ -185,7 +182,8 @@ fun SettingsScreen(
         val defaultPrioInt = defaultPriority.trim().toUByteOrNull() ?: 5u
         val startGraceInt = startGracePeriodDays.trim().toUIntOrNull() ?: 1u
 
-        val sShort = api.parseDurationString(snoozeShort) ?: 60u
+        // Use the configured snoozeShort from the backend config (preset removed from UI)
+        val sShort = api.getConfig().snoozeShort
         val aRefresh = api.parseDurationString(autoRefresh) ?: 30u
 
         // NEW: parse advanced numeric inputs
@@ -507,16 +505,7 @@ fun SettingsScreen(
                     )
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                    Text("Snooze Preset:", modifier = Modifier.weight(1f))
-                    OutlinedTextField(
-                        value = snoozeShort,
-                        onValueChange = { snoozeShort = it },
-                        modifier = Modifier.width(70.dp),
-                        singleLine = true,
-                        placeholder = { Text("1h") }
-                    )
-                }
+                // Snooze preset removed from the settings UI; app now uses stored config.snoozeShort
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                     Text("Auto-refresh interval:", modifier = Modifier.weight(1f))

@@ -267,6 +267,7 @@ fun getTaskTextColor(
 fun formatDuration(
     minMinutes: UInt,
     maxMinutes: UInt? = null,
+    isEstimate: Boolean = false
 ): String {
     val min = minMinutes.toInt()
 
@@ -282,11 +283,14 @@ fun formatDuration(
 
     val minStr = fmt(min)
 
+    // Only include the estimate prefix when appropriate
+    val prefix = if (isEstimate) "~" else ""
+
     return if (maxMinutes != null && maxMinutes > minMinutes) {
         val maxStr = fmt(maxMinutes.toInt())
-        "~$minStr-$maxStr"
+        "$prefix$minStr-$maxStr"
     } else {
-        "~$minStr"
+        "$prefix$minStr"
     }
 }
 

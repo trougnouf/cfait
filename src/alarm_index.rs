@@ -138,8 +138,8 @@ impl AlarmIndex {
         for (calendar_href, task_map) in tasks {
             // CHANGED: Iterate values of the inner map
             for task in task_map.values() {
-                // Skip completed tasks
-                if task.status.is_done() {
+                // Skip completed tasks (and tasks in progress — no need to remind)
+                if task.status.is_done() || task.status == crate::model::TaskStatus::InProcess {
                     continue;
                 }
 
