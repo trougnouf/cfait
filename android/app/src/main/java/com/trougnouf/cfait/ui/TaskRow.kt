@@ -21,7 +21,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.core.MobileTask
 import java.time.Instant
+import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneId
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -224,17 +226,36 @@ fun TaskRow(
                         // Note: Removed generic CALENDAR icon check to rely on the new hourglass_end
 
                         // --- CHANGED START ---
-                        val isOverdue = remember(task.dueDateIso, task.isDone) {
-                            if (task.isDone) false
-                            else try {
-                                val due = OffsetDateTime.parse(task.dueDateIso).toInstant()
-                                due.isBefore(Instant.now())
-                            } catch (e: Exception) {
+                        // Check for Overdue
+                        val isOverdue = remember(task.dueDateIso, task.isDone, task.isAlldayDue) {
+                            if (task.isDone || task.dueDateIso == null) {
                                 false
+                            } else {
+                                try {
+                                    val dueInstant = if (task.isAlldayDue) {
+                                        // All-day task: "YYYY-MM-DD". Overdue if the *next day* has started.
+                                        val localDate = LocalDate.parse(task.dueDateIso)
+                                        localDate.plusDays(1)
+                                            .atStartOfDay(ZoneId.systemDefault())
+                                            .toInstant()
+                                    } else {
+                                        // Specific time task: "YYYY-MM-DDTHH:MM:SSZ"
+                                        OffsetDateTime.parse(task.dueDateIso).toInstant()
+                                    }
+                                    // It's overdue if the due time is before the current time.
+                                    dueInstant.isBefore(Instant.now())
+                                } catch (e: Exception) {
+                                    // If parsing fails for any reason, it's not overdue.
+                                    false
+                                }
                             }
                         }
 
-                        val dateColor = if (isOverdue) MaterialTheme.colorScheme.error else Color.Gray
+                        val dueColor = if (isOverdue) {
+                            MaterialTheme.colorScheme.error // Red
+                        } else {
+                            Color.Gray
+                        };
 
                         // Format Due Date
                         val displayStr = if (task.isAlldayDue) {
@@ -243,8 +264,8 @@ fun TaskRow(
                             formatIsoToLocal(task.dueDateIso!!)
                         }
 
-                        Text(displayStr, fontSize = 10.sp, color = dateColor, lineHeight = 10.sp)
-                        NfIcon(NfIcons.HOURGLASS_END, size = 10.sp, color = dateColor, lineHeight = 10.sp)
+                        Text(displayStr, fontSize = 10.sp, color = dueColor, lineHeight = 10.sp)
+                        NfIcon(NfIcons.HOURGLASS_END, size = 10.sp, color = dueColor, lineHeight = 10.sp)
                         // --- CHANGED END ---
                     }
 
