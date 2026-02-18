@@ -165,20 +165,22 @@ fun TaskRow(
 
                     // Date Display Logic
                     if (task.isDone && task.completedDateIso != null) {
-                        // COMPLETED DATE DISPLAY
-                        val doneColor = Color(0xFF66BB6A) // Greenish
+                        // COMPLETED/CANCELLED DATE DISPLAY
+                        val (done_icon, doneColor) = if (task.statusString == "Completed") {
+                            Pair(NfIcons.CALENDAR_CHECK, Color(0xFF66BB6A)) // Greenish
+                        } else { // Cancelled
+                            Pair(NfIcons.CALENDAR_XMARK, MaterialTheme.colorScheme.error) // Red
+                        }
 
-                        NfIcon(NfIcons.CALENDAR_CHECK, size = 10.sp, color = doneColor, lineHeight = 10.sp)
+                        NfIcon(done_icon, size = 10.sp, color = doneColor, lineHeight = 10.sp)
 
-                        // Show only the date portion (YYYY-MM-DD)
+                        // Show the full datetime
                         val dateStr = try {
-                            // Convert to local and take just the date part, but guard against short/malformed strings
-                            val localStr = formatIsoToLocal(task.completedDateIso!!)
-                            if (localStr.length >= 10) localStr.substring(0, 10) else localStr
+                            formatIsoToLocal(task.completedDateIso!!)
                         } catch (e: Exception) {
-                            // Fallback: if parsing fails, safely take up to the first 10 chars
+                            // Fallback: if parsing fails, safely take up to the first 16 chars
                             val safeIso = task.completedDateIso ?: ""
-                            if (safeIso.length >= 10) safeIso.substring(0, 10) else safeIso
+                            if (safeIso.length >= 16) safeIso.substring(0, 16).replace("T", " ") else safeIso
                         }
                         Text(dateStr, fontSize = 10.sp, color = doneColor, lineHeight = 10.sp)
 

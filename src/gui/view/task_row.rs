@@ -241,14 +241,22 @@ pub fn view_task_row<'a>(
         if task.status.is_done() {
             if let Some(done_dt) = task.completion_date() {
                 let local_done = done_dt.with_timezone(&chrono::Local);
-                let done_color = Color::from_rgb(0.4, 0.6, 0.4); // Muted green
+                // CHOOSE ICON AND COLOR BASED ON STATUS
+                let (done_icon, done_color) = if task.status == crate::model::TaskStatus::Completed
+                {
+                    (icon::CALENDAR_CHECK, Color::from_rgb(0.4, 0.6, 0.4)) // Muted green
+                } else {
+                    // Cancelled
+                    (icon::CALENDAR_XMARK, Color::from_rgb(0.8, 0.2, 0.2)) // Muted red
+                };
 
                 row_content = row_content.push(
-                    container(icon::icon(icon::CALENDAR_CHECK).size(12).color(done_color))
+                    container(icon::icon(done_icon).size(12).color(done_color))
                         .align_y(iced::Alignment::Center),
                 );
+                // SHOW DATETIME INSTEAD OF JUST DATE
                 row_content = row_content.push(
-                    text(local_done.format("%Y-%m-%d").to_string())
+                    text(local_done.format("%Y-%m-%d %H:%M").to_string())
                         .size(14)
                         .color(done_color),
                 );

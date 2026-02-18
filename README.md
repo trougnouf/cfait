@@ -65,6 +65,9 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 <a name="installation"></a>
 ## 🚀 Installation
 
+## Configuration
+Self-documenting config file. See also: https://codeberg.org/trougnouf/cfait/wiki/Configuration
+
 <a name="linux"></a>
 ### 🐧 Linux
 *   **Flatpak:** Available on [Flathub](https://flathub.org/apps/com.trougnouf.Cfait)

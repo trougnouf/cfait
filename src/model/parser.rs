@@ -1,5 +1,11 @@
-// File: ./src/model/parser.rs
-// Logic for parsing smart input strings into task properties.
+/*
+File: cfait/src/model/parser.rs
+Logic for parsing smart input strings into task properties.
+This file is recreated with updated handling for `done:` tokens to accept
+either a full datetime in the token (`done:YYYY-MM-DD HH:MM`) or the older
+date-only form with an optional separate time token following it.
+*/
+
 use crate::model::{Alarm, DateType, Task};
 use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, Utc};
 use std::collections::{HashMap, HashSet};
@@ -1697,16 +1703,27 @@ pub fn apply_smart_input(
         }
         // 3. New Fields (@@, loc:, url:, geo:, desc:, !, ~, spent:, done:)
         else if let Some(_val) = token_lower.strip_prefix("done:") {
-            // Completed date token (done:)
-            // Support forms like `done:2025-12-31`, `done:tomorrow`, and allow an optional time token next.
+            // Completed date/datetime token (done:)
             let clean_val = if token.len() > 5 { &token[5..] } else { "" };
 
+            let mut matched = false;
+
             if !clean_val.is_empty() {
-                if let Some(d) = parse_smart_date(clean_val) {
+                // Case 1: Try parsing as a full datetime first (e.g., "done:2024-01-01 15:30")
+                if let Ok(ndt) = chrono::NaiveDateTime::parse_from_str(clean_val, "%Y-%m-%d %H:%M")
+                {
+                    let utc_dt = ndt.and_local_timezone(Local).unwrap().with_timezone(&Utc);
+                    task.set_completion_date(Some(utc_dt));
+                    consumed = 1; // The entire datetime was in one token
+                    matched = true;
+                }
+                // Case 2: Fallback to parsing date-only, with an optional time as the next token
+                else if let Some(d) = parse_smart_date(clean_val) {
                     let mut temp_consumed = 1;
                     // Check next token for time and finalize into DateType
                     let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
 
+                    // Convert DateType to a specific DateTime<Utc> for set_completion_date
                     let utc_dt = match dt {
                         DateType::Specific(t) => t,
                         DateType::AllDay(d) => d
@@ -1719,10 +1736,11 @@ pub fn apply_smart_input(
 
                     task.set_completion_date(Some(utc_dt));
                     consumed = temp_consumed;
-                } else {
-                    summary_words.push(unescape(token));
+                    matched = true;
                 }
-            } else {
+            }
+
+            if !matched {
                 summary_words.push(unescape(token));
             }
         } else if let Some(val) = token_lower.strip_prefix("spent:") {

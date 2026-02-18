@@ -437,7 +437,19 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 .map(|s| s.to_start_comparison_time() > now)
                 .unwrap_or(false);
 
-            let (date_display_str, date_style) = if is_future_start {
+            let (date_display_str, date_style) = if t.status.is_done() {
+                // NEW TUI LOGIC for completion date
+                if let Some(done_dt) = t.completion_date() {
+                    let local_done = done_dt.with_timezone(&chrono::Local);
+                    let color = Color::DarkGray;
+                    (
+                        format!(" 🗓️ {}", local_done.format("%Y-%m-%d %H:%M")),
+                        Style::default().fg(color),
+                    )
+                } else {
+                    (String::new(), Style::default())
+                }
+            } else if is_future_start {
                 let start_ref = t.dtstart.as_ref().unwrap();
                 let start_str = start_ref.format_smart();
 

@@ -39,6 +39,7 @@ object NfIcons {
     val GEO = get(0xf041)
     val CALENDAR = get(0xf073)
     val CALENDAR_CHECK = get(0xf274)
+    val CALENDAR_XMARK = get(0xf273)
     val TAG = get(0xf02b)
     val TAG_OUTLINE = get(0xf04fc)
     val TAG_CHECK = get(0xf1a7a)

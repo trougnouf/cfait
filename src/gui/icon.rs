@@ -30,6 +30,7 @@ pub fn icon<'a>(codepoint: char) -> Text<'a> {
 
 pub const CALENDAR: char = '\u{f073}'; // 
 pub const CALENDAR_CHECK: char = '\u{f274}'; // nf-fa-calendar_check
+pub const CALENDAR_XMARK: char = '\u{f273}'; // nf-fa-calendar_xmark
 pub const TAG: char = '\u{f02b}'; //  (generic tag)
 pub const TAG_OUTLINE: char = '\u{f04fc}'; // nf-md-tag_outline
 pub const TAG_CHECK: char = '\u{f1a7a}'; // nf-md-tag_check
