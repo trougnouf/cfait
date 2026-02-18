@@ -95,7 +95,7 @@ os_info = "3"
 webpki-roots = "1.0"
 android_logger = "0.15"
 log = "0.4"
-zip = "7.2"
+zip = "8.1"
 
 [dev-dependencies]
 mockito = "1.7" # For mocking the HTTP server

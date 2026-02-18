@@ -128,13 +128,12 @@ pub struct Config {
     pub url: String,
     pub username: String,
     pub password: String,
-    pub default_calendar: Option<String>,
     #[serde(default)]
     pub allow_insecure_certs: bool,
     #[serde(default)]
-    pub hidden_calendars: Vec<String>,
-    #[serde(default)]
     pub disabled_calendars: Vec<String>,
+
+    pub default_calendar: Option<String>,
     #[serde(default)]
     pub hide_completed: bool,
     #[serde(default)]
@@ -143,8 +142,6 @@ pub struct Config {
     pub hide_fully_completed_tags: bool,
     #[serde(default = "default_cutoff")]
     pub sort_cutoff_months: Option<u32>,
-    #[serde(default)]
-    pub tag_aliases: HashMap<String, Vec<String>>,
     #[serde(default)]
     pub theme: AppTheme,
 
@@ -180,6 +177,12 @@ pub struct Config {
     pub max_done_roots: usize,
     #[serde(default = "default_max_done_subtasks")]
     pub max_done_subtasks: usize,
+
+    // Maps are typically at the end in TOML
+    #[serde(default)]
+    pub hidden_calendars: Vec<String>,
+    #[serde(default)]
+    pub tag_aliases: HashMap<String, Vec<String>>,
 }
 
 impl Default for Config {
@@ -193,7 +196,6 @@ impl Default for Config {
             hidden_calendars: Vec::new(),
             disabled_calendars: Vec::new(),
             hide_completed: false,
-            // Match the serde defaults
             hide_fully_completed_tags: true,
             sort_cutoff_months: Some(2),
             tag_aliases: HashMap::new(),
@@ -218,21 +220,17 @@ impl Default for Config {
 
 impl Config {
     /// Load the configuration from disk using an explicit context.
-    /// Returns a contextualized error if reading or parsing fails.
     pub fn load(ctx: &dyn AppContext) -> Result<Self> {
         let path = ctx.get_config_file_path()?;
 
-        // Explicitly detect missing file so callers (onboarding) can behave accordingly.
         if !path.exists() {
             return Err(anyhow::anyhow!("Config file not found"));
         }
 
-        // Read the file with contextualized error (covers permission/IO issues).
         let contents = fs::read_to_string(&path).map_err(|e| {
             anyhow::anyhow!("Failed to read config file '{}': {}", path.display(), e)
         })?;
 
-        // Parse TOML with contextualized error (covers syntax issues).
         let config: Config = toml::from_str(&contents).map_err(|e| {
             anyhow::anyhow!("Failed to parse config file '{}': {}", path.display(), e)
         })?;
@@ -240,28 +238,15 @@ impl Config {
         Ok(config)
     }
 
-    /// Helper to detect whether an anyhow::Error indicates that the config file was missing.
-    /// This tries multiple strategies:
-    ///  - Fast path: check for our explicit "Config file not found" message
-    ///  - Look for underlying IO NotFound errors in the error chain
-    ///
-    /// The goal is to avoid brittle substring checks spread across the codebase.
     pub fn is_missing_config_error(err: &Error) -> bool {
-        // Fast textual check for the explicit not-found message.
         if err.to_string().contains("Config file not found") {
             return true;
         }
-
-        // Check if the top-level error is an io::Error with NotFound kind.
         if let Some(io_err) = err.downcast_ref::<std::io::Error>()
             && io_err.kind() == std::io::ErrorKind::NotFound
         {
             return true;
         }
-
-        // Walk the error chain and look for an underlying IO NotFound.
-        // `chain()` yields references to the error chain; check each for io::Error.
-        // This makes detection robust even when errors are wrapped.
         for cause in err.chain() {
             if let Some(io_err) = cause.downcast_ref::<std::io::Error>()
                 && io_err.kind() == std::io::ErrorKind::NotFound
@@ -269,16 +254,17 @@ impl Config {
                 return true;
             }
         }
-
         false
     }
 
     /// Save configuration using an explicit context.
+    /// This method post-processes the TOML string to inject documentation comments.
     pub fn save(&self, ctx: &dyn AppContext) -> Result<()> {
         let path = ctx.get_config_file_path()?;
         LocalStorage::with_lock(&path, || {
             let toml_str = toml::to_string_pretty(self)?;
-            LocalStorage::atomic_write(&path, toml_str)?;
+            let documented_toml = Self::inject_documentation(&toml_str);
+            LocalStorage::atomic_write(&path, documented_toml)?;
             Ok(())
         })?;
         Ok(())
@@ -288,5 +274,132 @@ impl Config {
     pub fn get_path_string(ctx: &dyn AppContext) -> Result<String> {
         let path = ctx.get_config_file_path()?;
         Ok(path.to_string_lossy().to_string())
+    }
+
+    /// Post-process raw TOML string to add comments and headers.
+    fn inject_documentation(raw_toml: &str) -> String {
+        let mut out = String::with_capacity(raw_toml.len() + 2048);
+
+        // Header Comment
+        out.push_str("# Cfait Configuration\n\n");
+
+        // Connection Header (Assumed to be at top based on struct order)
+        out.push_str("# --- Connection Settings ---\n");
+
+        for line in raw_toml.lines() {
+            let trimmed = line.trim();
+
+            // -- Section Headers --
+            if trimmed.starts_with("default_calendar =") {
+                out.push_str("\n# --- UI & Behavior ---\n");
+            } else if trimmed.starts_with("sort_cutoff_months =") {
+                out.push_str("\n# --- Sorting & Ranking Logic ---\n");
+            } else if trimmed.starts_with("auto_reminders =") {
+                out.push_str("\n# --- Notifications & Reminders ---\n");
+            } else if trimmed.starts_with("create_events_for_tasks =") {
+                out.push_str("\n# --- Calendar Integration (VEVENT Sync) ---\n");
+            } else if trimmed.starts_with("max_done_roots =") {
+                out.push_str("\n# --- Advanced Performance Settings ---\n");
+            } else if trimmed.starts_with("[tag_aliases]") {
+                out.push_str("\n# --- Aliases (Global Templates) ---\n");
+                out.push_str("# Map shortcuts to sets of tags/locations/priorities.\n");
+                out.push_str("# Example: \"#gardening\" = [\"#fun\", \"@@home\"]\n");
+            }
+
+            // -- Inline or Block Comments for specific keys --
+
+            if trimmed.starts_with("url =") {
+                out.push_str("# URL: The full address to your CalDAV server endpoint.\n");
+                out.push_str(line);
+            } else if trimmed.starts_with("allow_insecure_certs =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Boolean: Set true to bypass SSL verification (e.g. self-signed certs).",
+                );
+            } else if trimmed.starts_with("disabled_calendars =") {
+                out.push_str("# List of calendar HREFs (strings) to completely disable/ignore.\n");
+                out.push_str(line);
+            } else if trimmed.starts_with("default_calendar =") {
+                out.push_str(line);
+                out.push_str(" # String: Target for new tasks. HREF or 'local://default'.");
+            } else if trimmed.starts_with("hide_completed =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: If true, Completed/Cancelled tasks are hidden globally.");
+            } else if trimmed.starts_with("strikethrough_completed =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Apply strikethrough styling to completed task titles.");
+            } else if trimmed.starts_with("hide_fully_completed_tags =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Hide tags in sidebar if all their tasks are completed.");
+            } else if trimmed.starts_with("theme =") {
+                out.push_str(line);
+                out.push_str(" # String: GUI Theme (RustyDark, Light, Dark, Dracula, Nord, etc).");
+            } else if trimmed.starts_with("sort_cutoff_months =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Integer/None: Tasks due beyond this many months are ranked lower.",
+                );
+            } else if trimmed.starts_with("urgent_days_horizon =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Integer: Tasks due within this many days are considered 'Urgent'.",
+                );
+            } else if trimmed.starts_with("urgent_priority_threshold =") {
+                out.push_str(line);
+                out.push_str(" # Integer (1-9): Priorities <= this value are 'Urgent'. (1=High)");
+            } else if trimmed.starts_with("default_priority =") {
+                out.push_str(line);
+                out.push_str(" # Integer (1-9): Default priority for new tasks. 0 maps to this.");
+            } else if trimmed.starts_with("start_grace_period_days =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Integer: Future tasks appear in the list this many days before start.",
+                );
+            } else if trimmed.starts_with("auto_reminders =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Boolean: Auto-remind on Due/Start dates if no explicit alarms exist.",
+                );
+            } else if trimmed.starts_with("default_reminder_time =") {
+                out.push_str(line);
+                out.push_str(" # String (HH:MM): Default time for date-only auto-reminders.");
+            } else if trimmed.starts_with("snooze_short_mins =") {
+                out.push_str(line);
+                out.push_str(" # Integer: Minutes for the 'Short Snooze' button.");
+            } else if trimmed.starts_with("snooze_long_mins =") {
+                out.push_str(line);
+                out.push_str(" # Integer: Minutes for the 'Long Snooze' button.");
+            } else if trimmed.starts_with("auto_refresh_interval_mins =") {
+                out.push_str(line);
+                out.push_str(" # Integer: Background sync interval in minutes. 0 to disable.");
+            } else if trimmed.starts_with("create_events_for_tasks =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Boolean: Create companion VEVENTs on server for tasks with dates.",
+                );
+            } else if trimmed.starts_with("delete_events_on_completion =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Remove the companion VEVENT when task is completed.");
+            } else if trimmed.starts_with("max_done_roots =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Integer: Limit completed root tasks shown before 'Expand' button.",
+                );
+            } else if trimmed.starts_with("max_done_subtasks =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Integer: Limit completed subtasks shown in a parent before 'Expand'.",
+                );
+            } else if trimmed.starts_with("hidden_calendars =") {
+                out.push_str("# List of calendar HREFs currently toggled 'off' in the sidebar.\n");
+                out.push_str(line);
+            } else {
+                // Pass through unhandled lines
+                out.push_str(line);
+            }
+            out.push('\n');
+        }
+
+        out
     }
 }
