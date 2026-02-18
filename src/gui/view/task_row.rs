@@ -237,7 +237,23 @@ pub fn view_task_row<'a>(
         };
         // --- CHANGED END ---
 
-        if is_future_start {
+        // NEW LOGIC START: Show completion date for finished tasks
+        if task.status.is_done() {
+            if let Some(done_dt) = task.completion_date() {
+                let local_done = done_dt.with_timezone(&chrono::Local);
+                let done_color = Color::from_rgb(0.4, 0.6, 0.4); // Muted green
+
+                row_content = row_content.push(
+                    container(icon::icon(icon::CALENDAR_CHECK).size(12).color(done_color))
+                        .align_y(iced::Alignment::Center),
+                );
+                row_content = row_content.push(
+                    text(local_done.format("%Y-%m-%d").to_string())
+                        .size(14)
+                        .color(done_color),
+                );
+            }
+        } else if is_future_start {
             // Start Icon
             row_content = row_content.push(
                 container(icon::icon(icon::HOURGLASS_START).size(12).color(dim_color))

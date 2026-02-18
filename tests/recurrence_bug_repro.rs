@@ -1,4 +1,5 @@
-// File: ./src/tests/recurrence_bug_repro.rs
+// Updated recurrence tests to use the `recycle` method which mirrors how the
+// application/store handles recurring task completion/cancellation.
 use cfait::model::{DateType, Task, TaskStatus};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;
@@ -20,14 +21,14 @@ fn create_weekly_task(uid: &str, offset_days: i64) -> Task {
 
 #[test]
 fn test_recurrence_recycling_preserves_uid() {
-    // Task due today
-    let mut t = create_weekly_task("recycle_uid_test", 0);
+    let t = create_weekly_task("recycle_uid_test", 0);
     let original_uid = t.uid.clone();
 
-    // Mark as done (Advance Recurrence)
-    let advanced = t.advance_recurrence();
+    // Simulate completing the task which the store handles by recycling
+    let (history, secondary) = t.recycle(TaskStatus::Completed);
+    assert_eq!(history.status, TaskStatus::Completed);
 
-    assert!(advanced, "Should have advanced");
+    let t = secondary.unwrap();
     assert_eq!(
         t.uid, original_uid,
         "UID must be preserved for Tasks.org compatibility"
@@ -39,7 +40,6 @@ fn test_recurrence_recycling_preserves_uid() {
     );
     assert_ne!(t.dtstart, None, "Dates should be updated");
 
-    // Check it moved 1 week forward
     let old_due = (Utc::now()).date_naive();
     let new_due = t.due.as_ref().unwrap().to_date_naive();
     let diff = new_due - old_due;
@@ -48,110 +48,109 @@ fn test_recurrence_recycling_preserves_uid() {
 
 #[test]
 fn test_scenario_1_cancel_then_done_sequence() {
-    // create task starting 5 days ago
-    let mut t = create_weekly_task("task1", -5);
+    let t = create_weekly_task("task1", -5);
     let initial_due = t.due.as_ref().unwrap().to_date_naive();
 
-    // 1. Mark as done -> Should move +7 days from initial
-    t.status = TaskStatus::Completed;
-    assert!(t.advance_recurrence(), "Should advance");
+    // 1. Mark as done -> Recycle
+    let (history1, secondary1) = t.recycle(TaskStatus::Completed);
+    assert_eq!(history1.status, TaskStatus::Completed);
+    let t = secondary1.unwrap();
     let due1 = t.due.as_ref().unwrap().to_date_naive();
     assert_eq!(due1, initial_due + Duration::days(7));
     assert_eq!(t.status, TaskStatus::NeedsAction);
 
-    // 2. Mark as done -> Should move another +7 days
-    t.status = TaskStatus::Completed;
-    assert!(t.advance_recurrence(), "Should advance");
+    // 2. Mark as done -> Recycle again
+    let (history2, secondary2) = t.recycle(TaskStatus::Completed);
+    assert_eq!(history2.status, TaskStatus::Completed);
+    let t = secondary2.unwrap();
     let due2 = t.due.as_ref().unwrap().to_date_naive();
     assert_eq!(due2, initial_due + Duration::days(14));
 
-    // 3. Mark as canceled -> Should move another +7 days, adding exception
-    t.status = TaskStatus::Cancelled;
-    assert!(t.advance_recurrence(), "Should cancel");
+    // 3. Mark as canceled -> Recycle
+    let (history3, secondary3) = t.recycle(TaskStatus::Cancelled);
+    assert_eq!(history3.status, TaskStatus::Cancelled);
+    let t = secondary3.unwrap();
     let due3 = t.due.as_ref().unwrap().to_date_naive();
     assert_eq!(due3, initial_due + Duration::days(21));
-    assert!(t.exdates.is_empty(), "Should not have exdates with new implementation");
-
-    // 4. Mark as canceled -> Should move another +7 days
-    t.status = TaskStatus::Cancelled;
     assert!(
-        t.advance_recurrence(),
-        "Should cancel again"
+        !t.exdates.is_empty(),
+        "Next instance should contain the EXDATE"
     );
+    assert_eq!(t.exdates.len(), 1);
 
+    // 4. Mark as canceled again
+    let (history4, secondary4) = t.recycle(TaskStatus::Cancelled);
+    assert_eq!(history4.status, TaskStatus::Cancelled);
+    let t = secondary4.unwrap();
     let due4 = t.due.as_ref().unwrap().to_date_naive();
-    assert_eq!(
-        due4,
-        initial_due + Duration::days(28),
-        "Should have advanced again"
-    );
+    assert_eq!(due4, initial_due + Duration::days(28));
+    assert_eq!(t.exdates.len(), 2, "Should have accumulated another EXDATE");
 }
 
 #[test]
 fn test_scenario_2_multiple_cancels() {
-    // task starting 5 days ago
-    let mut t = create_weekly_task("task2", -5);
+    let t = create_weekly_task("task2", -5);
     let initial_due = t.due.as_ref().unwrap().to_date_naive();
 
     // 1. Cancel -> +7 days
-    t.status = TaskStatus::Cancelled;
-    t.advance_recurrence();
+    let (_, secondary1) = t.recycle(TaskStatus::Cancelled);
+    let t = secondary1.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(7)
     );
 
     // 2. Cancel -> +14 days
-    t.status = TaskStatus::Cancelled;
-    t.advance_recurrence();
+    let (_, secondary2) = t.recycle(TaskStatus::Cancelled);
+    let t = secondary2.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(14)
     );
 
     // 3. Cancel -> +21 days
-    t.status = TaskStatus::Cancelled;
-    t.advance_recurrence();
+    let (_, secondary3) = t.recycle(TaskStatus::Cancelled);
+    let t = secondary3.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(21)
     );
 
-    assert_eq!(t.exdates.len(), 0);
+    assert_eq!(t.exdates.len(), 3);
 }
 
 #[test]
 fn test_scenario_3_cancel_loop() {
-    let mut t = create_weekly_task("task3", -5);
+    let t = create_weekly_task("task3", -5);
     let initial_due = t.due.as_ref().unwrap().to_date_naive();
 
     // Done -> +7
-    t.status = TaskStatus::Completed;
-    t.advance_recurrence();
+    let (_, secondary1) = t.recycle(TaskStatus::Completed);
+    let t = secondary1.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(7)
     );
 
     // Cancel -> +14
-    t.status = TaskStatus::Cancelled;
-    t.advance_recurrence();
+    let (_, secondary2) = t.recycle(TaskStatus::Cancelled);
+    let t = secondary2.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(14)
     );
 
     // Done -> +21
-    t.status = TaskStatus::Completed;
-    t.advance_recurrence();
+    let (_, secondary3) = t.recycle(TaskStatus::Completed);
+    let t = secondary3.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(21)
     );
 
     // Cancel -> +28
-    t.status = TaskStatus::Cancelled;
-    t.advance_recurrence();
+    let (_, secondary4) = t.recycle(TaskStatus::Cancelled);
+    let t = secondary4.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
         initial_due + Duration::days(28)

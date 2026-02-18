@@ -3750,6 +3750,7 @@ data class MobileTask(
     var `isDone`: kotlin.Boolean,
     var `priority`: kotlin.UByte,
     var `dueDateIso`: kotlin.String?,
+    var `completedDateIso`: kotlin.String?,
     var `isAlldayDue`: kotlin.Boolean,
     var `startDateIso`: kotlin.String?,
     var `isAlldayStart`: kotlin.Boolean,
@@ -3797,6 +3798,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterBoolean.read(buf),
             FfiConverterUByte.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
@@ -3838,6 +3840,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterBoolean.allocationSize(value.`isDone`) +
                 FfiConverterUByte.allocationSize(value.`priority`) +
                 FfiConverterOptionalString.allocationSize(value.`dueDateIso`) +
+                FfiConverterOptionalString.allocationSize(value.`completedDateIso`) +
                 FfiConverterBoolean.allocationSize(value.`isAlldayDue`) +
                 FfiConverterOptionalString.allocationSize(value.`startDateIso`) +
                 FfiConverterBoolean.allocationSize(value.`isAlldayStart`) +
@@ -3881,6 +3884,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterBoolean.write(value.`isDone`, buf)
         FfiConverterUByte.write(value.`priority`, buf)
         FfiConverterOptionalString.write(value.`dueDateIso`, buf)
+        FfiConverterOptionalString.write(value.`completedDateIso`, buf)
         FfiConverterBoolean.write(value.`isAlldayDue`, buf)
         FfiConverterOptionalString.write(value.`startDateIso`, buf)
         FfiConverterBoolean.write(value.`isAlldayStart`, buf)

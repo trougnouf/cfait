@@ -8,7 +8,7 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
-const CACHE_VERSION: u32 = 5;
+const CACHE_VERSION: u32 = 6;
 
 #[derive(Serialize, Deserialize)]
 struct CalendarCache {
@@ -62,9 +62,10 @@ impl Cache {
             return LocalStorage::with_lock(&path, || {
                 let json = fs::read_to_string(&path)?;
                 if let Ok(cache) = serde_json::from_str::<CalendarCache>(&json)
-                    && cache.version == CACHE_VERSION {
-                        return Ok((cache.tasks, cache.sync_token));
-                    }
+                    && cache.version == CACHE_VERSION
+                {
+                    return Ok((cache.tasks, cache.sync_token));
+                }
                 Ok((vec![], None))
             });
         }

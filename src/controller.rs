@@ -1,3 +1,4 @@
+// File: ./src/controller.rs
 //! Central logic controller for Task operations.
 //! This is the single source of truth for all business logic (create, update, delete, etc.).
 //! All UI layers (TUI, GUI, Mobile) must delegate actions to this controller to ensure
@@ -83,9 +84,52 @@ impl TaskController {
     }
 
     pub async fn update_task(&self, task: Task) -> Result<Vec<String>, String> {
-        // 1. Optimistic UI update
-        self.store.lock().await.update_or_add_task(task.clone());
-        // 2. Persist (returns sync warnings/logs)
+        let mut store = self.store.lock().await;
+
+        // FIX: Check for Recurrence Completion Transition via Smart Input.
+        // If the user updated a recurring task to "Completed" (e.g. via "done:" syntax),
+        // we must trigger the recycle logic to create history and advance the next instance,
+        // rather than just overwriting the task in place (which breaks the recurrence chain).
+        let is_recurring_completion = if let Some(existing) = store.get_task_ref(&task.uid) {
+            task.rrule.is_some() && task.status.is_done() && !existing.status.is_done()
+        } else {
+            false
+        };
+
+        if is_recurring_completion {
+            // Apply recycle logic using the NEW task state as the base.
+            // This ensures any other edits (notes, tags) made alongside the completion are preserved.
+            let (history, next_opt) = task.recycle(task.status);
+
+            // 1. Optimistic UI Update
+            store.add_task(history.clone()); // Add history item (new UID)
+
+            if let Some(next) = &next_opt {
+                store.update_or_add_task(next.clone()); // Update main item (same UID)
+            } else {
+                // Fallback: just update the task if recycle failed to produce next (e.g. malformed rrule)
+                store.update_or_add_task(task.clone());
+            }
+
+            // Drop lock before network ops
+            drop(store);
+
+            // 2. Persist Changes (History + Next)
+            // We must persist both the history creation and the update to the next instance.
+            let mut logs = self.persist_change(Action::Create(history)).await?;
+
+            if let Some(next) = next_opt {
+                let next_logs = self.persist_change(Action::Update(next)).await?;
+                logs.extend(next_logs);
+            }
+
+            return Ok(logs);
+        }
+
+        // Standard Update Path (Non-recurring or no status change)
+        store.update_or_add_task(task.clone());
+        drop(store);
+
         self.persist_change(Action::Update(task)).await
     }
 

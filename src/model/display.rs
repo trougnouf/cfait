@@ -208,6 +208,13 @@ impl TaskDisplay for Task {
             s.push_str(if create_event { " +cal" } else { " -cal" });
         }
 
+        // Output completion date if present
+        if let Some(comp) = self.completion_date() {
+            let local = comp.with_timezone(&chrono::Local);
+            s.push_str(&format!(" done:{}", local.format("%Y-%m-%d")));
+            // Optionally add time if strictly needed, but date usually suffices for input
+        }
+
         // Output spent time
         if self.time_spent_seconds > 0 {
             // Round to nearest minute for display

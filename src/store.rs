@@ -336,12 +336,19 @@ impl TaskStore {
         if let Some((task, _)) = self.get_task_mut(uid) {
             task.status = TaskStatus::NeedsAction;
 
-            // STOP TIMER AND ACCUMULATE
+            // STOP TIMER, ACCUMULATE, AND RECORD SESSION
             if let Some(start) = task.last_started_at {
                 let now = Utc::now().timestamp();
                 if now > start {
-                    task.time_spent_seconds =
-                        task.time_spent_seconds.saturating_add((now - start) as u64);
+                    let duration = (now - start) as u64;
+                    task.time_spent_seconds = task.time_spent_seconds.saturating_add(duration);
+
+                    // NEW: Record specific session
+                    // Only record if it was longer than 1 minute (reduce noise)
+                    if duration > 60 {
+                        task.sessions
+                            .push(crate::model::item::WorkSession { start, end: now });
+                    }
                 }
                 task.last_started_at = None;
             }
@@ -360,12 +367,18 @@ impl TaskStore {
             task.status = TaskStatus::NeedsAction;
             task.percent_complete = None;
 
-            // STOP TIMER AND ACCUMULATE
+            // STOP TIMER, ACCUMULATE, AND RECORD SESSION
             if let Some(start) = task.last_started_at {
                 let now = Utc::now().timestamp();
                 if now > start {
-                    task.time_spent_seconds =
-                        task.time_spent_seconds.saturating_add((now - start) as u64);
+                    let duration = (now - start) as u64;
+                    task.time_spent_seconds = task.time_spent_seconds.saturating_add(duration);
+
+                    // NEW: Record session
+                    if duration > 60 {
+                        task.sessions
+                            .push(crate::model::item::WorkSession { start, end: now });
+                    }
                 }
                 task.last_started_at = None;
             }

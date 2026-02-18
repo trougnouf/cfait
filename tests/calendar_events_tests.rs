@@ -272,7 +272,7 @@ fn test_event_generation_status_mapping() {
     // Test Cancelled status
     task.status = TaskStatus::Cancelled;
     let result = task.to_event_ics();
-    assert!(result.is_some());
+    assert!(result.is_some(), "Cancelled task should generate an event");
     let (_uid, ics) = result.unwrap();
     assert!(ics.contains("STATUS:CANCELLED"));
 
@@ -649,4 +649,67 @@ fn test_override_priority_deletion_when_global_off() {
     assert_eq!(task_with_override.create_event, Some(true));
     let result_override = task_with_override.to_event_ics();
     assert!(result_override.is_some()); // Should still generate event
+}
+
+#[test]
+fn test_event_generation_cancelled_with_sessions() {
+    let mut task = parse("Cancelled project");
+    task.status = TaskStatus::Cancelled;
+    task.due = Some(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2025, 2, 15).unwrap(),
+    ));
+    task.sessions.push(cfait::model::item::WorkSession {
+        start: 1735689600, // 2025-01-01 00:00:00 UTC
+        end: 1735693200,   // 2025-01-01 01:00:00 UTC
+    });
+
+    let result = task.to_event_ics();
+    assert!(
+        result.is_some(),
+        "Cancelled task with sessions should generate an event"
+    );
+    let (_uid, ics) = result.unwrap();
+
+    // Should contain the VEVENT for the session
+    assert!(ics.contains("SUMMARY:⚙ Cancelled project"));
+    assert!(
+        ics.matches("BEGIN:VEVENT").count() == 2,
+        "Should have 2 VEVENT components (session + cancelled plan)"
+    );
+
+    // Should also contain the main cancelled VEVENT
+    assert!(ics.contains("SUMMARY:Cancelled project"));
+    assert!(ics.contains("STATUS:CANCELLED"));
+}
+
+#[test]
+fn test_event_generation_completed_with_sessions_no_summary() {
+    let mut task = parse("Completed project");
+    task.status = TaskStatus::Completed;
+    task.due = Some(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2025, 2, 15).unwrap(),
+    ));
+    task.sessions.push(cfait::model::item::WorkSession {
+        start: 1735689600, // 2025-01-01 00:00:00 UTC
+        end: 1735693200,   // 2025-01-01 01:00:00 UTC
+    });
+
+    let result = task.to_event_ics();
+    assert!(
+        result.is_some(),
+        "Completed task with sessions should generate an event"
+    );
+    let (_uid, ics) = result.unwrap();
+
+    // Should contain ONLY the VEVENT for the session
+    assert!(ics.contains("SUMMARY:⚙ Completed project"));
+    assert!(
+        ics.matches("BEGIN:VEVENT").count() == 1,
+        "Should have only 1 VEVENT component (the session)"
+    );
+
+    // Should NOT contain the generic "✓ Task Completed" summary event
+    assert!(!ics.contains("✓ Task Completed"));
+    // Check with newline to avoid matching the session summary's "Completed project" part
+    assert!(!ics.contains("SUMMARY:Completed project\r\n"));
 }

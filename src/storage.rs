@@ -22,7 +22,7 @@ use std::sync::Arc;
 pub const LOCAL_CALENDAR_HREF: &str = "local://default";
 pub const LOCAL_CALENDAR_NAME: &str = "Local";
 pub const LOCAL_REGISTRY_FILENAME: &str = "local_calendars.json";
-const LOCAL_STORAGE_VERSION: u32 = 3;
+const LOCAL_STORAGE_VERSION: u32 = 4;
 
 #[derive(Serialize, Deserialize)]
 struct LocalStorageData {

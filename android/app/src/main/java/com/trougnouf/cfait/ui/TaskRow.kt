@@ -164,7 +164,25 @@ fun TaskRow(
                     }
 
                     // Date Display Logic
-                    if (task.isFutureStart && task.startDateIso != null) {
+                    if (task.isDone && task.completedDateIso != null) {
+                        // COMPLETED DATE DISPLAY
+                        val doneColor = Color(0xFF66BB6A) // Greenish
+
+                        NfIcon(NfIcons.CALENDAR_CHECK, size = 10.sp, color = doneColor, lineHeight = 10.sp)
+
+                        // Show only the date portion (YYYY-MM-DD)
+                        val dateStr = try {
+                            // Convert to local and take just the date part, but guard against short/malformed strings
+                            val localStr = formatIsoToLocal(task.completedDateIso!!)
+                            if (localStr.length >= 10) localStr.substring(0, 10) else localStr
+                        } catch (e: Exception) {
+                            // Fallback: if parsing fails, safely take up to the first 10 chars
+                            val safeIso = task.completedDateIso ?: ""
+                            if (safeIso.length >= 10) safeIso.substring(0, 10) else safeIso
+                        }
+                        Text(dateStr, fontSize = 10.sp, color = doneColor, lineHeight = 10.sp)
+
+                    } else if (task.isFutureStart && task.startDateIso != null) {
                         // Future Start Display
                         val dimColor = Color(0xFFBDBDBD) // Lighter Gray
 

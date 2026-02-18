@@ -549,6 +549,9 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
             } else if word_lower.starts_with("spent:") {
                 // New logic for spent:
                 matched_kind = Some(SyntaxType::Duration);
+            } else if word_lower.starts_with("done:") {
+                // Highlight done: tokens like dates (reuse DueDate highlighting/color)
+                matched_kind = Some(SyntaxType::DueDate);
             } else if word.starts_with('#') {
                 matched_kind = Some(SyntaxType::Tag);
             }
@@ -1692,8 +1695,37 @@ pub fn apply_smart_input(
                 summary_words.push(unescape(token));
             }
         }
-        // 3. New Fields (@@, loc:, url:, geo:, desc:, !, ~, spent:)
-        else if let Some(val) = token_lower.strip_prefix("spent:") {
+        // 3. New Fields (@@, loc:, url:, geo:, desc:, !, ~, spent:, done:)
+        else if let Some(_val) = token_lower.strip_prefix("done:") {
+            // Completed date token (done:)
+            // Support forms like `done:2025-12-31`, `done:tomorrow`, and allow an optional time token next.
+            let clean_val = if token.len() > 5 { &token[5..] } else { "" };
+
+            if !clean_val.is_empty() {
+                if let Some(d) = parse_smart_date(clean_val) {
+                    let mut temp_consumed = 1;
+                    // Check next token for time and finalize into DateType
+                    let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
+
+                    let utc_dt = match dt {
+                        DateType::Specific(t) => t,
+                        DateType::AllDay(d) => d
+                            .and_hms_opt(12, 0, 0)
+                            .unwrap()
+                            .and_local_timezone(Local)
+                            .unwrap()
+                            .with_timezone(&Utc),
+                    };
+
+                    task.set_completion_date(Some(utc_dt));
+                    consumed = temp_consumed;
+                } else {
+                    summary_words.push(unescape(token));
+                }
+            } else {
+                summary_words.push(unescape(token));
+            }
+        } else if let Some(val) = token_lower.strip_prefix("spent:") {
             // Allow formats like `spent:30m` or `spent:1h`
             if let Some(mins) = parse_duration(val) {
                 task.time_spent_seconds = (mins as u64) * 60;

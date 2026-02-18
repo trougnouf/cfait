@@ -109,6 +109,8 @@ pub struct MobileTask {
     pub is_done: bool,
     pub priority: u8,
     pub due_date_iso: Option<String>,
+    // NEW FIELD
+    pub completed_date_iso: Option<String>,
     pub is_allday_due: bool,
     pub start_date_iso: Option<String>,
     pub is_allday_start: bool,
@@ -251,6 +253,8 @@ fn task_to_mobile(
         Some(DateType::Specific(dt)) => (Some(dt.to_rfc3339()), false),
         None => (None, false),
     };
+    // NEW: expose completion date to mobile clients
+    let completed_date_iso = t.completion_date().map(|d| d.to_rfc3339());
 
     let has_alarms = !t
         .alarms
@@ -292,6 +296,8 @@ fn task_to_mobile(
         is_done: t.status.is_done(),
         priority: t.priority,
         due_date_iso: due_iso,
+        // NEW: include completed date field
+        completed_date_iso,
         is_allday_due: due_allday,
         start_date_iso: start_iso,
         is_allday_start: start_allday,

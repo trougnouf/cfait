@@ -54,6 +54,12 @@ pub struct RawProperty {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct WorkSession {
+    pub start: i64, // Unix timestamp
+    pub end: i64,   // Unix timestamp
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 pub enum DateType {
     AllDay(NaiveDate),
@@ -256,6 +262,10 @@ pub struct Task {
     #[serde(default)]
     pub last_started_at: Option<i64>, // Unix timestamp
 
+    // NEW: Detailed session history
+    #[serde(default)]
+    pub sessions: Vec<WorkSession>,
+
     #[serde(default)]
     pub unmapped_properties: Vec<RawProperty>,
     #[serde(default)]
@@ -356,6 +366,25 @@ impl Task {
             })
     }
 
+    pub fn set_completion_date(&mut self, dt: Option<DateTime<Utc>>) {
+        // Remove existing
+        self.unmapped_properties.retain(|p| p.key != "COMPLETED");
+
+        if let Some(date) = dt {
+            // Set status to Completed if not already (logic convenience)
+            if !self.status.is_done() {
+                self.status = TaskStatus::Completed;
+            }
+
+            let val = date.format("%Y%m%dT%H%M%SZ").to_string();
+            self.unmapped_properties.push(RawProperty {
+                key: "COMPLETED".to_string(),
+                value: val,
+                params: vec![],
+            });
+        }
+    }
+
     pub fn new(
         input: &str,
         aliases: &HashMap<String, Vec<String>>,
@@ -388,6 +417,8 @@ impl Task {
             geo: None,
             time_spent_seconds: 0,
             last_started_at: None,
+            // NEW: initialize sessions history
+            sessions: Vec::new(),
             unmapped_properties: Vec::new(),
             sequence: 0,
             raw_alarms: Vec::new(),
