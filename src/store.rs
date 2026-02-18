@@ -1179,7 +1179,7 @@ impl TaskStore {
             }
             visiting.insert(idx);
 
-            let is_suppressed = t.status.is_done() || t.is_paused();
+            let is_suppressed = t.status.is_done();
 
             if !is_suppressed && let Some(children) = map.get(&t.uid) {
                 for &child_idx in children {
