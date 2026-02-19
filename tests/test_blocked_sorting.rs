@@ -39,6 +39,7 @@ fn test_blocked_tasks_skip_urgent_rank() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -52,7 +53,7 @@ fn test_blocked_tasks_skip_urgent_rank() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     let urgent_pos = filtered.iter().position(|t| t.uid == "urgent");
     let blocked_pos = filtered.iter().position(|t| t.uid == "blocked_urgent");
@@ -97,6 +98,7 @@ fn test_blocked_tasks_skip_due_soon_rank() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -110,7 +112,7 @@ fn test_blocked_tasks_skip_due_soon_rank() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     let due_soon_pos = filtered.iter().position(|t| t.uid == "due_soon");
     let blocked_pos = filtered.iter().position(|t| t.uid == "blocked_due_soon");
@@ -153,6 +155,7 @@ fn test_blocked_tasks_skip_started_rank() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -166,7 +169,7 @@ fn test_blocked_tasks_skip_started_rank() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     let started_pos = filtered.iter().position(|t| t.uid == "started");
     let blocked_pos = filtered.iter().position(|t| t.uid == "blocked_started");
@@ -210,6 +213,7 @@ fn test_dependency_blocked_tasks_also_skip_ranks() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -223,7 +227,7 @@ fn test_dependency_blocked_tasks_also_skip_ranks() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     let urgent_pos = filtered.iter().position(|t| t.uid == "urgent");
     let blocked_pos = filtered.iter().position(|t| t.uid == "blocked_by_dep");
@@ -278,6 +282,7 @@ fn test_is_ready_filters_manually_blocked_tasks() {
         match_all_categories: false,
         search_term: "is:ready",
         hide_completed_global: true,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -291,7 +296,7 @@ fn test_is_ready_filters_manually_blocked_tasks() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     assert!(!filtered.iter().any(|t| t.summary.contains("Blocked Task")));
     assert!(
@@ -336,6 +341,7 @@ fn test_is_blocked_filter_shows_only_blocked() {
         match_all_categories: false,
         search_term: "is:blocked",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -349,7 +355,7 @@ fn test_is_blocked_filter_shows_only_blocked() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     assert!(
         filtered

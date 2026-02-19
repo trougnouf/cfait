@@ -1474,7 +1474,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 40919.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 22815.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 46482.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_any_tasks() != 42815.toShort()) {
@@ -2156,7 +2156,7 @@ public interface CfaitMobileInterface {
         `filterLocations`: List<kotlin.String>,
         `searchQuery`: kotlin.String,
         `expandedGroups`: List<kotlin.String>,
-    ): List<MobileTask>
+    ): MobileViewData
 
     /**
      * Returns true if the in-memory store contains any tasks across any calendars.
@@ -2831,7 +2831,7 @@ open class CfaitMobile :
         `filterLocations`: List<kotlin.String>,
         `searchQuery`: kotlin.String,
         `expandedGroups`: List<kotlin.String>,
-    ): List<MobileTask> =
+    ): MobileViewData =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
@@ -2846,7 +2846,7 @@ open class CfaitMobile :
             { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
             { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
-            { FfiConverterSequenceTypeMobileTask.lift(it) },
+            { FfiConverterTypeMobileViewData.lift(it) },
             // Error FFI converter
             UniffiNullRustCallStatusErrorHandler,
         )
@@ -3924,6 +3924,42 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterString.write(value.`virtualPayload`, buf)
         FfiConverterSequenceString.write(value.`visibleCategories`, buf)
         FfiConverterOptionalString.write(value.`visibleLocation`, buf)
+    }
+}
+
+data class MobileViewData(
+    var `tasks`: List<MobileTask>,
+    var `tags`: List<MobileTag>,
+    var `locations`: List<MobileLocation>,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileViewData> {
+    override fun read(buf: ByteBuffer): MobileViewData =
+        MobileViewData(
+            FfiConverterSequenceTypeMobileTask.read(buf),
+            FfiConverterSequenceTypeMobileTag.read(buf),
+            FfiConverterSequenceTypeMobileLocation.read(buf),
+        )
+
+    override fun allocationSize(value: MobileViewData) =
+        (
+            FfiConverterSequenceTypeMobileTask.allocationSize(value.`tasks`) +
+                FfiConverterSequenceTypeMobileTag.allocationSize(value.`tags`) +
+                FfiConverterSequenceTypeMobileLocation.allocationSize(value.`locations`)
+        )
+
+    override fun write(
+        value: MobileViewData,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceTypeMobileTask.write(value.`tasks`, buf)
+        FfiConverterSequenceTypeMobileTag.write(value.`tags`, buf)
+        FfiConverterSequenceTypeMobileLocation.write(value.`locations`, buf)
     }
 }
 

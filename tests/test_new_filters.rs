@@ -159,6 +159,7 @@ fn test_is_ready_filters_future_start_dates() {
         match_all_categories: false,
         search_term: "is:ready",
         hide_completed_global: true,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -172,7 +173,7 @@ fn test_is_ready_filters_future_start_dates() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     // Future task should be filtered out
     assert!(!filtered.iter().any(|t| t.summary.contains("Future")));
@@ -216,6 +217,7 @@ fn test_is_ready_filters_blocked_tasks() {
         match_all_categories: false,
         search_term: "is:ready",
         hide_completed_global: true,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -229,7 +231,7 @@ fn test_is_ready_filters_blocked_tasks() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     // Blocked task should be filtered out
     assert!(!filtered.iter().any(|t| t.summary.contains("Blocked")));
@@ -279,6 +281,7 @@ fn test_is_ready_combines_with_other_filters() {
         match_all_categories: false,
         search_term: "is:ready #work",
         hide_completed_global: true,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -292,7 +295,7 @@ fn test_is_ready_combines_with_other_filters() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     // Only the ready work task should be included
     assert!(filtered.len() == 1);

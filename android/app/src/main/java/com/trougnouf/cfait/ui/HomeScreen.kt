@@ -60,8 +60,6 @@ fun ColoredOverflowDots() {
 fun HomeScreen(
     api: CfaitMobile,
     calendars: List<MobileCalendar>,
-    tags: List<MobileTag>,
-    locations: List<MobileLocation>,
     defaultCalHref: String?,
     defaultPriority: Int, // Accept the parameter
     isLoading: Boolean,
@@ -83,6 +81,10 @@ fun HomeScreen(
     var lastSyncFailed by remember { mutableStateOf(false) }
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
     var isPullRefreshing by remember { mutableStateOf(false) }
+
+    // Lift tags & locations directly tied to HomeScreen (populated by getViewData)
+    var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
+    var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) }
 
     var filterTags by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
     var filterLocations by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
@@ -343,12 +345,15 @@ fun HomeScreen(
     fun updateTaskList() {
         scope.launch {
             try {
-                tasks = api.getViewTasks(
+                val viewData = api.getViewTasks(
                     filterTags.toList(),
                     filterLocations.toList(),
                     searchQuery,
-                    expandedGroups.toList() // Pass the new argument
+                    expandedGroups.toList()
                 )
+                tasks = viewData.tasks
+                tags = viewData.tags
+                locations = viewData.locations
                 aliases = api.getConfig().tagAliases
             } catch (_: Exception) {
             }
@@ -362,8 +367,6 @@ fun HomeScreen(
         filterLocations,
         isLoading,
         calendars,
-        tags,
-        locations,
         refreshTick,
         expandedGroups
     ) {
@@ -499,14 +502,16 @@ fun HomeScreen(
                     onDataChanged()
                     lastSyncFailed = false
                     try {
-                        // 2. Fetch new list
-                        val newTasks = api.getViewTasks(
+                        // 2. Fetch new view data
+                        val viewData = api.getViewTasks(
                             filterTags.toList(),
                             filterLocations.toList(),
                             searchQuery,
-                            expandedGroups.toList() // Pass expanded groups
+                            expandedGroups.toList()
                         )
-                        tasks = newTasks
+                        tasks = viewData.tasks
+                        tags = viewData.tags
+                        locations = viewData.locations
 
                         // 3. Trigger Scroll
                         // Incrementing scrollTrigger forces the LaunchedEffect to run

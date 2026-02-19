@@ -41,6 +41,7 @@ fn test_start_grace_period_keeps_tasks_in_active_section() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -54,7 +55,7 @@ fn test_start_grace_period_keeps_tasks_in_active_section() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     // Find positions of tasks
     let within_pos = filtered
@@ -106,6 +107,7 @@ fn test_grace_period_zero_pushes_all_future_starts() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -119,7 +121,7 @@ fn test_grace_period_zero_pushes_all_future_starts() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     let soon_pos = filtered.iter().position(|t| t.summary.contains("1 hour"));
     let normal_pos = filtered.iter().position(|t| t.summary.contains("Normal"));
@@ -175,6 +177,7 @@ fn test_acknowledged_alarm_keeps_task_in_active_section() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -188,7 +191,7 @@ fn test_acknowledged_alarm_keeps_task_in_active_section() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     let with_alarm_pos = filtered
         .iter()
@@ -251,6 +254,7 @@ fn test_any_acknowledged_alarm_keeps_task_active() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -264,7 +268,7 @@ fn test_any_acknowledged_alarm_keeps_task_active() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     let with_alarm_pos = filtered
         .iter()
@@ -317,6 +321,7 @@ fn test_recurring_task_with_fresh_dates_goes_to_future() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -330,7 +335,7 @@ fn test_recurring_task_with_fresh_dates_goes_to_future() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options);
+    let filtered = store.filter(options).tasks;
 
     let recurring_pos = filtered
         .iter()

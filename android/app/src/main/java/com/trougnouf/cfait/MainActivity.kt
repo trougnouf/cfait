@@ -127,8 +127,6 @@ fun CfaitNavHost(
 
     // Data State
     var calendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
-    var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
-    var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) }
     var defaultCalHref by remember { mutableStateOf<String?>(null) }
     var hasUnsynced by remember { mutableStateOf(false) }
     // Add state for default priority
@@ -262,8 +260,6 @@ fun CfaitNavHost(
                 refreshTick = System.currentTimeMillis()
                 val config = api.getConfig()
                 calendars = api.getCalendars()
-                tags = api.getAllTags()
-                locations = api.getAllLocations()
                 defaultCalHref = config.defaultCalendar
                 defaultPriority = config.defaultPriority.toInt() // Fetch config value
                 hasUnsynced = api.hasUnsyncedChanges()
@@ -406,8 +402,6 @@ fun CfaitNavHost(
             HomeScreen(
                 api = api,
                 calendars = calendars,
-                tags = tags,
-                locations = locations,
                 defaultCalHref = defaultCalHref,
                 defaultPriority = defaultPriority, // Pass it here
                 isLoading = isLoading,

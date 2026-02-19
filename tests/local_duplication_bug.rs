@@ -47,7 +47,7 @@ fn test_reproduce_android_local_revert_bug() {
     store.insert(LOCAL_CALENDAR_HREF.to_string(), reloaded_list);
 
     // Filter to get the tasks as the UI would see them
-    let filtered = store.filter(FilterOptions {
+    let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
         selected_categories: &HashSet::new(),
@@ -55,6 +55,7 @@ fn test_reproduce_android_local_revert_bug() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false, // Don't hide so we can check
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -69,7 +70,8 @@ fn test_reproduce_android_local_revert_bug() {
         max_done_subtasks: usize::MAX,
     });
 
-    let visible_task = filtered
+    let visible_task = filter_res
+        .tasks
         .iter()
         .find(|t| t.uid == uid)
         .expect("Task should exist");

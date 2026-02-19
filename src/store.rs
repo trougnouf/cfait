@@ -30,6 +30,12 @@ use std::sync::Arc;
 
 pub const UNCATEGORIZED_ID: &str = ":::uncategorized:::";
 
+pub struct FilterResult {
+    pub tasks: Vec<Task>,
+    pub categories: Vec<(String, usize)>,
+    pub locations: Vec<(String, usize)>,
+}
+
 /// Select an index from `tasks` at random weighted by priority.
 /// Tasks with priority 0 use the provided `default_priority`.
 /// Lower numeric priority indicates higher importance; we invert
@@ -121,6 +127,7 @@ pub struct FilterOptions<'a> {
     pub match_all_categories: bool,
     pub search_term: &'a str,
     pub hide_completed_global: bool,
+    pub hide_fully_completed_tags: bool,
     pub cutoff_date: Option<DateTime<Utc>>,
     pub min_duration: Option<u32>,
     pub max_duration: Option<u32>,
@@ -643,147 +650,6 @@ impl TaskStore {
         modified_tasks
     }
 
-    pub fn get_all_categories(
-        &self,
-        _hide_completed: bool,
-        hide_fully_completed_tags: bool,
-        forced_includes: &HashSet<String>,
-        hidden_calendars: &HashSet<String>,
-    ) -> Vec<(String, usize)> {
-        let mut active_counts: HashMap<String, usize> = HashMap::new();
-        let mut display_names: HashMap<String, String> = HashMap::new();
-        let mut present_tags_lower: HashSet<String> = HashSet::new();
-        let mut has_uncategorized_active = false;
-        let mut has_uncategorized_any = false;
-
-        // Iterate map values
-        for (href, map) in &self.calendars {
-            if hidden_calendars.contains(href) {
-                continue;
-            }
-            for task in map.values() {
-                let is_active = !task.status.is_done();
-
-                if task.categories.is_empty() {
-                    has_uncategorized_any = true;
-                    if is_active {
-                        has_uncategorized_active = true;
-                    }
-                } else {
-                    for cat in &task.categories {
-                        let parts: Vec<&str> = cat.split(':').collect();
-                        let mut current_hierarchy = String::with_capacity(cat.len());
-
-                        for (i, part) in parts.iter().enumerate() {
-                            if i > 0 {
-                                current_hierarchy.push(':');
-                            }
-                            current_hierarchy.push_str(part);
-
-                            let lower_key = current_hierarchy.to_lowercase();
-                            present_tags_lower.insert(lower_key.clone());
-                            display_names
-                                .entry(lower_key.clone())
-                                .or_insert(current_hierarchy.clone());
-
-                            if is_active {
-                                *active_counts.entry(lower_key).or_insert(0) += 1;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ... (rest of aggregation logic remains the same)
-        let mut result = Vec::new();
-        for lower_tag in present_tags_lower {
-            let count = *active_counts.get(&lower_tag).unwrap_or(&0);
-            let display_name = display_names
-                .get(&lower_tag)
-                .cloned()
-                .unwrap_or(lower_tag.clone());
-            let is_forced = forced_includes
-                .iter()
-                .any(|f| f.to_lowercase() == lower_tag);
-
-            if !hide_fully_completed_tags || count > 0 || is_forced {
-                result.push((display_name, count));
-            }
-        }
-        // ... handle uncategorized ...
-        if has_uncategorized_active
-            || (has_uncategorized_any && !hide_fully_completed_tags)
-            || forced_includes.contains(UNCATEGORIZED_ID)
-        {
-            let count = if has_uncategorized_active {
-                self.count_uncategorized_active(hidden_calendars)
-            } else {
-                0
-            };
-            result.push((UNCATEGORIZED_ID.to_string(), count));
-        }
-
-        result.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
-        result
-    }
-
-    pub fn get_all_locations(
-        &self,
-        _hide_completed: bool,
-        hidden_calendars: &HashSet<String>,
-    ) -> Vec<(String, usize)> {
-        let mut active_counts: HashMap<String, usize> = HashMap::new();
-        let mut present_locations: HashSet<String> = HashSet::new();
-
-        for (href, map) in &self.calendars {
-            if hidden_calendars.contains(href) {
-                continue;
-            }
-            for task in map.values() {
-                let is_active = !task.status.is_done();
-                if let Some(loc) = &task.location {
-                    let parts: Vec<&str> = loc.split(':').collect();
-                    let mut current_hierarchy = String::with_capacity(loc.len());
-                    for (i, part) in parts.iter().enumerate() {
-                        if i > 0 {
-                            current_hierarchy.push(':');
-                        }
-                        current_hierarchy.push_str(part);
-                        present_locations.insert(current_hierarchy.clone());
-                        if is_active {
-                            *active_counts.entry(current_hierarchy.clone()).or_insert(0) += 1;
-                        }
-                    }
-                }
-            }
-        }
-        let mut result = Vec::new();
-        for loc in present_locations {
-            let count = *active_counts.get(&loc).unwrap_or(&0);
-            if count > 0 {
-                result.push((loc, count));
-            }
-        }
-        result.sort_by(|a, b| a.0.cmp(&b.0));
-        result
-    }
-
-    fn count_uncategorized_active(&self, hidden_calendars: &HashSet<String>) -> usize {
-        let mut count = 0;
-        for (href, map) in &self.calendars {
-            if hidden_calendars.contains(href) {
-                continue;
-            }
-            for task in map.values() {
-                if task.categories.is_empty() && !task.status.is_done() {
-                    count += 1;
-                }
-            }
-        }
-        count
-    }
-
     pub fn get_summary(&self, uid: &str) -> Option<String> {
         // O(1) Lookup
         let href = self.index.get(uid)?;
@@ -889,7 +755,7 @@ impl TaskStore {
     }
 
     // --- CRITICAL OPTIMIZATION: Filter using References ---
-    pub fn filter(&self, options: FilterOptions) -> Vec<Task> {
+    pub fn filter(&self, options: FilterOptions) -> FilterResult {
         // Pre-calculate blocked/done status for O(1) checks during filter
         let mut completed_uids: HashSet<String> = HashSet::new();
         // Iterate maps
@@ -1111,6 +977,105 @@ impl TaskStore {
                 .collect()
         };
 
+        // --- NEW: Calculate Tags and Locations Dynamically from Filtered Result ---
+        let mut cat_active_counts: HashMap<String, usize> = HashMap::new();
+        let mut cat_display_names: HashMap<String, String> = HashMap::new();
+        let mut cat_present_lower: HashSet<String> = HashSet::new();
+        let mut uncat_active_count = 0;
+        let mut uncat_any = false;
+
+        let mut loc_active_counts: HashMap<String, usize> = HashMap::new();
+        let mut loc_present: HashSet<String> = HashSet::new();
+
+        for t in &final_refs {
+            let is_active = !t.status.is_done();
+
+            // Categories
+            if t.categories.is_empty() {
+                uncat_any = true;
+                if is_active {
+                    uncat_active_count += 1;
+                }
+            } else {
+                for cat in &t.categories {
+                    let parts: Vec<&str> = cat.split(':').collect();
+                    let mut current_hierarchy = String::with_capacity(cat.len());
+
+                    for (i, part) in parts.iter().enumerate() {
+                        if i > 0 {
+                            current_hierarchy.push(':');
+                        }
+                        current_hierarchy.push_str(part);
+
+                        let lower_key = current_hierarchy.to_lowercase();
+                        cat_present_lower.insert(lower_key.clone());
+                        cat_display_names
+                            .entry(lower_key.clone())
+                            .or_insert_with(|| current_hierarchy.clone());
+
+                        if is_active {
+                            *cat_active_counts.entry(lower_key.clone()).or_insert(0) += 1;
+                        }
+                    }
+                }
+            }
+
+            // Locations
+            if let Some(loc) = &t.location {
+                let parts: Vec<&str> = loc.split(':').collect();
+                let mut current_hierarchy = String::with_capacity(loc.len());
+                for (i, part) in parts.iter().enumerate() {
+                    if i > 0 {
+                        current_hierarchy.push(':');
+                    }
+                    current_hierarchy.push_str(part);
+                    loc_present.insert(current_hierarchy.clone());
+                    if is_active {
+                        *loc_active_counts
+                            .entry(current_hierarchy.clone())
+                            .or_insert(0) += 1;
+                    }
+                }
+            }
+        }
+
+        let mut categories = Vec::new();
+        for lower_tag in cat_present_lower {
+            let count = *cat_active_counts.get(&lower_tag).unwrap_or(&0);
+            let display_name = cat_display_names
+                .get(&lower_tag)
+                .cloned()
+                .unwrap_or(lower_tag.clone());
+            let is_forced = options
+                .selected_categories
+                .iter()
+                .any(|f| f.to_lowercase() == lower_tag);
+
+            if !options.hide_fully_completed_tags || count > 0 || is_forced {
+                categories.push((display_name, count));
+            }
+        }
+
+        if uncat_active_count > 0
+            || (uncat_any && !options.hide_fully_completed_tags)
+            || options.selected_categories.contains(UNCATEGORIZED_ID)
+        {
+            categories.push((UNCATEGORIZED_ID.to_string(), uncat_active_count));
+        }
+
+        categories.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+
+        let mut locations = Vec::new();
+        for loc in loc_present {
+            let count = *loc_active_counts.get(&loc).unwrap_or(&0);
+            let is_forced = options.selected_locations.contains(&loc);
+
+            if !options.hide_fully_completed_tags || count > 0 || is_forced {
+                locations.push((loc, count));
+            }
+        }
+        locations.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+
         // 4. CLONE ONLY FINAL RESULTS & CALCULATE TRANSIENT FIELDS
         let mut final_tasks_processed: Vec<Task> = final_refs
             .into_iter()
@@ -1229,12 +1194,18 @@ impl TaskStore {
             t.effective_dtstart = eff.start;
         }
 
-        Task::organize_hierarchy(
+        let tasks = Task::organize_hierarchy(
             final_tasks_processed,
             options.default_priority,
             options.expanded_done_groups,
             options.max_done_roots,
             options.max_done_subtasks,
-        )
+        );
+
+        FilterResult {
+            tasks,
+            categories,
+            locations,
+        }
     }
 }

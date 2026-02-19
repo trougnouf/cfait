@@ -1079,12 +1079,8 @@ pub async fn handle_key_event(
                             }
                         }
                         SidebarMode::Categories => {
-                            let cats = state.store.get_all_categories(
-                                state.hide_completed,
-                                state.hide_fully_completed_tags,
-                                &state.selected_categories,
-                                &state.hidden_calendars,
-                            );
+                            // Use cached categories derived from the last `filter()` call
+                            let cats = &state.cached_categories;
                             if let Some(idx) = state.cal_state.selected()
                                 && let Some((c, _)) = cats.get(idx)
                             {
@@ -1094,9 +1090,8 @@ pub async fn handle_key_event(
                             }
                         }
                         SidebarMode::Locations => {
-                            let locs = state
-                                .store
-                                .get_all_locations(state.hide_completed, &state.hidden_calendars);
+                            // Use cached locations derived from the last `filter()` call
+                            let locs = &state.cached_locations;
                             if let Some(idx) = state.cal_state.selected()
                                 && let Some((l, _)) = locs.get(idx)
                             {
@@ -1152,12 +1147,8 @@ pub async fn handle_key_event(
                             }
                         }
                         SidebarMode::Categories => {
-                            let cats = state.store.get_all_categories(
-                                state.hide_completed,
-                                state.hide_fully_completed_tags,
-                                &state.selected_categories,
-                                &state.hidden_calendars,
-                            );
+                            // Use cached categories derived from the last `filter()` call
+                            let cats = &state.cached_categories;
                             if let Some(idx) = state.cal_state.selected()
                                 && let Some((c, _)) = cats.get(idx)
                             {
@@ -1171,9 +1162,8 @@ pub async fn handle_key_event(
                             }
                         }
                         SidebarMode::Locations => {
-                            let locs = state
-                                .store
-                                .get_all_locations(state.hide_completed, &state.hidden_calendars);
+                            // Use cached locations derived from the last `filter()` call
+                            let locs = &state.cached_locations;
                             if let Some(idx) = state.cal_state.selected()
                                 && let Some((l, _)) = locs.get(idx)
                             {

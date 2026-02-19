@@ -48,6 +48,7 @@ fn parent_inherits_child_priority_and_sorts_before_sibling() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -61,7 +62,7 @@ fn parent_inherits_child_priority_and_sorts_before_sibling() {
         max_done_subtasks: usize::MAX,
     };
 
-    let result = store.filter(opts);
+    let result = store.filter(opts).tasks;
 
     let p_idx = result.iter().position(|t| t.uid == "p1").unwrap();
     let s_idx = result.iter().position(|t| t.uid == "s1").unwrap();
@@ -114,6 +115,7 @@ fn compare_two_parents_inherited_priorities_determine_order() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -127,7 +129,7 @@ fn compare_two_parents_inherited_priorities_determine_order() {
         max_done_subtasks: usize::MAX,
     };
 
-    let result = store.filter(opts);
+    let result = store.filter(opts).tasks;
 
     let pa_idx = result.iter().position(|t| t.uid == "pa").unwrap();
     let pb_idx = result.iter().position(|t| t.uid == "pb").unwrap();
@@ -175,6 +177,7 @@ fn parent_inherits_started_child_over_unset_sibling() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -188,7 +191,7 @@ fn parent_inherits_started_child_over_unset_sibling() {
         max_done_subtasks: usize::MAX,
     };
 
-    let result = store.filter(opts);
+    let result = store.filter(opts).tasks;
 
     let p_idx = result.iter().position(|t| t.uid == "p_started").unwrap();
     let s_idx = result.iter().position(|t| t.uid == "s_unset").unwrap();

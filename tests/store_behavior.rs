@@ -28,7 +28,7 @@ fn test_filter_by_tag() {
     cats.insert("work".to_string());
     let empty_set = HashSet::new();
 
-    let results = store.filter(FilterOptions {
+    let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &empty_set,
         selected_categories: &cats,
@@ -36,6 +36,7 @@ fn test_filter_by_tag() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -48,6 +49,7 @@ fn test_filter_by_tag() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
     });
+    let results = filter_res.tasks;
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].summary, "Work Task");
@@ -66,7 +68,7 @@ fn test_filter_hierarchical_tags() {
     cats.insert("dev".to_string());
     let empty_set = HashSet::new();
 
-    let results = store.filter(FilterOptions {
+    let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &empty_set,
         selected_categories: &cats,
@@ -74,6 +76,7 @@ fn test_filter_hierarchical_tags() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -86,6 +89,7 @@ fn test_filter_hierarchical_tags() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
     });
+    let results = filter_res.tasks;
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].summary, "Backend");
@@ -110,7 +114,7 @@ fn test_hide_hidden_calendars() {
     hidden.insert("cal2".to_string());
     let empty_set = HashSet::new();
 
-    let results = store.filter(FilterOptions {
+    let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &hidden,
         selected_categories: &empty_set,
@@ -118,6 +122,7 @@ fn test_hide_hidden_calendars() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -130,6 +135,7 @@ fn test_hide_hidden_calendars() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
     });
+    let results = filter_res.tasks;
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].summary, "Cal 1 Task");

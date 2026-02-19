@@ -184,6 +184,13 @@ pub struct MobileLocation {
 }
 
 #[derive(uniffi::Record)]
+pub struct MobileViewData {
+    pub tasks: Vec<MobileTask>,
+    pub tags: Vec<MobileTag>,
+    pub locations: Vec<MobileLocation>,
+}
+
+#[derive(uniffi::Record)]
 pub struct MobileAlarmInfo {
     pub task_uid: String,
     pub alarm_uid: String,
@@ -979,40 +986,17 @@ impl CfaitMobile {
         self.apply_connection(config).await
     }
 
+    // get_all_tags removed: tags are now derived from view data returned by `get_view_data`.
+    // Keep a lightweight compatibility shim that returns an empty vector so callers that
+    // haven't been migrated won't panic (prefer updating callers to use `get_view_data`).
     pub async fn get_all_tags(&self) -> Vec<MobileTag> {
-        let store = self.controller.store.lock().await;
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let mut hidden_cals: HashSet<String> = config.hidden_calendars.into_iter().collect();
-        hidden_cals.extend(config.disabled_calendars);
-        store
-            .get_all_categories(
-                config.hide_completed,
-                config.hide_fully_completed_tags,
-                &HashSet::new(),
-                &hidden_cals,
-            )
-            .into_iter()
-            .map(|(name, count)| MobileTag {
-                name: name.clone(),
-                count: count as u32,
-                is_uncategorized: name == UNCATEGORIZED_ID,
-            })
-            .collect()
+        Vec::new()
     }
 
+    // get_all_locations removed: locations are now derived from view data returned by `get_view_data`.
+    // Compatibility shim returning empty vector to avoid panics for callers that were not updated yet.
     pub async fn get_all_locations(&self) -> Vec<MobileLocation> {
-        let store = self.controller.store.lock().await;
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let mut hidden_cals: HashSet<String> = config.hidden_calendars.into_iter().collect();
-        hidden_cals.extend(config.disabled_calendars);
-        store
-            .get_all_locations(config.hide_completed, &hidden_cals)
-            .into_iter()
-            .map(|(name, count)| MobileLocation {
-                name,
-                count: count as u32,
-            })
-            .collect()
+        Vec::new()
     }
 
     // NEW: Direct lookup to support opening specific tasks (e.g. via notification or deep link)
@@ -1028,14 +1012,15 @@ impl CfaitMobile {
         }
     }
 
+    // get_view_tasks returns tasks + contextual tags/locations (kept MobileViewData return).
     pub async fn get_view_tasks(
         &self,
         filter_tags: Vec<String>,
         filter_locations: Vec<String>,
         search_query: String,
-        // NEW: caller-provided list of expanded done-group keys
+        // Caller-provided list of expanded done-group keys
         expanded_groups: Vec<String>,
-    ) -> Vec<MobileTask> {
+    ) -> MobileViewData {
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
@@ -1055,6 +1040,7 @@ impl CfaitMobile {
             match_all_categories: false,
             search_term: &search_query,
             hide_completed_global: config.hide_completed,
+            hide_fully_completed_tags: config.hide_fully_completed_tags,
             cutoff_date,
             min_duration: None,
             max_duration: None,
@@ -1064,15 +1050,42 @@ impl CfaitMobile {
             default_priority: config.default_priority,
             start_grace_period_days: config.start_grace_period_days,
 
-            // NEW: pass expansion state and configured limits into the store filter
+            // Pass expansion state and configured limits into the store filter
             expanded_done_groups: &expanded_set,
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
         });
-        filtered
+
+        let tasks = filtered
+            .tasks
             .into_iter()
             .map(|t| task_to_mobile(&t, &store, &config.tag_aliases))
-            .collect()
+            .collect();
+
+        let tags = filtered
+            .categories
+            .into_iter()
+            .map(|(name, count)| MobileTag {
+                name: name.clone(),
+                count: count as u32,
+                is_uncategorized: name == UNCATEGORIZED_ID,
+            })
+            .collect();
+
+        let locations = filtered
+            .locations
+            .into_iter()
+            .map(|(name, count)| MobileLocation {
+                name,
+                count: count as u32,
+            })
+            .collect();
+
+        MobileViewData {
+            tasks,
+            tags,
+            locations,
+        }
     }
 
     pub async fn get_random_task_uid(
@@ -1088,7 +1101,7 @@ impl CfaitMobile {
         let cutoff_date = config
             .sort_cutoff_months
             .map(|m| Utc::now() + chrono::Duration::days(m as i64 * 30));
-        let filtered = store.filter(FilterOptions {
+        let filter_res = store.filter(FilterOptions {
             active_cal_href: None,
             hidden_calendars: &hidden,
             selected_categories: &filter_tags.into_iter().collect(),
@@ -1096,6 +1109,7 @@ impl CfaitMobile {
             match_all_categories: false,
             search_term: &search_query,
             hide_completed_global: config.hide_completed,
+            hide_fully_completed_tags: config.hide_fully_completed_tags,
             cutoff_date,
             min_duration: None,
             max_duration: None,
@@ -1108,6 +1122,7 @@ impl CfaitMobile {
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
         });
+        let filtered = filter_res.tasks;
         let idx = crate::store::select_weighted_random_index(&filtered, config.default_priority)?;
         filtered.get(idx).map(|t| t.uid.clone())
     }

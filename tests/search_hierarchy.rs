@@ -22,7 +22,7 @@ fn test_search_includes_non_matching_children() {
     store.add_task(parent);
     store.add_task(child);
 
-    let results = store.filter(FilterOptions {
+    let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
         selected_categories: &HashSet::new(),
@@ -30,6 +30,7 @@ fn test_search_includes_non_matching_children() {
         match_all_categories: false,
         search_term: "Project",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -43,6 +44,7 @@ fn test_search_includes_non_matching_children() {
         max_done_subtasks: usize::MAX,
     });
 
+    let results = filter_res.tasks;
     assert_eq!(results.len(), 2);
     assert!(results.iter().any(|t| t.uid == "parent"));
     assert!(results.iter().any(|t| t.uid == "child"));
@@ -72,7 +74,7 @@ fn test_search_includes_deep_hierarchy() {
     store.add_task(p);
     store.add_task(c);
 
-    let results = store.filter(FilterOptions {
+    let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
         selected_categories: &HashSet::new(),
@@ -80,6 +82,7 @@ fn test_search_includes_deep_hierarchy() {
         match_all_categories: false,
         search_term: "Grand",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -93,6 +96,7 @@ fn test_search_includes_deep_hierarchy() {
         max_done_subtasks: usize::MAX,
     });
 
+    let results = filter_res.tasks;
     assert_eq!(results.len(), 3);
 }
 
@@ -114,7 +118,7 @@ fn test_child_match_does_not_force_parent_if_parent_does_not_match() {
     store.add_task(parent);
     store.add_task(child);
 
-    let results = store.filter(FilterOptions {
+    let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
         selected_categories: &HashSet::new(),
@@ -122,6 +126,7 @@ fn test_child_match_does_not_force_parent_if_parent_does_not_match() {
         match_all_categories: false,
         search_term: "Match",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -135,6 +140,7 @@ fn test_child_match_does_not_force_parent_if_parent_does_not_match() {
         max_done_subtasks: usize::MAX,
     });
 
+    let results = filter_res.tasks;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].uid, "child");
 }
@@ -168,7 +174,7 @@ fn test_multiple_parents_with_children() {
     store.add_task(parent2);
     store.add_task(child2);
 
-    let results = store.filter(FilterOptions {
+    let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
         selected_categories: &HashSet::new(),
@@ -176,6 +182,7 @@ fn test_multiple_parents_with_children() {
         match_all_categories: false,
         search_term: "Alpha",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -189,6 +196,7 @@ fn test_multiple_parents_with_children() {
         max_done_subtasks: usize::MAX,
     });
 
+    let results = filter_res.tasks;
     assert_eq!(results.len(), 2);
     assert!(results.iter().any(|t| t.uid == "p1"));
     assert!(results.iter().any(|t| t.uid == "c1"));
@@ -218,7 +226,7 @@ fn test_sibling_match_only_includes_matching_sibling() {
     store.add_task(child1);
     store.add_task(child2);
 
-    let results = store.filter(FilterOptions {
+    let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
         selected_categories: &HashSet::new(),
@@ -226,6 +234,7 @@ fn test_sibling_match_only_includes_matching_sibling() {
         match_all_categories: false,
         search_term: "Special",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -239,6 +248,7 @@ fn test_sibling_match_only_includes_matching_sibling() {
         max_done_subtasks: usize::MAX,
     });
 
+    let results = filter_res.tasks;
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].uid, "c1");
 }
@@ -261,7 +271,7 @@ fn test_empty_search_shows_all_tasks() {
     store.add_task(parent);
     store.add_task(child);
 
-    let results = store.filter(FilterOptions {
+    let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
         selected_categories: &HashSet::new(),
@@ -269,6 +279,7 @@ fn test_empty_search_shows_all_tasks() {
         match_all_categories: false,
         search_term: "",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -282,6 +293,7 @@ fn test_empty_search_shows_all_tasks() {
         max_done_subtasks: usize::MAX,
     });
 
+    let results = filter_res.tasks;
     assert_eq!(results.len(), 2);
 }
 
@@ -304,7 +316,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
     store.add_task(parent);
     store.add_task(child);
 
-    let results = store.filter(FilterOptions {
+    let filter_res = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
         selected_categories: &HashSet::new(),
@@ -312,6 +324,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         match_all_categories: false,
         search_term: "Project",
         hide_completed_global: false,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -325,9 +338,10 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         max_done_subtasks: usize::MAX,
     });
 
+    let results = filter_res.tasks;
     assert_eq!(results.len(), 2);
 
-    let results_hidden = store.filter(FilterOptions {
+    let filter_res_hidden = store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &HashSet::new(),
         selected_categories: &HashSet::new(),
@@ -335,6 +349,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         match_all_categories: false,
         search_term: "Project",
         hide_completed_global: true,
+        hide_fully_completed_tags: false,
         cutoff_date: None,
         min_duration: None,
         max_duration: None,
@@ -348,6 +363,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         max_done_subtasks: usize::MAX,
     });
 
+    let results_hidden = filter_res_hidden.tasks;
     assert_eq!(results_hidden.len(), 1);
     assert_eq!(results_hidden[0].uid, "parent");
 }

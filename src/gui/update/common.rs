@@ -14,21 +14,10 @@ use iced::widget::operation;
 use iced::widget::scrollable::RelativeOffset;
 use std::time::Duration as StdDuration;
 
-pub fn refresh_sidebar_cache(app: &mut GuiApp) {
-    // Cache categories
-    app.cached_categories = app.store.get_all_categories(
-        app.hide_completed,
-        app.hide_fully_completed_tags,
-        &app.selected_categories,
-        &app.hidden_calendars,
-    );
-
-    // Cache locations
-    app.cached_locations = app
-        .store
-        .get_all_locations(app.hide_completed, &app.hidden_calendars);
-}
-
+/// NOTE:
+/// The sidebar cache is now populated directly from the results of `store.filter()`
+/// inside `refresh_filtered_tasks`. The previous `refresh_sidebar_cache` helper
+/// performed a separate, global scan of the store and is now unnecessary.
 pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     // --- FIX: Clear the focus bounds cache before filtering ---
     // This prevents stale layout data from breaking scroll calculations.
@@ -46,10 +35,8 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     effective_hidden.extend(app.disabled_calendars.clone());
 
     let search_text = app.search_value.text();
-    app.tasks = app.store.filter(FilterOptions {
-        // FIX: Pass None instead of active_cal_href.
-        // Passing active_cal_href forces the store to filter EXCLUSIVELY to that calendar.
-        // We want to show all calendars that aren't hidden (unified view).
+
+    let filter_res = app.store.filter(FilterOptions {
         active_cal_href: None,
         hidden_calendars: &effective_hidden,
         selected_categories: &app.selected_categories,
@@ -57,6 +44,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         match_all_categories: app.match_all_categories,
         search_term: &search_text,
         hide_completed_global: app.hide_completed,
+        hide_fully_completed_tags: app.hide_fully_completed_tags,
         cutoff_date,
         min_duration: app.filter_min_duration,
         max_duration: app.filter_max_duration,
@@ -69,6 +57,10 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         max_done_roots: config.max_done_roots,
         max_done_subtasks: config.max_done_subtasks,
     });
+
+    app.tasks = filter_res.tasks;
+    app.cached_categories = filter_res.categories;
+    app.cached_locations = filter_res.locations;
 
     // 2. Build Parent Attribute Cache (O(N))
     // We do this here once per update so the view loop is O(1)
@@ -101,13 +93,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         }
     }
 
-    // Update sidebar cache after filtering
-    refresh_sidebar_cache(app);
-
     if let Some(tx) = &app.alarm_tx {
-        // We need to send the FULL list (store.calendars.values().flat_map), not just filtered view
-        // But for simplicity, let's just send the filtered list if that's what we have handy,
-        // OR better: construct full list. The actor needs ALL tasks to check alarms properly.
         let all_tasks: Vec<crate::model::Task> = app
             .store
             .calendars

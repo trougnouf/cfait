@@ -58,6 +58,10 @@ pub struct AppState {
     pub strikethrough_completed: bool,
     pub sort_cutoff_months: Option<u32>,
 
+    // Cached sidebar values (derived from the last filter result)
+    pub cached_categories: Vec<(String, usize)>,
+    pub cached_locations: Vec<(String, usize)>,
+
     pub urgent_days: u32,
     pub urgent_prio: u8,
     pub default_priority: u8,
@@ -146,6 +150,9 @@ impl AppState {
             strikethrough_completed: false,
             hide_fully_completed_tags: false,
             sort_cutoff_months: Some(2),
+            // Initialize sidebar caches as empty; they will be populated by refresh_filtered_view()
+            cached_categories: Vec::new(),
+            cached_locations: Vec::new(),
             urgent_days: 1,
             urgent_prio: 1,
             default_priority: 5,
@@ -212,7 +219,9 @@ impl AppState {
         // Load config to get limits
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
 
-        self.tasks = self.store.filter(FilterOptions {
+        // Use the store.filter() that returns a FilterResult so we can populate
+        // both the task list and the sidebar caches for categories/locations.
+        let filter_res = self.store.filter(FilterOptions {
             active_cal_href: None, // Logic handled by hidden_calendars
             selected_categories: &self.selected_categories,
             selected_locations: &self.selected_locations, // Pass locations
@@ -220,6 +229,7 @@ impl AppState {
             hidden_calendars: &effective_hidden,
             search_term,
             hide_completed_global: self.hide_completed,
+            hide_fully_completed_tags: self.hide_fully_completed_tags,
             cutoff_date,
             min_duration: None,
             max_duration: None,
@@ -233,6 +243,10 @@ impl AppState {
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
         });
+
+        self.tasks = filter_res.tasks;
+        self.cached_categories = filter_res.categories;
+        self.cached_locations = filter_res.locations;
 
         let len = self.tasks.len();
         if len == 0 {
@@ -301,19 +315,8 @@ impl AppState {
                 .iter()
                 .filter(|c| !self.disabled_calendars.contains(&c.href))
                 .count(),
-            SidebarMode::Categories => self
-                .store
-                .get_all_categories(
-                    self.hide_completed,
-                    self.hide_fully_completed_tags,
-                    &self.selected_categories,
-                    &self.hidden_calendars,
-                )
-                .len(),
-            SidebarMode::Locations => self
-                .store
-                .get_all_locations(self.hide_completed, &self.hidden_calendars)
-                .len(), // NEW
+            SidebarMode::Categories => self.cached_categories.len(),
+            SidebarMode::Locations => self.cached_locations.len(),
         }
     }
 
