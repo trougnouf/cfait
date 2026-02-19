@@ -1105,6 +1105,7 @@ internal object UniffiLib {
         `createEventsForTasks`: Byte,
         `deleteEventsOnCompletion`: Byte,
         `autoRefreshInterval`: Int,
+        `trashRetention`: Int,
         `maxDoneRoots`: Int,
         `maxDoneSubtasks`: Int,
         uniffi_out_err: UniffiRustCallStatus,
@@ -1515,7 +1516,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_related_to() != 37228.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 32031.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 34385.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility() != 45711.toShort()) {
@@ -2223,6 +2224,7 @@ public interface CfaitMobileInterface {
         `createEventsForTasks`: kotlin.Boolean,
         `deleteEventsOnCompletion`: kotlin.Boolean,
         `autoRefreshInterval`: kotlin.UInt,
+        `trashRetention`: kotlin.UInt,
         `maxDoneRoots`: kotlin.UInt,
         `maxDoneSubtasks`: kotlin.UInt,
     )
@@ -3086,6 +3088,7 @@ open class CfaitMobile :
         `createEventsForTasks`: kotlin.Boolean,
         `deleteEventsOnCompletion`: kotlin.Boolean,
         `autoRefreshInterval`: kotlin.UInt,
+        `trashRetention`: kotlin.UInt,
         `maxDoneRoots`: kotlin.UInt,
         `maxDoneSubtasks`: kotlin.UInt,
     ) = callWithHandle {
@@ -3109,6 +3112,7 @@ open class CfaitMobile :
                 FfiConverterBoolean.lower(`createEventsForTasks`),
                 FfiConverterBoolean.lower(`deleteEventsOnCompletion`),
                 FfiConverterUInt.lower(`autoRefreshInterval`),
+                FfiConverterUInt.lower(`trashRetention`),
                 FfiConverterUInt.lower(`maxDoneRoots`),
                 FfiConverterUInt.lower(`maxDoneSubtasks`),
                 _status,
@@ -3522,6 +3526,7 @@ data class MobileConfig(
     var `createEventsForTasks`: kotlin.Boolean,
     var `deleteEventsOnCompletion`: kotlin.Boolean,
     var `autoRefreshInterval`: kotlin.UInt,
+    var `trashRetention`: kotlin.UInt,
     var `maxDoneRoots`: kotlin.UInt,
     var `maxDoneSubtasks`: kotlin.UInt,
 ) {
@@ -3554,6 +3559,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
         )
 
     override fun allocationSize(value: MobileConfig) =
@@ -3576,6 +3582,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterBoolean.allocationSize(value.`createEventsForTasks`) +
                 FfiConverterBoolean.allocationSize(value.`deleteEventsOnCompletion`) +
                 FfiConverterUInt.allocationSize(value.`autoRefreshInterval`) +
+                FfiConverterUInt.allocationSize(value.`trashRetention`) +
                 FfiConverterUInt.allocationSize(value.`maxDoneRoots`) +
                 FfiConverterUInt.allocationSize(value.`maxDoneSubtasks`)
         )
@@ -3602,6 +3609,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterBoolean.write(value.`createEventsForTasks`, buf)
         FfiConverterBoolean.write(value.`deleteEventsOnCompletion`, buf)
         FfiConverterUInt.write(value.`autoRefreshInterval`, buf)
+        FfiConverterUInt.write(value.`trashRetention`, buf)
         FfiConverterUInt.write(value.`maxDoneRoots`, buf)
         FfiConverterUInt.write(value.`maxDoneSubtasks`, buf)
     }

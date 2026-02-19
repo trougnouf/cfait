@@ -808,8 +808,32 @@ impl IcsAdapter {
         // to avoid cluttering the calendar with overlapping blocks.
         if task.status == TaskStatus::Completed && !has_sessions {
             // Completed event: show when it was completed as a short event.
-            // Use the task's completion date if available, otherwise now.
-            let completed_at = task.completion_date().unwrap_or_else(Utc::now);
+            // Use the task's completion date if available.
+            // Fallback to Last-Modified, then Due/Start, or abort if no time context exists.
+            let completed_at_opt = task
+                .completion_date()
+                .or_else(|| {
+                    // Fallback 1: LAST-MODIFIED (Proxy for completion time on old tasks)
+                    task.unmapped_properties
+                        .iter()
+                        .find(|p| p.key == "LAST-MODIFIED")
+                        .and_then(|p| {
+                            // Parse standard ICS date-time
+                            NaiveDateTime::parse_from_str(&p.value, "%Y%m%dT%H%M%SZ")
+                                .ok()
+                                .map(|ndt| Utc.from_utc_datetime(&ndt))
+                        })
+                })
+                .or_else(|| {
+                    // Fallback 2: Due Date (Historical context)
+                    task.due.as_ref().map(|d| d.to_comparison_time())
+                })
+                .or_else(|| {
+                    // Fallback 3: Start Date
+                    task.dtstart.as_ref().map(|d| d.to_comparison_time())
+                });
+
+            let completed_at = completed_at_opt?;
 
             let duration_mins = task.estimated_duration.unwrap_or(60) as i64;
             let start_at = completed_at - chrono::Duration::minutes(duration_mins);

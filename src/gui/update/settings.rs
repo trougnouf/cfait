@@ -362,6 +362,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::SetTrashRetention(val) => {
+            // Accept only numeric input (or empty while typing). Persist when a valid integer is provided.
+            if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
+                app.ob_trash_retention_input = val.clone();
+                if let Ok(n) = val.trim().parse::<u32>() {
+                    app.trash_retention_days = n;
+                    save_config(app);
+                }
+            }
+            Task::none()
+        }
         // Added Handler
         Message::SetAutoRefreshInterval(val) => {
             app.ob_auto_refresh_input = val.clone();

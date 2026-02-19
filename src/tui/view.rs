@@ -421,7 +421,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             let mut base_style = Style::default().fg(base_color);
 
-            if t.status.is_done() && state.strikethrough_completed {
+            let is_trash = t.calendar_href == "local://trash";
+
+            if (t.status.is_done() && state.strikethrough_completed) || is_trash {
                 base_style = base_style.add_modifier(Modifier::CROSSED_OUT);
             }
 

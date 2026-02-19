@@ -153,6 +153,7 @@ pub enum Message {
     ObUrgentPrioChanged(String),
     ObDefaultPriorityChanged(String),
     ObStartGraceChanged(String),
+    SetTrashRetention(String),
 
     // --- Alarms & Reminders ---
     InitAlarmActor(mpsc::Sender<SystemEvent>),

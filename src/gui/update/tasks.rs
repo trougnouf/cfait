@@ -9,7 +9,7 @@ use crate::gui::update::common::{
 };
 use crate::journal::{Action, Journal};
 use crate::model::{Task as TodoTask, extract_inline_aliases};
-use crate::storage::LocalStorage;
+use crate::storage::{LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
 use chrono::{DateTime, NaiveTime, Utc};
 use iced::Task;
 use iced::widget::text_editor;
@@ -159,17 +159,80 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::DeleteTask(index) => {
-            if let Some(view_task) = app.tasks.get(index)
-                && let Some((deleted_task, _)) = app.store.delete_task(&view_task.uid)
-            {
-                refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_delete_wrapper(client.clone(), deleted_task),
-                        Message::DeleteComplete,
-                    );
+            if let Some(view_task) = app.tasks.get(index) {
+                // Check for Soft Delete conditions
+                let is_trash = view_task.calendar_href == LOCAL_TRASH_HREF;
+
+                if app.trash_retention_days > 0 && !is_trash {
+                    // --- SOFT DELETE ---
+                    let uid = view_task.uid.clone();
+
+                    // 1. Ensure Registry Exists
+                    let _ = LocalCalendarRegistry::ensure_trash_calendar_exists(app.ctx.as_ref());
+                    // Dynamically update UI list if not present
+                    if !app.calendars.iter().any(|c| c.href == LOCAL_TRASH_HREF) {
+                        app.calendars.push(crate::model::CalendarListEntry {
+                            name: "Trash".to_string(),
+                            href: LOCAL_TRASH_HREF.to_string(),
+                            color: Some("#808080".to_string()),
+                        });
+                    }
+
+                    // 2. Ensure Store Entry
+                    app.store
+                        .calendars
+                        .entry(LOCAL_TRASH_HREF.to_string())
+                        .or_default();
+
+                    // 3. Move in Store
+                    if let Some((original, mut updated)) =
+                        app.store.move_task(&uid, LOCAL_TRASH_HREF.to_string())
+                    {
+                        // 4. Stamp Date
+                        let now_str = Utc::now().to_rfc3339();
+                        updated
+                            .unmapped_properties
+                            .retain(|p| p.key != "X-TRASHED-DATE");
+                        updated.unmapped_properties.push(crate::model::RawProperty {
+                            key: "X-TRASHED-DATE".to_string(),
+                            value: now_str,
+                            params: vec![],
+                        });
+
+                        // 5. Save Trash Copy (persists to local_trash.json)
+                        app.store.update_or_add_task(updated.clone());
+                        refresh_filtered_tasks(app);
+
+                        // 6. Delete Original from Source
+                        if original.calendar_href.starts_with("local://") {
+                            // Already removed from source file by store.move_task
+                            return Task::none();
+                        } else {
+                            // Remote: must sync deletion
+                            if let Some(client) = &app.client {
+                                return Task::perform(
+                                    async_delete_wrapper(client.clone(), original),
+                                    Message::DeleteComplete,
+                                );
+                            } else {
+                                app.unsynced_changes = true;
+                                let _ = Journal::push(app.ctx.as_ref(), Action::Delete(original));
+                            }
+                        }
+                    }
                 } else {
-                    handle_offline_delete(app, deleted_task);
+                    // --- HARD DELETE (Existing Logic) ---
+                    if let Some((deleted_task, _)) = app.store.delete_task(&view_task.uid) {
+                        refresh_filtered_tasks(app);
+                        if let Some(client) = &app.client {
+                            return Task::perform(
+                                async_delete_wrapper(client.clone(), deleted_task),
+                                Message::DeleteComplete,
+                            );
+                        } else {
+                            handle_offline_delete(app, deleted_task);
+                        }
+                    }
                 }
             }
             Task::none()

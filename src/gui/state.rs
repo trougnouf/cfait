@@ -114,6 +114,8 @@ pub struct GuiApp {
     // Inputs - Settings (Aliases)
     pub alias_input_key: String,
     pub alias_input_values: String,
+    pub ob_trash_retention_input: String,
+    pub trash_retention_days: u32,
 
     // System
     pub loading: bool,
@@ -284,6 +286,8 @@ impl Default for GuiApp {
             random_icon,       // NEW
             alias_input_key: String::new(),
             alias_input_values: String::new(),
+            ob_trash_retention_input: "30".to_string(),
+            trash_retention_days: 30,
 
             loading: true,
             error_msg: None,

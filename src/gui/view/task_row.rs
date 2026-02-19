@@ -974,8 +974,12 @@ pub fn view_task_row<'a>(
             color
         };
 
-        let summary_text: Element<'a, Message> = if app.strikethrough_completed
-            && task.status.is_done()
+        let is_trash = task.calendar_href == "local://trash"; // Check href
+
+        let summary_text: Element<'a, Message> = if (app.strikethrough_completed
+            && task.status.is_done())
+            || is_trash
+        // Force if trash
         {
             Into::<Element<'a, Message>>::into(
                 rich_text![span::<Message, iced::Font>(task.summary.clone()).strikethrough(true)]

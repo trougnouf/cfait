@@ -167,6 +167,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ToggleAllCalendars(show_all) => {
             if show_all {
                 app.hidden_calendars.clear();
+                // NEW: Explicitly re-hide trash unless it is active
+                if app.active_cal_href.as_deref() != Some("local://trash") {
+                    app.hidden_calendars.insert("local://trash".to_string());
+                }
             } else {
                 for cal in &app.calendars {
                     if app.active_cal_href.as_ref() != Some(&cal.href) {

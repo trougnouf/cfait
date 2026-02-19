@@ -4,11 +4,13 @@
 //! All UI layers (TUI, GUI, Mobile) must delegate actions to this controller to ensure
 //! consistent behavior for both online and offline operations.
 use crate::client::RustyClient;
+use crate::config::Config;
 use crate::context::AppContext;
 use crate::journal::{Action, Journal};
-use crate::model::Task;
-use crate::storage::LocalStorage;
+use crate::model::{RawProperty, Task};
+use crate::storage::{LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::store::TaskStore;
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -133,15 +135,116 @@ impl TaskController {
         self.persist_change(Action::Update(task)).await
     }
 
+    /// Delete a task. Implements soft-delete (move to local trash) when enabled via config.
+    /// If trash retention is 0 or the task is already in trash, perform a hard delete.
     pub async fn delete_task(&self, uid: &str) -> Result<Vec<String>, String> {
-        let (task, _) = self
-            .store
-            .lock()
-            .await
-            .delete_task(uid)
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+
+        // Lock store to check current state
+        let mut store = self.store.lock().await;
+        let (task_ref, _) = store
+            .get_task_mut(uid)
             .ok_or("Task not found".to_string())?;
 
-        self.persist_change(Action::Delete(task)).await
+        let is_already_trash = task_ref.calendar_href == LOCAL_TRASH_HREF;
+        let retention = config.trash_retention_days;
+
+        // HARD DELETE if:
+        // 1. Retention is 0 (feature disabled)
+        // 2. Task is already in trash
+        if retention == 0 || is_already_trash {
+            let (task, _) = store.delete_task(uid).ok_or("Task not found".to_string())?;
+            drop(store);
+            return self.persist_change(Action::Delete(task)).await;
+        }
+
+        // SOFT DELETE (Move to Trash)
+        let target_href = LOCAL_TRASH_HREF.to_string();
+
+        // 1. Ensure trash calendar exists in Registry (Disk)
+        let _ = LocalCalendarRegistry::ensure_trash_calendar_exists(self.ctx.as_ref());
+
+        // 2. Ensure trash calendar exists in Store (Memory)
+        store.calendars.entry(target_href.clone()).or_default();
+
+        // 3. Move in Store
+        let (original, mut updated) = store
+            .move_task(uid, target_href.clone())
+            .ok_or("Task not found".to_string())?;
+
+        // 4. Stamp deletion date
+        let now_str = Utc::now().to_rfc3339();
+        updated
+            .unmapped_properties
+            .retain(|p| p.key != "X-TRASHED-DATE");
+        updated.unmapped_properties.push(RawProperty {
+            key: "X-TRASHED-DATE".to_string(),
+            value: now_str,
+            params: vec![],
+        });
+
+        // 5. Save the Trash Item to Disk (Local Storage)
+        store.update_or_add_task(updated.clone());
+        drop(store);
+
+        // 6. Handle Original Persistence
+        // If original was local, it's already gone from source file via move_task -> delete_task logic in store.
+        // If original was remote, we must delete it from the server.
+        // We DO NOT use Action::Move because the client doesn't support Remote->Local moves.
+        if !original.calendar_href.starts_with("local://") {
+            self.persist_change(Action::Delete(original)).await
+        } else {
+            Ok(vec![])
+        }
+    }
+
+    /// Prunes items in the trash that have exceeded the retention period.
+    pub async fn prune_trash(&self) -> Result<usize, String> {
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let retention_days = config.trash_retention_days as i64;
+
+        if retention_days == 0 {
+            return Ok(0);
+        }
+
+        let now = Utc::now();
+        let mut uids_to_purge = Vec::new();
+
+        let mut store = self.store.lock().await;
+
+        if let Some(trash_map) = store.calendars.get(LOCAL_TRASH_HREF) {
+            for task in trash_map.values() {
+                // Find X-TRASHED-DATE
+                if let Some(prop) = task
+                    .unmapped_properties
+                    .iter()
+                    .find(|p| p.key == "X-TRASHED-DATE")
+                {
+                    if let Ok(dt) = DateTime::parse_from_rfc3339(&prop.value) {
+                        let age_days = (now - dt.with_timezone(&Utc)).num_days();
+                        if age_days >= retention_days {
+                            uids_to_purge.push(task.uid.clone());
+                        }
+                    }
+                } else {
+                    // If no date found, skip (safe default)
+                }
+            }
+        }
+
+        // Perform deletions
+        let mut count = 0;
+        for uid in uids_to_purge {
+            if let Some((task, _)) = store.delete_task(&uid) {
+                // Optionally persist deletion for remote journal; since this is local trash file removal,
+                // the store's delete_task may handle LocalStorage write. We still push a Delete action so
+                // sync log is consistent if this item was originally remote.
+                let _ = Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()));
+                count += 1;
+            }
+        }
+
+        Ok(count)
     }
 
     pub async fn toggle_task(&self, uid: &str) -> Result<Vec<String>, String> {

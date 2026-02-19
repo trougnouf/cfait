@@ -10,10 +10,15 @@
 use crate::cache::Cache;
 use crate::client::RustyClient;
 use crate::context::AppContext;
+use crate::controller::TaskController;
 use crate::storage::{LocalCalendarRegistry, LocalStorage};
+use crate::store::TaskStore;
 use crate::tui::action::{Action, AppEvent};
 use std::sync::Arc;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::{
+    Mutex,
+    mpsc::{Receiver, Sender},
+};
 
 pub struct NetworkActorConfig {
     pub url: String,
@@ -38,7 +43,22 @@ pub async fn run_network_actor(
     } = config;
 
     // ------------------------------------------------------------------
-    // 0. LOAD CACHE IMMEDIATELY
+    // 0. INITIALIZE CONTROLLER (Lightweight reconstruction for the actor context)
+    // ------------------------------------------------------------------
+    // Create a minimal controller instance for background tasks like pruning local trash.
+    let store = Arc::new(Mutex::new(TaskStore::new(ctx.clone())));
+    let client_container = Arc::new(Mutex::new(None));
+    let controller = TaskController::new(store.clone(), client_container.clone(), ctx.clone());
+
+    // PRUNE TRASH on startup (best-effort; report error to event channel)
+    if let Err(e) = controller.prune_trash().await {
+        let _ = event_tx
+            .send(AppEvent::Error(format!("Trash prune failed: {}", e)))
+            .await;
+    }
+
+    // ------------------------------------------------------------------
+    // 1. LOAD CACHE IMMEDIATELY
     // ------------------------------------------------------------------
     if let Ok(mut cached_cals) = Cache::load_calendars(ctx.as_ref()) {
         // Load local registry and merge

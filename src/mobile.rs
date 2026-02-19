@@ -7,7 +7,7 @@ use crate::context::{AppContext, StandardContext};
 use crate::controller::TaskController;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::model::{AlarmTrigger, DateType, Task};
-use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
+use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
 use chrono::{DateTime, Local, NaiveTime, Utc};
 use futures::stream::{self, StreamExt};
@@ -211,6 +211,7 @@ pub struct MobileConfig {
     pub create_events_for_tasks: bool,
     pub delete_events_on_completion: bool,
     pub auto_refresh_interval: u32,
+    pub trash_retention: u32,
     pub max_done_roots: u32,
     pub max_done_subtasks: u32,
 }
@@ -362,6 +363,12 @@ impl CfaitMobile {
         let client = Arc::new(Mutex::new(None));
         let controller = TaskController::new(store, client, ctx.clone());
 
+        // Trigger prune on startup
+        let c_clone = controller.clone();
+        tokio::spawn(async move {
+            let _ = c_clone.prune_trash().await;
+        });
+
         Self {
             controller,
             alarm_index_cache: Arc::new(Mutex::new(None)),
@@ -445,6 +452,7 @@ impl CfaitMobile {
             create_events_for_tasks: c.create_events_for_tasks,
             delete_events_on_completion: c.delete_events_on_completion,
             auto_refresh_interval: c.auto_refresh_interval_mins,
+            trash_retention: c.trash_retention_days,
             max_done_roots: c.max_done_roots as u32,
             max_done_subtasks: c.max_done_subtasks as u32,
         }
@@ -474,6 +482,7 @@ impl CfaitMobile {
         create_events_for_tasks: bool,
         delete_events_on_completion: bool,
         auto_refresh_interval: u32,
+        trash_retention: u32,
         // NEW ARGUMENTS
         max_done_roots: u32,
         max_done_subtasks: u32,
@@ -498,6 +507,7 @@ impl CfaitMobile {
         c.create_events_for_tasks = create_events_for_tasks;
         c.delete_events_on_completion = delete_events_on_completion;
         c.auto_refresh_interval_mins = auto_refresh_interval;
+        c.trash_retention_days = trash_retention;
 
         // Save new values
         c.max_done_roots = max_done_roots as usize;
@@ -510,8 +520,20 @@ impl CfaitMobile {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let disabled_set: HashSet<String> = config.disabled_calendars.iter().cloned().collect();
         let mut result = Vec::new();
+        // Acquire a blocking lock to inspect local store counts for the trash calendar
+        let store = self.controller.store.blocking_lock();
         if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
             for loc in locals {
+                // Special-case: hide empty trash calendar from mobile list
+                if loc.href == LOCAL_TRASH_HREF {
+                    if let Some(map) = store.calendars.get(LOCAL_TRASH_HREF) {
+                        if map.is_empty() {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+                }
                 result.push(MobileCalendar {
                     name: loc.name,
                     href: loc.href.clone(),

@@ -353,12 +353,28 @@ impl Task {
             .iter()
             .find(|p| p.key == "COMPLETED")
             .and_then(|p| {
-                if p.value.contains('T') {
-                    NaiveDateTime::parse_from_str(&p.value, "%Y%m%dT%H%M%SZ")
+                let v = p.value.trim();
+                if v.contains('T') {
+                    // Try several datetime variants commonly found in ICS:
+                    // 1) UTC with Z suffix: 20240228T153000Z
+                    // 2) Naive datetime without Z: 20240228T153000
+                    // 3) RFC3339 / offset-aware: 2024-02-28T15:30:00+01:00
+                    NaiveDateTime::parse_from_str(v, "%Y%m%dT%H%M%SZ")
                         .ok()
                         .map(|ndt| Utc.from_utc_datetime(&ndt))
+                        .or_else(|| {
+                            NaiveDateTime::parse_from_str(v, "%Y%m%dT%H%M%S")
+                                .ok()
+                                .map(|ndt| Utc.from_utc_datetime(&ndt))
+                        })
+                        .or_else(|| {
+                            DateTime::parse_from_rfc3339(v)
+                                .ok()
+                                .map(|dt| dt.with_timezone(&Utc))
+                        })
                 } else {
-                    NaiveDate::parse_from_str(&p.value, "%Y%m%d")
+                    // Date-only value (all-day): interpret as midnight local -> UTC
+                    NaiveDate::parse_from_str(v, "%Y%m%d")
                         .ok()
                         .and_then(|nd| nd.and_hms_opt(0, 0, 0))
                         .map(|ndt| Utc.from_utc_datetime(&ndt))
@@ -451,6 +467,11 @@ impl Task {
         urgent_prio: u8,
         start_grace_period_days: u32,
     ) -> u8 {
+        // NEW: Trash items are always bottom (Rank 8)
+        if self.calendar_href == "local://trash" {
+            return 8;
+        }
+
         if self.status.is_done() {
             return 7;
         }
@@ -519,6 +540,14 @@ impl Task {
     }
 
     pub fn compare_for_sort(&self, other: &Self, default_priority: u8) -> Ordering {
+        // NEW: Stable sort for Trash items
+        if self.sort_rank == 8 && other.sort_rank == 8 {
+            return other
+                .completion_date()
+                .cmp(&self.completion_date())
+                .then_with(|| self.summary.cmp(&other.summary));
+        }
+
         if self.sort_rank == 7 && other.sort_rank == 7 {
             return other
                 .completion_date()

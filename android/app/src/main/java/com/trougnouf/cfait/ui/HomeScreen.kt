@@ -816,7 +816,12 @@ fun HomeScreen(
                             item {
                                 TextButton(
                                     onClick = {
-                                        calendars.forEach { api.setCalendarVisibility(it.href, true) }
+                                        calendars.forEach {
+                                            // FIX: Don't unhide trash unless it is the active/default calendar
+                                            if (it.href != "local://trash" || defaultCalHref == "local://trash") {
+                                                api.setCalendarVisibility(it.href, true)
+                                            }
+                                        }
                                         onDataChanged()
                                         updateTaskList()
                                     },

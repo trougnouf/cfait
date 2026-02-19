@@ -120,12 +120,13 @@ fun TaskRow(
             TaskCheckbox(task, calColor, onToggle)
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
+                val isTrash = task.calendarHref == "local://trash"
                 Text(
                     text = task.summary,
                     style = MaterialTheme.typography.bodyMedium,
                     color = textColor,
                     fontWeight = if (task.priority > 0.toUByte()) FontWeight.Medium else FontWeight.Normal,
-                    textDecoration = if (task.isDone) TextDecoration.LineThrough else null,
+                    textDecoration = if (task.isDone || isTrash) TextDecoration.LineThrough else null,
                     lineHeight = 18.sp,
                 )
 

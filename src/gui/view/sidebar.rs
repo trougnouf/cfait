@@ -6,6 +6,7 @@ use crate::color_utils;
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
+use crate::storage::LOCAL_TRASH_HREF;
 
 use crate::store::UNCATEGORIZED_ID;
 use iced::never;
@@ -54,6 +55,18 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
         app.calendars
             .iter()
             .filter(|c| !app.disabled_calendars.contains(&c.href))
+            .filter(|c| {
+                // SPECIAL TRASH LOGIC: Only show trash calendar when it contains tasks
+                if c.href == LOCAL_TRASH_HREF {
+                    if let Some(map) = app.store.calendars.get(LOCAL_TRASH_HREF) {
+                        !map.is_empty()
+                    } else {
+                        false
+                    }
+                } else {
+                    true
+                }
+            })
             .map(|cal| {
                 let is_visible = !app.hidden_calendars.contains(&cal.href);
                 let is_target = app.active_cal_href.as_ref() == Some(&cal.href);

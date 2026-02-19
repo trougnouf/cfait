@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 pub const LOCAL_CALENDAR_HREF: &str = "local://default";
 pub const LOCAL_CALENDAR_NAME: &str = "Local";
+pub const LOCAL_TRASH_HREF: &str = "local://trash";
 pub const LOCAL_REGISTRY_FILENAME: &str = "local_calendars.json";
 const LOCAL_STORAGE_VERSION: u32 = 4;
 
@@ -101,6 +102,23 @@ impl LocalCalendarRegistry {
             })?;
         }
         Ok(())
+    }
+
+    /// Ensures the "Trash" calendar exists in the registry.
+    /// Returns true if it was created, false if it already existed.
+    pub fn ensure_trash_calendar_exists(ctx: &dyn AppContext) -> Result<bool> {
+        let mut locals = Self::load(ctx)?;
+        if !locals.iter().any(|c| c.href == LOCAL_TRASH_HREF) {
+            locals.push(CalendarListEntry {
+                name: "Trash".to_string(),
+                href: LOCAL_TRASH_HREF.to_string(),
+                // Use a distinctive color (Gray)
+                color: Some("#808080".to_string()),
+            });
+            Self::save(ctx, &locals)?;
+            return Ok(true);
+        }
+        Ok(false)
     }
 }
 

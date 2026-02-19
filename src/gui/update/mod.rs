@@ -41,6 +41,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetDefaultReminderTime(_)
         | Message::SetSnoozeShort(_)
         | Message::SetSnoozeLong(_)
+        | Message::SetTrashRetention(_)  // <--- Added this line
         | Message::SetAutoRefreshInterval(_)
         | Message::SetCreateEventsForTasks(_)
         | Message::SetDeleteEventsOnCompletion(_)

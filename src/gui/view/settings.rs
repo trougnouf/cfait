@@ -305,8 +305,29 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         Space::new().width(0).into()
     };
 
-    // Data Management is now merged into Local Calendar UI below
-    let data_management_ui: Element<_> = Space::new().width(0).into();
+    // Data Management (Trash retention)
+    let data_management_ui: Element<_> = if is_settings {
+        column![
+            text("Data Management").size(20),
+            text("Trash Retention:").size(16),
+            row![
+                text("Keep deleted items for (days):").width(Length::Fixed(220.0)),
+                text_input("30", &app.ob_trash_retention_input)
+                    .on_input(Message::SetTrashRetention)
+                    .width(Length::Fixed(60.0))
+                    .padding(5)
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
+            text("Set to 0 to disable trash (immediate deletion).")
+                .size(12)
+                .color(Color::from_rgb(0.6, 0.6, 0.6)),
+        ]
+        .spacing(10)
+        .into()
+    } else {
+        Space::new().width(0).into()
+    };
 
     // --- NEW ADVANCED SETTINGS UI ---
     let advanced_ui: Element<_> = if is_settings {

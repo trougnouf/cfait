@@ -146,6 +146,7 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.delete_events_on_completion = app.delete_events_on_completion;
     cfg.strikethrough_completed = app.strikethrough_completed;
     cfg.auto_refresh_interval_mins = app.auto_refresh_interval_mins;
+    cfg.trash_retention_days = app.trash_retention_days;
 
     // Save new values from Advanced Settings inputs
     cfg.max_done_roots = app.ob_max_done_roots_input.parse().unwrap_or(20);

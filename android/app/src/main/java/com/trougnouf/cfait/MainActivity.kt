@@ -497,7 +497,7 @@ fun CfaitNavHost(
                             cfg.defaultPriority, cfg.startGracePeriodDays, cfg.autoReminders,
                             cfg.defaultReminderTime, cfg.snoozeShort, cfg.createEventsForTasks,
                             cfg.deleteEventsOnCompletion, cfg.autoRefreshInterval,
-                            r, s // New values
+                            cfg.trashRetention, r, s // New values (added trash retention)
                         )
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e

@@ -3,7 +3,7 @@
 use crate::config::Config;
 use crate::model::parser::{extract_inline_aliases, validate_alias_integrity};
 use crate::model::{Task, TaskStatus};
-use crate::storage::LOCAL_CALENDAR_HREF;
+use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF, LocalCalendarRegistry};
 use crate::system::SystemEvent;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
 use crate::tui::state::{AppState, Focus, InputMode};
@@ -610,25 +610,25 @@ pub async fn handle_key_event(
                 if state.active_focus == Focus::Main {
                     if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
                         && let Some((primary, secondary, children)) = state.store.toggle_task(&uid)
-                        {
-                            state.refresh_filtered_view();
-                            update_alarms(state);
+                    {
+                        state.refresh_filtered_view();
+                        update_alarms(state);
 
-                            // Dispatch persistence actions computed by the store
-                            if let Some(sec) = secondary {
-                                let _ = action_tx.send(Action::CreateTask(primary)).await;
-                                let _ = action_tx.send(Action::UpdateTask(sec)).await;
-                            } else {
-                                let _ = action_tx.send(Action::UpdateTask(primary)).await;
-                            }
-
-                            for child in children {
-                                let _ = action_tx.send(Action::UpdateTask(child)).await;
-                            }
-
-                            // Local state already updated; no single intent to return.
-                            return None;
+                        // Dispatch persistence actions computed by the store
+                        if let Some(sec) = secondary {
+                            let _ = action_tx.send(Action::CreateTask(primary)).await;
+                            let _ = action_tx.send(Action::UpdateTask(sec)).await;
+                        } else {
+                            let _ = action_tx.send(Action::UpdateTask(primary)).await;
                         }
+
+                        for child in children {
+                            let _ = action_tx.send(Action::UpdateTask(child)).await;
+                        }
+
+                        // Local state already updated; no single intent to return.
+                        return None;
+                    }
                 } else if state.active_focus == Focus::Sidebar
                     && state.sidebar_mode == SidebarMode::Calendars
                 {
@@ -679,22 +679,22 @@ pub async fn handle_key_event(
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
                     && let Some((primary, secondary, children)) =
                         state.store.set_status(&uid, TaskStatus::Cancelled)
-                    {
-                        state.refresh_filtered_view();
-                        update_alarms(state);
+                {
+                    state.refresh_filtered_view();
+                    update_alarms(state);
 
-                        // Persist the computed mutations
-                        if let Some(sec) = secondary {
-                            let _ = action_tx.send(Action::CreateTask(primary)).await;
-                            let _ = action_tx.send(Action::UpdateTask(sec)).await;
-                        } else {
-                            let _ = action_tx.send(Action::UpdateTask(primary)).await;
-                        }
-
-                        for child in children {
-                            let _ = action_tx.send(Action::UpdateTask(child)).await;
-                        }
+                    // Persist the computed mutations
+                    if let Some(sec) = secondary {
+                        let _ = action_tx.send(Action::CreateTask(primary)).await;
+                        let _ = action_tx.send(Action::UpdateTask(sec)).await;
+                    } else {
+                        let _ = action_tx.send(Action::UpdateTask(primary)).await;
                     }
+
+                    for child in children {
+                        let _ = action_tx.send(Action::UpdateTask(child)).await;
+                    }
+                }
             }
             KeyCode::Char('+') => {
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
@@ -717,12 +717,74 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('d') => {
-                if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some((deleted, _)) = state.store.delete_task(&uid)
-                {
-                    state.refresh_filtered_view();
-                    update_alarms(state);
-                    return Some(Action::DeleteTask(deleted));
+                if let Some(view_task) = state.get_selected_task() {
+                    let uid = view_task.uid.clone();
+                    let is_trash = view_task.calendar_href == LOCAL_TRASH_HREF;
+
+                    // Load config to check retention
+                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+
+                    if config.trash_retention_days > 0 && !is_trash {
+                        // --- SOFT DELETE ---
+                        // 1. Ensure Registry
+                        let _ =
+                            LocalCalendarRegistry::ensure_trash_calendar_exists(state.ctx.as_ref());
+                        // Update UI calendar list if needed
+                        if !state.calendars.iter().any(|c| c.href == LOCAL_TRASH_HREF)
+                            && let Ok(cals) = LocalCalendarRegistry::load(state.ctx.as_ref())
+                        {
+                            // Merge intelligently
+                            for c in cals {
+                                if !state
+                                    .calendars
+                                    .iter()
+                                    .any(|existing| existing.href == c.href)
+                                {
+                                    state.calendars.push(c);
+                                }
+                            }
+                        }
+
+                        // 2. Ensure Store Map
+                        state
+                            .store
+                            .calendars
+                            .entry(LOCAL_TRASH_HREF.to_string())
+                            .or_default();
+
+                        // 3. Move in Store
+                        if let Some((original, mut updated)) =
+                            state.store.move_task(&uid, LOCAL_TRASH_HREF.to_string())
+                        {
+                            // 4. Stamp Date
+                            let now_str = chrono::Utc::now().to_rfc3339();
+                            updated
+                                .unmapped_properties
+                                .retain(|p| p.key != "X-TRASHED-DATE");
+                            updated.unmapped_properties.push(crate::model::RawProperty {
+                                key: "X-TRASHED-DATE".to_string(),
+                                value: now_str,
+                                params: vec![],
+                            });
+
+                            // 5. Save Trash Copy
+                            state.store.update_or_add_task(updated.clone());
+                            state.refresh_filtered_view();
+                            update_alarms(state);
+
+                            // 6. Delete Original
+                            // We emit DeleteTask for the original. The network actor will see it as a delete
+                            // and remove it from the server. The local trash copy is safe.
+                            return Some(Action::DeleteTask(original));
+                        }
+                    } else {
+                        // --- HARD DELETE ---
+                        if let Some((deleted, _)) = state.store.delete_task(&uid) {
+                            state.refresh_filtered_view();
+                            update_alarms(state);
+                            return Some(Action::DeleteTask(deleted));
+                        }
+                    }
                 }
             }
             KeyCode::Char('c') => {
@@ -975,6 +1037,10 @@ pub async fn handle_key_event(
                                 }
                             } else {
                                 state.hidden_calendars.clear();
+                                // NEW: Re-hide trash if not active
+                                if state.active_cal_href.as_deref() != Some("local://trash") {
+                                    state.hidden_calendars.insert("local://trash".to_string());
+                                }
                                 let _ = action_tx.send(Action::Refresh).await;
                             }
                         }
@@ -985,7 +1051,6 @@ pub async fn handle_key_event(
                             state.selected_locations.clear();
                         }
                     }
-                    state.refresh_filtered_view();
                 }
             }
             KeyCode::Right => {

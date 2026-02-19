@@ -72,6 +72,7 @@ fun SettingsScreen(
     var autoRefresh by remember { mutableStateOf("30m") }
     var createEventsForTasks by remember { mutableStateOf(false) }
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
+    var trashRetention by remember { mutableStateOf("30") }
 
     // NEW STATES
     var maxDoneRoots by remember { mutableStateOf("20") }
@@ -137,6 +138,7 @@ fun SettingsScreen(
         autoRefresh = formatDuration(cfg.autoRefreshInterval)
         createEventsForTasks = cfg.createEventsForTasks
         deleteEventsOnCompletion = cfg.deleteEventsOnCompletion
+        trashRetention = cfg.trashRetention.toString()
 
         // Load advanced values
         maxDoneRoots = cfg.maxDoneRoots.toString()
@@ -185,6 +187,7 @@ fun SettingsScreen(
         // Use the configured snoozeShort from the backend config (preset removed from UI)
         val sShort = api.getConfig().snoozeShort
         val aRefresh = api.parseDurationString(autoRefresh) ?: 30u
+        val trashInt = trashRetention.trim().toUIntOrNull() ?: 30u
 
         // NEW: parse advanced numeric inputs
         val maxRootsInt = maxDoneRoots.trim().toUIntOrNull() ?: 20u
@@ -193,7 +196,7 @@ fun SettingsScreen(
         // FIX: Ensure arguments match Rust signature exactly:
         // url, user, pass, insecure, hide_completed, disabled_cals, sort, days, prio,
         // default_prio, grace, auto_reminders, default_time, snooze_short, create_events,
-        // delete_events, auto_refresh, max_done_roots, max_done_subtasks
+        // delete_events, auto_refresh, trash_retention, max_done_roots, max_done_subtasks
         api.saveConfig(
             url, user, pass, insecure, hideCompleted,
             disabledSet.toList(), sortInt,
@@ -201,6 +204,7 @@ fun SettingsScreen(
             autoRemind, defTime, sShort,
             createEventsForTasks, deleteEventsOnCompletion,
             aRefresh,
+            trashInt,
             maxRootsInt, maxSubtasksInt
         )
     }

@@ -63,6 +63,10 @@ fn default_max_done_subtasks() -> usize {
     5
 }
 
+fn default_trash_retention() -> u32 {
+    30
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
 pub enum AppTheme {
     #[default]
@@ -173,6 +177,9 @@ pub struct Config {
     #[serde(default = "default_refresh_interval")]
     pub auto_refresh_interval_mins: u32,
 
+    #[serde(default = "default_trash_retention")]
+    pub trash_retention_days: u32, // Integer: Days to keep items in local trash before permanent delete. 0 to disable trash.
+
     #[serde(default = "default_max_done_roots")]
     pub max_done_roots: usize,
     #[serde(default = "default_max_done_subtasks")]
@@ -211,6 +218,7 @@ impl Default for Config {
             create_events_for_tasks: false,
             delete_events_on_completion: false,
             auto_refresh_interval_mins: 30,
+            trash_retention_days: 30,
             strikethrough_completed: false,
             max_done_roots: 20,
             max_done_subtasks: 5,
