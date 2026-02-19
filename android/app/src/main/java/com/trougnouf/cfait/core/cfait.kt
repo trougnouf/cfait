@@ -749,6 +749,8 @@ internal object IntegrityCheckingUniffiLib {
         uniffiCheckApiChecksums(this)
     }
 
+    external fun uniffi_cfait_checksum_func_init_tokio_runtime(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_add_alias(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_add_dependency(): Short
@@ -1188,6 +1190,8 @@ internal object UniffiLib {
         `uid`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_func_init_tokio_runtime(uniffi_out_err: UniffiRustCallStatus): Unit
+
     external fun ffi_cfait_rustbuffer_alloc(
         `size`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -1402,6 +1406,9 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if (lib.uniffi_cfait_checksum_func_init_tokio_runtime() != 54401.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_alias() != 54369.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -4434,3 +4441,9 @@ public object FfiConverterMapStringSequenceString : FfiConverterRustBuffer<Map<k
         }
     }
 }
+
+@Throws(MobileException::class)
+fun `initTokioRuntime`() =
+    uniffiRustCallWithError(MobileException) { _status ->
+        UniffiLib.uniffi_cfait_fn_func_init_tokio_runtime(_status)
+    }

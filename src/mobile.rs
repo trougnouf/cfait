@@ -17,6 +17,10 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+// --- Additions for Tokio Runtime ---
+use std::sync::OnceLock;
+use tokio::runtime::Runtime;
+
 type StoreMutator = Box<dyn Fn(&mut TaskStore, &str) -> Vec<Task> + Send>;
 
 #[cfg(target_os = "android")]
@@ -54,6 +58,24 @@ impl std::fmt::Display for MobileError {
     }
 }
 impl std::error::Error for MobileError {}
+
+// This will be the runtime for all mobile async operations.
+static TOKIO_RUNTIME: OnceLock<Runtime> = OnceLock::new();
+
+#[uniffi::export]
+pub fn init_tokio_runtime() -> Result<(), MobileError> {
+    if TOKIO_RUNTIME.get().is_none() {
+        let runtime = Runtime::new().map_err(|e| MobileError::from(e.to_string()))?;
+        if TOKIO_RUNTIME.set(runtime).is_err() {
+            #[cfg(target_os = "android")]
+            log::warn!("Tokio runtime was already initialized by another thread.");
+        } else {
+            #[cfg(target_os = "android")]
+            log::debug!("Tokio runtime initialized.");
+        }
+    }
+    Ok(())
+}
 
 #[derive(uniffi::Enum)]
 pub enum MobileSyntaxType {
@@ -398,9 +420,16 @@ impl CfaitMobile {
 
         // Trigger prune on startup
         let c_clone = controller.clone();
-        tokio::spawn(async move {
-            let _ = c_clone.prune_trash().await;
-        });
+        // This is the critical change. We must explicitly use the runtime we created.
+        if let Some(runtime) = TOKIO_RUNTIME.get() {
+            runtime.spawn(async move {
+                let _ = c_clone.prune_trash().await;
+            });
+        } else {
+            // Log an error if the runtime wasn't initialized.
+            #[cfg(target_os = "android")]
+            log::error!("Tokio runtime not initialized before CfaitMobile::new() was called!");
+        }
 
         Self {
             controller,
