@@ -51,7 +51,7 @@ fun IcsImportScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                "Import Tasks",
+                "Import tasks",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -74,7 +74,7 @@ fun IcsImportScreen(
                 ) {
                     NfIcon(NfIcons.IMPORT, 20.sp, MaterialTheme.colorScheme.onPrimaryContainer)
                     Text(
-                        "ICS File Detected",
+                        "ICS file detected",
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
@@ -96,7 +96,7 @@ fun IcsImportScreen(
 
         // Calendar selection
         Text(
-            "Select target calendar:",
+            "Select target collection:",
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold
         )
@@ -198,7 +198,7 @@ fun CalendarSelectionItem(
                     fontSize = 16.sp
                 )
                 Text(
-                    text = if (calendar.isLocal) "Local Calendar" else calendar.href,
+                    text = if (calendar.isLocal) "Local collection" else calendar.href,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -246,7 +246,7 @@ fun SettingsScreen(
         LazyColumn(modifier = Modifier.padding(p).imePadding().padding(16.dp)) {
             item {
                 Text(
-                    "Server Connection",
+                    "Server connection",
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
@@ -306,7 +306,13 @@ fun SettingsScreen(
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
             }
 
-            item { Text("Manage calendars", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp)) }
+            item {
+                Text(
+                    "Manage collections",
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
             items(allCalendars) { cal ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -405,7 +411,7 @@ fun SettingsScreen(
                 androidx.compose.material3.OutlinedCard(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            "Sorting & Visibility",
+                            "Sorting & visibility",
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             color = MaterialTheme.colorScheme.primary,
@@ -413,7 +419,7 @@ fun SettingsScreen(
                         )
 
                         Text(
-                            "Future Task Grace Period:",
+                            "Future task grace period:",
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(top = 8.dp)
                         )
@@ -429,7 +435,7 @@ fun SettingsScreen(
                         }
 
                         Text(
-                            "Urgency Rules:",
+                            "Urgency rules:",
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(top = 16.dp)
                         )
@@ -456,7 +462,7 @@ fun SettingsScreen(
                         }
 
                         Text(
-                            "Priority Settings:",
+                            "Priority settings:",
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(top = 16.dp)
                         )
@@ -524,7 +530,7 @@ fun SettingsScreen(
 
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    "Calendar Integration",
+                    "Collection integration",
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
@@ -570,7 +576,7 @@ fun SettingsScreen(
 
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    "Local Calendars",
+                    "Local collections",
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
@@ -635,7 +641,7 @@ fun SettingsScreen(
                     onClick = {
                         scope.launch {
                             try {
-                                api.createLocalCalendar("New Calendar", null)
+                                api.createLocalCalendar("New collection", null)
                                 reload()
                             } catch (e: Exception) {
                                 status = "Error: ${e.message}"
@@ -650,7 +656,7 @@ fun SettingsScreen(
                 ) {
                     NfIcon(NfIcons.ADD, 16.sp)
                     Spacer(Modifier.width(8.dp))
-                    Text("Create New Local Calendar")
+                    Text("Create new local collection")
                 }
             }
 
@@ -724,7 +730,7 @@ fun SettingsScreen(
                 ) {
                     Column {
                         Text(
-                            "Advanced Settings",
+                            "Advanced settings",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp
                         )

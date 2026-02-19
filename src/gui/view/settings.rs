@@ -92,7 +92,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     let cal_names: Vec<String> = app.calendars.iter().map(|c| c.name.clone()).collect();
     let picker: Element<_> = if !cal_names.is_empty() && is_settings {
         column![
-            text("Default calendar:"),
+            text("Default collection:"),
             iced::widget::pick_list(
                 cal_names,
                 app.ob_default_cal.clone(),
@@ -257,7 +257,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             .spacing(10)
             .align_y(iced::Alignment::Center),
             text("").size(5),
-            text("Calendar Integration").size(20),
+            text("Calendar integration").size(20),
             {
                 let cb = checkbox(app.create_events_for_tasks)
                     .label("Create calendar events (VEVENT) for tasks with dates");
@@ -448,7 +448,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     };
 
     let cal_mgmt_ui: Element<_> = if is_settings && !app.calendars.is_empty() {
-        let mut col = column![text("Manage calendars").size(20)].spacing(10);
+        let mut col = column![text("Manage collections").size(20)].spacing(10);
         for cal in &app.calendars {
             let is_enabled = !app.disabled_calendars.contains(&cal.href);
             let row_content = row![
@@ -477,8 +477,8 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     // --- Local Calendar Management UI ---
     let local_cal_ui: Element<_> = if is_settings {
         let mut local_cal_col = column![
-            text("Local Calendars").size(20),
-            text("Manage your offline calendars here.")
+            text("Local collections").size(20),
+            text("Manage your offline collections here.")
                 .size(12)
                 .color(Color::from_rgb(0.6, 0.6, 0.6)),
         ]
@@ -569,7 +569,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         }
 
         local_cal_col = local_cal_col.push(
-            button("Add Local Calendar")
+            button("Add local collection")
                 .style(button::secondary)
                 .on_press(Message::AddLocalCalendar),
         );

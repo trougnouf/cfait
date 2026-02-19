@@ -669,11 +669,11 @@ fun HomeScreen(
     if (showExportSourceDialog) {
         AlertDialog(
             onDismissRequest = { showExportSourceDialog = false },
-            title = { Text("Export: Select source calendar") },
+            title = { Text("Export: select source collection") },
             text = {
                 Column {
                     Text(
-                        "Select which local calendar to export:",
+                        "Select which local collection to export:",
                         fontSize = 14.sp,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
@@ -703,7 +703,7 @@ fun HomeScreen(
                 showExportDestDialog = false
                 exportSourceHref = null
             },
-            title = { Text("Export: Select destination") },
+            title = { Text("Export: select destination collection") },
             text = {
                 Column {
                     exportSourceHref?.let { sourceHref ->
@@ -714,7 +714,7 @@ fun HomeScreen(
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                     }
-                    Text("Select destination calendar:", fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    Text("Select destination collection:", fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
                     LazyColumn {
                         items(remoteCals) { cal ->
                             ListItem(
@@ -826,7 +826,7 @@ fun HomeScreen(
                                         updateTaskList()
                                     },
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                                ) { Text("Show all calendars") }
+                                ) { Text("Show all collections") }
                                 HorizontalDivider()
                             }
                             items(calendars.filter { !it.isDisabled }) { cal ->

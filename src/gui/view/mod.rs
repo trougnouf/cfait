@@ -191,7 +191,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             alarm.uid.clone(),
         ));
 
-        let cancel_btn = button(text("Cancel Task").size(14))
+        let cancel_btn = button(text("Cancel task").size(14))
             .style(iced::widget::button::danger)
             .padding([8, 16])
             .on_press(Message::CancelTaskFromAlarm(
@@ -1178,7 +1178,7 @@ fn view_ics_import_dialog<'a>(
     .padding(5)
     .center_x(Length::Fill);
 
-    let title = text("Import Tasks")
+    let title = text("Import tasks")
         .size(24)
         .font(iced::Font {
             weight: iced::font::Weight::Bold,
@@ -1198,7 +1198,7 @@ fn view_ics_import_dialog<'a>(
     .spacing(5)
     .align_x(iced::Alignment::Center);
 
-    let select_label = text("Select target calendar:").size(16).font(iced::Font {
+    let select_label = text("Select target collection:").size(16).font(iced::Font {
         weight: iced::font::Weight::Medium,
         ..Default::default()
     });

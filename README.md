@@ -21,32 +21,32 @@ It connects to any standard **CalDAV** server (Radicale, Xandikos, Baikal, Nextc
 
 You can use it comfortably from the command line (TUI), on your desktop (GUI), or on the go with the native Android app. It's built "offline-first," so you can keep working without an internet connection and Cfait will sync your changes the next time you go online.
 
-<strong>Table of Contents</strong>
+<strong>Table of contents</strong>
 
-- [✨ Features](#features)
-- [📸 Screenshots](#screenshots)
-- [🚀 Installation](#installation)
+- [✨ features](#features)
+- [📸 screenshots](#screenshots)
+- [🚀 installation](#installation)
   - [🐧 Linux](#linux)
   - [📱 Android](#android)
   - [🪟 Windows](#windows)
   - [🍎 MacOS](#macos)
-  - [⚙️ From Source (Rust)](#from-source-rust)
-- [⌨️ Smart Input Syntax](#smart-input-syntax)
-- [🔍 Search & Filtering](#search--filtering)
-- [📊 Task Sorting](#task-sorting)
-- [📅 Calendar Events for Tasks](#calendar-events-for-tasks)
-- [💾 Export & Backup](#export-backup)
-- [🎮 TUI Keybindings and configuration](#tui-keybindings)
+  - [⚙️ From source (Rust)](#from-source-rust)
+- [⌨️ Smart input syntax](#smart-input-syntax)
+- [🔍 Search & filtering](#search--filtering)
+- [📊 Task sorting](#task-sorting)
+- [📅 Calendar events for tasks](#calendar-events-for-tasks)
+- [💾 Export & backup](#export-backup)
+- [🎮 TUI keybindings and configuration](#tui-keybindings)
 - [🤗 Support](#support)
 - [🪩 Mirrors](#mirrors)
-- [🛡️ Privacy Policy](#privacy-policy)
+- [🛡️ Privacy policy](#privacy-policy)
 - [⚖️ License](#license)
-- [☁️ CalDAV Providers](#caldav-providers)
+- [☁️ CalDAV providers](#caldav-providers)
 
 </details>
 
 <a name="features"></a>
-## ✨ Features
+## ✨ features
 
 *   **Smart Input:** Type your tasks naturally. `Buy cookies @tomorrow @@bakery !1` is parsed instantly into a high-priority task due tomorrow at the bakery.
 *   **Hierarchical Tags & Locations:** Organize deeply with tags like `#dev:cfait` or `#cooking:cookies`, and locations like `@@home:office` or `@@store:aldi:downtown`.
@@ -56,14 +56,14 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 *   **Cross-Platform:** Runs on Linux, Android, Windows, and MacOS.
 
 <a name="screenshots"></a>
-## 📸 Screenshots
+## 📸 screenshots
 
 | Desktop (GUI & TUI) | Mobile (Android) |
 | :---: | :---: |
 | ![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.4.6_screenshot_(GUI).png)<br>The Graphical Interface in v0.4.6 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small><br><br>![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.4.6_screenshot_(TUI).png)<br>The Terminal Interface in v0.4.6 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small> | ![Cfait Android Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.4.6_screenshot_(Android).png)<br>The Android client in v0.4.6 <small>([history and more](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(Android)))</small> |
 
 <a name="installation"></a>
-## 🚀 Installation
+## 🚀 installation
 
 ## Configuration
 Self-documenting config file. See also: https://codeberg.org/trougnouf/cfait/wiki/Configuration
@@ -137,7 +137,7 @@ cd android
 The APK will be in `android/app/build/outputs/apk/release/`.
 
 <a name="smart-input-syntax"></a>
-## ⌨️ Smart Input Syntax
+## ⌨️ smart input syntax
 
 You don't need to click through menus to set the due/start date, length, priority, recurrence, tags, location,... Just type.
 
@@ -333,7 +333,7 @@ Cfait organizes tasks in the following order:
 - Thresholds for "urgent", "due soon", and "cutoff" are configurable in settings
 
 <a name="calendar-events-for-tasks"></a>
-## 📅 Calendar Events for Tasks
+## 📅 calendar events for tasks
 
 Cfait can automatically create calendar events (VEVENT) for tasks with dates, making them visible in any CalDAV calendar app.
 

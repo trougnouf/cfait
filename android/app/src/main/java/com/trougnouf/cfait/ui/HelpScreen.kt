@@ -70,7 +70,7 @@ fun HelpScreen(onBack: () -> Unit) {
                             modifier = Modifier.width(52.5.dp).height(20.dp)
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text("Help & About")
+                        Text("Help & about")
                     }
                 },
                 navigationIcon = {
@@ -179,7 +179,7 @@ fun HelpScreen(onBack: () -> Unit) {
 
             item {
                 HelpSection(
-                    "Search & Filtering",
+                    "Search & filtering",
                     NfIcons.SEARCH,
                     listOf(
                         HelpItem("text", "Matches summary or description.", "buy cat food"),

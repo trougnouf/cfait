@@ -31,7 +31,7 @@ pub fn view_help() -> Element<'static, Message> {
             .width(Length::Fixed(84.0)) // 168 / 2 for smooth rendering at half native size
             .height(Length::Fixed(32.0)) // 64 / 2 for smooth rendering at half native size
             .content_fit(iced::ContentFit::Contain),
-        text("Help & About")
+        text("Help & about")
             .size(28)
             .style(|theme: &Theme| text::Style {
                 color: Some(theme.extended_palette().background.base.text)
@@ -81,7 +81,7 @@ pub fn view_help() -> Element<'static, Message> {
         ),
         // 2. TIMELINE
         help_card(
-            "Timeline & Scheduling",
+            "Timeline & scheduling",
             crate::gui::icon::CALENDAR,
             vec![
                 entry(
@@ -210,7 +210,7 @@ pub fn view_help() -> Element<'static, Message> {
         ),
         // 4. POWER SEARCH
         help_card(
-            "Search & Filtering",
+            "Search & filtering",
             crate::gui::icon::SHIELD,
             vec![
                 entry("text", "Matches summary or description.", "buy cat food"),
@@ -501,7 +501,7 @@ fn support_card() -> Element<'static, Message> {
         icon(HEART_HAND).size(20).style(|_: &Theme| text::Style {
             color: Some(Color::from_rgb(1.0, 0.4, 0.4))
         }),
-        text("Support Development")
+        text("Support development")
             .size(18)
             .style(|theme: &Theme| text::Style {
                 color: Some(theme.extended_palette().background.base.text)
