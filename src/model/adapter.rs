@@ -835,7 +835,11 @@ impl IcsAdapter {
 
             let completed_at = completed_at_opt?;
 
-            let duration_mins = task.estimated_duration.unwrap_or(60) as i64;
+            let duration_mins = if task.time_spent_seconds > 0 && !has_sessions {
+                (task.time_spent_seconds / 60).max(1) as i64
+            } else {
+                task.estimated_duration.unwrap_or(60) as i64
+            };
             let start_at = completed_at - chrono::Duration::minutes(duration_mins);
 
             let mut event = Event::new();
@@ -931,7 +935,11 @@ impl IcsAdapter {
                 }
                 (Some(s), None) => {
                     // Only start: make an end from estimated_duration or default 1h / same day for all-day
-                    let duration_mins = task.estimated_duration.unwrap_or(60) as i64;
+                    let duration_mins = if task.time_spent_seconds > 0 && !has_sessions {
+                        (task.time_spent_seconds / 60).max(1) as i64
+                    } else {
+                        task.estimated_duration.unwrap_or(60) as i64
+                    };
                     match s {
                         DateType::AllDay(d) => (DateType::AllDay(*d), DateType::AllDay(*d)),
                         DateType::Specific(dt) => (
@@ -942,7 +950,11 @@ impl IcsAdapter {
                 }
                 (None, Some(d)) => {
                     // Only due: make a start from estimated_duration or default 1h / same day for all-day
-                    let duration_mins = task.estimated_duration.unwrap_or(60) as i64;
+                    let duration_mins = if task.time_spent_seconds > 0 && !has_sessions {
+                        (task.time_spent_seconds / 60).max(1) as i64
+                    } else {
+                        task.estimated_duration.unwrap_or(60) as i64
+                    };
                     match d {
                         DateType::AllDay(date) => {
                             (DateType::AllDay(*date), DateType::AllDay(*date))

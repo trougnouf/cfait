@@ -80,43 +80,40 @@ pub async fn handle_key_event(
             match key.code {
                 KeyCode::Char('D') | KeyCode::Char('d') => {
                     if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                        && t.dismiss_alarm(&alarm_uid)
-                    {
-                        let t_clone = t.clone();
-                        // Update UI
-                        state.active_alarm = None;
-                        state.refresh_filtered_view();
-                        // Push update to backend
-                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                        // Push update to alarm actor
-                        update_alarms(state);
-                    }
+                        && t.handle_dismiss(&alarm_uid) {
+                            let t_clone = t.clone();
+                            // Update UI
+                            state.active_alarm = None;
+                            state.refresh_filtered_view();
+                            // Push update to backend
+                            let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                            // Push update to alarm actor
+                            update_alarms(state);
+                        }
                     return None;
                 }
                 KeyCode::Char('1') => {
                     // Snooze short preset
                     if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                        && t.snooze_alarm(&alarm_uid, state.snooze_short_mins)
-                    {
-                        let t_clone = t.clone();
-                        state.active_alarm = None;
-                        state.refresh_filtered_view();
-                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                        update_alarms(state);
-                    }
+                        && t.handle_snooze(&alarm_uid, state.snooze_short_mins) {
+                            let t_clone = t.clone();
+                            state.active_alarm = None;
+                            state.refresh_filtered_view();
+                            let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                            update_alarms(state);
+                        }
                     return None;
                 }
                 KeyCode::Char('2') => {
                     // Snooze long preset
                     if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                        && t.snooze_alarm(&alarm_uid, state.snooze_long_mins)
-                    {
-                        let t_clone = t.clone();
-                        state.active_alarm = None;
-                        state.refresh_filtered_view();
-                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                        update_alarms(state);
-                    }
+                        && t.handle_snooze(&alarm_uid, state.snooze_long_mins) {
+                            let t_clone = t.clone();
+                            state.active_alarm = None;
+                            state.refresh_filtered_view();
+                            let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                            update_alarms(state);
+                        }
                     return None;
                 }
                 KeyCode::Char('c') => {
@@ -655,24 +652,37 @@ pub async fn handle_key_event(
             KeyCode::Char('s') => {
                 if let Some(task) = state.get_selected_task() {
                     let uid = task.uid.clone();
-                    let updated_opt = if task.status == TaskStatus::InProcess {
+                    let updated_tasks = if task.status == TaskStatus::InProcess {
                         state.store.pause_task(&uid)
                     } else {
                         state.store.set_status_in_process(&uid)
                     };
 
-                    if let Some(updated) = updated_opt {
+                    if !updated_tasks.is_empty() {
                         state.refresh_filtered_view();
-                        return Some(Action::UpdateTask(updated));
+                        for t in updated_tasks {
+                            let tx = action_tx.clone();
+                            tokio::spawn(async move {
+                                let _ = tx.send(Action::UpdateTask(t)).await;
+                            });
+                        }
+                        return None;
                     }
                 }
             }
             KeyCode::Char('S') => {
-                if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
-                    && let Some(updated) = state.store.stop_task(&uid)
-                {
-                    state.refresh_filtered_view();
-                    return Some(Action::UpdateTask(updated));
+                if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
+                    let updated_tasks = state.store.stop_task(&uid);
+                    if !updated_tasks.is_empty() {
+                        state.refresh_filtered_view();
+                        for t in updated_tasks {
+                            let tx = action_tx.clone();
+                            tokio::spawn(async move {
+                                let _ = tx.send(Action::UpdateTask(t)).await;
+                            });
+                        }
+                        return None;
+                    }
                 }
             }
             KeyCode::Char('x') => {

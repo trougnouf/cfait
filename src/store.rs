@@ -327,72 +327,142 @@ impl TaskStore {
         Some((primary, secondary, reset_children))
     }
 
-    pub fn set_status_in_process(&mut self, uid: &str) -> Option<Task> {
-        if let Some((task, _)) = self.get_task_mut(uid) {
-            task.status = TaskStatus::InProcess;
-            // START TIMER
-            if task.last_started_at.is_none() {
-                task.last_started_at = Some(Utc::now().timestamp());
+    pub fn set_status_in_process(&mut self, uid: &str) -> Vec<Task> {
+        let mut updated = Vec::new();
+        let mut current_uid = uid.to_string();
+        let now = Utc::now().timestamp();
+
+        loop {
+            if let Some((task, _)) = self.get_task_mut(&current_uid) {
+                let mut changed = false;
+                if task.status != TaskStatus::InProcess {
+                    task.status = TaskStatus::InProcess;
+                    changed = true;
+                }
+                if task.last_started_at.is_none() {
+                    task.last_started_at = Some(now);
+                    changed = true;
+                }
+                if changed {
+                    updated.push(task.clone());
+                }
+                if let Some(p) = task.parent_uid.clone() {
+                    current_uid = p;
+                    continue;
+                }
             }
-            return Some(task.clone());
+            break;
         }
-        None
+        updated
     }
 
-    pub fn pause_task(&mut self, uid: &str) -> Option<Task> {
-        if let Some((task, _)) = self.get_task_mut(uid) {
-            task.status = TaskStatus::NeedsAction;
+    pub fn pause_task(&mut self, uid: &str) -> Vec<Task> {
+        let mut updated = Vec::new();
+        let now = Utc::now().timestamp();
+        let mut queue = vec![uid.to_string()];
+        let mut visited = HashSet::new();
 
-            // STOP TIMER, ACCUMULATE, AND RECORD SESSION
-            if let Some(start) = task.last_started_at {
-                let now = Utc::now().timestamp();
-                if now > start {
-                    let duration = (now - start) as u64;
-                    task.time_spent_seconds = task.time_spent_seconds.saturating_add(duration);
-
-                    // NEW: Record specific session
-                    // Only record if it was longer than 1 minute (reduce noise)
-                    if duration > 60 {
-                        task.sessions
-                            .push(crate::model::item::WorkSession { start, end: now });
-                    }
+        let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+        for map in self.calendars.values() {
+            for t in map.values() {
+                if let Some(p) = &t.parent_uid {
+                    adjacency.entry(p.clone()).or_default().push(t.uid.clone());
                 }
-                task.last_started_at = None;
+            }
+        }
+
+        while let Some(current_uid) = queue.pop() {
+            if !visited.insert(current_uid.clone()) {
+                continue;
             }
 
-            let current = task.percent_complete.unwrap_or(0);
-            if current == 0 {
-                task.percent_complete = Some(50);
+            if let Some((task, _)) = self.get_task_mut(&current_uid) {
+                let mut changed = false;
+                if task.status == TaskStatus::InProcess {
+                    task.status = TaskStatus::NeedsAction;
+                    let current_pc = task.percent_complete.unwrap_or(0);
+                    if current_pc == 0 {
+                        task.percent_complete = Some(50);
+                    }
+                    changed = true;
+                }
+
+                if let Some(start) = task.last_started_at {
+                    if now > start {
+                        let duration = (now - start) as u64;
+                        task.time_spent_seconds = task.time_spent_seconds.saturating_add(duration);
+                        if duration > 60 {
+                            task.sessions
+                                .push(crate::model::item::WorkSession { start, end: now });
+                        }
+                    }
+                    task.last_started_at = None;
+                    changed = true;
+                }
+
+                if changed {
+                    updated.push(task.clone());
+                }
+
+                if let Some(children) = adjacency.get(&current_uid) {
+                    queue.extend(children.clone());
+                }
             }
-            return Some(task.clone());
         }
-        None
+        updated
     }
 
-    pub fn stop_task(&mut self, uid: &str) -> Option<Task> {
-        if let Some((task, _)) = self.get_task_mut(uid) {
-            task.status = TaskStatus::NeedsAction;
-            task.percent_complete = None;
+    pub fn stop_task(&mut self, uid: &str) -> Vec<Task> {
+        let mut updated = Vec::new();
+        let now = Utc::now().timestamp();
+        let mut queue = vec![uid.to_string()];
+        let mut visited = HashSet::new();
 
-            // STOP TIMER, ACCUMULATE, AND RECORD SESSION
-            if let Some(start) = task.last_started_at {
-                let now = Utc::now().timestamp();
-                if now > start {
-                    let duration = (now - start) as u64;
-                    task.time_spent_seconds = task.time_spent_seconds.saturating_add(duration);
-
-                    // NEW: Record session
-                    if duration > 60 {
-                        task.sessions
-                            .push(crate::model::item::WorkSession { start, end: now });
-                    }
+        let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+        for map in self.calendars.values() {
+            for t in map.values() {
+                if let Some(p) = &t.parent_uid {
+                    adjacency.entry(p.clone()).or_default().push(t.uid.clone());
                 }
-                task.last_started_at = None;
+            }
+        }
+
+        while let Some(current_uid) = queue.pop() {
+            if !visited.insert(current_uid.clone()) {
+                continue;
             }
 
-            return Some(task.clone());
+            if let Some((task, _)) = self.get_task_mut(&current_uid) {
+                let mut changed = false;
+                if task.status != TaskStatus::NeedsAction || task.percent_complete.is_some() {
+                    task.status = TaskStatus::NeedsAction;
+                    task.percent_complete = None;
+                    changed = true;
+                }
+
+                if let Some(start) = task.last_started_at {
+                    if now > start {
+                        let duration = (now - start) as u64;
+                        task.time_spent_seconds = task.time_spent_seconds.saturating_add(duration);
+                        if duration > 60 {
+                            task.sessions
+                                .push(crate::model::item::WorkSession { start, end: now });
+                        }
+                    }
+                    task.last_started_at = None;
+                    changed = true;
+                }
+
+                if changed {
+                    updated.push(task.clone());
+                }
+
+                if let Some(children) = adjacency.get(&current_uid) {
+                    queue.extend(children.clone());
+                }
+            }
         }
-        None
+        updated
     }
 
     pub fn change_priority(&mut self, uid: &str, delta: i8, default_priority: u8) -> Option<Task> {

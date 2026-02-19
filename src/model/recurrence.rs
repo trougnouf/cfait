@@ -112,10 +112,56 @@ impl RecurrenceEngine {
 
             let search_floor = std::cmp::max(comparison_now, seed_dt_utc);
 
-            let next_occurrence = rrule_set
+            let rrule_next = rrule_set
                 .into_iter()
                 .find(|d| d.to_utc() > search_floor)
                 .map(|d| d.to_utc());
+
+            // FIX: Prevent 'rrule' from entirely skipping months lacking a 29th/30th/31st day
+            // by clamping to the end of the expected month for simple monthly/yearly intervals.
+            let is_simple_monthly =
+                final_rule_part.contains("FREQ=MONTHLY") && !final_rule_part.contains("BY");
+            let is_simple_yearly =
+                final_rule_part.contains("FREQ=YEARLY") && !final_rule_part.contains("BY");
+
+            let next_occurrence = if let Some(rn) = rrule_next {
+                if is_simple_monthly || is_simple_yearly {
+                    let interval = if let Some(idx) = final_rule_part.find("INTERVAL=") {
+                        let end = final_rule_part[idx..]
+                            .find(';')
+                            .map(|i| idx + i)
+                            .unwrap_or(final_rule_part.len());
+                        final_rule_part[idx + 9..end].parse::<u32>().unwrap_or(1)
+                    } else {
+                        1
+                    };
+
+                    let expected_months = if is_simple_yearly {
+                        interval * 12
+                    } else {
+                        interval
+                    };
+
+                    if let Some(expected_date) =
+                        seed_dt_utc.checked_add_months(chrono::Months::new(expected_months))
+                    {
+                        // If standard rrule skipped forward entirely (e.g. over Feb), clamp to end of expected month
+                        // Only clamp when the expected_date itself is after our search_floor; otherwise
+                        // prefer the rrule result which may already be appropriately advanced.
+                        if rn > expected_date && expected_date > search_floor {
+                            Some(expected_date)
+                        } else {
+                            Some(rn)
+                        }
+                    } else {
+                        Some(rn)
+                    }
+                } else {
+                    Some(rn)
+                }
+            } else {
+                None
+            };
 
             if let Some(next_start) = next_occurrence {
                 let mut next_task = task.clone();

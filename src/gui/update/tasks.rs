@@ -10,26 +10,10 @@ use crate::gui::update::common::{
 use crate::journal::{Action, Journal};
 use crate::model::{Task as TodoTask, extract_inline_aliases};
 use crate::storage::{LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
-use chrono::{DateTime, NaiveTime, Utc};
+use chrono::{NaiveTime, Utc};
 use iced::Task;
 use iced::widget::text_editor;
 use std::collections::HashMap;
-
-// Helper to parse the packed implicit UID
-fn parse_implicit_id(alarm_uid: &str) -> Option<(DateTime<Utc>, String)> {
-    if alarm_uid.starts_with("implicit_") {
-        let parts: Vec<&str> = alarm_uid.split('|').collect();
-        if parts.len() >= 3 {
-            // parts[0] = "implicit_due:"
-            // parts[1] = ISO Date
-            // parts[2] = task_uid (redundant but safe)
-            if let Ok(dt) = DateTime::parse_from_rfc3339(parts[1]) {
-                return Some((dt.with_timezone(&Utc), parts[0].to_string()));
-            }
-        }
-    }
-    None
-}
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
@@ -450,46 +434,67 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::StartTask(uid) => {
-            if let Some(updated) = app.store.set_status_in_process(&uid) {
+            let updated_tasks = app.store.set_status_in_process(&uid);
+            if !updated_tasks.is_empty() {
                 app.selected_uid = Some(uid.clone());
                 refresh_filtered_tasks(app);
                 if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
-                    );
+                    let mut commands = Vec::new();
+                    for t in updated_tasks {
+                        commands.push(Task::perform(
+                            async_update_wrapper(client.clone(), t),
+                            Message::SyncSaved,
+                        ));
+                    }
+                    return Task::batch(commands);
                 } else {
-                    handle_offline_update(app, updated);
+                    for t in updated_tasks {
+                        handle_offline_update(app, t);
+                    }
                 }
             }
             Task::none()
         }
         Message::PauseTask(uid) => {
-            if let Some(updated) = app.store.pause_task(&uid) {
+            let updated_tasks = app.store.pause_task(&uid);
+            if !updated_tasks.is_empty() {
                 app.selected_uid = Some(uid.clone());
                 refresh_filtered_tasks(app);
                 if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
-                    );
+                    let mut commands = Vec::new();
+                    for t in updated_tasks {
+                        commands.push(Task::perform(
+                            async_update_wrapper(client.clone(), t),
+                            Message::SyncSaved,
+                        ));
+                    }
+                    return Task::batch(commands);
                 } else {
-                    handle_offline_update(app, updated);
+                    for t in updated_tasks {
+                        handle_offline_update(app, t);
+                    }
                 }
             }
             Task::none()
         }
         Message::StopTask(uid) => {
-            if let Some(updated) = app.store.stop_task(&uid) {
+            let updated_tasks = app.store.stop_task(&uid);
+            if !updated_tasks.is_empty() {
                 app.selected_uid = Some(uid.clone());
                 refresh_filtered_tasks(app);
                 if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
-                    );
+                    let mut commands = Vec::new();
+                    for t in updated_tasks {
+                        commands.push(Task::perform(
+                            async_update_wrapper(client.clone(), t),
+                            Message::SyncSaved,
+                        ));
+                    }
+                    return Task::batch(commands);
                 } else {
-                    handle_offline_update(app, updated);
+                    for t in updated_tasks {
+                        handle_offline_update(app, t);
+                    }
                 }
             }
             Task::none()
@@ -751,71 +756,35 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SnoozeAlarm(t_uid, a_uid, mins) => {
-            if let Some((task, _)) = app.store.get_task_mut(&t_uid) {
-                let mut changed = false;
-
-                // Case A: Implicit Alarm
-                if let Some((dt, prefix)) = parse_implicit_id(&a_uid) {
-                    let desc = if prefix.contains("due") {
-                        "Due now"
-                    } else {
-                        "Starting"
-                    }
-                    .to_string();
-                    task.snooze_implicit_alarm(dt, desc, mins);
-                    changed = true;
-                }
-                // Case B: Explicit Alarm
-                else if task.snooze_alarm(&a_uid, mins) {
-                    changed = true;
-                }
-
-                if changed {
-                    let t_clone = task.clone();
-                    refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
-                        return Task::perform(
-                            async_update_wrapper(client.clone(), t_clone),
-                            Message::SyncSaved,
-                        );
-                    } else {
-                        handle_offline_update(app, t_clone);
-                    }
+            if let Some((task, _)) = app.store.get_task_mut(&t_uid)
+                && task.handle_snooze(&a_uid, mins)
+            {
+                let t_clone = task.clone();
+                refresh_filtered_tasks(app);
+                if let Some(client) = &app.client {
+                    return Task::perform(
+                        async_update_wrapper(client.clone(), t_clone),
+                        Message::SyncSaved,
+                    );
+                } else {
+                    handle_offline_update(app, t_clone);
                 }
             }
             Task::none()
         }
         Message::DismissAlarm(t_uid, a_uid) => {
-            if let Some((task, _)) = app.store.get_task_mut(&t_uid) {
-                let mut changed = false;
-
-                // Case A: Implicit Alarm
-                if let Some((dt, prefix)) = parse_implicit_id(&a_uid) {
-                    let desc = if prefix.contains("due") {
-                        "Due now"
-                    } else {
-                        "Starting"
-                    }
-                    .to_string();
-                    task.dismiss_implicit_alarm(dt, desc);
-                    changed = true;
-                }
-                // Case B: Explicit Alarm
-                else if task.dismiss_alarm(&a_uid) {
-                    changed = true;
-                }
-
-                if changed {
-                    let t_clone = task.clone();
-                    refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
-                        return Task::perform(
-                            async_update_wrapper(client.clone(), t_clone),
-                            Message::SyncSaved,
-                        );
-                    } else {
-                        handle_offline_update(app, t_clone);
-                    }
+            if let Some((task, _)) = app.store.get_task_mut(&t_uid)
+                && task.handle_dismiss(&a_uid)
+            {
+                let t_clone = task.clone();
+                refresh_filtered_tasks(app);
+                if let Some(client) = &app.client {
+                    return Task::perform(
+                        async_update_wrapper(client.clone(), t_clone),
+                        Message::SyncSaved,
+                    );
+                } else {
+                    handle_offline_update(app, t_clone);
                 }
             }
             Task::none()

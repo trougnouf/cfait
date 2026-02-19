@@ -782,6 +782,46 @@ impl Task {
         }
     }
 
+    pub fn handle_dismiss(&mut self, alarm_uid: &str) -> bool {
+        if alarm_uid.starts_with("implicit_") {
+            let parts: Vec<&str> = alarm_uid.split('|').collect();
+            if parts.len() >= 2
+                && let Ok(dt) = chrono::DateTime::parse_from_rfc3339(parts[1]) {
+                    let desc = if alarm_uid.contains("due") {
+                        "Due now"
+                    } else {
+                        "Starting"
+                    };
+                    self.dismiss_implicit_alarm(dt.with_timezone(&chrono::Utc), desc.to_string());
+                    return true;
+                }
+            return false;
+        }
+        self.dismiss_alarm(alarm_uid)
+    }
+
+    pub fn handle_snooze(&mut self, alarm_uid: &str, mins: u32) -> bool {
+        if alarm_uid.starts_with("implicit_") {
+            let parts: Vec<&str> = alarm_uid.split('|').collect();
+            if parts.len() >= 2
+                && let Ok(dt) = chrono::DateTime::parse_from_rfc3339(parts[1]) {
+                    let desc = if alarm_uid.contains("due") {
+                        "Due now"
+                    } else {
+                        "Starting"
+                    };
+                    self.snooze_implicit_alarm(
+                        dt.with_timezone(&chrono::Utc),
+                        desc.to_string(),
+                        mins,
+                    );
+                    return true;
+                }
+            return false;
+        }
+        self.snooze_alarm(alarm_uid, mins)
+    }
+
     pub fn dismiss_alarm(&mut self, alarm_uid: &str) -> bool {
         if let Some(alarm) = self.alarms.iter_mut().find(|a| a.uid == alarm_uid) {
             alarm.acknowledged = Some(Utc::now());

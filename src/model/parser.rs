@@ -2142,4 +2142,11 @@ pub fn apply_smart_input(
         task.dtstart = Some(DateType::AllDay(first_occurrence));
         task.due = Some(DateType::AllDay(first_occurrence));
     }
+
+    // Ensure start date cannot be strictly after due date
+    if let (Some(start), Some(due)) = (&task.dtstart, &task.due)
+        && start.to_start_comparison_time() > due.to_comparison_time() {
+            // Clamp start to due to avoid invalid ranges where start > due.
+            task.dtstart = Some(due.clone());
+        }
 }

@@ -1,5 +1,5 @@
 // Renders the settings and onboarding screens.
-use crate::config::AppTheme;
+
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
@@ -11,7 +11,6 @@ use iced::widget::{
 use iced::{Color, Element, Length};
 #[cfg(feature = "gui")]
 use iced_aw::color_picker;
-use strum::IntoEnumIterator;
 
 pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     let is_settings = matches!(app.state, AppState::Settings);
@@ -107,119 +106,14 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         Space::new().width(0).into()
     };
 
-    let prefs: Element<'_, Message> = if is_settings {
-        std::convert::Into::<Element<'_, Message>>::into(container(
-            column![
-                row![
-                    text("Theme:"),
-                    iced::widget::pick_list(
-                        AppTheme::iter().collect::<Vec<_>>(),
-                        Some(app.current_theme),
-                        Message::ThemeChanged
-                    )
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
-                std::convert::Into::<Element<'_, Message>>::into(
-                    checkbox(app.hide_completed)
-                        .label("Hide completed and canceled tasks") // RENAMED
-                        .on_toggle(Message::ToggleHideCompleted),
-                ),
-                if !app.hide_completed {
-                    std::convert::Into::<Element<'_, Message>>::into(
-                        checkbox(app.hide_fully_completed_tags)
-                            .label("Hide tags containing only completed tasks")
-                            .on_toggle(Message::ToggleHideFullyCompletedTags),
-                    )
-                } else {
-                    std::convert::Into::<Element<'_, Message>>::into(Space::new().width(0))
-                },
-            ]
-            .spacing(10),
-        ))
-    } else {
-        std::convert::Into::<Element<'_, Message>>::into(Space::new().width(0))
-    };
+    let prefs: Element<'_, Message> = Space::new().width(0).into();
 
-    let sorting_ui: Element<_> = if is_settings {
-        container(
-            column![
-                text("Sorting & Visibility").size(20),
-                Space::new().height(10),
-                text("Future Task Grace Period:").size(16),
-                row![
-                    text("Start within (days):").width(Length::Fixed(150.0)),
-                    text_input("1", &app.ob_start_grace_input)
-                        .on_input(Message::ObStartGraceChanged)
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
-                text("Tasks starting within this period won't be pushed to 'Future'")
-                    .size(12)
-                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
-                Space::new().height(15),
-                text("Urgency Rules (Shown at top):").size(16),
-                row![
-                    text("Due within (days):").width(Length::Fixed(150.0)),
-                    text_input("1", &app.ob_urgent_days_input)
-                        .on_input(Message::ObUrgentDaysChanged)
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
-                row![
-                    text("Priority <= (!):").width(Length::Fixed(150.0)),
-                    text_input("1", &app.ob_urgent_prio_input)
-                        .on_input(Message::ObUrgentPrioChanged)
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
-                Space::new().height(15),
-                text("Priority Settings:").size(16),
-                row![
-                    text("Default Priority (!):").width(Length::Fixed(150.0)),
-                    text_input("5", &app.ob_default_priority_input)
-                        .on_input(Message::ObDefaultPriorityChanged)
-                        .width(Length::Fixed(60.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
-                text("(Tasks without priority (0) sort as this value)")
-                    .size(12)
-                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
-                Space::new().height(10),
-                row![
-                    text("Priority cutoff (months):").width(Length::Fixed(150.0)),
-                    text_input("6", &app.ob_sort_months_input)
-                        .on_input(Message::ObSortMonthsChanged)
-                        .width(Length::Fixed(100.0))
-                        .padding(5)
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center),
-                text("(Tasks due within this range are shown first. Blank = all timed first)")
-                    .size(12)
-                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
-            ]
-            .spacing(5),
-        )
-        .padding(15)
-        .style(container::rounded_box)
-        .into()
-    } else {
-        Space::new().width(0).into()
-    };
+    let sorting_ui: Element<_> = Space::new().width(0).into();
 
     let notifications_ui: Element<_> = if is_settings {
         column![
             text("Notifications & Reminders").size(20),
-            checkbox(app.auto_reminders)
+            checkbox::<Message, iced::Theme, iced::Renderer>(app.auto_reminders)
                 .label("Auto-remind on Start/Due dates (if no alarms set)")
                 .on_toggle(Message::SetAutoReminders),
             row![
@@ -259,7 +153,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             text("").size(5),
             text("Calendar integration").size(20),
             {
-                let cb = checkbox(app.create_events_for_tasks)
+                let cb = checkbox::<Message, iced::Theme, iced::Renderer>(app.create_events_for_tasks)
                     .label("Create calendar events (VEVENT) for tasks with dates");
                 if !app.deleting_events {
                     cb.on_toggle(Message::SetCreateEventsForTasks)
@@ -272,7 +166,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .color(Color::from_rgb(0.6, 0.6, 0.6)),
             text("").size(5),
             {
-                let cb = checkbox(app.delete_events_on_completion)
+                let cb = checkbox::<Message, iced::Theme, iced::Renderer>(app.delete_events_on_completion)
                     .label("Delete events when tasks are completed");
                 if !app.deleting_events {
                     cb.on_toggle(Message::SetDeleteEventsOnCompletion)
@@ -332,7 +226,54 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     // --- NEW ADVANCED SETTINGS UI ---
     let advanced_ui: Element<_> = if is_settings {
         let content = if app.show_advanced_settings {
+            // Extract hide_fully_ui out of the macro to avoid type inference issues inside column!()
+            let hide_fully_ui: Element<_> = if !app.hide_completed {
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.hide_fully_completed_tags)
+                    .label("Hide tags containing only completed tasks")
+                    .on_toggle(Message::ToggleHideFullyCompletedTags)
+                    .into()
+            } else {
+                Space::new().width(0).into()
+            };
+
             column![
+                text("Sorting & Visibility").size(20),
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.hide_completed)
+                    .label("Hide completed and canceled tasks")
+                    .on_toggle(Message::ToggleHideCompleted),
+                hide_fully_ui,
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.strikethrough_completed)
+                    .label("Cross-off (strikethrough) done tasks")
+                    .on_toggle(Message::SetStrikethroughCompleted),
+                Space::new().height(10),
+
+                text("Priority Rules:").size(16),
+                row![
+                    text("Due within (days):").width(Length::Fixed(150.0)),
+                    text_input("1", &app.ob_urgent_days_input).on_input(Message::ObUrgentDaysChanged).width(Length::Fixed(60.0)).padding(5)
+                ].spacing(10).align_y(iced::Alignment::Center),
+                row![
+                    text("Priority <= (!):").width(Length::Fixed(150.0)),
+                    text_input("1", &app.ob_urgent_prio_input).on_input(Message::ObUrgentPrioChanged).width(Length::Fixed(60.0)).padding(5)
+                ].spacing(10).align_y(iced::Alignment::Center),
+                row![
+                    text("Default Priority (!):").width(Length::Fixed(150.0)),
+                    text_input("5", &app.ob_default_priority_input).on_input(Message::ObDefaultPriorityChanged).width(Length::Fixed(60.0)).padding(5)
+                ].spacing(10).align_y(iced::Alignment::Center),
+
+                Space::new().height(10),
+                text("Sorting Timeframes:").size(16),
+                row![
+                    text("Start Grace (days):").width(Length::Fixed(150.0)),
+                    text_input("1", &app.ob_start_grace_input).on_input(Message::ObStartGraceChanged).width(Length::Fixed(60.0)).padding(5)
+                ].spacing(10).align_y(iced::Alignment::Center),
+                row![
+                    text("Priority cutoff (months):").width(Length::Fixed(150.0)),
+                    text_input("6", &app.ob_sort_months_input).on_input(Message::ObSortMonthsChanged).width(Length::Fixed(100.0)).padding(5)
+                ].spacing(10).align_y(iced::Alignment::Center),
+
+                Space::new().height(10),
+                text("Display Limits:").size(16),
                 row![
                     text("Max completed tasks (Roots):").width(Length::Fixed(200.0)),
                     text_input("20", &app.ob_max_done_roots_input)
@@ -360,18 +301,13 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 text("Limits how many completed subtasks are shown inside a parent before truncating.")
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.6)),
-
-                // New checkbox to control strikethrough (cross-off) of completed tasks
-                checkbox(app.strikethrough_completed)
-                    .label("Cross-off (strikethrough) done tasks")
-                    .on_toggle(Message::SetStrikethroughCompleted),
             ]
             .spacing(5)
             .padding(10)
         } else {
             column![]
         };
-
+        // ... Render accordion button ...
         column![
             button(
                 row![
@@ -452,7 +388,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         for cal in &app.calendars {
             let is_enabled = !app.disabled_calendars.contains(&cal.href);
             let row_content = row![
-                checkbox(is_enabled)
+                checkbox::<Message, iced::Theme, iced::Renderer>(is_enabled)
                     .label(&cal.name)
                     .on_toggle(move |v| Message::ToggleCalendarDisabled(cal.href.clone(), !v))
                     .width(Length::Fill)
@@ -599,7 +535,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     .width(Length::Fill)
     .on_press(Message::ObSubmit);
 
-    let insecure_check = checkbox(app.ob_insecure)
+    let insecure_check = checkbox::<Message, iced::Theme, iced::Renderer>(app.ob_insecure)
         .label("Allow insecure SSL (e.g. self-signed)")
         .on_toggle(Message::ObInsecureToggled)
         .size(16)

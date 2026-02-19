@@ -17,6 +17,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+type StoreMutator = Box<dyn Fn(&mut TaskStore, &str) -> Vec<Task> + Send>;
+
 #[cfg(target_os = "android")]
 use std::io::{Read, Write};
 
@@ -351,6 +353,30 @@ pub struct CfaitMobile {
     controller: TaskController,
     alarm_index_cache: Arc<Mutex<Option<AlarmIndex>>>,
     ctx: Arc<dyn AppContext>,
+}
+
+// Module-scope boxed helper for persisting multiple tasks returned by store mutators.
+// This lives at module scope so it can be used from the exported uniffi impl block
+// without embedding complicated generic closure bounds in the exported impl.
+async fn apply_store_mutation_multi_boxed(
+    this: &CfaitMobile,
+    uid: &str,
+    mutator: StoreMutator,
+) -> Result<(), MobileError> {
+    let mut store = this.controller.store.lock().await;
+    let tasks_to_save = (mutator)(&mut store, uid);
+    drop(store);
+
+    for task in tasks_to_save {
+        this.controller
+            .update_task(task)
+            .await
+            .map_err(MobileError::from)?;
+    }
+
+    let store_locked = this.controller.store.lock().await;
+    this.rebuild_alarm_index_sync(&store_locked);
+    Ok(())
 }
 
 #[uniffi::export]
@@ -1208,8 +1234,12 @@ impl CfaitMobile {
     }
 
     pub async fn set_status_process(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(&uid, |store, id| store.set_status_in_process(id))
-            .await
+        apply_store_mutation_multi_boxed(
+            self,
+            &uid,
+            Box::new(|store, id| store.set_status_in_process(id)),
+        )
+        .await
     }
 
     pub async fn set_status_cancelled(&self, uid: String) -> Result<(), MobileError> {
@@ -1256,15 +1286,13 @@ impl CfaitMobile {
     }
 
     pub async fn pause_task(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(&uid, |s, id| s.pause_task(id))
-            .await
+        apply_store_mutation_multi_boxed(self, &uid, Box::new(|s, id| s.pause_task(id))).await
     }
     pub async fn stop_task(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(&uid, |s, id| s.stop_task(id))
-            .await
+        apply_store_mutation_multi_boxed(self, &uid, Box::new(|s, id| s.stop_task(id))).await
     }
     pub async fn start_task(&self, uid: String) -> Result<(), MobileError> {
-        self.apply_store_mutation(&uid, |s, id| s.set_status_in_process(id))
+        apply_store_mutation_multi_boxed(self, &uid, Box::new(|s, id| s.set_status_in_process(id)))
             .await
     }
 
@@ -1400,6 +1428,9 @@ impl CfaitMobile {
         }
     }
 
+    // apply_store_mutation_multi_boxed moved to module scope above so it is callable
+    // from the exported impl without generic-bound issues.
+
     pub async fn delete_local_calendar(&self, href: String) -> Result<(), MobileError> {
         if href == LOCAL_CALENDAR_HREF {
             return Err(MobileError::from("Cannot delete default calendar"));
@@ -1429,24 +1460,10 @@ impl CfaitMobile {
         minutes: u32,
     ) -> Result<(), MobileError> {
         self.apply_store_mutation(&task_uid, |store, id| {
-            if let Some((task, _)) = store.get_task_mut(id) {
-                if alarm_uid.starts_with("implicit_")
-                    && let Some(dt) = alarm_uid
-                        .split('|')
-                        .nth(1)
-                        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-                {
-                    let desc = if alarm_uid.contains("due") {
-                        "Due now"
-                    } else {
-                        "Starting"
-                    };
-                    task.snooze_implicit_alarm(dt.with_timezone(&Utc), desc.to_string(), minutes);
-                    return Some(task.clone());
-                }
-                if task.snooze_alarm(&alarm_uid, minutes) {
-                    return Some(task.clone());
-                }
+            if let Some((task, _)) = store.get_task_mut(id)
+                && task.handle_snooze(&alarm_uid, minutes)
+            {
+                return Some(task.clone());
             }
             None
         })
@@ -1464,34 +1481,10 @@ impl CfaitMobile {
         #[cfg(target_os = "android")]
         log::debug!("dismiss_alarm: task={}, alarm={}", task_uid, alarm_uid);
         self.apply_store_mutation(&task_uid, |store, id| {
-            if let Some((task, _)) = store.get_task_mut(id) {
-                #[cfg(target_os = "android")]
-                log::debug!(
-                    "Found task '{}', alarms: {}",
-                    task.summary,
-                    task.alarms.len()
-                );
-                if alarm_uid.starts_with("implicit_")
-                    && let Some(dt) = alarm_uid
-                        .split('|')
-                        .nth(1)
-                        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-                {
-                    let desc = if alarm_uid.contains("due") {
-                        "Due now"
-                    } else {
-                        "Starting"
-                    };
-                    task.dismiss_implicit_alarm(dt.with_timezone(&Utc), desc.to_string());
-                    #[cfg(target_os = "android")]
-                    log::debug!("Dismissed implicit alarm");
-                    return Some(task.clone());
-                }
-                if task.dismiss_alarm(&alarm_uid) {
-                    #[cfg(target_os = "android")]
-                    log::debug!("Dismissed explicit alarm, new count: {}", task.alarms.len());
-                    return Some(task.clone());
-                }
+            if let Some((task, _)) = store.get_task_mut(id)
+                && task.handle_dismiss(&alarm_uid)
+            {
+                return Some(task.clone());
             }
             None
         })
