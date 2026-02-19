@@ -313,6 +313,33 @@ fun HomeScreen(
 
     BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
 
+    BackHandler(
+        enabled = isSearchActive || searchQuery.isNotBlank() || yankedUid != null || filterTags.isNotEmpty() || filterLocations.isNotEmpty()
+    ) {
+        when {
+            // 1) If the search UI is active, exit it (like Escape on desktop).
+            isSearchActive -> {
+                isSearchActive = false
+            }
+
+            // 2) If a task is yanked, clear it next.
+            yankedUid != null -> {
+                yankedUid = null
+            }
+
+            // 3) If there's a search query text, clear it next.
+            searchQuery.isNotBlank() -> {
+                searchQuery = ""
+            }
+
+            // 4) Finally clear tag/location filters.
+            filterTags.isNotEmpty() || filterLocations.isNotEmpty() -> {
+                filterTags = emptySet()
+                filterLocations = emptySet()
+            }
+        }
+    }
+
     fun updateTaskList() {
         scope.launch {
             try {
