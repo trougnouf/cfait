@@ -243,6 +243,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             Task::none()
         }
+        Message::ClearAllFilters => {
+            // TUI Parity: '*' clears all sidebar filters and search
+            app.selected_categories.clear();
+            app.selected_locations.clear();
+
+            // Also clear search text properly
+            if !app.search_value.text().is_empty() {
+                app.search_value = iced::widget::text_editor::Content::new();
+            }
+
+            refresh_filtered_tasks(app);
+
+            // Reset sidebar mode to Calendars default
+            app.sidebar_mode = SidebarMode::Calendars;
+
+            Task::none()
+        }
         Message::CategoryMatchModeChanged(val) => {
             app.match_all_categories = val;
             refresh_filtered_tasks(app);

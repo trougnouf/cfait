@@ -65,7 +65,11 @@ pub enum Message {
     YankSelected,
     ClearYank,
     EscapePressed,
-    KeyboardCreateChild,
+    // TUI parity: split child behavior into explicit "link child" and "create new subtask"
+    KeyboardLinkChild,   // 'c' (Link selected to yanked)
+    KeyboardCreateChild, // 'C' (Create new subtask for selected)
+    // Clear all filters (TUI '*' behavior)
+    ClearAllFilters,
     KeyboardAddDependency,
     KeyboardAddRelation,
     ToggleActiveSelected,       // 's' logic

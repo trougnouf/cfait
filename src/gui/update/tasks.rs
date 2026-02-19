@@ -62,16 +62,26 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             app.input_value = text_editor::Content::with_text(&initial_input);
-            Task::none()
+            app.input_value
+                .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+
+            // CRITICAL: Force focus to the main input
+            iced::widget::operation::focus(iced::widget::Id::new("main_input"))
         }
         Message::SubmitTask => handle_submit(app),
 
         Message::EditTaskStart(index) => {
             if let Some(task) = app.tasks.get(index) {
                 app.input_value = text_editor::Content::with_text(&task.to_smart_string());
+                app.input_value
+                    .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
+
                 app.description_value = text_editor::Content::with_text(&task.description);
                 app.editing_uid = Some(task.uid.clone());
                 app.selected_uid = Some(task.uid.clone());
+
+                // CRITICAL: Force focus to the main input
+                return iced::widget::operation::focus(iced::widget::Id::new("main_input"));
             }
             Task::none()
         }
@@ -80,7 +90,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.description_value = text_editor::Content::new();
             app.editing_uid = None;
             app.creating_child_of = None;
-            Task::none()
+            // Return focus to the list so navigation works immediately
+            scroll_to_selected(app, true)
         }
 
         Message::ToggleTask(index, _) => {
@@ -279,13 +290,21 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::KeyboardLinkChild => {
+            // Behavior: 'c' (lowercase) -> Link selected to yanked (if yanked exists)
+            if let Some(parent_uid) = &app.yanked_uid
+                && let Some(selected_uid) = &app.selected_uid
+                && parent_uid != selected_uid
+            {
+                return handle(app, Message::MakeChild(selected_uid.clone()));
+            }
+            Task::none()
+        }
+
         Message::KeyboardCreateChild => {
-            if let Some(_yanked) = &app.yanked_uid {
-                if let Some(selected) = &app.selected_uid {
-                    return handle(app, Message::MakeChild(selected.clone()));
-                }
-            } else if let Some(selected) = &app.selected_uid {
-                return handle(app, Message::StartCreateChild(selected.clone()));
+            // Behavior: 'C' (uppercase) -> Create new subtask for selected
+            if let Some(selected_uid) = &app.selected_uid {
+                return handle(app, Message::StartCreateChild(selected_uid.clone()));
             }
             Task::none()
         }
@@ -977,8 +996,12 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                     Message::SyncSaved,
                 );
 
+                // Delayed scroll to show new item
+                let focus_cmd = iced::widget::operation::focus(iced::widget::Id::new("main_input"));
+
                 retroactive_sync_batch.push(create_cmd);
                 retroactive_sync_batch.push(scroll_cmd);
+                retroactive_sync_batch.push(focus_cmd); // Keep focus on input for rapid entry
 
                 return Task::batch(retroactive_sync_batch);
             } else {
@@ -998,7 +1021,9 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 }
 
                 app.unsynced_changes = true;
+                let focus_cmd = iced::widget::operation::focus(iced::widget::Id::new("main_input"));
                 retroactive_sync_batch.push(scroll_cmd);
+                retroactive_sync_batch.push(focus_cmd); // Keep focus on input for rapid entry
                 return Task::batch(retroactive_sync_batch);
             }
         }

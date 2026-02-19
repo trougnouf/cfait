@@ -99,6 +99,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::PromoteSelected
         | Message::DemoteSelected
         | Message::YankSelected
+        | Message::KeyboardLinkChild
         | Message::KeyboardCreateChild
         | Message::KeyboardAddDependency
         | Message::KeyboardAddRelation
@@ -123,6 +124,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::LocationToggled(_)
         | Message::ClearAllTags
         | Message::ClearAllLocations
+        | Message::ClearAllFilters
         | Message::CategoryMatchModeChanged(_)
         | Message::ToggleHideCompleted(_)
         | Message::ToggleHideFullyCompletedTags(_)

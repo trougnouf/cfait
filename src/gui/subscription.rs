@@ -34,14 +34,15 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
     // Auto-refresh subscription (configurable)
     // If config load succeeds and interval > 0, subscribe to a periodic timer that maps to Message::Refresh.
     if let Ok(cfg) = crate::config::Config::load(app.ctx.as_ref())
-        && cfg.auto_refresh_interval_mins > 0 {
-            subs.push(
-                iced::time::every(std::time::Duration::from_secs(
-                    cfg.auto_refresh_interval_mins as u64 * 60,
-                ))
-                .map(|_| Message::Refresh),
-            );
-        }
+        && cfg.auto_refresh_interval_mins > 0
+    {
+        subs.push(
+            iced::time::every(std::time::Duration::from_secs(
+                cfg.auto_refresh_interval_mins as u64 * 60,
+            ))
+            .map(|_| Message::Refresh),
+        );
+    }
 
     Subscription::batch(subs)
 }
@@ -70,72 +71,54 @@ fn handle_hotkey(
         }
 
         match key.as_ref() {
-            // --- NAVIGATION ---
-            keyboard::Key::Character("j") | keyboard::Key::Named(Named::ArrowDown) => {
-                Some(Message::SelectNextTask)
+            // 1. Handle character-based keys first
+            keyboard::Key::Character(s) => {
+                let s_lower = s.to_lowercase();
+                // Match on lowercase char + shift state tuple for alphabetic keys
+                match (s_lower.as_str(), modifiers.shift()) {
+                    ("j", false) => Some(Message::SelectNextTask),
+                    ("k", false) => Some(Message::SelectPrevTask),
+                    ("d", false) => Some(Message::DeleteSelected),
+                    ("e", false) => Some(Message::EditSelected),
+                    ("e", true) => Some(Message::EditSelectedDescription),
+                    ("s", false) => Some(Message::ToggleActiveSelected),
+                    ("s", true) => Some(Message::StopSelected),
+                    ("x", false) => Some(Message::CancelSelected),
+                    ("y", false) => Some(Message::YankSelected),
+                    ("c", false) => Some(Message::KeyboardLinkChild),
+                    ("c", true) => Some(Message::KeyboardCreateChild),
+                    ("b", false) => Some(Message::KeyboardAddDependency),
+                    ("l", false) => Some(Message::KeyboardAddRelation),
+                    ("a", false) => Some(Message::FocusInput),
+                    ("h", true) => Some(Message::ToggleHideCompletedToggle),
+                    ("m", false) => Some(Message::CategoryMatchModeToggle),
+                    ("m", true) => Some(Message::EditSelected), // 'M' for Move (parity)
+                    ("q", false) => Some(Message::CloseWindow),
+                    ("r", false) => Some(Message::Refresh),
+                    ("r", true) => Some(Message::JumpToRandomTask),
+                    // Fallback to match exact char for symbols and numbers
+                    _ => match s {
+                        "1" => Some(Message::SidebarModeChanged(SidebarMode::Calendars)),
+                        "2" => Some(Message::SidebarModeChanged(SidebarMode::Categories)),
+                        "3" => Some(Message::SidebarModeChanged(SidebarMode::Locations)),
+                        "/" | "?" => Some(Message::FocusSearch),
+                        "*" => Some(Message::ClearAllFilters),
+                        "+" | "=" => Some(Message::ChangePrioritySelected(1)),
+                        "-" => Some(Message::ChangePrioritySelected(-1)),
+                        "." | ">" => Some(Message::DemoteSelected),
+                        "," | "<" => Some(Message::PromoteSelected),
+                        _ => None,
+                    },
+                }
             }
-            keyboard::Key::Character("k") | keyboard::Key::Named(Named::ArrowUp) => {
-                Some(Message::SelectPrevTask)
-            }
+
+            // 2. Handle Named keys
+            keyboard::Key::Named(Named::ArrowDown) => Some(Message::SelectNextTask),
+            keyboard::Key::Named(Named::ArrowUp) => Some(Message::SelectPrevTask),
             keyboard::Key::Named(Named::PageDown) => Some(Message::SelectNextPage),
             keyboard::Key::Named(Named::PageUp) => Some(Message::SelectPrevPage),
-
-            // --- ACTIONS ---
-            keyboard::Key::Character("d") => Some(Message::DeleteSelected),
-            keyboard::Key::Character("e") => Some(Message::EditSelected),
-            keyboard::Key::Character("E") => Some(Message::EditSelectedDescription),
             keyboard::Key::Named(Named::Space) => Some(Message::ToggleSelected),
-
-            // --- STATUS ---
-            keyboard::Key::Character("s") => Some(Message::ToggleActiveSelected),
-            keyboard::Key::Character("S") => Some(Message::StopSelected),
-            keyboard::Key::Character("x") => Some(Message::CancelSelected),
-
-            // --- PRIORITY ---
-            keyboard::Key::Character("+") => Some(Message::ChangePrioritySelected(1)),
-            keyboard::Key::Character("-") => Some(Message::ChangePrioritySelected(-1)),
-
-            // --- MOVEMENT ---
-            keyboard::Key::Character("M") => Some(Message::EditSelected), // Reuse edit mode for moving
-
-            // --- HIERARCHY ---
-            keyboard::Key::Character(".") | keyboard::Key::Character(">") => {
-                Some(Message::DemoteSelected)
-            }
-            keyboard::Key::Character(",") | keyboard::Key::Character("<") => {
-                Some(Message::PromoteSelected)
-            }
-
-            // --- YANK / PASTE ---
-            keyboard::Key::Character("y") => Some(Message::YankSelected),
-            keyboard::Key::Character("c") => Some(Message::KeyboardCreateChild),
-            keyboard::Key::Character("b") => Some(Message::KeyboardAddDependency),
-            keyboard::Key::Character("l") => Some(Message::KeyboardAddRelation),
             keyboard::Key::Named(Named::Escape) => Some(Message::EscapePressed),
-
-            // --- SEARCH / INPUT ---
-            keyboard::Key::Character("/") => Some(Message::FocusSearch),
-            keyboard::Key::Character("a") => Some(Message::FocusInput),
-
-            // --- VIEW TABS ---
-            keyboard::Key::Character("1") => {
-                Some(Message::SidebarModeChanged(SidebarMode::Calendars))
-            }
-            keyboard::Key::Character("2") => {
-                Some(Message::SidebarModeChanged(SidebarMode::Categories))
-            }
-            keyboard::Key::Character("3") => {
-                Some(Message::SidebarModeChanged(SidebarMode::Locations))
-            }
-
-            // --- TOGGLES (Stateless) ---
-            keyboard::Key::Character("H") => Some(Message::ToggleHideCompletedToggle),
-            keyboard::Key::Character("m") => Some(Message::CategoryMatchModeToggle),
-
-            // --- GLOBAL ---
-            keyboard::Key::Character("?") => Some(Message::OpenHelp),
-            keyboard::Key::Character("q") => Some(Message::CloseWindow),
-            keyboard::Key::Character("r") => Some(Message::Refresh),
 
             _ => None,
         }
