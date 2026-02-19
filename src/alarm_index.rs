@@ -194,12 +194,25 @@ impl AlarmIndex {
                         let mut add_implicit = |dt: DateTime<Utc>, desc: &str, type_key: &str| {
                             // Only index future alarms (or recent past within grace period)
                             if dt > now || (now - dt).num_minutes() < 60 {
+                                let trigger_ms = dt.timestamp_millis();
+
+                                // If there's already an alarm for the same task at the same time,
+                                // do not add another one. This prevents duplicate notifications
+                                // when start and due are identical and also prevents implicit
+                                // reminders from being added on top of existing explicit alarms.
+                                let exists = alarms
+                                    .iter()
+                                    .any(|a| a.task_uid == task.uid && a.trigger_ms == trigger_ms);
+                                if exists {
+                                    return;
+                                }
+
                                 let ts_str = dt.to_rfc3339();
                                 let synth_id =
                                     format!("implicit_{}:|{}|{}", type_key, ts_str, task.uid);
 
                                 alarms.push(AlarmIndexEntry {
-                                    trigger_ms: dt.timestamp_millis(),
+                                    trigger_ms,
                                     task_uid: task.uid.clone(),
                                     alarm_uid: synth_id,
                                     task_title: task.summary.clone(),
