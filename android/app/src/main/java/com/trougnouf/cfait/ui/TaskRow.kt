@@ -135,7 +135,9 @@ fun TaskRow(
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
-                    if (task.description.isNotEmpty()) {
+                    if (task.description.isNotEmpty() || task.blockingUids.isNotEmpty() || task.blockingNames.isNotEmpty()) {
+                        // Show the info icon if the task has a description OR if it is blocking other tasks
+                        // so users can tap to see the "Blocking (Successors)" section in details.
                         NfIcon(NfIcons.INFO, size = 10.sp, color = Color.Gray, lineHeight = 10.sp)
                     }
 

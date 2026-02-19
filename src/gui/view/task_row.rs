@@ -327,15 +327,22 @@ pub fn view_task_row<'a>(
     let has_related = !task.related_to.is_empty();
     let has_incoming_related = !app.store.get_tasks_related_to(&task.uid).is_empty();
 
+    // NEW: Determine if this task is blocking other tasks (successors)
+    let has_blocking = !app.store.get_tasks_blocking(&task.uid).is_empty();
+
     // Determine if we should show the hand cursor (has content details)
-    let has_content_to_show =
-        has_desc || has_valid_parent || has_deps || has_related || has_incoming_related;
+    let has_content_to_show = has_desc
+        || has_valid_parent
+        || has_deps
+        || has_related
+        || has_incoming_related
+        || has_blocking;
 
     let is_expanded = app.expanded_tasks.contains(&task.uid);
 
     let mut actions = row![].spacing(3).align_y(iced::Alignment::Center);
 
-    if has_desc || has_deps {
+    if has_desc || has_deps || has_blocking {
         let info_icon = icon::icon(icon::INFO)
             .size(12)
             .line_height(1.0)
