@@ -546,9 +546,10 @@ fun HomeScreen(
                             "stop" -> t.copy(statusString = "NeedsAction", isPaused = false)
                             "prio_up" -> {
                                 var p = t.priority.toInt()
-                                // If unset, start at passed defaultPriority. Otherwise increase importance (decrease number).
+                                // If unset, start at passed defaultPriority and apply the delta immediately.
+                                // Otherwise increase importance (decrease number).
                                 if (p == 0) {
-                                    p = defaultPriority
+                                    p = (defaultPriority - 1).coerceAtLeast(1)
                                 } else if (p > 1) {
                                     p -= 1
                                 }
@@ -557,9 +558,10 @@ fun HomeScreen(
 
                             "prio_down" -> {
                                 var p = t.priority.toInt()
-                                // If unset, start at passed defaultPriority. Otherwise decrease importance (increase number).
+                                // If unset, start at passed defaultPriority and apply the delta immediately.
+                                // Otherwise decrease importance (increase number).
                                 if (p == 0) {
-                                    p = defaultPriority
+                                    p = (defaultPriority + 1).coerceAtMost(9)
                                 } else if (p < 9) {
                                     p += 1
                                 }

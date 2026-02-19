@@ -390,15 +390,23 @@ impl TaskStore {
 
     pub fn change_priority(&mut self, uid: &str, delta: i8, default_priority: u8) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
-            if task.priority == 0 {
-                task.priority = default_priority;
-            } else if delta > 0 {
-                if task.priority > 1 {
-                    task.priority -= 1;
-                }
-            } else if task.priority < 9 {
-                task.priority += 1;
+            // If priority is unset, use the default and then apply the delta in one atomic step.
+            // Delta > 0 means increase importance (decrease numeric value).
+            // Delta < 0 means decrease importance (increase numeric value).
+            let mut p = task.priority as i16;
+            if p == 0 {
+                p = default_priority as i16;
             }
+
+            if delta > 0 {
+                // apply positive delta, clamp to 1
+                p = (p - delta as i16).max(1);
+            } else if delta < 0 {
+                // apply negative delta (subtracting a negative adds), clamp to 9
+                p = (p - delta as i16).min(9);
+            }
+
+            task.priority = p as u8;
             return Some(task.clone());
         }
         None
