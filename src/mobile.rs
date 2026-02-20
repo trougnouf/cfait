@@ -375,13 +375,15 @@ pub struct CfaitMobile {
     ctx: Arc<dyn AppContext>,
 }
 
+type MultiTaskMutator = Box<dyn Fn(&mut TaskStore, &str) -> Vec<Task> + Send>;
+
 // Module-scope boxed helper for persisting multiple tasks returned by store mutators.
 // This lives at module scope so it can be used from the exported uniffi impl block
 // without embedding complicated generic closure bounds in the exported impl.
 async fn apply_store_mutation_multi_boxed(
     this: &CfaitMobile,
     uid: &str,
-    mutator: Box<dyn Fn(&mut TaskStore, &str) -> Vec<Task> + Send>,
+    mutator: MultiTaskMutator,
 ) -> Result<(), MobileError> {
     let mut store = this.controller.store.lock().await;
     let tasks_to_save = (mutator)(&mut store, uid);

@@ -80,40 +80,43 @@ pub async fn handle_key_event(
             match key.code {
                 KeyCode::Char('D') | KeyCode::Char('d') => {
                     if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                        && t.handle_dismiss(&alarm_uid) {
-                            let t_clone = t.clone();
-                            // Update UI
-                            state.active_alarm = None;
-                            state.refresh_filtered_view();
-                            // Push update to backend
-                            let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                            // Push update to alarm actor
-                            update_alarms(state);
-                        }
+                        && t.handle_dismiss(&alarm_uid)
+                    {
+                        let t_clone = t.clone();
+                        // Update UI
+                        state.active_alarm = None;
+                        state.refresh_filtered_view();
+                        // Push update to backend
+                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                        // Push update to alarm actor
+                        update_alarms(state);
+                    }
                     return None;
                 }
                 KeyCode::Char('1') => {
                     // Snooze short preset
                     if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                        && t.handle_snooze(&alarm_uid, state.snooze_short_mins) {
-                            let t_clone = t.clone();
-                            state.active_alarm = None;
-                            state.refresh_filtered_view();
-                            let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                            update_alarms(state);
-                        }
+                        && t.handle_snooze(&alarm_uid, state.snooze_short_mins)
+                    {
+                        let t_clone = t.clone();
+                        state.active_alarm = None;
+                        state.refresh_filtered_view();
+                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                        update_alarms(state);
+                    }
                     return None;
                 }
                 KeyCode::Char('2') => {
                     // Snooze long preset
                     if let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                        && t.handle_snooze(&alarm_uid, state.snooze_long_mins) {
-                            let t_clone = t.clone();
-                            state.active_alarm = None;
-                            state.refresh_filtered_view();
-                            let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                            update_alarms(state);
-                        }
+                        && t.handle_snooze(&alarm_uid, state.snooze_long_mins)
+                    {
+                        let t_clone = t.clone();
+                        state.active_alarm = None;
+                        state.refresh_filtered_view();
+                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
+                        update_alarms(state);
+                    }
                     return None;
                 }
                 KeyCode::Char('c') => {
@@ -485,15 +488,16 @@ pub async fn handle_key_event(
                 if let Some(mins) = crate::model::parser::parse_duration(&state.input_buffer) {
                     if let Some((task, alarm_uid)) = state.active_alarm.clone()
                         && let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                        && t.snooze_alarm(&alarm_uid, mins) {
-                            let t_clone = t.clone();
-                            state.active_alarm = None;
-                            state.mode = InputMode::Normal;
-                            state.reset_input();
-                            state.refresh_filtered_view();
-                            let _ = action_tx.send(Action::UpdateTask(t_clone)).await;
-                            update_alarms(state);
-                        }
+                        && t.snooze_alarm(&alarm_uid, mins)
+                    {
+                        let t_clone = t.clone();
+                        state.active_alarm = None;
+                        state.mode = InputMode::Normal;
+                        state.reset_input();
+                        state.refresh_filtered_view();
+                        let _ = action_tx.send(Action::UpdateTask(t_clone)).await;
+                        update_alarms(state);
+                    }
                 } else {
                     state.message = format!("Invalid duration: '{}'", state.input_buffer);
                 }
@@ -1025,20 +1029,14 @@ pub async fn handle_key_event(
                 if state.active_focus == Focus::Sidebar {
                     match state.sidebar_mode {
                         SidebarMode::Calendars => {
-                            let enabled_count = state
+                            let are_all_visible = state
                                 .calendars
                                 .iter()
                                 .filter(|c| !state.disabled_calendars.contains(&c.href))
-                                .count();
-                            let visible_count = state
-                                .calendars
-                                .iter()
-                                .filter(|c| {
-                                    !state.disabled_calendars.contains(&c.href)
-                                        && !state.hidden_calendars.contains(&c.href)
-                                })
-                                .count();
-                            if visible_count == enabled_count {
+                                .filter(|c| c.href != "local://trash")
+                                .all(|c| !state.hidden_calendars.contains(&c.href));
+
+                            if are_all_visible {
                                 for cal in &state.calendars {
                                     if state.active_cal_href.as_ref() != Some(&cal.href) {
                                         state.hidden_calendars.insert(cal.href.clone());

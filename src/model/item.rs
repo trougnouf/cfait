@@ -1208,8 +1208,10 @@ impl Task {
         crate::model::IcsAdapter::to_ics(self)
     }
 
-    /// Produce a companion VEVENT ICS for this Task if applicable.
-    pub fn to_event_ics(&self) -> Option<(String, String)> {
+    /// Produce companion VEVENT ICS files for this Task if applicable.
+    /// Returns a vector of (suffix, ics_body) tuples where each tuple represents
+    /// a separate .ics file (e.g., `evt-<uid>-start.ics`, `evt-<uid>-due.ics`).
+    pub fn to_event_ics(&self) -> Vec<(String, String)> {
         crate::model::IcsAdapter::to_event_ics(self)
     }
 

@@ -1223,27 +1223,25 @@ impl TaskStore {
 
             let is_suppressed = t.status.is_done() || t.is_blocked || t.is_implicitly_blocked;
 
-            if !is_suppressed
-                && let Some(children) = map.get(&t.uid) {
-                    for &child_idx in children {
-                        let child_eff =
-                            resolve(child_idx, tasks, map, cache, visiting, default_prio);
-                        let ordering = Task::compare_components(
-                            child_eff.sort_rank,
-                            child_eff.effective_priority,
-                            &child_eff.effective_due,
-                            &child_eff.effective_dtstart,
-                            best.sort_rank,
-                            best.effective_priority,
-                            &best.effective_due,
-                            &best.effective_dtstart,
-                            default_prio,
-                        );
-                        if ordering == std::cmp::Ordering::Less {
-                            best = child_eff;
-                        }
+            if !is_suppressed && let Some(children) = map.get(&t.uid) {
+                for &child_idx in children {
+                    let child_eff = resolve(child_idx, tasks, map, cache, visiting, default_prio);
+                    let ordering = Task::compare_components(
+                        child_eff.sort_rank,
+                        child_eff.effective_priority,
+                        &child_eff.effective_due,
+                        &child_eff.effective_dtstart,
+                        best.sort_rank,
+                        best.effective_priority,
+                        &best.effective_due,
+                        &best.effective_dtstart,
+                        default_prio,
+                    );
+                    if ordering == std::cmp::Ordering::Less {
+                        best = child_eff;
                     }
                 }
+            }
 
             visiting.remove(&idx);
             cache.insert(idx, best.clone());
@@ -1266,11 +1264,19 @@ impl TaskStore {
             }
         }
 
-        // Final sorting using compare_for_sort to produce a deterministic order for UI rendering.
-        final_tasks_processed.sort_by(|a, b| a.compare_for_sort(b, options.default_priority));
+        // Delegate to the model's hierarchy organizer which handles parent/child relationships,
+        // indentation depth, and injecting virtual expand/collapse rows for completed groups.
+        // Note: organize_hierarchy applies `compare_for_sort` internally before building the tree.
+        let organized_tasks = Task::organize_hierarchy(
+            final_tasks_processed,
+            options.default_priority,
+            options.expanded_done_groups,
+            options.max_done_roots,
+            options.max_done_subtasks,
+        );
 
         FilterResult {
-            tasks: final_tasks_processed,
+            tasks: organized_tasks,
             categories,
             locations,
         }

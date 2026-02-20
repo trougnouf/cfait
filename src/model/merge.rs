@@ -30,8 +30,31 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
     merge_field!(location);
     merge_field!(url);
     merge_field!(geo);
-    // Time-tracking fields: prefer local changes when server did not modify them.
-    merge_field!(time_spent_seconds);
+    // Smart merge for time tracking (accumulate offline time from both clients)
+    if local.time_spent_seconds != base.time_spent_seconds
+        || server.time_spent_seconds != base.time_spent_seconds
+    {
+        let local_diff = local
+            .time_spent_seconds
+            .saturating_sub(base.time_spent_seconds);
+        let server_diff = server
+            .time_spent_seconds
+            .saturating_sub(base.time_spent_seconds);
+        merged.time_spent_seconds = base.time_spent_seconds + local_diff + server_diff;
+    }
+
+    // Smart merge for sessions (union both lists)
+    if local.sessions != base.sessions || server.sessions != base.sessions {
+        let mut all_sessions = server.sessions.clone();
+        for local_session in &local.sessions {
+            if !all_sessions.contains(local_session) {
+                all_sessions.push(local_session.clone());
+            }
+        }
+        all_sessions.sort_by_key(|s| s.start);
+        merged.sessions = all_sessions;
+    }
+
     merge_field!(last_started_at);
 
     if local.categories != base.categories {

@@ -23,6 +23,8 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
         .calendars
         .iter()
         .filter(|c| !app.disabled_calendars.contains(&c.href))
+        // Do not factor the Trash calendar into the "Show all" toggle state
+        .filter(|c| c.href != LOCAL_TRASH_HREF)
         .all(|c| !app.hidden_calendars.contains(&c.href));
 
     let theme = app.theme();

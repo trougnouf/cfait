@@ -755,14 +755,17 @@ impl IcsAdapter {
         })
     }
 
-    // REVISED to_event_ics: restore robust handling of various date/status combinations
-    // while preserving session export and clamping long spans.
-    pub fn to_event_ics(task: &Task) -> Option<(String, String)> {
+    // REVISED to_event_ics: robust handling of various date/status combinations
+    // now outputs a Vec of separate ICS files to comply with CalDAV's strict
+    // single-UID-per-file constraint, while preserving session history.
+    pub fn to_event_ics(task: &Task) -> Vec<(String, String)> {
+        let mut results = Vec::new();
         let base_uid = format!("evt-{}", task.uid);
-        let mut calendar = Calendar::new();
+
+        let has_sessions = !task.sessions.is_empty();
 
         // 1. GENERATE WORK SESSIONS (The "Past" blocks for time tracking)
-        // These are always generated if present.
+        // These are always generated if present into separate ICS files.
         for (index, session) in task.sessions.iter().enumerate() {
             let start_utc = Utc
                 .timestamp_opt(session.start, 0)
@@ -778,11 +781,15 @@ impl IcsAdapter {
                 continue;
             }
 
+            let suffix = format!("-session-{}", index);
+            let uid = format!("{}{}", base_uid, suffix);
+
             let mut session_event = Event::new();
-            session_event.add_property("UID", format!("{}-session-{}", base_uid, index));
+            session_event.add_property("UID", &uid);
             session_event.summary(&format!("⚙ {}", task.summary));
             session_event.timestamp(Utc::now());
             session_event.add_property("STATUS", "CONFIRMED");
+            session_event.add_property("SEQUENCE", task.sequence.to_string());
 
             let duration_mins = (end_utc - start_utc).num_minutes();
             let desc = format!(
@@ -794,10 +801,11 @@ impl IcsAdapter {
             session_event.add_property("DTSTART", start_utc.format("%Y%m%dT%H%M%SZ").to_string());
             session_event.add_property("DTEND", end_utc.format("%Y%m%dT%H%M%SZ").to_string());
 
+            let mut calendar = Calendar::new();
             calendar.push(session_event);
-        }
 
-        let has_sessions = !task.sessions.is_empty();
+            results.push((suffix, calendar.to_string()));
+        }
 
         // 2. GENERATE MAIN EVENT (Planning or Completed)
         if task.status == TaskStatus::Completed && !has_sessions {
@@ -817,77 +825,25 @@ impl IcsAdapter {
                 .or_else(|| task.due.as_ref().map(|d| d.to_comparison_time()))
                 .or_else(|| task.dtstart.as_ref().map(|d| d.to_comparison_time()));
 
-            let completed_at = completed_at_opt?;
+            if let Some(completed_at) = completed_at_opt {
+                let duration_mins = if task.time_spent_seconds > 0 && !has_sessions {
+                    (task.time_spent_seconds / 60).max(1) as i64
+                } else {
+                    task.estimated_duration.unwrap_or(60) as i64
+                };
+                let start_at = completed_at - chrono::Duration::minutes(duration_mins);
 
-            let duration_mins = if task.time_spent_seconds > 0 && !has_sessions {
-                (task.time_spent_seconds / 60).max(1) as i64
-            } else {
-                task.estimated_duration.unwrap_or(60) as i64
-            };
-            let start_at = completed_at - chrono::Duration::minutes(duration_mins);
-
-            let mut event = Event::new();
-            event.add_property("UID", &base_uid);
-            event.summary(&task.summary);
-            event.timestamp(Utc::now());
-            event.add_property("STATUS", "CONFIRMED");
-
-            let mut event_desc = String::new();
-            if !task.description.is_empty() {
-                event_desc.push_str(&task.description);
-                event_desc.push_str("\n\n");
+                let ics = Self::make_single_event_ics(
+                    task,
+                    "",
+                    DateType::Specific(start_at),
+                    DateType::Specific(completed_at),
+                );
+                results.push(("".to_string(), ics));
             }
-            event_desc.push_str("✓ Task Completed\n");
-            event.description(&event_desc);
-
-            if let Some(loc) = &task.location {
-                event.add_property("LOCATION", loc);
-            }
-            if let Some(url) = &task.url {
-                event.add_property("URL", url);
-            }
-
-            event.add_property("DTSTART", start_at.format("%Y%m%dT%H%M%SZ").to_string());
-            event.add_property("DTEND", completed_at.format("%Y%m%dT%H%M%SZ").to_string());
-
-            calendar.push(event);
         } else if (task.due.is_some() || task.dtstart.is_some())
             && task.status != TaskStatus::Completed
         {
-            // Planning/event placeholder for non-completed tasks
-
-            // Helper to build a base event with common properties
-            let create_base_event = |uid_suffix: &str| -> Event {
-                let mut event = Event::new();
-                event.add_property("UID", format!("{}{}", base_uid, uid_suffix));
-                event.summary(&task.summary);
-                event.timestamp(Utc::now());
-
-                let mut event_desc = String::new();
-                if !task.description.is_empty() {
-                    event_desc.push_str(&task.description);
-                    event_desc.push_str("\n\n");
-                }
-                event_desc
-                    .push_str("⚠️ This event was automatically created by Cfait from a task.\n");
-                event_desc.push_str("It will be automatically updated/overwritten when the task changes, and it might get deleted when the task is completed or canceled.\n");
-                event_desc.push_str("Any changes made directly to this event will be lost.\n");
-                event.description(&event_desc);
-
-                if let Some(loc) = &task.location {
-                    event.add_property("LOCATION", loc);
-                }
-                if let Some(url) = &task.url {
-                    event.add_property("URL", url);
-                }
-                let status_str = match task.status {
-                    TaskStatus::Cancelled => "CANCELLED",
-                    _ => "CONFIRMED",
-                };
-                event.add_property("STATUS", status_str);
-                event
-            };
-
             // Calculate duration to use (Estimate or Spent or Default 1h)
             let has_explicit_duration =
                 task.estimated_duration.is_some() || (task.time_spent_seconds > 0 && !has_sessions);
@@ -898,27 +854,33 @@ impl IcsAdapter {
                 task.estimated_duration.unwrap_or(60) as i64
             };
 
-            // Logic for determining Date ranges to push
-            let events_to_push: Vec<(DateType, DateType, String)> = match (&task.dtstart, &task.due)
-            {
+            match (&task.dtstart, &task.due) {
                 (Some(s), Some(d)) => {
                     if has_explicit_duration {
                         // CASE A: Start + Due + Estimate/Spent
-                        // Only be estimated time long and end at due time.
-                        // If Due is AllDay, we default to a single AllDay event on that day.
                         match d {
-                            DateType::AllDay(date) => vec![(
-                                DateType::AllDay(*date),
-                                DateType::AllDay(*date),
-                                "".to_string(),
-                            )],
+                            DateType::AllDay(date) => {
+                                results.push((
+                                    "".to_string(),
+                                    Self::make_single_event_ics(
+                                        task,
+                                        "",
+                                        DateType::AllDay(*date),
+                                        DateType::AllDay(*date),
+                                    ),
+                                ));
+                            }
                             DateType::Specific(dt) => {
                                 let start_val = *dt - chrono::Duration::minutes(duration_mins);
-                                vec![(
-                                    DateType::Specific(start_val),
-                                    DateType::Specific(*dt),
+                                results.push((
                                     "".to_string(),
-                                )]
+                                    Self::make_single_event_ics(
+                                        task,
+                                        "",
+                                        DateType::Specific(start_val),
+                                        DateType::Specific(*dt),
+                                    ),
+                                ));
                             }
                         }
                     } else {
@@ -927,25 +889,35 @@ impl IcsAdapter {
                             (DateType::AllDay(sd), DateType::AllDay(ed)) => {
                                 if sd == ed {
                                     // B1: Same day -> All day event
-                                    vec![(
-                                        DateType::AllDay(*sd),
-                                        DateType::AllDay(*ed),
+                                    results.push((
                                         "".to_string(),
-                                    )]
+                                        Self::make_single_event_ics(
+                                            task,
+                                            "",
+                                            DateType::AllDay(*sd),
+                                            DateType::AllDay(*ed),
+                                        ),
+                                    ));
                                 } else {
                                     // B2: Different days -> Two events (Start and Due)
-                                    vec![
-                                        (
+                                    results.push((
+                                        "-start".to_string(),
+                                        Self::make_single_event_ics(
+                                            task,
+                                            "-start",
                                             DateType::AllDay(*sd),
                                             DateType::AllDay(*sd),
-                                            "-start".to_string(),
                                         ),
-                                        (
+                                    ));
+                                    results.push((
+                                        "-due".to_string(),
+                                        Self::make_single_event_ics(
+                                            task,
+                                            "-due",
                                             DateType::AllDay(*ed),
                                             DateType::AllDay(*ed),
-                                            "-due".to_string(),
                                         ),
-                                    ]
+                                    ));
                                 }
                             }
                             _ => {
@@ -956,17 +928,18 @@ impl IcsAdapter {
 
                                 if diff.num_hours() < 24 {
                                     // B3: < 24h -> Span length
-                                    vec![(s.clone(), d.clone(), "".to_string())]
+                                    results.push((
+                                        "".to_string(),
+                                        Self::make_single_event_ics(task, "", s.clone(), d.clone()),
+                                    ));
                                 } else {
                                     // B4: > 24h -> Two 1h events
-                                    // Start: s -> s+1h
                                     let start_event_end = match s {
-                                        DateType::AllDay(date) => DateType::AllDay(*date), // Keep as AllDay if source was AllDay
+                                        DateType::AllDay(date) => DateType::AllDay(*date),
                                         DateType::Specific(dt) => {
                                             DateType::Specific(*dt + chrono::Duration::minutes(60))
                                         }
                                     };
-                                    // Due: d-1h -> d
                                     let due_event_start = match d {
                                         DateType::AllDay(date) => DateType::AllDay(*date),
                                         DateType::Specific(dt) => {
@@ -974,10 +947,24 @@ impl IcsAdapter {
                                         }
                                     };
 
-                                    vec![
-                                        (s.clone(), start_event_end, "-start".to_string()),
-                                        (due_event_start, d.clone(), "-due".to_string()),
-                                    ]
+                                    results.push((
+                                        "-start".to_string(),
+                                        Self::make_single_event_ics(
+                                            task,
+                                            "-start",
+                                            s.clone(),
+                                            start_event_end,
+                                        ),
+                                    ));
+                                    results.push((
+                                        "-due".to_string(),
+                                        Self::make_single_event_ics(
+                                            task,
+                                            "-due",
+                                            due_event_start,
+                                            d.clone(),
+                                        ),
+                                    ));
                                 }
                             }
                         }
@@ -987,70 +974,148 @@ impl IcsAdapter {
                     // Start Only: Start -> Start + Duration
                     match s {
                         DateType::AllDay(d) => {
-                            vec![(DateType::AllDay(*d), DateType::AllDay(*d), "".to_string())]
+                            results.push((
+                                "".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "",
+                                    DateType::AllDay(*d),
+                                    DateType::AllDay(*d),
+                                ),
+                            ));
                         }
-                        DateType::Specific(dt) => vec![(
-                            DateType::Specific(*dt),
-                            DateType::Specific(*dt + chrono::Duration::minutes(duration_mins)),
-                            "".to_string(),
-                        )],
+                        DateType::Specific(dt) => {
+                            results.push((
+                                "".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "",
+                                    DateType::Specific(*dt),
+                                    DateType::Specific(
+                                        *dt + chrono::Duration::minutes(duration_mins),
+                                    ),
+                                ),
+                            ));
+                        }
                     }
                 }
                 (None, Some(d)) => {
                     // Due Only: Due - Duration -> Due
                     match d {
                         DateType::AllDay(d) => {
-                            vec![(DateType::AllDay(*d), DateType::AllDay(*d), "".to_string())]
+                            results.push((
+                                "".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "",
+                                    DateType::AllDay(*d),
+                                    DateType::AllDay(*d),
+                                ),
+                            ));
                         }
-                        DateType::Specific(dt) => vec![(
-                            DateType::Specific(*dt - chrono::Duration::minutes(duration_mins)),
-                            DateType::Specific(*dt),
-                            "".to_string(),
-                        )],
+                        DateType::Specific(dt) => {
+                            results.push((
+                                "".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "",
+                                    DateType::Specific(
+                                        *dt - chrono::Duration::minutes(duration_mins),
+                                    ),
+                                    DateType::Specific(*dt),
+                                ),
+                            ));
+                        }
                     }
                 }
-                (None, None) => vec![],
-            };
-
-            // Push all generated event segments
-            for (start_dt, end_dt, suffix) in events_to_push {
-                let mut event = create_base_event(&suffix);
-
-                match start_dt {
-                    DateType::AllDay(d) => {
-                        let mut p =
-                            icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
-                        p.add_parameter("VALUE", "DATE");
-                        event.append_property(p);
-                    }
-                    DateType::Specific(t) => {
-                        event.add_property("DTSTART", t.format("%Y%m%dT%H%M%SZ").to_string());
-                    }
-                }
-
-                match end_dt {
-                    DateType::AllDay(d) => {
-                        let next_day = d + chrono::Duration::days(1);
-                        let mut p = icalendar::Property::new(
-                            "DTEND",
-                            next_day.format("%Y%m%d").to_string(),
-                        );
-                        p.add_parameter("VALUE", "DATE");
-                        event.append_property(p);
-                    }
-                    DateType::Specific(t) => {
-                        event.add_property("DTEND", t.format("%Y%m%dT%H%M%SZ").to_string());
-                    }
-                }
-
-                calendar.push(event);
+                (None, None) => {}
             }
         }
 
-        if calendar.components.is_empty() {
-            None
-        } else {
-            Some((base_uid, calendar.to_string()))
+        results
+    }
+
+    fn make_single_event_ics(
+        task: &Task,
+        suffix: &str,
+        start_dt: DateType,
+        end_dt: DateType,
+    ) -> String {
+        let base_uid = format!("evt-{}", task.uid);
+        let uid = format!("{}{}", base_uid, suffix);
+
+        let mut event = Event::new();
+        event.add_property("UID", &uid);
+
+        let summary = match suffix {
+            "-start" => format!("{} (start)", task.summary),
+            "-due" => format!("{} (due)", task.summary),
+            _ => task.summary.clone(),
+        };
+        event.summary(&summary);
+
+        event.timestamp(Utc::now());
+        event.add_property("SEQUENCE", task.sequence.to_string());
+
+        let mut event_desc = String::new();
+        if !task.description.is_empty() {
+            event_desc.push_str(&task.description);
+            event_desc.push_str("\n\n");
         }
+        event_desc.push_str("⚠️ This event was automatically created by Cfait from a task.\n");
+        if task.status == TaskStatus::Completed {
+            event_desc.push_str("✓ Task Completed\n");
+        } else {
+            event_desc.push_str("It will be automatically updated/overwritten when the task changes, and it might get deleted when the task is completed or canceled.\n");
+            event_desc.push_str("Any changes made directly to this event will be lost.\n");
+        }
+        event.description(&event_desc);
+
+        if let Some(loc) = &task.location {
+            event.add_property("LOCATION", loc);
+        }
+        if let Some(url) = &task.url {
+            event.add_property("URL", url);
+        }
+        if let Some(rrule) = &task.rrule {
+            event.add_property("RRULE", rrule);
+        }
+
+        match task.status {
+            TaskStatus::Cancelled => {
+                event.add_property("STATUS", "CANCELLED");
+            }
+            _ => {
+                event.add_property("STATUS", "CONFIRMED");
+            }
+        }
+
+        match start_dt {
+            DateType::AllDay(d) => {
+                let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
+                p.add_parameter("VALUE", "DATE");
+                event.append_property(p);
+            }
+            DateType::Specific(t) => {
+                event.add_property("DTSTART", t.format("%Y%m%dT%H%M%SZ").to_string());
+            }
+        }
+
+        match end_dt {
+            DateType::AllDay(d) => {
+                let next_day = d + chrono::Duration::days(1);
+                let mut p =
+                    icalendar::Property::new("DTEND", next_day.format("%Y%m%d").to_string());
+                p.add_parameter("VALUE", "DATE");
+                event.append_property(p);
+            }
+            DateType::Specific(t) => {
+                event.add_property("DTEND", t.format("%Y%m%dT%H%M%SZ").to_string());
+            }
+        }
+
+        let mut calendar = Calendar::new();
+        calendar.push(event);
+        calendar.to_string()
     }
 }

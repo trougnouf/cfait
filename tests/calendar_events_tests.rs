@@ -92,7 +92,7 @@ fn test_event_generation_no_dates_returns_none() {
     let task = parse("Task without dates");
     let result = task.to_event_ics();
     assert!(
-        result.is_none(),
+        result.is_empty(),
         "Task without dates should not generate event"
     );
 }
@@ -105,11 +105,15 @@ fn test_event_generation_with_due_date() {
     ));
 
     let result = task.to_event_ics();
-    assert!(result.is_some(), "Task with due date should generate event");
+    assert!(
+        !result.is_empty(),
+        "Task with due date should generate event"
+    );
 
-    let (event_uid, ics) = result.unwrap();
-    assert_eq!(event_uid, format!("evt-{}", task.uid));
+    let (suffix, ics) = result.first().unwrap();
+    assert_eq!(suffix, "");
     assert!(ics.contains("BEGIN:VEVENT"));
+    assert!(ics.contains(&format!("UID:evt-{}", task.uid)));
     assert!(ics.contains("SUMMARY:Buy milk"));
     assert!(ics.contains("DTSTART"));
     assert!(ics.contains("DTEND"));
@@ -124,12 +128,12 @@ fn test_event_generation_with_start_date() {
 
     let result = task.to_event_ics();
     assert!(
-        result.is_some(),
+        !result.is_empty(),
         "Task with start date should generate event"
     );
 
-    let (event_uid, ics) = result.unwrap();
-    assert_eq!(event_uid, format!("evt-{}", task.uid));
+    let (suffix, ics) = result.first().unwrap();
+    assert_eq!(suffix, "");
     assert!(ics.contains("BEGIN:VEVENT"));
     assert!(ics.contains("SUMMARY:Project work"));
 }
@@ -145,12 +149,21 @@ fn test_event_generation_both_dates() {
     ));
 
     let result = task.to_event_ics();
-    assert!(result.is_some());
+    assert_eq!(
+        result.len(),
+        2,
+        "Different all-day dates should split into two events"
+    );
 
-    let (_uid, ics) = result.unwrap();
-    assert!(ics.contains("DTSTART"));
-    assert!(ics.contains("DTEND"));
-    // Should span from start to due
+    let (suffix1, ics1) = &result[0];
+    assert_eq!(suffix1, "-start");
+    assert!(ics1.contains("DTSTART"));
+    assert!(ics1.contains("DTEND"));
+
+    let (suffix2, ics2) = &result[1];
+    assert_eq!(suffix2, "-due");
+    assert!(ics2.contains("DTSTART"));
+    assert!(ics2.contains("DTEND"));
 }
 
 #[test]
@@ -162,9 +175,10 @@ fn test_event_generation_with_duration() {
     task.estimated_duration = Some(30);
 
     let result = task.to_event_ics();
-    assert!(result.is_some());
+    assert!(!result.is_empty());
 
-    let (_uid, ics) = result.unwrap();
+    let (suffix, ics) = result.first().unwrap();
+    assert_eq!(suffix, "");
     // Should calculate start time as 30 minutes before due
     assert!(ics.contains("DTSTART"));
     assert!(ics.contains("DTEND"));
@@ -178,9 +192,9 @@ fn test_event_generation_all_day_exclusive_dtend() {
     ));
 
     let result = task.to_event_ics();
-    assert!(result.is_some());
+    assert!(!result.is_empty());
 
-    let (_uid, ics) = result.unwrap();
+    let (_, ics) = result.first().unwrap();
     // DTEND for all-day events should be exclusive (next day)
     assert!(ics.contains("VALUE=DATE"));
     assert!(ics.contains("20250216")); // Next day for DTEND
@@ -195,9 +209,9 @@ fn test_event_generation_with_location() {
     task.location = Some("office".to_string());
 
     let result = task.to_event_ics();
-    assert!(result.is_some());
+    assert!(!result.is_empty());
 
-    let (_uid, ics) = result.unwrap();
+    let (_, ics) = result.first().unwrap();
     assert!(ics.contains("LOCATION:office"));
 }
 
@@ -210,9 +224,9 @@ fn test_event_generation_with_url() {
     task.url = Some("https://meet.example.com".to_string());
 
     let result = task.to_event_ics();
-    assert!(result.is_some());
+    assert!(!result.is_empty());
 
-    let (_uid, ics) = result.unwrap();
+    let (_, ics) = result.first().unwrap();
     assert!(ics.contains("URL:https://meet.example.com"));
 }
 
@@ -225,9 +239,9 @@ fn test_event_generation_with_description() {
     task.description = "Important".to_string();
 
     let result = task.to_event_ics();
-    assert!(result.is_some());
+    assert!(!result.is_empty());
 
-    let (_uid, ics) = result.unwrap();
+    let (_, ics) = result.first().unwrap();
     assert!(ics.contains("DESCRIPTION:"));
     // Should contain disclaimer parts (checking short words that won't be split by line folding)
     assert!(ics.contains("automatically"));
@@ -245,9 +259,9 @@ fn test_event_generation_disclaimer_present() {
     ));
 
     let result = task.to_event_ics();
-    assert!(result.is_some());
+    assert!(!result.is_empty());
 
-    let (_uid, ics) = result.unwrap();
+    let (_, ics) = result.first().unwrap();
 
     // The disclaimer is in the DESCRIPTION field, which may be encoded
     // Just check that key phrases appear somewhere in the ICS
@@ -272,22 +286,25 @@ fn test_event_generation_status_mapping() {
     // Test Cancelled status
     task.status = TaskStatus::Cancelled;
     let result = task.to_event_ics();
-    assert!(result.is_some(), "Cancelled task should generate an event");
-    let (_uid, ics) = result.unwrap();
+    assert!(
+        !result.is_empty(),
+        "Cancelled task should generate an event"
+    );
+    let (_, ics) = result.first().unwrap();
     assert!(ics.contains("STATUS:CANCELLED"));
 
     // Test Completed status
     task.status = TaskStatus::Completed;
     let result = task.to_event_ics();
-    assert!(result.is_some());
-    let (_uid, ics) = result.unwrap();
+    assert!(!result.is_empty());
+    let (_, ics) = result.first().unwrap();
     assert!(ics.contains("STATUS:CONFIRMED"));
 
     // Test other statuses
     task.status = TaskStatus::NeedsAction;
     let result = task.to_event_ics();
-    assert!(result.is_some());
-    let (_uid, ics) = result.unwrap();
+    assert!(!result.is_empty());
+    let (_, ics) = result.first().unwrap();
     assert!(ics.contains("STATUS:CONFIRMED"));
 }
 
@@ -300,16 +317,17 @@ fn test_event_generation_deterministic_uid() {
     ));
 
     let result1 = task1.to_event_ics();
-    assert!(result1.is_some());
-    let (uid1, _) = result1.unwrap();
+    assert!(!result1.is_empty());
+    let (suffix1, ics1) = result1.first().unwrap();
 
     // Generate again - should get same UID
     let result2 = task1.to_event_ics();
-    assert!(result2.is_some());
-    let (uid2, _) = result2.unwrap();
+    assert!(!result2.is_empty());
+    let (suffix2, ics2) = result2.first().unwrap();
 
-    assert_eq!(uid1, uid2, "Event UID should be deterministic");
-    assert_eq!(uid1, "evt-test-uid-123");
+    assert_eq!(suffix1, suffix2, "Suffix should be deterministic");
+    assert!(ics1.contains("UID:evt-test-uid-123"));
+    assert!(ics2.contains("UID:evt-test-uid-123"));
 }
 
 // ============================================================================
@@ -460,9 +478,6 @@ fn test_override_priority_explicit_true_over_global() {
     // Task explicitly says +cal
     let task = parse("Task +cal @tomorrow");
     assert_eq!(task.create_event, Some(true));
-
-    // Should create event even if global config is false
-    // (This is tested in sync logic, but we verify the field is set)
 }
 
 #[test]
@@ -470,9 +485,6 @@ fn test_override_priority_explicit_false_over_global() {
     // Task explicitly says -cal
     let task = parse("Task -cal @tomorrow");
     assert_eq!(task.create_event, Some(false));
-
-    // Should NOT create event even if global config is true
-    // (This is tested in sync logic, but we verify the field is set)
 }
 
 #[test]
@@ -480,8 +492,6 @@ fn test_override_priority_none_uses_global() {
     // Task has no explicit override
     let task = parse("Task @tomorrow");
     assert_eq!(task.create_event, None);
-
-    // Should use global config setting (tested in sync logic)
 }
 
 // ============================================================================
@@ -528,9 +538,9 @@ fn test_event_generation_with_timed_dates() {
     task.estimated_duration = Some(90); // 1.5 hours
 
     let result = task.to_event_ics();
-    assert!(result.is_some());
+    assert!(!result.is_empty());
 
-    let (_uid, ics) = result.unwrap();
+    let (_, ics) = result.first().unwrap();
     // Should have specific time format (not VALUE=DATE)
     assert!(ics.contains("20250215T"));
     assert!(!ics.contains("VALUE=DATE"));
@@ -545,9 +555,9 @@ fn test_event_default_duration_is_one_hour() {
     // No estimated_duration set
 
     let result = task.to_event_ics();
-    assert!(result.is_some());
+    assert!(!result.is_empty());
 
-    let (_uid, ics) = result.unwrap();
+    let (_, ics) = result.first().unwrap();
     // Should calculate start time as 1 hour before due (default)
     // Event should be from 13:00 to 14:00
     assert!(ics.contains("DTSTART:20250215T130000Z"));
@@ -567,27 +577,23 @@ fn test_event_long_span_split_into_start_and_due() {
     ));
 
     let result = task.to_event_ics();
-    assert!(result.is_some());
-
-    let (_uid, ics) = result.unwrap();
-
-    // With new logic, we expect TWO events for this all-day range.
-    // One for start (Jan 1) and one for due (Feb 15).
-
-    // Check for Start Event (Jan 1)
-    assert!(ics.contains("DTSTART;VALUE=DATE:20250101"));
-    assert!(ics.contains("DTEND;VALUE=DATE:20250102")); // Exclusive end
-
-    // Check for Due Event (Feb 15)
-    assert!(ics.contains("DTSTART;VALUE=DATE:20250215"));
-    assert!(ics.contains("DTEND;VALUE=DATE:20250216")); // Exclusive end
-
-    // Ensure we have two distinct VEVENT blocks
-    let event_count = ics.matches("BEGIN:VEVENT").count();
     assert_eq!(
-        event_count, 2,
-        "Should have two VEVENTs for separate start/due dates"
+        result.len(),
+        2,
+        "Different all-day dates should split into two events"
     );
+
+    // Start event
+    let start_event = result.iter().find(|(s, _)| s == "-start").unwrap();
+    assert!(start_event.1.contains("SUMMARY:Long project (start)"));
+    assert!(start_event.1.contains("DTSTART;VALUE=DATE:20250101"));
+    assert!(start_event.1.contains("DTEND;VALUE=DATE:20250102")); // Exclusive end
+
+    // Due event
+    let due_event = result.iter().find(|(s, _)| s == "-due").unwrap();
+    assert!(due_event.1.contains("SUMMARY:Long project (due)"));
+    assert!(due_event.1.contains("DTSTART;VALUE=DATE:20250215"));
+    assert!(due_event.1.contains("DTEND;VALUE=DATE:20250216")); // Exclusive end
 }
 
 #[test]
@@ -603,22 +609,21 @@ fn test_event_short_span_split_into_start_and_due() {
     ));
 
     let result = task.to_event_ics();
-    assert!(result.is_some());
-
-    let (_uid, ics) = result.unwrap();
-
-    // Per new logic: "if there is no time and the start and due day differ, make it two calendar events"
-    // So we expect Jan 1 and Jan 5, NOT a span from 1 to 5.
-
-    assert!(ics.contains("DTSTART;VALUE=DATE:20250101"));
-    assert!(ics.contains("DTSTART;VALUE=DATE:20250105"));
-
-    // Ensure we have two events
-    let event_count = ics.matches("BEGIN:VEVENT").count();
     assert_eq!(
-        event_count, 2,
-        "Should have two VEVENTs for different start/due days"
+        result.len(),
+        2,
+        "Different all-day dates should split into two events"
     );
+
+    // Start event
+    let start_event = result.iter().find(|(s, _)| s == "-start").unwrap();
+    assert!(start_event.1.contains("SUMMARY:Short project (start)"));
+    assert!(start_event.1.contains("DTSTART;VALUE=DATE:20250101"));
+
+    // Due event
+    let due_event = result.iter().find(|(s, _)| s == "-due").unwrap();
+    assert!(due_event.1.contains("SUMMARY:Short project (due)"));
+    assert!(due_event.1.contains("DTSTART;VALUE=DATE:20250105"));
 }
 
 #[test]
@@ -634,58 +639,39 @@ fn test_event_long_span_with_specific_times() {
     ));
 
     let result = task.to_event_ics();
-    assert!(result.is_some());
-
-    let (_uid, ics) = result.unwrap();
-
-    // Logic: "if there is a time and the difference is greater than 24h, make a 1h event starting at the start and a 1h event ending at the due datetime."
+    assert_eq!(result.len(), 2, "Specific times > 24h apart should split");
 
     // 1. Check Start Event (Jan 1, 09:00 to 10:00 (default 1h))
-    assert!(ics.contains("DTSTART:20250101T090000Z"));
-    // Since task has no duration, start event gets 1h duration added to start time for end?
-    // Wait, the logic implemented matches `DateType::Specific(dt) => DateType::Specific(*dt + chrono::Duration::minutes(60))` for start event end.
-    // So Jan 1 10:00
-    assert!(ics.contains("DTEND:20250101T100000Z"));
+    let start_event = result.iter().find(|(s, _)| s == "-start").unwrap();
+    assert!(start_event.1.contains("SUMMARY:Timed long project (start)"));
+    assert!(start_event.1.contains("DTSTART:20250101T090000Z"));
+    assert!(start_event.1.contains("DTEND:20250101T100000Z"));
 
     // 2. Check Due Event (Feb 15, ending at 17:00. Start = 17:00 - 60m = 16:00)
-    assert!(ics.contains("DTSTART:20250215T160000Z"));
-    assert!(ics.contains("DTEND:20250215T170000Z"));
-
-    // Ensure we have two events
-    let event_count = ics.matches("BEGIN:VEVENT").count();
-    assert_eq!(
-        event_count, 2,
-        "Should have two VEVENTs for start and due times > 24h apart"
-    );
+    let due_event = result.iter().find(|(s, _)| s == "-due").unwrap();
+    assert!(due_event.1.contains("SUMMARY:Timed long project (due)"));
+    assert!(due_event.1.contains("DTSTART:20250215T160000Z"));
+    assert!(due_event.1.contains("DTEND:20250215T170000Z"));
 }
 
 #[test]
 fn test_override_priority_deletion_when_global_off() {
-    // Test that events are deleted when global setting is OFF and task has no override
     let mut task = parse("Task with dates");
     task.due = Some(DateType::Specific(
         Utc.with_ymd_and_hms(2025, 2, 15, 14, 0, 0).unwrap(),
     ));
-    task.create_event = None; // No per-task override
+    task.create_event = None;
 
-    // With global setting ON, should generate event
     let result_on = task.to_event_ics();
-    assert!(result_on.is_some());
+    assert!(!result_on.is_empty());
 
-    // This test verifies the logic in sync_companion_event would delete
-    // We can't directly test the async function here, but we verify that:
-    // 1. Task with dates CAN generate an event
-    // 2. When should_create_events = false (global OFF), should_delete = true
-    // The actual deletion logic is tested via the backfill behavior
-
-    // Verify that a task with +cal override would NOT be deleted even with global OFF
     let mut task_with_override = parse("Task +cal");
     task_with_override.due = Some(DateType::Specific(
         Utc.with_ymd_and_hms(2025, 2, 15, 14, 0, 0).unwrap(),
     ));
     assert_eq!(task_with_override.create_event, Some(true));
     let result_override = task_with_override.to_event_ics();
-    assert!(result_override.is_some()); // Should still generate event
+    assert!(!result_override.is_empty());
 }
 
 #[test]
@@ -702,21 +688,21 @@ fn test_event_generation_cancelled_with_sessions() {
 
     let result = task.to_event_ics();
     assert!(
-        result.is_some(),
+        !result.is_empty(),
         "Cancelled task with sessions should generate an event"
     );
-    let (_uid, ics) = result.unwrap();
-
-    // Should contain the VEVENT for the session
-    assert!(ics.contains("SUMMARY:⚙ Cancelled project"));
-    assert!(
-        ics.matches("BEGIN:VEVENT").count() == 2,
-        "Should have 2 VEVENT components (session + cancelled plan)"
+    assert_eq!(
+        result.len(),
+        2,
+        "Should have 2 VEVENTs (session + cancelled plan)"
     );
 
-    // Should also contain the main cancelled VEVENT
-    assert!(ics.contains("SUMMARY:Cancelled project"));
-    assert!(ics.contains("STATUS:CANCELLED"));
+    let session_event = result.iter().find(|(s, _)| s == "-session-0").unwrap();
+    assert!(session_event.1.contains("SUMMARY:⚙ Cancelled project"));
+
+    let main_event = result.iter().find(|(s, _)| s.is_empty()).unwrap();
+    assert!(main_event.1.contains("SUMMARY:Cancelled project"));
+    assert!(main_event.1.contains("STATUS:CANCELLED"));
 }
 
 #[test]
@@ -733,20 +719,13 @@ fn test_event_generation_completed_with_sessions_no_summary() {
 
     let result = task.to_event_ics();
     assert!(
-        result.is_some(),
+        !result.is_empty(),
         "Completed task with sessions should generate an event"
     );
-    let (_uid, ics) = result.unwrap();
+    assert_eq!(result.len(), 1, "Should have only 1 VEVENT (the session)");
 
-    // Should contain ONLY the VEVENT for the session
-    assert!(ics.contains("SUMMARY:⚙ Completed project"));
-    assert!(
-        ics.matches("BEGIN:VEVENT").count() == 1,
-        "Should have only 1 VEVENT component (the session)"
-    );
-
-    // Should NOT contain the generic "✓ Task Completed" summary event
-    assert!(!ics.contains("✓ Task Completed"));
-    // Check with newline to avoid matching the session summary's "Completed project" part
-    assert!(!ics.contains("SUMMARY:Completed project\r\n"));
+    let session_event = result.iter().find(|(s, _)| s == "-session-0").unwrap();
+    assert!(session_event.1.contains("SUMMARY:⚙ Completed project"));
+    assert!(!session_event.1.contains("✓ Task Completed"));
+    assert!(!session_event.1.contains("SUMMARY:Completed project\r\n"));
 }

@@ -396,36 +396,31 @@ impl RustyClient {
                                 Action::Move(t, new_cal) => {
                                     // Move companion event too
                                     if events_enabled || t.create_event.is_some() {
-                                        let evt_uid = format!("evt-{}", t.uid);
-                                        let evt_filename = format!("{}.ics", evt_uid);
-                                        let old_cal_path = if t.calendar_href.ends_with('/') {
-                                            t.calendar_href.clone()
-                                        } else {
-                                            format!("{}/", t.calendar_href)
-                                        };
-                                        let old_evt_path = format!(
-                                            "{}{}",
-                                            strip_host(&old_cal_path),
-                                            evt_filename
-                                        );
-
-                                        // Try to move the event (best effort, ignore errors)
-                                        // Delete from old location
-                                        let _ = client
-                                            .request(Delete::new(&old_evt_path).force())
+                                        // 1. Delete ALL variants from the OLD location by invoking
+                                        // sync_companion_event with is_delete_intent = true so it
+                                        // cleans up static and session variants.
+                                        let _ = self
+                                            .sync_companion_event(
+                                                t,
+                                                events_enabled,
+                                                delete_on_completion,
+                                                true, // is_delete_intent
+                                            )
                                             .await;
-                                        // Create updated task with new calendar href
+
+                                        // 2. Create updated variants in the NEW location
                                         if let Some(new_h) = &href {
                                             let mut moved_task = t.clone();
                                             moved_task.calendar_href = new_cal.clone();
                                             moved_task.href = new_h.clone();
-                                            self.sync_companion_event(
-                                                &moved_task,
-                                                events_enabled,
-                                                delete_on_completion,
-                                                false,
-                                            )
-                                            .await;
+                                            let _ = self
+                                                .sync_companion_event(
+                                                    &moved_task,
+                                                    events_enabled,
+                                                    delete_on_completion,
+                                                    false,
+                                                )
+                                                .await;
                                         }
                                     }
                                 }

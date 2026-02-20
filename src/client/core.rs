@@ -533,8 +533,7 @@ impl RustyClient {
         }
 
         let should_create_events = task.create_event.unwrap_or(config_enabled);
-        let event_uid = format!("evt-{}", task.uid);
-        let filename = format!("{}.ics", event_uid);
+        let base_uid = format!("evt-{}", task.uid);
 
         let cal_path = if task.calendar_href.ends_with('/') {
             task.calendar_href.clone()
@@ -546,7 +545,6 @@ impl RustyClient {
                 task.calendar_href.clone()
             }
         };
-        let event_path = format!("{}{}", strip_host(&cal_path), filename);
 
         let client = match &self.client {
             Some(c) => c,
@@ -561,27 +559,83 @@ impl RustyClient {
             || (!has_dates && !keep_completed)
             || !should_create_events;
 
-        if should_delete {
-            return match client.request(Delete::new(&event_path).force()).await {
-                Ok(_) => true,
-                Err(WebDavError::BadStatusCode(http::StatusCode::NOT_FOUND)) => false,
-                Err(_) => false,
-            };
-        } else if let Some((_, ics_body)) = IcsAdapter::to_event_ics(task) {
+        let mut success = true;
+
+        let generated_events = if should_delete {
+            vec![]
+        } else {
+            IcsAdapter::to_event_ics(task)
+        };
+
+        let target_suffixes: std::collections::HashSet<&str> =
+            generated_events.iter().map(|(s, _)| s.as_str()).collect();
+
+        // 1. PUT all generated events (Upsert active events)
+        for (suffix, ics_body) in &generated_events {
+            let event_filename = format!("{}{}.ics", base_uid, suffix);
+            let event_path = format!("{}{}", strip_host(&cal_path), event_filename);
+
             let create_req =
                 PutResource::new(&event_path).create(ics_body.clone(), "text/calendar");
             match client.request(create_req).await {
-                Ok(_) => return true,
+                Ok(_) => {}
                 Err(WebDavError::BadStatusCode(http::StatusCode::PRECONDITION_FAILED))
                 | Err(WebDavError::PreconditionFailed(_)) => {
                     let update_req =
-                        PutResource::new(&event_path).update(ics_body, "text/calendar", "");
-                    return client.request(update_req).await.is_ok();
+                        PutResource::new(&event_path).update(ics_body.clone(), "text/calendar", "");
+                    if client.request(update_req).await.is_err() {
+                        success = false;
+                    }
                 }
-                Err(_) => return false,
+                Err(_) => success = false,
             }
         }
-        false
+
+        // 2. DELETE obsolete static events (variants we swapped away from)
+        let static_suffixes = ["", "-start", "-due"];
+        for suffix in static_suffixes {
+            if !target_suffixes.contains(suffix) {
+                let event_filename = format!("{}{}.ics", base_uid, suffix);
+                let event_path = format!("{}{}", strip_host(&cal_path), event_filename);
+                match client.request(Delete::new(&event_path).force()).await {
+                    Ok(_) => {}
+                    Err(WebDavError::BadStatusCode(http::StatusCode::NOT_FOUND)) => {}
+                    Err(_) => success = false,
+                }
+            }
+        }
+
+        // 3. DELETE obsolete/trailing session events
+        // Loop upwards to find any stray sessions. Allow up to 3 consecutive 404 misses to ensure
+        // gaps from buggy versions are wiped out.
+        let mut session_idx = if should_delete {
+            0
+        } else {
+            task.sessions.len()
+        };
+        let mut miss_count = 0;
+
+        while miss_count < 3 {
+            let session_suffix = format!("-session-{}", session_idx);
+            let event_filename = format!("{}{}.ics", base_uid, session_suffix);
+            let event_path = format!("{}{}", strip_host(&cal_path), event_filename);
+
+            match client.request(Delete::new(&event_path).force()).await {
+                Ok(_) => {
+                    miss_count = 0;
+                }
+                Err(WebDavError::BadStatusCode(http::StatusCode::NOT_FOUND)) => {
+                    miss_count += 1;
+                }
+                Err(_) => {
+                    success = false;
+                    break;
+                }
+            }
+            session_idx += 1;
+        }
+
+        success
     }
 
     /// Public wrapper for convenience
