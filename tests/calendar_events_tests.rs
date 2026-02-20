@@ -555,13 +555,13 @@ fn test_event_default_duration_is_one_hour() {
 }
 
 #[test]
-fn test_event_long_span_capped_at_7_days() {
+fn test_event_long_span_split_into_start_and_due() {
     let mut task = parse("Long project");
     // Set start date: Jan 1, 2025
     task.dtstart = Some(DateType::AllDay(
         NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
     ));
-    // Set due date: Feb 15, 2025 (45 days later)
+    // Set due date: Feb 15, 2025
     task.due = Some(DateType::AllDay(
         NaiveDate::from_ymd_opt(2025, 2, 15).unwrap(),
     ));
@@ -570,22 +570,34 @@ fn test_event_long_span_capped_at_7_days() {
     assert!(result.is_some());
 
     let (_uid, ics) = result.unwrap();
-    // Should create single-day event on due date (Feb 15)
-    // DTSTART: 20250215, DTEND: 20250216 (exclusive)
+
+    // With new logic, we expect TWO events for this all-day range.
+    // One for start (Jan 1) and one for due (Feb 15).
+
+    // Check for Start Event (Jan 1)
+    assert!(ics.contains("DTSTART;VALUE=DATE:20250101"));
+    assert!(ics.contains("DTEND;VALUE=DATE:20250102")); // Exclusive end
+
+    // Check for Due Event (Feb 15)
     assert!(ics.contains("DTSTART;VALUE=DATE:20250215"));
-    assert!(ics.contains("DTEND;VALUE=DATE:20250216"));
-    // Should NOT span from Jan 1 to Feb 15
-    assert!(!ics.contains("20250101"));
+    assert!(ics.contains("DTEND;VALUE=DATE:20250216")); // Exclusive end
+
+    // Ensure we have two distinct VEVENT blocks
+    let event_count = ics.matches("BEGIN:VEVENT").count();
+    assert_eq!(
+        event_count, 2,
+        "Should have two VEVENTs for separate start/due dates"
+    );
 }
 
 #[test]
-fn test_event_short_span_not_capped() {
+fn test_event_short_span_split_into_start_and_due() {
     let mut task = parse("Short project");
     // Set start date: Jan 1, 2025
     task.dtstart = Some(DateType::AllDay(
         NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
     ));
-    // Set due date: Jan 5, 2025 (4 days later, within 7-day limit)
+    // Set due date: Jan 5, 2025 (Different day)
     task.due = Some(DateType::AllDay(
         NaiveDate::from_ymd_opt(2025, 1, 5).unwrap(),
     ));
@@ -594,9 +606,19 @@ fn test_event_short_span_not_capped() {
     assert!(result.is_some());
 
     let (_uid, ics) = result.unwrap();
-    // Should create event spanning full range
+
+    // Per new logic: "if there is no time and the start and due day differ, make it two calendar events"
+    // So we expect Jan 1 and Jan 5, NOT a span from 1 to 5.
+
     assert!(ics.contains("DTSTART;VALUE=DATE:20250101"));
-    assert!(ics.contains("DTEND;VALUE=DATE:20250106")); // Exclusive end
+    assert!(ics.contains("DTSTART;VALUE=DATE:20250105"));
+
+    // Ensure we have two events
+    let event_count = ics.matches("BEGIN:VEVENT").count();
+    assert_eq!(
+        event_count, 2,
+        "Should have two VEVENTs for different start/due days"
+    );
 }
 
 #[test]
@@ -615,11 +637,26 @@ fn test_event_long_span_with_specific_times() {
     assert!(result.is_some());
 
     let (_uid, ics) = result.unwrap();
-    // Should create 1-hour event ending at due time
-    assert!(ics.contains("DTSTART:20250215T160000Z")); // 4:00 PM (1 hour before)
-    assert!(ics.contains("DTEND:20250215T170000Z")); // 5:00 PM
-    // Should NOT use Jan 1 start date
-    assert!(!ics.contains("20250101"));
+
+    // Logic: "if there is a time and the difference is greater than 24h, make a 1h event starting at the start and a 1h event ending at the due datetime."
+
+    // 1. Check Start Event (Jan 1, 09:00 to 10:00 (default 1h))
+    assert!(ics.contains("DTSTART:20250101T090000Z"));
+    // Since task has no duration, start event gets 1h duration added to start time for end?
+    // Wait, the logic implemented matches `DateType::Specific(dt) => DateType::Specific(*dt + chrono::Duration::minutes(60))` for start event end.
+    // So Jan 1 10:00
+    assert!(ics.contains("DTEND:20250101T100000Z"));
+
+    // 2. Check Due Event (Feb 15, ending at 17:00. Start = 17:00 - 60m = 16:00)
+    assert!(ics.contains("DTSTART:20250215T160000Z"));
+    assert!(ics.contains("DTEND:20250215T170000Z"));
+
+    // Ensure we have two events
+    let event_count = ics.matches("BEGIN:VEVENT").count();
+    assert_eq!(
+        event_count, 2,
+        "Should have two VEVENTs for start and due times > 24h apart"
+    );
 }
 
 #[test]

@@ -1,4 +1,3 @@
-orb/Dev/cfait/src/controller.rs#L1-400
 // File: src/controller.rs
 //! Central logic controller for Task operations.
 //! This is the single source of truth for all business logic (create, update, delete, etc.).
@@ -246,12 +245,13 @@ impl TaskController {
                     .unmapped_properties
                     .iter()
                     .find(|p| p.key == "X-TRASHED-DATE")
-                    && let Ok(dt) = DateTime::parse_from_rfc3339(&prop.value) {
-                        let age_days = (now - dt.with_timezone(&Utc)).num_days();
-                        if age_days >= retention_days {
-                            uids_to_purge.push(task.uid.clone());
-                        }
+                    && let Ok(dt) = DateTime::parse_from_rfc3339(&prop.value)
+                {
+                    let age_days = (now - dt.with_timezone(&Utc)).num_days();
+                    if age_days >= retention_days {
+                        uids_to_purge.push(task.uid.clone());
                     }
+                }
             }
         }
 

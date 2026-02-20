@@ -1,4 +1,4 @@
-// File: ./src/mobile.rs
+// File: src/mobile.rs
 use crate::alarm_index::AlarmIndex;
 use crate::cache::Cache;
 use crate::client::RustyClient;
@@ -20,8 +20,6 @@ use uuid::Uuid;
 // --- Additions for Tokio Runtime ---
 use std::sync::OnceLock;
 use tokio::runtime::Runtime;
-
-type StoreMutator = Box<dyn Fn(&mut TaskStore, &str) -> Vec<Task> + Send>;
 
 #[cfg(target_os = "android")]
 use std::io::{Read, Write};
@@ -383,7 +381,7 @@ pub struct CfaitMobile {
 async fn apply_store_mutation_multi_boxed(
     this: &CfaitMobile,
     uid: &str,
-    mutator: StoreMutator,
+    mutator: Box<dyn Fn(&mut TaskStore, &str) -> Vec<Task> + Send>,
 ) -> Result<(), MobileError> {
     let mut store = this.controller.store.lock().await;
     let tasks_to_save = (mutator)(&mut store, uid);
@@ -765,7 +763,7 @@ impl CfaitMobile {
                         .iter()
                         .any(|a| a.acknowledged.is_none() && !a.is_snooze())
                 {
-                    // ... [implicit check logic remains same] ...
+                    // Check implicit logic using explicitly referenced parameters
                     let mut check_implicit = |dt: DateTime<Utc>| {
                         if !task.has_alarm_at(dt) {
                             check_ts(dt.timestamp(), &mut global_earliest);

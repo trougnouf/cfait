@@ -1223,8 +1223,8 @@ impl TaskStore {
 
             let is_suppressed = t.status.is_done() || t.is_blocked || t.is_implicitly_blocked;
 
-            if !is_suppressed {
-                if let Some(children) = map.get(&t.uid) {
+            if !is_suppressed
+                && let Some(children) = map.get(&t.uid) {
                     for &child_idx in children {
                         let child_eff =
                             resolve(child_idx, tasks, map, cache, visiting, default_prio);
@@ -1244,7 +1244,6 @@ impl TaskStore {
                         }
                     }
                 }
-            }
 
             visiting.remove(&idx);
             cache.insert(idx, best.clone());
