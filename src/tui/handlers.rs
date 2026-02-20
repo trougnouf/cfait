@@ -1,4 +1,4 @@
-// File: ./src/tui/handlers.rs
+// File: src/tui/handlers.rs
 // Handles keyboard input and system events for the TUI.
 use crate::config::Config;
 use crate::model::parser::{extract_inline_aliases, validate_alias_integrity};
@@ -485,16 +485,15 @@ pub async fn handle_key_event(
                 if let Some(mins) = crate::model::parser::parse_duration(&state.input_buffer) {
                     if let Some((task, alarm_uid)) = state.active_alarm.clone()
                         && let Some((t, _)) = state.store.get_task_mut(&task.uid)
-                        && t.snooze_alarm(&alarm_uid, mins)
-                    {
-                        let t_clone = t.clone();
-                        state.active_alarm = None;
-                        state.mode = InputMode::Normal;
-                        state.reset_input();
-                        state.refresh_filtered_view();
-                        let _ = action_tx.send(Action::UpdateTask(t_clone.clone())).await;
-                        update_alarms(state);
-                    }
+                        && t.snooze_alarm(&alarm_uid, mins) {
+                            let t_clone = t.clone();
+                            state.active_alarm = None;
+                            state.mode = InputMode::Normal;
+                            state.reset_input();
+                            state.refresh_filtered_view();
+                            let _ = action_tx.send(Action::UpdateTask(t_clone)).await;
+                            update_alarms(state);
+                        }
                 } else {
                     state.message = format!("Invalid duration: '{}'", state.input_buffer);
                 }
@@ -991,7 +990,7 @@ pub async fn handle_key_event(
                             .store
                             .get_summary(dep_uid)
                             .unwrap_or_else(|| "Unknown task".to_string());
-                        let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
+                        let is_done = state.store.is_task_done(dep_uid).unwrap_or(false);
                         let check = if is_done { "[x]" } else { "[ ]" };
                         items.push((dep_uid.clone(), format!("⬆ {} {}", check, name)));
                     }
@@ -1047,7 +1046,7 @@ pub async fn handle_key_event(
                                 }
                             } else {
                                 state.hidden_calendars.clear();
-                                // NEW: Re-hide trash if not active
+                                // Re-hide trash if not active
                                 if state.active_cal_href.as_deref() != Some("local://trash") {
                                     state.hidden_calendars.insert("local://trash".to_string());
                                 }

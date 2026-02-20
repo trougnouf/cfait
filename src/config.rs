@@ -63,8 +63,9 @@ fn default_max_done_subtasks() -> usize {
     5
 }
 
+// Default trash retention moved to advanced settings; default shortened to 14 days.
 fn default_trash_retention() -> u32 {
-    30
+    14
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
@@ -177,6 +178,8 @@ pub struct Config {
     #[serde(default = "default_refresh_interval")]
     pub auto_refresh_interval_mins: u32,
 
+    // Default retention for local trash. This setting has been moved to the
+    // Advanced Settings UI; default value reduced to 14 days.
     #[serde(default = "default_trash_retention")]
     pub trash_retention_days: u32, // Integer: Days to keep items in local trash before permanent delete. 0 to disable trash.
 
@@ -218,7 +221,7 @@ impl Default for Config {
             create_events_for_tasks: false,
             delete_events_on_completion: false,
             auto_refresh_interval_mins: 30,
-            trash_retention_days: 30,
+            trash_retention_days: 14,
             strikethrough_completed: false,
             max_done_roots: 20,
             max_done_subtasks: 5,
@@ -401,6 +404,9 @@ impl Config {
             } else if trimmed.starts_with("hidden_calendars =") {
                 out.push_str("# List of calendar HREFs currently toggled 'off' in the sidebar.\n");
                 out.push_str(line);
+            } else if trimmed.starts_with("trash_retention_days =") {
+                out.push_str(line);
+                out.push_str(" # Integer: Days to keep deleted items in local trash before permanent delete. 0 disables trash.");
             } else {
                 // Pass through unhandled lines
                 out.push_str(line);

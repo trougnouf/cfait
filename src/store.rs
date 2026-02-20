@@ -1,28 +1,56 @@
-/* cfait/src/store.rs
- *
- * Optimized in-memory store for tasks.
- *
- * Changes:
- * - `calendars` map: HashMap<CalendarHref, HashMap<Uid, Task>> for O(1) UID lookups.
- * - Filter pipeline operates on &Task references and only clones final results.
- * - get_task / get_task_mut use direct map lookups.
- *
- * Context injection:
- * - TaskStore now stores an `Arc<dyn AppContext>` to perform file IO without
- *   relying on global state.
- *
- * NOTE: This file includes a small behavioral change: `set_status` and
- * `toggle_task` now automatically reset completed children (set them to
- * `NeedsAction`, clear percent_complete and remove `COMPLETED` unmapped
- * property) when a recurring parent task is completed and a next-instance
- * (secondary) is created. The function returns the list of reset children
- * so callers can persist/sync them.
- */
+/*
+File: cfait/src/store.rs
 
-use crate::cache::Cache;
+Optimized in-memory store for tasks.
+
+Overview & Rationale:
+- The TaskStore is the single-process in-memory representation of all task data
+  grouped by calendar (calendar_href -> HashMap<uid, Task>).
+- Performance goals:
+  * O(1) lookup by UID (index: uid -> calendar_href)
+  * Minimal cloning: filter pipeline operates over &Task references and only clones
+    the final, visible tasks returned to UI layers.
+  * Relation indices (related_from_index, blocking_index) are maintained to allow
+    efficient reverse-lookup for "related to" and "blocked by" queries without
+    scanning the whole dataset repeatedly.
+
+Behavioral notes (important):
+- Blocking semantics:
+  * `is_blocked` on a Task represents an explicit block (e.g. tag `blocked` or
+    an unresolved dependency).
+  * `is_implicitly_blocked` is a transient flag that indicates inherited block
+    status coming from an ancestor in the parent hierarchy. Both are used to
+    decide "is:ready" semantics and ranking, but UI badges generally use only
+    the explicit `is_blocked`.
+- Hierarchy and virtual rows:
+  * The model supports injecting small "virtual" tasks (Expand/Collapse rows)
+    used by UI layers to truncate large groups of completed subtasks while still
+    providing a way to expand them. These virtual tasks are created during the
+    `organize_hierarchy` stage and are not persisted.
+- Storage interactions:
+  * The store keeps an index for fast lookups; persistent save/load is handled
+    by higher-level modules (LocalStorage / Cache). Store provides convenient
+    methods that ensure relation indices are rebuilt when data mutates.
+
+API guarantees:
+- Methods that mutate the internal maps update the relation indices so callers
+  can rely on the reverse-maps (get_tasks_related_to / get_tasks_blocking).
+- get_task_ref / get_task_mut provide direct map-backed access and will auto-fix
+  inconsistent index state by removing dangling index entries.
+
+Implementation notes:
+- The file favors clarity of the logic in filter/propagation/hierarchy routines.
+- Filtering is done in multiple passes:
+  1. Build a reference iterator of candidate tasks from allowed calendars.
+  2. Apply predicate filters on &Task references to avoid cloning.
+  3. Optionally expand the set to include parent/child context when search term
+     requires it.
+  4. Clone only the final set of tasks to produce the FilterResult (where
+     transient attributes are computed).
+*/
+
 use crate::context::AppContext;
 use crate::model::{Task, TaskStatus};
-use crate::storage::LocalStorage;
 use chrono::{DateTime, Utc};
 use fastrand;
 use std::collections::{HashMap, HashSet};
@@ -30,6 +58,7 @@ use std::sync::Arc;
 
 pub const UNCATEGORIZED_ID: &str = ":::uncategorized:::";
 
+/// Result container returned by the `filter` pipeline.
 pub struct FilterResult {
     pub tasks: Vec<Task>,
     pub categories: Vec<(String, usize)>,
@@ -37,14 +66,13 @@ pub struct FilterResult {
 }
 
 /// Select an index from `tasks` at random weighted by priority.
-/// Tasks with priority 0 use the provided `default_priority`.
-/// Lower numeric priority indicates higher importance; we invert
-/// to produce weights where priority 1 -> weight 9, priority 9 -> weight 1.
-///
-/// Filters for "is:ready" criteria:
-/// - Must not be done (Completed/Cancelled)
-/// - Must not be blocked (is_blocked)
-/// - Must not have a future start date
+/// - Tasks with priority 0 use the provided `default_priority`.
+/// - Lower numeric priority indicates higher importance; we invert to produce
+///   weights where priority 1 -> weight 9, priority 9 -> weight 1.
+/// - Filters for "is:ready" criteria:
+///   * Must not be done (Completed/Cancelled)
+///   * Must not be explicitly OR implicitly blocked
+///   * Must not have a future start date
 ///
 /// Returns `None` for an empty slice or if no tasks qualify.
 pub fn select_weighted_random_index(tasks: &[Task], default_priority: u8) -> Option<usize> {
@@ -62,9 +90,8 @@ pub fn select_weighted_random_index(tasks: &[Task], default_priority: u8) -> Opt
                 return 0;
             }
 
-            // 2. Must not be blocked (is:ready logic)
-            // Note: is_blocked is a transient field populated by store.filter()
-            if t.is_blocked {
+            // 2. Must not be blocked (explicit or inherited)
+            if t.is_blocked || t.is_implicitly_blocked {
                 return 0;
             }
 
@@ -75,13 +102,12 @@ pub fn select_weighted_random_index(tasks: &[Task], default_priority: u8) -> Opt
                 return 0;
             }
 
-            // Use the passed default_priority instead of any hardcoded value
+            // Invert priority so 1 is high weight (range 1..=9 -> weight 9..=1)
             let p = if t.priority == 0 {
                 default_priority
             } else {
                 t.priority
             };
-            // Invert priority so 1 is high weight (range 1..=9 -> weight 9..=1)
             (10u32).saturating_sub(p as u32)
         })
         .collect();
@@ -109,19 +135,23 @@ pub fn select_weighted_random_index(tasks: &[Task], default_priority: u8) -> Opt
 
 #[derive(Debug, Clone)]
 pub struct TaskStore {
-    // OPTIMIZATION: Changed inner type from Vec<Task> to HashMap<Uid, Task> for O(1) lookups
+    /// calendars: calendar_href -> (uid -> Task)
     pub calendars: HashMap<String, HashMap<String, Task>>,
-    pub index: HashMap<String, String>, // UID -> CalendarHref mapping
+    /// index: uid -> calendar_href (fast lookup for operations that only know a UID)
+    pub index: HashMap<String, String>,
+    /// Reverse lookup for related_to: target_uid -> Vec<source_uid>
     pub related_from_index: HashMap<String, Vec<String>>,
-    // Maps a Task UID -> List of tasks that are blocked BY this task
+    /// Reverse lookup for dependencies: dep_uid -> Vec<task_uid_that_depend_on_dep>
     pub blocking_index: HashMap<String, Vec<String>>,
-    // Context for filesystem operations and test isolation
+    /// AppContext used for persistence operations (if store needs to save).
     pub ctx: Arc<dyn AppContext>,
 }
 
+/// Options to parameterize a filter operation. Using a struct keeps the signature
+/// manageable as the filter logic supports many toggles.
 pub struct FilterOptions<'a> {
     pub active_cal_href: Option<&'a str>,
-    pub hidden_calendars: &'a std::collections::HashSet<String>,
+    pub hidden_calendars: &'a HashSet<String>,
     pub selected_categories: &'a HashSet<String>,
     pub selected_locations: &'a HashSet<String>,
     pub match_all_categories: bool,
@@ -142,7 +172,7 @@ pub struct FilterOptions<'a> {
 }
 
 impl TaskStore {
-    /// Creates a new TaskStore with an explicit AppContext.
+    /// Construct a new TaskStore with an AppContext reference for persistence.
     pub fn new(ctx: Arc<dyn AppContext>) -> Self {
         Self {
             calendars: HashMap::new(),
@@ -153,12 +183,14 @@ impl TaskStore {
         }
     }
 
-    /// Efficiently checks if there are any tasks in the store across all calendars.
-    /// Used to differentiate between "App is empty" and "Filters matched nothing".
+    /// Whether the store contains any tasks (fast O(1) via index map).
+    /// This is used to differentiate between a truly-empty app vs filters hiding items.
     pub fn has_any_tasks(&self) -> bool {
-        self.calendars.values().any(|map| !map.is_empty())
+        !self.index.is_empty()
     }
 
+    /// Replace or insert an entire calendar's tasks.
+    /// This sets up the internal uid index and rebuilds relation indices for correctness.
     pub fn insert(&mut self, calendar_href: String, tasks: Vec<Task>) {
         let mut map = HashMap::new();
         for task in tasks {
@@ -169,38 +201,56 @@ impl TaskStore {
         self.rebuild_relation_index();
     }
 
+    /// Add a single task into the store. If it already exists, it will be overwritten
+    /// in the calendar map and indices are rebuilt to reflect the new relationships.
     pub fn add_task(&mut self, task: Task) {
         let href = task.calendar_href.clone();
         self.index.insert(task.uid.clone(), href.clone());
-
         self.calendars
             .entry(href)
             .or_default()
             .insert(task.uid.clone(), task);
-
         self.rebuild_relation_index();
     }
 
+    /// Update an existing task or insert it if missing. This method attempts to handle
+    /// moves between calendars by checking the uid index and adjusting maps accordingly.
     pub fn update_or_add_task(&mut self, task: Task) {
         let href = task.calendar_href.clone();
-        self.index.insert(task.uid.clone(), href.clone());
-        let cal_map = self.calendars.entry(href.clone()).or_default();
-
-        cal_map.insert(task.uid.clone(), task);
-
-        // Convert Map values back to Vec for persistence (legacy compatibility)
-        let list: Vec<Task> = cal_map.values().cloned().collect();
-
-        if href.starts_with("local://") {
-            let _ = LocalStorage::save_for_href(self.ctx.as_ref(), &href, &list);
+        let uid = task.uid.clone();
+        if let Some(existing_href) = self.index.get(&uid) {
+            if existing_href == &href {
+                if let Some(map) = self.calendars.get_mut(&href) {
+                    map.insert(uid.clone(), task);
+                } else {
+                    self.calendars
+                        .entry(href.clone())
+                        .or_default()
+                        .insert(uid.clone(), task);
+                }
+            } else {
+                // Task was moved between calendars: remove from old map and insert in new
+                if let Some(map) = self.calendars.get_mut(existing_href) {
+                    map.remove(&uid);
+                }
+                self.index.insert(uid.clone(), href.clone());
+                self.calendars
+                    .entry(href.clone())
+                    .or_default()
+                    .insert(uid.clone(), task);
+            }
         } else {
-            let (_, token) = Cache::load(self.ctx.as_ref(), &href).unwrap_or((vec![], None));
-            let _ = Cache::save(self.ctx.as_ref(), &href, &list, token);
+            // New task
+            self.index.insert(uid.clone(), href.clone());
+            self.calendars
+                .entry(href.clone())
+                .or_default()
+                .insert(uid.clone(), task);
         }
-
         self.rebuild_relation_index();
     }
 
+    /// Remove all tasks and indices from the store.
     pub fn clear(&mut self) {
         self.calendars.clear();
         self.index.clear();
@@ -208,6 +258,7 @@ impl TaskStore {
         self.blocking_index.clear();
     }
 
+    /// Remove an entire calendar from the store and drop related index entries.
     pub fn remove(&mut self, calendar_href: &str) {
         if let Some(tasks_map) = self.calendars.remove(calendar_href) {
             for uid in tasks_map.keys() {
@@ -217,7 +268,8 @@ impl TaskStore {
         self.rebuild_relation_index();
     }
 
-    // OPTIMIZATION: O(1) Lookup
+    /// Get a mutable reference to a task together with its calendar href.
+    /// Returns None if the uid is not present or index is inconsistent (auto-fix).
     pub fn get_task_mut(&mut self, uid: &str) -> Option<(&mut Task, String)> {
         let href = self.index.get(uid)?.clone();
         if let Some(map) = self.calendars.get_mut(&href)
@@ -225,23 +277,35 @@ impl TaskStore {
         {
             return Some((task, href));
         }
-        // Inconsistent state fix
+        // Index pointed to a non-existent entry; clean it up.
         self.index.remove(uid);
         None
     }
 
-    // OPTIMIZATION: O(1) Lookup
+    /// Immutable reference by uid (O(1)).
     pub fn get_task_ref(&self, uid: &str) -> Option<&Task> {
         let href = self.index.get(uid)?;
         self.calendars.get(href).and_then(|map| map.get(uid))
     }
 
-    /// Toggle the task status (Completed <-> NeedsAction).
-    /// CHANGED: returns the optional secondary task (next instance for recurrences)
-    /// and a Vec of any children that were auto-reset as part of a recurring completion.
+    /// O(1) delete a task and return (task, calendar_href) on success.
+    /// Relation indices are rebuilt afterwards.
+    pub fn delete_task(&mut self, uid: &str) -> Option<(Task, String)> {
+        let href = self.index.get(uid)?.clone();
+        if let Some(map) = self.calendars.get_mut(&href)
+            && let Some(task) = map.remove(uid)
+        {
+            self.index.remove(uid);
+            self.rebuild_relation_index();
+            return Some((task, href));
+        }
+        None
+    }
+
+    /// Toggle convenience: Completed <-> NeedsAction (returns primary, optional secondary, reset children)
     pub fn toggle_task(&mut self, uid: &str) -> Option<(Task, Option<Task>, Vec<Task>)> {
         let current_status = self.get_task_ref(uid)?.status;
-        let next_status = if current_status == TaskStatus::Completed {
+        let next_status = if current_status.is_done() {
             TaskStatus::NeedsAction
         } else {
             TaskStatus::Completed
@@ -249,39 +313,36 @@ impl TaskStore {
         self.set_status(uid, next_status)
     }
 
-    /// Set status for a given task uid.
-    /// CHANGED: Signature returns a Vec<Task> containing any child tasks that were auto-reset.
+    /// Set the status for a task. Special handling:
+    /// - If the task is recurring and is being completed, `recycle` is invoked which may
+    ///   return (history_snapshot, Some(next_instance)). Both are persisted to the store.
+    /// - When recurring completion advances, descendants that were completed will be
+    ///   reset to NeedsAction so the recurrence semantics remain coherent. The list of
+    ///   reset children is returned for callers to persist/journal.
     pub fn set_status(
         &mut self,
         uid: &str,
         status: TaskStatus,
     ) -> Option<(Task, Option<Task>, Vec<Task>)> {
-        // 1. Get copy of task to modify
-        let (task_ref, _href) = self.get_task_mut(uid)?;
-        let task_copy = task_ref.clone();
-
-        // Check if this is a recurring completion that requires child reset
+        let task_copy = self.get_task_ref(uid)?.clone();
+        // If the task is recurring and we are completing it we may need to reset children
         let should_reset_children = task_copy.rrule.is_some() && status.is_done();
 
-        // 2. Perform logic (recycle or simple update) via model-level helper
-        // NOTE: `recycle` is a model-level helper that returns (primary, secondary)
-        // where `primary` is the history/updated task and `secondary` is the next instance.
+        // Model-level helper computes the primary (history or updated) and optional secondary
         let (primary, secondary) = task_copy.recycle(status);
 
-        // 3. Save Primary (This is either the history item OR the simple updated task)
+        // Save primary and secondary into the store (optimistic/instant UI update)
         self.update_or_add_task(primary.clone());
 
-        // 4. Save Secondary (This is the Recycled/Next instance if it exists)
         if let Some(sec) = &secondary {
             self.update_or_add_task(sec.clone());
         }
 
-        // 5. Reset ALL Descendants if applicable
+        // Reset descendants if appropriate (recurrence completion path)
         let mut reset_children: Vec<Task> = Vec::new();
 
         if should_reset_children && secondary.is_some() {
-            // Build adjacency map for full hierarchy traversal (Parent -> Vec<Children>)
-            // We scan all calendars because children might technically live in different lists (though rare)
+            // Build adjacency (Parent -> [Children]) across all calendars
             let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
             for map in self.calendars.values() {
                 for t in map.values() {
@@ -291,7 +352,7 @@ impl TaskStore {
                 }
             }
 
-            // BFS Traversal to find all descendants
+            // BFS to discover all descendant UIDs
             let mut queue = vec![uid.to_string()];
             let mut descendants = HashSet::new();
 
@@ -305,21 +366,20 @@ impl TaskStore {
                 }
             }
 
-            // Reset found descendants
+            // Reset each done descendant to NeedsAction and persist
             for child_uid in descendants {
-                if let Some((child, _)) = self.get_task_mut(&child_uid) {
-                    // Only modify if it's actually done
-                    if child.status.is_done() {
-                        child.status = TaskStatus::NeedsAction;
-                        child.percent_complete = None;
-                        child
-                            .unmapped_properties
-                            .retain(|p| p.key.to_uppercase() != "COMPLETED");
+                if let Some((child, _)) = self.get_task_mut(&child_uid)
+                    && child.status.is_done()
+                {
+                    child.status = TaskStatus::NeedsAction;
+                    child.percent_complete = None;
+                    child
+                        .unmapped_properties
+                        .retain(|p| p.key.to_uppercase() != "COMPLETED");
 
-                        let child_copy = child.clone();
-                        self.update_or_add_task(child_copy.clone());
-                        reset_children.push(child_copy);
-                    }
+                    let child_copy = child.clone();
+                    self.update_or_add_task(child_copy.clone());
+                    reset_children.push(child_copy);
                 }
             }
         }
@@ -327,6 +387,8 @@ impl TaskStore {
         Some((primary, secondary, reset_children))
     }
 
+    /// Mark a task InProcess and begin timing; bubble to parent tasks so the timer
+    /// context is preserved. Returns the set of tasks that were updated.
     pub fn set_status_in_process(&mut self, uid: &str) -> Vec<Task> {
         let mut updated = Vec::new();
         let mut current_uid = uid.to_string();
@@ -356,6 +418,7 @@ impl TaskStore {
         updated
     }
 
+    /// Pause a task and all descendants (stop timing and record a session as appropriate).
     pub fn pause_task(&mut self, uid: &str) -> Vec<Task> {
         let mut updated = Vec::new();
         let now = Utc::now().timestamp();
@@ -412,6 +475,7 @@ impl TaskStore {
         updated
     }
 
+    /// Stop a running task and its subtree; commit time and close sessions.
     pub fn stop_task(&mut self, uid: &str) -> Vec<Task> {
         let mut updated = Vec::new();
         let now = Utc::now().timestamp();
@@ -465,21 +529,19 @@ impl TaskStore {
         updated
     }
 
+    /// Adjust priority by `delta` with sensible clamping. Delta semantics:
+    /// positive -> increase importance (lower numeric), negative -> decrease importance.
     pub fn change_priority(&mut self, uid: &str, delta: i8, default_priority: u8) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(uid) {
             // If priority is unset, use the default and then apply the delta in one atomic step.
-            // Delta > 0 means increase importance (decrease numeric value).
-            // Delta < 0 means decrease importance (increase numeric value).
             let mut p = task.priority as i16;
             if p == 0 {
                 p = default_priority as i16;
             }
 
             if delta > 0 {
-                // apply positive delta, clamp to 1
                 p = (p - delta as i16).max(1);
             } else if delta < 0 {
-                // apply negative delta (subtracting a negative adds), clamp to 9
                 p = (p - delta as i16).min(9);
             }
 
@@ -489,31 +551,7 @@ impl TaskStore {
         None
     }
 
-    // OPTIMIZATION: O(1) Delete
-    pub fn delete_task(&mut self, uid: &str) -> Option<(Task, String)> {
-        let href = self.index.get(uid)?.clone();
-        if let Some(map) = self.calendars.get_mut(&href)
-            && let Some(task) = map.remove(uid)
-        {
-            self.index.remove(uid);
-
-            // Re-serialize for storage
-            let list: Vec<Task> = map.values().cloned().collect();
-
-            if href.starts_with("local://") {
-                let _ = LocalStorage::save_for_href(self.ctx.as_ref(), &href, &list);
-            } else {
-                let (_, token) = Cache::load(self.ctx.as_ref(), &href).unwrap_or((vec![], None));
-                let _ = Cache::save(self.ctx.as_ref(), &href, &list, token);
-            }
-            self.rebuild_relation_index();
-            return Some((task, href));
-        }
-        None
-    }
-
-    // ... [Other setters remain unchanged and rely on get_task_mut] ...
-
+    /// Set or unset a parent relationship for a task.
     pub fn set_parent(&mut self, child_uid: &str, parent_uid: Option<String>) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(child_uid) {
             task.parent_uid = parent_uid;
@@ -522,15 +560,13 @@ impl TaskStore {
         None
     }
 
+    /// Add a dependency (task_uid depends on dep_uid). Maintain reverse blocking index.
     pub fn add_dependency(&mut self, task_uid: &str, dep_uid: String) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(task_uid)
             && !task.dependencies.contains(&dep_uid)
         {
             task.dependencies.push(dep_uid.clone());
-            // Clone the modified task so we can return it after releasing the borrow
             let task_clone = task.clone();
-            // Release the mutable borrow on `task` before mutating other fields on `self`
-            // Update reverse blocking index: dep_uid (the dependency) is blocking task_uid
             self.blocking_index
                 .entry(dep_uid)
                 .or_default()
@@ -540,15 +576,13 @@ impl TaskStore {
         None
     }
 
+    /// Remove a dependency and update reverse index.
     pub fn remove_dependency(&mut self, task_uid: &str, dep_uid: &str) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(task_uid)
             && let Some(pos) = task.dependencies.iter().position(|d| d == dep_uid)
         {
             task.dependencies.remove(pos);
-            // Clone the modified task so we can return it after releasing the borrow
             let task_clone = task.clone();
-            // Release the mutable borrow on `task` before mutating other fields on `self`
-            // Update reverse blocking index: remove this task from the dep_uid entry
             if let Some(list) = self.blocking_index.get_mut(dep_uid) {
                 list.retain(|u| u != task_uid);
                 if list.is_empty() {
@@ -560,6 +594,7 @@ impl TaskStore {
         None
     }
 
+    /// Add a related_to relationship and update reverse index for fast lookups.
     pub fn add_related_to(&mut self, task_uid: &str, related_uid: String) -> Option<Task> {
         let result = if let Some((task, _)) = self.get_task_mut(task_uid)
             && !task.related_to.contains(&related_uid)
@@ -578,6 +613,7 @@ impl TaskStore {
         result
     }
 
+    /// Remove a related_to relationship and update reverse index.
     pub fn remove_related_to(&mut self, task_uid: &str, related_uid: &str) -> Option<Task> {
         let result = if let Some((task, _)) = self.get_task_mut(task_uid)
             && let Some(pos) = task.related_to.iter().position(|r| r == related_uid)
@@ -598,35 +634,27 @@ impl TaskStore {
         result
     }
 
+    /// Move a task between calendars in an atomic fashion:
+    /// - delete from old calendar, adjust index, insert into target calendar
+    /// - returns (original, updated) pair when a move occurred
     pub fn move_task(&mut self, uid: &str, target_href: String) -> Option<(Task, Task)> {
         if let Some((mut task, old_href)) = self.delete_task(uid) {
             if old_href == target_href {
+                // No-op move; re-add to same calendar
                 self.add_task(task);
                 return None;
             }
             let original = task.clone();
             task.calendar_href = target_href.clone();
             self.add_task(task.clone());
-
-            // Persist target calendar
-            if let Some(target_map) = self.calendars.get(&target_href) {
-                let target_list: Vec<Task> = target_map.values().cloned().collect();
-
-                if target_href.starts_with("local://") {
-                    let _ =
-                        LocalStorage::save_for_href(self.ctx.as_ref(), &target_href, &target_list);
-                } else {
-                    let (_, token) =
-                        Cache::load(self.ctx.as_ref(), &target_href).unwrap_or((vec![], None));
-                    let _ = Cache::save(self.ctx.as_ref(), &target_href, &target_list, token);
-                }
-            }
-
             return Some((original, task));
         }
         None
     }
 
+    /// Apply an alias retroactively: examine tasks that match the alias key (or its children)
+    /// and mutate categories/location/priority as specified by `raw_values`. Returns the set
+    /// of modified tasks for callers to persist/save.
     pub fn apply_alias_retroactively(
         &mut self,
         alias_key: &str,
@@ -641,7 +669,6 @@ impl TaskStore {
             (alias_key, format!("{}:", alias_key))
         };
 
-        // Iterate map values
         for map in self.calendars.values() {
             for task in map.values() {
                 let has_alias_or_child = if is_location_alias {
@@ -657,10 +684,8 @@ impl TaskStore {
                 };
 
                 if has_alias_or_child {
-                    // (Check if update needed logic - simplified for brevity, same as before)
                     let mut needs_update = false;
                     for val in raw_values {
-                        // ... same change detection logic ...
                         if let Some(tag) = val.strip_prefix('#') {
                             let clean = crate::model::parser::strip_quotes(tag);
                             if !task.categories.contains(&clean) {
@@ -695,9 +720,7 @@ impl TaskStore {
         let mut modified_tasks = Vec::new();
         for uid in uids_to_update {
             if let Some((task, _)) = self.get_task_mut(&uid) {
-                // Apply changes logic (same as before)
                 for val in raw_values {
-                    // ... same mutation logic ...
                     if let Some(tag) = val.strip_prefix('#') {
                         let clean = crate::model::parser::strip_quotes(tag);
                         if !task.categories.contains(&clean) {
@@ -710,7 +733,6 @@ impl TaskStore {
                     {
                         task.priority = p.min(9);
                     }
-                    // ... etc ...
                 }
                 task.categories.sort();
                 task.categories.dedup();
@@ -720,27 +742,13 @@ impl TaskStore {
         modified_tasks
     }
 
-    pub fn get_summary(&self, uid: &str) -> Option<String> {
-        // O(1) Lookup
-        let href = self.index.get(uid)?;
-        self.calendars
-            .get(href)
-            .and_then(|m| m.get(uid))
-            .map(|t| t.summary.clone())
-    }
-
+    /// Convenience: is task done by uid.
     pub fn is_task_done(&self, uid: &str) -> Option<bool> {
-        let href = self.index.get(uid)?;
-        self.calendars
-            .get(href)
-            .and_then(|m| m.get(uid))
-            .map(|t| t.status.is_done())
+        self.get_task_ref(uid).map(|t| t.status.is_done())
     }
 
-    pub fn get_task_status(&self, uid: &str) -> Option<bool> {
-        self.is_task_done(uid)
-    }
-
+    /// Determine explicit blocking for a task by checking 'blocked' category and dependencies.
+    /// This uses the store's index for O(1) existence checks of dependency UIDs.
     pub fn is_blocked(&self, task: &Task) -> bool {
         if task.categories.contains(&"blocked".to_string()) {
             return true;
@@ -758,8 +766,8 @@ impl TaskStore {
         false
     }
 
+    /// Get list of tasks that DECLARE they are related to the provided uid (i.e. sources).
     pub fn get_tasks_related_to(&self, uid: &str) -> Vec<(String, String)> {
-        // Unchanged (uses reverse index)
         if let Some(source_uids) = self.related_from_index.get(uid) {
             source_uids
                 .iter()
@@ -788,6 +796,8 @@ impl TaskStore {
         }
     }
 
+    /// Rebuild both reverse indices (related_from_index and blocking_index).
+    /// This is called after bulk mutations and ensures the indices are consistent.
     pub fn rebuild_relation_index(&mut self) {
         self.related_from_index.clear();
         self.blocking_index.clear();
@@ -795,40 +805,37 @@ impl TaskStore {
         let mut relationships = Vec::new();
         let mut blocking_rels = Vec::new();
 
-        // Iterate map values
+        // Iterate all calendars and tasks only once to collect relations
         for map in self.calendars.values() {
-            for task in map.values() {
-                for target in &task.related_to {
-                    relationships.push((target.clone(), task.uid.clone()));
+            for (uid, task) in map {
+                for r in &task.related_to {
+                    relationships.push((r.clone(), uid.clone()));
                 }
-                // If `task` depends on `dep_uid`, then `dep_uid` is BLOCKING `task`.
-                for dep_uid in &task.dependencies {
-                    blocking_rels.push((dep_uid.clone(), task.uid.clone()));
+                for dep in &task.dependencies {
+                    blocking_rels.push((dep.clone(), uid.clone()));
                 }
             }
         }
 
-        for (target, source) in relationships {
-            self.related_from_index
-                .entry(target)
-                .or_default()
-                .push(source);
+        // Populate reverse maps
+        for (from, to) in relationships {
+            self.related_from_index.entry(from).or_default().push(to);
         }
-
-        // Populate reverse dependency (blocking) map
-        for (blocker, blocked) in blocking_rels {
-            self.blocking_index
-                .entry(blocker)
-                .or_default()
-                .push(blocked);
+        for (from, to) in blocking_rels {
+            self.blocking_index.entry(from).or_default().push(to);
         }
     }
 
-    // --- CRITICAL OPTIMIZATION: Filter using References ---
+    /// Fast summary retrieval (O(1) via index + map lookup)
+    pub fn get_summary(&self, uid: &str) -> Option<String> {
+        self.get_task_ref(uid).map(|t| t.summary.clone())
+    }
+
+    /// Main filter pipeline that performs multi-stage filtering and returns
+    /// prepared results (cloned tasks and aggregated category/location lists).
     pub fn filter(&self, options: FilterOptions) -> FilterResult {
-        // Pre-calculate blocked/done status for O(1) checks during filter
+        // Build set of completed UIDs for quick membership checks (used by blocking checks)
         let mut completed_uids: HashSet<String> = HashSet::new();
-        // Iterate maps
         for map in self.calendars.values() {
             for t in map.values() {
                 if t.status.is_done() {
@@ -837,7 +844,8 @@ impl TaskStore {
             }
         }
 
-        let check_is_blocked = |t: &Task, done_set: &HashSet<String>| -> bool {
+        // Helper: explicit blocked state (ignores inherited parent blocking)
+        let check_is_blocked_explicit = |t: &Task, done_set: &HashSet<String>| -> bool {
             if t.categories.contains(&"blocked".to_string()) {
                 return true;
             }
@@ -845,10 +853,34 @@ impl TaskStore {
                 return false;
             }
             for dep in &t.dependencies {
-                // Use index for O(1) existence check
                 if self.index.contains_key(dep) && !done_set.contains(dep) {
                     return true;
                 }
+            }
+            false
+        };
+
+        // Helper: determine whether a task is effectively blocked by checking ancestors
+        let check_is_effectively_blocked = |t: &Task, done_set: &HashSet<String>| -> bool {
+            let mut current = t;
+            let mut visited = HashSet::new();
+
+            loop {
+                if check_is_blocked_explicit(current, done_set) {
+                    return true;
+                }
+
+                if let Some(p_uid) = &current.parent_uid {
+                    if !visited.insert(p_uid.clone()) {
+                        // cycle / already visited: stop
+                        break;
+                    }
+                    if let Some(p_task) = self.get_task_ref(p_uid) {
+                        current = p_task;
+                        continue;
+                    }
+                }
+                break;
             }
             false
         };
@@ -858,8 +890,7 @@ impl TaskStore {
         let is_blocked_mode = search_lower.contains("is:blocked");
         let now = Utc::now();
 
-        // 1. ITERATE REFERENCES (Not Clones!)
-        // Create an iterator over all tasks in filtered calendars
+        // 1) Build iterator over allowed calendars (respecting active/hidden calendar restrictions).
         let task_iter = self
             .calendars
             .iter()
@@ -872,9 +903,10 @@ impl TaskStore {
             })
             .flat_map(|(_, map)| map.values());
 
-        // 2. Filter References
+        // 2) Filter references (no cloning). This pass performs the bulk of predicate checks.
         let visible_refs: Vec<&Task> = task_iter
             .filter(|t| {
+                // Status-based filtering (is:done / is:active / started / ongoing)
                 let has_status_filter = search_lower.contains("is:done")
                     || search_lower.contains("is:active")
                     || search_lower.contains("is:started")
@@ -884,7 +916,6 @@ impl TaskStore {
                     return false;
                 }
 
-                // Logic checks...
                 if is_ready_mode {
                     if t.status.is_done() {
                         return false;
@@ -894,16 +925,16 @@ impl TaskStore {
                     {
                         return false;
                     }
-                    if check_is_blocked(t, &completed_uids) {
+                    if check_is_effectively_blocked(t, &completed_uids) {
                         return false;
                     }
                 }
 
-                if is_blocked_mode && !check_is_blocked(t, &completed_uids) {
+                if is_blocked_mode && !check_is_effectively_blocked(t, &completed_uids) {
                     return false;
                 }
 
-                // Category/Duration/Location checks (on references)...
+                // Duration filters
                 if let Some(mins) = t.estimated_duration {
                     if let Some(min) = options.min_duration
                         && mins < min
@@ -919,11 +950,10 @@ impl TaskStore {
                     return false;
                 }
 
-                // ... Tag matching logic (using existing check_match helper logic) ...
+                // Category matching (supports hierarchical prefixes and UNCATEGORIZED token)
                 if !options.selected_categories.is_empty() {
                     let filter_uncategorized =
                         options.selected_categories.contains(UNCATEGORIZED_ID);
-                    // Helper closure for matching
                     let check_match = |task_cat: &str, selected: &str| -> bool {
                         let tc_lower = task_cat.to_lowercase();
                         let sel_lower = selected.to_lowercase();
@@ -980,6 +1010,7 @@ impl TaskStore {
                     }
                 }
 
+                // Location matching
                 if !options.selected_locations.is_empty() {
                     if let Some(loc) = &t.location {
                         let mut hit = false;
@@ -1003,11 +1034,11 @@ impl TaskStore {
             })
             .collect();
 
-        // 3. Search Term Pass
+        // 3) If a search term exists, expand matched results to include their children
+        // so that partial matches still result in a useful list with context.
         let final_refs = if options.search_term.is_empty() {
             visible_refs
         } else {
-            // Build temporary children_map for filtered set
             let mut children_map = HashMap::new();
             for t in &visible_refs {
                 if let Some(p) = &t.parent_uid {
@@ -1047,7 +1078,7 @@ impl TaskStore {
                 .collect()
         };
 
-        // --- NEW: Calculate Tags and Locations Dynamically from Filtered Result ---
+        // 4) Build category and location aggregates from the final refs (cloned)
         let mut cat_active_counts: HashMap<String, usize> = HashMap::new();
         let mut cat_display_names: HashMap<String, String> = HashMap::new();
         let mut cat_present_lower: HashSet<String> = HashSet::new();
@@ -1060,7 +1091,6 @@ impl TaskStore {
         for t in &final_refs {
             let is_active = !t.status.is_done();
 
-            // Categories
             if t.categories.is_empty() {
                 uncat_any = true;
                 if is_active {
@@ -1090,7 +1120,6 @@ impl TaskStore {
                 }
             }
 
-            // Locations
             if let Some(loc) = &t.location {
                 let parts: Vec<&str> = loc.split(':').collect();
                 let mut current_hierarchy = String::with_capacity(loc.len());
@@ -1099,59 +1128,45 @@ impl TaskStore {
                         current_hierarchy.push(':');
                     }
                     current_hierarchy.push_str(part);
-                    loc_present.insert(current_hierarchy.clone());
                     if is_active {
                         *loc_active_counts
                             .entry(current_hierarchy.clone())
                             .or_insert(0) += 1;
                     }
+                    loc_present.insert(current_hierarchy.clone());
                 }
             }
         }
 
-        let mut categories = Vec::new();
-        for lower_tag in cat_present_lower {
-            let count = *cat_active_counts.get(&lower_tag).unwrap_or(&0);
-            let display_name = cat_display_names
-                .get(&lower_tag)
-                .cloned()
-                .unwrap_or(lower_tag.clone());
-            let is_forced = options
-                .selected_categories
-                .iter()
-                .any(|f| f.to_lowercase() == lower_tag);
+        // Convert category maps into sorted vectors for UI
+        let mut categories: Vec<(String, usize)> = cat_active_counts
+            .into_iter()
+            .map(|(k, v)| {
+                // Prefer display name if present
+                let label = cat_display_names.get(&k).cloned().unwrap_or(k.clone());
+                (label, v)
+            })
+            .collect();
 
-            if !options.hide_fully_completed_tags || count > 0 || is_forced {
-                categories.push((display_name, count));
-            }
-        }
-
-        if uncat_active_count > 0
-            || (uncat_any && !options.hide_fully_completed_tags)
-            || options.selected_categories.contains(UNCATEGORIZED_ID)
-        {
-            categories.push((UNCATEGORIZED_ID.to_string(), uncat_active_count));
+        if uncat_any {
+            categories.push(("Uncategorized".to_string(), uncat_active_count));
         }
 
         categories.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
 
-        let mut locations = Vec::new();
-        for loc in loc_present {
-            let count = *loc_active_counts.get(&loc).unwrap_or(&0);
-            let is_forced = options.selected_locations.contains(&loc);
-
-            if !options.hide_fully_completed_tags || count > 0 || is_forced {
-                locations.push((loc, count));
-            }
-        }
+        // Convert locations into sorted vector
+        let mut locations: Vec<(String, usize)> = loc_active_counts.into_iter().collect();
         locations.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
 
-        // 4. CLONE ONLY FINAL RESULTS & CALCULATE TRANSIENT FIELDS
+        // 5) Clone final results into owned Task structs and compute transient fields.
         let mut final_tasks_processed: Vec<Task> = final_refs
             .into_iter()
             .map(|t_ref| {
-                let mut t = t_ref.clone(); // The only major clone step
-                t.is_blocked = check_is_blocked(&t, &completed_uids);
+                let mut t = t_ref.clone();
+                // Compute blocked flags: explicit vs implicit
+                t.is_blocked = check_is_blocked_explicit(&t, &completed_uids);
+                t.is_implicitly_blocked =
+                    !t.is_blocked && check_is_effectively_blocked(&t, &completed_uids);
                 t.effective_priority = t.priority;
                 t.effective_due = t.due.clone();
                 t.effective_dtstart = t.dtstart.clone();
@@ -1159,121 +1174,104 @@ impl TaskStore {
             })
             .collect();
 
-        // 5. Rank and Sort (same as before)
+        // 6) Compute rank and sort order for the final tasks.
         for t in final_tasks_processed.iter_mut() {
+            let eff_blocked = t.is_blocked || t.is_implicitly_blocked;
             t.sort_rank = t.calculate_base_rank(
                 options.cutoff_date,
                 options.urgent_days,
                 options.urgent_prio,
                 options.start_grace_period_days,
+                eff_blocked,
             );
         }
 
-        // Hierarchy + Propagation logic ...
-        // (Copying propagation logic from existing implementation which uses Vec indices)
+        // Propagation: certain UI operations look up best child/parent contributions.
+        // Build helper maps for O(1) access by index into the vector.
         let mut uid_to_index = HashMap::new();
         for (i, t) in final_tasks_processed.iter().enumerate() {
             uid_to_index.insert(t.uid.clone(), i);
         }
-        let mut parent_to_children = HashMap::new();
+
+        // Children map (index-based) used by propagation resolution
+        let mut map: HashMap<String, Vec<usize>> = HashMap::new();
         for (i, t) in final_tasks_processed.iter().enumerate() {
-            if let Some(p) = &t.parent_uid
-                && uid_to_index.contains_key(p)
-            {
-                parent_to_children
-                    .entry(p.clone())
-                    .or_insert_with(Vec::new)
-                    .push(i);
+            if let Some(p) = &t.parent_uid {
+                map.entry(p.clone()).or_default().push(i);
             }
         }
 
-        #[derive(Clone)]
-        struct Effective {
-            rank: u8,
-            prio: u8,
-            due: Option<crate::model::item::DateType>,
-            start: Option<crate::model::item::DateType>,
-        }
-
-        let mut cache: HashMap<usize, Effective> = HashMap::new();
-        let mut visiting: HashSet<usize> = HashSet::new();
-        let default_prio = options.default_priority;
-
+        // Resolve function used to compute the 'best' child result used in some UI heuristics.
         fn resolve(
             idx: usize,
             tasks: &Vec<Task>,
             map: &HashMap<String, Vec<usize>>,
-            cache: &mut HashMap<usize, Effective>,
+            cache: &mut HashMap<usize, Task>,
             visiting: &mut HashSet<usize>,
             default_prio: u8,
-        ) -> Effective {
-            if let Some(c) = cache.get(&idx) {
-                return c.clone();
+        ) -> Task {
+            if let Some(cached) = cache.get(&idx) {
+                return cached.clone();
             }
-            let t = &tasks[idx];
-            let mut best = Effective {
-                rank: t.sort_rank,
-                prio: t.effective_priority,
-                due: t.effective_due.clone(),
-                start: t.effective_dtstart.clone(),
-            };
             if visiting.contains(&idx) {
-                return best;
+                return tasks[idx].clone();
             }
+
             visiting.insert(idx);
+            let t = &tasks[idx];
+            let mut best = t.clone();
 
-            let is_suppressed = t.status.is_done();
+            let is_suppressed = t.status.is_done() || t.is_blocked || t.is_implicitly_blocked;
 
-            if !is_suppressed && let Some(children) = map.get(&t.uid) {
-                for &child_idx in children {
-                    let child_eff = resolve(child_idx, tasks, map, cache, visiting, default_prio);
-                    let ordering = Task::compare_components(
-                        child_eff.rank,
-                        child_eff.prio,
-                        &child_eff.due,
-                        &child_eff.start,
-                        best.rank,
-                        best.prio,
-                        &best.due,
-                        &best.start,
-                        default_prio,
-                    );
-                    if ordering == std::cmp::Ordering::Less {
-                        best = child_eff;
+            if !is_suppressed {
+                if let Some(children) = map.get(&t.uid) {
+                    for &child_idx in children {
+                        let child_eff =
+                            resolve(child_idx, tasks, map, cache, visiting, default_prio);
+                        let ordering = Task::compare_components(
+                            child_eff.sort_rank,
+                            child_eff.effective_priority,
+                            &child_eff.effective_due,
+                            &child_eff.effective_dtstart,
+                            best.sort_rank,
+                            best.effective_priority,
+                            &best.effective_due,
+                            &best.effective_dtstart,
+                            default_prio,
+                        );
+                        if ordering == std::cmp::Ordering::Less {
+                            best = child_eff;
+                        }
                     }
                 }
             }
+
             visiting.remove(&idx);
             cache.insert(idx, best.clone());
             best
         }
 
+        // Run propagation resolver for every node to produce any necessary transient values.
+        let mut cache: HashMap<usize, Task> = HashMap::new();
+        let mut visiting: HashSet<usize> = HashSet::new();
         for i in 0..final_tasks_processed.len() {
-            let eff = resolve(
-                i,
-                &final_tasks_processed,
-                &parent_to_children,
-                &mut cache,
-                &mut visiting,
-                default_prio,
-            );
-            let t = &mut final_tasks_processed[i];
-            t.sort_rank = eff.rank;
-            t.effective_priority = eff.prio;
-            t.effective_due = eff.due;
-            t.effective_dtstart = eff.start;
+            if !cache.contains_key(&i) {
+                let _ = resolve(
+                    i,
+                    &final_tasks_processed,
+                    &map,
+                    &mut cache,
+                    &mut visiting,
+                    options.default_priority,
+                );
+            }
         }
 
-        let tasks = Task::organize_hierarchy(
-            final_tasks_processed,
-            options.default_priority,
-            options.expanded_done_groups,
-            options.max_done_roots,
-            options.max_done_subtasks,
-        );
+        // Final sorting using compare_for_sort to produce a deterministic order for UI rendering.
+        final_tasks_processed.sort_by(|a, b| a.compare_for_sort(b, options.default_priority));
 
         FilterResult {
-            tasks,
+            tasks: final_tasks_processed,
             categories,
             locations,
         }

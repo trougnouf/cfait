@@ -1,23 +1,20 @@
-// File: ./src/gui/update/settings.rs
-// Handles settings-related messages and updates in the GUI.
+// File: src/gui/update/settings.rs
 use crate::cache::Cache;
 
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::gui::update::common::{apply_alias_retroactively, refresh_filtered_tasks, save_config};
-use crate::model::parser::{format_duration_compact, parse_duration, validate_alias_integrity}; // Updated import
+use crate::model::parser::{format_duration_compact, parse_duration, validate_alias_integrity};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use iced::Task;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::ConfigLoaded(Ok(config)) => {
-            // Load Local Calendars from registry
             let locals = LocalCalendarRegistry::load(app.ctx.as_ref()).unwrap_or_default();
             app.local_cals_editing = locals.clone();
 
-            // ... [Same loading logic as before] ...
             app.hidden_calendars = config.hidden_calendars.clone().into_iter().collect();
             app.disabled_calendars = config.disabled_calendars.clone().into_iter().collect();
             app.sort_cutoff_months = config.sort_cutoff_months;
@@ -44,28 +41,26 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_default_priority_input = app.default_priority.to_string();
             app.ob_start_grace_input = app.start_grace_period_days.to_string();
 
-            // --- LOAD NEW FIELDS ---
             app.auto_reminders = config.auto_reminders;
             app.default_reminder_time = config.default_reminder_time.clone();
             app.snooze_short_mins = config.snooze_short_mins;
             app.create_events_for_tasks = config.create_events_for_tasks;
             app.delete_events_on_completion = config.delete_events_on_completion;
             app.snooze_long_mins = config.snooze_long_mins;
-            app.auto_refresh_interval_mins = config.auto_refresh_interval_mins; // Added
+            app.auto_refresh_interval_mins = config.auto_refresh_interval_mins;
             app.strikethrough_completed = config.strikethrough_completed;
+            app.trash_retention_days = config.trash_retention_days;
 
-            // Initialize inputs with formatted strings
             app.ob_snooze_short_input = format_duration_compact(config.snooze_short_mins);
             app.ob_snooze_long_input = format_duration_compact(config.snooze_long_mins);
-            app.ob_auto_refresh_input = format_duration_compact(config.auto_refresh_interval_mins); // Added
+            app.ob_auto_refresh_input = format_duration_compact(config.auto_refresh_interval_mins);
+            app.ob_trash_retention_input = config.trash_retention_days.to_string();
 
-            // --- LOAD ADVANCED SETTINGS INPUTS ---
             app.ob_max_done_roots_input = config.max_done_roots.to_string();
             app.ob_max_done_subtasks_input = config.max_done_subtasks.to_string();
 
             let mut cached_cals = Cache::load_calendars(app.ctx.as_ref()).unwrap_or_default();
 
-            // Merge locals into main calendar list
             for loc in locals {
                 if !cached_cals.iter().any(|c| c.href == loc.href) {
                     cached_cals.push(loc);
@@ -75,7 +70,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             app.store.clear();
 
-            // Load data for all calendars
             for cal in &app.calendars {
                 if cal.href.starts_with("local://") {
                     if let Ok(tasks) = LocalStorage::load_for_href(app.ctx.as_ref(), &cal.href) {
@@ -114,11 +108,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::ConfigLoaded(Err(e)) => {
             app.state = AppState::Onboarding;
-            // If it failed to load but NOT because it was missing (e.g. syntax/permission error),
-            // show the specific error message on the onboarding screen and prevent overwrites.
             if !e.contains("Config file not found") {
                 app.error_msg = Some(format!("Configuration Error:\n{}", e));
-                // Lock the UI to prevent accidental overwrites of the corrupted config file.
                 app.config_was_corrupted = true;
             }
             Task::none()
@@ -150,7 +141,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ObSubmit => {
-            // Sync `calendars` list with modified `local_cals_editing`
             app.calendars.retain(|c| !c.href.starts_with("local://"));
             app.calendars.extend(app.local_cals_editing.clone());
 
@@ -189,12 +179,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     Some(m) => m.to_string(),
                     None => "".to_string(),
                 };
+                app.trash_retention_days = cfg.trash_retention_days;
+                app.ob_trash_retention_input = cfg.trash_retention_days.to_string();
             }
             app.state = AppState::Settings;
             Task::none()
         }
         Message::CancelSettings => {
-            // Sync `calendars` list with modified `local_cals_editing`
             app.calendars.retain(|c| !c.href.starts_with("local://"));
             app.calendars.extend(app.local_cals_editing.clone());
 
@@ -231,13 +222,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let tags: Vec<String> = app
                     .alias_input_values
                     .split(',')
-                    // Removed .trim_start_matches('#') to preserve #tags, @@locs, etc.
                     .map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty())
                     .collect();
 
                 if !tags.is_empty() {
-                    // Normalize key input for consistency with parser
                     let raw_key = app.alias_input_key.trim();
                     let key = if raw_key.starts_with("@@") {
                         raw_key.to_string()
@@ -247,7 +236,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         raw_key.trim_start_matches('#').to_string()
                     };
 
-                    // --- VALIDATION ADDED HERE ---
                     match validate_alias_integrity(&key, &tags, &app.tag_aliases) {
                         Ok(_) => {
                             app.tag_aliases.insert(key.clone(), tags.clone());
@@ -314,7 +302,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.ob_default_priority_input = val.clone();
                 if let Ok(n) = val.trim().parse::<u8>()
                     && n > 0
-                // Allow any non-zero u8 value (1-255)
                 {
                     app.default_priority = n;
                     save_config(app);
@@ -345,12 +332,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SetSnoozeShort(val) => {
-            app.ob_snooze_short_input = val.clone(); // Allow user to type "1h"
+            app.ob_snooze_short_input = val.clone();
             if let Some(n) = parse_duration(&val) {
                 app.snooze_short_mins = n;
                 save_config(app);
-            } else if val.is_empty() {
-                // Optional: handle empty
             }
             Task::none()
         }
@@ -363,7 +348,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SetTrashRetention(val) => {
-            // Accept only numeric input (or empty while typing). Persist when a valid integer is provided.
             if val.is_empty() || val.chars().all(|c| c.is_numeric()) {
                 app.ob_trash_retention_input = val.clone();
                 if let Ok(n) = val.trim().parse::<u32>() {
@@ -373,7 +357,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        // Added Handler
         Message::SetAutoRefreshInterval(val) => {
             app.ob_auto_refresh_input = val.clone();
             if let Some(n) = parse_duration(&val) {
@@ -382,8 +365,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-
-        // NEW HANDLERS: Advanced Settings toggles and inputs
         Message::ToggleAdvancedSettings(val) => {
             app.show_advanced_settings = val;
             Task::none()
@@ -410,12 +391,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.create_events_for_tasks = val;
             save_config(app);
 
-            // BACKFILL: Only trigger retroactive event creation when toggling ON
             if val
                 && was_disabled
                 && let Some(client) = &app.client
             {
-                // Collect all tasks from all calendars
                 let all_tasks: Vec<_> = app
                     .store
                     .calendars
@@ -446,7 +425,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(client) = &app.client {
                 app.deleting_events = true;
 
-                // Collect all tasks from all calendars
                 let all_tasks: Vec<_> = app
                     .store
                     .calendars
@@ -466,8 +444,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.deleting_events = false;
 
             if count > 0 {
-                // Determine action based on whether events were created or deleted
-                // If setting is ON, we created. Otherwise we deleted.
                 let action = if app.create_events_for_tasks {
                     "Created"
                 } else {
@@ -486,7 +462,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ExportLocalIcs(calendar_href) => {
-            // 1. Load tasks from specified calendar
             let tasks_result = LocalStorage::load_for_href(app.ctx.as_ref(), &calendar_href);
             let cal_name = calendar_href.clone();
 
@@ -495,11 +470,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     let tasks = tasks_result.map_err(|e| e.to_string())?;
                     let ics_content = LocalStorage::to_ics_string(&tasks);
 
-                    // Extract calendar name/id for filename
                     let cal_id = cal_name.strip_prefix("local://").unwrap_or("backup");
                     let filename = format!("cfait_{}.ics", cal_id);
 
-                    // 2. Open File Dialog (Async)
                     let file_handle = rfd::AsyncFileDialog::new()
                         .add_filter("Calendar", &["ics"])
                         .set_file_name(&filename)
@@ -508,7 +481,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
                     if let Some(handle) = file_handle {
                         let path = handle.path().to_path_buf();
-                        // 3. Write file
                         #[cfg(not(target_arch = "wasm32"))]
                         {
                             use tokio::io::AsyncWriteExt;
@@ -521,7 +493,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         }
                         Ok(path)
                     } else {
-                        // User cancelled
                         Err("Export cancelled".to_string())
                     }
                 },
@@ -536,7 +507,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ExportSaved(Err(e)) => {
-            // Don't show error if user just cancelled
             if e != "Export cancelled" {
                 app.error_msg = Some(format!("Export failed: {}", e));
             }
@@ -544,7 +514,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::ImportLocalIcs(calendar_href) => {
             let ctx = app.ctx.clone();
-            // Open file picker to select ICS file
             Task::perform(
                 async move {
                     if let Some(file) = rfd::AsyncFileDialog::new()
@@ -555,7 +524,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         let content = file.read().await;
                         match String::from_utf8(content) {
                             Ok(ics_content) => {
-                                // Use canonical import function
                                 match LocalStorage::import_from_ics(
                                     ctx.as_ref(),
                                     &calendar_href,
@@ -578,7 +546,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::ImportCompleted(Ok(msg)) => {
             app.error_msg = Some(msg);
-            // Refresh tasks after import
             if let Some(client) = &app.client {
                 app.loading = true;
                 return Task::perform(
@@ -589,7 +556,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ImportCompleted(Err(e)) => {
-            // Don't show error if user just cancelled
             if e != "Import cancelled" {
                 app.error_msg = Some(format!("Import failed: {}", e));
             }
@@ -605,22 +571,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             };
             app.local_cals_editing.push(new_cal.clone());
 
-            // Auto-save registry
             let _ = LocalCalendarRegistry::save(app.ctx.as_ref(), &app.local_cals_editing);
 
-            // Also add to main calendar list
             if !app.calendars.iter().any(|c| c.href == new_cal.href) {
                 app.calendars.push(new_cal.clone());
             }
 
-            // Initialize empty task list for this calendar
             app.store.insert(new_cal.href.clone(), vec![]);
 
             refresh_filtered_tasks(app);
             Task::none()
         }
         Message::DeleteLocalCalendar(href) => {
-            // Don't delete default
             if href == LOCAL_CALENDAR_HREF {
                 return Task::none();
             }
@@ -629,11 +591,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.local_cals_editing.remove(idx);
                 let _ = LocalCalendarRegistry::save(app.ctx.as_ref(), &app.local_cals_editing);
 
-                // Also remove from main calendar list
                 app.calendars.retain(|c| c.href != href);
                 app.store.remove(&href);
 
-                // Delete data file
                 if let Some(path) = LocalStorage::get_path_for_href(app.ctx.as_ref(), &href) {
                     let _ = std::fs::remove_file(path);
                 }
@@ -647,7 +607,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 cal.name = name.clone();
                 let _ = LocalCalendarRegistry::save(app.ctx.as_ref(), &app.local_cals_editing);
 
-                // Also update in main calendar list
                 if let Some(main_cal) = app.calendars.iter_mut().find(|c| c.href == href) {
                     main_cal.name = name;
                 }
@@ -667,7 +626,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(href) = &app.color_picker_active_href.clone()
                 && let Some(cal) = app.local_cals_editing.iter_mut().find(|c| c.href == *href)
             {
-                // Convert color to hex
                 let r = (color.r * 255.0) as u8;
                 let g = (color.g * 255.0) as u8;
                 let b = (color.b * 255.0) as u8;
@@ -675,7 +633,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 cal.color = Some(hex.clone());
                 let _ = LocalCalendarRegistry::save(app.ctx.as_ref(), &app.local_cals_editing);
 
-                // Also update in main calendar list
                 if let Some(main_cal) = app.calendars.iter_mut().find(|c| c.href == *href) {
                     main_cal.color = Some(hex);
                 }
@@ -685,7 +642,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::IcsFileLoaded(Ok((file_path, content))) => {
-            // Count tasks in the ICS content
             let task_count = content.split("BEGIN:VTODO").count().saturating_sub(1);
 
             app.ics_import_dialog_open = true;
@@ -716,14 +672,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(calendar_href) = &app.ics_import_selected_calendar.clone()
                 && let Some(ics_content) = &app.ics_import_content.clone()
             {
-                // Close dialog
                 app.ics_import_dialog_open = false;
                 let file_path = app.ics_import_file_path.take();
                 app.ics_import_content = None;
                 app.ics_import_selected_calendar = None;
                 app.ics_import_task_count = None;
 
-                // Import the tasks
                 let href = calendar_href.clone();
                 let content = ics_content.clone();
                 let ctx = app.ctx.clone();

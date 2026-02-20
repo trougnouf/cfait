@@ -574,7 +574,7 @@ fun CompactTagRow(
         Text(name, fontSize = 14.sp, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
         if (count != null) Text("$count", fontSize = 12.sp, color = Color.Gray)
 
-        // NEW: Render Focus Button if callback exists
+        // Render Focus Button if callback exists
         if (onFocus != null) {
             Spacer(Modifier.width(8.dp))
             IconButton(

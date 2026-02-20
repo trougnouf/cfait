@@ -1,5 +1,4 @@
-// File: ./src/gui/update/network.rs
-// Handles network sync and connectivity messages in the GUI.
+// File: src/gui/update/network.rs
 use crate::cache::Cache;
 use crate::config::Config;
 use crate::gui::async_ops::*;
@@ -40,17 +39,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
 
-            // Merge all local calendars from registry with network calendars
             let local_cals = LocalCalendarRegistry::load(app.ctx.as_ref()).unwrap_or_default();
 
-            // Add all local calendars that aren't already in the list
             for local_cal in local_cals {
                 if !cals.iter().any(|c| c.href == local_cal.href) {
                     cals.push(local_cal);
                 }
             }
 
-            // Ensure default local calendar is always present
             if !cals.iter().any(|c| c.href == LOCAL_CALENDAR_HREF) {
                 let local_entry = CalendarListEntry {
                     name: LOCAL_CALENDAR_NAME.to_string(),
@@ -62,22 +58,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             app.calendars = cals.clone();
 
-            // Clear store to rebuild from fresh network/cache state
             app.store.clear();
 
-            // 1. Load all local calendars
             for cal in &app.calendars {
                 if cal.href.starts_with("local://")
                     && let Ok(mut local_t) = crate::gui::async_ops::get_runtime()
                         .block_on(async { client.get_tasks(&cal.href).await })
                 {
-                    // Apply Journal (replays Creates/Updates/Deletes correctly)
                     Journal::apply_to_tasks(app.ctx.as_ref(), &mut local_t, &cal.href);
                     app.store.insert(cal.href.clone(), local_t);
                 }
             }
 
-            // 2. Load Caches for remote calendars
             for cal in &app.calendars {
                 if cal.href.starts_with("local://") {
                     continue;
@@ -110,7 +102,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             active = valid_active;
             app.active_cal_href = active.clone();
 
-            // 3. Load Fresh Network Data (Active Calendar)
             if let Some(href) = &active
                 && href != LOCAL_CALENDAR_HREF
                 && app.error_msg.is_none()
@@ -134,7 +125,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             app.loading = false;
 
-            // Enable Alarms here!
             if let Some(tx) = &app.alarm_tx {
                 let _ = tx.try_send(SystemEvent::EnableAlarms);
             }
@@ -154,7 +144,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::Loaded(Err(e)) => {
             app.error_msg = Some(format!("Connection Failed: {}", e));
 
-            // Fallback: If connection fails, we might still want alarms for offline data
             if let Some(tx) = &app.alarm_tx {
                 let _ = tx.try_send(SystemEvent::EnableAlarms);
             }
@@ -197,10 +186,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SyncSaved(Ok(mut updated)) => {
-            // If the Sync succeeded (Journal entry removed) but we don't have a
-            // real ETag yet, we must set a placeholder. Otherwise, if the app restarts now,
-            // Cache::load -> Journal::apply will see an empty ETag and no Journal entry,
-            // and delete the task ("Ghost Pruning").
             if updated.etag.is_empty() {
                 updated.etag = "pending_refresh".to_string();
             }
@@ -245,10 +230,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             if let Some(map) = app.store.calendars.get_mut(&new_task.calendar_href) {
-                // CHANGED: Use HashMap insert instead of Vec positioning
                 map.insert(new_task.uid.clone(), new_task.clone());
 
-                // Collect to Vec for saving to Cache/Disk
                 let list: Vec<_> = map.values().cloned().collect();
                 let (_, token) = Cache::load(app.ctx.as_ref(), &new_task.calendar_href)
                     .unwrap_or((vec![], None));
@@ -256,13 +239,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             refresh_filtered_tasks(app);
 
-            // Close the task editing interface after successful move
             app.input_value = text_editor::Content::new();
             app.description_value = text_editor::Content::new();
             app.editing_uid = None;
             app.creating_child_of = None;
 
-            // Select the moved task in the list
             app.selected_uid = Some(new_task.uid.clone());
 
             Task::none()

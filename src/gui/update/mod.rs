@@ -1,5 +1,4 @@
-// File: ./src/gui/update/mod.rs
-// Central message handler dispatching to specific update modules.
+// File: src/gui/update/mod.rs
 pub mod common;
 pub mod network;
 pub mod settings;
@@ -16,7 +15,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::FontLoaded(_) => Task::none(),
         Message::DeleteComplete(_) => Task::none(),
 
-        // --- Settings Messages ---
         Message::ConfigLoaded(_)
         | Message::ObUrlChanged(_)
         | Message::ObUserChanged(_)
@@ -41,7 +39,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetDefaultReminderTime(_)
         | Message::SetSnoozeShort(_)
         | Message::SetSnoozeLong(_)
-        | Message::SetTrashRetention(_)  // <--- Added this line
+        | Message::SetTrashRetention(_)
         | Message::SetAutoRefreshInterval(_)
         | Message::SetCreateEventsForTasks(_)
         | Message::SetDeleteEventsOnCompletion(_)
@@ -61,13 +59,11 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::OpenColorPicker(_, _)
         | Message::CancelColorPicker
         | Message::SubmitColorPicker(_)
-        // NEW: Route advanced settings messages
         | Message::ToggleAdvancedSettings(_)
         | Message::SetMaxDoneRoots(_)
         | Message::SetMaxDoneSubtasks(_)
         | Message::SetStrikethroughCompleted(_) => settings::handle(app, message),
 
-        // --- Task Logic Messages ---
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)
         | Message::StartCreateChild(_)
@@ -94,7 +90,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::StopTask(_)
         | Message::SnoozeCustomInput(_)
         | Message::SnoozeCustomSubmit(_, _)
-        // Keyboard Shortcuts routing to Task logic
         | Message::EditSelectedDescription
         | Message::PromoteSelected
         | Message::DemoteSelected
@@ -111,7 +106,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CancelTaskFromAlarm(_, _)
         | Message::ToggleDoneGroup(_) => tasks::handle(app, message),
 
-        // --- View & Navigation Messages ---
         Message::TabPressed(_)
         | Message::FocusInput
         | Message::FocusSearch
@@ -162,7 +156,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleHideCompletedToggle
         | Message::CategoryMatchModeToggle => view::handle(app, message),
 
-        // --- Network Messages ---
         Message::Refresh
         | Message::Loaded(_)
         | Message::RefreshedAll(_)
@@ -172,9 +165,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::TaskMoved(_)
         | Message::MigrationComplete(_) => network::handle(app, message),
 
-        // Delayed focus trigger: when the view has been refreshed and widget IDs are registered,
-        // `SnapToSelected` will attempt to focus/scroll to the selected task. If the task
-        // is still not present in the filtered view, re-schedule a delayed attempt.
         Message::SnapToSelected { focus } => {
             if let Some(uid) = &app.selected_uid {
                 let present_in_list = app.tasks.iter().any(|t| t.uid == *uid);
@@ -183,7 +173,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if present_in_list || has_cached_id {
                     common::scroll_to_selected(app, focus)
                 } else {
-                    // Task not yet visible/registered; try again shortly.
                     common::scroll_to_selected_delayed(app, focus)
                 }
             } else {
@@ -191,36 +180,46 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
         }
 
-        // --- Alarm System ---
         Message::InitAlarmActor(tx) => {
             app.alarm_tx = Some(tx.clone());
             if !app.tasks.is_empty() {
-                let all = app.store.calendars.values().flat_map(|m| m.values()).cloned().collect();
+                let all = app
+                    .store
+                    .calendars
+                    .values()
+                    .flat_map(|m| m.values())
+                    .cloned()
+                    .collect();
                 let _ = tx.try_send(SystemEvent::UpdateTasks(all));
             }
             Task::none()
         }
         Message::AlarmSignalReceived(msg) => {
-             match &*msg {
+            match &*msg {
                 AlarmMessage::Fire(task_uid, alarm_uid) => {
                     if let Some((task, _)) = app.store.get_task_mut(task_uid) {
                         let is_implicit = alarm_uid.starts_with("implicit_");
                         let exists = is_implicit || task.alarms.iter().any(|a| a.uid == *alarm_uid);
 
                         if exists {
-                            let alarm_obj = if let Some(a) = task.alarms.iter().find(|a| a.uid == *alarm_uid) {
-                                a.clone()
-                            } else {
-                                crate::model::Alarm {
-                                    uid: alarm_uid.clone(),
-                                    action: "DISPLAY".to_string(),
-                                    trigger: crate::model::AlarmTrigger::Relative(0),
-                                    description: Some(if alarm_uid.contains("due") { "Due now".to_string() } else { "Starting".to_string() }),
-                                    acknowledged: None,
-                                    related_to_uid: None,
-                                    relation_type: None,
-                                }
-                            };
+                            let alarm_obj =
+                                if let Some(a) = task.alarms.iter().find(|a| a.uid == *alarm_uid) {
+                                    (*a).clone() // Safely deref &&Alarm
+                                } else {
+                                    crate::model::Alarm {
+                                        uid: alarm_uid.clone(),
+                                        action: "DISPLAY".to_string(),
+                                        trigger: crate::model::AlarmTrigger::Relative(0),
+                                        description: Some(if alarm_uid.contains("due") {
+                                            "Due now".to_string()
+                                        } else {
+                                            "Starting".to_string()
+                                        }),
+                                        acknowledged: None,
+                                        related_to_uid: None,
+                                        relation_type: None,
+                                    }
+                                };
                             app.ringing_tasks.push((task.clone(), alarm_obj));
                         }
                     }
@@ -229,16 +228,17 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SnoozeAlarm(t_uid, a_uid, mins) => {
-            app.ringing_tasks.retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
+            app.ringing_tasks
+                .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
             tasks::handle(app, Message::SnoozeAlarm(t_uid, a_uid, mins))
         }
         Message::DismissAlarm(t_uid, a_uid) => {
-            app.ringing_tasks.retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
+            app.ringing_tasks
+                .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
             tasks::handle(app, Message::DismissAlarm(t_uid, a_uid))
         }
     };
 
-    // Update placeholder text for UI
     if app.editing_uid.is_some() {
         app.current_placeholder = "Edit Title...".to_string();
     } else if let Some(parent_uid) = &app.creating_child_of {

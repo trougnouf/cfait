@@ -192,7 +192,7 @@ fun CfaitNavHost(
                     Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                 }
             } else if (currentWorkInfo?.state == WorkInfo.State.FAILED) {
-                // FLAW FIX: Do not show a toast for periodic/background sync failures.
+                // Do not show a toast for periodic/background sync failures to avoid alarming the user.
                 // Log the failure for diagnostics instead.
                 val msg = currentWorkInfo.outputData.getString(CalendarSyncWorker.OUTPUT_MESSAGE) ?: "Unknown error"
                 android.util.Log.w("CfaitMain", "Periodic calendar sync failed: $msg")
@@ -398,6 +398,55 @@ fun CfaitNavHost(
     }
 
     NavHost(navController, startDestination = "home") {
+        composable("settings/advanced") {
+            // Load fresh on entry
+            var localRoots by remember { mutableStateOf("20") }
+            var localSubs by remember { mutableStateOf("5") }
+            var localTrash by remember { mutableStateOf("14") }
+
+            LaunchedEffect(Unit) {
+                try {
+                    val cfg = api.getConfig()
+                    localRoots = cfg.maxDoneRoots.toString()
+                    localSubs = cfg.maxDoneSubtasks.toString()
+                    localTrash = cfg.trashRetention.toString()
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    // ignore
+                }
+            }
+
+            AdvancedSettingsScreen(
+                api = api,
+                maxDoneRoots = localRoots,
+                maxDoneSubtasks = localSubs,
+                trashRetention = localTrash,
+                onMaxDoneRootsChange = { localRoots = it },
+                onMaxDoneSubtasksChange = { localSubs = it },
+                onTrashRetentionChange = { localTrash = it },
+                onBack = {
+                    // Save on exit
+                    try {
+                        val cfg = api.getConfig()
+                        val r = localRoots.toUIntOrNull() ?: 20u
+                        val s = localSubs.toUIntOrNull() ?: 5u
+                        val t = localTrash.toUIntOrNull() ?: 14u
+                        api.saveConfig(
+                            cfg.url, cfg.username, "", cfg.allowInsecure, cfg.hideCompleted,
+                            cfg.disabledCalendars, cfg.sortCutoffMonths, cfg.urgentDays, cfg.urgentPrio,
+                            cfg.defaultPriority, cfg.startGracePeriodDays, cfg.autoReminders,
+                            cfg.defaultReminderTime, cfg.snoozeShort, cfg.createEventsForTasks,
+                            cfg.deleteEventsOnCompletion, cfg.autoRefreshInterval,
+                            t, r, s // New values (added trash retention)
+                        )
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        // swallow save error
+                    }
+                    navController.popBackStack()
+                }
+            )
+        }
         composable("home") {
             HomeScreen(
                 api = api,
@@ -461,12 +510,14 @@ fun CfaitNavHost(
             // Load fresh on entry
             var localRoots by remember { mutableStateOf("20") }
             var localSubs by remember { mutableStateOf("5") }
+            var localTrash by remember { mutableStateOf("14") }
 
             LaunchedEffect(Unit) {
                 try {
                     val cfg = api.getConfig()
                     localRoots = cfg.maxDoneRoots.toString()
                     localSubs = cfg.maxDoneSubtasks.toString()
+                    localTrash = cfg.trashRetention.toString()
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     // ignore
@@ -477,21 +528,24 @@ fun CfaitNavHost(
                 api = api,
                 maxDoneRoots = localRoots,
                 maxDoneSubtasks = localSubs,
+                trashRetention = localTrash,
                 onMaxDoneRootsChange = { localRoots = it },
                 onMaxDoneSubtasksChange = { localSubs = it },
+                onTrashRetentionChange = { localTrash = it },
                 onBack = {
                     // Save on exit
                     try {
                         val cfg = api.getConfig()
                         val r = localRoots.toUIntOrNull() ?: 20u
                         val s = localSubs.toUIntOrNull() ?: 5u
+                        val t = localTrash.toUIntOrNull() ?: 14u
                         api.saveConfig(
                             cfg.url, cfg.username, "", cfg.allowInsecure, cfg.hideCompleted,
                             cfg.disabledCalendars, cfg.sortCutoffMonths, cfg.urgentDays, cfg.urgentPrio,
                             cfg.defaultPriority, cfg.startGracePeriodDays, cfg.autoReminders,
                             cfg.defaultReminderTime, cfg.snoozeShort, cfg.createEventsForTasks,
                             cfg.deleteEventsOnCompletion, cfg.autoRefreshInterval,
-                            cfg.trashRetention, r, s // New values (added trash retention)
+                            t, r, s // New values (added trash retention)
                         )
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e

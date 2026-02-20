@@ -99,7 +99,7 @@ pub struct AppState {
     pub alarm_actor_tx: Option<mpsc::Sender<SystemEvent>>,
     pub active_alarm: Option<(Task, String)>, // (Task, AlarmUID) to render popup
 
-    // NEW: Expanded Done Groups (keys are parent UIDs; empty string for root group)
+    // Expanded Done Groups (keys are parent UIDs; empty string for root group)
     pub expanded_done_groups: HashSet<String>,
 }
 
@@ -186,7 +186,7 @@ impl AppState {
             alarm_actor_tx: None,
             active_alarm: None,
 
-            // NEW: track expanded completed groups (keys are parent UIDs, empty string for roots)
+            // Track expanded completed groups (keys are parent UIDs, empty string for roots)
             expanded_done_groups: HashSet::new(),
         }
     }
@@ -238,7 +238,7 @@ impl AppState {
             urgent_prio: self.urgent_prio,
             default_priority: self.default_priority,
             start_grace_period_days: self.start_grace_period_days,
-            // NEW: pass expanded groups and configured limits
+            // Pass expanded groups and configured limits
             expanded_done_groups: &self.expanded_done_groups,
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,

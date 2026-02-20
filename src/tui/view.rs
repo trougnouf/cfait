@@ -1,3 +1,4 @@
+// File: src/tui/view.rs
 /* Renders the Terminal User Interface (TUI) layout and widgets.
  *
  * This file implements the main `draw` function used by the TUI. It renders
@@ -696,14 +697,15 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     .store
                     .get_summary(dep_uid)
                     .unwrap_or_else(|| "Unknown".to_string());
-                let is_done = state.store.get_task_status(dep_uid).unwrap_or(false);
+                // FIXED: Use is_task_done instead of get_task_status
+                let is_done = state.store.is_task_done(dep_uid).unwrap_or(false);
                 let check = if is_done { "[x]" } else { "[ ]" };
                 details_md.push_str(&format!("- {} {}\n", check, name));
             }
             details_md.push('\n');
         }
 
-        // NEW: Blocking Section (Successors) - tasks that are blocked BY this task
+        // Blocking Section (Successors) - tasks that are blocked BY this task
         let blocking_tasks = state.store.get_tasks_blocking(&task.uid);
         if !blocking_tasks.is_empty() {
             details_md.push_str("### Blocking (Successors)\n");

@@ -1,5 +1,23 @@
-// File: ./src/gui/update/common.rs
-// Common utility functions for GUI updates.
+// File: src/gui/update/common.rs
+/*
+ Common utilities for GUI update handlers.
+
+ This module implements shared helper routines used by the GUI update flow:
+  - building the filtered task list for the UI,
+  - saving configuration back to disk,
+  - applying alias changes retroactively,
+  - and helper scrolling/focus utilities used by the view layer.
+
+ Key design notes:
+  - The filter pipeline is intentionally split so that most predicate checks
+    operate on &Task references (no clones). Only the final, visible tasks are
+    cloned for UI rendering. This keeps memory churn low on frequent refreshes.
+  - We maintain a small parent-attribute cache here (tags/location) to avoid
+    repeated lookups while rendering task rows.
+  - The scrolling helpers attempt a bounds-aware snap (pixel-accurate) when a
+    widget Id and its layout bounds are available; they fall back to index-based
+    heuristics when bounds are not yet registered.
+*/
 
 use crate::config::Config;
 use crate::gui::async_ops::*;
@@ -14,23 +32,28 @@ use iced::widget::operation;
 use iced::widget::scrollable::RelativeOffset;
 use std::time::Duration as StdDuration;
 
-/// NOTE:
-/// The sidebar cache is now populated directly from the results of `store.filter()`
-/// inside `refresh_filtered_tasks`. The previous `refresh_sidebar_cache` helper
-/// performed a separate, global scan of the store and is now unnecessary.
+/// Build the visible task list and update UI caches.
+///
+/// Strategy:
+/// 1) Clear any previously stored focus bounds (these can be stale after major updates).
+/// 2) Build an effective set of hidden calendars (user-hidden + disabled).
+/// 3) Run `store.filter(...)` which operates on references and returns the final cloned list.
+/// 4) Build a small parent-attribute cache used by task row rendering (inheritance of tags/location).
+/// 5) Notify the alarm actor with the full task set (for alarm scheduling).
 pub fn refresh_filtered_tasks(app: &mut GuiApp) {
-    // --- FIX: Clear the focus bounds cache before filtering ---
-    // This prevents stale layout data from breaking scroll calculations.
+    // Clear focus bounds before rebuilding the list. This prevents stale layout
+    // information from interfering with subsequent focus/scroll computations.
     clear_focus_bounds();
 
     let cutoff_date = app
         .sort_cutoff_months
         .map(|m| chrono::Utc::now() + chrono::Duration::days(m as i64 * 30));
 
-    // Load config so we can respect the global limits for showing completed groups/subtasks.
+    // Load configuration so the filter honors the current advanced limits (max done roots/subtasks).
     let config = Config::load(app.ctx.as_ref()).unwrap_or_default();
 
-    // Create an effective set of all calendars that should be hidden from the task view.
+    // Effective hidden calendars: union of explicitly hidden and disabled calendars.
+    // This set is passed to the filter to exclude those calendars efficiently.
     let mut effective_hidden = app.hidden_calendars.clone();
     effective_hidden.extend(app.disabled_calendars.clone());
 
@@ -62,21 +85,20 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     app.cached_categories = filter_res.categories;
     app.cached_locations = filter_res.locations;
 
-    // 2. Build Parent Attribute Cache (O(N))
-    // We do this here once per update so the view loop is O(1)
+    // Rebuild a tiny parent attribute cache (tags + location). This allows task rows
+    // to inherit visual attributes without performing repeated map lookups.
     app.parent_attributes_cache.clear();
 
-    // Create a temporary lookup for all tasks in the store
-    // This allows us to resolve parents even if they aren't in the filtered view
     let mut quick_lookup: std::collections::HashMap<String, &crate::model::Task> =
         std::collections::HashMap::new();
+    // Create an O(1) lookup table for tasks across all calendars so that parent attribute
+    // resolution can work even if the parent is not in the current filtered view.
     for map in app.store.calendars.values() {
         for t in map.values() {
             quick_lookup.insert(t.uid.clone(), t);
         }
     }
 
-    // --- UPDATE ID CACHE ---
     for task in &app.tasks {
         app.task_ids
             .entry(task.uid.clone())
@@ -93,6 +115,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         }
     }
 
+    // Notify the alarm actor with the complete task set so scheduling/enablement can run off the latest data.
     if let Some(tx) = &app.alarm_tx {
         let all_tasks: Vec<crate::model::Task> = app
             .store
@@ -105,6 +128,12 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     }
 }
 
+/// Persist GUI-level config values back to the central Config object and save to disk.
+///
+/// This function collects the various UI-bound fields, converts them into the
+/// Config structure and saves. It's intentionally permissive because the GUI may
+/// leave some fields empty while the user types; callers should ensure validation
+/// where necessary.
 pub fn save_config(app: &mut GuiApp) -> Config {
     let mut cfg = Config::load(app.ctx.as_ref()).unwrap_or_default();
 
@@ -134,7 +163,6 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.auto_refresh_interval_mins = app.auto_refresh_interval_mins;
     cfg.trash_retention_days = app.trash_retention_days;
 
-    // Save new values from Advanced Settings inputs
     cfg.max_done_roots = app.ob_max_done_roots_input.parse().unwrap_or(20);
     cfg.max_done_subtasks = app.ob_max_done_subtasks_input.parse().unwrap_or(5);
 
@@ -142,6 +170,10 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg
 }
 
+/// Apply a new alias mapping retroactively across tasks.
+///
+/// If there are modified tasks, refresh the filtered view and optionally issue
+/// network update commands to persist changes to a remote server.
 pub fn apply_alias_retroactively(
     app: &mut GuiApp,
     alias_key: &str,
@@ -169,27 +201,21 @@ pub fn apply_alias_retroactively(
     None
 }
 
-/// Helper: Generates a command to scroll the main list to the currently selected task.
+/// Scroll the main list to the selected task.
 ///
-/// Strategy:
-/// 1) If both a stable widget Id is registered and the task index is known, perform both:
-///    focus the widget id and snap the scrollable to the relative offset (batched).
-/// 2) If only Id is present, focus it (ensures keyboard focus).
-/// 3) If only index known, snap_to relative offset as a fallback.
+/// This helper prefers a bounds-aware pixel-accurate scroll when we have a widget Id
+/// and the view has registered layout bounds for it. When bounds are not available
+/// (e.g. the widget hasn't rendered yet) it falls back to an index-based heuristic
+/// using an average row height.
 pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
     if let Some(uid) = &app.selected_uid {
         let id_opt = app.task_ids.get(uid).cloned();
         let idx_opt = app.tasks.iter().position(|t| t.uid == *uid);
 
-        // If we have both an Id and an index, prefer to compute a pixel-accurate scroll offset
-        // and then focus. We try bounds-based centering first (most accurate), and fall back
-        // to an index-based center estimate if bounds are not available.
         if let (Some(id), Some(idx)) = (id_opt.clone(), idx_opt) {
-            // Try bounds-based centering when available.
             if let Some(rect) = get_focus_bounds(&id) {
-                // Compute content top/min and content bottom/max from registered bounds.
-                // This allows computing content height as max_y - min_y, and deriving the
-                // target item's center relative to the content origin (min_y).
+                // When available, use the union of all registered bounds to compute
+                // an absolute content height and derive a fractional scroll offset.
                 let all = get_all_focus_bounds();
                 let mut min_y: f32 = f32::INFINITY;
                 let mut max_y: f32 = 0.0;
@@ -205,15 +231,13 @@ pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
                     // Item center relative to content top (min_y)
                     let item_center_rel = (rect.y - min_y) + rect.height / 2.0;
 
-                    // Maximum scroll offset (px) is content_h - viewport_h.
+                    // Maximum scroll = content_h - viewport_h
                     let max_scroll = (content_h - viewport_h).max(0.0);
                     // Desired offset so the item center is positioned in the middle of the viewport.
                     let desired_offset_px =
                         (item_center_rel - viewport_h / 2.0).clamp(0.0, max_scroll);
 
-                    // Use an absolute pixel scroll to position precisely, then focus the id.
                     // Convert desired pixel offset into a relative fraction for snap_to.
-                    // max_scroll = content_height - viewport_height
                     let max_scroll_px = (content_h - viewport_h).max(0.0);
                     let y = if max_scroll_px > 0.0 {
                         (desired_offset_px / max_scroll_px).clamp(0.0, 1.0)
@@ -233,7 +257,8 @@ pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
             }
 
             // Fallback: index-centered heuristic (estimate pixels using avg row height).
-            let avg_item_h: f32 = 34.0; // tuned default row height
+            // Tuned default row height is used when bounds are not available.
+            let avg_item_h: f32 = 34.0;
             let total_items = app.tasks.len() as f32;
             let content_h = (avg_item_h * total_items).max(1.0);
             let viewport_h = (app.current_window_size.height - 180.0).max(100.0);
@@ -241,7 +266,6 @@ pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
             let max_scroll = (content_h - viewport_h).max(0.0);
             let desired_offset_px = (item_center - viewport_h / 2.0).clamp(0.0, max_scroll);
 
-            // Convert desired pixel offset into a relative fraction for snap_to.
             let max_scroll_px = (content_h - viewport_h).max(0.0);
             let y = if max_scroll_px > 0.0 {
                 (desired_offset_px / max_scroll_px).clamp(0.0, 1.0)
@@ -258,8 +282,8 @@ pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
             }
         }
 
-        // If we only have the index, center using the same index-based pixel heuristic.
         if let Some(idx) = idx_opt {
+            // Index-only centering as a last resort.
             let avg_item_h: f32 = 34.0;
             let total_items = app.tasks.len() as f32;
             let content_h = (avg_item_h * total_items).max(1.0);
@@ -268,7 +292,6 @@ pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
             let max_scroll = (content_h - viewport_h).max(0.0);
             let desired_offset_px = (item_center - viewport_h / 2.0).clamp(0.0, max_scroll);
 
-            // Convert desired pixel offset into a relative fraction for snap_to.
             let max_scroll_px = (content_h - viewport_h).max(0.0);
             let y = if max_scroll_px > 0.0 {
                 (desired_offset_px / max_scroll_px).clamp(0.0, 1.0)
@@ -279,54 +302,33 @@ pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
             return operation::snap_to(app.scrollable_id.clone(), RelativeOffset { x: 0.0, y });
         }
 
-        // If we only have the widget Id, focus it (last resort).
         if let Some(id) = id_opt
             && focus
         {
+            // If we only have a widget Id, focus it as a last step.
             return operation::focus(id);
         }
     }
 
-    //eprintln!("scroll_to_selected: no selected uid");
     Task::none()
 }
 
-/// Helper: Waits a small amount of time (allowing the View to rebuild)
-/// and then triggers one or more `SnapToSelected` messages (retries).
-///
-/// Rationale:
-/// A single delayed attempt may still miss on some platforms/conditions. Emit a small batch
-/// of delayed triggers (at increasing delays) so the focus attempt has multiple chances across
-/// subsequent frames to succeed.
+/// Try to focus the selected row after a short delay. This function emits a small
+/// batch of delayed attempts to increase the chance the focusable row has been
+/// registered by the view traversal on slower platforms or complex layouts.
 pub fn scroll_to_selected_delayed(_app: &GuiApp, focus: bool) -> Task<Message> {
-    // Try to emit SnapToSelected as soon as the focusable row reports its layout bounds.
-    // Strategy:
-    // 1. If we know which UID is selected and we have a cached widget Id for it, poll the
-    //    focus bounds registry for that Id and emit SnapToSelected as soon as a bounds entry
-    //    is seen (up to a timeout). This yields the most precise timing to focus the widget
-    //    right after it has been registered by the View's operate traversal.
-    // 2. Fallback: if no selected UID / id is available, or the poll times out, emit a
-    //    series of delayed SnapToSelected messages as before.
-
-    // If we have an explicitly-selected task and a cached widget Id, try the bounds-aware path.
     if let Some(uid) = &_app.selected_uid
         && let Some(id) = _app.task_ids.get(uid).cloned()
     {
-        // Spawn a single perform task that polls for the bounds to exist for this Id.
-        // We will wait up to ~1s (20 * 50ms) checking every 50ms; as soon as bounds exist
-        // we emit SnapToSelected. If polling times out, emit SnapToSelected once anyway.
         return Task::perform(
             async move {
                 let mut attempts = 0u8;
-                // Poll loop: check for bounds up to N attempts.
                 loop {
-                    // If bounds exist, we can stop waiting.
                     if crate::gui::view::focusable::get_focus_bounds(&id).is_some() {
                         break;
                     }
                     attempts = attempts.saturating_add(1);
                     if attempts >= 20 {
-                        // timed out
                         break;
                     }
                     std::thread::sleep(StdDuration::from_millis(50));
@@ -336,7 +338,7 @@ pub fn scroll_to_selected_delayed(_app: &GuiApp, focus: bool) -> Task<Message> {
         );
     }
 
-    // Fallback: emit a small batch of delayed attempts (in case no id was cached yet).
+    // Batch a few increasing delays to give the UI multiple chances to register the row.
     Task::batch(vec![
         Task::perform(
             async {

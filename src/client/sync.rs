@@ -116,7 +116,7 @@ impl RustyClient {
         client: &CalDavClient<HttpsClient>,
         task: &Task,
     ) -> Result<StepResult, String> {
-        // FIX: Handle "Ghost Update" where href is missing.
+        // Handle "Ghost Update" where href is missing.
         // Reconstruct the correct path from the calendar_href and UID.
         let path = if task.href.is_empty() {
             let filename = format!("{}.ics", task.uid);

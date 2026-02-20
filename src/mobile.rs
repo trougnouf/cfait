@@ -166,7 +166,7 @@ pub struct MobileTask {
     pub time_spent_seconds: u64,
     pub last_started_at: Option<i64>,
 
-    // NEW: Virtual task hinting for clients to render expand/collapse rows
+    // Virtual task hinting for clients to render expand/collapse rows
     // Values are:
     //  - "none"     -> not a virtual row
     //  - "expand"   -> an expand placeholder; `virtual_payload` contains parent key
@@ -262,7 +262,7 @@ fn task_to_mobile(
         .filter_map(|uid| store.get_summary(uid))
         .collect();
 
-    // NEW: Determine tasks that THIS task is blocking (successors) via reverse index
+    // Determine tasks that THIS task is blocking (successors) via reverse index
     let blocking_pairs = store.get_tasks_blocking(&t.uid);
     // Unzip into parallel vectors: (uids, names)
     let (blocking_uids, blocking_names): (Vec<String>, Vec<String>) =
@@ -285,7 +285,7 @@ fn task_to_mobile(
         Some(DateType::Specific(dt)) => (Some(dt.to_rfc3339()), false),
         None => (None, false),
     };
-    // NEW: expose completion date to mobile clients
+    // expose completion date to mobile clients
     let completed_date_iso = t.completion_date().map(|d| d.to_rfc3339());
 
     let has_alarms = !t
@@ -328,7 +328,7 @@ fn task_to_mobile(
         is_done: t.status.is_done(),
         priority: t.priority,
         due_date_iso: due_iso,
-        // NEW: include completed date field
+        // Include completed date field
         completed_date_iso,
         is_allday_due: due_allday,
         start_date_iso: start_iso,
@@ -347,7 +347,7 @@ fn task_to_mobile(
         status_string: status_str,
         blocked_by_names,
         blocked_by_uids: t.dependencies.clone(),
-        // NEW: expose blocking (successors) to mobile clients
+        // Expose blocking (successors) to mobile clients
         blocking_uids,
         blocking_names,
         related_to_uids: t.related_to.clone(),
@@ -1054,7 +1054,7 @@ impl CfaitMobile {
         Vec::new()
     }
 
-    // NEW: Direct lookup to support opening specific tasks (e.g. via notification or deep link)
+    // Direct lookup to support opening specific tasks (e.g. via notification or deep link)
     // regardless of current view filters (hidden/completed/collapsed).
     pub async fn get_task_by_uid(&self, uid: String) -> Option<MobileTask> {
         let store = self.controller.store.lock().await;

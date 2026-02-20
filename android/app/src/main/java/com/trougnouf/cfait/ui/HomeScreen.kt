@@ -89,7 +89,7 @@ fun HomeScreen(
     var filterTags by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
     var filterLocations by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
 
-    // NEW: State to track which "done" groups are expanded.
+    // State to track which "done" groups are expanded.
     var expandedGroups by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
 
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
@@ -851,7 +851,7 @@ fun HomeScreen(
                                 TextButton(
                                     onClick = {
                                         calendars.forEach {
-                                            // FIX: Don't unhide trash unless it is the active/default calendar
+                                            // Don't unhide trash unless it is the active/default calendar
                                             if (it.href != "local://trash" || defaultCalHref == "local://trash") {
                                                 api.setCalendarVisibility(it.href, true)
                                             }

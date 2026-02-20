@@ -199,26 +199,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         Space::new().width(0).into()
     };
 
-    // Data Management (Trash retention)
+    // Data Management (moved to Advanced Settings)
     let data_management_ui: Element<_> = if is_settings {
-        column![
-            text("Data Management").size(20),
-            text("Trash Retention:").size(16),
-            row![
-                text("Keep deleted items for (days):").width(Length::Fixed(220.0)),
-                text_input("30", &app.ob_trash_retention_input)
-                    .on_input(Message::SetTrashRetention)
-                    .width(Length::Fixed(60.0))
-                    .padding(5)
-            ]
-            .spacing(10)
-            .align_y(iced::Alignment::Center),
-            text("Set to 0 to disable trash (immediate deletion).")
-                .size(12)
-                .color(Color::from_rgb(0.6, 0.6, 0.6)),
-        ]
-        .spacing(10)
-        .into()
+        // Moved: Trash retention is now part of Advanced Settings.
+        Space::new().width(0).into()
     } else {
         Space::new().width(0).into()
     };
@@ -299,6 +283,21 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .spacing(10)
                 .align_y(iced::Alignment::Center),
                 text("Limits how many completed subtasks are shown inside a parent before truncating.")
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.6)),
+
+                Space::new().height(10),
+                text("Data Management:").size(16),
+                row![
+                    text("Trash Retention (days):").width(Length::Fixed(200.0)),
+                    text_input("14", &app.ob_trash_retention_input)
+                        .on_input(Message::SetTrashRetention)
+                        .width(Length::Fixed(60.0))
+                        .padding(5)
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+                text("Keep deleted items in local trash for this many days (0 to disable).")
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.6)),
             ]

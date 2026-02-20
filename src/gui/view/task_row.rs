@@ -327,7 +327,7 @@ pub fn view_task_row<'a>(
     let has_related = !task.related_to.is_empty();
     let has_incoming_related = !app.store.get_tasks_related_to(&task.uid).is_empty();
 
-    // NEW: Determine if this task is blocking other tasks (successors)
+    // Determine if this task is blocking other tasks (successors)
     let has_blocking = !app.store.get_tasks_blocking(&task.uid).is_empty();
 
     // Determine if we should show the hand cursor (has content details)
@@ -672,7 +672,7 @@ pub fn view_task_row<'a>(
     .style(move |_theme, status| {
         let palette = _theme.extended_palette();
         let base_active = button::Style {
-            // FIX: Explicitly specify Background variant to resolve inference error
+            // Explicitly specify Background variant to resolve inference error
             background: Some(iced::Background::Color(bg_color)),
             text_color: palette.background.base.text,
             border: iced::Border {

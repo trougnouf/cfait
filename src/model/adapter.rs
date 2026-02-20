@@ -751,6 +751,7 @@ impl IcsAdapter {
             raw_components,
             create_event,
             is_blocked: false,
+            is_implicitly_blocked: false,
             sort_rank: 0,
             effective_priority: 0,
             effective_due: None,

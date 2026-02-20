@@ -739,7 +739,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     // --- UPDATED SEARCH BAR LOGIC ---
     let mut search_row = row![].align_y(iced::Alignment::Center).spacing(5);
 
-    // NEW: Random Task Button
+    // Random Task Button
     let random_btn = iced::widget::button(icon::icon(app.random_icon).size(16))
         .style(iced::widget::button::text)
         .padding(6)

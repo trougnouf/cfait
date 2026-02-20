@@ -24,8 +24,10 @@ fun AdvancedSettingsScreen(
     api: CfaitMobile,
     maxDoneRoots: String,
     maxDoneSubtasks: String,
+    trashRetention: String,
     onMaxDoneRootsChange: (String) -> Unit,
     onMaxDoneSubtasksChange: (String) -> Unit,
+    onTrashRetentionChange: (String) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -82,6 +84,22 @@ fun AdvancedSettingsScreen(
             )
             Text(
                 "How many completed subtasks to show inside a parent task before truncating.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            )
+
+            // Data Management Section
+            OutlinedTextField(
+                value = trashRetention,
+                onValueChange = onTrashRetentionChange,
+                label = { Text("Trash Retention (days)") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true
+            )
+            Text(
+                "Keep deleted items in local trash for this many days. Set to 0 to delete immediately.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)

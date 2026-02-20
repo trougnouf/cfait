@@ -50,7 +50,7 @@ fun TaskDetailScreen(
 
     fun reload() {
         scope.launch {
-            // FIX: Use direct lookup instead of searching in the filtered view list.
+            // Use direct lookup instead of searching in the filtered view list.
             // This ensures completed/hidden tasks can still be opened and edited.
             task = api.getTaskByUid(uid)
             task?.let {
@@ -135,7 +135,7 @@ fun TaskDetailScreen(
                 label = { Text("Task (smart syntax)") },
                 modifier = Modifier.fillMaxWidth(),
                 visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
-                // Fix: Removed singleLine = true to fix cursor handle positioning on high DPI tablets
+                // Removed singleLine = true to avoid cursor handle positioning issues on high DPI tablets
                 maxLines = 5,
                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
@@ -195,7 +195,7 @@ fun TaskDetailScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
 
-            // NEW: Blocking (Successors) - tasks that are blocked BY this task
+            // Blocking (Successors) - tasks that are blocked BY this task
             if (task!!.blockingNames.isNotEmpty()) {
                 Text(
                     "Blocking (Successors):",

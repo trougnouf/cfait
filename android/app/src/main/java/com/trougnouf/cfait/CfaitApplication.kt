@@ -18,7 +18,7 @@ class CfaitApplication : Application() {
         // This avoids redundant IPC overhead on every alarm fire
         createNotificationChannel()
 
-        // NEW: Initialize the Tokio runtime before calling any Rust code that needs it.
+        // Initialize the Tokio runtime before calling any Rust code that needs it.
         // This call is synchronous and sets up the background runtime for Rust.
         com.trougnouf.cfait.core.initTokioRuntime()
 

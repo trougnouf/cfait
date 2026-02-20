@@ -267,7 +267,7 @@ fun getTaskTextColor(
 
         9 -> Color(0xFF998CA6)
 
-        // Fix: Use Unspecified so Text() components use the active theme's onSurface color automatically
+        // Use Unspecified so Text() components use the active theme's onSurface color automatically
         else -> Color.Unspecified
     }
 }

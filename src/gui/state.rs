@@ -179,7 +179,7 @@ pub struct GuiApp {
     pub ob_snooze_long_input: String,
     pub ob_auto_refresh_input: String, // Added
 
-    // NEW: Advanced Settings Inputs
+    // Advanced Settings Inputs
     pub show_advanced_settings: bool,
     pub ob_max_done_roots_input: String,
     pub ob_max_done_subtasks_input: String,
@@ -286,8 +286,8 @@ impl Default for GuiApp {
             random_icon,       // NEW
             alias_input_key: String::new(),
             alias_input_values: String::new(),
-            ob_trash_retention_input: "30".to_string(),
-            trash_retention_days: 30,
+            ob_trash_retention_input: "14".to_string(),
+            trash_retention_days: 14,
 
             loading: true,
             error_msg: None,
@@ -331,7 +331,7 @@ impl Default for GuiApp {
             ob_snooze_long_input: "1d".to_string(),
             ob_auto_refresh_input: "30m".to_string(), // Added default
 
-            // NEW: Advanced Settings Inputs
+            // Advanced Settings Inputs
             show_advanced_settings: false,
             ob_max_done_roots_input: "20".to_string(),
             ob_max_done_subtasks_input: "5".to_string(),
