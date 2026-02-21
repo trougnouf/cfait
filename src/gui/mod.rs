@@ -19,6 +19,7 @@ use crate::system::spawn_alarm_actor;
 use iced::futures::SinkExt;
 use iced::futures::channel::mpsc::Sender;
 use iced::stream;
+use iced::window::icon as window_icon;
 use iced::{Element, Subscription, Task, Theme, font, window};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -33,6 +34,9 @@ pub fn run_with_ics_file(
     force_ssd: bool,
 ) -> iced::Result {
     async_ops::init_runtime();
+
+    let window_icon =
+        window_icon::from_file_data(include_bytes!("../../assets/autogen/cfait.png"), None).ok();
 
     iced::application(
         // Pass force_ssd down into app initialization
@@ -62,6 +66,7 @@ pub fn run_with_ics_file(
         }
     })
     .window(window::Settings {
+        icon: window_icon,
         decorations: force_ssd,  // Enable native decorations when forced
         transparent: !force_ssd, // Only allow transparency when not using native decorations
         platform_specific: window::settings::PlatformSpecific {
