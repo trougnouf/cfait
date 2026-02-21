@@ -422,14 +422,21 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::DeleteAllCalendarEvents => {
-            if let Some(client) = &app.client {
+            // Clone client first to avoid immutable borrow of `app` conflicting with mutable borrow below
+            let client_opt = app.client.clone();
+
+            if let Some(client) = client_opt {
                 app.deleting_events = true;
+
+                // NEW: Auto-disable event creation
+                app.create_events_for_tasks = false;
+                save_config(app);
 
                 // Grab all known calendar hrefs
                 let cals: Vec<String> = app.store.calendars.keys().cloned().collect();
 
                 return Task::perform(
-                    async_delete_all_events_wrapper(client.clone(), cals),
+                    async_delete_all_events_wrapper(client, cals),
                     Message::BackfillEventsComplete,
                 );
             }

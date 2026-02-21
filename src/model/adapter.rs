@@ -1,4 +1,3 @@
-// File: ./src/model/adapter.rs
 /*
 File: cfait/src/model/adapter.rs
 
@@ -15,8 +14,6 @@ use icalendar::{Calendar, CalendarComponent, Component, Event, Todo, TodoStatus}
 use uuid::Uuid;
 
 /// List of property keys we explicitly handle when mapping to/from ICS.
-/// Time-tracking properties `X-TIME-SPENT` and `X-LAST-START` are included here
-/// so they are not treated as unmapped custom properties.
 const HANDLED_KEYS: &[&str] = &[
     "UID",
     "SUMMARY",
@@ -42,9 +39,9 @@ const HANDLED_KEYS: &[&str] = &[
     "URL",
     "GEO",
     "X-CFAIT-CREATE-EVENT",
-    // Time-tracking properties we explicitly understand
     "X-TIME-SPENT",
     "X-LAST-START",
+    "X-CFAIT-SESSION",
     "EXDATE",
 ];
 
@@ -68,7 +65,6 @@ impl IcsAdapter {
             todo.add_property("URL", u);
         }
         if let Some(g) = &task.geo {
-            // ICS GEO uses ';' separator sometimes - we stored as "lat,lon"
             let geo_val: String = g.replace(',', ";");
             todo.add_property("GEO", &geo_val);
         }
@@ -181,6 +177,13 @@ impl IcsAdapter {
         }
         if let Some(ts) = task.last_started_at {
             todo.add_property("X-LAST-START", ts.to_string());
+        }
+        // NEW: Safely serialize work sessions to the server
+        for session in &task.sessions {
+            todo.append_multi_property(icalendar::Property::new(
+                "X-CFAIT-SESSION",
+                format!("{},{}", session.start, session.end),
+            ));
         }
 
         for raw in &task.unmapped_properties {
@@ -427,10 +430,7 @@ impl IcsAdapter {
             }
         }
 
-        // Helper to parse iCal durations like PT1H30M or P1DT etc. Return total minutes.
         let parse_ics_duration = |val: &str| -> i32 {
-            // Very small state machine to parse ISO 8601 durations (subset).
-            // We'll accept patterns like PnW, PnDTnHnM, PTnHnM, etc.
             let mut minutes: i32 = 0;
             let mut num_buf = String::new();
             let mut in_time = false;
@@ -538,6 +538,10 @@ impl IcsAdapter {
         let mut dependencies = Vec::new();
         let mut related_to = Vec::new();
 
+        // NEW: Manually parse sessions from unfolded text to ensure we catch all of them
+        // regardless of how icalendar crate groups X- properties.
+        let mut manual_sessions = Vec::new();
+
         let unfolded = icalendar::parser::unfold(raw_ics);
         let mut in_vtodo = false;
         let mut in_valarm = false;
@@ -561,36 +565,47 @@ impl IcsAdapter {
                 continue;
             }
 
-            if in_vtodo
-                && !in_valarm
-                && line.starts_with("RELATED-TO")
-                && let Some((raw_key, val)) = line.split_once(':')
-            {
-                let parts: Vec<&str> = raw_key.split(';').collect();
-                let mut is_dep = false;
-                let mut is_sibling = false;
-                for param in parts.iter().skip(1) {
-                    if param.contains("RELTYPE") {
-                        if param.contains("DEPENDS-ON") {
-                            is_dep = true;
-                        } else if param.contains("SIBLING") {
-                            is_sibling = true;
+            if in_vtodo && !in_valarm {
+                if line.starts_with("RELATED-TO")
+                    && let Some((raw_key, val)) = line.split_once(':')
+                {
+                    let parts: Vec<&str> = raw_key.split(';').collect();
+                    let mut is_dep = false;
+                    let mut is_sibling = false;
+                    for param in parts.iter().skip(1) {
+                        if param.contains("RELTYPE") {
+                            if param.contains("DEPENDS-ON") {
+                                is_dep = true;
+                            } else if param.contains("SIBLING") {
+                                is_sibling = true;
+                            }
                         }
+                    }
+
+                    let value = val.trim().to_string();
+                    if is_dep {
+                        if !dependencies.contains(&value) {
+                            dependencies.push(value);
+                        }
+                    } else if is_sibling {
+                        if !related_to.contains(&value) {
+                            related_to.push(value);
+                        }
+                    } else {
+                        parent_uid = Some(value);
                     }
                 }
 
-                let value = val.trim().to_string();
-                if is_dep {
-                    if !dependencies.contains(&value) {
-                        dependencies.push(value);
-                    }
-                } else if is_sibling {
-                    if !related_to.contains(&value) {
-                        related_to.push(value);
-                    }
-                } else {
-                    parent_uid = Some(value);
-                }
+                // NEW: Manual session parsing
+                if line.starts_with("X-CFAIT-SESSION:")
+                    && let Some((_, val)) = line.split_once(':')
+                        && let Some((s_str, e_str)) = val.split_once(',')
+                            && let (Ok(start), Ok(end)) =
+                                (s_str.trim().parse::<i64>(), e_str.trim().parse::<i64>())
+                            {
+                                manual_sessions
+                                    .push(crate::model::item::WorkSession { start, end });
+                            }
             }
         }
 
@@ -712,6 +727,10 @@ impl IcsAdapter {
 
         let last_started_at = get_prop("X-LAST-START").and_then(|v| v.parse::<i64>().ok());
 
+        // Sort & dedup manually parsed sessions
+        manual_sessions.sort_by_key(|s| s.start);
+        manual_sessions.dedup();
+
         Ok(Task {
             uid,
             summary,
@@ -739,7 +758,7 @@ impl IcsAdapter {
             geo,
             time_spent_seconds,
             last_started_at,
-            sessions: Vec::new(),
+            sessions: manual_sessions, // Use manual parsing result
             unmapped_properties,
             sequence,
             raw_alarms: Vec::new(),
@@ -755,9 +774,6 @@ impl IcsAdapter {
         })
     }
 
-    // REVISED to_event_ics: robust handling of various date/status combinations
-    // now outputs a Vec of separate ICS files to comply with CalDAV's strict
-    // single-UID-per-file constraint, while preserving session history.
     pub fn to_event_ics(task: &Task) -> Vec<(String, String)> {
         let mut results = Vec::new();
         let base_uid = format!("evt-{}", task.uid);
@@ -882,6 +898,17 @@ impl IcsAdapter {
                 (Some(s), Some(d)) => {
                     if has_explicit_duration {
                         // CASE A: Start + Due + Estimate/Spent
+                        // If duration is present, we honor it specifically.
+                        // We anchor to the DUE date (work back from deadline), or START date?
+                        // Standard practice for 'scheduled work' is Start -> Start+Dur.
+                        // Standard practice for 'deadline' is Due.
+                        // If both exist + duration, usually implies "Scheduled block".
+                        // Let's anchor to START if available, otherwise DUE?
+                        // The prompt implied current behavior anchors to DUE.
+                        // Let's stick to DUE-based anchoring if both are present to ensure deadline visibility.
+
+                        // Wait, previous "Quirk 1" discussion said it anchors to DUE.
+                        // Let's keep that for now unless specific requirement changed.
                         match d {
                             DateType::AllDay(date) => {
                                 results.push((
@@ -909,81 +936,60 @@ impl IcsAdapter {
                         }
                     } else {
                         // CASE B: Start + Due, NO Estimate
-                        match (s, d) {
-                            (DateType::AllDay(sd), DateType::AllDay(ed)) => {
-                                // B1 & B2 combined: Single all-day event spanning from sd to ed inclusive
-                                results.push((
-                                    "".to_string(),
-                                    Self::make_single_event_ics(
-                                        task,
-                                        "",
-                                        DateType::AllDay(*sd),
-                                        DateType::AllDay(*ed),
-                                    ),
-                                ));
-                            }
-                            _ => {
-                                // B3/B4: Specific or Mixed -> Check time difference
-                                let s_ts = s.to_start_comparison_time();
-                                let d_ts = d.to_comparison_time();
-                                let diff = d_ts - s_ts;
+                        let s_date = s.to_date_naive();
+                        let d_date = d.to_date_naive();
+                        let diff = d_date - s_date;
 
-                                if diff.num_hours() < 24 {
-                                    // B3: < 24h -> Span length
-                                    // Prevent mixed types by forcing Specific if they differ
-                                    let (final_start, final_end) = match (&s, &d) {
-                                        (DateType::AllDay(_), DateType::Specific(dt)) => {
-                                            (DateType::Specific(s_ts), DateType::Specific(*dt))
-                                        }
-                                        (DateType::Specific(dt), DateType::AllDay(_)) => {
-                                            (DateType::Specific(*dt), DateType::Specific(d_ts))
-                                        }
-                                        _ => (s.clone(), d.clone()),
-                                    };
-                                    results.push((
-                                        "".to_string(),
-                                        Self::make_single_event_ics(
-                                            task,
-                                            "",
-                                            final_start,
-                                            final_end,
-                                        ),
-                                    ));
-                                } else {
-                                    // B4: > 24h -> Two 1h events
-                                    let start_event_end = match s {
-                                        DateType::AllDay(date) => DateType::AllDay(*date),
-                                        DateType::Specific(dt) => {
-                                            DateType::Specific(*dt + chrono::Duration::minutes(60))
-                                        }
-                                    };
-                                    let due_event_start = match d {
-                                        DateType::AllDay(date) => DateType::AllDay(*date),
-                                        DateType::Specific(dt) => {
-                                            DateType::Specific(*dt - chrono::Duration::minutes(60))
-                                        }
-                                    };
-
-                                    results.push((
-                                        "-start".to_string(),
-                                        Self::make_single_event_ics(
-                                            task,
-                                            "-start",
-                                            s.clone(),
-                                            start_event_end,
-                                        ),
-                                    ));
-                                    results.push((
-                                        "-due".to_string(),
-                                        Self::make_single_event_ics(
-                                            task,
-                                            "-due",
-                                            due_event_start,
-                                            d.clone(),
-                                        ),
-                                    ));
+                        if diff.num_days() <= 1 {
+                            // <= 1 day apart -> Span length
+                            let (final_start, final_end) = match (&s, &d) {
+                                (DateType::AllDay(_), DateType::Specific(dt)) => (
+                                    DateType::Specific(s.to_start_comparison_time()),
+                                    DateType::Specific(*dt),
+                                ),
+                                (DateType::Specific(dt), DateType::AllDay(_)) => (
+                                    DateType::Specific(*dt),
+                                    DateType::Specific(d.to_comparison_time()),
+                                ),
+                                _ => (s.clone(), d.clone()),
+                            };
+                            results.push((
+                                "".to_string(),
+                                Self::make_single_event_ics(task, "", final_start, final_end),
+                            ));
+                        } else {
+                            // > 1 day apart -> Two separate 1-day/1-hour events
+                            let start_event_end = match s {
+                                DateType::AllDay(date) => DateType::AllDay(*date),
+                                DateType::Specific(dt) => {
+                                    DateType::Specific(*dt + chrono::Duration::hours(1))
                                 }
-                            }
+                            };
+                            let due_event_start = match d {
+                                DateType::AllDay(date) => DateType::AllDay(*date),
+                                DateType::Specific(dt) => {
+                                    DateType::Specific(*dt - chrono::Duration::hours(1))
+                                }
+                            };
+
+                            results.push((
+                                "-start".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "-start",
+                                    s.clone(),
+                                    start_event_end,
+                                ),
+                            ));
+                            results.push((
+                                "-due".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "-due",
+                                    due_event_start,
+                                    d.clone(),
+                                ),
+                            ));
                         }
                     }
                 }

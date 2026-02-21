@@ -461,7 +461,11 @@ fun SettingsScreen(
                 )
 
                 Button(
-                    onClick = onDeleteEvents,
+                    onClick = {
+                        createEventsForTasks = false
+                        saveToDisk()
+                        onDeleteEvents()
+                    },
                     modifier = Modifier.padding(top = 8.dp),
                     enabled = !isCalendarBusy
                 ) {
