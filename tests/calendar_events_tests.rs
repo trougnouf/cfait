@@ -1,3 +1,4 @@
+// File: tests/calendar_events_tests.rs
 // Tests for calendar event generation logic.
 use cfait::model::{DateType, Task, TaskStatus};
 use chrono::{NaiveDate, TimeZone, Utc};
@@ -151,19 +152,14 @@ fn test_event_generation_both_dates() {
     let result = task.to_event_ics();
     assert_eq!(
         result.len(),
-        2,
-        "Different all-day dates should split into two events"
+        1,
+        "Different all-day dates should merge into one multi-day event"
     );
 
-    let (suffix1, ics1) = &result[0];
-    assert_eq!(suffix1, "-start");
-    assert!(ics1.contains("DTSTART"));
-    assert!(ics1.contains("DTEND"));
-
-    let (suffix2, ics2) = &result[1];
-    assert_eq!(suffix2, "-due");
-    assert!(ics2.contains("DTSTART"));
-    assert!(ics2.contains("DTEND"));
+    let (suffix, ics) = &result[0];
+    assert_eq!(suffix, "");
+    assert!(ics.contains("DTSTART;VALUE=DATE:20250215"));
+    assert!(ics.contains("DTEND;VALUE=DATE:20250218")); // Exclusive end (+1 day)
 }
 
 #[test]
@@ -565,7 +561,7 @@ fn test_event_default_duration_is_one_hour() {
 }
 
 #[test]
-fn test_event_long_span_split_into_start_and_due() {
+fn test_event_long_span_generates_single_event() {
     let mut task = parse("Long project");
     // Set start date: Jan 1, 2025
     task.dtstart = Some(DateType::AllDay(
@@ -579,25 +575,20 @@ fn test_event_long_span_split_into_start_and_due() {
     let result = task.to_event_ics();
     assert_eq!(
         result.len(),
-        2,
-        "Different all-day dates should split into two events"
+        1,
+        "Different all-day dates should merge into one multi-day event"
     );
 
-    // Start event
-    let start_event = result.iter().find(|(s, _)| s == "-start").unwrap();
-    assert!(start_event.1.contains("SUMMARY:Long project (start)"));
-    assert!(start_event.1.contains("DTSTART;VALUE=DATE:20250101"));
-    assert!(start_event.1.contains("DTEND;VALUE=DATE:20250102")); // Exclusive end
-
-    // Due event
-    let due_event = result.iter().find(|(s, _)| s == "-due").unwrap();
-    assert!(due_event.1.contains("SUMMARY:Long project (due)"));
-    assert!(due_event.1.contains("DTSTART;VALUE=DATE:20250215"));
-    assert!(due_event.1.contains("DTEND;VALUE=DATE:20250216")); // Exclusive end
+    // Event
+    let (suffix, ics) = &result[0];
+    assert_eq!(suffix, "");
+    assert!(ics.contains("SUMMARY:Long project"));
+    assert!(ics.contains("DTSTART;VALUE=DATE:20250101"));
+    assert!(ics.contains("DTEND;VALUE=DATE:20250216")); // Exclusive end (+1 day)
 }
 
 #[test]
-fn test_event_short_span_split_into_start_and_due() {
+fn test_event_short_span_generates_single_event() {
     let mut task = parse("Short project");
     // Set start date: Jan 1, 2025
     task.dtstart = Some(DateType::AllDay(
@@ -611,19 +602,16 @@ fn test_event_short_span_split_into_start_and_due() {
     let result = task.to_event_ics();
     assert_eq!(
         result.len(),
-        2,
-        "Different all-day dates should split into two events"
+        1,
+        "Different all-day dates should merge into one multi-day event"
     );
 
-    // Start event
-    let start_event = result.iter().find(|(s, _)| s == "-start").unwrap();
-    assert!(start_event.1.contains("SUMMARY:Short project (start)"));
-    assert!(start_event.1.contains("DTSTART;VALUE=DATE:20250101"));
-
-    // Due event
-    let due_event = result.iter().find(|(s, _)| s == "-due").unwrap();
-    assert!(due_event.1.contains("SUMMARY:Short project (due)"));
-    assert!(due_event.1.contains("DTSTART;VALUE=DATE:20250105"));
+    // Event
+    let (suffix, ics) = &result[0];
+    assert_eq!(suffix, "");
+    assert!(ics.contains("SUMMARY:Short project"));
+    assert!(ics.contains("DTSTART;VALUE=DATE:20250101"));
+    assert!(ics.contains("DTEND;VALUE=DATE:20250106")); // Exclusive end (+1 day)
 }
 
 #[test]

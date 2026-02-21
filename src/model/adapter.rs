@@ -810,22 +810,18 @@ impl IcsAdapter {
         // 2. GENERATE MAIN EVENT (Planning or Completed)
         if task.status == TaskStatus::Completed && !has_sessions {
             // Completed event: show when it was completed as a short event.
-            let completed_at_opt = task
-                .completion_date()
-                .or_else(|| {
-                    task.unmapped_properties
-                        .iter()
-                        .find(|p| p.key == "LAST-MODIFIED")
-                        .and_then(|p| {
-                            NaiveDateTime::parse_from_str(&p.value, "%Y%m%dT%H%M%SZ")
-                                .ok()
-                                .map(|ndt| Utc.from_utc_datetime(&ndt))
-                        })
-                })
-                .or_else(|| task.due.as_ref().map(|d| d.to_comparison_time()))
-                .or_else(|| task.dtstart.as_ref().map(|d| d.to_comparison_time()));
+            let explicit_completion = task.completion_date().or_else(|| {
+                task.unmapped_properties
+                    .iter()
+                    .find(|p| p.key == "LAST-MODIFIED")
+                    .and_then(|p| {
+                        NaiveDateTime::parse_from_str(&p.value, "%Y%m%dT%H%M%SZ")
+                            .ok()
+                            .map(|ndt| Utc.from_utc_datetime(&ndt))
+                    })
+            });
 
-            if let Some(completed_at) = completed_at_opt {
+            if let Some(completed_at) = explicit_completion {
                 let duration_mins = if task.time_spent_seconds > 0 && !has_sessions {
                     (task.time_spent_seconds / 60).max(1) as i64
                 } else {
@@ -839,6 +835,34 @@ impl IcsAdapter {
                     DateType::Specific(start_at),
                     DateType::Specific(completed_at),
                 );
+                results.push(("".to_string(), ics));
+            } else if let Some(due) = &task.due {
+                let start_dt = match due {
+                    DateType::AllDay(d) => DateType::AllDay(*d),
+                    DateType::Specific(dt) => {
+                        let duration_mins = if task.time_spent_seconds > 0 && !has_sessions {
+                            (task.time_spent_seconds / 60).max(1) as i64
+                        } else {
+                            task.estimated_duration.unwrap_or(60) as i64
+                        };
+                        DateType::Specific(*dt - chrono::Duration::minutes(duration_mins))
+                    }
+                };
+                let ics = Self::make_single_event_ics(task, "", start_dt, due.clone());
+                results.push(("".to_string(), ics));
+            } else if let Some(start) = &task.dtstart {
+                let end_dt = match start {
+                    DateType::AllDay(d) => DateType::AllDay(*d),
+                    DateType::Specific(dt) => {
+                        let duration_mins = if task.time_spent_seconds > 0 && !has_sessions {
+                            (task.time_spent_seconds / 60).max(1) as i64
+                        } else {
+                            task.estimated_duration.unwrap_or(60) as i64
+                        };
+                        DateType::Specific(*dt + chrono::Duration::minutes(duration_mins))
+                    }
+                };
+                let ics = Self::make_single_event_ics(task, "", start.clone(), end_dt);
                 results.push(("".to_string(), ics));
             }
         } else if (task.due.is_some() || task.dtstart.is_some())
@@ -887,38 +911,16 @@ impl IcsAdapter {
                         // CASE B: Start + Due, NO Estimate
                         match (s, d) {
                             (DateType::AllDay(sd), DateType::AllDay(ed)) => {
-                                if sd == ed {
-                                    // B1: Same day -> All day event
-                                    results.push((
-                                        "".to_string(),
-                                        Self::make_single_event_ics(
-                                            task,
-                                            "",
-                                            DateType::AllDay(*sd),
-                                            DateType::AllDay(*ed),
-                                        ),
-                                    ));
-                                } else {
-                                    // B2: Different days -> Two events (Start and Due)
-                                    results.push((
-                                        "-start".to_string(),
-                                        Self::make_single_event_ics(
-                                            task,
-                                            "-start",
-                                            DateType::AllDay(*sd),
-                                            DateType::AllDay(*sd),
-                                        ),
-                                    ));
-                                    results.push((
-                                        "-due".to_string(),
-                                        Self::make_single_event_ics(
-                                            task,
-                                            "-due",
-                                            DateType::AllDay(*ed),
-                                            DateType::AllDay(*ed),
-                                        ),
-                                    ));
-                                }
+                                // B1 & B2 combined: Single all-day event spanning from sd to ed inclusive
+                                results.push((
+                                    "".to_string(),
+                                    Self::make_single_event_ics(
+                                        task,
+                                        "",
+                                        DateType::AllDay(*sd),
+                                        DateType::AllDay(*ed),
+                                    ),
+                                ));
                             }
                             _ => {
                                 // B3/B4: Specific or Mixed -> Check time difference
@@ -928,9 +930,24 @@ impl IcsAdapter {
 
                                 if diff.num_hours() < 24 {
                                     // B3: < 24h -> Span length
+                                    // Prevent mixed types by forcing Specific if they differ
+                                    let (final_start, final_end) = match (&s, &d) {
+                                        (DateType::AllDay(_), DateType::Specific(dt)) => {
+                                            (DateType::Specific(s_ts), DateType::Specific(*dt))
+                                        }
+                                        (DateType::Specific(dt), DateType::AllDay(_)) => {
+                                            (DateType::Specific(*dt), DateType::Specific(d_ts))
+                                        }
+                                        _ => (s.clone(), d.clone()),
+                                    };
                                     results.push((
                                         "".to_string(),
-                                        Self::make_single_event_ics(task, "", s.clone(), d.clone()),
+                                        Self::make_single_event_ics(
+                                            task,
+                                            "",
+                                            final_start,
+                                            final_end,
+                                        ),
                                     ));
                                 } else {
                                     // B4: > 24h -> Two 1h events
@@ -1078,7 +1095,11 @@ impl IcsAdapter {
             event.add_property("URL", url);
         }
         if let Some(rrule) = &task.rrule {
-            event.add_property("RRULE", rrule);
+            // Strip RRULE from events that represent a specific completed instance
+            // so they don't incorrectly repeat on the calendar view.
+            if task.status != TaskStatus::Completed {
+                event.add_property("RRULE", rrule);
+            }
         }
 
         match task.status {
