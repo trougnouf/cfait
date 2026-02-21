@@ -359,8 +359,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.selected_uid = Some(uid);
             Task::none()
         }
-        Message::OpenHelp => {
-            app.state = AppState::Help;
+        Message::OpenHelp(tab) => {
+            app.state = AppState::Help(tab);
             Task::none()
         }
         Message::CloseHelp => {

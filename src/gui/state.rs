@@ -20,7 +20,7 @@ pub enum AppState {
     Onboarding,
     Active,
     Settings,
-    Help,
+    Help(crate::help::HelpTab),
 }
 
 #[derive(Default, PartialEq, Clone, Copy, Debug)]

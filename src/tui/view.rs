@@ -99,58 +99,8 @@ fn format_description_for_markdown(raw: &str) -> String {
 }
 
 pub fn draw(f: &mut Frame, state: &mut AppState) {
-    // Help text used when user requests extended help
-    let full_help_text = vec![
-        Line::from(vec![
-            Span::styled(
-                " GLOBAL ",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" Tab:Switch Focus  ?:Toggle Help  q:Quit"),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                " NAVIGATION ",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" j/k:Up/Down  PgUp/PgDn:Scroll"),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                " TASKS ",
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(
-                " a:Add  e:Edit Title  E:Edit Desc  d:Delete  Space:Toggle Done  L:Jump to Related",
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("       ", Style::default()),
-            Span::raw("s:Start/Pause  S:Stop  x:Cancel  M:Move  r:Sync  X:Export  R:Random Jump"),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                " SIDEBAR ",
-                Style::default()
-                    .fg(Color::LightCyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(
-                " Enter:Select/Toggle  Space:Toggle Visibility  *:Show/Clear All  Right:Focus",
-            ),
-        ]),
-    ];
-
     let footer_height = if state.mode == InputMode::EditingDescription {
         Constraint::Length(10)
-    } else if state.show_full_help {
-        Constraint::Length(full_help_text.len() as u16 + 2)
     } else {
         Constraint::Length(3)
     };
@@ -958,48 +908,48 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 ));
             }
         }
+        InputMode::Help(_) => {
+            let help = Paragraph::new("Tab:Switch  Up/Dn:Scroll  Esc/?:Close")
+                .alignment(Alignment::Right)
+                .block(Block::default().borders(Borders::ALL).title(" Actions "));
+            f.render_widget(help, footer_area);
+        }
         _ => {
-            if state.show_full_help {
-                let p = Paragraph::new(full_help_text)
-                    .block(Block::default().borders(Borders::ALL).title(" Help "))
-                    .wrap(Wrap { trim: false });
-                f.render_widget(p, footer_area);
-            } else {
-                let status = Paragraph::new(state.message.clone())
-                    .style(Style::default().fg(Color::Cyan))
-                    .block(
-                        Block::default()
-                            .borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM)
-                            .title(" Status "),
-                    );
-                let help_text = match state.active_focus {
-                    Focus::Sidebar => {
-                        "?:Help q:Quit Tab:Tasks ↵:Select Spc:Show/Hide *:All →:Iso".to_string()
-                    }
-                    Focus::Main => {
-                        if let Some(uid) = &state.yanked_uid {
-                            let summary = state
-                                .store
-                                .get_summary(uid)
-                                .unwrap_or_else(|| "Unknown".to_string());
-                            format!("YANK: '{}' — b:Block c:Child l:Link (Esc:Clear)", summary)
-                        } else {
-                            "?:Help q:Quit Tab:Side a:Add e:Edit E:Details Spc:Done d:Del y:Yank /:Find".to_string()
-                        }
-                    }
-                };
-                let help = Paragraph::new(help_text).alignment(Alignment::Right).block(
+            let status = Paragraph::new(state.message.clone())
+                .style(Style::default().fg(Color::Cyan))
+                .block(
                     Block::default()
-                        .borders(Borders::RIGHT | Borders::TOP | Borders::BOTTOM)
-                        .title(" Actions "),
+                        .borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM)
+                        .title(" Status "),
                 );
-                let chunks = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
-                    .split(footer_area);
-                f.render_widget(status, chunks[0]);
-                f.render_widget(help, chunks[1]);
-            }
+            let help_text = match state.active_focus {
+                Focus::Sidebar => {
+                    "?:Help q:Quit Tab:Tasks ↵:Select Spc:Show/Hide *:All →:Iso".to_string()
+                }
+                Focus::Main => {
+                    if let Some(uid) = &state.yanked_uid {
+                        let summary = state
+                            .store
+                            .get_summary(uid)
+                            .unwrap_or_else(|| "Unknown".to_string());
+                        format!("YANK: '{}' — b:Block c:Child l:Link (Esc:Clear)", summary)
+                    } else {
+                        "?:Help q:Quit Tab:Side a:Add e:Edit E:Details Spc:Done d:Del y:Yank /:Find"
+                            .to_string()
+                    }
+                }
+            };
+            let help = Paragraph::new(help_text).alignment(Alignment::Right).block(
+                Block::default()
+                    .borders(Borders::RIGHT | Borders::TOP | Borders::BOTTOM)
+                    .title(" Actions "),
+            );
+            let chunks = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
+                .split(footer_area);
+            f.render_widget(status, chunks[0]);
+            f.render_widget(help, chunks[1]);
         }
     }
 
@@ -1143,6 +1093,94 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         if visual_row < viewport_height && visual_col < chunks[0].width {
             f.set_cursor_position((chunks[0].x + visual_col, chunks[0].y + visual_row));
         }
+    }
+
+    // Render Help modal when in Help mode (popover)
+    if let InputMode::Help(tab) = state.mode {
+        let area = centered_rect(90, 90, f.area());
+        f.render_widget(Clear, area);
+
+        let data = match tab {
+            crate::help::HelpTab::Syntax => crate::help::SYNTAX_HELP,
+            crate::help::HelpTab::Keyboard => crate::help::KEYBOARD_HELP,
+        };
+
+        let mut lines = vec![
+            Line::from(vec![
+                Span::styled(
+                    if tab == crate::help::HelpTab::Keyboard {
+                        " [Keyboard] "
+                    } else {
+                        "  Keyboard  "
+                    },
+                    Style::default()
+                        .fg(if tab == crate::help::HelpTab::Keyboard {
+                            Color::Yellow
+                        } else {
+                            Color::DarkGray
+                        })
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(" | "),
+                Span::styled(
+                    if tab == crate::help::HelpTab::Syntax {
+                        " [Syntax] "
+                    } else {
+                        "  Syntax  "
+                    },
+                    Style::default()
+                        .fg(if tab == crate::help::HelpTab::Syntax {
+                            Color::Yellow
+                        } else {
+                            Color::DarkGray
+                        })
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw("   (Press Tab to switch)"),
+            ]),
+            Line::from(""),
+        ];
+
+        for sec in data {
+            lines.push(Line::from(Span::styled(
+                format!("--- {} ---", sec.title),
+                Style::default()
+                    .fg(Color::LightCyan)
+                    .add_modifier(Modifier::BOLD),
+            )));
+            for item in sec.items {
+                let keys_span = Span::styled(
+                    format!("{:width$}", item.keys, width = 22),
+                    Style::default().fg(Color::Green),
+                );
+                let desc_span = Span::raw(item.desc);
+                if item.example.is_empty() {
+                    lines.push(Line::from(vec![Span::raw("  "), keys_span, desc_span]));
+                } else {
+                    let example_span = Span::styled(
+                        format!(" (e.g. {})", item.example),
+                        Style::default().fg(Color::DarkGray),
+                    );
+                    lines.push(Line::from(vec![
+                        Span::raw("  "),
+                        keys_span,
+                        desc_span,
+                        example_span,
+                    ]));
+                }
+            }
+            lines.push(Line::from(""));
+        }
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(" Help ")
+            .border_style(Style::default().fg(Color::Yellow));
+        let p = Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false })
+            .scroll((state.edit_scroll_offset, 0));
+        f.render_widget(p, area);
     }
 }
 

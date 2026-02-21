@@ -130,7 +130,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetMaxDuration(_)
         | Message::ToggleIncludeUnsetDuration(_)
         | Message::ToggleDetails(_)
-        | Message::OpenHelp
+        | Message::OpenHelp(_)
         | Message::CloseHelp
         | Message::WindowDragged
         | Message::MinimizeWindow

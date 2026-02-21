@@ -1,5 +1,6 @@
-// File: ./src/gui/view/help.rs
 use crate::gui::message::Message;
+use crate::gui::state::GuiApp;
+use crate::help::HelpTab;
 use fastrand;
 use iced::widget::{
     MouseArea, Space, button, column, container, row, scrollable, svg, text, text_input,
@@ -11,8 +12,7 @@ const COL_ACCENT: Color = Color::from_rgb(0.4, 0.7, 1.0); // Soft Blue (Dark Mod
 const COL_SYNTAX: Color = Color::from_rgb(1.0, 0.85, 0.4); // Gold/Yellow (Dark Mode)
 const COL_MUTED: Color = Color::from_rgb(0.6, 0.6, 0.6); // Grey
 
-pub fn view_help() -> Element<'static, Message> {
-    // Randomize icon
+pub fn view_help<'a>(tab: HelpTab, _app: &'a GuiApp) -> Element<'a, Message> {
     let icon_choice = fastrand::u8(0..3);
 
     let help_icon = match icon_choice {
@@ -28,8 +28,8 @@ pub fn view_help() -> Element<'static, Message> {
     let title_row = row![
         back_btn,
         svg(svg::Handle::from_memory(help_icon))
-            .width(Length::Fixed(84.0)) // 168 / 2 for smooth rendering at half native size
-            .height(Length::Fixed(32.0)) // 64 / 2 for smooth rendering at half native size
+            .width(Length::Fixed(84.0))
+            .height(Length::Fixed(32.0))
             .content_fit(iced::ContentFit::Contain),
         text("Help & about")
             .size(28)
@@ -44,245 +44,54 @@ pub fn view_help() -> Element<'static, Message> {
     let title = MouseArea::new(container(title_row).width(Length::Fill).padding(20))
         .on_press(Message::WindowDragged);
 
-    let content = column![
-        // 1. FUNDAMENTALS
-        help_card(
-            "Organization",
-            crate::gui::icon::TAG,
-            vec![
-                entry("!1", "Priority High (1) to Low (9)", "!1, !5, !9"),
-                entry(
-                    "#tag",
-                    "Add category. Use ':' for sub-tags.",
-                    "#work, #dev:backend, #work:project:urgent"
-                ),
-                entry(
-                    "@@loc",
-                    "Location. Supports hierarchy with ':'.",
-                    "@@home, @@home:office, @@store:aldi:downtown"
-                ),
-                entry("~30m or ~1h-2h", "Estimated Duration (Single or Range).", "~30m, ~1.5h, ~15m-45m"),
-                entry(
-                    "#a:=#b,#c,@@d",
-                    "Define tag alias inline (Retroactive).",
-                    "#tree_planting:=#gardening,@@home"
-                ),
-                entry(
-                    "@@a:=#b,#c",
-                    "Define location alias (Retroactive).",
-                    "@@aldi:=#groceries,#shopping"
-                ),
-                entry(
-                    "\\#text",
-                    "Escape special characters.",
-                    "\\#not-a-tag \\@not-a-date"
-                ),
-            ]
-        ),
-        // 2. TIMELINE
-        help_card(
-            "Timeline & scheduling",
-            crate::gui::icon::CALENDAR,
-            vec![
-                entry(
-                    "@date",
-                    "Due Date. Deadline for the task.",
-                    "@tomorrow, @2025-12-31"
-                ),
-                entry("^date", "Start Date (Defer until).", "^next week, ^2025-01-01"),
-                entry(
-                    "Offsets",
-                    "Add time from today.",
-                    "1d, 2w, 3mo (optional: @2 weeks = @in 2 weeks)"
-                ),
-                entry(
-                    "Weekdays",
-                    "Next occurrence (\"next\" is optional).",
-                    "@friday = @next friday, @monday"
-                ),
-                entry(
-                    "Next period",
-                    "Next week/month/year.",
-                    "@next week, @next month, @next year"
-                ),
-                entry("Keywords", "Relative dates supported.", "today, tomorrow"),
-                entry(
-                    "^@date",
-                    "Set both Start and Due dates.",
-                    "^@tomorrow, ^@2d, ^@next friday"
-                ),
-            ]
-        ),
-        // 3. RECURRENCE
-        help_card(
-            "Recurrence",
-            crate::gui::icon::REPEAT,
-            vec![
-                entry(
-                    "@daily",
-                    "Quick presets.",
-                    "@daily, @weekly, @monthly, @yearly"
-                ),
-                entry(
-                    "@every X",
-                    "Custom intervals.",
-                    "@every 3 days, @every 2 weeks"
-                ),
-                entry(
-                    "@every <weekday>",
-                    "Specific weekdays (comma-separated).",
-                    "@every monday, @every monday,wednesday,friday"
-                ),
-                entry(
-                    "Auto-dates",
-                    "Recurrence without dates auto-sets start & due to first occurrence.",
-                    "@daily → today, @every monday → next Monday"
-                ),
-                entry(
-                    "until <date>",
-                    "End date for recurrence (inclusive).",
-                    "@daily until 2025-12-31, @every 2 weeks until 2026-06-30"
-                ),
-                entry(
-                    "except <date>",
-                    "Skip specific dates (comma-separated).",
-                    "@weekly except 2025-01-20, @daily except 2025-12-25,2026-01-01"
-                ),
-                entry(
-                    "except <weekday>",
-                    "Exclude weekdays (short/long/plural).",
-                    "@daily except mo,tue or @daily except saturdays,sundays"
-                ),
-                entry(
-                    "except <month>",
-                    "Exclude entire months (short/long).",
-                    "@monthly except oct,nov,dec or @weekly except march"
-                ),
-                entry(
-                    "Note",
-                    "Recurrence calculates next date based on Start Date if present, else Due Date.",
-                    ""
-                ),
-            ]
-        ),
-        help_card(
-            "Metadata",
-            crate::gui::icon::INFO,
-            vec![
-                entry("url:", "Attach a link.", "url:https://perdu.com"),
-                entry(
-                    "geo:",
-                    "Coordinates (lat,long).",
-                    "geo:53.046070, -121.105264"
-                ),
-                entry("desc:", "Append description text.", "desc:\"Call back later\""),
-                entry(
-                    "rem:10m",
-                    "Relative reminder (before due date).",
-                    "Adjusts if due date changes"
-                ),
-                entry(
-                    "rem:in 5m",
-                    "Relative from now (becomes absolute).",
-                    "rem:in 2h (5 min/2 hours from now)"
-                ),
-                entry(
-                    "rem:next friday",
-                    "Next occurrence (becomes absolute).",
-                    "rem:next week, rem:next month"
-                ),
-                entry(
-                    "rem:8am",
-                    "Absolute reminder (fixed time).",
-                    "rem:2025-01-20 9am, rem:2025-12-31 10:00"
-                ),
-                entry(
-                    "+cal",
-                    "Force create calendar event.",
-                    "Overrides global setting"
-                ),
-                entry(
-                    "-cal",
-                    "Prevent calendar event creation.",
-                    "Overrides global setting"
-                ),
-            ]
-        ),
-        // 4. POWER SEARCH
-        help_card(
-            "Search & filtering",
-            crate::gui::icon::SHIELD,
-            vec![
-                entry("text", "Matches summary or description.", "buy cat food"),
-                entry("#tag", "Filter by specific tag.", "#gardening"),
-                entry(
-                    "is:ready",
-                    "Work Mode - actionable tasks only.",
-                    "Not done, start date passed, not blocked"
-                ),
-                entry(
-                    "is:status",
-                    "Filter by state.",
-                    "is:done, is:started, is:active, is:blocked, is:ready"
-                ),
-                entry(
-                    "Operators",
-                    "Compare values (<, >, <=, >=).",
-                    "~<20m (less than 20 minutes), <!4 (urgent tasks)"
-                ),
-                entry(
-                    "  Dates",
-                    "Filter by timeframe.",
-                    "@<today (Overdue), ^>1w (Start in 1+ weeks)"
-                ),
-                entry(
-                    "  Date!",
-                    "Include unset dates with '!' suffix.",
-                    "@<today! (Overdue OR no due date)"
-                ),
-                entry(
-                    "  Priority",
-                    "Filter by priority range.",
-                    "!<3 (High prio), !>=5"
-                ),
-                entry("  Duration", "Filter by effort.", "~<15m (Quick tasks)"),
-                entry(
-                    "  Location",
-                    "Filter by location (matches sub-locations).",
-                    "@@home, @@store:aldi"
-                ),
-                entry(
-                    "Combine",
-                    "Mix multiple filters.",
-                    "is:ready #work ~<1h (Actionable work tasks under 1 hour)"
-                ),
-            ]
-        ),
-        help_card(
-            "Tips",
-            crate::gui::icon::INFO,
-            vec![
-                entry(
-                    "Escape",
-                    "Use \\ to treat special chars as text.",
-                    "Buy \\#tag literally"
-                ),
-                entry(
-                    "Quotes",
-                    "Use \" \" or { } for values with spaces.",
-                    "@@\"my office\""
-                ),
-                entry("Next dates", "Use natural language.", "@next monday, @next week"),
-                entry(
-                    "Reminders",
-                    "rem:10m (before due) vs rem:next friday.",
-                    "rem:in 5m (from now), rem:8am (absolute)"
-                ),
-            ]
-        ),
-        // 5. SUPPORT
-        support_card(),
-        // FOOTER
+    let tab_row = row![
+        button(text("Syntax"))
+            .style(if tab == HelpTab::Syntax {
+                iced::widget::button::primary
+            } else {
+                iced::widget::button::secondary
+            })
+            .width(Length::Fill)
+            .on_press(Message::OpenHelp(HelpTab::Syntax)),
+        button(text("Keyboard"))
+            .style(if tab == HelpTab::Keyboard {
+                iced::widget::button::primary
+            } else {
+                iced::widget::button::secondary
+            })
+            .width(Length::Fill)
+            .on_press(Message::OpenHelp(HelpTab::Keyboard))
+    ]
+    .spacing(10)
+    .padding(iced::Padding {
+        left: 20.0,
+        right: 20.0,
+        top: 0.0,
+        bottom: 10.0,
+    });
+
+    let data = match tab {
+        HelpTab::Syntax => crate::help::SYNTAX_HELP,
+        HelpTab::Keyboard => crate::help::KEYBOARD_HELP,
+    };
+
+    let mut content_col = column![].spacing(20).padding(20).max_width(800);
+
+    for section in data {
+        content_col = content_col.push(help_card(
+            section.title,
+            if tab == HelpTab::Syntax {
+                crate::gui::icon::INFO
+            } else {
+                crate::gui::icon::KEYBOARD
+            },
+            section.items,
+        ));
+    }
+
+    content_col = content_col.push(support_card());
+
+    let footer =
         container(
             column![
                 button(
@@ -303,17 +112,15 @@ pub fn view_help() -> Element<'static, Message> {
                 .style(|_: &Theme| text::Style {
                     color: Some(COL_MUTED)
                 }),
-                button(
-                    text("https://codeberg.org/trougnouf/cfait")
-                        .size(12)
-                        .style(|theme: &Theme| text::Style {
-                            color: Some(if theme.extended_palette().is_dark {
-                                COL_ACCENT
-                            } else {
-                                theme.extended_palette().primary.base.color
-                            })
+                button(text("https://codeberg.org/trougnouf/cfait").size(12).style(
+                    |theme: &Theme| text::Style {
+                        color: Some(if theme.extended_palette().is_dark {
+                            COL_ACCENT
+                        } else {
+                            theme.extended_palette().primary.base.color
                         })
-                )
+                    }
+                ))
                 .padding(0)
                 .style(iced::widget::button::text)
                 .on_press(Message::OpenUrl(
@@ -321,20 +128,19 @@ pub fn view_help() -> Element<'static, Message> {
                 ))
             ]
             .spacing(15)
-            .align_x(iced::Alignment::Center)
+            .align_x(iced::Alignment::Center),
         )
         .width(Length::Fill)
         .center_x(Length::Fill)
-        .padding(20)
-    ]
-    .spacing(20)
-    .padding(20)
-    .max_width(800);
+        .padding(20);
+
+    content_col = content_col.push(footer);
 
     column![
         title,
+        tab_row,
         scrollable(
-            container(content)
+            container(content_col)
                 .width(Length::Fill)
                 .center_x(Length::Fill),
         )
@@ -343,28 +149,11 @@ pub fn view_help() -> Element<'static, Message> {
     .into()
 }
 
-// --- HELPERS ---
-
-struct HelpEntry {
-    syntax: &'static str,
-    desc: &'static str,
-    example: &'static str,
-}
-
-fn entry(syntax: &'static str, desc: &'static str, example: &'static str) -> HelpEntry {
-    HelpEntry {
-        syntax,
-        desc,
-        example,
-    }
-}
-
-fn help_card(
+fn help_card<'a>(
     title: &'static str,
     icon_char: char,
-    items: Vec<HelpEntry>,
-) -> Element<'static, Message> {
-    // Header Row with Dynamic Accent Color
+    items: &'static [crate::help::HelpItem],
+) -> Element<'a, Message> {
     let header = row![
         crate::gui::icon::icon(icon_char)
             .size(20)
@@ -403,13 +192,10 @@ fn help_card(
     .spacing(12);
 
     for item in items {
-        // Syntax Pill with Dynamic High Contrast Color
-        let syntax_pill = container(text::<Theme, iced::Renderer>(item.syntax).size(14).style(
+        let syntax_pill = container(text::<Theme, iced::Renderer>(item.keys).size(14).style(
             |theme: &Theme| {
                 let palette = theme.extended_palette();
                 text::Style {
-                    // Dark Mode: Yellow (COL_SYNTAX)
-                    // Light Mode: Primary Strong (Dark Blue/Purple) for readability on Light Blue BG
                     color: Some(if palette.is_dark {
                         COL_SYNTAX
                     } else {
@@ -450,7 +236,7 @@ fn help_card(
             .spacing(10)
             .align_y(iced::Alignment::Center),
             if !item.example.is_empty() {
-                Element::new(row![
+                Element::from(row![
                     Space::new().width(Length::Fixed(120.0)),
                     text::<Theme, iced::Renderer>(format!("e.g.: {}", item.example))
                         .size(12)
@@ -459,7 +245,7 @@ fn help_card(
                         })
                 ])
             } else {
-                Element::new(Space::new().height(0))
+                Element::from(Space::new().height(0))
             }
         ]
         .spacing(2);
@@ -494,7 +280,10 @@ fn help_card(
         .into()
 }
 
-fn support_card() -> Element<'static, Message> {
+// Keep support_card implementation unchanged but make it public within the module if needed,
+// but since it's in the same file it doesn't matter.
+
+fn support_card<'a>() -> Element<'a, Message> {
     use crate::gui::icon::*;
 
     let header = row![
@@ -592,13 +381,10 @@ fn support_card() -> Element<'static, Message> {
 
     container(rows)
         .padding(15)
-        // Updated Background style to be Theme-Aware
         .style(|theme: &Theme| {
             let palette = theme.extended_palette();
             container::Style {
                 background: Some(
-                    // Use a slightly darker shade of the theme's background
-                    // instead of the hardcoded COL_CARD_BG
                     Color {
                         a: 0.98,
                         ..palette.background.weak.color

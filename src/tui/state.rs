@@ -28,6 +28,7 @@ pub enum InputMode {
     Exporting,
     Snoozing,
     RelationshipBrowsing,
+    Help(crate::help::HelpTab),
 }
 
 pub struct AppState {
@@ -87,7 +88,6 @@ pub struct AppState {
 
     pub yanked_uid: Option<String>,
     pub creating_child_of: Option<String>,
-    pub show_full_help: bool,
     pub tag_aliases: HashMap<String, Vec<String>>,
 
     // Relationship browsing state
@@ -171,7 +171,6 @@ impl AppState {
             move_targets: Vec::new(),
             yanked_uid: None,
             creating_child_of: None,
-            show_full_help: false,
 
             tag_aliases: HashMap::new(),
             export_source_selection_state: ListState::default(),

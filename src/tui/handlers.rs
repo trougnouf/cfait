@@ -576,6 +576,32 @@ pub async fn handle_key_event(
             KeyCode::PageUp => state.jump_backward(10),
             _ => {}
         },
+        InputMode::Help(tab) => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('?') => {
+                state.mode = InputMode::Normal;
+            }
+            KeyCode::Tab => {
+                state.mode = InputMode::Help(if tab == crate::help::HelpTab::Keyboard {
+                    crate::help::HelpTab::Syntax
+                } else {
+                    crate::help::HelpTab::Keyboard
+                });
+                state.edit_scroll_offset = 0;
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                state.edit_scroll_offset = state.edit_scroll_offset.saturating_add(1);
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                state.edit_scroll_offset = state.edit_scroll_offset.saturating_sub(1);
+            }
+            KeyCode::PageDown => {
+                state.edit_scroll_offset = state.edit_scroll_offset.saturating_add(10);
+            }
+            KeyCode::PageUp => {
+                state.edit_scroll_offset = state.edit_scroll_offset.saturating_sub(10);
+            }
+            _ => {}
+        },
         InputMode::Normal => match key.code {
             KeyCode::Esc => {
                 let mut needs_refresh = false;
@@ -593,7 +619,10 @@ pub async fn handle_key_event(
                     state.refresh_filtered_view();
                 }
             }
-            KeyCode::Char('?') => state.show_full_help = !state.show_full_help,
+            KeyCode::Char('?') => {
+                state.mode = InputMode::Help(crate::help::HelpTab::Keyboard);
+                state.edit_scroll_offset = 0;
+            },
             KeyCode::Char('q') => return Some(Action::Quit),
             KeyCode::Char('r') => return Some(Action::Refresh),
             KeyCode::Char('R') => {

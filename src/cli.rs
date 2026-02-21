@@ -86,35 +86,12 @@ pub fn print_help(binary_name: &str) {
         println!("    Press '?' inside the app for full interactive help");
         println!();
         println!("SMART INPUT SYNTAX:");
-        println!("    !1-9              Priority (1=highest, 9=lowest)");
-        println!("    #tag              Add category/tag (supports hierarchy: #work:project)");
-        println!("    @@location        Add location (supports hierarchy: @@home:office)");
-        println!("    @date             Set due date (@tomorrow, @2d, @next friday)");
-        println!("    ^date             Set start date (^next week, ^2025-01-01)");
-        println!("    ^@date            Set both start and due dates (^@tomorrow, ^@2d)");
-        println!("    ~duration         Set duration (~30m, ~1.5h)");
-        println!("    @daily            Recurrence (@daily, @weekly, @every 3 days)");
-        println!("    until <date>      End date for recurrence (@daily until 2025-12-31)");
-        println!("    except <date>     Skip dates (@daily except 2025-12-25,2026-01-01)");
-        println!(
-            "    except <weekday>  Exclude weekdays (@daily except mo,tue or saturdays,sundays)"
-        );
-        println!("    except <month>    Exclude months (@monthly except oct,nov,dec)");
-        println!("    @friday           Next weekday (@friday = @next friday)");
-        println!("    @next X           Next week/month/year (@next week, @next month)");
-        println!("    \"in\" optional     @2 weeks = @in 2 weeks (the word \"in\" is optional)");
-        println!("    #alias:=#tags     Define tag alias inline (retroactive)");
-        println!("    @@alias:=#tags    Define location alias (@@aldi:=#groceries,#shopping)");
-        println!("    url:              Attach URL");
-        println!("    geo:              Add coordinates");
-        println!("    desc:             Add description");
-        println!("    rem:10m           Relative reminder (before due date, adjusts)");
-        println!("    rem:in 5m         Relative from now (becomes absolute)");
-        println!("    rem:next friday   Next occurrence (becomes absolute)");
-        println!("    rem:8am           Absolute reminder (fixed time)");
-        println!("    +cal              Force create calendar event (override global setting)");
-        println!("    -cal              Prevent calendar event creation (override global setting)");
-        println!("    \\#text            Escape special characters");
+        for sec in crate::help::SYNTAX_HELP {
+            for item in sec.items {
+                let padded = format!("{:width$}", item.keys, width = 18);
+                println!("    {} {}", padded, item.desc);
+            }
+        }
         println!();
         println!("EXAMPLES:");
         println!("    Buy cookies !1 @2025-01-16 #shopping rem:2025-01-16 8am");

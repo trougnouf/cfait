@@ -795,6 +795,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_syntax_help(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_task_by_uid(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to(): Short
@@ -993,6 +995,11 @@ internal object UniffiLib {
         `filterLocations`: RustBuffer.ByValue,
         `searchQuery`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_syntax_help(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_task_by_uid(
         `ptr`: Long,
@@ -1473,6 +1480,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid() != 32270.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_syntax_help() != 49497.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_task_by_uid() != 45186.toShort()) {
@@ -2154,6 +2164,8 @@ public interface CfaitMobileInterface {
         `searchQuery`: kotlin.String,
     ): kotlin.String?
 
+    fun `getSyntaxHelp`(): List<MobileHelpSection>
+
     suspend fun `getTaskByUid`(`uid`: kotlin.String): MobileTask?
 
     suspend fun `getTasksRelatedTo`(`uid`: kotlin.String): List<MobileRelatedTask>
@@ -2794,6 +2806,18 @@ open class CfaitMobile :
             { FfiConverterOptionalString.lift(it) },
             // Error FFI converter
             UniffiNullRustCallStatusErrorHandler,
+        )
+
+    override fun `getSyntaxHelp`(): List<MobileHelpSection> =
+        FfiConverterSequenceTypeMobileHelpSection.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_syntax_help(
+                        it,
+                        _status,
+                    )
+                }
+            },
         )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -3622,6 +3646,74 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
     }
 }
 
+data class MobileHelpItem(
+    var `keys`: kotlin.String,
+    var `desc`: kotlin.String,
+    var `example`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileHelpItem : FfiConverterRustBuffer<MobileHelpItem> {
+    override fun read(buf: ByteBuffer): MobileHelpItem =
+        MobileHelpItem(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: MobileHelpItem) =
+        (
+            FfiConverterString.allocationSize(value.`keys`) +
+                FfiConverterString.allocationSize(value.`desc`) +
+                FfiConverterString.allocationSize(value.`example`)
+        )
+
+    override fun write(
+        value: MobileHelpItem,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`keys`, buf)
+        FfiConverterString.write(value.`desc`, buf)
+        FfiConverterString.write(value.`example`, buf)
+    }
+}
+
+data class MobileHelpSection(
+    var `title`: kotlin.String,
+    var `items`: List<MobileHelpItem>,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileHelpSection : FfiConverterRustBuffer<MobileHelpSection> {
+    override fun read(buf: ByteBuffer): MobileHelpSection =
+        MobileHelpSection(
+            FfiConverterString.read(buf),
+            FfiConverterSequenceTypeMobileHelpItem.read(buf),
+        )
+
+    override fun allocationSize(value: MobileHelpSection) =
+        (
+            FfiConverterString.allocationSize(value.`title`) +
+                FfiConverterSequenceTypeMobileHelpItem.allocationSize(value.`items`)
+        )
+
+    override fun write(
+        value: MobileHelpSection,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`title`, buf)
+        FfiConverterSequenceTypeMobileHelpItem.write(value.`items`, buf)
+    }
+}
+
 data class MobileLocation(
     var `name`: kotlin.String,
     var `count`: kotlin.UInt,
@@ -3970,6 +4062,35 @@ public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileView
     }
 }
 
+enum class HelpTab {
+    SYNTAX,
+    KEYBOARD,
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHelpTab : FfiConverterRustBuffer<HelpTab> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            HelpTab.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: HelpTab) = 4UL
+
+    override fun write(
+        value: HelpTab,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
 sealed class MobileException(
     message: String,
 ) : kotlin.Exception(message) {
@@ -4257,6 +4378,62 @@ public object FfiConverterSequenceTypeMobileCalendar : FfiConverterRustBuffer<Li
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileCalendar.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMobileHelpItem : FfiConverterRustBuffer<List<MobileHelpItem>> {
+    override fun read(buf: ByteBuffer): List<MobileHelpItem> {
+        val len = buf.getInt()
+        return List<MobileHelpItem>(len) {
+            FfiConverterTypeMobileHelpItem.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MobileHelpItem>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMobileHelpItem.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<MobileHelpItem>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMobileHelpItem.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMobileHelpSection : FfiConverterRustBuffer<List<MobileHelpSection>> {
+    override fun read(buf: ByteBuffer): List<MobileHelpSection> {
+        val len = buf.getInt()
+        return List<MobileHelpSection>(len) {
+            FfiConverterTypeMobileHelpSection.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MobileHelpSection>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMobileHelpSection.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<MobileHelpSection>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMobileHelpSection.write(it, buf)
         }
     }
 }

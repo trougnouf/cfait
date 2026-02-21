@@ -245,6 +245,40 @@ pub struct MobileConfig {
     pub max_done_subtasks: u32,
 }
 
+#[derive(uniffi::Record)]
+pub struct MobileHelpItem {
+    pub keys: String,
+    pub desc: String,
+    pub example: String,
+}
+
+#[derive(uniffi::Record)]
+pub struct MobileHelpSection {
+    pub title: String,
+    pub items: Vec<MobileHelpItem>,
+}
+
+#[uniffi::export]
+impl CfaitMobile {
+    pub fn get_syntax_help(&self) -> Vec<MobileHelpSection> {
+        crate::help::SYNTAX_HELP
+            .iter()
+            .map(|s| MobileHelpSection {
+                title: s.title.to_string(),
+                items: s
+                    .items
+                    .iter()
+                    .map(|i| MobileHelpItem {
+                        keys: i.keys.to_string(),
+                        desc: i.desc.to_string(),
+                        example: i.example.to_string(),
+                    })
+                    .collect(),
+            })
+            .collect()
+    }
+}
+
 fn task_to_mobile(
     t: &Task,
     store: &TaskStore,

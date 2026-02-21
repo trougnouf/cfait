@@ -58,7 +58,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             .center_y(Length::Fill)
             .into(),
         AppState::Onboarding | AppState::Settings => view_settings(app),
-        AppState::Help => view_help(),
+        AppState::Help(tab) => view_help(tab, app),
         AppState::Active => {
             let content_height = match app.sidebar_mode {
                 SidebarMode::Calendars => {
@@ -508,6 +508,17 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     .style(iced::widget::button::secondary)
     .on_press(Message::OpenSettings);
 
+    let keyboard_btn = iced::widget::button(
+        container(icon::icon(icon::KEYBOARD).size(20))
+            .center_x(Length::Fill)
+            .center_y(Length::Fill),
+    )
+    .padding(0)
+    .height(Length::Fixed(40.0))
+    .width(Length::Fixed(40.0))
+    .style(iced::widget::button::secondary)
+    .on_press(Message::OpenHelp(crate::help::HelpTab::Keyboard));
+
     let help_btn = iced::widget::button(
         container(icon::icon(icon::HELP_RHOMBUS).size(20))
             .center_x(Length::Fill)
@@ -515,9 +526,9 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     )
     .padding(0)
     .height(Length::Fixed(40.0))
-    .width(Length::Fixed(50.0))
+    .width(Length::Fixed(40.0))
     .style(iced::widget::button::secondary)
-    .on_press(Message::OpenHelp);
+    .on_press(Message::OpenHelp(crate::help::HelpTab::Syntax));
 
     // Apply tooltip_style
     let footer = row![
@@ -528,9 +539,20 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         )
         .style(tooltip_style)
         .delay(Duration::from_millis(700)),
-        tooltip(help_btn, text("Help").size(12), tooltip::Position::Top)
-            .style(tooltip_style)
-            .delay(Duration::from_millis(700))
+        tooltip(
+            keyboard_btn,
+            text("Keyboard Shortcuts").size(12),
+            tooltip::Position::Top
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700)),
+        tooltip(
+            help_btn,
+            text("Syntax Help").size(12),
+            tooltip::Position::Top
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700))
     ]
     .spacing(5);
 
