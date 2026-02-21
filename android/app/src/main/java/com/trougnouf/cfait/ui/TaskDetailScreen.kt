@@ -7,6 +7,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -123,11 +125,13 @@ fun TaskDetailScreen(
             )
         },
     ) { p ->
+        val scrollState = rememberScrollState()
         Column(
             modifier = Modifier
                 .padding(p)
                 .imePadding()
                 .padding(start = 16.dp, top = 16.dp, end = 16.dp)
+                .verticalScroll(scrollState)
         ) {
             OutlinedTextField(
                 value = smartInput,
@@ -355,9 +359,11 @@ fun TaskDetailScreen(
                 value = description,
                 onValueChange = { description = it },
                 label = { Text("Description") },
-                modifier = Modifier.fillMaxWidth().weight(1f),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),
                 textStyle = TextStyle(textAlign = androidx.compose.ui.text.style.TextAlign.Start),
             )
+
+            Spacer(Modifier.height(24.dp))
         }
     }
 }

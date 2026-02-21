@@ -398,55 +398,6 @@ fun CfaitNavHost(
     }
 
     NavHost(navController, startDestination = "home") {
-        composable("settings/advanced") {
-            // Load fresh on entry
-            var localRoots by remember { mutableStateOf("20") }
-            var localSubs by remember { mutableStateOf("5") }
-            var localTrash by remember { mutableStateOf("14") }
-
-            LaunchedEffect(Unit) {
-                try {
-                    val cfg = api.getConfig()
-                    localRoots = cfg.maxDoneRoots.toString()
-                    localSubs = cfg.maxDoneSubtasks.toString()
-                    localTrash = cfg.trashRetention.toString()
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    // ignore
-                }
-            }
-
-            AdvancedSettingsScreen(
-                api = api,
-                maxDoneRoots = localRoots,
-                maxDoneSubtasks = localSubs,
-                trashRetention = localTrash,
-                onMaxDoneRootsChange = { localRoots = it },
-                onMaxDoneSubtasksChange = { localSubs = it },
-                onTrashRetentionChange = { localTrash = it },
-                onBack = {
-                    // Save on exit
-                    try {
-                        val cfg = api.getConfig()
-                        val r = localRoots.toUIntOrNull() ?: 20u
-                        val s = localSubs.toUIntOrNull() ?: 5u
-                        val t = localTrash.toUIntOrNull() ?: 14u
-                        api.saveConfig(
-                            cfg.url, cfg.username, "", cfg.allowInsecure, cfg.hideCompleted,
-                            cfg.disabledCalendars, cfg.sortCutoffMonths, cfg.urgentDays, cfg.urgentPrio,
-                            cfg.defaultPriority, cfg.startGracePeriodDays, cfg.autoReminders,
-                            cfg.defaultReminderTime, cfg.snoozeShort, cfg.createEventsForTasks,
-                            cfg.deleteEventsOnCompletion, cfg.autoRefreshInterval,
-                            t, r, s // New values (added trash retention)
-                        )
-                    } catch (e: Exception) {
-                        if (e is CancellationException) throw e
-                        // swallow save error
-                    }
-                    navController.popBackStack()
-                }
-            )
-        }
         composable("home") {
             HomeScreen(
                 api = api,
@@ -511,6 +462,7 @@ fun CfaitNavHost(
             var localRoots by remember { mutableStateOf("20") }
             var localSubs by remember { mutableStateOf("5") }
             var localTrash by remember { mutableStateOf("14") }
+            var deleteEvents by remember { mutableStateOf(false) }
 
             LaunchedEffect(Unit) {
                 try {
@@ -518,6 +470,7 @@ fun CfaitNavHost(
                     localRoots = cfg.maxDoneRoots.toString()
                     localSubs = cfg.maxDoneSubtasks.toString()
                     localTrash = cfg.trashRetention.toString()
+                    deleteEvents = cfg.deleteEventsOnCompletion
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     // ignore
@@ -529,9 +482,11 @@ fun CfaitNavHost(
                 maxDoneRoots = localRoots,
                 maxDoneSubtasks = localSubs,
                 trashRetention = localTrash,
+                deleteEventsOnCompletion = deleteEvents,
                 onMaxDoneRootsChange = { localRoots = it },
                 onMaxDoneSubtasksChange = { localSubs = it },
                 onTrashRetentionChange = { localTrash = it },
+                onDeleteEventsChange = { deleteEvents = it },
                 onBack = {
                     // Save on exit
                     try {
@@ -544,7 +499,7 @@ fun CfaitNavHost(
                             cfg.disabledCalendars, cfg.sortCutoffMonths, cfg.urgentDays, cfg.urgentPrio,
                             cfg.defaultPriority, cfg.startGracePeriodDays, cfg.autoReminders,
                             cfg.defaultReminderTime, cfg.snoozeShort, cfg.createEventsForTasks,
-                            cfg.deleteEventsOnCompletion, cfg.autoRefreshInterval,
+                            deleteEvents, cfg.autoRefreshInterval,
                             t, r, s // New values (added trash retention)
                         )
                     } catch (e: Exception) {
