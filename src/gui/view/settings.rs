@@ -190,7 +190,9 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.6))
             } else {
-                text("")
+                text("This is fully reversible. Simply toggle 'Create calendar events' off and back on to recreate them.")
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.6, 0.6))
             },
         ]
         .spacing(10)

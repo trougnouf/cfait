@@ -1546,17 +1546,6 @@ impl CfaitMobile {
     }
 
     pub async fn delete_all_calendar_events(&self) -> Result<u32, MobileError> {
-        let all_tasks: Vec<_> = {
-            self.controller
-                .store
-                .lock()
-                .await
-                .calendars
-                .values()
-                .flat_map(|m| m.values())
-                .cloned()
-                .collect()
-        };
         let client = {
             self.controller
                 .client
@@ -1566,25 +1555,28 @@ impl CfaitMobile {
                 .ok_or(MobileError::from("Offline"))?
                 .clone()
         };
-        let futures = all_tasks.into_iter().map(|t| {
-            let c = client.clone();
-            async move {
-                if c.sync_task_companion_event(&t, false)
-                    .await
-                    .unwrap_or(false)
-                {
-                    1
-                } else {
-                    0
-                }
+
+        // Get a list of all remote calendars we know about
+        let cals: Vec<String> = {
+            self.controller
+                .store
+                .lock()
+                .await
+                .calendars
+                .keys()
+                .filter(|h| !h.starts_with("local://"))
+                .cloned()
+                .collect()
+        };
+
+        let mut total = 0;
+        for cal_href in cals {
+            if let Ok(count) = client.delete_all_companion_events(&cal_href).await {
+                total += count as u32;
             }
-        });
-        Ok(stream::iter(futures)
-            .buffer_unordered(8)
-            .collect::<Vec<u32>>()
-            .await
-            .iter()
-            .sum())
+        }
+
+        Ok(total)
     }
 
     pub async fn create_missing_calendar_events(&self) -> Result<u32, MobileError> {

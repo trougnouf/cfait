@@ -457,7 +457,7 @@ fun SettingsScreen(
                     "Events will be retroactively created. Use +cal/-cal per task to override.",
                     fontSize = 12.sp,
                     color = androidx.compose.ui.graphics.Color.Gray,
-                    modifier = Modifier.padding(start = 12.dp)
+                    modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
                 )
 
                 Button(
@@ -479,6 +479,13 @@ fun SettingsScreen(
                         Text("Delete all calendar events")
                     }
                 }
+
+                Text(
+                    "This is fully reversible. Simply toggle 'Create calendar events' off and back on to recreate them.",
+                    fontSize = 12.sp,
+                    color = androidx.compose.ui.graphics.Color.Gray,
+                    modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                )
             }
 
             // 6. Local collections

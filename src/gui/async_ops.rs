@@ -166,3 +166,21 @@ pub async fn async_backfill_events_wrapper(
     .await
     .map_err(|e| e.to_string())?
 }
+
+pub async fn async_delete_all_events_wrapper(
+    client: RustyClient,
+    calendars: Vec<String>,
+) -> Result<usize, String> {
+    let rt = get_runtime();
+    rt.spawn(async move {
+        let mut total = 0;
+        for cal_href in calendars {
+            if let Ok(count) = client.delete_all_companion_events(&cal_href).await {
+                total += count;
+            }
+        }
+        Ok(total)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}

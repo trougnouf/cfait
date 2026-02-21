@@ -425,16 +425,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(client) = &app.client {
                 app.deleting_events = true;
 
-                let all_tasks: Vec<_> = app
-                    .store
-                    .calendars
-                    .values()
-                    .flat_map(|m| m.values())
-                    .cloned()
-                    .collect();
+                // Grab all known calendar hrefs
+                let cals: Vec<String> = app.store.calendars.keys().cloned().collect();
 
                 return Task::perform(
-                    async_backfill_events_wrapper(client.clone(), all_tasks, false),
+                    async_delete_all_events_wrapper(client.clone(), cals),
                     Message::BackfillEventsComplete,
                 );
             }
