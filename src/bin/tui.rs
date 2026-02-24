@@ -37,14 +37,14 @@ async fn main() -> Result<()> {
     if args.len() > 1 && args[1] == "import" {
         if args.len() < 3 {
             eprintln!("Error: Missing file path");
-            eprintln!("Usage: cfait import <file.ics> [--calendar <id>]");
+            eprintln!("Usage: cfait import <file.ics> [--collection <id>]");
             std::process::exit(1);
         }
 
         let file_path = &args[2];
 
-        // Check for --calendar flag
-        let calendar_id = if args.len() > 4 && args[3] == "--calendar" {
+        // Check for --collection flag
+        let collection_id = if args.len() > 4 && args[3] == "--collection" {
             Some(args[4].clone())
         } else {
             None
@@ -59,12 +59,12 @@ async fn main() -> Result<()> {
             }
         };
 
-        // Determine target calendar
-        let href = if let Some(cal_id) = calendar_id {
-            if cal_id == "default" {
+        // Determine target collection
+        let href = if let Some(col_id) = collection_id {
+            if col_id == "default" {
                 "local://default".to_string()
             } else {
-                format!("local://{}", cal_id)
+                format!("local://{}", col_id)
             }
         } else {
             "local://default".to_string()
@@ -74,7 +74,7 @@ async fn main() -> Result<()> {
         match LocalStorage::import_from_ics(ctx.as_ref(), &href, &ics_content) {
             Ok(count) => {
                 println!(
-                    "Successfully imported {} task(s) to calendar '{}'",
+                    "Successfully imported {} task(s) to collection '{}'",
                     count, href
                 );
                 return Ok(());
@@ -88,23 +88,23 @@ async fn main() -> Result<()> {
 
     // CLI Command: cfait export
     if args.len() > 1 && args[1] == "export" {
-        // Check for --calendar flag
-        let calendar_id = if args.len() > 3 && args[2] == "--calendar" {
+        // Check for --collection flag
+        let collection_id = if args.len() > 3 && args[2] == "--collection" {
             Some(args[3].clone())
         } else {
             None
         };
 
-        let tasks = if let Some(cal_id) = calendar_id {
-            // Export specific calendar
-            let href = if cal_id == "default" {
+        let tasks = if let Some(col_id) = collection_id {
+            // Export specific collection
+            let href = if col_id == "default" {
                 "local://default".to_string()
             } else {
-                format!("local://{}", cal_id)
+                format!("local://{}", col_id)
             };
             LocalStorage::load_for_href(ctx.as_ref(), &href)?
         } else {
-            // Export default calendar for backward compatibility
+            // Export default collection for backward compatibility
             // LocalStorage::load() was removed, use load_for_href with default
             LocalStorage::load_for_href(ctx.as_ref(), cfait::storage::LOCAL_CALENDAR_HREF)?
         };
@@ -123,7 +123,13 @@ async fn main() -> Result<()> {
         }
 
         println!("Syncing with {}...", config.url);
-        match cfait::client::RustyClient::connect_with_fallback(ctx.clone(), config, Some("CLI-Sync")).await {
+        match cfait::client::RustyClient::connect_with_fallback(
+            ctx.clone(),
+            config,
+            Some("CLI-Sync"),
+        )
+        .await
+        {
             Ok(_) => println!("Sync completed successfully."),
             Err(e) => {
                 eprintln!("Sync failed: {}", e);
@@ -152,7 +158,12 @@ async fn main() -> Result<()> {
                 match cfait::storage::DaemonLock::try_acquire_exclusive(ctx.as_ref()) {
                     Ok(Some(_lock)) => {
                         println!("Daemon: Syncing with {}...", config.url);
-                        let _ = cfait::client::RustyClient::connect_with_fallback(ctx.clone(), config, Some("CLI-Daemon")).await;
+                        let _ = cfait::client::RustyClient::connect_with_fallback(
+                            ctx.clone(),
+                            config,
+                            Some("CLI-Daemon"),
+                        )
+                        .await;
                         // _lock is dropped here, allowing UIs to open instantly
                     }
                     Ok(None) => {
@@ -173,7 +184,7 @@ async fn main() -> Result<()> {
 
     // Normal TUI startup
     cfait::tui::run(ctx).await
-    }
+}
 
 // Help printing is provided by the shared CLI module:
 // use `cfait::cli::print_help(&binary_name)` instead.

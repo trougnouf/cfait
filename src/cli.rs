@@ -18,8 +18,8 @@ pub fn print_help(binary_name: &str) {
         );
     } else {
         println!("    {} [--root <path>]", binary_name);
-        println!("    {} export [--calendar <id>]", binary_name);
-        println!("    {} import <file.ics> [--calendar <id>]", binary_name);
+        println!("    {} export [--collection <id>]", binary_name);
+        println!("    {} import <file.ics> [--collection <id>]", binary_name);
         println!("    {} --help", binary_name);
     }
     println!();
@@ -39,32 +39,40 @@ pub fn print_help(binary_name: &str) {
 
     if !is_gui {
         println!("SYNC COMMANDS:");
-        println!("    {} sync                                    Fetch and push changes, then exit", binary_name);
-        println!("    {} daemon                                  Run continuously in background and sync", binary_name);
-        println!("                                               at the interval specified in settings");
+        println!(
+            "    {} sync                                    Fetch and push changes, then exit",
+            binary_name
+        );
+        println!(
+            "    {} daemon                                  Run continuously in background and sync",
+            binary_name
+        );
+        println!(
+            "                                               at the interval specified in settings"
+        );
         println!();
         println!("IMPORT COMMAND:");
         println!(
-            "    {} import tasks.ics                        Import to default local calendar",
+            "    {} import tasks.ics                        Import to default local collection",
             binary_name
         );
         println!(
-            "    {} import tasks.ics --calendar <id>        Import to specific local calendar",
+            "    {} import tasks.ics --collection <id>        Import to specific local calendar",
             binary_name
         );
         println!(
-            "    {} import backup.ics --calendar my-cal     Import to 'my-cal' calendar",
+            "    {} import backup.ics --collection my-cal     Import to 'my-cal' collection",
             binary_name
         );
         println!();
 
         println!("EXPORT COMMAND:");
         println!(
-            "    {} export                              Export default local calendar",
+            "    {} export                              Export default local collection",
             binary_name
         );
         println!(
-            "    {} export --calendar <id>              Export specific local calendar",
+            "    {} export --collection <id>              Export specific local collection",
             binary_name
         );
         println!(
@@ -72,7 +80,7 @@ pub fn print_help(binary_name: &str) {
             binary_name
         );
         println!(
-            "    {} export --calendar my-cal > my.ics   Export specific calendar to file",
+            "    {} export --collection my-cal > my.ics   Export specific collection to file",
             binary_name
         );
         println!(
