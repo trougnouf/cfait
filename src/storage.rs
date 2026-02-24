@@ -414,3 +414,72 @@ impl LocalStorage {
         Ok(tasks)
     }
 }
+
+#[cfg(not(target_os = "android"))]
+pub struct DaemonLock {
+    _file: std::fs::File,
+}
+
+#[cfg(not(target_os = "android"))]
+impl DaemonLock {
+    /// Acquired by UI instances. Multiple UIs can hold this shared lock simultaneously.
+    /// If the daemon is currently syncing, this blocks briefly until the daemon finishes.
+    pub fn acquire_shared(ctx: &dyn AppContext) -> Result<Self> {
+        let path = ctx.get_data_dir()?.join("daemon.lock");
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)?;
+
+        file.lock_shared()?;
+        Ok(Self { _file: file })
+    }
+
+    /// Acquired by the background daemon.
+    /// Returns None immediately if ANY UI instance is currently holding a shared lock.
+    pub fn try_acquire_exclusive(ctx: &dyn AppContext) -> Result<Option<Self>> {
+        let path = ctx.get_data_dir()?.join("daemon.lock");
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)?;
+
+        match file.try_lock_exclusive() {
+            Ok(_) => Ok(Some(Self { _file: file })),
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::PermissionDenied => Ok(None),
+            Err(e) => Err(anyhow::anyhow!("Failed to acquire daemon lock: {}", e)),
+        }
+    }
+}
+
+#[cfg(test)]
+#[cfg(not(target_os = "android"))]
+mod lock_tests {
+    use super::*;
+    use crate::context::TestContext;
+
+    #[test]
+    fn test_daemon_locks_shared_vs_exclusive() {
+        let ctx = TestContext::new();
+
+        // 1. Multiple shared locks are allowed (TUI & GUI open simultaneously)
+        let shared1 = DaemonLock::acquire_shared(&ctx).unwrap();
+        let shared2 = DaemonLock::acquire_shared(&ctx).unwrap();
+
+        // 2. Exclusive lock should fail while shared locks are held (Daemon yields)
+        let excl1 = DaemonLock::try_acquire_exclusive(&ctx).unwrap();
+        assert!(excl1.is_none(), "Exclusive lock should fail when shared locks exist");
+
+        // 3. Drop all UI shared locks
+        drop(shared1);
+        drop(shared2);
+
+        // 4. Exclusive lock should now succeed (Daemon syncs)
+        let excl2 = DaemonLock::try_acquire_exclusive(&ctx).unwrap();
+        assert!(excl2.is_some(), "Exclusive lock should succeed when no shared locks exist");
+    }
+}

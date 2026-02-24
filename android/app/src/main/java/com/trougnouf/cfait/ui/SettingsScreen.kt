@@ -424,8 +424,20 @@ fun SettingsScreen(
                         singleLine = true
                     )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                    Text("Auto-refresh interval:", modifier = Modifier.weight(1f))
+
+            }
+
+            // 5. Background Sync
+            item {
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                Text(
+                    "Background Sync",
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Sync interval:", modifier = Modifier.weight(1f))
                     OutlinedTextField(
                         value = autoRefresh,
                         onValueChange = { autoRefresh = it },
@@ -433,9 +445,47 @@ fun SettingsScreen(
                         singleLine = true
                     )
                 }
+                Text(
+                    "Note: Android enforces a minimum interval of 15 minutes.",
+                    fontSize = 12.sp,
+                    color = androidx.compose.ui.graphics.Color.Gray,
+                    modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 8.dp)
+                )
+
+                // Battery Optimization Warning
+                val powerManager = context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+                val isIgnoringBatteryOptimizations = powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+
+                if (!isIgnoringBatteryOptimizations) {
+                    Button(
+                        onClick = {
+                            try {
+                                val intent = android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                status = "Cannot open battery settings"
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    ) {
+                        Text("Disable Battery Optimizations (Fix Sync)")
+                    }
+                    Text(
+                        "Allow cfait to run in the background without restrictions for reliable synchronization and alarms.",
+                        fontSize = 12.sp,
+                        color = androidx.compose.ui.graphics.Color.Gray,
+                        modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+                    )
+                }
             }
 
-            // 5. Calendar Integration
+            // 6. Calendar Integration
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(

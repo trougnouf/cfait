@@ -114,9 +114,66 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
+    // CLI Command: cfait sync
+    if args.len() > 1 && args[1] == "sync" {
+        let config = cfait::config::Config::load(ctx.as_ref()).unwrap_or_default();
+        if config.url.is_empty() {
+            println!("Offline mode configured; nothing to sync.");
+            return Ok(());
+        }
+
+        println!("Syncing with {}...", config.url);
+        match cfait::client::RustyClient::connect_with_fallback(ctx.clone(), config, Some("CLI-Sync")).await {
+            Ok(_) => println!("Sync completed successfully."),
+            Err(e) => {
+                eprintln!("Sync failed: {}", e);
+                std::process::exit(1);
+            }
+        }
+        return Ok(());
+    }
+
+    // CLI Command: cfait daemon
+    if args.len() > 1 && args[1] == "daemon" {
+        println!("Starting Cfait background daemon...");
+        loop {
+            let config = cfait::config::Config::load(ctx.as_ref()).unwrap_or_default();
+            let interval = config.auto_refresh_interval_mins;
+
+            if interval == 0 {
+                println!("Auto-refresh is disabled in config. Daemon exiting.");
+                return Ok(());
+            }
+
+            if config.url.is_empty() {
+                println!("Offline mode configured. Daemon sleeping...");
+            } else {
+                #[cfg(not(target_os = "android"))]
+                match cfait::storage::DaemonLock::try_acquire_exclusive(ctx.as_ref()) {
+                    Ok(Some(_lock)) => {
+                        println!("Daemon: Syncing with {}...", config.url);
+                        let _ = cfait::client::RustyClient::connect_with_fallback(ctx.clone(), config, Some("CLI-Daemon")).await;
+                        // _lock is dropped here, allowing UIs to open instantly
+                    }
+                    Ok(None) => {
+                        // A UI is open holding a shared lock. Stay quiet.
+                    }
+                    Err(e) => eprintln!("Daemon: Failed to check instance lock: {}", e),
+                }
+            }
+            tokio::time::sleep(tokio::time::Duration::from_secs(interval as u64 * 60)).await;
+        }
+    }
+
+    // Grab the shared lock for the TUI (allows multiple UIs, blocks daemon)
+    #[cfg(not(target_os = "android"))]
+    let _ui_lock = cfait::storage::DaemonLock::acquire_shared(ctx.as_ref())
+        .map_err(|e| eprintln!("Warning: Could not acquire shared UI lock: {}", e))
+        .ok();
+
     // Normal TUI startup
     cfait::tui::run(ctx).await
-}
+    }
 
 // Help printing is provided by the shared CLI module:
 // use `cfait::cli::print_help(&binary_name)` instead.

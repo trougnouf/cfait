@@ -63,5 +63,15 @@ fn main() -> iced::Result {
         i += 1;
     }
 
+    // Create context to grab the lock
+    let ctx: std::sync::Arc<dyn cfait::context::AppContext> =
+        std::sync::Arc::new(cfait::context::StandardContext::new(override_root.clone()));
+
+    // Grab the shared lock for the GUI (allows multiple UIs, blocks daemon)
+    #[cfg(not(target_os = "android"))]
+    let _ui_lock = cfait::storage::DaemonLock::acquire_shared(ctx.as_ref())
+        .map_err(|e| eprintln!("Warning: Could not acquire shared UI lock: {}", e))
+        .ok();
+
     cfait::gui::run_with_ics_file(ics_file_path, override_root, force_ssd)
 }

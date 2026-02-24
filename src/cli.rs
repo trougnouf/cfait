@@ -38,6 +38,11 @@ pub fn print_help(binary_name: &str) {
     println!();
 
     if !is_gui {
+        println!("SYNC COMMANDS:");
+        println!("    {} sync                                    Fetch and push changes, then exit", binary_name);
+        println!("    {} daemon                                  Run continuously in background and sync", binary_name);
+        println!("                                               at the interval specified in settings");
+        println!();
         println!("IMPORT COMMAND:");
         println!(
             "    {} import tasks.ics                        Import to default local calendar",
@@ -52,6 +57,7 @@ pub fn print_help(binary_name: &str) {
             binary_name
         );
         println!();
+
         println!("EXPORT COMMAND:");
         println!(
             "    {} export                              Export default local calendar",

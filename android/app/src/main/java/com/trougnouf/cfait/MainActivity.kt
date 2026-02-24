@@ -162,22 +162,6 @@ fun CfaitNavHost(
         .getWorkInfosForUniqueWorkLiveData(CalendarSyncWorker.UNIQUE_WORK_NAME)
         .observeAsState()
 
-    // Schedule a periodic background sync worker to keep remote changes and alarms up-to-date.
-    // Uses a 30-minute interval; WorkManager will coalesce as appropriate.
-    val periodicSyncRequest = PeriodicWorkRequestBuilder<PeriodicSyncWorker>(30, TimeUnit.MINUTES)
-        .setConstraints(
-            Constraints.Builder()
-                .setRequiredNetworkType(NetworkType.CONNECTED)
-                .build()
-        )
-        .build()
-
-    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-        "cfait_periodic_sync",
-        ExistingPeriodicWorkPolicy.KEEP,
-        periodicSyncRequest
-    )
-
     val currentWorkInfo = calendarWorkInfo?.firstOrNull()
     val isCalendarSyncRunning =
         currentWorkInfo?.state == WorkInfo.State.RUNNING || currentWorkInfo?.state == WorkInfo.State.ENQUEUED
@@ -264,6 +248,24 @@ fun CfaitNavHost(
                 defaultPriority = config.defaultPriority.toInt() // Fetch config value
                 hasUnsynced = api.hasUnsyncedChanges()
                 AlarmScheduler.scheduleNextAlarm(context, api)
+
+                // Dynamically update Background Sync Worker based on config
+                val interval = config.autoRefreshInterval
+                if (interval > 0u) {
+                    val mins = kotlin.math.max(15L, interval.toLong()) // Android enforces a 15 min minimum
+                    val request = PeriodicWorkRequestBuilder<PeriodicSyncWorker>(mins, TimeUnit.MINUTES)
+                        .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                        .build()
+
+                    // UPDATE ensures we don't brutally reset the timer if it's already running
+                    workManager.enqueueUniquePeriodicWork(
+                        "cfait_periodic_sync",
+                        ExistingPeriodicWorkPolicy.UPDATE,
+                        request
+                    )
+                } else {
+                    workManager.cancelUniqueWork("cfait_periodic_sync")
+                }
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
                 android.util.Log.e("CfaitMain", "Exception in refreshLists", e)
