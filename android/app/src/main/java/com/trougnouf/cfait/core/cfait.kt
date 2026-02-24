@@ -1017,6 +1017,7 @@ internal object UniffiLib {
         `filterLocations`: RustBuffer.ByValue,
         `searchQuery`: RustBuffer.ByValue,
         `expandedGroups`: RustBuffer.ByValue,
+        `matchAllCategories`: Byte,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_has_any_tasks(
@@ -1491,7 +1492,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 40919.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 46482.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 51338.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_any_tasks() != 42815.toShort()) {
@@ -2175,6 +2176,7 @@ public interface CfaitMobileInterface {
         `filterLocations`: List<kotlin.String>,
         `searchQuery`: kotlin.String,
         `expandedGroups`: List<kotlin.String>,
+        `matchAllCategories`: kotlin.Boolean,
     ): MobileViewData
 
     /**
@@ -2862,6 +2864,7 @@ open class CfaitMobile :
         `filterLocations`: List<kotlin.String>,
         `searchQuery`: kotlin.String,
         `expandedGroups`: List<kotlin.String>,
+        `matchAllCategories`: kotlin.Boolean,
     ): MobileViewData =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -2871,6 +2874,7 @@ open class CfaitMobile :
                     FfiConverterSequenceString.lower(`filterLocations`),
                     FfiConverterString.lower(`searchQuery`),
                     FfiConverterSequenceString.lower(`expandedGroups`),
+                    FfiConverterBoolean.lower(`matchAllCategories`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },

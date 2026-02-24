@@ -145,7 +145,7 @@ impl AppState {
             disabled_calendars: HashSet::new(),
             selected_categories: HashSet::new(),
             selected_locations: HashSet::new(), // Init
-            match_all_categories: false,
+            match_all_categories: true,
             hide_completed: false,
             strikethrough_completed: false,
             hide_fully_completed_tags: false,

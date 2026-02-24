@@ -39,6 +39,7 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
@@ -88,6 +89,8 @@ fun HomeScreen(
 
     var filterTags by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
     var filterLocations by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
+
+    var matchAllCategories by rememberSaveable { mutableStateOf(true) }
 
     // State to track which "done" groups are expanded.
     var expandedGroups by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
@@ -345,11 +348,13 @@ fun HomeScreen(
     fun updateTaskList() {
         scope.launch {
             try {
+                // 2. Fetch new view data
                 val viewData = api.getViewTasks(
                     filterTags.toList(),
                     filterLocations.toList(),
                     searchQuery,
-                    expandedGroups.toList()
+                    expandedGroups.toList(),
+                    matchAllCategories
                 )
                 tasks = viewData.tasks
                 tags = viewData.tags
@@ -368,7 +373,8 @@ fun HomeScreen(
         isLoading,
         calendars,
         refreshTick,
-        expandedGroups
+        expandedGroups,
+        matchAllCategories
     ) {
         updateTaskList()
     }
@@ -507,7 +513,8 @@ fun HomeScreen(
                             filterTags.toList(),
                             filterLocations.toList(),
                             searchQuery,
-                            expandedGroups.toList()
+                            expandedGroups.toList(),
+                            matchAllCategories
                         )
                         tasks = viewData.tasks
                         tags = viewData.tags
@@ -807,20 +814,46 @@ fun HomeScreen(
                         // Use Filled TAG if selected (active), otherwise Outline
                         val iconStr = if (isAllTagsSelected) NfIcons.TAG else NfIcons.TAG_OUTLINE
 
-                        CompactTagRow(
-                            name = "All Tasks",
-                            count = null,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            isSelected = isAllTagsSelected,
-                            icon = iconStr, // Dynamic Icon
-                            onClick = {
-                                filterTags = emptySet()
-                            },
-                            onFocus = {
-                                filterTags = emptySet()
-                                scope.launch { drawerState.close() }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Left Side: All Tasks / Clear
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .background(
+                                        if (isAllTagsSelected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f) else Color.Transparent,
+                                        androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                    )
+                                    .clickable { filterTags = emptySet(); scope.launch { drawerState.close() } }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                NfIcon(iconStr, size = 14.sp)
+                                Spacer(Modifier.width(12.dp))
+                                Text("All Tasks", fontSize = 14.sp)
                             }
-                        )
+
+                            Spacer(Modifier.width(8.dp))
+
+                            // Right Side: AND / OR toggle
+                            Surface(
+                                color = if (matchAllCategories) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
+                                modifier = Modifier.clickable {
+                                    matchAllCategories = !matchAllCategories
+                                }
+                            ) {
+                                Text(
+                                    text = if (matchAllCategories) "Match: AND" else "Match: OR",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (matchAllCategories) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
                         HorizontalDivider()
                     } else if (sidebarTab == 2) {
                         val isAllLocsSelected = filterLocations.isEmpty()

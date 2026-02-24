@@ -1109,6 +1109,7 @@ impl CfaitMobile {
         search_query: String,
         // Caller-provided list of expanded done-group keys
         expanded_groups: Vec<String>,
+        match_all_categories: bool, // <--- ADDED PARAM
     ) -> MobileViewData {
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
@@ -1126,7 +1127,7 @@ impl CfaitMobile {
             hidden_calendars: &hidden,
             selected_categories: &filter_tags.into_iter().collect(),
             selected_locations: &filter_locations.into_iter().collect(),
-            match_all_categories: false,
+            match_all_categories, // <--- PASSED IN
             search_term: &search_query,
             hide_completed_global: config.hide_completed,
             hide_fully_completed_tags: config.hide_fully_completed_tags,

@@ -254,7 +254,7 @@ impl Default for GuiApp {
             disabled_calendars: HashSet::new(),
             selected_categories: HashSet::new(),
             selected_locations: HashSet::new(),
-            match_all_categories: false,
+            match_all_categories: true,
             yanked_uid: None,
             selected_uid: None,
 

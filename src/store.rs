@@ -891,7 +891,7 @@ impl TaskStore {
         let now = Utc::now();
 
         // 1) Build iterator over allowed calendars (respecting active/hidden calendar restrictions).
-        let task_iter = self
+        let all_allowed_refs: Vec<&Task> = self
             .calendars
             .iter()
             .filter(|(href, _)| {
@@ -901,184 +901,206 @@ impl TaskStore {
                     !options.hidden_calendars.contains(*href)
                 }
             })
-            .flat_map(|(_, map)| map.values());
+            .flat_map(|(_, map)| map.values())
+            .collect();
 
-        // 2) Filter references (no cloning). This pass performs the bulk of predicate checks.
-        let visible_refs: Vec<&Task> = task_iter
-            .filter(|t| {
-                // Status-based filtering (is:done / is:active / started / ongoing)
-                let has_status_filter = search_lower.contains("is:done")
-                    || search_lower.contains("is:active")
-                    || search_lower.contains("is:started")
-                    || search_lower.contains("is:ongoing");
+        // 2) Define the filtering pipeline as a reusable closure.
+        // This allows us to calculate the final tasks, and recalculate aggregates ignoring specific filters for OR modes.
+        let run_pipeline = |ignore_categories: bool, ignore_locations: bool| -> Vec<&Task> {
+            let visible_refs: Vec<&Task> = all_allowed_refs
+                .iter()
+                .copied()
+                .filter(|t| {
+                    // Status-based filtering
+                    let has_status_filter = search_lower.contains("is:done")
+                        || search_lower.contains("is:active")
+                        || search_lower.contains("is:started")
+                        || search_lower.contains("is:ongoing");
 
-                if !has_status_filter && t.status.is_done() && options.hide_completed_global {
-                    return false;
-                }
-
-                if is_ready_mode {
-                    if t.status.is_done() {
+                    if !has_status_filter && t.status.is_done() && options.hide_completed_global {
                         return false;
                     }
-                    if let Some(start) = &t.dtstart
-                        && start.to_start_comparison_time() > now
-                    {
-                        return false;
-                    }
-                    if check_is_effectively_blocked(t, &completed_uids) {
-                        return false;
-                    }
-                }
 
-                if is_blocked_mode && !check_is_effectively_blocked(t, &completed_uids) {
-                    return false;
-                }
-
-                // Duration filters
-                if let Some(mins) = t.estimated_duration {
-                    if let Some(min) = options.min_duration
-                        && mins < min
-                    {
-                        return false;
-                    }
-                    if let Some(max) = options.max_duration
-                        && mins > max
-                    {
-                        return false;
-                    }
-                } else if !options.include_unset_duration {
-                    return false;
-                }
-
-                // Category matching (supports hierarchical prefixes and UNCATEGORIZED token)
-                if !options.selected_categories.is_empty() {
-                    let filter_uncategorized =
-                        options.selected_categories.contains(UNCATEGORIZED_ID);
-                    let check_match = |task_cat: &str, selected: &str| -> bool {
-                        let tc_lower = task_cat.to_lowercase();
-                        let sel_lower = selected.to_lowercase();
-                        if tc_lower == sel_lower {
-                            return true;
+                    if is_ready_mode {
+                        if t.status.is_done() {
+                            return false;
                         }
-                        if let Some(stripped) = tc_lower.strip_prefix(&sel_lower) {
-                            return stripped.starts_with(':');
+                        if let Some(start) = &t.dtstart
+                            && start.to_start_comparison_time() > now
+                        {
+                            return false;
                         }
-                        false
-                    };
+                        if check_is_effectively_blocked(t, &completed_uids) {
+                            return false;
+                        }
+                    }
 
-                    if options.match_all_categories {
-                        for sel in options.selected_categories {
-                            if sel == UNCATEGORIZED_ID {
-                                if !t.categories.is_empty() {
-                                    return false;
-                                }
-                            } else {
-                                let mut has = false;
-                                for c in &t.categories {
-                                    if check_match(c, sel) {
-                                        has = true;
-                                        break;
-                                    }
-                                }
-                                if !has {
-                                    return false;
-                                }
+                    if is_blocked_mode && !check_is_effectively_blocked(t, &completed_uids) {
+                        return false;
+                    }
+
+                    // Duration filters
+                    if let Some(mins) = t.estimated_duration {
+                        if let Some(min) = options.min_duration
+                            && mins < min
+                        {
+                            return false;
+                        }
+                        if let Some(max) = options.max_duration
+                            && mins > max
+                        {
+                            return false;
+                        }
+                    } else if !options.include_unset_duration {
+                        return false;
+                    }
+
+                    // Category matching
+                    if !ignore_categories && !options.selected_categories.is_empty() {
+                        let filter_uncategorized =
+                            options.selected_categories.contains(UNCATEGORIZED_ID);
+                        let check_match = |task_cat: &str, selected: &str| -> bool {
+                            let tc_lower = task_cat.to_lowercase();
+                            let sel_lower = selected.to_lowercase();
+                            if tc_lower == sel_lower {
+                                return true;
                             }
-                        }
-                    } else {
-                        let mut hit = false;
-                        if filter_uncategorized && t.categories.is_empty() {
-                            hit = true;
-                        } else {
+                            if let Some(stripped) = tc_lower.strip_prefix(&sel_lower) {
+                                return stripped.starts_with(':');
+                            }
+                            false
+                        };
+
+                        if options.match_all_categories {
                             for sel in options.selected_categories {
-                                if sel != UNCATEGORIZED_ID {
+                                if sel == UNCATEGORIZED_ID {
+                                    if !t.categories.is_empty() {
+                                        return false;
+                                    }
+                                } else {
+                                    let mut has = false;
                                     for c in &t.categories {
                                         if check_match(c, sel) {
-                                            hit = true;
+                                            has = true;
                                             break;
                                         }
                                     }
+                                    if !has {
+                                        return false;
+                                    }
                                 }
-                                if hit {
+                            }
+                        } else {
+                            let mut hit = false;
+                            if filter_uncategorized && t.categories.is_empty() {
+                                hit = true;
+                            } else {
+                                for sel in options.selected_categories {
+                                    if sel != UNCATEGORIZED_ID {
+                                        for c in &t.categories {
+                                            if check_match(c, sel) {
+                                                hit = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if hit {
+                                        break;
+                                    }
+                                }
+                            }
+                            if !hit {
+                                return false;
+                            }
+                        }
+                    }
+
+                    // Location matching
+                    if !ignore_locations && !options.selected_locations.is_empty() {
+                        if let Some(loc) = &t.location {
+                            let mut hit = false;
+                            for sel in options.selected_locations {
+                                if loc == sel
+                                    || (loc.starts_with(sel)
+                                        && loc.chars().nth(sel.len()) == Some(':'))
+                                {
+                                    hit = true;
                                     break;
                                 }
                             }
-                        }
-                        if !hit {
+                            if !hit {
+                                return false;
+                            }
+                        } else {
                             return false;
                         }
                     }
+
+                    true
+                })
+                .collect();
+
+            // 3) Search term expansion
+            if options.search_term.is_empty() {
+                visible_refs
+            } else {
+                let mut children_map = HashMap::new();
+                for t in &visible_refs {
+                    if let Some(p) = &t.parent_uid {
+                        children_map
+                            .entry(p.clone())
+                            .or_insert_with(Vec::new)
+                            .push(t.uid.clone());
+                    }
                 }
 
-                // Location matching
-                if !options.selected_locations.is_empty() {
-                    if let Some(loc) = &t.location {
-                        let mut hit = false;
-                        for sel in options.selected_locations {
-                            if loc == sel
-                                || (loc.starts_with(sel) && loc.chars().nth(sel.len()) == Some(':'))
-                            {
-                                hit = true;
-                                break;
+                let mut matched_uids = HashSet::new();
+                let mut queue = Vec::new();
+
+                for t in &visible_refs {
+                    if t.matches_search_term(options.search_term)
+                        && matched_uids.insert(t.uid.clone())
+                    {
+                        queue.push(t.uid.clone());
+                    }
+                }
+
+                let mut idx = 0;
+                while idx < queue.len() {
+                    let curr = queue[idx].clone();
+                    idx += 1;
+                    if let Some(children) = children_map.get(&curr) {
+                        for child in children {
+                            if matched_uids.insert(child.clone()) {
+                                queue.push(child.clone());
                             }
                         }
-                        if !hit {
-                            return false;
-                        }
-                    } else {
-                        return false;
                     }
                 }
 
-                true
-            })
-            .collect();
-
-        // 3) If a search term exists, expand matched results to include their children
-        // so that partial matches still result in a useful list with context.
-        let final_refs = if options.search_term.is_empty() {
-            visible_refs
-        } else {
-            let mut children_map = HashMap::new();
-            for t in &visible_refs {
-                if let Some(p) = &t.parent_uid {
-                    children_map
-                        .entry(p.clone())
-                        .or_insert_with(Vec::new)
-                        .push(t.uid.clone());
-                }
+                visible_refs
+                    .into_iter()
+                    .filter(|t| matched_uids.contains(&t.uid))
+                    .collect()
             }
-
-            let mut matched_uids = HashSet::new();
-            let mut queue = Vec::new();
-
-            for t in &visible_refs {
-                if t.matches_search_term(options.search_term) && matched_uids.insert(t.uid.clone())
-                {
-                    queue.push(t.uid.clone());
-                }
-            }
-
-            let mut idx = 0;
-            while idx < queue.len() {
-                let curr = queue[idx].clone();
-                idx += 1;
-                if let Some(children) = children_map.get(&curr) {
-                    for child in children {
-                        if matched_uids.insert(child.clone()) {
-                            queue.push(child.clone());
-                        }
-                    }
-                }
-            }
-
-            visible_refs
-                .into_iter()
-                .filter(|t| matched_uids.contains(&t.uid))
-                .collect()
         };
 
-        // 4) Build category and location aggregates from the final refs (cloned)
+        // Execution of pipelines:
+        // The final task list applies ALL filters
+        let final_refs = run_pipeline(false, false);
+
+        // For tags: If OR mode, ignore current tag selection so user can pick multiple parallel tags
+        let tag_refs = if options.match_all_categories {
+            final_refs.clone()
+        } else {
+            run_pipeline(true, false)
+        };
+
+        // For locations: A task only has 1 location, so multiple locations is ALWAYS an OR operation.
+        // We always ignore the location filter when computing location aggregates so other locations stay visible.
+        let loc_refs = run_pipeline(false, true);
+
+        // 4) Build category and location aggregates
         let mut cat_active_counts: HashMap<String, usize> = HashMap::new();
         let mut cat_display_names: HashMap<String, String> = HashMap::new();
         let mut cat_present_lower: HashSet<String> = HashSet::new();
@@ -1088,7 +1110,8 @@ impl TaskStore {
         let mut loc_active_counts: HashMap<String, usize> = HashMap::new();
         let mut loc_present: HashSet<String> = HashSet::new();
 
-        for t in &final_refs {
+        // Process tag refs
+        for t in &tag_refs {
             let is_active = !t.status.is_done();
 
             if t.categories.is_empty() {
@@ -1119,6 +1142,11 @@ impl TaskStore {
                     }
                 }
             }
+        }
+
+        // Process location refs
+        for t in &loc_refs {
+            let is_active = !t.status.is_done();
 
             if let Some(loc) = &t.location {
                 let parts: Vec<&str> = loc.split(':').collect();
@@ -1157,6 +1185,8 @@ impl TaskStore {
         // Convert locations into sorted vector
         let mut locations: Vec<(String, usize)> = loc_active_counts.into_iter().collect();
         locations.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+
+        // duplicate aggregates removed (handled above)
 
         // 5) Clone final results into owned Task structs and compute transient fields.
         let mut final_tasks_processed: Vec<Task> = final_refs
