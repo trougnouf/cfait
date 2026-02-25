@@ -16,6 +16,8 @@ use tokio::sync::mpsc::Sender;
 use crate::store::select_weighted_random_index;
 
 pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Option<String>) {
+    // Ensure the [UNSYNCED] badge reflects the current journal state on every event
+    state.unsynced_changes = !crate::journal::Journal::load(state.ctx.as_ref()).is_empty();
     match event {
         AppEvent::Status(s) => state.message = s,
         AppEvent::Error(s) => {

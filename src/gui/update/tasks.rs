@@ -486,6 +486,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.yanked_uid = None;
             Task::none()
         }
+        Message::EscCaptured => {
+            // Esc pressed while an input widget had capture (input focused).
+            // Decide behavior here: if we're in a modal edit (editing or creating child),
+            // cancel immediately. Otherwise just snap focus to the selected (soft escape).
+            if app.editing_uid.is_some() || app.creating_child_of.is_some() {
+                // Modal edit: hard cancel immediately (revert)
+                app.input_value = text_editor::Content::new();
+                app.description_value = text_editor::Content::new();
+                app.editing_uid = None;
+                app.creating_child_of = None;
+                scroll_to_selected_delayed(app, true)
+            } else {
+                // Non-modal (searching/drafting): just move focus to the task list (step 1)
+                scroll_to_selected_delayed(app, true)
+            }
+        }
         Message::EscapePressed => {
             let mut needs_refresh = false;
             let mut captured_action = false;
@@ -498,6 +514,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 captured_action = true;
             } else if app.yanked_uid.is_some() {
                 app.yanked_uid = None;
+                captured_action = true;
+            } else if !app.input_value.text().is_empty() {
+                // Clear draft input on second Esc
+                app.input_value = text_editor::Content::new();
                 captured_action = true;
             } else if !app.search_value.text().is_empty() {
                 app.search_value = text_editor::Content::new();

@@ -77,6 +77,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::YankTask(_)
         | Message::ClearYank
         | Message::EscapePressed
+        | Message::EscCaptured
         | Message::MakeChild(_)
         | Message::RemoveParent(_)
         | Message::RemoveDependency(_, _)

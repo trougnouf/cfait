@@ -65,6 +65,7 @@ pub enum Message {
     YankSelected,
     ClearYank,
     EscapePressed,
+    EscCaptured,
     // TUI parity: split child behavior into explicit "link child" and "create new subtask"
     KeyboardLinkChild,   // 'c' (Link selected to yanked)
     KeyboardCreateChild, // 'C' (Create new subtask for selected)

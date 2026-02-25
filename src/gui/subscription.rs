@@ -54,12 +54,13 @@ fn handle_hotkey(
 ) -> Option<Message> {
     use iced::keyboard::key::Named;
 
-    // Allow Escape to work even when input is captured (to cancel edit)
+    // Allow Escape to work even when input is captured — notify the app that Esc was pressed while captured.
+    // The tasks update handler will decide whether to CancelEdit immediately (modal) or to SnapToSelected (non-modal).
     if status == iced::event::Status::Captured {
         if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = evt
             && key == keyboard::Key::Named(Named::Escape)
         {
-            return Some(Message::CancelEdit);
+            return Some(Message::EscCaptured);
         }
         return None;
     }

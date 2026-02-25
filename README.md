@@ -36,7 +36,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 - [📊 Task sorting](#task-sorting)
 - [📅 Calendar events for tasks](#calendar-events-for-tasks)
 - [💾 Export & backup](#export-backup)
-- [🎮 TUI keybindings and configuration](#tui-keybindings)
+- [🎮 Keybindings and TUI configuration](#tui-keybindings)
 - [🤗 Support](#support)
 - [🪩 Mirrors](#mirrors)
 - [🛡️ Privacy policy](#privacy-policy)
@@ -53,6 +53,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 *   **Dependencies:** Block tasks until others are done. You can create parent/child tasks or loose dependencies <small>(RFC9253)</small> (or manually block with `#blocked`).
 *   **Recurrence:** Powerful repetition rules for habits and recurrent tasks.
 *   **Inline Aliases:** Define shortcuts on the fly; typing `#gardening:=#fun,@@home` or `@@aldi:=#groceries,#shopping` applies the alias immediately and saves it for future use (retroactive).
+*   **Time tracking:** Start and pause tasks; Cfait automatically keeps track of the total time spent.
 *   **Cross-Platform:** Runs on Linux, Android, Windows, and MacOS.
 
 <a name="screenshots"></a>
@@ -60,7 +61,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 
 | Desktop (GUI & TUI) | Mobile (Android) |
 | :---: | :---: |
-| ![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.4.6_screenshot_(GUI).png)<br>The Graphical Interface in v0.4.6 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small><br><br>![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.4.6_screenshot_(TUI).png)<br>The Terminal Interface in v0.4.6 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small> | ![Cfait Android Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.4.6_screenshot_(Android).png)<br>The Android client in v0.4.6 <small>([history and more](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(Android)))</small> |
+| ![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.0_screenshot_(GUI).png)<br>The Graphical Interface in v0.5.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small><br><br>![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.0_screenshot_(TUI).png)<br>The Terminal Interface in v0.5.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small> | ![Cfait Android Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.0_screenshot_(Android).png)<br>The Android client in v0.5.0 <small>([history and more](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(Android)))</small> |
 
 <a name="installation"></a>
 ## 🚀 installation
@@ -96,10 +97,10 @@ Self-documenting config file. See also: https://codeberg.org/trougnouf/cfait/wik
 Requires Rust (latest stable version recommended).
 ```bash
 # Install TUI only
-cargo install cfait --release
+cargo install cfait
 
 # Install GUI
-cargo install cfait --features gui --bin gui --release
+cargo install cfait --features gui --bin cfait-gui
 ```
 Replace `cfait` with `.` to build locally.
 Remove `--release` to build in debug mode. (Much faster compilation, much slower execution.)
@@ -360,11 +361,19 @@ Very private task @tomorrow -cal
 - Use the "Delete all calendar events" button in the GUI or Android Settings to remove all auto-generated events
 
 <a name="export-backup"></a>
-## 💾 Export & Backup
+## 💾 CLI, Export & Background Daemon
+
+Cfait includes a CLI for background syncing, and exporting.
+
+**Background Sync Daemon:**
+Run `cfait daemon` to automatically sync in the background at your configured interval without needing to keep a UI open.
 
 Export your local tasks to standard `.ics` (iCalendar) format for backup or sharing with other applications.
 
-**TUI (Command Line):**
+**Export**:
+
+TUI:
+
 ```bash
 # Export to file
 cfait export > backup.ics
@@ -376,13 +385,13 @@ cfait export
 cfait export | grep 'SUMMARY'
 ```
 
-**GUI (Desktop):**
+GUI:
 1. Open Settings (gear icon)
 2. Scroll to "Data Management" section
 3. Click "Export Local Tasks (.ics)"
 4. Choose save location in file dialog
 
-**Android:**
+Android:
 1. Open Settings
 2. Scroll to "Data Management" section  
 3. Tap "Export Local Tasks (.ics)"
@@ -393,7 +402,7 @@ The exported `.ics` any CalDAV-compatible application.
 <a name="tui-keybindings"></a>
 ## 🎮 TUI Keybindings
 
-If you are using the Terminal interface, here are the essentials (*Press `?` inside the app for the full interactive help menu.*).
+If you are using the Terminal interface (or the GUI), here are the essentials (*Press `?` inside the app or click on ⌨ for the full help menu.*).
 
 **Navigation & Views**
 *   `Tab`: Switch focus (Tasks ↔ Sidebar)
@@ -465,13 +474,12 @@ Cfait works with any standard CalDAV server. If you don't have one yet, here are
 
 **Self-Hosted**
 *   **[Radicale](https://radicale.org/):** One of the easiest, lightweight solution to host on a Raspberry Pi or VPS.
+  * When connecting to a radicale server, do not include your username in the URL.
 *   **[Nextcloud](https://nextcloud.com/):** A popular full-suite option (files, contacts, and calendars).
 
 **Free & Managed**
 *   **[Disroot](https://disroot.org/):** A privacy-focused platform providing a free Nextcloud account.
     *   *How to connect:* After signing up, set `https://cloud.disroot.org/remote.php/dav` as the server URL. Use the [calendar web-interface](https://cloud.disroot.org/apps/calendar) to create a "New calendar with task list" or the [tasks web-interface](https://cloud.disroot.org/apps/tasks/collections/all) to create new tasks-only collections,
-*   **[Infomaniak](https://www.infomaniak.com/):** A Swiss provider with a free tier that includes a CalDAV account.
-    *   *How to connect:* After signing up, go to [config.infomaniak.com](https://config.infomaniak.com/). Click **"On this device"** followed by **"My Calendars"** to reveal your specific Server URL and Login username. (Use your infomaniak password.)
 
 You can also use the `Local` calendar entirely offline (and there is the possibility to migrate to and synchronize with a CalDAV server at a later time).
 
