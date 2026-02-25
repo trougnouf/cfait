@@ -78,6 +78,117 @@
   </requires>
 
   <releases>
+    <release version="0.5.1" date="2026-02-25">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>Add --root flag (TUI, GUI)</li>
+          <li>(client) Implement automatic CalDAV root discovery and URL correction</li>
+          <li>(gui) Keep focus in input bar after entering a task</li>
+          <li>Add done/cancel actions to alarm (suggested by busterkeaton) and implement auto-refresh</li>
+          <li>(ui) Add done/completed tasks expansion arrow (and advanced settings to control # of tasks shown)</li>
+          <li>Android rolling release (build a new APK on every commit)</li>
+          <li>Pre-fill sub-tasks tags and location with that of their parent</li>
+          <li>Implement time tracking (between start and done) and `spent:` syntax (suggested by savion)</li>
+          <li>Implement recursive subtask reset ( https://github.com/trougnouf/cfait/discussions/5#discussioncomment-15734983 ) and unify task completion logic</li>
+          <li>Add boolean search with |or, -not and parentheses (and implied and) ( https://github.com/trougnouf/cfait/issues/4 )</li>
+          <li>Show blocking task (in addition to blocked-by), link both ways</li>
+          <li>Highlight search and sidebar filters red when they result in an empty task list</li>
+          <li>(android) Replace {snooze (preset), snooze..., done} with {snooze..., start, done} and show time spent after start</li>
+          <li>Add work session recording w/ matching calendar events, show completed datetime in the task list and expose COMPLETED date tracking with done: property in the smart syntax</li>
+          <li>Use distinct completed/canceled icons and full datetime for done: tasks (syntax and UI)</li>
+          <li>Add Trash calendar (unrelated: fix calendar event creation datetime to better match completion time)</li>
+          <li>(gui) Keyboard shortcuts parity with TUI</li>
+          <li>(store) One-step increase/decrease from default priority</li>
+          <li>(android) Second BackHandler to exit search UI, clear yanked task, clear search text, and clear tag/location filters before exiting the app</li>
+          <li>Expose blocks:link_to_other_task in GUI and Android task list</li>
+          <li>Reduce tags&amp;locations list and counts based on search terms</li>
+          <li>Handle multi-task start/pause/stop and unify alarm snooze/dismiss; add Task.handle_* helpers and mobile boxed mutator; improve time/session tracking, ICS duration &amp; recurrence handling, and settings UI typing/layout</li>
+          <li>Reduce duplicate alarms</li>
+          <li>Make sub-tasks of blocked tasks implicitly blocked and sort entire group to a lower bin</li>
+          <li>Improve calendar events creation length: all-day same-day -&gt; single all-day event, all-day different days -&gt; start and due event, specific time (&lt;24h) -&gt; span length of event, specific time (&gt;24h) -&gt; two separate 1h events</li>
+          <li>Further calendar events improvements (and fix toggle-all button)</li>
+          <li>(calendar) Improve calendar events handling: merge 2 consecutive 1-day tasks into 2, avoid copying RRULE of completed recurrent tasks</li>
+          <li>Centralize help and document keyboard shortcuts in GUI</li>
+          <li>Ensure sessions information is kept across clients, more calendar integration improvements&amp;fixes&amp;tests</li>
+          <li>Add background synchronization (Android) and synchronization daemon (desktop) ( https://codeberg.org/trougnouf/cfait/issues/30 )</li>
+          <li>Add AND/OR tag selection in Android, (all clients) default to AND and fix OR tags and locations selection s.t. others are not filtered out</li>
+          <li>Ensure multiple clients/instances can share the same local collection concurrently</li>
+          <li>Parse "@daily 09:00" format (shorter than "@daily @today 09:00")</li>
+          <li>(gui) First esc does not clear the search</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>(model) Fix missing and flickering tags introduced in refactor</li>
+          <li>(tui) Suppress alarm in completed/canceled tasks</li>
+          <li>(recurrence) Centralize task recycling logic in model and fix various recurrence (incl. cancellation, until, smart-syntax) bugs</li>
+          <li>(recurrence) Use local date for all-day search floor to prevent skipping occurrences ( https://github.com/trougnouf/cfait/discussions/5#discussioncomment-15652213 )</li>
+          <li>(android) Explicitly follow redirects (fix some Android connection issues, reported by yknip)</li>
+          <li>(android) Fix Android 13 timezone issue reported by busterkeaton</li>
+          <li>(gui) Retain scroll position when yanking a task</li>
+          <li>(sync) Handle fatal 400/403/415 errors and duplicate CREATEs in journal sync, unblocking stuck queues</li>
+          <li>(sync) Reconstruct missing HREF in Update actions to prevent PUT / 403 errors</li>
+          <li>(ci) Fix Android rolling release</li>
+          <li>(android) Resolve infinite loading in TaskDetailScreen by using direct task lookup</li>
+          <li>(android) Restore custom redirect logic but more secure, https://codeberg.org/trougnouf/cfait/issues/28</li>
+          <li>(gui) Ensure tasks from all visible calendars are shown in the task list</li>
+          <li>(windows) Force server-side decorations on Windows 10 (fixes cursor shifting issue reported by busterkeaton) and add --force-csd launch option</li>
+          <li>(gui) Hide tasks from disabled calendars (reported by busterkeaton)</li>
+          <li>(android) Color past due-dates red for all-day tasks</li>
+          <li>(sorting) Fix priority inheritence in paused sub-tasks</li>
+          <li>(android) Fix android client initialization</li>
+          <li>(android) Restore settings panel scroll</li>
+          <li>(pkg) Fix Arch cfait-git PKGBUILD's pkgver</li>
+          <li>Fix deletion from recovery calendar and hide recovery and trash local calendars when empty</li>
+          <li>(sort) Propagate sort value from sub-tasks to parents</li>
+          <li>Show timer in task list when there is no provided time estimation (GUI/TUI)</li>
+        </ul>
+        <p>Other:</p>
+        <ul>
+          <li>Implement UID-based upsert for imports and auto-repair duplicates on load ( https://github.com/trougnouf/cfait/issues/8 )</li>
+          <li>(android) Handle coroutine cancellation gracefully</li>
+          <li>Replace calendar with collection wording in CLI</li>
+        </ul>
+        <p>Refactor:</p>
+        <ul>
+          <li>Centralize view logic (per-client shadowing logic -&gt; Task::resolve_display_properties)</li>
+          <li>Optimize TaskStore perf (O(1) lookups) and centralize visibility logic</li>
+          <li>Decompose Task god struct</li>
+          <li>Modularize sync logic</li>
+          <li>Transition from global AppPaths to AppContext</li>
+          <li>Transition from global AppPaths to AppContext (everywhere)</li>
+          <li>Switch from custom redirect.rs to tower_http::follow_redirect</li>
+          <li>Centralize task logic into a new shared controller</li>
+          <li>Refactor client sync logic, consolidate CLI help</li>
+        </ul>
+        <p>Documentation:</p>
+        <ul>
+          <li>Self-document config file</li>
+          <li>Switch from title case to sentence case and replace the term "calendar" with "collection"</li>
+        </ul>
+        <p>Performance:</p>
+        <ul>
+          <li>Optimize event deletion speed</li>
+        </ul>
+        <p>Styling:</p>
+        <ul>
+          <li>Make overdue date(time) red in task list (suggested by Kursti)</li>
+          <li>Syntax highlighting search queries and +cal/-cal ( https://codeberg.org/trougnouf/cfait/issues/24 )</li>
+          <li>(android) Contrasting tag colors ( https://codeberg.org/trougnouf/cfait/issues/27 )</li>
+          <li>(GUI, TUI) Dim completed &amp; canceled tasks, add strikethrough_completed advanced config (suggested by busterkeaton)</li>
+          <li>(windows) Embed application icon (reported by busterkeaton)</li>
+        </ul>
+        <p>Testing:</p>
+        <ul>
+          <li>Android rolling release is built only on successful tets</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>(release) Update flathub screenshots</li>
+          <li>(release) Bump version up due to accidental previously yanked v0.5.0</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.9" date="2026-01-28">
       <description>
         <p>Features:</p>

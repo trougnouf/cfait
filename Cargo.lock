@@ -795,7 +795,7 @@ checksum = "6d43a04d8753f35258c91f8ec639f792891f748a1edbd759cf1dcea3382ad83c"
 
 [[package]]
 name = "cfait"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "android_logger",
  "anyhow",
