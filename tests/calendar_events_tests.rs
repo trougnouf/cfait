@@ -9,8 +9,6 @@ fn parse(input: &str) -> Task {
     Task::new(input, &aliases, None)
 }
 
-// ... existing parser tests ...
-
 #[test]
 fn test_event_generation_both_dates_short_span() {
     let mut task = parse("Conference");
@@ -77,8 +75,6 @@ fn test_event_generation_with_duration() {
     assert!(ics.contains("DTSTART"));
     assert!(ics.contains("DTEND"));
 }
-
-// ... existing helper tests ...
 
 #[test]
 fn test_event_long_span_with_specific_times() {

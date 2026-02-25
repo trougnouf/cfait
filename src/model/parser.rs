@@ -1967,14 +1967,66 @@ pub fn apply_smart_input(
 
             // Recurrence, Date, or Weekday
             if let Some(rrule) = parse_recurrence(val) {
-                task.rrule = Some(rrule);
+                task.rrule = Some(rrule.clone());
                 has_recurrence = true;
+
+                // Look ahead for time (e.g. "@daily 09:00")
+                if i + consumed < stream.len() {
+                    let potential_time = &stream[i + consumed];
+                    if let Some(t) = parse_time_string(potential_time) {
+                        let today = Local::now().date_naive();
+                        let first_date = calculate_first_occurrence(&rrule, today);
+
+                        let dt_specific = first_date
+                            .and_time(t)
+                            .and_local_timezone(Local)
+                            .unwrap()
+                            .with_timezone(&Utc);
+
+                        let date_val = DateType::Specific(dt_specific);
+                        if set_start {
+                            task.dtstart = Some(date_val.clone());
+                        }
+                        if set_due {
+                            task.due = Some(date_val.clone());
+                        }
+                        // Defaulting: ensure dtstart/due are set appropriately when not explicitly requested
+                        if !set_start {
+                            task.dtstart = Some(date_val.clone());
+                        }
+                        if !set_due {
+                            task.due = Some(date_val.clone());
+                        }
+                        consumed += 1;
+                    }
+                }
             } else if token.starts_with("rec:") {
                 if let Some((interval, unit, _)) = parse_amount_and_unit(val, None, false) {
                     let freq = parse_freq_from_unit(&unit);
                     if !freq.is_empty() {
-                        task.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
+                        let rrule_str = format!("FREQ={};INTERVAL={}", freq, interval);
+                        task.rrule = Some(rrule_str.clone());
                         has_recurrence = true;
+
+                        // Check for time (e.g. "rec:2d 09:00")
+                        if i + consumed < stream.len() {
+                            let potential_time = &stream[i + consumed];
+                            if let Some(t) = parse_time_string(potential_time) {
+                                let today = Local::now().date_naive();
+                                let first_date = calculate_first_occurrence(&rrule_str, today);
+
+                                let dt_specific = first_date
+                                    .and_time(t)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc);
+
+                                let date_val = DateType::Specific(dt_specific);
+                                task.due = Some(date_val.clone());
+                                task.dtstart = Some(date_val);
+                                consumed += 1;
+                            }
+                        }
                     } else {
                         summary_words.push(unescape(token));
                     }
@@ -2077,15 +2129,6 @@ pub fn apply_smart_input(
             }
         } else {
             summary_words.push(unescape(token));
-
-            // FIX 4: Prevent time tokens being duplicated in summary.
-            // If the next token is a time string and we didn't consume it above,
-            // that means this token was supposed to be a date-time anchor that failed.
-            if is_time_format(token) {
-                // We just consumed a lone time token; do nothing.
-            } else {
-                // If a token was not recognized as a keyword, it's safe to add.
-            }
         }
         i += consumed;
     }
@@ -2145,8 +2188,9 @@ pub fn apply_smart_input(
 
     // Ensure start date cannot be strictly after due date
     if let (Some(start), Some(due)) = (&task.dtstart, &task.due)
-        && start.to_start_comparison_time() > due.to_comparison_time() {
-            // Clamp start to due to avoid invalid ranges where start > due.
-            task.dtstart = Some(due.clone());
-        }
+        && start.to_start_comparison_time() > due.to_comparison_time()
+    {
+        // Clamp start to due to avoid invalid ranges where start > due.
+        task.dtstart = Some(due.clone());
+    }
 }

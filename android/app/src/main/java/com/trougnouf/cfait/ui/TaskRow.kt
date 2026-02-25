@@ -502,7 +502,6 @@ fun TaskRow(
     }
 }
 
-// ... TaskCheckbox and CompactTagRow remain unchanged ...
 @Composable
 fun TaskCheckbox(
     task: MobileTask,

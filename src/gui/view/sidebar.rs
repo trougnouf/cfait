@@ -167,7 +167,6 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     .into()
 }
 
-// ... format_mins and DurationOpt unchanged ...
 // (Omitting to save space)
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DurationOpt(Option<u32>, String);

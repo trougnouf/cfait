@@ -141,6 +141,8 @@ The APK will be in `android/app/build/outputs/apk/release/`.
 
 You don't need to click through menus to set the due/start date, length, priority, recurrence, tags, location,... Just type.
 
+The clients are self-documenting; the most up-to-date documentation should be provided in the built-in help.
+
 ### Basics
 | Property | Syntax | Description |
 | :--- | :--- | :--- |
