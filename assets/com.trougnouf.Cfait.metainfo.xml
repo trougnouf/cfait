@@ -46,12 +46,12 @@
   <screenshots>
     <screenshot type="default">
       <image
-            >https://commons.wikimedia.org/wiki/Special:Redirect/file/Cfait_task_manager_v0.4.6_screenshot_(GUI).png</image>
+            >https://commons.wikimedia.org/wiki/Special:Redirect/file/Cfait_task_manager_v0.5.0_screenshot_(GUI).png</image>
       <caption xml:lang="en">The Graphical User Interface</caption>
     </screenshot>
     <screenshot>
       <image
-            >https://commons.wikimedia.org/wiki/Special:Redirect/file/Cfait_task_manager_v0.4.6_screenshot_(TUI).png</image>
+            >https://commons.wikimedia.org/wiki/Special:Redirect/file/Cfait_task_manager_v0.5.0_screenshot_(TUI).png</image>
       <caption xml:lang="en">The Terminal User Interface</caption>
     </screenshot>
   </screenshots>
@@ -82,34 +82,53 @@
       <description>
         <p>Features:</p>
         <ul>
-          <li>(store) Group tags (and sort them) in a case-insensitive way in the tags list (requested by Christian Meixner)</li>
-          <li>Add a (weighted) random task selector ( https://codeberg.org/trougnouf/cfait/issues/17 )</li>
+          <li
+                    >(store) Group tags (and sort them) in a case-insensitive way in the tags list (requested by Christian Meixner)</li>
+          <li
+                    >Add a (weighted) random task selector ( https://codeberg.org/trougnouf/cfait/issues/17 )</li>
           <li>(randomizer) Only pick from is:ready tasks</li>
-          <li>(sorting) Sort done/canceled tasks by most recently done/canceled first</li>
-          <li>(core) Send user agent to CalDAV server (suggested by Geoffrey Frogeye)</li>
+          <li
+                    >(sorting) Sort done/canceled tasks by most recently done/canceled first</li>
+          <li
+                    >(core) Send user agent to CalDAV server (suggested by Geoffrey Frogeye)</li>
           <li>(android) Add export all data debug option</li>
           <li>(core) Detect and reject non-VTODO collections</li>
-          <li>(core) Move tasks rejected by the CalDAV server to a local recovery calendar</li>
-          <li>(android) Remember tags and locations when coming back from a task's details</li>
-          <li>(recurrence) Switch from respawning to recycling + regeneration (compatibility with other clients, https://github.com/trougnouf/cfait/discussions/5 )</li>
+          <li
+                    >(core) Move tasks rejected by the CalDAV server to a local recovery calendar</li>
+          <li
+                    >(android) Remember tags and locations when coming back from a task's details</li>
+          <li
+                    >(recurrence) Switch from respawning to recycling + regeneration (compatibility with other clients, https://github.com/trougnouf/cfait/discussions/5 )</li>
           <li>Make yanked task clippy/sticky (GUI, TUI)</li>
-          <li>(gui) Escape exits the input field then clears the yanked task then the search filter then the tags/locations ( https://codeberg.org/trougnouf/cfait/issues/9 )</li>
-          <li>Condense start-due datetime in task list when a task has the same date but different times</li>
+          <li
+                    >(gui) Escape exits the input field then clears the yanked task then the search filter then the tags/locations ( https://codeberg.org/trougnouf/cfait/issues/9 )</li>
+          <li
+                    >Condense start-due datetime in task list when a task has the same date but different times</li>
           <li>Link done recurrence snapshots to their parent</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
-          <li>(rfc5545) Clamp priority to 9 ( https://codeberg.org/trougnouf/cfait/issues/22 )</li>
-          <li>(android) Show local timezone (not UTC) in tasks list ( https://codeberg.org/trougnouf/cfait/issues/23 )</li>
-          <li>(android) Add imePadding s.t. keyboard does not hide bottom of settings screen ( https://codeberg.org/trougnouf/cfait/issues/23 )</li>
-          <li>(recurrence) Preserve both start and due date(time) in recurrence</li>
-          <li>(migration) Ensure that tasks are present on the server before deleting them from the local store</li>
-          <li>(core) Propagate newly created href to journal and guard empty DELETE</li>
-          <li>(android) Ensure task migration message does not repeatedly come up</li>
-          <li>(gui) Fix auto-scroll (focus to current task) in filtered view</li>
+          <li
+                    >(rfc5545) Clamp priority to 9 ( https://codeberg.org/trougnouf/cfait/issues/22 )</li>
+          <li
+                    >(android) Show local timezone (not UTC) in tasks list ( https://codeberg.org/trougnouf/cfait/issues/23 )</li>
+          <li
+                    >(android) Add imePadding s.t. keyboard does not hide bottom of settings screen ( https://codeberg.org/trougnouf/cfait/issues/23 )</li>
+          <li
+                    >(recurrence) Preserve both start and due date(time) in recurrence</li>
+          <li
+                    >(migration) Ensure that tasks are present on the server before deleting them from the local store</li>
+          <li
+                    >(core) Propagate newly created href to journal and guard empty DELETE</li>
+          <li
+                    >(android) Ensure task migration message does not repeatedly come up</li>
+          <li
+                    >(gui) Fix auto-scroll (focus to current task) in filtered view</li>
           <li>Fix increase/decrease priority action</li>
-          <li>(recurrence) Remove COMPLETED timestamp on recurring task recycling ( https://github.com/trougnouf/cfait/discussions/5 )</li>
-          <li>(tui) Ensure tags are not cropped; use visual width instead of char count ( https://codeberg.org/trougnouf/cfait/issues/26 )</li>
+          <li
+                    >(recurrence) Remove COMPLETED timestamp on recurring task recycling ( https://github.com/trougnouf/cfait/discussions/5 )</li>
+          <li
+                    >(tui) Ensure tags are not cropped; use visual width instead of char count ( https://codeberg.org/trougnouf/cfait/issues/26 )</li>
         </ul>
         <p>Documentation:</p>
         <ul>
@@ -117,7 +136,8 @@
         </ul>
         <p>Styling:</p>
         <ul>
-          <li>(android) Tighter task list layout ( proposed by busterkeaton )</li>
+          <li
+                    >(android) Tighter task list layout ( proposed by busterkeaton )</li>
           <li>(android) Fix spacing of loading/spinning icon</li>
         </ul>
       </description>
@@ -126,40 +146,58 @@
       <description>
         <p>Features:</p>
         <ul>
-          <li>(tasks) Implement time estimation ranges (e.g. ~10m-3h) with compatible search logic</li>
-          <li>(gui) Initial work on keyboard shortcuts ( https://codeberg.org/trougnouf/cfait/issues/9 )</li>
+          <li
+                    >(tasks) Implement time estimation ranges (e.g. ~10m-3h) with compatible search logic</li>
+          <li
+                    >(gui) Initial work on keyboard shortcuts ( https://codeberg.org/trougnouf/cfait/issues/9 )</li>
           <li>(gui) Towards keyboard shortcuts</li>
           <li>(gui) Expandable description field with scroll bar</li>
           <li>(android) Parse new alias definitions in task input bar</li>
-          <li>(gui) Double click to edit a task ( https://codeberg.org/trougnouf/cfait/issues/9 )</li>
-          <li>(tui) Improved task editing experience with enter for newline, basic markdown highlighting, and markdown viewer in the task details view (with plain-text auto-detection to maintain basic newlines) ( https://codeberg.org/trougnouf/cfait/issues/14 )</li>
-          <li>(tui) Support horizontal scrolling in the description editor and multi-byte characters ( https://codeberg.org/trougnouf/cfait/issues/14 )</li>
-          <li>(config) Differentiate between corrupted and missing config files ( https://codeberg.org/trougnouf/cfait/issues/13 )</li>
+          <li
+                    >(gui) Double click to edit a task ( https://codeberg.org/trougnouf/cfait/issues/9 )</li>
+          <li
+                    >(tui) Improved task editing experience with enter for newline, basic markdown highlighting, and markdown viewer in the task details view (with plain-text auto-detection to maintain basic newlines) ( https://codeberg.org/trougnouf/cfait/issues/14 )</li>
+          <li
+                    >(tui) Support horizontal scrolling in the description editor and multi-byte characters ( https://codeberg.org/trougnouf/cfait/issues/14 )</li>
+          <li
+                    >(config) Differentiate between corrupted and missing config files ( https://codeberg.org/trougnouf/cfait/issues/13 )</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
-          <li>(android) Maintain keyboard after adding task and jump to task instantly instead of with animation</li>
-          <li>(recurrence) Preserve task UID on cancellation to prevent duplication</li>
-          <li>(tui) Restore onboarding ( https://codeberg.org/trougnouf/cfait/issues/13 )</li>
-          <li>(gui) Load iced_aw fonts to render correct icons in color picker (reported by beh bah)</li>
-          <li>(android) Disable keyboard autocorrect for login fields and enable url / password mode ( https://codeberg.org/trougnouf/cfait/issues/15 )</li>
-          <li>(android) Fix cursor position in new task field and adjust size of task description field when keyboard is out</li>
-          <li>(tests) Properly isolate all write tests in a temporary directory (reported by Geoffrey Frogeye)</li>
-          <li>(model) Fix stuck recurring tasks by normalizing AllDay/EXDATE calculations to UTC</li>
+          <li
+                    >(android) Maintain keyboard after adding task and jump to task instantly instead of with animation</li>
+          <li
+                    >(recurrence) Preserve task UID on cancellation to prevent duplication</li>
+          <li
+                    >(tui) Restore onboarding ( https://codeberg.org/trougnouf/cfait/issues/13 )</li>
+          <li
+                    >(gui) Load iced_aw fonts to render correct icons in color picker (reported by beh bah)</li>
+          <li
+                    >(android) Disable keyboard autocorrect for login fields and enable url / password mode ( https://codeberg.org/trougnouf/cfait/issues/15 )</li>
+          <li
+                    >(android) Fix cursor position in new task field and adjust size of task description field when keyboard is out</li>
+          <li
+                    >(tests) Properly isolate all write tests in a temporary directory (reported by Geoffrey Frogeye)</li>
+          <li
+                    >(model) Fix stuck recurring tasks by normalizing AllDay/EXDATE calculations to UTC</li>
           <li>(gui) Auto-scroll to task (linked or up/down)</li>
         </ul>
         <p>Performance:</p>
         <ul>
-          <li>Pre-calculate and cache is_blocked status and parent attributes (fixes O(N^2) rendering lag)</li>
+          <li
+                    >Pre-calculate and cache is_blocked status and parent attributes (fixes O(N^2) rendering lag)</li>
         </ul>
         <p>Styling:</p>
         <ul>
-          <li>Use consistant style for start - due date(time) (hourglass_empty - hourglass_full), avoid identical start/due date(time) repetitions</li>
-          <li>(gui) Restore calendar icon for due date(time) when it's the only date(time) shown</li>
+          <li
+                    >Use consistant style for start - due date(time) (hourglass_empty - hourglass_full), avoid identical start/due date(time) repetitions</li>
+          <li
+                    >(gui) Restore calendar icon for due date(time) when it's the only date(time) shown</li>
         </ul>
         <p>Miscellaneous Tasks:</p>
         <ul>
-          <li>(android) Bump min SDK to 28 (Android 9) due to uniffi v0.31 update</li>
+          <li
+                    >(android) Bump min SDK to 28 (Android 9) due to uniffi v0.31 update</li>
           <li>Move Cargo.lock update to every release and disable check</li>
         </ul>
       </description>
@@ -169,15 +207,21 @@
         <p>Features:</p>
         <ul>
           <li>Show start date (if not yet started) in tasks list</li>
-          <li>Add ^@ syntax (sets both start and due date(time)). sorting: if parent is canceled/paused/done, use that for the whole group</li>
-          <li>Implement multi-select filtering and focus for tags &amp; locations, make the clear icon always visible, improve UI and make it consistent between GUI and Android</li>
-          <li>feat: implement multi-select filtering and focus for tags &amp; locations and make the clear icon always visible on Android (feature parity with GUI)</li>
+          <li
+                    >Add ^@ syntax (sets both start and due date(time)). sorting: if parent is canceled/paused/done, use that for the whole group</li>
+          <li
+                    >Implement multi-select filtering and focus for tags &amp; locations, make the clear icon always visible, improve UI and make it consistent between GUI and Android</li>
+          <li
+                    >feat: implement multi-select filtering and focus for tags &amp; locations and make the clear icon always visible on Android (feature parity with GUI)</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
-          <li>Ignore Release KeyEvents (fixes doubled characters on Windows reported by Christian Meixner</li>
-          <li>(adapter) Use X-ESTIMATED-DURATION for all-day tasks to fix RFC 5545 / iCalendar standard compliance</li>
-          <li>(android) Hide keyboard after adding task s.t. it is visible when we jump to it ( https://codeberg.org/trougnouf/cfait/issues/7 ), ensure that the jump-to-top icon hiden after 3-seconds and after getting pressed</li>
+          <li
+                    >Ignore Release KeyEvents (fixes doubled characters on Windows reported by Christian Meixner</li>
+          <li
+                    >(adapter) Use X-ESTIMATED-DURATION for all-day tasks to fix RFC 5545 / iCalendar standard compliance</li>
+          <li
+                    >(android) Hide keyboard after adding task s.t. it is visible when we jump to it ( https://codeberg.org/trougnouf/cfait/issues/7 ), ensure that the jump-to-top icon hiden after 3-seconds and after getting pressed</li>
         </ul>
         <p>Documentation:</p>
         <ul>
@@ -195,24 +239,31 @@
         <p>Features:</p>
         <ul>
           <li>(gui) Navigate back to tasks list after moving a task</li>
-          <li>(sorting) Sort task and its sub-task(s) according to the first sort_rank of the whole group</li>
+          <li
+                    >(sorting) Sort task and its sub-task(s) according to the first sort_rank of the whole group</li>
           <li>(sorting) Propagate more tie-breaker fields from sub-tasks</li>
           <li>(gui) Ensure resize handles are available in every panel</li>
           <li>(parser) Parse time in recurrences</li>
-          <li>(calendar) Move completed tasks to the time they were done (and add undated done tasks)</li>
+          <li
+                    >(calendar) Move completed tasks to the time they were done (and add undated done tasks)</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
           <li>Moving a task no longer leaves the old calendar event</li>
-          <li>(windows) Avoid spawning a console window with the GUI ( https://codeberg.org/trougnouf/cfait/issues/8 )</li>
-          <li>Fix respawn logic and timezone handling for recurring tasks (reported by Antoine Bargel)</li>
+          <li
+                    >(windows) Avoid spawning a console window with the GUI ( https://codeberg.org/trougnouf/cfait/issues/8 )</li>
+          <li
+                    >Fix respawn logic and timezone handling for recurring tasks (reported by Antoine Bargel)</li>
           <li>(android) Correct cursor position in high DPI screens</li>
-          <li>Fix legacy data migration and floating time parsing for all-day tasks</li>
-          <li>(recurrence) Fix respawn logic and timezone handling for recurring tasks (for realz this time)</li>
+          <li
+                    >Fix legacy data migration and floating time parsing for all-day tasks</li>
+          <li
+                    >(recurrence) Fix respawn logic and timezone handling for recurring tasks (for realz this time)</li>
         </ul>
         <p>Refactor:</p>
         <ul>
-          <li>(gui) Reduce theme repetition, rm fragile manual count and position-dependent code</li>
+          <li
+                    >(gui) Reduce theme repetition, rm fragile manual count and position-dependent code</li>
         </ul>
         <p>Documentation:</p>
         <ul>
@@ -225,10 +276,14 @@
           <li>(gui) Add Random theme and make it the default</li>
           <li>(gui) Switch to fastrand randomness generator</li>
           <li>(gui) Add two rounded corners</li>
-          <li>(gui) Allow server-side decorations with --force-ssd flag ( https://codeberg.org/trougnouf/cfait/issues/11 )</li>
-          <li>Show calendar's name in its own color, add ++... with each calendar's color (GUI, Android, https://codeberg.org/trougnouf/cfait/issues/4 proposed by devinside)</li>
-          <li>(android) Add theme switch w/ light, dark, dynamic light, dynamic dark, default to dynamic auto-detect ( https://codeberg.org/trougnouf/cfait/issues/6 proposed by devinside )</li>
-          <li>(gui) Only show calendar+++ when not in calendar list view. chore: update screenshots</li>
+          <li
+                    >(gui) Allow server-side decorations with --force-ssd flag ( https://codeberg.org/trougnouf/cfait/issues/11 )</li>
+          <li
+                    >Show calendar's name in its own color, add ++... with each calendar's color (GUI, Android, https://codeberg.org/trougnouf/cfait/issues/4 proposed by devinside)</li>
+          <li
+                    >(android) Add theme switch w/ light, dark, dynamic light, dynamic dark, default to dynamic auto-detect ( https://codeberg.org/trougnouf/cfait/issues/6 proposed by devinside )</li>
+          <li
+                    >(gui) Only show calendar+++ when not in calendar list view. chore: update screenshots</li>
         </ul>
         <p>Miscellaneous Tasks:</p>
         <ul>
