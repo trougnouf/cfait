@@ -178,7 +178,27 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.update_or_add_task(updated.clone());
                         refresh_filtered_tasks(app);
 
+                        let _ = LocalStorage::modify_for_href(
+                            app.ctx.as_ref(),
+                            LOCAL_TRASH_HREF,
+                            |all| {
+                                if let Some(idx) = all.iter().position(|t| t.uid == updated.uid) {
+                                    all[idx] = updated.clone();
+                                } else {
+                                    all.push(updated.clone());
+                                }
+                            },
+                        );
+
                         if original.calendar_href.starts_with("local://") {
+                            let task_clone = original.clone();
+                            let _ = LocalStorage::modify_for_href(
+                                app.ctx.as_ref(),
+                                &original.calendar_href,
+                                |all| {
+                                    all.retain(|t| t.uid != task_clone.uid);
+                                },
+                            );
                             return Task::none();
                         } else if let Some(client) = &app.client {
                             return Task::perform(
@@ -613,6 +633,25 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             {
                 app.selected_uid = Some(task_uid);
                 refresh_filtered_tasks(app);
+
+                if original.calendar_href.starts_with("local://") {
+                    let task_clone = original.clone();
+                    let _ = LocalStorage::modify_for_href(
+                        app.ctx.as_ref(),
+                        &original.calendar_href,
+                        |all| {
+                            all.retain(|t| t.uid != task_clone.uid);
+                        },
+                    );
+                }
+                if target_href.starts_with("local://") {
+                    let mut moved = original.clone();
+                    moved.calendar_href = target_href.clone();
+                    let _ = LocalStorage::modify_for_href(app.ctx.as_ref(), &target_href, |all| {
+                        all.push(moved);
+                    });
+                }
+
                 if let Some(client) = &app.client {
                     return Task::perform(
                         async_move_wrapper(client.clone(), original.clone(), target_href),
@@ -620,7 +659,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     );
                 } else {
                     app.unsynced_changes = true;
-                    let _ = Journal::push(app.ctx.as_ref(), Action::Move(original, target_href));
+
+                    if !original.calendar_href.starts_with("local://")
+                        && !target_href.starts_with("local://")
+                    {
+                        let _ =
+                            Journal::push(app.ctx.as_ref(), Action::Move(original, target_href));
+                    } else if !original.calendar_href.starts_with("local://")
+                        && target_href.starts_with("local://")
+                    {
+                        let _ = Journal::push(app.ctx.as_ref(), Action::Delete(original));
+                    } else if original.calendar_href.starts_with("local://")
+                        && !target_href.starts_with("local://")
+                    {
+                        let mut moved = original.clone();
+                        moved.calendar_href = target_href;
+                        let _ = Journal::push(app.ctx.as_ref(), Action::Create(moved));
+                    }
                 }
             }
             Task::none()

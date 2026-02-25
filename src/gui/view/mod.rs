@@ -65,6 +65,18 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     app.calendars
                         .iter()
                         .filter(|c| !app.disabled_calendars.contains(&c.href))
+                        .filter(|c| {
+                            if c.href == crate::storage::LOCAL_TRASH_HREF
+                                || c.href == "local://recovery"
+                            {
+                                app.store
+                                    .calendars
+                                    .get(&c.href)
+                                    .is_some_and(|m| !m.is_empty())
+                            } else {
+                                true
+                            }
+                        })
                         .count() as f32
                         * 44.0
                 }

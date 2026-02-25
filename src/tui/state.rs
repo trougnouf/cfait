@@ -194,6 +194,16 @@ impl AppState {
         self.calendars
             .iter()
             .filter(|c| !self.disabled_calendars.contains(&c.href))
+            .filter(|c| {
+                if c.href == crate::storage::LOCAL_TRASH_HREF || c.href == "local://recovery" {
+                    self.store
+                        .calendars
+                        .get(&c.href)
+                        .is_some_and(|map| !map.is_empty())
+                } else {
+                    true
+                }
+            })
             .collect()
     }
 
@@ -309,11 +319,7 @@ impl AppState {
     // --- HELPER FOR SIDEBAR LENGTH ---
     fn get_sidebar_len(&self) -> usize {
         match self.sidebar_mode {
-            SidebarMode::Calendars => self
-                .calendars
-                .iter()
-                .filter(|c| !self.disabled_calendars.contains(&c.href))
-                .count(),
+            SidebarMode::Calendars => self.get_filtered_calendars().len(),
             SidebarMode::Categories => self.cached_categories.len(),
             SidebarMode::Locations => self.cached_locations.len(),
         }

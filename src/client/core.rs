@@ -445,10 +445,12 @@ impl RustyClient {
                 }
             }
 
-            // Include local calendars; but only show recovery if it contains tasks
+            // Include local calendars; but only show recovery/trash if they contain tasks
             if let Ok(local_cals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
                 for local_cal in local_cals {
-                    if local_cal.href == "local://recovery" {
+                    if local_cal.href == "local://recovery"
+                        || local_cal.href == crate::storage::LOCAL_TRASH_HREF
+                    {
                         if let Ok(tasks) =
                             LocalStorage::load_for_href(self.ctx.as_ref(), &local_cal.href)
                             && !tasks.is_empty()
@@ -470,7 +472,9 @@ impl RustyClient {
                     if calendars.iter().any(|c| c.href == local_cal.href) {
                         continue;
                     }
-                    if local_cal.href == "local://recovery" {
+                    if local_cal.href == "local://recovery"
+                        || local_cal.href == crate::storage::LOCAL_TRASH_HREF
+                    {
                         if let Ok(tasks) =
                             LocalStorage::load_for_href(self.ctx.as_ref(), &local_cal.href)
                             && !tasks.is_empty()
@@ -1012,8 +1016,37 @@ impl RustyClient {
         task: &Task,
         new_calendar_href: &str,
     ) -> Result<(Task, Vec<String>), String> {
+        // Local -> Local move
+        if task.calendar_href.starts_with("local://") && new_calendar_href.starts_with("local://") {
+            let mut new_task = task.clone();
+            new_task.calendar_href = new_calendar_href.to_string();
+
+            let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), new_calendar_href, |all| {
+                all.push(new_task.clone());
+            });
+            let _ = self.delete_task(task).await;
+            return Ok((new_task, vec![]));
+        }
+
+        // Remote -> Local move
+        if !task.calendar_href.starts_with("local://") && new_calendar_href.starts_with("local://")
+        {
+            let mut new_task = task.clone();
+            new_task.calendar_href = new_calendar_href.to_string();
+
+            let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), new_calendar_href, |all| {
+                all.push(new_task.clone());
+            });
+
+            Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()))
+                .map_err(|e| e.to_string())?;
+            let logs = self.sync_journal().await?;
+            return Ok((new_task, logs));
+        }
+
         // Local->remote migration: attempt create+verify, otherwise journal a move.
-        if task.calendar_href.starts_with("local://") {
+        if task.calendar_href.starts_with("local://") && !new_calendar_href.starts_with("local://")
+        {
             let mut new_task = task.clone();
             new_task.calendar_href = new_calendar_href.to_string();
             let cal_path = new_calendar_href.trim_end_matches('/');
@@ -1051,7 +1084,7 @@ impl RustyClient {
             }
         }
 
-        // Otherwise, queue a Move action in the journal and trigger sync.
+        // Otherwise (Remote -> Remote), queue a Move action in the journal and trigger sync.
         Journal::push(
             self.ctx.as_ref(),
             Action::Move(task.clone(), new_calendar_href.to_string()),

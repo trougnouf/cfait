@@ -19,12 +19,25 @@ use std::time::Duration;
 
 // --- CALENDARS ---
 pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
-    let are_all_visible = app
+    let visible_calendars: Vec<_> = app
         .calendars
         .iter()
         .filter(|c| !app.disabled_calendars.contains(&c.href))
-        // Do not factor the Trash calendar into the "Show all" toggle state
-        .filter(|c| c.href != LOCAL_TRASH_HREF)
+        .filter(|c| {
+            if c.href == LOCAL_TRASH_HREF || c.href == "local://recovery" {
+                app.store
+                    .calendars
+                    .get(&c.href)
+                    .is_some_and(|map| !map.is_empty())
+            } else {
+                true
+            }
+        })
+        .collect();
+
+    let are_all_visible = visible_calendars
+        .iter()
+        .filter(|c| c.href != LOCAL_TRASH_HREF && c.href != "local://recovery")
         .all(|c| !app.hidden_calendars.contains(&c.href));
 
     let theme = app.theme();
@@ -54,21 +67,8 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
 
     // List generation (mostly unchanged logic, just wrapped in scrollable at end)
     let list = column(
-        app.calendars
-            .iter()
-            .filter(|c| !app.disabled_calendars.contains(&c.href))
-            .filter(|c| {
-                // SPECIAL TRASH LOGIC: Only show trash calendar when it contains tasks
-                if c.href == LOCAL_TRASH_HREF {
-                    if let Some(map) = app.store.calendars.get(LOCAL_TRASH_HREF) {
-                        !map.is_empty()
-                    } else {
-                        false
-                    }
-                } else {
-                    true
-                }
-            })
+        visible_calendars
+            .into_iter()
             .map(|cal| {
                 let is_visible = !app.hidden_calendars.contains(&cal.href);
                 let is_target = app.active_cal_href.as_ref() == Some(&cal.href);

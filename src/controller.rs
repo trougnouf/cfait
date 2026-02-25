@@ -139,7 +139,33 @@ impl TaskController {
             let mut logs = self.persist_change(Action::Create(history)).await?;
 
             if let Some(next) = next_opt {
-                let next_logs = self.persist_change(Action::Update(next)).await?;
+                if next.calendar_href.starts_with("local://") {
+                    let _ = LocalStorage::modify_for_href(
+                        self.ctx.as_ref(),
+                        &next.calendar_href,
+                        |all| {
+                            if let Some(idx) = all.iter().position(|t| t.uid == next.uid) {
+                                all[idx] = next.clone();
+                            } else {
+                                all.push(next.clone());
+                            }
+                        },
+                    );
+                } else {
+                    let next_logs = self.persist_change(Action::Update(next)).await?;
+                    logs.extend(next_logs);
+                }
+            } else if task.calendar_href.starts_with("local://") {
+                let _ =
+                    LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
+                        if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
+                            all[idx] = task.clone();
+                        } else {
+                            all.push(task.clone());
+                        }
+                    });
+            } else {
+                let next_logs = self.persist_change(Action::Update(task)).await?;
                 logs.extend(next_logs);
             }
 
@@ -149,6 +175,18 @@ impl TaskController {
         // Standard update path
         store.update_or_add_task(task.clone());
         drop(store);
+
+        if task.calendar_href.starts_with("local://") {
+            let task_clone = task.clone();
+            let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
+                if let Some(idx) = all.iter().position(|t| t.uid == task_clone.uid) {
+                    all[idx] = task_clone;
+                } else {
+                    all.push(task_clone);
+                }
+            });
+            return Ok(vec![]);
+        }
 
         self.persist_change(Action::Update(task)).await
     }
@@ -182,6 +220,16 @@ impl TaskController {
         if retention == 0 || is_already_trash {
             let (task, _) = store.delete_task(uid).ok_or("Task not found".to_string())?;
             drop(store);
+
+            if task.calendar_href.starts_with("local://") {
+                let task_clone = task.clone();
+                let _ =
+                    LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
+                        all.retain(|t| t.uid != task_clone.uid);
+                    });
+                return Ok(vec![]);
+            }
+
             return self.persist_change(Action::Delete(task)).await;
         }
 
@@ -213,11 +261,24 @@ impl TaskController {
         store.update_or_add_task(updated.clone());
         drop(store);
 
+        let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), LOCAL_TRASH_HREF, |all| {
+            if let Some(idx) = all.iter().position(|t| t.uid == updated.uid) {
+                all[idx] = updated.clone();
+            } else {
+                all.push(updated.clone());
+            }
+        });
+
         // If the original item was remote, persist a Delete action so the server removes it.
         if !original.calendar_href.starts_with("local://") {
             self.persist_change(Action::Delete(original)).await
         } else {
-            // Local source: nothing more to do.
+            // Local source: explicitly remove from original local storage
+            let task_clone = original.clone();
+            let _ =
+                LocalStorage::modify_for_href(self.ctx.as_ref(), &original.calendar_href, |all| {
+                    all.retain(|t| t.uid != task_clone.uid);
+                });
             Ok(vec![])
         }
     }
@@ -337,7 +398,38 @@ impl TaskController {
             .ok_or("Task not found".to_string())?;
         drop(store);
 
-        self.persist_change(Action::Move(original, new_cal_href.to_string()))
-            .await
+        if original.calendar_href.starts_with("local://") {
+            let task_clone = original.clone();
+            let _ =
+                LocalStorage::modify_for_href(self.ctx.as_ref(), &original.calendar_href, |all| {
+                    all.retain(|t| t.uid != task_clone.uid);
+                });
+        }
+
+        if new_cal_href.starts_with("local://") {
+            let mut moved = original.clone();
+            moved.calendar_href = new_cal_href.to_string();
+            let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), new_cal_href, |all| {
+                all.push(moved);
+            });
+        }
+
+        if !original.calendar_href.starts_with("local://") && !new_cal_href.starts_with("local://")
+        {
+            self.persist_change(Action::Move(original, new_cal_href.to_string()))
+                .await
+        } else if !original.calendar_href.starts_with("local://")
+            && new_cal_href.starts_with("local://")
+        {
+            self.persist_change(Action::Delete(original)).await
+        } else if original.calendar_href.starts_with("local://")
+            && !new_cal_href.starts_with("local://")
+        {
+            let mut moved = original.clone();
+            moved.calendar_href = new_cal_href.to_string();
+            self.persist_change(Action::Create(moved)).await
+        } else {
+            Ok(vec![])
+        }
     }
 }

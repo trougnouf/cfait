@@ -138,9 +138,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     let (sidebar_title, sidebar_items) = match state.sidebar_mode {
         SidebarMode::Calendars => {
             let items: Vec<ListItem> = state
-                .calendars
-                .iter()
-                .filter(|c| !state.disabled_calendars.contains(&c.href))
+                .get_filtered_calendars()
+                .into_iter()
                 .map(|c| {
                     let is_target = Some(&c.href) == state.active_cal_href.as_ref();
                     let is_visible = !state.hidden_calendars.contains(&c.href);

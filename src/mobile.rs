@@ -7,7 +7,7 @@ use crate::context::{AppContext, StandardContext};
 use crate::controller::TaskController;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::model::{AlarmTrigger, DateType, Task};
-use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
+use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
 use chrono::{DateTime, Local, NaiveTime, Utc};
 use futures::stream::{self, StreamExt};
@@ -620,9 +620,9 @@ impl CfaitMobile {
         let store = self.controller.store.blocking_lock();
         if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
             for loc in locals {
-                // Special-case: hide empty trash calendar from mobile list
-                if loc.href == LOCAL_TRASH_HREF {
-                    if let Some(map) = store.calendars.get(LOCAL_TRASH_HREF) {
+                // Special-case: hide empty trash and recovery calendars from mobile list
+                if loc.href == crate::storage::LOCAL_TRASH_HREF || loc.href == "local://recovery" {
+                    if let Some(map) = store.calendars.get(crate::storage::LOCAL_TRASH_HREF) {
                         if map.is_empty() {
                             continue;
                         }

@@ -3,7 +3,7 @@
 use crate::config::Config;
 use crate::model::parser::{extract_inline_aliases, validate_alias_integrity};
 use crate::model::{Task, TaskStatus};
-use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF, LocalCalendarRegistry};
+use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::system::SystemEvent;
 use crate::tui::action::{Action, AppEvent, SidebarMode};
 use crate::tui::state::{AppState, Focus, InputMode};
@@ -622,7 +622,7 @@ pub async fn handle_key_event(
             KeyCode::Char('?') => {
                 state.mode = InputMode::Help(crate::help::HelpTab::Keyboard);
                 state.edit_scroll_offset = 0;
-            },
+            }
             KeyCode::Char('q') => return Some(Action::Quit),
             KeyCode::Char('r') => return Some(Action::Refresh),
             KeyCode::Char('R') => {
@@ -811,6 +811,21 @@ pub async fn handle_key_event(
 
                             // 5. Save Trash Copy
                             state.store.update_or_add_task(updated.clone());
+
+                            // Must persist the trashed item to disk
+                            let _ = LocalStorage::modify_for_href(
+                                state.ctx.as_ref(),
+                                LOCAL_TRASH_HREF,
+                                |all| {
+                                    if let Some(idx) = all.iter().position(|t| t.uid == updated.uid)
+                                    {
+                                        all[idx] = updated.clone();
+                                    } else {
+                                        all.push(updated.clone());
+                                    }
+                                },
+                            );
+
                             state.refresh_filtered_view();
                             update_alarms(state);
 
@@ -1059,10 +1074,12 @@ pub async fn handle_key_event(
                     match state.sidebar_mode {
                         SidebarMode::Calendars => {
                             let are_all_visible = state
-                                .calendars
+                                .get_filtered_calendars()
                                 .iter()
-                                .filter(|c| !state.disabled_calendars.contains(&c.href))
-                                .filter(|c| c.href != "local://trash")
+                                .filter(|c| {
+                                    c.href != crate::storage::LOCAL_TRASH_HREF
+                                        && c.href != "local://recovery"
+                                })
                                 .all(|c| !state.hidden_calendars.contains(&c.href));
 
                             if are_all_visible {
