@@ -312,8 +312,25 @@ Date filters support **relative dates** for both due (`@`) and start (`^`) dates
 *   `@@home` (Matches location field)
 *   `@@store:aldi` (Matches location or any sub-location like `@@store:aldi:downtown`)
 
-### Combining Filters
-You can combine multiple filters: `is:ready !<4 ~<1h #gardening` (actionable high-priority gardening tasks under an hour).
+## Logical Combination (Boolean Search)
+You can combine multiple filters using boolean logic (AND, OR, NOT) and group them with parentheses `()`.
+
+*   **AND (Implicit):** Separating terms with a space requires both to match. 
+    *   `is:ready #gardening` (Actionable AND has gardening tag)
+*   **OR (`|`):** Use a pipe character to match either condition.
+    *   `@@aldi | #groceries` (Has either aldi location OR groceries tag)
+*   **NOT (`-`):** Prefix a term with a dash to exclude it.
+    *   `-is:done` (Excludes completed tasks)
+    *   `-#blocked` (Excludes the blocked tag)
+
+**Complex Examples:**
+> `(#work | #school) -is:done`
+> (Tasks tagged work or school that are not done)
+
+> `is:ready !<4 ~<1h (#gardening | @@home)`
+> (Actionable, high-priority tasks under an hour, located at home or tagged gardening)
+
+*Tip: If your search or sidebar filters result in an empty list while you still have tasks in your database, the search/filter icons will turn red to warn you that your filters are hiding everything.*
 
 <a name="task-sorting"></a>
 ## 📊 Task Sorting
