@@ -667,9 +667,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
 
             if let Some(idx) = app.tasks.iter().position(|t| t.uid == t_uid)
-                && !app.tasks[idx].status.is_done() {
-                    return handle(app, Message::ToggleTask(idx, true));
-                }
+                && !app.tasks[idx].status.is_done()
+            {
+                return handle(app, Message::ToggleTask(idx, true));
+            }
             Task::none()
         }
         Message::CancelTaskFromAlarm(t_uid, a_uid) => {
@@ -686,34 +687,36 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::SnoozeAlarm(t_uid, a_uid, mins) => {
             if let Some((task, _)) = app.store.get_task_mut(&t_uid)
-                && task.handle_snooze(&a_uid, mins) {
-                    let t_clone = task.clone();
-                    refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
-                        return Task::perform(
-                            async_update_wrapper(client.clone(), t_clone),
-                            Message::SyncSaved,
-                        );
-                    } else {
-                        handle_offline_update(app, t_clone);
-                    }
+                && task.handle_snooze(&a_uid, mins)
+            {
+                let t_clone = task.clone();
+                refresh_filtered_tasks(app);
+                if let Some(client) = &app.client {
+                    return Task::perform(
+                        async_update_wrapper(client.clone(), t_clone),
+                        Message::SyncSaved,
+                    );
+                } else {
+                    handle_offline_update(app, t_clone);
                 }
+            }
             Task::none()
         }
         Message::DismissAlarm(t_uid, a_uid) => {
             if let Some((task, _)) = app.store.get_task_mut(&t_uid)
-                && task.handle_dismiss(&a_uid) {
-                    let t_clone = task.clone();
-                    refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
-                        return Task::perform(
-                            async_update_wrapper(client.clone(), t_clone),
-                            Message::SyncSaved,
-                        );
-                    } else {
-                        handle_offline_update(app, t_clone);
-                    }
+                && task.handle_dismiss(&a_uid)
+            {
+                let t_clone = task.clone();
+                refresh_filtered_tasks(app);
+                if let Some(client) = &app.client {
+                    return Task::perform(
+                        async_update_wrapper(client.clone(), t_clone),
+                        Message::SyncSaved,
+                    );
+                } else {
+                    handle_offline_update(app, t_clone);
                 }
+            }
             Task::none()
         }
         _ => Task::none(),
@@ -723,10 +726,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 fn handle_offline_update(app: &mut GuiApp, task: TodoTask) {
     app.unsynced_changes = true;
     if task.calendar_href.starts_with("local://") {
-        if let Some(map) = app.store.calendars.get(&task.calendar_href) {
-            let list: Vec<_> = map.values().cloned().collect();
-            let _ = LocalStorage::save_for_href(app.ctx.as_ref(), &task.calendar_href, &list);
-        }
+        let task_clone = task.clone();
+        let _ = LocalStorage::modify_for_href(app.ctx.as_ref(), &task.calendar_href, |all| {
+            if let Some(idx) = all.iter().position(|t| t.uid == task_clone.uid) {
+                all[idx] = task_clone;
+            } else {
+                all.push(task_clone);
+            }
+        });
     } else {
         let _ = Journal::push(app.ctx.as_ref(), Action::Update(task));
     }
@@ -735,10 +742,9 @@ fn handle_offline_update(app: &mut GuiApp, task: TodoTask) {
 fn handle_offline_delete(app: &mut GuiApp, task: TodoTask) {
     app.unsynced_changes = true;
     if task.calendar_href.starts_with("local://") {
-        if let Some(map) = app.store.calendars.get(&task.calendar_href) {
-            let list: Vec<_> = map.values().cloned().collect();
-            let _ = LocalStorage::save_for_href(app.ctx.as_ref(), &task.calendar_href, &list);
-        }
+        let _ = LocalStorage::modify_for_href(app.ctx.as_ref(), &task.calendar_href, |all| {
+            all.retain(|t| t.uid != task.uid);
+        });
     } else {
         let _ = Journal::push(app.ctx.as_ref(), Action::Delete(task));
     }
@@ -892,16 +898,18 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 return Task::batch(retroactive_sync_batch);
             } else {
                 if new_task.calendar_href.starts_with("local://") {
-                    if let Ok(mut local) =
-                        LocalStorage::load_for_href(app.ctx.as_ref(), &new_task.calendar_href)
-                    {
-                        local.push(new_task.clone());
-                        let _ = LocalStorage::save_for_href(
-                            app.ctx.as_ref(),
-                            &new_task.calendar_href,
-                            &local,
-                        );
-                    }
+                    let task_clone = new_task.clone();
+                    let _ = LocalStorage::modify_for_href(
+                        app.ctx.as_ref(),
+                        &new_task.calendar_href,
+                        |all| {
+                            if let Some(idx) = all.iter().position(|t| t.uid == task_clone.uid) {
+                                all[idx] = task_clone;
+                            } else {
+                                all.push(task_clone);
+                            }
+                        },
+                    );
                 } else {
                     let _ = Journal::push(app.ctx.as_ref(), Action::Create(new_task.clone()));
                 }

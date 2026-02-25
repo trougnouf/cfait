@@ -517,22 +517,14 @@ impl RustyClient {
                                 task.description
                                     .push_str(&format!("\n\n[Sync Error]: {}", msg));
 
-                                if let Ok(mut existing) =
-                                    LocalStorage::load_for_href(self.ctx.as_ref(), recovery_href)
-                                {
-                                    existing.push(task);
-                                    let _ = LocalStorage::save_for_href(
-                                        self.ctx.as_ref(),
-                                        recovery_href,
-                                        &existing,
-                                    );
-                                } else {
-                                    let _ = LocalStorage::save_for_href(
-                                        self.ctx.as_ref(),
-                                        recovery_href,
-                                        &[task],
-                                    );
-                                }
+                                let task_clone = task.clone();
+                                let _ = LocalStorage::modify_for_href(
+                                    self.ctx.as_ref(),
+                                    recovery_href,
+                                    |existing| {
+                                        existing.push(task_clone);
+                                    },
+                                );
                                 warnings.push(
                                     "Fatal sync error. Task moved to 'Local (Recovery)'."
                                         .to_string(),

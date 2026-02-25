@@ -946,11 +946,15 @@ impl RustyClient {
 
     pub async fn create_task(&self, task: &mut Task) -> Result<Vec<String>, String> {
         if task.calendar_href.starts_with("local://") {
-            let mut all = LocalStorage::load_for_href(self.ctx.as_ref(), &task.calendar_href)
-                .map_err(|e| e.to_string())?;
-            all.push(task.clone());
-            LocalStorage::save_for_href(self.ctx.as_ref(), &task.calendar_href, &all)
-                .map_err(|e| e.to_string())?;
+            let task_clone = task.clone();
+            LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
+                if let Some(idx) = all.iter().position(|t| t.uid == task_clone.uid) {
+                    all[idx] = task_clone;
+                } else {
+                    all.push(task_clone);
+                }
+            })
+            .map_err(|e| e.to_string())?;
             return Ok(vec![]);
         }
 
@@ -972,13 +976,15 @@ impl RustyClient {
         task.sequence += 1;
 
         if task.calendar_href.starts_with("local://") {
-            let mut all = LocalStorage::load_for_href(self.ctx.as_ref(), &task.calendar_href)
-                .map_err(|e| e.to_string())?;
-            if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
-                all[idx] = task.clone();
-                LocalStorage::save_for_href(self.ctx.as_ref(), &task.calendar_href, &all)
-                    .map_err(|e| e.to_string())?;
-            }
+            let task_clone = task.clone();
+            LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
+                if let Some(idx) = all.iter().position(|t| t.uid == task_clone.uid) {
+                    all[idx] = task_clone;
+                } else {
+                    all.push(task_clone);
+                }
+            })
+            .map_err(|e| e.to_string())?;
             return Ok(vec![]);
         }
 
@@ -989,11 +995,10 @@ impl RustyClient {
 
     pub async fn delete_task(&self, task: &Task) -> Result<Vec<String>, String> {
         if task.calendar_href.starts_with("local://") {
-            let mut all = LocalStorage::load_for_href(self.ctx.as_ref(), &task.calendar_href)
-                .map_err(|e| e.to_string())?;
-            all.retain(|t| t.uid != task.uid);
-            LocalStorage::save_for_href(self.ctx.as_ref(), &task.calendar_href, &all)
-                .map_err(|e| e.to_string())?;
+            LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
+                all.retain(|t| t.uid != task.uid);
+            })
+            .map_err(|e| e.to_string())?;
             return Ok(vec![]);
         }
 

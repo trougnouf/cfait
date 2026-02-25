@@ -80,12 +80,15 @@ impl TaskController {
 
         // If the task is local-only, persist to local storage immediately.
         if task.calendar_href.starts_with("local://") {
-            let mut store = self.store.lock().await;
-            if let Some(map) = store.calendars.get_mut(&task.calendar_href) {
-                let list: Vec<Task> = map.values().cloned().collect();
-                LocalStorage::save_for_href(self.ctx.as_ref(), &task.calendar_href, &list)
-                    .map_err(|e| e.to_string())?;
-            }
+            let task_clone = task.clone();
+            LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
+                if let Some(idx) = all.iter().position(|t| t.uid == task_clone.uid) {
+                    all[idx] = task_clone;
+                } else {
+                    all.push(task_clone);
+                }
+            })
+            .map_err(|e| e.to_string())?;
         } else {
             // Remote create failed / offline: journal the create for later sync.
             Journal::push(self.ctx.as_ref(), Action::Create(task.clone()))

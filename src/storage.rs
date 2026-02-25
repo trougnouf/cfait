@@ -190,19 +190,18 @@ impl LocalStorage {
             anyhow::bail!("No valid tasks found in ICS file");
         }
 
-        let mut existing_tasks = Self::load_for_href(ctx, calendar_href)?;
         let count = imported_tasks.len();
 
-        // Upsert tasks: replace existing ones with the same UID, append new ones
-        for imported in imported_tasks {
-            if let Some(idx) = existing_tasks.iter().position(|t| t.uid == imported.uid) {
-                existing_tasks[idx] = imported;
-            } else {
-                existing_tasks.push(imported);
+        // Safely upsert tasks using the unified lock
+        Self::modify_for_href(ctx, calendar_href, |existing_tasks| {
+            for imported in imported_tasks {
+                if let Some(idx) = existing_tasks.iter().position(|t| t.uid == imported.uid) {
+                    existing_tasks[idx] = imported;
+                } else {
+                    existing_tasks.push(imported);
+                }
             }
-        }
-
-        Self::save_for_href(ctx, calendar_href, &existing_tasks)?;
+        })?;
 
         Ok(count)
     }
@@ -280,70 +279,63 @@ impl LocalStorage {
         Ok(())
     }
 
-    /// Load tasks from a specific file path (Internal)
+    /// Load tasks from a specific file path (Internal, assumes lock is held)
+    fn load_internal(path: &Path, _href: &str) -> Result<(Vec<Task>, bool)> {
+        let json = fs::read_to_string(path)?;
+        let (mut tasks, mut needs_save) =
+            if let Ok(data) = serde_json::from_str::<LocalStorageData>(&json) {
+                if data.version == LOCAL_STORAGE_VERSION {
+                    (data.tasks, false)
+                } else {
+                    (Self::migrate_to_current(data.version, &json)?, true)
+                }
+            } else {
+                (Self::migrate_v1_to_v2(&json)?, true)
+            };
+
+        // DEDUPLICATION FIX
+        let len_before = tasks.len();
+        let mut uid_to_index = HashMap::new();
+        for (i, t) in tasks.iter().enumerate() {
+            uid_to_index.insert(t.uid.clone(), i);
+        }
+
+        if uid_to_index.len() < len_before {
+            let mut indices: Vec<usize> = uid_to_index.into_values().collect();
+            indices.sort_unstable();
+
+            let mut deduped = Vec::with_capacity(indices.len());
+            for i in indices {
+                deduped.push(tasks[i].clone());
+            }
+            tasks = deduped;
+            needs_save = true;
+        }
+
+        Ok((tasks, needs_save))
+    }
+
+    /// Save tasks to a specific file path (Internal, assumes lock is held)
+    fn save_internal(path: &Path, tasks: &[Task]) -> Result<()> {
+        let data = LocalStorageData {
+            version: LOCAL_STORAGE_VERSION,
+            tasks: tasks.to_vec(),
+        };
+        let json = serde_json::to_string_pretty(&data)?;
+        Self::atomic_write(path, json)
+    }
+
+    /// Load tasks from a specific file path
     fn load_from_path(path: &Path, href: &str) -> Result<Vec<Task>> {
         if !path.exists() {
             LoadState::set(href, LoadState::Success);
             return Ok(vec![]);
         }
         let result = Self::with_lock(path, || {
-            let json = fs::read_to_string(path)?;
-            let (mut tasks, mut needs_save) =
-                if let Ok(data) = serde_json::from_str::<LocalStorageData>(&json) {
-                    if data.version == LOCAL_STORAGE_VERSION {
-                        (data.tasks, false)
-                    } else {
-                        (Self::migrate_to_current(data.version, &json)?, true)
-                    }
-                } else {
-                    (Self::migrate_v1_to_v2(&json)?, true)
-                };
-
-            // DEDUPLICATION FIX (v0.4.10)
-            // Remove duplicate tasks by UID, keeping the last occurrence (matching TaskStore behavior).
-            // This fixes data corruption from previous versions where imports appended duplicates.
-            let len_before = tasks.len();
-            let mut uid_to_index = HashMap::new();
-
-            // Iterate to find indices of the *last* occurrence of each UID
-            for (i, t) in tasks.iter().enumerate() {
-                uid_to_index.insert(t.uid.clone(), i);
-            }
-
-            if uid_to_index.len() < len_before {
-                let mut indices: Vec<usize> = uid_to_index.into_values().collect();
-                indices.sort_unstable();
-
-                let mut deduped = Vec::with_capacity(indices.len());
-                for i in indices {
-                    deduped.push(tasks[i].clone());
-                }
-                tasks = deduped;
-                needs_save = true;
-
-                #[cfg(target_os = "android")]
-                log::info!(
-                    "Repaired {} duplicate tasks in {}",
-                    len_before - tasks.len(),
-                    href
-                );
-                #[cfg(not(target_os = "android"))]
-                eprintln!(
-                    "Repaired {} duplicate tasks in {}",
-                    len_before - tasks.len(),
-                    href
-                );
-            }
-
+            let (tasks, needs_save) = Self::load_internal(path, href)?;
             if needs_save {
-                let data = LocalStorageData {
-                    version: LOCAL_STORAGE_VERSION,
-                    tasks: tasks.clone(),
-                };
-                let upgraded_json = serde_json::to_string_pretty(&data)?;
-                Self::atomic_write(path, upgraded_json)?;
+                Self::save_internal(path, &tasks)?;
             }
-
             Ok(tasks)
         });
         match &result {
@@ -360,15 +352,36 @@ impl LocalStorage {
                 href
             ));
         }
-        Self::with_lock(path, || {
-            let data = LocalStorageData {
-                version: LOCAL_STORAGE_VERSION,
-                tasks: tasks.to_vec(),
-            };
-            let json = serde_json::to_string_pretty(&data)?;
-            Self::atomic_write(path, json)?;
-            Ok(())
-        })
+        Self::with_lock(path, || Self::save_internal(path, tasks))
+    }
+
+    /// Safely modifies a local collection using a Read-Modify-Write pattern under a single file lock.
+    /// This prevents multiple concurrent UI instances from clobbering each other's local updates.
+    pub fn modify_for_href<F>(ctx: &dyn AppContext, href: &str, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Vec<Task>),
+    {
+        if !Self::can_save_href(href) {
+            return Err(anyhow::anyhow!(
+                "Cannot modify {}: previous load failed.",
+                href
+            ));
+        }
+        if let Some(path) = Self::get_path_for_href(ctx, href) {
+            Self::with_lock(&path, || {
+                let mut tasks = if path.exists() {
+                    let (t, _) = Self::load_internal(&path, href)?;
+                    t
+                } else {
+                    vec![]
+                };
+                f(&mut tasks);
+                Self::save_internal(&path, &tasks)?;
+                Ok(())
+            })
+        } else {
+            Err(anyhow::anyhow!("Invalid local href: {}", href))
+        }
     }
 
     pub fn load_for_href(ctx: &dyn AppContext, href: &str) -> Result<Vec<Task>> {
@@ -450,7 +463,12 @@ impl DaemonLock {
 
         match file.try_lock_exclusive() {
             Ok(_) => Ok(Some(Self { _file: file })),
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock || e.kind() == std::io::ErrorKind::PermissionDenied => Ok(None),
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    || e.kind() == std::io::ErrorKind::PermissionDenied =>
+            {
+                Ok(None)
+            }
             Err(e) => Err(anyhow::anyhow!("Failed to acquire daemon lock: {}", e)),
         }
     }
@@ -472,7 +490,10 @@ mod lock_tests {
 
         // 2. Exclusive lock should fail while shared locks are held (Daemon yields)
         let excl1 = DaemonLock::try_acquire_exclusive(&ctx).unwrap();
-        assert!(excl1.is_none(), "Exclusive lock should fail when shared locks exist");
+        assert!(
+            excl1.is_none(),
+            "Exclusive lock should fail when shared locks exist"
+        );
 
         // 3. Drop all UI shared locks
         drop(shared1);
@@ -480,6 +501,9 @@ mod lock_tests {
 
         // 4. Exclusive lock should now succeed (Daemon syncs)
         let excl2 = DaemonLock::try_acquire_exclusive(&ctx).unwrap();
-        assert!(excl2.is_some(), "Exclusive lock should succeed when no shared locks exist");
+        assert!(
+            excl2.is_some(),
+            "Exclusive lock should succeed when no shared locks exist"
+        );
     }
 }
