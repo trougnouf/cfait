@@ -1294,6 +1294,16 @@ impl TaskStore {
             }
         }
 
+        // Apply propagated sort values back to the tasks so parents sort according to their highest actionable child
+        for (i, t) in final_tasks_processed.iter_mut().enumerate() {
+            if let Some(best) = cache.get(&i) {
+                t.sort_rank = best.sort_rank;
+                t.effective_priority = best.effective_priority;
+                t.effective_due = best.effective_due.clone();
+                t.effective_dtstart = best.effective_dtstart.clone();
+            }
+        }
+
         // Delegate to the model's hierarchy organizer which handles parent/child relationships,
         // indentation depth, and injecting virtual expand/collapse rows for completed groups.
         // Note: organize_hierarchy applies `compare_for_sort` internally before building the tree.
