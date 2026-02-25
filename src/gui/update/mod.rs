@@ -14,6 +14,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
     let task = match message {
         Message::FontLoaded(_) => Task::none(),
         Message::DeleteComplete(_) => Task::none(),
+        Message::Tick => Task::none(), // Just forces a view redraw
 
         Message::ConfigLoaded(_)
         | Message::ObUrlChanged(_)

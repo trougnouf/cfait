@@ -145,6 +145,7 @@ pub enum Message {
     FontLoaded(Result<(), String>),
     DismissError,
     ToggleAllCalendars(bool),
+    Tick,
 
     // --- Window Management ---
     WindowDragged,

@@ -90,7 +90,7 @@ impl TaskDisplay for Task {
             String::new()
         };
 
-        if total_mins > 0 {
+        if total_mins > 0 || self.last_started_at.is_some() {
             if !est_str.is_empty() {
                 format!("[{} / {}]", fmt_min(total_mins), est_str)
             } else {

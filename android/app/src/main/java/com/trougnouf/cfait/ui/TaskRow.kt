@@ -311,9 +311,9 @@ fun TaskRow(
                         }
                     }
 
-                    if (liveDurationMins > 0 || task.durationMins != null) {
+                    if (liveDurationMins > 0 || task.durationMins != null || task.lastStartedAt != null) {
                         // UPDATE: Pass isEstimate=false for spent, isEstimate=true for duration
-                        val spentStr = if (liveDurationMins > 0) formatDuration(
+                        val spentStr = if (liveDurationMins > 0 || task.lastStartedAt != null) formatDuration(
                             liveDurationMins.toUInt(),
                             isEstimate = false
                         ) else ""

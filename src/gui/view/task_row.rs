@@ -705,7 +705,9 @@ pub fn view_task_row<'a>(
         || task.estimated_duration.is_some()
         || task.location.is_some()
         || task.url.is_some()
-        || task.geo.is_some();
+        || task.geo.is_some()
+        || task.time_spent_seconds > 0
+        || task.last_started_at.is_some();
 
     let main_text_col = responsive(move |size| {
         let available_width = size.width;
@@ -726,7 +728,10 @@ pub fn view_task_row<'a>(
             if let Some(l) = &visible_location {
                 tags_width += (l.len() as f32 * 7.0) + 25.0;
             }
-            if task.estimated_duration.is_some() {
+            if task.estimated_duration.is_some()
+                || task.time_spent_seconds > 0
+                || task.last_started_at.is_some()
+            {
                 tags_width += 50.0;
             }
             if task.rrule.is_some() {
@@ -848,7 +853,8 @@ pub fn view_task_row<'a>(
             let total_seconds = task.time_spent_seconds + current_session;
             let total_mins = (total_seconds / 60) as u32;
 
-            if total_mins > 0 || task.estimated_duration.is_some() {
+            if total_mins > 0 || task.estimated_duration.is_some() || task.last_started_at.is_some()
+            {
                 // Helper closure for formatting
                 let fmt_dur = |m: u32| -> String {
                     if m >= 525600 {
@@ -882,7 +888,7 @@ pub fn view_task_row<'a>(
                 };
 
                 // Build Final Label: "Spent / Est" or just "Spent" or just "Est"
-                let label = if total_mins > 0 {
+                let label = if total_mins > 0 || task.last_started_at.is_some() {
                     if !est_label.is_empty() {
                         format!("{} / {}", fmt_dur(total_mins), est_label)
                     } else {

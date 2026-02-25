@@ -44,6 +44,12 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
         );
     }
 
+    // Tick every minute if there is an active task running, so the timer updates visually
+    let has_running_tasks = app.tasks.iter().any(|t| t.last_started_at.is_some());
+    if has_running_tasks {
+        subs.push(iced::time::every(std::time::Duration::from_secs(60)).map(|_| Message::Tick));
+    }
+
     Subscription::batch(subs)
 }
 
