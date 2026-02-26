@@ -88,7 +88,7 @@ pub fn spawn_alarm_actor(
                                     uid: format!("implicit_due:|{}|{}", ts_str, task.uid),
                                     action: "DISPLAY".to_string(),
                                     trigger: AlarmTrigger::Absolute(trigger_dt),
-                                    description: Some("Due now".to_string()),
+                                    description: Some(rust_i18n::t!("alarm_due_now").to_string()),
                                     acknowledged: None,
                                     related_to_uid: None,
                                     relation_type: None,
@@ -114,7 +114,9 @@ pub fn spawn_alarm_actor(
                                     uid: format!("implicit_start:|{}|{}", ts_str, task.uid),
                                     action: "DISPLAY".to_string(),
                                     trigger: AlarmTrigger::Absolute(trigger_dt),
-                                    description: Some("Task starting".to_string()),
+                                    description: Some(
+                                        rust_i18n::t!("alarm_task_starting").to_string(),
+                                    ),
                                     acknowledged: None,
                                     related_to_uid: None,
                                     relation_type: None,
@@ -175,7 +177,7 @@ pub fn spawn_alarm_actor(
                                 let body = alarm
                                     .description
                                     .clone()
-                                    .unwrap_or_else(|| "Reminder".to_string());
+                                    .unwrap_or_else(|| rust_i18n::t!("reminder").to_string());
 
                                 std::thread::spawn(move || {
                                     let _ = Notification::new()

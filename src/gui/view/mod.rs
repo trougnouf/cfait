@@ -5,7 +5,7 @@ pub mod help;
 pub mod settings;
 pub mod sidebar;
 pub mod syntax;
-pub mod task_row; // Added module export
+pub mod task_row;
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp, ResizeDirection, SidebarMode};
@@ -14,7 +14,6 @@ use crate::gui::view::settings::view_settings;
 use crate::gui::view::sidebar::{view_sidebar_calendars, view_sidebar_categories};
 use crate::gui::view::task_row::view_task_row;
 use iced::alignment::Horizontal;
-// --- Import for resize interaction ---
 use iced::mouse;
 use iced::widget::scrollable::{Direction, Scrollbar};
 use iced::widget::{
@@ -23,14 +22,11 @@ use iced::widget::{
 };
 use iced::{Color, Element, Length, Theme, Vector};
 
-/// Shared semantic color for Locations (Gray)
 pub const COLOR_LOCATION: Color = Color::from_rgb(0.4, 0.4, 0.6);
 
-/// Shared style for tooltips with slight transparency
 pub fn tooltip_style(theme: &Theme) -> container::Style {
     let palette = theme.extended_palette();
     container::Style {
-        // 85% Opacity Background
         background: Some(
             Color {
                 a: 0.85,
@@ -49,9 +45,8 @@ pub fn tooltip_style(theme: &Theme) -> container::Style {
 }
 
 pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
-    // 1. Generate the base content
     let base_content: Element<'_, Message> = match app.state {
-        AppState::Loading => container(text("Loading...").size(30))
+        AppState::Loading => container(text(rust_i18n::t!("loading")).size(30))
             .width(Length::Fill)
             .height(Length::Fill)
             .center_x(Length::Fill)
@@ -100,17 +95,13 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         }
     };
 
-    // 2. Modals (Import / Alarm)
-    // Wrap base_content in modals if necessary
     let mut content_with_modals = base_content;
 
     if app.ics_import_dialog_open {
         content_with_modals = view_ics_import_dialog(app, content_with_modals);
     } else if !app.ringing_tasks.is_empty() {
-        // --- ALARM MODAL ---
         let (task, alarm) = &app.ringing_tasks[0];
 
-        // --- ALARM MODAL ---
         let icon_header = container(
             icon::icon(icon::BELL)
                 .size(30)
@@ -119,7 +110,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         .padding(5)
         .center_x(Length::Fill);
 
-        let title = text("Reminder")
+        let title = text(rust_i18n::t!("reminder_title"))
             .size(24)
             .font(iced::Font {
                 weight: iced::font::Weight::Bold,
@@ -128,13 +119,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             .width(Length::Fill)
             .align_x(Horizontal::Center);
 
-        // Task Summary (Title)
         let summary = text(&task.summary)
             .size(18)
             .width(Length::Fill)
             .align_x(Horizontal::Center);
 
-        // Task Description (New)
         let task_desc_content = if !task.description.is_empty() {
             column![
                 text(&task.description)
@@ -146,9 +135,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             column![]
         };
 
-        // --- BUTTONS ---
-
-        // Load config for presets
         let (s1, s2) = if let Ok(cfg) = crate::config::Config::load(app.ctx.as_ref()) {
             (cfg.snooze_short_mins, cfg.snooze_long_mins)
         } else {
@@ -172,15 +158,18 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         };
 
         let custom_snooze_row = row![
-            text_input("Custom (eg 30m)", &app.snooze_custom_input)
-                .on_input(Message::SnoozeCustomInput)
-                .on_submit(Message::SnoozeCustomSubmit(
-                    task.uid.clone(),
-                    alarm.uid.clone()
-                ))
-                .padding(5)
-                .size(12)
-                .width(Length::Fixed(100.0)),
+            text_input(
+                &rust_i18n::t!("snooze_custom_placeholder"),
+                &app.snooze_custom_input
+            )
+            .on_input(Message::SnoozeCustomInput)
+            .on_submit(Message::SnoozeCustomSubmit(
+                task.uid.clone(),
+                alarm.uid.clone()
+            ))
+            .padding(5)
+            .size(12)
+            .width(Length::Fixed(100.0)),
             button(icon::icon(icon::CHECK).size(12))
                 .style(iced::widget::button::secondary)
                 .padding(6)
@@ -192,7 +181,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         .spacing(5)
         .align_y(iced::Alignment::Center);
 
-        let done_btn = button(text("Done").size(14).font(iced::Font {
+        let done_btn = button(text(rust_i18n::t!("done")).size(14).font(iced::Font {
             weight: iced::font::Weight::Bold,
             ..Default::default()
         }))
@@ -203,7 +192,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             alarm.uid.clone(),
         ));
 
-        let cancel_btn = button(text("Cancel task").size(14))
+        let cancel_btn = button(text(rust_i18n::t!("cancel_task")).size(14))
             .style(iced::widget::button::danger)
             .padding([8, 16])
             .on_press(Message::CancelTaskFromAlarm(
@@ -211,7 +200,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 alarm.uid.clone(),
             ));
 
-        let dismiss_btn = button(text("Dismiss").size(14).font(iced::Font {
+        let dismiss_btn = button(text(rust_i18n::t!("dismiss")).size(14).font(iced::Font {
             weight: iced::font::Weight::Bold,
             ..Default::default()
         }))
@@ -228,7 +217,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         ]
         .align_x(iced::Alignment::Center);
 
-        // Combine content into a scrollable area to handle dynamic sizes
         let modal_content = scrollable(
             column![
                 icon_header,
@@ -247,7 +235,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         let modal_card = container(modal_content)
             .padding(20)
             .width(Length::Fixed(380.0))
-            // Max height constraint to ensure it fits on screen even with huge descriptions
             .max_height(500.0)
             .style(|theme: &Theme| {
                 let palette = theme.extended_palette();
@@ -288,13 +275,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         .into();
     }
 
-    // 3. Resize Grips (if !SSD)
-    // Apply resize grips *after* modals so grips are on top of everything (including full-screen modal overlays)
     let final_content = if app.force_ssd {
         content_with_modals
     } else {
-        let t = 6.0; // Thickness of edge grips
-        let c = 12.0; // Size of corner grips
+        let t = 6.0;
+        let c = 12.0;
 
         let n_grip = MouseArea::new(
             container(text(""))
@@ -361,8 +346,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         .interaction(mouse::Interaction::ResizingDiagonallyDown);
 
         stack![
-            content_with_modals, // Content is bottom layer
-            // Grips are top layers
+            content_with_modals,
             container(n_grip)
                 .width(Length::Fill)
                 .height(Length::Fill)
@@ -403,16 +387,13 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         .into()
     };
 
-    // 4. Final Window Style Container
     container(final_content)
         .width(Length::Fill)
         .height(Length::Fill)
         .style(|theme: &Theme| {
             let palette = theme.extended_palette();
             container::Style {
-                // Apply the actual background color here
                 background: Some(iced::Background::Color(palette.background.base.color)),
-                // Apply the Border Radius here (remove when SSD)
                 border: iced::Border {
                     color: palette.background.strong.color,
                     width: if app.force_ssd { 0.0 } else { 1.0 },
@@ -442,13 +423,10 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             }
         };
 
-    // Determine whether filters produced an empty visible list while the store has tasks.
-    // This lets us attribute the emptiness to search / tag / location filters.
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
     let is_tag_error = is_filter_empty && !app.selected_categories.is_empty();
     let is_loc_error = is_filter_empty && !app.selected_locations.is_empty();
 
-    // Icons for tabs - show error color on the tab icon if that tab is responsible for the empty result.
     let btn_cals =
         button(container(icon::icon(icon::CALENDARS_HEADER).size(18)).center_x(Length::Fill))
             .padding(8)
@@ -460,7 +438,6 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             })
             .on_press(Message::SidebarModeChanged(SidebarMode::Calendars));
 
-    // Tag tab: if tags are the culprit, color the tag icon red (when inactive) to attribute the empty state.
     let tag_icon = {
         if is_tag_error && app.sidebar_mode != SidebarMode::Categories {
             icon::icon(icon::TAGS_HEADER)
@@ -480,7 +457,6 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         })
         .on_press(Message::SidebarModeChanged(SidebarMode::Categories));
 
-    // Locations tab: if locations are the culprit, color the icon red (when inactive).
     let loc_icon = {
         if is_loc_error && app.sidebar_mode != SidebarMode::Locations {
             icon::icon(app.location_tab_icon)
@@ -542,25 +518,24 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     .style(iced::widget::button::secondary)
     .on_press(Message::OpenHelp(crate::help::HelpTab::Syntax));
 
-    // Apply tooltip_style
     let footer = row![
         tooltip(
             settings_btn,
-            text("Settings").size(12),
+            text(rust_i18n::t!("settings_tooltip")).size(12),
             tooltip::Position::Top
         )
         .style(tooltip_style)
         .delay(Duration::from_millis(700)),
         tooltip(
             keyboard_btn,
-            text("Keyboard Shortcuts").size(12),
+            text(rust_i18n::t!("keyboard_tooltip")).size(12),
             tooltip::Position::Top
         )
         .style(tooltip_style)
         .delay(Duration::from_millis(700)),
         tooltip(
             help_btn,
-            text("Syntax Help").size(12),
+            text(rust_i18n::t!("syntax_tooltip")).size(12),
             tooltip::Position::Top
         )
         .style(tooltip_style)
@@ -604,25 +579,21 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 }
 
 fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
-    // 1. Identify Active Calendar
     let active_cal = app
         .active_cal_href
         .as_ref()
         .and_then(|href| app.calendars.iter().find(|c| &c.href == href));
 
     let title_text = if app.loading {
-        "Loading...".to_string()
+        rust_i18n::t!("loading").to_string()
     } else if let Some(cal) = active_cal {
         cal.name.clone()
     } else if app.selected_categories.is_empty() {
-        "All tasks".to_string()
+        rust_i18n::t!("all_tasks").to_string()
     } else {
-        "Tasks".to_string()
+        rust_i18n::t!("tasks").to_string()
     };
 
-    // 2. Identify Other Visible Calendars
-    // Logic change: Only show other visible calendars if we are NOT in the Calendars sidebar mode.
-    // If we are in Calendar mode, the sidebar already shows what is active/visible.
     let other_visible_cals: Vec<&crate::model::CalendarListEntry> =
         if !app.loading && app.sidebar_mode != SidebarMode::Calendars {
             app.calendars
@@ -637,13 +608,11 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             vec![]
         };
 
-    // Prepare Active Calendar Color (computed outside closure to allow move)
     let active_cal_color_opt = active_cal
         .and_then(|c| c.color.as_ref())
         .and_then(|h| crate::color_utils::parse_hex_to_floats(h))
         .map(|(r, g, b)| Color::from_rgb(r, g, b));
 
-    // Dynamic Title Style Closure
     let title_style = move |theme: &Theme| -> text::Style {
         text::Style {
             color: Some(
@@ -653,7 +622,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     };
 
     let active_count = app.tasks.iter().filter(|t| !t.status.is_done()).count();
-    let mut subtitle = format!("{} Tasks", active_count);
+    let mut subtitle = rust_i18n::t!("tasks_count", count = active_count).to_string();
 
     let search_text = app.search_value.text();
     if !search_text.is_empty() {
@@ -670,7 +639,6 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         }
     }
 
-    // Reduced spacing to 0 to remove gaps between +
     let mut title_group = row![].spacing(0).align_y(iced::Alignment::Center);
 
     if show_logo {
@@ -679,26 +647,23 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
                 .width(24)
                 .height(24),
         );
-        // Add spacing back manually only after logo
         title_group = title_group.push(Space::new().width(10));
     }
 
-    // Add Active Calendar Name with Color
     title_group = title_group.push(
         text(title_text)
             .size(20)
             .font(iced::Font::DEFAULT)
-            .style(title_style), // Apply color style
+            .style(title_style),
     );
 
-    // Add "+" for other visible calendars with their respective colors
     for other in other_visible_cals {
         let other_color = other
             .color
             .as_ref()
             .and_then(|h| crate::color_utils::parse_hex_to_floats(h))
             .map(|(r, g, b)| Color::from_rgb(r, g, b))
-            .unwrap_or(Color::from_rgb(0.5, 0.5, 0.5)); // Fallback gray
+            .unwrap_or(Color::from_rgb(0.5, 0.5, 0.5));
 
         title_group = title_group.push(text("+").size(18).color(other_color).font(iced::Font {
             ..Default::default()
@@ -712,7 +677,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     if app.unsynced_changes {
         left_section = left_section.push(
             container(
-                text("Unsynced")
+                text(rust_i18n::t!("unsynced"))
                     .size(10)
                     .style(|theme: &Theme| text::Style {
                         color: Some(theme.extended_palette().background.base.text),
@@ -735,11 +700,10 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         .padding(4)
         .on_press(Message::Refresh);
 
-    // Apply tooltip_style
     left_section = left_section.push(
         tooltip(
             refresh_btn,
-            text("Force sync").size(12),
+            text(rust_i18n::t!("force_sync")).size(12),
             tooltip::Position::Bottom,
         )
         .style(tooltip_style)
@@ -759,39 +723,33 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     let search_input = text_editor(&app.search_value)
         .id("header_search_input")
-        .placeholder("Search...")
+        .placeholder(&app.search_placeholder)
         .on_action(Message::SearchChanged)
         .highlight_with::<self::syntax::SmartInputHighlighter>(
             (is_dark_mode, true),
             |highlight, _theme| *highlight,
         )
         .padding(5)
-        // Make it look like a single line input
         .height(Length::Fixed(32.0))
         .font(iced::Font::DEFAULT);
 
-    // --- UPDATED SEARCH BAR LOGIC ---
     let mut search_row = row![].align_y(iced::Alignment::Center).spacing(5);
 
-    // Random Task Button
     let random_btn = iced::widget::button(icon::icon(app.random_icon).size(16))
         .style(iced::widget::button::text)
         .padding(6)
         .on_press(Message::JumpToRandomTask);
 
-    // Add tooltip
     search_row = search_row.push(
         tooltip(
             random_btn,
-            text("Jump to random task").size(12),
+            text(rust_i18n::t!("jump_to_random_task")).size(12),
             tooltip::Position::Bottom,
         )
         .style(tooltip_style)
         .delay(Duration::from_millis(700)),
     );
 
-    // If filters produced no results but the store has tasks, this indicates the
-    // active filters/search likely caused the empty result. Highlight search accordingly.
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
     let is_search_empty = app.search_value.text().is_empty();
     let is_search_error = is_filter_empty && !is_search_empty;
@@ -800,7 +758,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         (icon::SEARCH, Color::from_rgb(0.4, 0.4, 0.4), None)
     } else {
         let icon_col = if is_search_error {
-            Color::from_rgb(0.9, 0.2, 0.2) // Red when search is the culprit
+            Color::from_rgb(0.9, 0.2, 0.2)
         } else {
             app.theme().extended_palette().background.base.text
         };
@@ -816,7 +774,6 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         clear_btn = clear_btn.on_press(msg);
     }
 
-    // Wrap the input so we can apply a red border when search is the suspected culprit.
     let search_input_container = container(search_input).padding(0);
     let final_search_widget = if is_search_error {
         search_input_container.style(|_| container::Style {
@@ -833,10 +790,8 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     search_row = search_row.push(clear_btn);
     search_row = search_row.push(final_search_widget);
-    // --------------------------------
 
     let window_controls = if app.force_ssd {
-        // If SSD, hide custom controls
         row![].spacing(0)
     } else {
         row![
@@ -867,7 +822,6 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         .align_y(iced::Alignment::Center);
 
     let header_drag_area = if app.force_ssd {
-        // If SSD, let the OS handle dragging; don't make a custom drag area
         Element::from(header_row)
     } else {
         MouseArea::new(header_row)
@@ -875,7 +829,6 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             .into()
     };
 
-    // If viewing any local calendar, show export-to-caldav button bar
     let export_ui: Element<'_, Message>;
     if let Some(active_href) = &app.active_cal_href {
         if active_href.starts_with("local://") {
@@ -888,7 +841,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
                 .collect();
             if !targets.is_empty() {
                 let mut row = row![
-                    text("Export to:")
+                    text(rust_i18n::t!("export_to"))
                         .size(14)
                         .color(Color::from_rgb(0.5, 0.5, 0.5))
                 ]
@@ -923,7 +876,6 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     let input_area = view_input_area(app);
     let mut main_col = column![header_drag_area, export_ui, input_area];
 
-    // CHANGED: Insert Yanked Task Bar if active
     if let Some(uid) = &app.yanked_uid
         && let Some(summary) = app.store.get_summary(uid)
     {
@@ -934,10 +886,12 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
                     .style(|theme: &Theme| text::Style {
                         color: Some(theme.extended_palette().primary.base.color)
                     }),
-                text("Yanked:").size(14).font(iced::Font {
-                    weight: iced::font::Weight::Bold,
-                    ..Default::default()
-                }),
+                text(rust_i18n::t!("yanked_label"))
+                    .size(14)
+                    .font(iced::Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    }),
                 text(summary).size(14).width(Length::Fill),
                 button(icon::icon(icon::CROSS).size(14))
                     .style(iced::widget::button::text)
@@ -963,7 +917,6 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         main_col = main_col.push(yank_bar);
     }
 
-    // Existing Tag Jump
     if search_text.starts_with('#') {
         let tag = search_text.trim_start_matches('#').trim().to_string();
         if !tag.is_empty() {
@@ -972,7 +925,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
                     iced::widget::button(
                         row![
                             icon::icon(icon::TAG).size(14),
-                            text(format!(" Go to tag: #{}", tag)).size(14)
+                            text(rust_i18n::t!("go_to_tag", tag = tag.clone())).size(14)
                         ]
                         .spacing(5)
                         .align_y(iced::Alignment::Center),
@@ -992,7 +945,6 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         }
     }
 
-    // Location Jump Button
     if search_text.starts_with("@@") || search_text.starts_with("loc:") {
         let raw = if search_text.starts_with("@@") {
             search_text.trim_start_matches("@@")
@@ -1007,7 +959,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
                     iced::widget::button(
                         row![
                             icon::icon(icon::LOCATION).size(14),
-                            text(format!(" Go to location: @@{}", loc)).size(14)
+                            text(rust_i18n::t!("go_to_location", loc = loc.clone())).size(14)
                         ]
                         .spacing(5)
                         .align_y(iced::Alignment::Center),
@@ -1061,18 +1013,17 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             .iter()
             .enumerate()
             .map(|(real_index, task)| {
-                // RETRIEVE ID FROM CACHE
-                let row_id = app.task_ids.get(&task.uid).cloned().unwrap_or_else(|| {
-                    // Fallback should not happen in a correctly functioning app
-                    iced::widget::Id::unique()
-                });
+                let row_id = app
+                    .task_ids
+                    .get(&task.uid)
+                    .cloned()
+                    .unwrap_or_else(iced::widget::Id::unique);
                 view_task_row(app, real_index, task, row_id)
             })
             .collect::<Vec<_>>(),
     )
     .spacing(1);
 
-    // --- UPDATED SCROLLABLE WITH AUTO-SCROLL ---
     main_col = main_col.push(
         scrollable(tasks_view)
             .height(Length::Fill)
@@ -1111,7 +1062,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
 
         let input_desc = text_editor(&app.description_value)
             .id("description_input")
-            .placeholder("Notes...")
+            .placeholder(&app.notes_placeholder)
             .on_action(Message::DescriptionChanged)
             .padding(10)
             .height(Length::Shrink)
@@ -1126,14 +1077,14 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
 
         let desc_container = container(scrollable_desc).max_height(max_desc_height);
 
-        let cancel_btn = iced::widget::button(text("Cancel").size(16))
+        let cancel_btn = iced::widget::button(text(rust_i18n::t!("cancel")).size(16))
             .style(iced::widget::button::secondary)
             .on_press(Message::CancelEdit);
-        let save_btn = iced::widget::button(text("Save").size(16))
+        let save_btn = iced::widget::button(text(rust_i18n::t!("save")).size(16))
             .style(iced::widget::button::primary)
             .on_press(Message::SubmitTask);
         let top_bar = row![
-            text("Editing")
+            text(rust_i18n::t!("editing"))
                 .size(14)
                 .color(Color::from_rgb(0.7, 0.7, 1.0)),
             Space::new().width(Length::Fill),
@@ -1155,7 +1106,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                 })
                 .collect();
             if !targets.is_empty() {
-                let label = text("Move to:")
+                let label = text(rust_i18n::t!("move_to"))
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.6));
                 let mut btn_row = row![].spacing(5);
@@ -1203,7 +1154,6 @@ fn view_ics_import_dialog<'a>(
 
     let task_count = app.ics_import_task_count.unwrap_or(0);
 
-    // Header
     let icon_header = container(
         icon::icon(icon::IMPORT)
             .size(30)
@@ -1212,7 +1162,7 @@ fn view_ics_import_dialog<'a>(
     .padding(5)
     .center_x(Length::Fill);
 
-    let title = text("Import tasks")
+    let title = text(rust_i18n::t!("ics_import_title"))
         .size(24)
         .font(iced::Font {
             weight: iced::font::Weight::Bold,
@@ -1222,22 +1172,23 @@ fn view_ics_import_dialog<'a>(
         .align_x(Horizontal::Center);
 
     let file_info = column![
-        text(format!("File: {}", file_name))
+        text(rust_i18n::t!("import_file_name", file = file_name))
             .size(14)
             .color(Color::from_rgb(0.7, 0.7, 0.7)),
-        text(format!("Tasks found: {}", task_count))
+        text(rust_i18n::t!("found_tasks_to_import", count = task_count))
             .size(14)
             .color(Color::from_rgb(0.7, 0.7, 0.7)),
     ]
     .spacing(5)
     .align_x(iced::Alignment::Center);
 
-    let select_label = text("Select target collection:").size(16).font(iced::Font {
-        weight: iced::font::Weight::Medium,
-        ..Default::default()
-    });
+    let select_label = text(rust_i18n::t!("select_target_collection"))
+        .size(16)
+        .font(iced::Font {
+            weight: iced::font::Weight::Medium,
+            ..Default::default()
+        });
 
-    // Calendar selection list
     let mut calendar_list = column![].spacing(5);
     for cal in &app.calendars {
         if app.disabled_calendars.contains(&cal.href) {
@@ -1257,7 +1208,7 @@ fn view_ics_import_dialog<'a>(
                 },
                 text(&cal.name).size(14),
                 if cal.href.starts_with("local://") {
-                    text(" (Local)")
+                    text(rust_i18n::t!("local_collection_suffix"))
                         .size(12)
                         .color(Color::from_rgb(0.6, 0.6, 0.6))
                 } else {
@@ -1294,13 +1245,12 @@ fn view_ics_import_dialog<'a>(
             Scrollbar::new().width(8).scroller_width(8),
         ));
 
-    // Action buttons
-    let cancel_btn = button(text("Cancel").size(14))
+    let cancel_btn = button(text(rust_i18n::t!("cancel")).size(14))
         .style(iced::widget::button::secondary)
         .padding([8, 16])
         .on_press(Message::IcsImportDialogCancel);
 
-    let import_btn = button(text("Import").size(14).font(iced::Font {
+    let import_btn = button(text(rust_i18n::t!("import")).size(14).font(iced::Font {
         weight: iced::font::Weight::Bold,
         ..Default::default()
     }))
@@ -1317,7 +1267,6 @@ fn view_ics_import_dialog<'a>(
         .spacing(10)
         .align_y(iced::Alignment::Center);
 
-    // Combine all elements
     let modal_content = column![
         icon_header,
         title,
@@ -1361,7 +1310,6 @@ fn view_ics_import_dialog<'a>(
             }
         });
 
-    // Overlay on top of existing content
     stack![
         content,
         container(modal_card)

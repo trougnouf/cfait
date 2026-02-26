@@ -160,6 +160,7 @@ pub enum Message {
     ObDefaultPriorityChanged(String),
     ObStartGraceChanged(String),
     SetTrashRetention(String),
+    SetLanguage(String),
 
     // --- Alarms & Reminders ---
     InitAlarmActor(mpsc::Sender<SystemEvent>),

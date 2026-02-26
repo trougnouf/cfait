@@ -36,6 +36,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -390,7 +391,8 @@ fun HomeScreen(
                 updateTaskList()
             } catch (e: Exception) {
                 lastSyncFailed = true
-                Toast.makeText(context, "Sync issue: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
+                    .show()
                 api.loadFromCache()
                 updateTaskList()
             } finally {
@@ -410,7 +412,8 @@ fun HomeScreen(
                 updateTaskList()
             } catch (e: Exception) {
                 lastSyncFailed = true
-                Toast.makeText(context, "Sync issue: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
+                    .show()
                 api.loadFromCache()
                 updateTaskList()
             } finally {
@@ -676,10 +679,14 @@ fun HomeScreen(
             }
         AlertDialog(
             onDismissRequest = { taskToMove = null },
-            title = { Text("Move task") },
+            title = { Text(stringResource(R.string.move_task_title)) },
             text = {
                 Column {
-                    Text("Select destination:", fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    Text(
+                        stringResource(R.string.select_destination),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
                     LazyColumn {
                         items(targetCals) { cal ->
                             ListItem(
@@ -694,7 +701,11 @@ fun HomeScreen(
                                                 updateTaskList()
                                                 onDataChanged()
                                             } catch (e: Exception) {
-                                                Toast.makeText(context, "Move failed: ${e.message}", Toast.LENGTH_SHORT)
+                                                Toast.makeText(
+                                                    context,
+                                                    context.getString(R.string.move_failed, e.message ?: ""),
+                                                    Toast.LENGTH_SHORT
+                                                )
                                                     .show()
                                             }
                                         }
@@ -704,18 +715,18 @@ fun HomeScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { taskToMove = null }) { Text("Cancel") } },
+            confirmButton = { TextButton(onClick = { taskToMove = null }) { Text(stringResource(R.string.cancel)) } },
         )
     }
 
     if (showExportSourceDialog) {
         AlertDialog(
             onDismissRequest = { showExportSourceDialog = false },
-            title = { Text("Export: select source collection") },
+            title = { Text(stringResource(R.string.export_select_source_collection)) },
             text = {
                 Column {
                     Text(
-                        "Select which local collection to export:",
+                        stringResource(R.string.select_local_collection_to_export),
                         fontSize = 14.sp,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
@@ -735,7 +746,11 @@ fun HomeScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showExportSourceDialog = false }) { Text("Cancel") } },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExportSourceDialog = false
+                }) { Text(stringResource(R.string.cancel)) }
+            },
         )
     }
 
@@ -745,18 +760,23 @@ fun HomeScreen(
                 showExportDestDialog = false
                 exportSourceHref = null
             },
-            title = { Text("Export: select destination collection") },
+            title = { Text(stringResource(R.string.export_select_destination_collection)) },
             text = {
                 Column {
                     exportSourceHref?.let { sourceHref ->
-                        val sourceName = localCals.find { it.href == sourceHref }?.name ?: "Local"
+                        val sourceName =
+                            localCals.find { it.href == sourceHref }?.name ?: stringResource(R.string.local_label)
                         Text(
-                            "Exporting from: $sourceName",
+                            stringResource(R.string.exporting_from, sourceName),
                             fontSize = 12.sp,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                     }
-                    Text("Select destination collection:", fontSize = 14.sp, modifier = Modifier.padding(bottom = 8.dp))
+                    Text(
+                        stringResource(R.string.select_destination_collection),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
                     LazyColumn {
                         items(remoteCals) { cal ->
                             ListItem(
@@ -780,7 +800,7 @@ fun HomeScreen(
                     showExportDestDialog = false
                     exportSourceHref = null
                 }) {
-                    Text("Cancel")
+                    Text(androidx.compose.ui.res.stringResource(R.string.cancel))
                 }
             },
         )
@@ -833,7 +853,7 @@ fun HomeScreen(
                             ) {
                                 NfIcon(iconStr, size = 14.sp)
                                 Spacer(Modifier.width(12.dp))
-                                Text("All Tasks", fontSize = 14.sp)
+                                Text(stringResource(R.string.all_tasks), fontSize = 14.sp)
                             }
 
                             Spacer(Modifier.width(8.dp))
@@ -847,7 +867,9 @@ fun HomeScreen(
                                 }
                             ) {
                                 Text(
-                                    text = if (matchAllCategories) "Match: AND" else "Match: OR",
+                                    text = if (matchAllCategories) stringResource(R.string.match_and) else stringResource(
+                                        R.string.match_or
+                                    ),
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (matchAllCategories) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
@@ -862,7 +884,7 @@ fun HomeScreen(
                         val iconStr = if (isAllLocsSelected) NfIcons.MAP else NfIcons.MAP_O
 
                         CompactTagRow(
-                            name = "All Locations",
+                            name = stringResource(R.string.locations),
                             count = null,
                             color = MaterialTheme.colorScheme.onSurface,
                             isSelected = isAllLocsSelected,
@@ -894,7 +916,7 @@ fun HomeScreen(
                                         updateTaskList()
                                     },
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                                ) { Text("Show all collections") }
+                                ) { Text(androidx.compose.ui.res.stringResource(R.string.show_all_collections)) }
                                 HorizontalDivider()
                             }
                             items(calendars.filter { !it.isDisabled }) { cal ->
@@ -1039,7 +1061,7 @@ fun HomeScreen(
                             TextField(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
-                                placeholder = { Text("Search...") },
+                                placeholder = { Text(stringResource(R.string.search_placeholder)) },
                                 singleLine = true,
                                 visualTransformation = remember(isDark) {
                                     SmartSyntaxTransformation(
@@ -1238,7 +1260,7 @@ fun HomeScreen(
                                 NfIcon(NfIcons.CHILD, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    "New subtask for: ${creatingChildTask.summary}",
+                                    stringResource(R.string.new_child_of, creatingChildTask.summary),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                                     maxLines = 1,
@@ -1260,7 +1282,7 @@ fun HomeScreen(
                                 NfIcon(NfIcons.LINK, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer)
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    "Yanked: ${yankedTask.summary}",
+                                    stringResource(R.string.yanked_label) + " " + yankedTask.summary,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                                     maxLines = 1,
@@ -1287,7 +1309,7 @@ fun HomeScreen(
                             OutlinedTextField(
                                 value = newTaskText,
                                 onValueChange = { newTaskText = it },
-                                placeholder = { Text("!1 @tomorrow Buy cat food #groceries") },
+                                placeholder = { Text(stringResource(R.string.new_task_placeholder)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                                 visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
@@ -1320,7 +1342,7 @@ fun HomeScreen(
                         ) {
                             NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
                             Spacer(Modifier.width(8.dp))
-                            Text("Export local tasks to server")
+                            Text(stringResource(R.string.export_local_tasks_to_server))
                         }
                     }
 

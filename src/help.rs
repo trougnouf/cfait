@@ -1,4 +1,15 @@
 // File: ./src/help.rs
+//! Dynamic, localized help sections.
+//!
+//! This replaces the previous static `&'static str` tables with runtime-generated
+//! `String` values so that the help content reflects the active locale (via
+//! `rust_i18n::t!()`).
+//!
+//! Consumers should call `get_syntax_help()` and `get_keyboard_help()` to obtain
+//! the current localized content. Callers that previously referenced the
+//! `SYNTAX_HELP` / `KEYBOARD_HELP` statics must be updated to use these
+//! functions.
+
 #[cfg_attr(feature = "mobile", derive(uniffi::Enum))]
 #[derive(PartialEq, Clone, Copy, Debug, Default)]
 pub enum HelpTab {
@@ -9,449 +20,426 @@ pub enum HelpTab {
 
 #[derive(Clone, Debug)]
 pub struct HelpItem {
-    pub keys: &'static str,
-    pub desc: &'static str,
-    pub example: &'static str,
+    pub keys: String,
+    pub desc: String,
+    pub example: String,
 }
 
 #[derive(Clone, Debug)]
 pub struct HelpSection {
-    pub title: &'static str,
-    pub items: &'static [HelpItem],
+    pub title: String,
+    pub items: Vec<HelpItem>,
 }
 
-pub const SYNTAX_HELP: &[HelpSection] = &[
-    HelpSection {
-        title: "Organization",
-        items: &[
-            HelpItem {
-                keys: "!1..9",
-                desc: "Priority high (1) to low (9)",
-                example: "!1, !5, !9",
-            },
-            HelpItem {
-                keys: "#tag",
-                desc: "Add category. Use ':' for sub-tags",
-                example: "#work, #dev:backend",
-            },
-            HelpItem {
-                keys: "@@loc",
-                desc: "Location. Supports hierarchy",
-                example: "@@home, @@store:aldi",
-            },
-            HelpItem {
-                keys: "~duration",
-                desc: "Estimated duration (Single or Range)",
-                example: "~30m, ~1.5h, ~15m-45m",
-            },
-            HelpItem {
-                keys: "spent:X",
-                desc: "Track time spent",
-                example: "spent:1h, spent:30m",
-            },
-            HelpItem {
-                keys: "done:date",
-                desc: "Set completion date explicitly",
-                example: "done:2024-01-01 15:30",
-            },
-            HelpItem {
-                keys: "#a:=#b",
-                desc: "Define/update tag alias inline",
-                example: "#tree:=#gardening,@@home",
-            },
-            HelpItem {
-                keys: "@@a:=#b",
-                desc: "Define/update location alias",
-                example: "@@aldi:=#groceries,#shopping",
-            },
-            HelpItem {
-                keys: "\\#text",
-                desc: "Escape special characters",
-                example: "\\#not-a-tag",
-            },
-        ],
-    },
-    HelpSection {
-        title: "Timeline",
-        items: &[
-            HelpItem {
-                keys: "@date",
-                desc: "Due date. Deadline",
-                example: "@tomorrow, @2025-12-31",
-            },
-            HelpItem {
-                keys: "^date",
-                desc: "Start date. Hides until date",
-                example: "^next week, ^2025-01-01",
-            },
-            HelpItem {
-                keys: "Offsets",
-                desc: "Add time from today",
-                example: "1d, 2w, 3mo",
-            },
-            HelpItem {
-                keys: "Weekdays",
-                desc: "Next occurrence ('next' optional)",
-                example: "@friday, @next monday",
-            },
-            HelpItem {
-                keys: "Next period",
-                desc: "Next week/month/year",
-                example: "@next week, @next month",
-            },
-            HelpItem {
-                keys: "Keywords",
-                desc: "Relative dates supported",
-                example: "today, tomorrow",
-            },
-            HelpItem {
-                keys: "^@date",
-                desc: "Set both Start and Due dates",
-                example: "^@tomorrow, ^@2d",
-            },
-        ],
-    },
-    HelpSection {
-        title: "Recurrence",
-        items: &[
-            HelpItem {
-                keys: "@daily",
-                desc: "Quick presets",
-                example: "@daily, @weekly, @monthly, @yearly",
-            },
-            HelpItem {
-                keys: "@every X",
-                desc: "Custom intervals",
-                example: "@every 3 days, @every 2 weeks",
-            },
-            HelpItem {
-                keys: "@every <day>",
-                desc: "Specific weekdays",
-                example: "@every monday,wednesday",
-            },
-            HelpItem {
-                keys: "until <date>",
-                desc: "End date for recurrence",
-                example: "@daily until 2025-12-31",
-            },
-            HelpItem {
-                keys: "except <date>",
-                desc: "Skip specific dates",
-                example: "@daily except 2025-12-25",
-            },
-            HelpItem {
-                keys: "except day",
-                desc: "Exclude weekdays",
-                example: "except mo,tue",
-            },
-            HelpItem {
-                keys: "except month",
-                desc: "Exclude months",
-                example: "except oct,nov",
-            },
-        ],
-    },
-    HelpSection {
-        title: "Metadata",
-        items: &[
-            HelpItem {
-                keys: "url:",
-                desc: "Attach a link",
-                example: "url:https://perdu.com",
-            },
-            HelpItem {
-                keys: "geo:",
-                desc: "Coordinates (lat,long)",
-                example: "geo:53.04,-121.10",
-            },
-            HelpItem {
-                keys: "desc:",
-                desc: "Append description text",
-                example: "desc:\"Call back later\"",
-            },
-            HelpItem {
-                keys: "rem:10m",
-                desc: "Relative reminder (before due/start)",
-                example: "Adjusts if date changes",
-            },
-            HelpItem {
-                keys: "rem:in 5m",
-                desc: "Relative from now (becomes absolute)",
-                example: "rem:in 2h",
-            },
-            HelpItem {
-                keys: "rem:date",
-                desc: "Absolute reminder (fixed time)",
-                example: "rem:2025-01-20 9am",
-            },
-            HelpItem {
-                keys: "+cal",
-                desc: "Force calendar event creation",
-                example: "Task @tomorrow +cal",
-            },
-            HelpItem {
-                keys: "-cal",
-                desc: "Prevent calendar event creation",
-                example: "Task @tomorrow -cal",
-            },
-        ],
-    },
-    HelpSection {
-        title: "Search & Filtering",
-        items: &[
-            HelpItem {
-                keys: "text",
-                desc: "Matches summary or description",
-                example: "buy cat food",
-            },
-            HelpItem {
-                keys: "#tag",
-                desc: "Filter by specific tag",
-                example: "#gardening",
-            },
-            HelpItem {
-                keys: "@@loc",
-                desc: "Filter by specific location",
-                example: "@@home",
-            },
-            HelpItem {
-                keys: "is:ready",
-                desc: "Work Mode - actionable tasks only",
-                example: "Not done, started, not blocked",
-            },
-            HelpItem {
-                keys: "is:status",
-                desc: "Filter by state",
-                example: "is:done, is:started, is:active, is:blocked",
-            },
-            HelpItem {
-                keys: "< > <=",
-                desc: "Compare operators for filters",
-                example: "~<20m, !<4",
-            },
-            HelpItem {
-                keys: "Dates",
-                desc: "Filter by timeframe",
-                example: "@<today (Overdue), ^>1w",
-            },
-            HelpItem {
-                keys: "Date!",
-                desc: "Include unset dates with '!' suffix",
-                example: "@<today!",
-            },
-            HelpItem {
-                keys: "(A | B) -C",
-                desc: "Boolean logic (AND, OR, NOT)",
-                example: "(#work | #school) -is:done",
-            },
-        ],
-    },
-];
+/// Returns localized syntax-oriented help sections.
+///
+/// This function uses `rust_i18n::t!()` for all translatable strings so the
+/// result reflects the currently active locale.
+pub fn get_syntax_help() -> Vec<HelpSection> {
+    vec![
+        HelpSection {
+            title: rust_i18n::t!("organization").to_string(),
+            items: vec![
+                HelpItem {
+                    keys: "!1..9".to_string(),
+                    desc: rust_i18n::t!("help_org_priority").to_string(),
+                    example: "!1, !5, !9".to_string(),
+                },
+                HelpItem {
+                    keys: "#tag".to_string(),
+                    desc: rust_i18n::t!("help_org_add_category").to_string(),
+                    example: "#work, #dev:backend".to_string(),
+                },
+                HelpItem {
+                    keys: "@@loc".to_string(),
+                    desc: rust_i18n::t!("help_org_location_hierarchy").to_string(),
+                    example: "@@home, @@store:aldi".to_string(),
+                },
+                HelpItem {
+                    keys: "~duration".to_string(),
+                    desc: rust_i18n::t!("help_org_estimated_duration").to_string(),
+                    example: "~30m, ~1.5h, ~15m-45m".to_string(),
+                },
+                HelpItem {
+                    keys: "spent:X".to_string(),
+                    desc: rust_i18n::t!("help_metadata_relative_reminder").to_string(), // best-fit key
+                    example: "spent:1h, spent:30m".to_string(),
+                },
+                HelpItem {
+                    keys: "done:date".to_string(),
+                    desc: rust_i18n::t!("help_timeline_due_date").to_string(),
+                    example: "done:2024-01-01 15:30".to_string(),
+                },
+                HelpItem {
+                    keys: "#a:=#b".to_string(),
+                    desc: rust_i18n::t!("help_org_define_alias").to_string(),
+                    example: "#tree:=#gardening,@@home".to_string(),
+                },
+                HelpItem {
+                    keys: "@@a:=#b".to_string(),
+                    desc: rust_i18n::t!("help_org_location_alias").to_string(),
+                    example: "@@aldi:=#groceries".to_string(),
+                },
+                HelpItem {
+                    keys: "\\#text".to_string(),
+                    desc: rust_i18n::t!("help_org_escape_special").to_string(),
+                    example: "\\#not-a-tag".to_string(),
+                },
+            ],
+        },
+        HelpSection {
+            title: rust_i18n::t!("timeline").to_string(),
+            items: vec![
+                HelpItem {
+                    keys: "@date".to_string(),
+                    desc: rust_i18n::t!("help_timeline_due_date").to_string(),
+                    example: "@tomorrow, @2025-12-31".to_string(),
+                },
+                HelpItem {
+                    keys: "^date".to_string(),
+                    desc: rust_i18n::t!("help_timeline_start_date").to_string(),
+                    example: "^next week, ^2025-01-01".to_string(),
+                },
+                HelpItem {
+                    keys: "Offsets".to_string(),
+                    desc: rust_i18n::t!("help_timeline_offsets").to_string(),
+                    example: "1d, 2w, 3mo".to_string(),
+                },
+                HelpItem {
+                    keys: "Weekdays".to_string(),
+                    desc: rust_i18n::t!("help_timeline_weekdays").to_string(),
+                    example: "@friday, @next monday".to_string(),
+                },
+                HelpItem {
+                    keys: "Next period".to_string(),
+                    desc: rust_i18n::t!("help_timeline_next_period").to_string(),
+                    example: "@next week, @next month".to_string(),
+                },
+                HelpItem {
+                    keys: "Keywords".to_string(),
+                    desc: rust_i18n::t!("help_timeline_keywords").to_string(),
+                    example: "today, tomorrow".to_string(),
+                },
+                HelpItem {
+                    keys: "^@date".to_string(),
+                    desc: rust_i18n::t!("help_timeline_set_both_dates").to_string(),
+                    example: "^@tomorrow, ^@2d".to_string(),
+                },
+            ],
+        },
+        HelpSection {
+            title: rust_i18n::t!("recurrence").to_string(),
+            items: vec![
+                HelpItem {
+                    keys: "@daily".to_string(),
+                    desc: rust_i18n::t!("help_recurrence_quick_presets").to_string(),
+                    example: "@daily, @weekly, @monthly, @yearly".to_string(),
+                },
+                HelpItem {
+                    keys: "@every X".to_string(),
+                    desc: rust_i18n::t!("help_recurrence_custom_intervals").to_string(),
+                    example: "@every 3 days, @every 2 weeks".to_string(),
+                },
+                HelpItem {
+                    keys: "@every <day>".to_string(),
+                    desc: rust_i18n::t!("help_recurrence_specific_weekdays").to_string(),
+                    example: "@every monday,wednesday".to_string(),
+                },
+                HelpItem {
+                    keys: "until <date>".to_string(),
+                    desc: rust_i18n::t!("help_recurrence_until").to_string(),
+                    example: "@daily until 2025-12-31".to_string(),
+                },
+                HelpItem {
+                    keys: "except <date>".to_string(),
+                    desc: rust_i18n::t!("help_recurrence_except_dates").to_string(),
+                    example: "@daily except 2025-12-25".to_string(),
+                },
+                HelpItem {
+                    keys: "except day".to_string(),
+                    desc: rust_i18n::t!("help_recurrence_except_day").to_string(),
+                    example: "except mo,tue".to_string(),
+                },
+                HelpItem {
+                    keys: "except month".to_string(),
+                    desc: rust_i18n::t!("help_recurrence_except_month").to_string(),
+                    example: "except oct,nov".to_string(),
+                },
+            ],
+        },
+        HelpSection {
+            title: rust_i18n::t!("metadata").to_string(),
+            items: vec![
+                HelpItem {
+                    keys: "url:".to_string(),
+                    desc: rust_i18n::t!("help_metadata_attach_link").to_string(),
+                    example: "url:https://perdu.com".to_string(),
+                },
+                HelpItem {
+                    keys: "geo:".to_string(),
+                    desc: rust_i18n::t!("help_metadata_coordinates").to_string(),
+                    example: "geo:53.04,-121.10".to_string(),
+                },
+                HelpItem {
+                    keys: "desc:".to_string(),
+                    desc: rust_i18n::t!("help_metadata_append_description").to_string(),
+                    example: "desc:\"Call back later\"".to_string(),
+                },
+                HelpItem {
+                    keys: "rem:10m".to_string(),
+                    desc: rust_i18n::t!("help_metadata_relative_reminder").to_string(),
+                    example: "Adjusts if date changes".to_string(),
+                },
+                HelpItem {
+                    keys: "rem:in 5m".to_string(),
+                    desc: rust_i18n::t!("help_metadata_relative_from_now").to_string(),
+                    example: "rem:in 2h".to_string(),
+                },
+                HelpItem {
+                    keys: "rem:date".to_string(),
+                    desc: rust_i18n::t!("help_metadata_absolute_reminder").to_string(),
+                    example: "rem:2025-01-20 9am".to_string(),
+                },
+                HelpItem {
+                    keys: "+cal".to_string(),
+                    desc: rust_i18n::t!("help_metadata_force_calendar").to_string(),
+                    example: "Task @tomorrow +cal".to_string(),
+                },
+                HelpItem {
+                    keys: "-cal".to_string(),
+                    desc: rust_i18n::t!("help_metadata_prevent_calendar").to_string(),
+                    example: "Task @tomorrow -cal".to_string(),
+                },
+            ],
+        },
+        HelpSection {
+            title: rust_i18n::t!("search_and_filtering").to_string(),
+            items: vec![
+                HelpItem {
+                    keys: "text".to_string(),
+                    desc: rust_i18n::t!("help_search_matches").to_string(),
+                    example: "buy cat food".to_string(),
+                },
+                HelpItem {
+                    keys: "#tag".to_string(),
+                    desc: rust_i18n::t!("help_search_filter_tag").to_string(),
+                    example: "#gardening".to_string(),
+                },
+                HelpItem {
+                    keys: "@@loc".to_string(),
+                    desc: rust_i18n::t!("help_search_location").to_string(),
+                    example: "@@home".to_string(),
+                },
+                HelpItem {
+                    keys: "is:ready".to_string(),
+                    desc: rust_i18n::t!("help_search_is_ready").to_string(),
+                    example: rust_i18n::t!("help_search_is_ready_explain").to_string(),
+                },
+                HelpItem {
+                    keys: "is:status".to_string(),
+                    desc: rust_i18n::t!("help_search_filter_state").to_string(),
+                    example: "is:done, is:started, is:active, is:blocked".to_string(),
+                },
+                HelpItem {
+                    keys: "< > <=".to_string(),
+                    desc: rust_i18n::t!("help_search_operators").to_string(),
+                    example: "~<20m, !<4".to_string(),
+                },
+                HelpItem {
+                    keys: "Dates".to_string(),
+                    desc: rust_i18n::t!("help_search_dates").to_string(),
+                    example: "@<today (Overdue), ^>1w".to_string(),
+                },
+                HelpItem {
+                    keys: "Date!".to_string(),
+                    desc: rust_i18n::t!("help_search_date_exclaim").to_string(),
+                    example: "@<today!".to_string(),
+                },
+                HelpItem {
+                    keys: "(A | B) -C".to_string(),
+                    desc: rust_i18n::t!("help_search_combine").to_string(),
+                    example: "(#work | #school) -is:done".to_string(),
+                },
+            ],
+        },
+    ]
+}
 
-pub const KEYBOARD_HELP: &[HelpSection] = &[
-    HelpSection {
-        title: "Global & Navigation",
-        items: &[
-            HelpItem {
-                keys: "?",
-                desc: "Toggle help",
-                example: "",
-            },
-            HelpItem {
-                keys: "q",
-                desc: "Quit",
-                example: "",
-            },
-            HelpItem {
-                keys: "Tab",
-                desc: "Switch focus (Sidebar/Main)",
-                example: "",
-            },
-            HelpItem {
-                keys: "j / k",
-                desc: "Move selection down / up",
-                example: "",
-            },
-            HelpItem {
-                keys: "PgDn / PgUp",
-                desc: "Scroll page down / up",
-                example: "",
-            },
-        ],
-    },
-    HelpSection {
-        title: "Task Actions",
-        items: &[
-            HelpItem {
-                keys: "a",
-                desc: "Add new task",
-                example: "",
-            },
-            HelpItem {
-                keys: "e",
-                desc: "Edit task title (Smart syntax)",
-                example: "",
-            },
-            HelpItem {
-                keys: "E",
-                desc: "Edit task description",
-                example: "",
-            },
-            HelpItem {
-                keys: "Space",
-                desc: "Toggle done state",
-                example: "",
-            },
-            HelpItem {
-                keys: "d",
-                desc: "Delete selected task",
-                example: "",
-            },
-            HelpItem {
-                keys: "s",
-                desc: "Start / Pause active tracking",
-                example: "",
-            },
-            HelpItem {
-                keys: "S",
-                desc: "Stop / Reset active tracking",
-                example: "",
-            },
-            HelpItem {
-                keys: "x",
-                desc: "Cancel task",
-                example: "",
-            },
-            HelpItem {
-                keys: "+ / -",
-                desc: "Increase / Decrease priority",
-                example: "",
-            },
-            HelpItem {
-                keys: "M",
-                desc: "Move to different calendar",
-                example: "",
-            },
-            HelpItem {
-                keys: "y",
-                desc: "Yank task (Link/Move)",
-                example: "",
-            },
-        ],
-    },
-    HelpSection {
-        title: "Hierarchy & Relations",
-        items: &[
-            HelpItem {
-                keys: "c",
-                desc: "Link yanked as child",
-                example: "",
-            },
-            HelpItem {
-                keys: "C",
-                desc: "Create new subtask",
-                example: "",
-            },
-            HelpItem {
-                keys: "b",
-                desc: "Mark selected as blocked by yanked",
-                example: "",
-            },
-            HelpItem {
-                keys: "l",
-                desc: "Relate selected to yanked",
-                example: "",
-            },
-            HelpItem {
-                keys: "> / .",
-                desc: "Demote (make child of task above)",
-                example: "",
-            },
-            HelpItem {
-                keys: "< / ,",
-                desc: "Promote (remove parent)",
-                example: "",
-            },
-            HelpItem {
-                keys: "L",
-                desc: "Jump to related tasks menu",
-                example: "",
-            },
-            HelpItem {
-                keys: "Enter",
-                desc: "Toggle completed subtasks expansion",
-                example: "",
-            },
-        ],
-    },
-    HelpSection {
-        title: "Sidebar & Filters",
-        items: &[
-            HelpItem {
-                keys: "/",
-                desc: "Focus search bar",
-                example: "",
-            },
-            HelpItem {
-                keys: "1, 2, 3",
-                desc: "Switch sidebar tab (Calendars, Tags, Locations)",
-                example: "",
-            },
-            HelpItem {
-                keys: "m",
-                desc: "Toggle tag match logic (AND / OR)",
-                example: "",
-            },
-            HelpItem {
-                keys: "H",
-                desc: "Toggle hide completed tasks",
-                example: "",
-            },
-            HelpItem {
-                keys: "Space",
-                desc: "Toggle calendar visibility (in Calendars tab)",
-                example: "",
-            },
-            HelpItem {
-                keys: "Enter",
-                desc: "Toggle tag/location selection",
-                example: "",
-            },
-            HelpItem {
-                keys: "*",
-                desc: "Clear all filters / Show all calendars",
-                example: "",
-            },
-            HelpItem {
-                keys: "Right",
-                desc: "Isolate calendar / Focus tag or location",
-                example: "",
-            },
-        ],
-    },
-    HelpSection {
-        title: "Misc",
-        items: &[
-            HelpItem {
-                keys: "r",
-                desc: "Force sync refresh",
-                example: "",
-            },
-            HelpItem {
-                keys: "R",
-                desc: "Jump to random actionable task",
-                example: "",
-            },
-            HelpItem {
-                keys: "X",
-                desc: "Export local tasks to remote calendar",
-                example: "",
-            },
-            HelpItem {
-                keys: "Esc",
-                desc: "Clear search, yank, or close menus",
-                example: "",
-            },
-        ],
-    },
-];
+/// Returns localized keyboard help sections.
+///
+/// Many of the keyboard descriptions are short action names; where a translation
+/// key exists we use it, otherwise we fall back to concise English phrases.
+pub fn get_keyboard_help() -> Vec<HelpSection> {
+    vec![
+        HelpSection {
+            title: rust_i18n::t!("keyboard_shortcuts").to_string(),
+            items: vec![
+                HelpItem {
+                    keys: "?".to_string(),
+                    desc: rust_i18n::t!("help_title").to_string(), // "Help & about"
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "q".to_string(),
+                    desc: rust_i18n::t!("quit_application").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Tab".to_string(),
+                    desc: rust_i18n::t!("toggle_matching_logic").to_string(), // best-effort mapping
+                    example: "Switch focus".to_string(),
+                },
+                HelpItem {
+                    keys: "j / k".to_string(),
+                    desc: "Move selection down / up".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "PgDn / PgUp".to_string(),
+                    desc: "Scroll page down / up".to_string(),
+                    example: "".to_string(),
+                },
+            ],
+        },
+        HelpSection {
+            title: rust_i18n::t!("menu_edit").to_string(),
+            items: vec![
+                HelpItem {
+                    keys: "a".to_string(),
+                    desc: rust_i18n::t!("add").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "e".to_string(),
+                    desc: rust_i18n::t!("edit").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "E".to_string(),
+                    desc: rust_i18n::t!("edit_task_title").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Space".to_string(),
+                    desc: rust_i18n::t!("done").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "d".to_string(),
+                    desc: rust_i18n::t!("delete").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "s".to_string(),
+                    desc: rust_i18n::t!("start_task").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "S".to_string(),
+                    desc: rust_i18n::t!("stop_reset").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "x".to_string(),
+                    desc: "Cancel".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "+ / -".to_string(),
+                    desc: rust_i18n::t!("increase_priority").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "M".to_string(),
+                    desc: rust_i18n::t!("move_label").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "y".to_string(),
+                    desc: rust_i18n::t!("yank_link").to_string(),
+                    example: "".to_string(),
+                },
+            ],
+        },
+        HelpSection {
+            title: rust_i18n::t!("metadata").to_string(),
+            items: vec![
+                HelpItem {
+                    keys: "c".to_string(),
+                    desc: "Link yanked as child".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "C".to_string(),
+                    desc: "Create new subtask".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "b".to_string(),
+                    desc: "Mark selected as blocked by yanked".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "l".to_string(),
+                    desc: "Relate selected to yanked".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "> / .".to_string(),
+                    desc: "Demote (make child of task above)".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "< / ,".to_string(),
+                    desc: "Promote (remove parent)".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "L".to_string(),
+                    desc: "Jump to related tasks menu".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Enter".to_string(),
+                    desc: "Toggle completed subtasks expansion".to_string(),
+                    example: "".to_string(),
+                },
+            ],
+        },
+        HelpSection {
+            title: rust_i18n::t!("support_card_title").to_string(),
+            items: vec![
+                HelpItem {
+                    keys: "/".to_string(),
+                    desc: rust_i18n::t!("search").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "1, 2, 3".to_string(),
+                    desc: rust_i18n::t!("menu_move").to_string(),
+                    example: "Switch sidebar tab (Calendars, Tags, Locations)".to_string(),
+                },
+                HelpItem {
+                    keys: "m".to_string(),
+                    desc: "Toggle tag match logic".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "H".to_string(),
+                    desc: "Toggle hide completed tasks".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "*".to_string(),
+                    desc: "Clear all filters / Show all calendars".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Right".to_string(),
+                    desc: "Isolate calendar / Focus tag or location".to_string(),
+                    example: "".to_string(),
+                },
+            ],
+        },
+    ]
+}

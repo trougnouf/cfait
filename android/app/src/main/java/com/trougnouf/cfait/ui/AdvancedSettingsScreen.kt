@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
 import com.trougnouf.cfait.core.CfaitMobile
 import kotlinx.coroutines.launch
@@ -37,11 +38,18 @@ fun AdvancedSettingsScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var debugStatus by remember { mutableStateOf("") }
+    var debugIsError by remember { mutableStateOf(false) }
+
+    // Pre-resolve strings that will be referenced from non-composable contexts (eg. inside coroutine)
+    val exportExporting = stringResource(R.string.export_debug_status_exporting)
+    val exportReady = stringResource(R.string.export_debug_status_ready)
+    val exportFailedTemplate = stringResource(R.string.export_debug_status_failed)
+    val exportShareTitle = stringResource(R.string.export_debug_share_title)
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Advanced Settings") },
+                title = { Text(stringResource(R.string.advanced_settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) }
                 }
@@ -58,7 +66,7 @@ fun AdvancedSettingsScreen(
         ) {
             // Display Limits Section
             Text(
-                "Display Limits",
+                text = stringResource(R.string.display_limits),
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 color = MaterialTheme.colorScheme.primary,
@@ -68,13 +76,13 @@ fun AdvancedSettingsScreen(
             OutlinedTextField(
                 value = maxDoneRoots,
                 onValueChange = onMaxDoneRootsChange,
-                label = { Text("Max completed tasks (Root)") },
+                label = { Text(stringResource(R.string.max_completed_tasks_root)) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true
             )
             Text(
-                "How many completed tasks to show in the main list before hiding them behind a 'Show More' button.",
+                stringResource(R.string.max_completed_tasks_root_explain),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
@@ -83,13 +91,13 @@ fun AdvancedSettingsScreen(
             OutlinedTextField(
                 value = maxDoneSubtasks,
                 onValueChange = onMaxDoneSubtasksChange,
-                label = { Text("Max completed subtasks") },
+                label = { Text(stringResource(R.string.max_completed_subtasks)) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true
             )
             Text(
-                "How many completed subtasks to show inside a parent task before truncating.",
+                stringResource(R.string.max_completed_subtasks_explain),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
@@ -99,7 +107,7 @@ fun AdvancedSettingsScreen(
 
             // Calendar Integration Section
             Text(
-                "Calendar Integration",
+                stringResource(R.string.calendar_integration),
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 color = MaterialTheme.colorScheme.primary,
@@ -111,10 +119,10 @@ fun AdvancedSettingsScreen(
                     onCheckedChange = onDeleteEventsChange
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Delete calendar events when tasks are completed")
+                Text(stringResource(R.string.delete_calendar_events_on_completion_label))
             }
             Text(
-                "Regardless, events are always deleted when tasks are deleted.",
+                stringResource(R.string.events_deleted_on_task_delete),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
@@ -124,7 +132,7 @@ fun AdvancedSettingsScreen(
 
             // Data Management Section
             Text(
-                "Data Management",
+                stringResource(R.string.data_management),
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 color = MaterialTheme.colorScheme.primary,
@@ -133,13 +141,13 @@ fun AdvancedSettingsScreen(
             OutlinedTextField(
                 value = trashRetention,
                 onValueChange = onTrashRetentionChange,
-                label = { Text("Trash Retention (days)") },
+                label = { Text(stringResource(R.string.trash_retention_days_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true
             )
             Text(
-                "Keep deleted items in local trash for this many days. Set to 0 to delete immediately.",
+                stringResource(R.string.trash_retention_explain),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
@@ -149,14 +157,14 @@ fun AdvancedSettingsScreen(
 
             // Debug Section (Moved from SettingsScreen)
             Text(
-                "Debug",
+                stringResource(R.string.debug),
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
             Text(
-                "Export all app data (config, cache, journals) for debugging. Credentials will be redacted.",
+                stringResource(R.string.debug_export_explain),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 16.dp)
@@ -165,7 +173,8 @@ fun AdvancedSettingsScreen(
                 onClick = {
                     scope.launch {
                         try {
-                            debugStatus = "Exporting data..."
+                            debugIsError = false
+                            debugStatus = exportExporting
                             val zipPath = api.createDebugExport()
                             val sourceFile = File(zipPath)
                             val destFile = File(context.cacheDir, "cfait_debug_export.zip")
@@ -188,11 +197,18 @@ fun AdvancedSettingsScreen(
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }
 
-                            val shareIntent = Intent.createChooser(intent, "Export Debug Data")
+                            val shareIntent = Intent.createChooser(intent, exportShareTitle)
                             context.startActivity(shareIntent)
-                            debugStatus = "Export ready"
+                            debugIsError = false
+                            debugStatus = exportReady
                         } catch (e: Exception) {
-                            debugStatus = "Export failed: ${e.message}"
+                            debugIsError = true
+                            debugStatus = try {
+                                String.format(exportFailedTemplate, e.message ?: e.toString())
+                            } catch (_: Exception) {
+                                // Fallback if formatting fails
+                                "${exportFailedTemplate} ${e.message ?: e.toString()}"
+                            }
                         }
                     }
                 },
@@ -205,14 +221,14 @@ fun AdvancedSettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     NfIcon(NfIcons.ARCHIVE_ARROW_UP, 16.sp)
                     Spacer(Modifier.width(8.dp))
-                    Text("Export Debug ZIP")
+                    Text(stringResource(R.string.export_debug_zip))
                 }
             }
 
             if (debugStatus.isNotEmpty()) {
                 Text(
                     text = debugStatus,
-                    color = if (debugStatus.startsWith("Export failed")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    color = if (debugIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(top = 8.dp),
                     style = MaterialTheme.typography.bodySmall
                 )

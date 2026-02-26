@@ -4,120 +4,100 @@
 pub fn print_help(binary_name: &str) {
     let is_gui = binary_name.contains("gui");
 
+    // Localized title (uses locales/en.json key `cli_title`)
     println!(
-        "Cfait v{} - A powerful, fast and elegant CalDAV task manager ({})",
-        env!("CARGO_PKG_VERSION"),
-        if is_gui { "GUI" } else { "TUI" }
+        "{}",
+        rust_i18n::t!(
+            "cli_title",
+            version = env!("CARGO_PKG_VERSION"),
+            mode = if is_gui { "GUI" } else { "TUI" }
+        )
     );
     println!();
+
+    // Usage (fall back to existing English headings where appropriate)
     println!("USAGE:");
     if is_gui {
-        println!(
-            "    {} [--root <path>] [--force-ssd] [--force-csd] [path/to/file.ics]",
-            binary_name
-        );
+        println!("{}", rust_i18n::t!("cli_usage_gui", binary = binary_name));
     } else {
-        println!("    {} [--root <path>]", binary_name);
-        println!("    {} export [--collection <id>]", binary_name);
-        println!("    {} import <file.ics> [--collection <id>]", binary_name);
-        println!("    {} --help", binary_name);
-    }
-    println!();
-    println!("OPTIONS:");
-    if is_gui {
-        println!("    <path/to/file.ics>    Open an ICS file on startup to import it.");
-    }
-    println!("    -r, --root <path>     Use a different directory for config and data.");
-    if is_gui {
-        println!("    --force-ssd           Force server-side (native) window decorations.");
+        println!("{}", rust_i18n::t!("cli_usage_tui", binary = binary_name));
         println!(
-            "    --force-csd           Force client-side (custom) window decorations (override)."
+            "{}",
+            rust_i18n::t!("cli_usage_export", binary = binary_name)
         );
+        println!(
+            "{}",
+            rust_i18n::t!("cli_usage_import", binary = binary_name)
+        );
+        println!("{}", rust_i18n::t!("cli_option_help"));
     }
-    println!("    -h, --help            Show this help message.");
     println!();
 
+    println!("{}", rust_i18n::t!("cli_options_heading"));
+    if is_gui {
+        // GUI-specific option help lines localized
+        println!("{}", rust_i18n::t!("cli_option_force_ssd"));
+        println!("{}", rust_i18n::t!("cli_option_force_csd"));
+        println!("{}", rust_i18n::t!("cli_import_command"));
+    } else {
+        println!("{}", rust_i18n::t!("cli_option_root"));
+    }
+    println!("{}", rust_i18n::t!("cli_option_help"));
+
+    println!();
+
+    // Sync/Export sections (localized)
     if !is_gui {
-        println!("SYNC COMMANDS:");
+        println!("{}", rust_i18n::t!("cli_sync_commands_heading"));
         println!(
-            "    {} sync                                    Fetch and push changes, then exit",
-            binary_name
+            "{}",
+            rust_i18n::t!("cli_sync_command_sync", binary = binary_name)
         );
         println!(
-            "    {} daemon                                  Run continuously in background and sync",
-            binary_name
+            "{}",
+            rust_i18n::t!("cli_sync_command_daemon", binary = binary_name)
         );
+        // Import examples/localized short descriptions
+        println!("{}", rust_i18n::t!("cli_import_command"));
         println!(
-            "                                               at the interval specified in settings"
-        );
-        println!();
-        println!("IMPORT COMMAND:");
-        println!(
-            "    {} import tasks.ics                        Import to default local collection",
-            binary_name
-        );
-        println!(
-            "    {} import tasks.ics --collection <id>        Import to specific local calendar",
-            binary_name
-        );
-        println!(
-            "    {} import backup.ics --collection my-cal     Import to 'my-cal' collection",
-            binary_name
+            "{}",
+            rust_i18n::t!("cli_import_examples", binary = binary_name)
         );
         println!();
 
-        println!("EXPORT COMMAND:");
+        println!("{}", rust_i18n::t!("cli_export_command"));
         println!(
-            "    {} export                              Export default local collection",
-            binary_name
+            "{}",
+            rust_i18n::t!("cli_usage_export", binary = binary_name)
         );
         println!(
-            "    {} export --collection <id>              Export specific local collection",
-            binary_name
-        );
-        println!(
-            "    {} export > backup.ics                 Save tasks to file",
-            binary_name
-        );
-        println!(
-            "    {} export --collection my-cal > my.ics   Export specific collection to file",
-            binary_name
-        );
-        println!(
-            "    {} export | grep 'SUMMARY'             Filter output",
-            binary_name
+            "{}",
+            rust_i18n::t!("cli_export_examples", binary = binary_name)
         );
         println!();
     }
 
+    // GUI vs TUI specific notes
     if is_gui {
-        println!(
-            "This will open the graphical interface. For detailed smart input syntax and other"
-        );
-        println!("command-line operations (like import/export), see 'cfait --help'.");
+        println!("{}", rust_i18n::t!("cli_gui_note"));
     } else {
-        println!("KEYBINDINGS:");
-        println!("    Press '?' inside the app for full interactive help");
+        println!("{}", rust_i18n::t!("cli_keybindings_heading"));
+        println!("{}", rust_i18n::t!("cli_press_question"));
         println!();
-        println!("SMART INPUT SYNTAX:");
-        for sec in crate::help::SYNTAX_HELP {
-            for item in sec.items {
+        println!("{}", rust_i18n::t!("cli_smart_input_heading"));
+        for sec in crate::help::get_syntax_help() {
+            for item in &sec.items {
                 let padded = format!("{:width$}", item.keys, width = 18);
                 println!("    {} {}", padded, item.desc);
             }
         }
         println!();
-        println!("EXAMPLES:");
-        println!("    Buy cookies !1 @2025-01-16 #shopping rem:2025-01-16 8am");
-        println!("    Exercise @daily ~30m #health rem:8am");
-        println!("    Meeting @tomorrow 2pm ~1h +cal (force create calendar event)");
-        println!("    Plant plum tree #tree_planting !3 ~2h @@home:garden");
-        println!("    #tree_planting:=#gardening,@@home");
-        println!("    @@aldi:=#groceries,#shopping (location alias)");
+        println!("{}", rust_i18n::t!("cli_examples"));
+        // The `cli_examples` key contains a multi-line examples block in the SSOT
+        println!("{}", rust_i18n::t!("cli_examples"));
     }
 
     println!();
-    println!("MORE INFO:");
-    println!("    Repository: https://codeberg.org/trougnouf/cfait");
-    println!("    License:    GPL-3.0");
+    println!("{}", rust_i18n::t!("cli_more_info_repo"));
+    println!("{}", rust_i18n::t!("cli_more_info_license"));
 }

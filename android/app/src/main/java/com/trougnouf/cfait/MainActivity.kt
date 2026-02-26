@@ -198,7 +198,7 @@ fun CfaitNavHost(
         try {
             if (currentMigration?.state == WorkInfo.State.SUCCEEDED) {
                 val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
-                Toast.makeText(context, msg ?: "Migration complete", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, msg ?: context.getString(R.string.migration_complete), Toast.LENGTH_LONG).show()
 
                 // Force refresh UI
                 val intent = Intent("com.trougnouf.cfait.REFRESH_UI")
@@ -209,7 +209,7 @@ fun CfaitNavHost(
                 workManager.pruneWork()
             } else if (currentMigration?.state == WorkInfo.State.FAILED) {
                 val msg = currentMigration.outputData.getString(CalendarMigrationWorker.OUTPUT_MESSAGE)
-                Toast.makeText(context, msg ?: "Migration failed", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, msg ?: context.getString(R.string.migration_failed), Toast.LENGTH_LONG).show()
 
                 // Prune failed work too so user can retry immediately without UI glitch
                 workManager.pruneWork()
@@ -322,7 +322,11 @@ fun CfaitNavHost(
                 refreshLists()
             } catch (e: Exception) {
                 if (e is CancellationException) throw e // IGNORE CANCELLATION (don't show to user)
-                Toast.makeText(context, "Background sync failed: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.background_sync_failed, e.message ?: ""),
+                    Toast.LENGTH_LONG
+                ).show()
                 refreshLists()
             }
         }
@@ -338,7 +342,7 @@ fun CfaitNavHost(
             ExistingWorkPolicy.REPLACE,
             workRequest
         )
-        Toast.makeText(context, "Deleting events in background...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.deleting_events_background), Toast.LENGTH_SHORT).show()
     }
 
     fun handleCreateMissingEvents() {
@@ -351,7 +355,7 @@ fun CfaitNavHost(
             ExistingWorkPolicy.REPLACE,
             workRequest
         )
-        Toast.makeText(context, "Creating events in background...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.creating_events_background), Toast.LENGTH_SHORT).show()
     }
 
     fun handleMigration(sourceHref: String, targetHref: String) {
@@ -369,7 +373,7 @@ fun CfaitNavHost(
             ExistingWorkPolicy.KEEP,
             workRequest
         )
-        Toast.makeText(context, "Migrating tasks in background...", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, context.getString(R.string.migrating_tasks_background), Toast.LENGTH_SHORT).show()
     }
 
     LaunchedEffect("fastStart") { fastStart() }
@@ -388,11 +392,19 @@ fun CfaitNavHost(
                             icsContentToImport = icsContent
                             navController.navigate("ics_import")
                         } else {
-                            Toast.makeText(context, "Failed to read ICS file", Toast.LENGTH_LONG).show()
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.failed_to_read_ics_file),
+                                Toast.LENGTH_LONG
+                            ).show()
                         }
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
-                        Toast.makeText(context, "Error opening file: ${e.message}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.error_opening_file, e.message ?: ""),
+                            Toast.LENGTH_LONG
+                        ).show()
                     }
                 }
             }
@@ -534,7 +546,11 @@ fun CfaitNavHost(
                                 }
                             } catch (e: Exception) {
                                 if (e is CancellationException) throw e
-                                Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(
+                                    context,
+                                    context.getString(R.string.import_failed, e.message ?: ""),
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
                         }
                     },

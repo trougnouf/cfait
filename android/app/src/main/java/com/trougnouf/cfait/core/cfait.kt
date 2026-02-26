@@ -783,6 +783,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_tags(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_available_locales(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_calendars(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_config(): Short
@@ -834,6 +836,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_default_calendar(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_set_locale(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_set_parent(): Short
 
@@ -966,6 +970,11 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_get_all_locations(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_all_tags(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_available_locales(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_calendars(
         `ptr`: Long,
@@ -1131,6 +1140,12 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_set_default_calendar(
         `ptr`: Long,
         `href`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_set_locale(
+        `ptr`: Long,
+        `locale`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
@@ -1465,6 +1480,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_all_tags() != 35057.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_available_locales() != 49739.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_calendars() != 64964.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1541,6 +1559,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_default_calendar() != 27510.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_locale() != 46626.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_parent() != 26586.toShort()) {
@@ -2149,6 +2170,8 @@ public interface CfaitMobileInterface {
 
     suspend fun `getAllTags`(): List<MobileTag>
 
+    fun `getAvailableLocales`(): List<kotlin.String>
+
     fun `getCalendars`(): List<MobileCalendar>
 
     fun `getConfig`(): MobileConfig
@@ -2256,6 +2279,8 @@ public interface CfaitMobileInterface {
     )
 
     fun `setDefaultCalendar`(`href`: kotlin.String)
+
+    fun `setLocale`(`locale`: kotlin.String)
 
     suspend fun `setParent`(
         `childUid`: kotlin.String,
@@ -2721,6 +2746,18 @@ open class CfaitMobile :
             UniffiNullRustCallStatusErrorHandler,
         )
 
+    override fun `getAvailableLocales`(): List<kotlin.String> =
+        FfiConverterSequenceString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_available_locales(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
     override fun `getCalendars`(): List<MobileCalendar> =
         FfiConverterSequenceTypeMobileCalendar.lift(
             callWithHandle {
@@ -3177,6 +3214,17 @@ open class CfaitMobile :
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_default_calendar(
                     it,
                     FfiConverterString.lower(`href`),
+                    _status,
+                )
+            }
+        }
+
+    override fun `setLocale`(`locale`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_locale(
+                    it,
+                    FfiConverterString.lower(`locale`),
                     _status,
                 )
             }

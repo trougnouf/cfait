@@ -53,6 +53,10 @@ directories = "6.0"
 anyhow = "1.0"
 rrule = "0.14"
 serde_json = "1.0"
+# Single Source of Truth internationalization support (reads JSON locales)
+isolang = { version = "2.4.0", features = ["local_names", "english_names"] }
+rust-i18n = "3"
+sys-locale = "0.3"
 rustls-native-certs = "0.8"
 futures = "0.3"
 roxmltree = "0.21"
@@ -87,7 +91,7 @@ fastrand = "2.3"
 once_cell = "1.18"
 
 [build-dependencies]
-winresource = "0.1"
+winresource = "0.1" # (Keep existing)
 
 [target.'cfg(target_os = "windows")'.dependencies]
 os_info = "3"
@@ -144,7 +148,7 @@ lto = true          # Link Time Optimization (removes dead code across crates).
 codegen-units = 1   # Slower compile, but smaller binary.
 
 [package.metadata.deb]
-maintainer = "Benoit Brummer (Trougnouf) <trougnouf@gmail.com>"
+maintainer = "Benoit Brummer (Trougnouf) <trougnouf@disroot.org>"
 copyright = "2025, Benoit Brummer (Trougnouf)"
 license-file = ["LICENSE", "4"]
 extended-description = """

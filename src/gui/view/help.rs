@@ -31,7 +31,7 @@ pub fn view_help<'a>(tab: HelpTab, _app: &'a GuiApp) -> Element<'a, Message> {
             .width(Length::Fixed(84.0))
             .height(Length::Fixed(32.0))
             .content_fit(iced::ContentFit::Contain),
-        text("Help & about")
+        text(rust_i18n::t!("help_about"))
             .size(28)
             .style(|theme: &Theme| text::Style {
                 color: Some(theme.extended_palette().background.base.text)
@@ -45,7 +45,7 @@ pub fn view_help<'a>(tab: HelpTab, _app: &'a GuiApp) -> Element<'a, Message> {
         .on_press(Message::WindowDragged);
 
     let tab_row = row![
-        button(text("Syntax"))
+        button(text(rust_i18n::t!("help_syntax")))
             .style(if tab == HelpTab::Syntax {
                 iced::widget::button::primary
             } else {
@@ -53,7 +53,7 @@ pub fn view_help<'a>(tab: HelpTab, _app: &'a GuiApp) -> Element<'a, Message> {
             })
             .width(Length::Fill)
             .on_press(Message::OpenHelp(HelpTab::Syntax)),
-        button(text("Keyboard"))
+        button(text(rust_i18n::t!("help_keyboard")))
             .style(if tab == HelpTab::Keyboard {
                 iced::widget::button::primary
             } else {
@@ -71,21 +71,21 @@ pub fn view_help<'a>(tab: HelpTab, _app: &'a GuiApp) -> Element<'a, Message> {
     });
 
     let data = match tab {
-        HelpTab::Syntax => crate::help::SYNTAX_HELP,
-        HelpTab::Keyboard => crate::help::KEYBOARD_HELP,
+        HelpTab::Syntax => crate::help::get_syntax_help(),
+        HelpTab::Keyboard => crate::help::get_keyboard_help(),
     };
 
     let mut content_col = column![].spacing(20).padding(20).max_width(800);
 
     for section in data {
         content_col = content_col.push(help_card(
-            section.title,
+            section.title.as_str(),
             if tab == HelpTab::Syntax {
                 crate::gui::icon::INFO
             } else {
                 crate::gui::icon::KEYBOARD
             },
-            section.items,
+            &section.items,
         ));
     }
 
@@ -95,7 +95,7 @@ pub fn view_help<'a>(tab: HelpTab, _app: &'a GuiApp) -> Element<'a, Message> {
         container(
             column![
                 button(
-                    text("Close")
+                    text(rust_i18n::t!("close"))
                         .size(16)
                         .width(Length::Fill)
                         .align_x(iced::alignment::Horizontal::Center)
@@ -150,9 +150,9 @@ pub fn view_help<'a>(tab: HelpTab, _app: &'a GuiApp) -> Element<'a, Message> {
 }
 
 fn help_card<'a>(
-    title: &'static str,
+    title: &str,
     icon_char: char,
-    items: &'static [crate::help::HelpItem],
+    items: &[crate::help::HelpItem],
 ) -> Element<'a, Message> {
     let header = row![
         crate::gui::icon::icon(icon_char)
@@ -164,13 +164,16 @@ fn help_card<'a>(
                     theme.extended_palette().primary.base.color
                 })
             }),
-        text(title).size(18).style(|theme: &Theme| text::Style {
-            color: Some(if theme.extended_palette().is_dark {
-                COL_ACCENT
-            } else {
-                theme.extended_palette().primary.base.color
+        // FIX: Own the title string
+        text(title.to_string())
+            .size(18)
+            .style(|theme: &Theme| text::Style {
+                color: Some(if theme.extended_palette().is_dark {
+                    COL_ACCENT
+                } else {
+                    theme.extended_palette().primary.base.color
+                })
             })
-        })
     ]
     .spacing(10)
     .align_y(iced::Alignment::Center);
@@ -192,18 +195,21 @@ fn help_card<'a>(
     .spacing(12);
 
     for item in items {
-        let syntax_pill = container(text::<Theme, iced::Renderer>(item.keys).size(14).style(
-            |theme: &Theme| {
-                let palette = theme.extended_palette();
-                text::Style {
-                    color: Some(if palette.is_dark {
-                        COL_SYNTAX
-                    } else {
-                        palette.primary.strong.color
-                    }),
-                }
-            },
-        ))
+        let syntax_pill = container(
+            // FIX: Own the keys string using .clone()
+            text::<Theme, iced::Renderer>(item.keys.clone())
+                .size(14)
+                .style(|theme: &Theme| {
+                    let palette = theme.extended_palette();
+                    text::Style {
+                        color: Some(if palette.is_dark {
+                            COL_SYNTAX
+                        } else {
+                            palette.primary.strong.color
+                        }),
+                    }
+                }),
+        )
         .padding([2, 6])
         .style(|theme: &Theme| {
             let palette = theme.extended_palette();
@@ -226,7 +232,8 @@ fn help_card<'a>(
         let content = column![
             row![
                 syntax_pill.width(Length::Fixed(120.0)),
-                text::<Theme, iced::Renderer>(item.desc)
+                // FIX: Own the desc string using .clone()
+                text::<Theme, iced::Renderer>(item.desc.clone())
                     .size(14)
                     .width(Length::Fill)
                     .style(|theme: &Theme| text::Style {
@@ -238,6 +245,7 @@ fn help_card<'a>(
             if !item.example.is_empty() {
                 Element::from(row![
                     Space::new().width(Length::Fixed(120.0)),
+                    // format! creates an owned string automatically
                     text::<Theme, iced::Renderer>(format!("e.g.: {}", item.example))
                         .size(12)
                         .style(|_: &Theme| text::Style {
@@ -290,7 +298,7 @@ fn support_card<'a>() -> Element<'a, Message> {
         icon(HEART_HAND).size(20).style(|_: &Theme| text::Style {
             color: Some(Color::from_rgb(1.0, 0.4, 0.4))
         }),
-        text("Support development")
+        text(rust_i18n::t!("support_development"))
             .size(18)
             .style(|theme: &Theme| text::Style {
                 color: Some(theme.extended_palette().background.base.text)

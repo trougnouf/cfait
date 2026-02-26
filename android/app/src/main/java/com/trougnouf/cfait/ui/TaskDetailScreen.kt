@@ -76,7 +76,7 @@ fun TaskDetailScreen(
             }
         AlertDialog(
             onDismissRequest = { showMoveDialog = false },
-            title = { Text("Move to calendar") },
+            title = { Text(androidx.compose.ui.res.stringResource(R.string.move_to_calendar_title)) },
             text = {
                 LazyColumn {
                     items(targetCals) { cal ->
@@ -90,14 +90,18 @@ fun TaskDetailScreen(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { showMoveDialog = false }) { Text("Cancel") } },
+            confirmButton = {
+                TextButton(onClick = {
+                    showMoveDialog = false
+                }) { Text(androidx.compose.ui.res.stringResource(R.string.cancel)) }
+            },
         )
     }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Edit task") },
+                title = { Text(androidx.compose.ui.res.stringResource(R.string.task_edit_title)) },
                 navigationIcon = { IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) } },
                 actions = {
                     if (task!!.geo != null) {
@@ -111,7 +115,9 @@ fun TaskDetailScreen(
                         }
                     }
                     if (enabledCalendarCount > 1) {
-                        TextButton(onClick = { showMoveDialog = true }) { Text("Move") }
+                        TextButton(onClick = {
+                            showMoveDialog = true
+                        }) { Text(androidx.compose.ui.res.stringResource(R.string.move_label)) }
                     }
                     TextButton(
                         onClick = {
@@ -120,7 +126,7 @@ fun TaskDetailScreen(
                             // so we can leave this screen immediately without killing the save process.
                             onSave(smartInput, description)
                         },
-                    ) { Text("Save") }
+                    ) { Text(androidx.compose.ui.res.stringResource(R.string.task_save_button)) }
                 },
             )
         },
@@ -136,7 +142,7 @@ fun TaskDetailScreen(
             OutlinedTextField(
                 value = smartInput,
                 onValueChange = { smartInput = it.replace("\n", "") }, // Manually block newlines
-                label = { Text("Task (smart syntax)") },
+                label = { Text(androidx.compose.ui.res.stringResource(R.string.task_smart_syntax_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
                 // Removed singleLine = true to avoid cursor handle positioning issues on high DPI tablets
@@ -147,7 +153,7 @@ fun TaskDetailScreen(
                 }),
             )
             Text(
-                "Use !1, @date, #tag, ~duration",
+                androidx.compose.ui.res.stringResource(R.string.help_syntax_short),
                 style = MaterialTheme.typography.bodySmall,
                 color = androidx.compose.ui.graphics.Color.Gray,
                 modifier = Modifier.padding(start = 4.dp, bottom = 16.dp),
@@ -155,7 +161,7 @@ fun TaskDetailScreen(
 
             if (task!!.blockedByNames.isNotEmpty()) {
                 Text(
-                    "Blocked by:",
+                    androidx.compose.ui.res.stringResource(R.string.blocked_by_label),
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
@@ -202,7 +208,7 @@ fun TaskDetailScreen(
             // Blocking (Successors) - tasks that are blocked BY this task
             if (task!!.blockingNames.isNotEmpty()) {
                 Text(
-                    "Blocking (Successors):",
+                    androidx.compose.ui.res.stringResource(R.string.blocking_label),
                     color = MaterialTheme.colorScheme.tertiary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
@@ -250,7 +256,7 @@ fun TaskDetailScreen(
 
             if (task!!.relatedToNames.isNotEmpty()) {
                 Text(
-                    "Related to:",
+                    androidx.compose.ui.res.stringResource(R.string.related_to_label),
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
@@ -309,7 +315,7 @@ fun TaskDetailScreen(
             }
             if (incomingRelated.isNotEmpty()) {
                 Text(
-                    "Related from:",
+                    androidx.compose.ui.res.stringResource(R.string.related_from_label),
                     color = MaterialTheme.colorScheme.secondary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
@@ -358,7 +364,7 @@ fun TaskDetailScreen(
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text("Description") },
+                label = { Text(androidx.compose.ui.res.stringResource(R.string.description_label)) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),
                 textStyle = TextStyle(textAlign = androidx.compose.ui.text.style.TextAlign.Start),
             )

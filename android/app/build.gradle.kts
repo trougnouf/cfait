@@ -127,14 +127,15 @@ kotlin {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
-    implementation("androidx.activity:activity-compose:1.12.1")
-    implementation(platform("androidx.compose:compose-bom:2025.12.00"))
+    implementation("androidx.activity:activity-compose:1.12.4")
+    implementation(platform("androidx.compose:compose-bom:2026.02.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("androidx.navigation:navigation-compose:2.9.6")
+    implementation("androidx.navigation:navigation-compose:2.9.7")
     implementation("androidx.compose.runtime:runtime-livedata")
 
     // WorkManager for reliable background task execution
@@ -152,6 +153,88 @@ tasks.register<Copy>("copyFonts") {
     rename { "symbols_nerd_font.ttf" }
 }
 
-tasks.named("preBuild") {
-    dependsOn("copyFonts")
-}
+ // Generate Android strings.xml files from JSON locales in repository root
+ tasks.register("generateStringsXml") {
+     description = "Converts shared locales/*.json into Android strings.xml"
+
+     val localesDir = File(project.rootDir.parentFile, "locales")
+     // Tell Gradle to watch the locales folder for changes
+     inputs.dir(localesDir)
+     // Tell Gradle where the generated files go
+     outputs.dir(file("src/main/res"))
+
+     doLast {
+         val resDir = File(project.projectDir, "src/main/res")
+         if (!localesDir.exists()) {
+             println("No locales directory found at: ${localesDir.absolutePath}")
+             return@doLast
+         }
+
+         localesDir.listFiles { file -> file.extension == "json" }?.forEach { jsonFile ->
+             val lang = jsonFile.nameWithoutExtension
+             val targetFolder = if (lang == "en") "values" else "values-$lang"
+             val valuesDir = File(resDir, targetFolder)
+             valuesDir.mkdirs()
+
+             val xmlFile = File(valuesDir, "strings.xml")
+
+             // Use groovy's JsonSlurper (available in Gradle)
+             @Suppress("UNCHECKED_CAST")
+             val json = groovy.json.JsonSlurper().parse(jsonFile) as Map<String, Any>
+
+             xmlFile.bufferedWriter().use { writer ->
+                 writer.write("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
+                 writer.write("<!-- AUTO-GENERATED FROM locales/${jsonFile.name} - DO NOT EDIT -->\n")
+                 writer.write("<resources>\n")
+
+                 json.forEach { (key, rawValue) ->
+                     val value = rawValue.toString()
+
+                     // 1. Android XML Escaping
+                     var escapedValue = value
+                         .replace("&", "&amp;")
+                         .replace("<", "&lt;")
+                         .replace(">", "&gt;")
+                         .replace("'", "\\'")
+                         .replace("\"", "\\\"")
+                         .replace("\n", "\\n")
+                         .replace("?", "\\?") // Android needs question marks escaped
+
+                     // FIX 1: Escape @ at the beginning to prevent AAPT treating it as a resource reference
+                     if (escapedValue.startsWith("@")) {
+                         escapedValue = "\\" + escapedValue
+                     }
+
+                     // 2. Convert rust-i18n %{arg} to Android positional args %1$s, %2$s...
+                     val argRegex = Regex("%\\{.*?\\}")
+                     val hasArgs = argRegex.containsMatchIn(escapedValue)
+                     var argIndex = 1
+                     escapedValue = argRegex.replace(escapedValue) {
+                         "%${argIndex++}\$s"
+                     }
+
+                     // FIX 2: If there are no arguments but there is a '%', disable formatting to prevent crash
+                     val formattedAttr = if (!hasArgs && escapedValue.contains("%")) " formatted=\"false\"" else ""
+
+                     writer.write("    <string name=\"$key\"$formattedAttr>$escapedValue</string>\n")
+                 }
+                 writer.write("</resources>\n")
+             }
+             println("Generated Android strings for: $lang -> $targetFolder/strings.xml")
+         }
+     }
+ }
+
+ // Ensure fonts and strings are ready before any resource processing happens
+ tasks.configureEach {
+     if (name.contains("generate") && name.contains("Resources")) {
+         dependsOn("generateStringsXml")
+         dependsOn("copyFonts")
+     }
+ }
+
+ // Standard pre-build hook
+ tasks.named("preBuild") {
+     dependsOn("generateStringsXml")
+     dependsOn("copyFonts")
+ }

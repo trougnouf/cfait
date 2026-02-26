@@ -180,7 +180,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     ListItem::new(Line::from(spans))
                 })
                 .collect();
-            ("  Calendars ".to_string(), items)
+            (
+                format!("  {}", rust_i18n::t!("calendars")).to_string(),
+                items,
+            )
         }
         SidebarMode::Categories => {
             // Use cached categories derived from the last filter() call instead of
@@ -196,8 +199,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     };
                     if c == UNCATEGORIZED_ID {
                         ListItem::new(Line::from(format!(
-                            "{} Uncategorized ({})",
-                            selected, count
+                            "{} {} ({})",
+                            selected,
+                            rust_i18n::t!("uncategorized"),
+                            count
                         )))
                     } else {
                         let (r, g, b) = color_utils::generate_color(c);
@@ -217,11 +222,14 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 sidebar_border_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
             }
             let logic = if state.match_all_categories {
-                "AND"
+                rust_i18n::t!("match_and")
             } else {
-                "OR"
+                rust_i18n::t!("match_or")
             };
-            (format!("  Tags ({}) ", logic), items)
+            (
+                format!("  {} ({}) ", rust_i18n::t!("tags"), logic).to_string(),
+                items,
+            )
         }
         SidebarMode::Locations => {
             // Use cached locations derived from the last filter() call instead of
@@ -247,7 +255,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             if is_filter_empty && !state.selected_locations.is_empty() {
                 sidebar_border_style = Style::default().fg(Color::Red).add_modifier(Modifier::BOLD);
             }
-            ("  Locations ".to_string(), items)
+            (
+                format!("  {}", rust_i18n::t!("locations")).to_string(),
+                items,
+            )
         }
     };
 
@@ -718,15 +729,23 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .split(h_chunks[1]);
 
     let mut title = if state.loading {
-        " Tasks (Loading...) ".to_string()
+        format!(
+            " {} ({}) ",
+            rust_i18n::t!("tasks"),
+            rust_i18n::t!("loading")
+        )
     } else {
-        format!(" Tasks ({}) ", active_count)
+        format!(" {} ({}) ", rust_i18n::t!("tasks"), active_count)
     };
     if state.unsynced_changes {
-        title.push_str(" [UNSYNCED] ");
+        title.push_str(&format!(" [{}] ", rust_i18n::t!("unsynced")));
     }
     if !state.active_search_query.is_empty() {
-        title.push_str(&format!("[Search: '{}']", state.active_search_query));
+        title.push_str(&format!(
+            "[{}: '{}']",
+            rust_i18n::t!("search"),
+            state.active_search_query
+        ));
     }
 
     let main_style = if state.active_focus == Focus::Main {
@@ -757,17 +776,17 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         let md_text = tui_markdown::from_str(&details_md);
         let details_block = Block::default()
             .borders(Borders::ALL)
-            .title(" Details (Markdown) ")
+            .title(format!(" {} ", rust_i18n::t!("details")))
             .border_style(Style::default().fg(Color::Blue));
         let p = Paragraph::new(md_text)
             .block(details_block)
             .wrap(Wrap { trim: true });
         f.render_widget(p, main_chunks[1]);
     } else {
-        let p = Paragraph::new("Editing description...").block(
+        let p = Paragraph::new(rust_i18n::t!("editing")).block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Details ")
+                .title(format!(" {} ", rust_i18n::t!("details")))
                 .style(Style::default().fg(Color::DarkGray)),
         );
         f.render_widget(p, main_chunks[1]);
@@ -787,23 +806,45 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 InputMode::Searching => {
                     let is_search_culprit = is_filter_empty && !state.input_buffer.is_empty();
                     if is_search_culprit {
-                        (" Search (No Results) ".to_string(), "/ ", Color::Red)
+                        (
+                            format!(" {} (0) ", rust_i18n::t!("search")),
+                            "/ ",
+                            Color::Red,
+                        )
                     } else {
-                        (" Search ".to_string(), "/ ", Color::Green)
+                        (format!(" {} ", rust_i18n::t!("search")), "/ ", Color::Green)
                     }
                 }
-                InputMode::Editing => (" Edit Title ".to_string(), "> ", Color::Magenta),
-                InputMode::EditingDescription => {
-                    (" Edit Description ".to_string(), "📝 ", Color::Blue)
-                }
+                InputMode::Editing => (
+                    format!(" {} ", rust_i18n::t!("edit_task_title")),
+                    "> ",
+                    Color::Magenta,
+                ),
+                InputMode::EditingDescription => (
+                    format!(" {} ", rust_i18n::t!("edit_task_title")),
+                    "📝 ",
+                    Color::Blue,
+                ),
                 InputMode::Creating => {
                     if state.creating_child_of.is_some() {
-                        (" Create Child Task ".to_string(), "> ", Color::LightYellow)
+                        (
+                            format!(" {} ", rust_i18n::t!("mode_create")),
+                            "> ",
+                            Color::LightYellow,
+                        )
                     } else {
-                        (" Create Task ".to_string(), "> ", Color::Yellow)
+                        (
+                            format!(" {} ", rust_i18n::t!("mode_create")),
+                            "> ",
+                            Color::Yellow,
+                        )
                     }
                 }
-                _ => (" Create Task ".to_string(), "> ", Color::Yellow),
+                _ => (
+                    format!(" {} ", rust_i18n::t!("mode_create")),
+                    "> ",
+                    Color::Yellow,
+                ),
             };
 
             if (state.mode == InputMode::Searching && state.input_buffer.starts_with('#'))
@@ -908,9 +949,13 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             }
         }
         InputMode::Help(_) => {
-            let help = Paragraph::new("Tab:Switch  Up/Dn:Scroll  Esc/?:Close")
+            let help = Paragraph::new(rust_i18n::t!("tui_help_actions"))
                 .alignment(Alignment::Right)
-                .block(Block::default().borders(Borders::ALL).title(" Actions "));
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .title(format!(" {} ", rust_i18n::t!("actions"))),
+                );
             f.render_widget(help, footer_area);
         }
         _ => {
@@ -919,7 +964,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 .block(
                     Block::default()
                         .borders(Borders::LEFT | Borders::TOP | Borders::BOTTOM)
-                        .title(" Status "),
+                        .title(format!(" {} ", rust_i18n::t!("status"))),
                 );
             let help_text = match state.active_focus {
                 Focus::Sidebar => {
@@ -931,7 +976,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             .store
                             .get_summary(uid)
                             .unwrap_or_else(|| "Unknown".to_string());
-                        format!("YANK: '{}' — b:Block c:Child l:Link (Esc:Clear)", summary)
+                        format!(
+                            "{} '{}' — b:Block c:Child l:Link (Esc:Clear)",
+                            rust_i18n::t!("yanked_label"),
+                            summary
+                        )
                     } else {
                         "?:Help q:Quit Tab:Side a:Add e:Edit E:Details Spc:Done d:Del y:Yank /:Find"
                             .to_string()
@@ -941,7 +990,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let help = Paragraph::new(help_text).alignment(Alignment::Right).block(
                 Block::default()
                     .borders(Borders::RIGHT | Borders::TOP | Borders::BOTTOM)
-                    .title(" Actions "),
+                    .title(format!(" {} ", rust_i18n::t!("actions"))),
             );
             let chunks = Layout::default()
                 .direction(Direction::Horizontal)
@@ -964,7 +1013,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .map(|c| ListItem::new(c.name.as_str()))
             .collect();
         let popup = List::new(items)
-            .block(Block::default().borders(Borders::ALL).title(" Move Task "))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(format!(" {} ", rust_i18n::t!("move_task_title"))),
+            )
             .highlight_style(Style::default().bg(Color::Blue));
         f.render_widget(Clear, area);
         f.render_stateful_widget(popup, area, &mut state.move_selection_state);
@@ -982,7 +1035,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(" Jump to Related Task "),
+                    .title(format!(" {} ", rust_i18n::t!("jump_to_related_task"))),
             )
             .highlight_style(Style::default().bg(Color::Blue).fg(Color::White));
         f.render_widget(Clear, area);
@@ -993,7 +1046,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     if let Some((task, _alarm_uid)) = &state.active_alarm {
         let area = centered_rect(60, 40, f.area());
         let block = Block::default()
-            .title(" 🔔 REMINDER ")
+            .title(format!(" {} ", rust_i18n::t!("reminder_title_upper")))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::LightRed));
         let mut lines = vec![
@@ -1030,7 +1083,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         f.render_widget(Clear, area);
 
         let block = Block::default()
-            .title(" Edit Description (Markdown Supported) ")
+            .title(format!(" {} ", rust_i18n::t!("edit_description_title")))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Yellow));
         let inner_area = block.inner(area);
@@ -1074,14 +1127,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         f.render_widget(block, area);
         f.render_widget(p, chunks[0]);
 
-        let instructions = Line::from(vec![
-            Span::styled("Enter", Style::default().fg(Color::Yellow)),
-            Span::raw(": NewLine  "),
-            Span::styled("Ctrl+S", Style::default().fg(Color::Yellow)),
-            Span::raw(": Save  "),
-            Span::styled("Esc", Style::default().fg(Color::Yellow)),
-            Span::raw(": Cancel"),
-        ]);
+        let instructions = Line::from(rust_i18n::t!("tui_desc_editor_help").to_string());
         f.render_widget(
             Paragraph::new(instructions).alignment(Alignment::Center),
             chunks[1],
@@ -1100,8 +1146,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         f.render_widget(Clear, area);
 
         let data = match tab {
-            crate::help::HelpTab::Syntax => crate::help::SYNTAX_HELP,
-            crate::help::HelpTab::Keyboard => crate::help::KEYBOARD_HELP,
+            crate::help::HelpTab::Syntax => crate::help::get_syntax_help(),
+            crate::help::HelpTab::Keyboard => crate::help::get_keyboard_help(),
         };
 
         let mut lines = vec![

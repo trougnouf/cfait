@@ -365,6 +365,32 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
+        Message::SetLanguage(lang) => {
+            // Persist the user's language selection in the GUI app state.
+            // `lang == "auto"` means follow system/default.
+            let lang_opt = if lang == "auto" {
+                None
+            } else {
+                Some(lang.clone())
+            };
+            app.language = lang_opt.clone();
+
+            // Apply immediately to rust_i18n
+            if let Some(ref l) = lang_opt {
+                rust_i18n::set_locale(l);
+            } else if let Some(sys_lang) = sys_locale::get_locale() {
+                rust_i18n::set_locale(sys_lang.split('-').next().unwrap_or("en"));
+            }
+
+            // Also save the selection into the persistent Config so it's cross-platform.
+            // Load existing config (or default), set language, then save.
+            let mut cfg = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
+            cfg.language = app.language.clone();
+            let _ = cfg.save(app.ctx.as_ref());
+
+            Task::none()
+        }
         Message::ToggleAdvancedSettings(val) => {
             app.show_advanced_settings = val;
             Task::none()

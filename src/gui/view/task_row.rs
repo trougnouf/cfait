@@ -17,7 +17,6 @@ use iced::widget::{
 };
 use iced::{Border, Color, Element, Length, Theme};
 
-// Imports for custom widget (NoPointer)
 use iced::advanced::layout;
 use iced::advanced::renderer;
 use iced::advanced::widget::{self, Widget};
@@ -28,11 +27,8 @@ pub fn view_task_row<'a>(
     app: &'a GuiApp,
     index: usize,
     task: &'a TodoTask,
-    row_id: iced::widget::Id, // <-- CHANGED: Accept ID as argument
+    row_id: iced::widget::Id,
 ) -> Element<'a, Message> {
-    // Handle Virtual Task rows (expand/collapse placeholders) first.
-    // These are injected by the model as lightweight rows; render as a simple button
-    // with the proper arrow icon and send a ToggleDoneGroup message when clicked.
     use crate::model::VirtualState;
 
     match &task.virtual_state {
@@ -77,14 +73,11 @@ pub fn view_task_row<'a>(
         _ => {}
     }
 
-    // CHANGE: Use the pre-calculated field instead of calling app.store.is_blocked(task)
-    // app.store.is_blocked(task) triggers an O(N) scan. task.is_blocked is O(1).
     let is_blocked = task.is_blocked;
     let is_selected = app.selected_uid.as_ref() == Some(&task.uid);
 
     let theme = app.theme();
     let is_dark_theme = theme.extended_palette().is_dark;
-    // Extract only the theme-derived colors we actually use here
     let default_text_color = theme.extended_palette().background.base.text;
 
     let color = if is_blocked {
@@ -100,12 +93,8 @@ pub fn view_task_row<'a>(
     let indent_size = if show_indent { task.depth * 12 } else { 0 };
     let indent = Space::new().width(Length::Fixed(indent_size as f32));
 
-    // Pre-calculate parent info for inheritance hiding
-    // CHANGE: Use the lookup cache instead of iterating calendars every frame.
-    // OLD CODE performed an O(N) search per-row. The cache is populated during filtering.
     let (parent_tags, parent_location) = if show_indent && let Some(p_uid) = &task.parent_uid {
         if let Some(cached) = app.parent_attributes_cache.get(p_uid) {
-            // Clone to avoid holding references into app during view construction
             (cached.0.clone(), cached.1.clone())
         } else {
             (HashSet::new(), None)
@@ -114,11 +103,8 @@ pub fn view_task_row<'a>(
         (HashSet::new(), None)
     };
 
-    // --- USE CENTRALIZED LOGIC ---
-    // Delegate shadowing/visibility resolution to the core model.
     let (visible_tags, visible_location) =
         task.resolve_visual_attributes(&parent_tags, &parent_location, &app.tag_aliases);
-    // -----------------------------
 
     let action_style = |theme: &Theme, status: button::Status| -> button::Style {
         let palette = theme.extended_palette();
@@ -189,10 +175,8 @@ pub fn view_task_row<'a>(
         }
     };
 
-    // Check for active alarm
     let has_active_alarm = task.alarms.iter().any(|a| a.acknowledged.is_none());
 
-    // Build the date/alarm section
     let date_and_alarm_section: Element<'a, Message> = {
         let mut row_content = row![].spacing(3).align_y(iced::Alignment::Center);
 
@@ -204,14 +188,13 @@ pub fn view_task_row<'a>(
             row_content = row_content.push(
                 tooltip(
                     container(bell_icon).padding(1),
-                    text("Active Alarm").size(12),
+                    text(rust_i18n::t!("active_alarm")).size(12),
                     tooltip::Position::Top,
                 )
                 .style(tooltip_style),
             );
         }
 
-        // Check for Future Start Date
         let now = Utc::now();
         let is_future_start = task
             .dtstart
@@ -219,11 +202,8 @@ pub fn view_task_row<'a>(
             .map(|start| start.to_start_comparison_time() > now)
             .unwrap_or(false);
 
-        // Define colors
-        let dim_color = Color::from_rgb(0.7, 0.7, 0.7); // For future
+        let dim_color = Color::from_rgb(0.7, 0.7, 0.7);
 
-        // --- CHANGED START ---
-        // Check for Overdue
         let is_overdue = if let Some(d) = &task.due {
             !task.status.is_done() && d.to_comparison_time() < now
         } else {
@@ -231,30 +211,25 @@ pub fn view_task_row<'a>(
         };
 
         let due_color = if is_overdue {
-            Color::from_rgb(0.8, 0.2, 0.2) // Red
+            Color::from_rgb(0.8, 0.2, 0.2)
         } else {
-            Color::from_rgb(0.5, 0.5, 0.5) // Gray
+            Color::from_rgb(0.5, 0.5, 0.5)
         };
-        // --- CHANGED END ---
 
-        // NEW LOGIC START: Show completion date for finished tasks
         if task.status.is_done() {
             if let Some(done_dt) = task.completion_date() {
                 let local_done = done_dt.with_timezone(&chrono::Local);
-                // CHOOSE ICON AND COLOR BASED ON STATUS
                 let (done_icon, done_color) = if task.status == crate::model::TaskStatus::Completed
                 {
-                    (icon::CALENDAR_CHECK, Color::from_rgb(0.4, 0.6, 0.4)) // Muted green
+                    (icon::CALENDAR_CHECK, Color::from_rgb(0.4, 0.6, 0.4))
                 } else {
-                    // Cancelled
-                    (icon::CALENDAR_XMARK, Color::from_rgb(0.8, 0.2, 0.2)) // Muted red
+                    (icon::CALENDAR_XMARK, Color::from_rgb(0.8, 0.2, 0.2))
                 };
 
                 row_content = row_content.push(
                     container(icon::icon(done_icon).size(12).color(done_color))
                         .align_y(iced::Alignment::Center),
                 );
-                // SHOW DATETIME INSTEAD OF JUST DATE
                 row_content = row_content.push(
                     text(local_done.format("%Y-%m-%d %H:%M").to_string())
                         .size(14)
@@ -262,7 +237,6 @@ pub fn view_task_row<'a>(
                 );
             }
         } else if is_future_start {
-            // Start Icon
             row_content = row_content.push(
                 container(icon::icon(icon::HOURGLASS_START).size(12).color(dim_color))
                     .align_y(iced::Alignment::Center),
@@ -272,7 +246,6 @@ pub fn view_task_row<'a>(
             let start_str = start_ref.format_smart();
 
             if let Some(due) = &task.due {
-                // Check for same day to condense display
                 let is_same_day = start_ref.to_date_naive() == due.to_date_naive();
 
                 let due_str = if is_same_day {
@@ -286,31 +259,23 @@ pub fn view_task_row<'a>(
                     due.format_smart()
                 };
 
-                // Check against raw format for identity equality (Same exact date/time)
                 if start_str == due.format_smart() {
-                    // Case 2: Start == Due (Future) -> Show once
                     row_content = row_content.push(text(start_str).size(14).color(dim_color));
                 } else {
-                    // Case 1: Start != Due (Future) -> Show range
-                    // If same day, due_str is just HH:MM here
                     row_content = row_content.push(
                         text(format!("{} - {}", start_str, due_str))
                             .size(14)
                             .color(dim_color),
                     );
                 }
-                // End Icon (for both Case 1 and 2)
                 row_content = row_content.push(
                     container(icon::icon(icon::HOURGLASS_END).size(12).color(dim_color))
                         .align_y(iced::Alignment::Center),
                 );
             } else {
-                // Case 4: Start Only (Future) -> No end icon
                 row_content = row_content.push(text(start_str).size(14).color(dim_color));
             }
         } else if let Some(d) = &task.due {
-            // Case 3: Due Only (or Start passed)
-            // Use calendar icon before the date instead of hourglass_end after
             row_content = row_content.push(
                 container(icon::icon(icon::CALENDAR).size(12).color(due_color))
                     .align_y(iced::Alignment::Center),
@@ -327,10 +292,8 @@ pub fn view_task_row<'a>(
     let has_related = !task.related_to.is_empty();
     let has_incoming_related = !app.store.get_tasks_related_to(&task.uid).is_empty();
 
-    // Determine if this task is blocking other tasks (successors)
     let has_blocking = !app.store.get_tasks_blocking(&task.uid).is_empty();
 
-    // Determine if we should show the hand cursor (has content details)
     let has_content_to_show = has_desc
         || has_valid_parent
         || has_deps
@@ -361,7 +324,7 @@ pub fn view_task_row<'a>(
         actions = actions.push(
             tooltip(
                 info_btn,
-                text("Show details").size(12),
+                text(rust_i18n::t!("show_details")).size(12),
                 tooltip::Position::Top,
             )
             .style(tooltip_style)
@@ -401,7 +364,7 @@ pub fn view_task_row<'a>(
             actions = actions.push(
                 tooltip(
                     block_btn,
-                    text("Block (depends on)").size(12),
+                    text(rust_i18n::t!("block_depends_on")).size(12),
                     tooltip::Position::Top,
                 )
                 .style(tooltip_style)
@@ -414,7 +377,7 @@ pub fn view_task_row<'a>(
             actions = actions.push(
                 tooltip(
                     child_btn,
-                    text("Make child").size(12),
+                    text(rust_i18n::t!("make_child")).size(12),
                     tooltip::Position::Top,
                 )
                 .style(tooltip_style)
@@ -427,7 +390,7 @@ pub fn view_task_row<'a>(
             actions = actions.push(
                 tooltip(
                     related_btn,
-                    text("Related to").size(12),
+                    text(rust_i18n::t!("related_to")).size(12),
                     tooltip::Position::Top,
                 )
                 .style(tooltip_style)
@@ -439,9 +402,13 @@ pub fn view_task_row<'a>(
                 .padding(4)
                 .on_press(Message::EscapePressed);
             actions = actions.push(
-                tooltip(unlink_btn, text("Unlink").size(12), tooltip::Position::Top)
-                    .style(tooltip_style)
-                    .delay(Duration::from_millis(700)),
+                tooltip(
+                    unlink_btn,
+                    text(rust_i18n::t!("unlink")).size(12),
+                    tooltip::Position::Top,
+                )
+                .style(tooltip_style)
+                .delay(Duration::from_millis(700)),
             );
             let create_child_btn = button(icon::icon(icon::CREATE_CHILD).size(14))
                 .style(button::primary)
@@ -450,7 +417,7 @@ pub fn view_task_row<'a>(
             actions = actions.push(
                 tooltip(
                     create_child_btn,
-                    text("Create subtask").size(12),
+                    text(rust_i18n::t!("create_subtask")).size(12),
                     tooltip::Position::Top,
                 )
                 .style(tooltip_style)
@@ -465,7 +432,7 @@ pub fn view_task_row<'a>(
                 actions = actions.push(
                     tooltip(
                         lift_btn,
-                        text("Promote (remove parent)").size(12),
+                        text(rust_i18n::t!("promote_remove_parent")).size(12),
                         tooltip::Position::Top,
                     )
                     .style(tooltip_style)
@@ -481,7 +448,7 @@ pub fn view_task_row<'a>(
         actions = actions.push(
             tooltip(
                 link_btn,
-                text("Yank (copy ID)").size(12),
+                text(rust_i18n::t!("yank_copy_id")).size(12),
                 tooltip::Position::Top,
             )
             .style(tooltip_style)
@@ -492,25 +459,24 @@ pub fn view_task_row<'a>(
     if task.status != crate::model::TaskStatus::Completed
         && task.status != crate::model::TaskStatus::Cancelled
     {
-        // Use the wrapper method to fix error E0599
         let (action_icon, next_action_msg, tooltip_text) =
             if task.status == crate::model::TaskStatus::InProcess {
                 (
                     icon::PAUSE,
                     Message::PauseTask(task.uid.clone()),
-                    "Pause task",
+                    rust_i18n::t!("pause_task").to_string(),
                 )
             } else if task.is_paused() {
                 (
                     icon::PLAY,
                     Message::StartTask(task.uid.clone()),
-                    "Resume task",
+                    rust_i18n::t!("resume_task").to_string(),
                 )
             } else {
                 (
                     icon::PLAY,
                     Message::StartTask(task.uid.clone()),
-                    "Start task",
+                    rust_i18n::t!("start_task").to_string(),
                 )
             };
 
@@ -538,7 +504,7 @@ pub fn view_task_row<'a>(
             actions = actions.push(
                 tooltip(
                     stop_btn,
-                    text("Stop (Reset)").size(12),
+                    text(rust_i18n::t!("stop_reset")).size(12),
                     tooltip::Position::Top,
                 )
                 .style(tooltip_style)
@@ -554,7 +520,7 @@ pub fn view_task_row<'a>(
     actions = actions.push(
         tooltip(
             plus_btn,
-            text("Increase priority").size(12),
+            text(rust_i18n::t!("increase_priority")).size(12),
             tooltip::Position::Top,
         )
         .style(tooltip_style)
@@ -568,7 +534,7 @@ pub fn view_task_row<'a>(
     actions = actions.push(
         tooltip(
             minus_btn,
-            text("Decrease priority").size(12),
+            text(rust_i18n::t!("decrease_priority")).size(12),
             tooltip::Position::Top,
         )
         .style(tooltip_style)
@@ -580,9 +546,13 @@ pub fn view_task_row<'a>(
         .padding(4)
         .on_press(Message::EditTaskStart(index));
     actions = actions.push(
-        tooltip(edit_btn, text("Edit").size(12), tooltip::Position::Top)
-            .style(tooltip_style)
-            .delay(Duration::from_millis(700)),
+        tooltip(
+            edit_btn,
+            text(rust_i18n::t!("edit")).size(12),
+            tooltip::Position::Top,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700)),
     );
 
     let delete_btn = button(icon::icon(icon::TRASH).size(14))
@@ -590,9 +560,13 @@ pub fn view_task_row<'a>(
         .padding(4)
         .on_press(Message::DeleteTask(index));
     actions = actions.push(
-        tooltip(delete_btn, text("Delete").size(12), tooltip::Position::Top)
-            .style(tooltip_style)
-            .delay(Duration::from_millis(700)),
+        tooltip(
+            delete_btn,
+            text(rust_i18n::t!("delete")).size(12),
+            tooltip::Position::Top,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700)),
     );
 
     if task.status != crate::model::TaskStatus::Completed
@@ -606,9 +580,13 @@ pub fn view_task_row<'a>(
                 crate::model::TaskStatus::Cancelled,
             ));
         actions = actions.push(
-            tooltip(cancel_btn, text("Cancel").size(12), tooltip::Position::Top)
-                .style(tooltip_style)
-                .delay(Duration::from_millis(700)),
+            tooltip(
+                cancel_btn,
+                text(rust_i18n::t!("cancel")).size(12),
+                tooltip::Position::Top,
+            )
+            .style(tooltip_style)
+            .delay(Duration::from_millis(700)),
         );
     }
 
@@ -672,7 +650,6 @@ pub fn view_task_row<'a>(
     .style(move |_theme, status| {
         let palette = _theme.extended_palette();
         let base_active = button::Style {
-            // Explicitly specify Background variant to resolve inference error
             background: Some(iced::Background::Color(bg_color)),
             text_color: palette.background.base.text,
             border: iced::Border {
@@ -713,18 +690,13 @@ pub fn view_task_row<'a>(
         let available_width = size.width;
         let mut tags_width = 0.0;
 
-        // Use visible attributes computed by core model
-        // `visible_tags` and `visible_location` are owned by the outer scope.
-
         if has_metadata {
             if is_blocked {
                 tags_width += 65.0;
             }
-            // Use pre-computed visible tags (avoid checking hide-set per tag)
             for cat in &visible_tags {
                 tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
             }
-            // Use visible location instead of checking hidden_location
             if let Some(l) = &visible_location {
                 tags_width += (l.len() as f32 * 7.0) + 25.0;
             }
@@ -747,32 +719,29 @@ pub fn view_task_row<'a>(
                 row![].spacing(3).align_y(iced::Alignment::Center);
 
             if is_blocked {
-                tags_row = tags_row.push(
-                    container(
-                        text("[Blocked]")
-                            .size(12)
-                            .style(|theme: &Theme| text::Style {
+                tags_row =
+                    tags_row.push(
+                        container(text(rust_i18n::t!("blocked")).size(12).style(
+                            |theme: &Theme| text::Style {
                                 color: Some(theme.extended_palette().background.base.text),
-                            }),
-                    )
-                    .style(|_| container::Style {
-                        background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
-                        border: iced::Border {
-                            radius: 4.0.into(),
+                            },
+                        ))
+                        .style(|_| container::Style {
+                            background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
+                            border: iced::Border {
+                                radius: 4.0.into(),
+                                ..Default::default()
+                            },
                             ..Default::default()
-                        },
-                        ..Default::default()
-                    })
-                    .padding(3),
-                );
+                        })
+                        .padding(3),
+                    );
             }
 
-            // Render only the visible tags (already resolved by core)
             for cat in &visible_tags {
                 let (r, g, b) = color_utils::generate_color(cat);
                 let bg_color = Color::from_rgb(r, g, b);
 
-                // Deterministic text color based on background
                 let text_color = if color_utils::is_dark(r, g, b) {
                     Color::WHITE
                 } else {
@@ -811,7 +780,6 @@ pub fn view_task_row<'a>(
             }
 
             if let Some(loc) = &visible_location {
-                // Fixed white text for location pill
                 let text_color = Color::WHITE;
 
                 let loc_btn = button(text(format!("@@{}", loc)).size(12).color(text_color))
@@ -843,8 +811,6 @@ pub fn view_task_row<'a>(
                 tags_row = tags_row.push(loc_btn);
             }
 
-            // DURATION PILL (Updated)
-            // Calculate actual spent time (stored + current session)
             let now_ts = Utc::now().timestamp();
             let current_session = task
                 .last_started_at
@@ -855,7 +821,6 @@ pub fn view_task_row<'a>(
 
             if total_mins > 0 || task.estimated_duration.is_some() || task.last_started_at.is_some()
             {
-                // Helper closure for formatting
                 let fmt_dur = |m: u32| -> String {
                     if m >= 525600 {
                         format!("{}y", m / 525600)
@@ -872,7 +837,6 @@ pub fn view_task_row<'a>(
                     }
                 };
 
-                // Build Estimation String
                 let est_label = if let Some(min) = task.estimated_duration {
                     if let Some(max) = task.estimated_duration_max {
                         if max > min {
@@ -887,7 +851,6 @@ pub fn view_task_row<'a>(
                     String::new()
                 };
 
-                // Build Final Label: "Spent / Est" or just "Spent" or just "Est"
                 let label = if total_mins > 0 || task.last_started_at.is_some() {
                     if !est_label.is_empty() {
                         format!("{} / {}", fmt_dur(total_mins), est_label)
@@ -898,13 +861,9 @@ pub fn view_task_row<'a>(
                     est_label
                 };
 
-                // Style the duration/estimate pill. If the task is actively tracking time,
-                // tint the pill to draw attention.
                 let dur_bg = if task.last_started_at.is_some() {
-                    // subtle green for active tracking
                     Color::from_rgb(0.25, 0.50, 0.25)
                 } else {
-                    // neutral gray when inactive
                     Color::from_rgb(0.50, 0.50, 0.50)
                 };
                 let dur_border = if task.last_started_at.is_some() {
@@ -946,7 +905,7 @@ pub fn view_task_row<'a>(
                 tags_row = tags_row.push(
                     tooltip(
                         geo_btn,
-                        text("Open Coordinates").size(12),
+                        text(rust_i18n::t!("open_coordinates")).size(12),
                         tooltip::Position::Top,
                     )
                     .style(tooltip_style),
@@ -959,8 +918,12 @@ pub fn view_task_row<'a>(
                     .padding(0)
                     .on_press(Message::OpenUrl(u.clone()));
                 tags_row = tags_row.push(
-                    tooltip(url_btn, text("Open URL").size(12), tooltip::Position::Top)
-                        .style(tooltip_style),
+                    tooltip(
+                        url_btn,
+                        text(rust_i18n::t!("open_url")).size(12),
+                        tooltip::Position::Top,
+                    )
+                    .style(tooltip_style),
                 );
             }
 
@@ -979,20 +942,17 @@ pub fn view_task_row<'a>(
 
         let is_done_or_cancelled =
             task.status.is_done() || task.status == crate::model::TaskStatus::Cancelled;
-        // Use 25% transparency (75% opacity) for dimming completed/cancelled titles.
-        // Alpha = 0.75 keeps the text more readable while still dimming it.
         let title_color = if is_done_or_cancelled {
             Color { a: 0.75, ..color }
         } else {
             color
         };
 
-        let is_trash = task.calendar_href == "local://trash"; // Check href
+        let is_trash = task.calendar_href == "local://trash";
 
         let summary_text: Element<'a, Message> = if (app.strikethrough_completed
             && task.status.is_done())
             || is_trash
-        // Force if trash
         {
             Into::<Element<'a, Message>>::into(
                 rich_text![span::<Message, iced::Font>(task.summary.clone()).strikethrough(true)]
@@ -1105,7 +1065,6 @@ pub fn view_task_row<'a>(
             }
         });
 
-    // Prepare container content (Expanded view details omitted for brevity, logic unchanged)
     let container_content: Element<'a, Message> = if has_content_to_show {
         if is_expanded {
             let mut details_col = column![].spacing(5);
@@ -1122,19 +1081,19 @@ pub fn view_task_row<'a>(
                 let p_name = app
                     .store
                     .get_summary(p_uid)
-                    .unwrap_or_else(|| "Unknown parent".to_string());
+                    .unwrap_or_else(|| rust_i18n::t!("unknown_parent").to_string());
                 let remove_parent_btn = button(icon::icon(icon::CROSS).size(10))
                     .style(button::danger)
                     .padding(2)
                     .on_press(Message::RemoveParent(task.uid.clone()));
                 let row = row![
-                    text("Parent:")
+                    text(rust_i18n::t!("parent"))
                         .size(12)
                         .color(Color::from_rgb(0.4, 0.8, 0.4)),
                     text(p_name).size(12),
                     tooltip(
                         remove_parent_btn,
-                        text("Remove parent").size(12),
+                        text(rust_i18n::t!("remove_parent")).size(12),
                         tooltip::Position::Top
                     )
                     .style(tooltip_style)
@@ -1147,7 +1106,7 @@ pub fn view_task_row<'a>(
 
             if !task.dependencies.is_empty() {
                 details_col = details_col.push(
-                    text("[Blocked By]:")
+                    text(rust_i18n::t!("blocked_by"))
                         .size(12)
                         .color(Color::from_rgb(0.8, 0.4, 0.4)),
                 );
@@ -1155,7 +1114,7 @@ pub fn view_task_row<'a>(
                     let name = app
                         .store
                         .get_summary(dep_uid)
-                        .unwrap_or_else(|| "Unknown task".to_string());
+                        .unwrap_or_else(|| rust_i18n::t!("unknown_task").to_string());
                     let is_done = app.store.is_task_done(dep_uid).unwrap_or(false);
                     let check = if is_done { "[x]" } else { "[ ]" };
                     let remove_dep_btn = button(icon::icon(icon::CROSS).size(10))
@@ -1175,7 +1134,7 @@ pub fn view_task_row<'a>(
                         name_btn,
                         tooltip(
                             remove_dep_btn,
-                            text("Remove dependency").size(12),
+                            text(rust_i18n::t!("remove_dependency")).size(12),
                             tooltip::Position::Top
                         )
                         .style(tooltip_style)
@@ -1187,10 +1146,9 @@ pub fn view_task_row<'a>(
                 }
             }
 
-            // Outgoing relations (this task → others)
             if !task.related_to.is_empty() {
                 details_col = details_col.push(
-                    text("[Related To]:")
+                    text(rust_i18n::t!("related_to_label"))
                         .size(12)
                         .color(Color::from_rgb(0.6, 0.6, 0.8)),
                 );
@@ -1198,7 +1156,7 @@ pub fn view_task_row<'a>(
                     let name = app
                         .store
                         .get_summary(related_uid)
-                        .unwrap_or_else(|| "Unknown task".to_string());
+                        .unwrap_or_else(|| rust_i18n::t!("unknown_task").to_string());
                     let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
                         .style(button::danger)
                         .padding(2)
@@ -1217,7 +1175,7 @@ pub fn view_task_row<'a>(
                         name_btn,
                         tooltip(
                             remove_related_btn,
-                            text("Remove relation").size(12),
+                            text(rust_i18n::t!("remove_relation")).size(12),
                             tooltip::Position::Top
                         )
                         .style(tooltip_style)
@@ -1229,16 +1187,14 @@ pub fn view_task_row<'a>(
                 }
             }
 
-            // [INSERTED] Blocking (Successors) - Tasks waiting on THIS task
             let blocking_tasks = app.store.get_tasks_blocking(&task.uid);
             if !blocking_tasks.is_empty() {
                 details_col = details_col.push(
-                    text("[Blocking]:")
+                    text(rust_i18n::t!("blocking_label"))
                         .size(12)
                         .color(Color::from_rgb(0.6, 0.4, 0.8)),
                 );
                 for (blocked_uid, blocked_name) in blocking_tasks {
-                    // Action: Remove dependency from the blocked task (to \"unblock\")
                     let remove_block_btn = button(icon::icon(icon::UNLINK).size(10))
                         .style(button::danger)
                         .padding(2)
@@ -1257,14 +1213,13 @@ pub fn view_task_row<'a>(
                     .on_press(Message::JumpToTask(blocked_uid.clone()));
 
                     let blocking_row = row![
-                        // Hand-stop to indicate this task blocks another
                         icon::icon(icon::HAND_STOP)
                             .size(12)
                             .color(Color::from_rgb(0.5, 0.5, 0.5)),
                         name_btn,
                         tooltip(
                             remove_block_btn,
-                            text("Unblock (remove dependency)").size(12),
+                            text(rust_i18n::t!("unblock_remove_dependency")).size(12),
                             tooltip::Position::Top
                         )
                         .style(tooltip_style)
@@ -1277,11 +1232,10 @@ pub fn view_task_row<'a>(
                 }
             }
 
-            // Incoming relations (others → this task)
             let incoming_related = app.store.get_tasks_related_to(&task.uid);
             if !incoming_related.is_empty() {
                 details_col = details_col.push(
-                    text("[Related From]:")
+                    text(rust_i18n::t!("related_from_label"))
                         .size(12)
                         .color(Color::from_rgb(0.8, 0.6, 0.8)),
                 );
@@ -1307,7 +1261,7 @@ pub fn view_task_row<'a>(
                         name_btn,
                         tooltip(
                             remove_related_btn,
-                            text("Remove relation").size(12),
+                            text(rust_i18n::t!("remove_relation")).size(12),
                             tooltip::Position::Top
                         )
                         .style(tooltip_style)
@@ -1325,8 +1279,6 @@ pub fn view_task_row<'a>(
             ];
             column![task_button, desc_row].spacing(5).into()
         } else {
-            // FIX: Wrap collapsed state in Column to maintain widget tree stability
-            // This ensures double-click works even if the first click triggered layout change
             column![task_button].into()
         }
     } else {
@@ -1336,8 +1288,6 @@ pub fn view_task_row<'a>(
         .into()
     };
 
-    // Use focusable wrapper to support focus/scroll logic
-    // We attach the ID here to the wrapper, which will be the target of operation::focus
     focusable(
         container(container_content).padding(if is_expanded && has_content_to_show {
             5
@@ -1349,7 +1299,6 @@ pub fn view_task_row<'a>(
     .into()
 }
 
-// Wrapper widget to suppress pointer cursor on hover
 struct NoPointer<'a, Message, Theme, Renderer> {
     content: Element<'a, Message, Theme, Renderer>,
 }

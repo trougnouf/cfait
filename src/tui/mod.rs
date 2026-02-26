@@ -310,8 +310,9 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
 
         // A. Network Events
         if let Ok(event) = event_rx.try_recv() {
-            // Check for Sync Complete Status
-            let enable_alarms = matches!(event, AppEvent::Status(ref s) if s == "Ready.");
+            // Check for Sync Complete Status (use stable key emitted by network actor)
+            let enable_alarms =
+                matches!(event, AppEvent::Status { key: ref k, .. } if k == "ready");
             let is_task_update = matches!(event, AppEvent::TasksLoaded(_));
 
             handlers::handle_app_event(&mut app_state, event, &default_cal);

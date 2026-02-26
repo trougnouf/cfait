@@ -63,6 +63,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleAdvancedSettings(_)
         | Message::SetMaxDoneRoots(_)
         | Message::SetMaxDoneSubtasks(_)
+        | Message::SetLanguage(_)
         | Message::SetStrikethroughCompleted(_) => settings::handle(app, message),
 
         Message::InputChanged(_)
@@ -242,13 +243,13 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
     };
 
     if app.editing_uid.is_some() {
-        app.current_placeholder = "Edit Title...".to_string();
+        app.current_placeholder = rust_i18n::t!("edit_task_title").to_string();
     } else if let Some(parent_uid) = &app.creating_child_of {
         let parent_name = app
             .store
             .get_summary(parent_uid)
             .unwrap_or("Parent".to_string());
-        app.current_placeholder = format!("New child of '{}'...", parent_name);
+        app.current_placeholder = rust_i18n::t!("new_child_of", name = parent_name).to_string();
     } else {
         let target_name = app
             .calendars
@@ -256,11 +257,13 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             .find(|c| Some(&c.href) == app.active_cal_href.as_ref())
             .map(|c| c.name.as_str())
             .unwrap_or("Default");
-        app.current_placeholder = format!(
-            "Add task to {} (e.g. Buy cat food !1 @tomorrow #groceries ~30m)",
-            target_name
-        );
+        app.current_placeholder =
+            rust_i18n::t!("new_task_placeholder_full", target = target_name).to_string();
     }
+
+    // Persist search/notes placeholder translations
+    app.search_placeholder = rust_i18n::t!("search_placeholder").to_string();
+    app.notes_placeholder = rust_i18n::t!("notes_placeholder").to_string();
 
     task
 }

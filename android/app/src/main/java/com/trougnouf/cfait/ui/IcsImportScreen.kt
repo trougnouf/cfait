@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
 
@@ -51,7 +52,7 @@ fun IcsImportScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                "Import tasks",
+                stringResource(R.string.import),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -74,14 +75,14 @@ fun IcsImportScreen(
                 ) {
                     NfIcon(NfIcons.IMPORT, 20.sp, MaterialTheme.colorScheme.onPrimaryContainer)
                     Text(
-                        "ICS file detected",
+                        stringResource(R.string.ics_file_detected),
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
                 if (taskCount != null) {
                     Text(
-                        "Found $taskCount task(s) to import",
+                        stringResource(R.string.found_tasks_to_import, taskCount),
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
@@ -96,7 +97,7 @@ fun IcsImportScreen(
 
         // Calendar selection
         Text(
-            "Select target collection:",
+            stringResource(R.string.select_target_collection),
             fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold
         )
@@ -131,7 +132,7 @@ fun IcsImportScreen(
                 onClick = onCancel,
                 modifier = Modifier.weight(1f)
             ) {
-                Text("Cancel")
+                Text(androidx.compose.ui.res.stringResource(R.string.cancel))
             }
             Button(
                 onClick = {
@@ -147,7 +148,7 @@ fun IcsImportScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     NfIcon(NfIcons.IMPORT, 16.sp, MaterialTheme.colorScheme.onPrimary)
-                    Text("Import")
+                    Text(androidx.compose.ui.res.stringResource(R.string.import))
                 }
             }
         }
@@ -198,7 +199,7 @@ fun CalendarSelectionItem(
                     fontSize = 16.sp
                 )
                 Text(
-                    text = if (calendar.isLocal) "Local collection" else calendar.href,
+                    text = if (calendar.isLocal) stringResource(R.string.local_collection) else calendar.href,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

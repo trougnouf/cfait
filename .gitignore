@@ -10,6 +10,7 @@ android/build/
 .gradle/
 android/.gradle/
 .kotlin
+android/app/src/main/res/values*/strings.xml
 
 # Android - Local Configuration
 local.properties

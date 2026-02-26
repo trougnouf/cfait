@@ -103,7 +103,10 @@ pub async fn run_network_actor(
             }
         };
     let _ = event_tx
-        .send(AppEvent::Status("Connecting...".to_string()))
+        .send(AppEvent::Status {
+            key: "connecting".to_string(),
+            human: "Connecting...".to_string(),
+        })
         .await;
 
     let mut calendars = match client.get_calendars().await {
@@ -129,7 +132,10 @@ pub async fn run_network_actor(
                 return;
             } else {
                 let _ = event_tx
-                    .send(AppEvent::Status(format!("Sync warning: {}", err_str)))
+                    .send(AppEvent::Status {
+                        key: "sync_warning".to_string(),
+                        human: format!("Sync warning: {}", err_str),
+                    })
                     .await;
                 vec![]
             }
@@ -150,7 +156,10 @@ pub async fn run_network_actor(
         .await;
 
     let _ = event_tx
-        .send(AppEvent::Status("Syncing...".to_string()))
+        .send(AppEvent::Status {
+            key: "syncing".to_string(),
+            human: "Syncing...".to_string(),
+        })
         .await;
 
     // Load tasks again with validated calendars list
@@ -171,11 +180,19 @@ pub async fn run_network_actor(
     match client.get_all_tasks(&calendars).await {
         Ok(results) => {
             let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
-            let _ = event_tx.send(AppEvent::Status("Ready.".to_string())).await;
+            let _ = event_tx
+                .send(AppEvent::Status {
+                    key: "ready".to_string(),
+                    human: "Ready.".to_string(),
+                })
+                .await;
         }
         Err(e) => {
             let _ = event_tx
-                .send(AppEvent::Status(format!("Sync warning: {}", e)))
+                .send(AppEvent::Status {
+                    key: "sync_warning".to_string(),
+                    human: format!("Sync warning: {}", e),
+                })
                 .await;
         }
     }
@@ -224,11 +241,16 @@ pub async fn run_network_actor(
                             let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
                         }
                         let s: String = if msgs.is_empty() {
-                            "Created.".to_string()
+                            rust_i18n::t!("status_created").to_string()
                         } else {
                             msgs.join("; ")
                         };
-                        let _ = event_tx.send(AppEvent::Status(s)).await;
+                        let key = if msgs.is_empty() {
+                            "status_created".to_string()
+                        } else {
+                            "status_custom".to_string()
+                        };
+                        let _ = event_tx.send(AppEvent::Status { key, human: s }).await;
                     }
                     Err(e) => {
                         let _ = event_tx.send(AppEvent::Error(e)).await;
@@ -241,11 +263,16 @@ pub async fn run_network_actor(
                 match client.update_task(&mut task).await {
                     Ok(msgs) => {
                         let s: String = if msgs.is_empty() {
-                            "Saved.".to_string()
+                            rust_i18n::t!("status_saved").to_string()
                         } else {
                             msgs.join("; ")
                         };
-                        let _ = event_tx.send(AppEvent::Status(s)).await;
+                        let key = if msgs.is_empty() {
+                            "status_saved".to_string()
+                        } else {
+                            "status_custom".to_string()
+                        };
+                        let _ = event_tx.send(AppEvent::Status { key, human: s }).await;
                     }
                     Err(e) => {
                         let _ = event_tx.send(AppEvent::Error(e)).await;
@@ -262,11 +289,16 @@ pub async fn run_network_actor(
                 match client.delete_task(&task).await {
                     Ok(msgs) => {
                         let s: String = if msgs.is_empty() {
-                            "Deleted.".to_string()
+                            rust_i18n::t!("status_deleted").to_string()
                         } else {
                             msgs.join("; ")
                         };
-                        let _ = event_tx.send(AppEvent::Status(s)).await;
+                        let key = if msgs.is_empty() {
+                            "status_deleted".to_string()
+                        } else {
+                            "status_custom".to_string()
+                        };
+                        let _ = event_tx.send(AppEvent::Status { key, human: s }).await;
                     }
                     Err(e) => {
                         let _ = event_tx.send(AppEvent::Error(e)).await;
@@ -279,7 +311,10 @@ pub async fn run_network_actor(
 
             Action::Refresh => {
                 let _ = event_tx
-                    .send(AppEvent::Status("Refreshing...".to_string()))
+                    .send(AppEvent::Status {
+                        key: "syncing".to_string(),
+                        human: "Syncing...".to_string(),
+                    })
                     .await;
 
                 let mut calendars = match client.get_calendars().await {
@@ -307,7 +342,10 @@ pub async fn run_network_actor(
                     Ok(results) => {
                         let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
                         let _ = event_tx
-                            .send(AppEvent::Status("Refreshed.".to_string()))
+                            .send(AppEvent::Status {
+                                key: "refreshed".to_string(),
+                                human: "Refreshed.".to_string(),
+                            })
                             .await;
                     }
                     Err(e) => {
@@ -321,11 +359,16 @@ pub async fn run_network_actor(
                 match client.move_task(&task, &new_href).await {
                     Ok((_, msgs)) => {
                         let s: String = if msgs.is_empty() {
-                            "Moved.".to_string()
+                            rust_i18n::t!("status_moved").to_string()
                         } else {
                             msgs.join("; ")
                         };
-                        let _ = event_tx.send(AppEvent::Status(s)).await;
+                        let key = if msgs.is_empty() {
+                            "status_moved".to_string()
+                        } else {
+                            "status_custom".to_string()
+                        };
+                        let _ = event_tx.send(AppEvent::Status { key, human: s }).await;
                         if let Ok(t1) = client.get_tasks(&old_href).await {
                             let _ = event_tx
                                 .send(AppEvent::TasksLoaded(vec![(old_href, t1)]))
@@ -347,7 +390,10 @@ pub async fn run_network_actor(
 
             Action::MigrateLocal(source_href, target_href) => {
                 let _ = event_tx
-                    .send(AppEvent::Status("Migrating local...".to_string()))
+                    .send(AppEvent::Status {
+                        key: "migrating_local".to_string(),
+                        human: "Migrating local...".to_string(),
+                    })
                     .await;
 
                 // FIX: Load tasks from disk. The client is dumb; we must provide the data.
@@ -355,15 +401,18 @@ pub async fn run_network_actor(
                     match client.migrate_tasks(local_tasks, &target_href).await {
                         Ok(count) => {
                             let _ = event_tx
-                                .send(AppEvent::Status(format!(
-                                    "Migration complete. Moved {}.",
-                                    count
-                                )))
+                                .send(AppEvent::Status {
+                                    key: "migration_complete".to_string(),
+                                    human: format!("Migration complete. Moved {}.", count),
+                                })
                                 .await;
 
                             // Trigger refresh to show moved tasks
                             let _ = event_tx
-                                .send(AppEvent::Status("Refreshing...".to_string()))
+                                .send(AppEvent::Status {
+                                    key: "refreshing".to_string(),
+                                    human: "Refreshing...".to_string(),
+                                })
                                 .await;
                             // (Existing refresh logic usually follows here or user presses 'r')
                         }

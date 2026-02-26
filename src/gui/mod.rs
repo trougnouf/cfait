@@ -11,7 +11,7 @@ pub mod subscription;
 pub mod update;
 pub mod view;
 
-use crate::config::{AppTheme, Config};
+use crate::config::{self, AppTheme, Config};
 use crate::context::{AppContext, StandardContext};
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
@@ -104,6 +104,8 @@ impl GuiApp {
         force_ssd: bool,
     ) -> (Self, Task<Message>) {
         let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(override_root));
+        // Initialize locale based on saved config or system preference immediately after context creation
+        config::init_locale(ctx.as_ref());
         let ctx_clone = ctx.clone();
 
         let mut tasks = vec![

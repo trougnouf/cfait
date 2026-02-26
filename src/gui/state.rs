@@ -106,6 +106,8 @@ pub struct GuiApp {
 
     // Computed State (Persisted for view borrowing)
     pub current_placeholder: String,
+    pub search_placeholder: String,
+    pub notes_placeholder: String,
 
     // UI Visuals
     pub location_tab_icon: char,
@@ -166,6 +168,8 @@ pub struct GuiApp {
     pub last_click: Option<(std::time::Instant, String)>, // Added
 
     // Config cache (New fields)
+    // Optional selected language for the GUI. `None` => use system default.
+    pub language: Option<String>,
     pub auto_reminders: bool,
     pub default_reminder_time: String,
     pub snooze_short_mins: u32,
@@ -196,8 +200,6 @@ impl Default for GuiApp {
         // Randomize Location Icon
         let loc_icons = [
             icon::LOCATION,
-            icon::LOCATION,
-            icon::LOCATION,
             icon::EARTH_ASIA,
             icon::EARTH_AMERICAS,
             icon::EARTH_AFRICA,
@@ -227,7 +229,6 @@ impl Default for GuiApp {
         let resolved_random_theme = if !themes.is_empty() {
             themes[rng.usize(..themes.len())]
         } else {
-            // Fallback if the themes list is somehow empty
             AppTheme::RustyDark
         };
 
@@ -244,9 +245,8 @@ impl Default for GuiApp {
             cached_categories: Vec::new(),
             cached_locations: Vec::new(),
 
-            // Initialize:
             parent_attributes_cache: HashMap::new(),
-            task_ids: HashMap::new(), // Init new field
+            task_ids: HashMap::new(),
 
             sidebar_mode: SidebarMode::Calendars,
             active_cal_href: None,
@@ -281,9 +281,11 @@ impl Default for GuiApp {
             unsynced_changes: false,
 
             current_placeholder: "Add a task...".to_string(),
+            search_placeholder: "Search...".to_string(),
+            notes_placeholder: "Notes...".to_string(),
 
-            location_tab_icon, // Add this
-            random_icon,       // NEW
+            location_tab_icon,
+            random_icon,
             alias_input_key: String::new(),
             alias_input_values: String::new(),
             ob_trash_retention_input: "14".to_string(),
@@ -318,7 +320,7 @@ impl Default for GuiApp {
             ringing_tasks: Vec::new(),
             snooze_custom_input: String::new(),
 
-            // Default config values
+            language: None,
             auto_reminders: true,
             default_reminder_time: "09:00".to_string(),
             snooze_short_mins: 60,
@@ -329,15 +331,12 @@ impl Default for GuiApp {
             deleting_events: false,
             ob_snooze_short_input: "1h".to_string(),
             ob_snooze_long_input: "1d".to_string(),
-            ob_auto_refresh_input: "30m".to_string(), // Added default
+            ob_auto_refresh_input: "30m".to_string(),
 
-            // Advanced Settings Inputs
             show_advanced_settings: false,
             ob_max_done_roots_input: "20".to_string(),
             ob_max_done_subtasks_input: "5".to_string(),
 
-            // Force Server-Side Decorations
-            // Default to true on Windows 10 so native (server-side) decorations are used there.
             force_ssd: {
                 #[cfg(target_os = "windows")]
                 {
@@ -351,13 +350,10 @@ impl Default for GuiApp {
                 }
             },
 
-            // ADDED: Auto Refresh
             auto_refresh_interval_mins: 30,
 
-            // Double click tracking
-            last_click: None, // Added
+            last_click: None,
 
-            // ICS Import Dialog
             ics_import_dialog_open: false,
             ics_import_file_path: None,
             ics_import_content: None,

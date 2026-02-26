@@ -19,7 +19,7 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
     // Ensure the [UNSYNCED] badge reflects the current journal state on every event
     state.unsynced_changes = !crate::journal::Journal::load(state.ctx.as_ref()).is_empty();
     match event {
-        AppEvent::Status(s) => state.message = s,
+        AppEvent::Status { key: _, human } => state.message = human,
         AppEvent::Error(s) => {
             state.message = format!("Error: {}", s);
             state.loading = false;

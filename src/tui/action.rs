@@ -36,6 +36,12 @@ pub enum Action {
 pub enum AppEvent {
     CalendarsLoaded(Vec<CalendarListEntry>),
     TasksLoaded(Vec<(String, Vec<Task>)>),
+    /// An event that carries a stable message key plus a localized/human string.
+    /// Use `key` in tests and logic for stable comparisons; `human` is intended
+    /// for UI display (localized).
     Error(String),
-    Status(String),
+    Status {
+        key: String,
+        human: String,
+    },
 }

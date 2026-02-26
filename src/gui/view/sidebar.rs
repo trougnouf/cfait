@@ -1,6 +1,5 @@
 // File: ./src/gui/view/sidebar.rs
 // Renders the sidebar (calendars, tags, locations) for the GUI.
-
 use super::tooltip_style;
 use crate::color_utils;
 use crate::gui::icon;
@@ -56,7 +55,7 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     };
 
     let toggle_all = toggler(are_all_visible)
-        .label("Show all")
+        .label(rust_i18n::t!("show_all"))
         .text_size(12)
         .text_alignment(iced::alignment::Horizontal::Left)
         .spacing(10)
@@ -65,7 +64,6 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
         .style(toggler_style);
     let toggle_container = container(toggle_all).padding(5);
 
-    // List generation (mostly unchanged logic, just wrapped in scrollable at end)
     let list = column(
         visible_calendars
             .into_iter()
@@ -108,7 +106,12 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
 
                 let vis_tooltip = tooltip(
                     vis_btn,
-                    text(if is_visible { "Hide" } else { "Show" }).size(12),
+                    text(if is_visible {
+                        rust_i18n::t!("hide")
+                    } else {
+                        rust_i18n::t!("show")
+                    })
+                    .size(12),
                     tooltip::Position::Right,
                 )
                 .style(tooltip_style)
@@ -140,7 +143,7 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
 
                 let focus_tooltip = tooltip(
                     focus_btn,
-                    text("Focus (hide others)").size(12),
+                    text(rust_i18n::t!("focus_hide_others")).size(12),
                     tooltip::Position::Left,
                 )
                 .style(tooltip_style)
@@ -156,7 +159,6 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     .spacing(2)
     .width(Length::Fill);
 
-    // ADDED: Wrap list in scrollable, keep toggle_container sticky
     column![
         toggle_container,
         scrollable(list)
@@ -167,41 +169,15 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     .into()
 }
 
-// (Omitting to save space)
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct DurationOpt(Option<u32>, String);
-impl std::fmt::Display for DurationOpt {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.1)
-    }
-}
-fn format_mins(m: u32) -> String {
-    if m >= 525600 {
-        format!("{}y", m / 525600)
-    } else if m >= 43200 {
-        format!("{}mo", m / 43200)
-    } else if m >= 10080 {
-        format!("{}w", m / 10080)
-    } else if m >= 1440 {
-        format!("{}d", m / 1440)
-    } else if m >= 60 {
-        format!("{}h", m / 60)
-    } else {
-        format!("{}m", m)
-    }
-}
-
 // --- CATEGORIES ---
 pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     let all_cats = &app.cached_categories;
 
-    // --- 1. Header Logic ---
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
     let has_selection = !app.selected_categories.is_empty();
 
     let clear_btn = if has_selection {
         if is_filter_empty {
-            // Error state: color button icon red
             button(
                 icon::icon(icon::CLEAR_ALL)
                     .size(16)
@@ -213,14 +189,12 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
             .padding(5)
             .on_press(Message::ClearAllTags)
         } else {
-            // Normal active state
             button(icon::icon(icon::CLEAR_ALL).size(16))
                 .style(button::text)
                 .padding(5)
                 .on_press(Message::ClearAllTags)
         }
     } else {
-        // Disabled state
         button(
             icon::icon(icon::CLEAR_ALL)
                 .size(16)
@@ -234,16 +208,16 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
 
     let clear_tooltip = tooltip(
         clear_btn,
-        text("Clear all tags").size(12),
+        text(rust_i18n::t!("clear_all_tags")).size(12),
         tooltip::Position::Top,
     )
     .style(tooltip_style)
     .delay(Duration::from_millis(700));
 
     let logic_text = if app.match_all_categories {
-        "Match: AND"
+        rust_i18n::t!("match_and")
     } else {
-        "Match: OR"
+        rust_i18n::t!("match_or")
     };
     let logic_btn = button(text(logic_text).size(12))
         .style(button::secondary)
@@ -252,13 +226,12 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
 
     let logic_tooltip = tooltip(
         logic_btn,
-        text("Toggle matching logic").size(12),
+        text(rust_i18n::t!("toggle_matching_logic")).size(12),
         tooltip::Position::Top,
     )
     .style(tooltip_style)
     .delay(Duration::from_millis(700));
 
-    // STICKY HEADER
     let header = row![
         clear_tooltip,
         Space::new().width(Length::Fill),
@@ -272,7 +245,29 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         ..Default::default()
     });
 
-    // --- 2. Duration Filters Logic (Moved Up) ---
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct DurationOpt(Option<u32>, String);
+    impl std::fmt::Display for DurationOpt {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.1)
+        }
+    }
+    fn format_mins(m: u32) -> String {
+        if m >= 525600 {
+            format!("{}y", m / 525600)
+        } else if m >= 43200 {
+            format!("{}mo", m / 43200)
+        } else if m >= 10080 {
+            format!("{}w", m / 10080)
+        } else if m >= 1440 {
+            format!("{}d", m / 1440)
+        } else if m >= 60 {
+            format!("{}h", m / 60)
+        } else {
+            format!("{}m", m)
+        }
+    }
+
     let mut dur_set = std::collections::HashSet::new();
     for map in app.store.calendars.values() {
         for t in map.values() {
@@ -300,11 +295,11 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
 
     let dur_filters = column![
         iced::widget::rule::horizontal(1),
-        text("Filter duration")
+        text(rust_i18n::t!("filter_duration"))
             .size(14)
             .color(Color::from_rgb(0.7, 0.7, 0.7)),
         row![
-            text("Min:").size(12).width(30),
+            text(rust_i18n::t!("min")).size(12).width(30),
             iced::widget::pick_list(opts.clone(), Some(current_min), |o| {
                 Message::SetMinDuration(o.0)
             })
@@ -315,7 +310,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         .spacing(5)
         .align_y(iced::Alignment::Center),
         row![
-            text("Max:").size(12).width(30),
+            text(rust_i18n::t!("max")).size(12).width(30),
             iced::widget::pick_list(opts, Some(current_max), |o| Message::SetMaxDuration(o.0))
                 .text_size(12)
                 .padding(5)
@@ -324,7 +319,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         .spacing(5)
         .align_y(iced::Alignment::Center),
         iced::widget::checkbox(app.filter_include_unset_duration)
-            .label("Include unset")
+            .label(rust_i18n::t!("include_unset"))
             .text_size(12)
             .size(16)
             .on_toggle(Message::ToggleIncludeUnsetDuration)
@@ -335,11 +330,10 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         ..Default::default()
     });
 
-    // --- 3. Tag List Construction ---
     let tags_column = if all_cats.is_empty() {
         column![
             container(
-                text("No tags found")
+                text(rust_i18n::t!("no_tags_found"))
                     .size(14)
                     .color(Color::from_rgb(0.5, 0.5, 0.5)),
             )
@@ -358,20 +352,16 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                     let (r, g, b) = color_utils::generate_color(cat);
                     let tag_color = Color::from_rgb(r, g, b);
 
-                    // Icon character depends on selection state
                     let icon_char = if is_selected {
                         icon::TAG_CHECK
                     } else {
                         icon::TAG_OUTLINE
                     };
 
-                    // The icon widget itself has no color set; the button style will control it.
                     let icon_content = icon::icon(icon_char).size(16);
 
                     let icon_btn = button(icon_content)
                         .style(move |_theme: &Theme, status: button::Status| {
-                            // On hover, always use the full opaque tag color for feedback.
-                            // Otherwise, use the appropriate color based on selection state.
                             let color =
                                 if status == button::Status::Hovered || is_selected || is_hovered {
                                     tag_color
@@ -397,7 +387,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                         } else {
                             app.theme().extended_palette().background.base.text
                         };
-                        text(format!("Uncategorized ({})", count))
+                        text(format!("{} ({})", rust_i18n::t!("uncategorized"), count))
                             .size(16)
                             .color(color)
                             .into()
@@ -425,7 +415,6 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                     .padding(0)
                     .on_press(Message::CategoryToggled(cat_clone_toggle));
 
-                    // Use new FocusTag message
                     let focus_btn = button(icon::icon(icon::ARROW_RIGHT).size(14))
                         .style(button::text)
                         .padding(2)
@@ -433,7 +422,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
 
                     let focus_tooltip = tooltip(
                         focus_btn,
-                        text("Focus (hide others)").size(12),
+                        text(rust_i18n::t!("focus_hide_others")).size(12),
                         tooltip::Position::Left,
                     )
                     .style(tooltip_style)
@@ -447,7 +436,6 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                     ]
                     .spacing(5)
                     .align_y(iced::Alignment::Center)
-                    // Added Right Padding so scrollbar doesn't overlap arrow
                     .padding(iced::Padding {
                         right: 15.0,
                         ..Default::default()
@@ -463,10 +451,8 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         .spacing(2)
     };
 
-    // --- 4. Combine: Tags + Filter Duration ---
     let scroll_content = tags_column.push(Space::new().height(10)).push(dur_filters);
 
-    // --- 5. Final Output: Header + Scrollable Area ---
     column![
         header,
         scrollable(scroll_content)
@@ -482,10 +468,8 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
     let all_locs = &app.cached_locations;
     let has_selection = !app.selected_locations.is_empty();
 
-    // Highlight clear button red if selected locations are likely the cause of an empty result.
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
     let clear_btn = if has_selection {
-        // If filters produced an empty result and locations are selected, color the clear button red to attribute.
         if is_filter_empty {
             button(
                 icon::icon(icon::CLEAR_ALL)
@@ -517,15 +501,14 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
 
     let clear_tooltip = tooltip(
         clear_btn,
-        text("Clear all locations").size(12),
+        text(rust_i18n::t!("clear_all_locations")).size(12),
         tooltip::Position::Top,
     )
     .style(tooltip_style)
     .delay(Duration::from_millis(700));
 
-    // STICKY HEADER
     let header = row![
-        text("Locations").size(14),
+        text(rust_i18n::t!("locations")).size(14),
         Space::new().width(Length::Fill),
         clear_tooltip
     ]
@@ -534,7 +517,7 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
 
     let list_content: Element<'_, Message> = if all_locs.is_empty() {
         container(
-            text("No locations")
+            text(rust_i18n::t!("no_locations"))
                 .size(14)
                 .color(Color::from_rgb(0.5, 0.5, 0.5)),
         )
@@ -549,11 +532,10 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
                     let loc_clone_toggle = loc.clone();
                     let loc_clone_focus = loc.clone();
 
-                    // Icon Logic: Amber for Checked
                     let (icon_char, icon_color) = if is_selected {
-                        (icon::CHECK_CIRCLE, Color::from_rgb(1.0, 0.6, 0.0)) // Amber
+                        (icon::CHECK_CIRCLE, Color::from_rgb(1.0, 0.6, 0.0))
                     } else {
-                        (icon::MAP_PIN, Color::from_rgb(0.5, 0.5, 0.5)) // Gray
+                        (icon::MAP_PIN, Color::from_rgb(0.5, 0.5, 0.5))
                     };
 
                     let icon_btn = button(icon::icon(icon_char).size(14).color(icon_color))
@@ -574,7 +556,6 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
                     .padding(0)
                     .on_press(Message::LocationToggled(loc_clone_toggle));
 
-                    // Use new FocusLocation message
                     let focus_btn = button(icon::icon(icon::ARROW_RIGHT).size(14))
                         .style(button::text)
                         .padding(2)
@@ -582,7 +563,7 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
 
                     let focus_tooltip = tooltip(
                         focus_btn,
-                        text("Focus (hide others)").size(12),
+                        text(rust_i18n::t!("focus_hide_others")).size(12),
                         tooltip::Position::Left,
                     )
                     .style(tooltip_style)
@@ -596,7 +577,6 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
                     ]
                     .spacing(5)
                     .align_y(iced::Alignment::Center)
-                    // Added Right Padding so scrollbar doesn't overlap arrow
                     .padding(iced::Padding {
                         right: 15.0,
                         ..Default::default()

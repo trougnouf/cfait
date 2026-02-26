@@ -26,6 +26,8 @@ async fn main() -> Result<()> {
 
     // Create the application context (StandardContext for production use) with the override
     let ctx: Arc<dyn AppContext> = Arc::new(StandardContext::new(override_root));
+    // Initialize locale (config override or system detection) immediately after context creation
+    cfait::config::init_locale(ctx.as_ref());
 
     // Handle help flag
     if args.len() > 1 && (args[1] == "--help" || args[1] == "-h" || args[1] == "help") {

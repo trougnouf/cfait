@@ -85,7 +85,7 @@ class AlarmWorker(
         // 1. Snooze Custom (Inline Reply) - Primary snooze action
         val snoozeCustomKey = "snooze_custom_duration"
         val remoteInput = RemoteInput.Builder(snoozeCustomKey)
-            .setLabel("Snooze (e.g. 15m, 1h)")
+            .setLabel(context.getString(R.string.snooze_hint))
             .build()
 
         val snoozeCustomIntent = Intent(context, NotificationActionReceiver::class.java).apply {
@@ -102,7 +102,7 @@ class AlarmWorker(
 
         val customSnoozeAction = NotificationCompat.Action.Builder(
             R.drawable.ic_launcher_foreground,
-            "Snooze...",
+            context.getString(R.string.snooze),
             snoozeCustomPending
         ).addRemoteInput(remoteInput).build()
 
@@ -155,8 +155,8 @@ class AlarmWorker(
             .setAutoCancel(true)
             // ACTION ORDER: Snooze..., Start, Done
             .addAction(customSnoozeAction)
-            .addAction(R.drawable.ic_launcher_foreground, "Start", startPending)
-            .addAction(R.drawable.ic_launcher_foreground, "Done", donePending)
+            .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.start), startPending)
+            .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.done), donePending)
             .build()
 
         NotificationManagerCompat.from(context).notify(alarmUid.hashCode(), notification)

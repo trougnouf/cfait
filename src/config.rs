@@ -16,6 +16,19 @@ fn default_cutoff() -> Option<u32> {
     Some(2)
 }
 
+pub fn init_locale(ctx: &dyn crate::context::AppContext) {
+    // Initialize locale using the persistent config if present, otherwise fall back
+    // to the system locale (primary language subtag). Android will pass its locale
+    // at startup via UniFFI so this will pick that up if it's saved in the Config.
+    let config = Config::load(ctx).unwrap_or_default();
+    if let Some(lang) = config.language {
+        rust_i18n::set_locale(&lang);
+    } else if let Some(sys_lang) = sys_locale::get_locale() {
+        // sys_lang is typically like "en-US" or "fr-FR"; use primary subtag.
+        rust_i18n::set_locale(sys_lang.split('-').next().unwrap_or("en"));
+    }
+}
+
 fn default_urgent_days() -> u32 {
     1
 }
@@ -150,6 +163,10 @@ pub struct Config {
     #[serde(default)]
     pub theme: AppTheme,
 
+    // Optional language/locale selection. None = use system default.
+    #[serde(default)]
+    pub language: Option<String>,
+
     #[serde(default = "default_urgent_days")]
     pub urgent_days_horizon: u32,
     #[serde(default = "default_urgent_prio")]
@@ -209,6 +226,7 @@ impl Default for Config {
             hide_fully_completed_tags: true,
             sort_cutoff_months: Some(2),
             tag_aliases: HashMap::new(),
+            language: None,
             theme: AppTheme::default(),
             urgent_days_horizon: 1,
             urgent_priority_threshold: 1,

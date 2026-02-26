@@ -407,20 +407,23 @@ fun TaskRow(
                     )
                 }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    DropdownMenuItem(text = { Text("Edit") }, onClick = {
-                        expanded = false
-                        onClick(task.uid)
-                    }, leadingIcon = { NfIcon(NfIcons.EDIT, 16.sp) })
+                    DropdownMenuItem(
+                        text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_edit)) },
+                        onClick = {
+                            expanded = false
+                            onClick(task.uid)
+                        },
+                        leadingIcon = { NfIcon(NfIcons.EDIT, 16.sp) })
 
                     DropdownMenuItem(
                         text = {
                             Text(
                                 if (task.statusString == "InProcess") {
-                                    "Pause"
+                                    androidx.compose.ui.res.stringResource(R.string.menu_pause)
                                 } else if (task.isPaused) {
-                                    "Resume"
+                                    androidx.compose.ui.res.stringResource(R.string.menu_resume)
                                 } else {
-                                    "Start"
+                                    androidx.compose.ui.res.stringResource(R.string.menu_start)
                                 },
                             )
                         },
@@ -436,28 +439,40 @@ fun TaskRow(
                         },
                     )
                     if (task.statusString == "InProcess" || task.isPaused) {
-                        DropdownMenuItem(text = { Text("Stop (Reset)") }, onClick = {
-                            expanded = false
-                            onAction("stop")
-                        }, leadingIcon = { NfIcon(NfIcons.DEBUG_STOP, 16.sp) })
+                        DropdownMenuItem(
+                            text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_stop_reset)) },
+                            onClick = {
+                                expanded = false
+                                onAction("stop")
+                            },
+                            leadingIcon = { NfIcon(NfIcons.DEBUG_STOP, 16.sp) })
                     }
-                    DropdownMenuItem(text = { Text("Increase prio") }, onClick = {
-                        expanded = false
-                        onAction("prio_up")
-                    }, leadingIcon = { NfIcon(NfIcons.PRIORITY_UP, 16.sp) })
-                    DropdownMenuItem(text = { Text("Decrease prio") }, onClick = {
-                        expanded = false
-                        onAction("prio_down")
-                    }, leadingIcon = { NfIcon(NfIcons.PRIORITY_DOWN, 16.sp) })
-                    if (yankedUid == null) {
-                        DropdownMenuItem(text = { Text("Yank (link)") }, onClick = {
+                    DropdownMenuItem(
+                        text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_increase_prio)) },
+                        onClick = {
                             expanded = false
-                            onAction("yank")
-                        }, leadingIcon = { NfIcon(NfIcons.LINK, 16.sp) })
+                            onAction("prio_up")
+                        },
+                        leadingIcon = { NfIcon(NfIcons.PRIORITY_UP, 16.sp) })
+                    DropdownMenuItem(
+                        text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_decrease_prio)) },
+                        onClick = {
+                            expanded = false
+                            onAction("prio_down")
+                        },
+                        leadingIcon = { NfIcon(NfIcons.PRIORITY_DOWN, 16.sp) })
+                    if (yankedUid == null) {
+                        DropdownMenuItem(
+                            text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_yank)) },
+                            onClick = {
+                                expanded = false
+                                onAction("yank")
+                            },
+                            leadingIcon = { NfIcon(NfIcons.LINK, 16.sp) })
                     }
 
                     DropdownMenuItem(
-                        text = { Text("Create subtask") },
+                        text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_create_subtask)) },
                         onClick = {
                             expanded = false
                             onAction("create_child")
@@ -466,33 +481,50 @@ fun TaskRow(
                     )
 
                     if (enabledCalendarCount > 1) {
-                        DropdownMenuItem(text = { Text("Move") }, onClick = {
-                            expanded = false
-                            onAction("move")
-                        }, leadingIcon = { NfIcon(NfIcons.MOVE, 16.sp) })
+                        DropdownMenuItem(
+                            text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_move)) },
+                            onClick = {
+                                expanded = false
+                                onAction("move")
+                            },
+                            leadingIcon = { NfIcon(NfIcons.MOVE, 16.sp) })
                     }
 
                     if (task.statusString != "Cancelled") {
-                        DropdownMenuItem(text = { Text("Cancel") }, onClick = {
-                            expanded = false
-                            onAction("cancel")
-                        }, leadingIcon = { NfIcon(NfIcons.CROSS, 16.sp) })
+                        DropdownMenuItem(
+                            text = { Text(androidx.compose.ui.res.stringResource(R.string.cancel)) },
+                            onClick = {
+                                expanded = false
+                                onAction("cancel")
+                            },
+                            leadingIcon = { NfIcon(NfIcons.CROSS, 16.sp) })
                     }
                     if (task.geo != null) {
-                        DropdownMenuItem(text = { Text("Open location") }, onClick = {
-                            expanded = false
-                            uriHandler.openUri("geo:${task.geo}")
-                        }, leadingIcon = { NfIcon(NfIcons.MAP_LOCATION_DOT, 16.sp) })
+                        DropdownMenuItem(
+                            text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_open_location)) },
+                            onClick = {
+                                expanded = false
+                                uriHandler.openUri("geo:${task.geo}")
+                            },
+                            leadingIcon = { NfIcon(NfIcons.MAP_LOCATION_DOT, 16.sp) })
                     }
 
                     if (task.url != null) {
-                        DropdownMenuItem(text = { Text("Open link") }, onClick = {
-                            expanded = false
-                            uriHandler.openUri(task.url!!)
-                        }, leadingIcon = { NfIcon(NfIcons.WEB_CHECK, 16.sp) })
+                        DropdownMenuItem(
+                            text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_open_link)) },
+                            onClick = {
+                                expanded = false
+                                uriHandler.openUri(task.url!!)
+                            },
+                            leadingIcon = { NfIcon(NfIcons.WEB_CHECK, 16.sp) })
                     }
 
-                    DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, onClick = {
+                    DropdownMenuItem(text = {
+                        Text(
+                            androidx.compose.ui.res.stringResource(R.string.menu_delete),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }, onClick = {
                         expanded = false
                         onAction("delete")
                     }, leadingIcon = { NfIcon(NfIcons.DELETE, 16.sp, MaterialTheme.colorScheme.error) })

@@ -69,8 +69,9 @@ async fn test_tui_toggle_task_does_not_revert_status() {
 
     loop {
         match tokio::time::timeout(std::time::Duration::from_secs(2), event_rx.recv()).await {
-            Ok(Some(AppEvent::Status(s))) => {
-                if s == "Saved." {
+            Ok(Some(AppEvent::Status { key, human })) => {
+                // Prefer asserting on the stable key; accept the canonical English human string as fallback.
+                if key == "status_saved" || human == "Saved." {
                     break;
                 }
             }

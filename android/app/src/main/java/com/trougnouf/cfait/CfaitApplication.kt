@@ -27,6 +27,18 @@ class CfaitApplication : Application() {
 
         // Preload data into memory immediately so UI is ready faster
         api.loadFromCache()
+
+        // Detect saved language preference or fall back to Android system language,
+        // then propagate it to the Rust backend so rust_i18n is initialized correctly.
+        val prefs = getSharedPreferences("cfait_prefs", android.content.Context.MODE_PRIVATE)
+        val savedLang = prefs.getString("language", null)
+
+        if (savedLang != null && savedLang != "auto") {
+            api.setLocale(savedLang)
+        } else {
+            // Detect Android system language
+            api.setLocale(java.util.Locale.getDefault().language)
+        }
     }
 
     private fun createNotificationChannel() {

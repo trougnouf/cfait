@@ -20,6 +20,8 @@ pub mod tui;
 #[cfg(feature = "gui")]
 pub mod gui;
 
+rust_i18n::i18n!("locales", fallback = "en");
+
 // --- ANDROID SUPPORT ---
 #[cfg(feature = "mobile")]
 pub mod mobile;

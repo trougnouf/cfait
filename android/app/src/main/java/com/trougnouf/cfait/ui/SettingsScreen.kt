@@ -31,18 +31,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
 import kotlinx.coroutines.launch
 import java.io.File
 
-private val busyMessages = listOf(
-    "Processing stuff", "BRB", "Be right back", "Working on things",
-    "Loading", "AFK", "Be right back", "Processing things",
-    "Reticulating splines", "Swapping time streams",
-    "Defragmenting memories", "Sorting mental baggage", "Getting things done"
-)
+/* busyMessages moved into the composable so strings can be resolved with stringResource()
+   (must be inside a @Composable function). */
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,21 +79,38 @@ fun SettingsScreen(
     var deleteEventsOnCompletion by remember { mutableStateOf(false) }
 
     var themeExpanded by remember { mutableStateOf(false) }
+    // Use localized labels for theme options so they appear translated on Android.
     val themeOptions = remember {
         val list = mutableListOf(
-            "auto" to "Auto-detect",
-            "light" to "Light",
-            "dark" to "Dark"
+            "auto" to stringResource(R.string.theme_auto_detect),
+            "light" to stringResource(R.string.theme_light),
+            "dark" to stringResource(R.string.theme_dark)
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            list.add("dynamic_light" to "Dynamic Light")
-            list.add("dynamic_dark" to "Dynamic Dark")
+            list.add("dynamic_light" to stringResource(R.string.theme_dynamic_light))
+            list.add("dynamic_dark" to stringResource(R.string.theme_dynamic_dark))
         }
         list
     }
 
     var initialCreateEventsState by remember { mutableStateOf(false) }
     var isInitialLoad by remember { mutableStateOf(true) }
+
+    // Localized busy messages (resolved inside the composable)
+    val busyMessages = listOf(
+        stringResource(R.string.busy_processing_stuff),
+        stringResource(R.string.busy_brb),
+        stringResource(R.string.busy_be_right_back),
+        stringResource(R.string.busy_working_on_things),
+        stringResource(R.string.busy_loading),
+        stringResource(R.string.busy_afk),
+        stringResource(R.string.busy_processing_things),
+        stringResource(R.string.busy_reticulating_splines),
+        stringResource(R.string.busy_swapping_time_streams),
+        stringResource(R.string.busy_defragmenting_memories),
+        stringResource(R.string.busy_sorting_mental_baggage),
+        stringResource(R.string.busy_getting_things_done)
+    )
 
     var currentBusyMessage by remember { mutableStateOf(busyMessages.first()) }
     LaunchedEffect(isCalendarBusy) {
@@ -163,10 +177,10 @@ fun SettingsScreen(
                         status = result
                         reload()
                     } else {
-                        status = "Error: Could not read file"
+                        status = context.getString(R.string.error_could_not_read_file)
                     }
                 } catch (e: Exception) {
-                    status = "Import Error: ${e.message}"
+                    status = context.getString(R.string.import_error, e.message ?: "")
                 }
             }
         }
@@ -204,13 +218,13 @@ fun SettingsScreen(
 
     fun saveAndConnect() {
         scope.launch {
-            status = "Connecting..."
+            status = context.getString(R.string.connecting)
             try {
                 saveToDisk()
                 status = api.connect(url, user, pass, insecure)
                 reload()
             } catch (e: Exception) {
-                status = "Connection failed: ${e.message}"
+                status = context.getString(R.string.connection_failed, e.message ?: "")
             }
         }
     }
@@ -230,7 +244,7 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(R.string.settings)) },
                 navigationIcon = {
                     IconButton(onClick = { handleBack() }) { NfIcon(NfIcons.BACK, 20.sp) }
                 },
@@ -249,7 +263,7 @@ fun SettingsScreen(
             // 1. Connection Section
             item {
                 Text(
-                    "Server Connection",
+                    stringResource(R.string.server_connection),
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
@@ -257,7 +271,7 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
-                    label = { Text("CalDAV URL") },
+                    label = { Text(androidx.compose.ui.res.stringResource(R.string.caldav_url)) },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Uri,
@@ -270,7 +284,7 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = user,
                     onValueChange = { user = it },
-                    label = { Text("Username") },
+                    label = { Text(androidx.compose.ui.res.stringResource(R.string.username)) },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(
                         autoCorrect = false,
@@ -282,7 +296,7 @@ fun SettingsScreen(
                 OutlinedTextField(
                     value = pass,
                     onValueChange = { pass = it },
-                    label = { Text("Password") },
+                    label = { Text(androidx.compose.ui.res.stringResource(R.string.password)) },
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(
@@ -293,12 +307,12 @@ fun SettingsScreen(
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = insecure, onCheckedChange = { insecure = it })
-                    Text("Allow insecure SSL")
+                    Text(androidx.compose.ui.res.stringResource(R.string.allow_insecure_ssl))
                 }
                 Button(
                     onClick = { saveAndConnect() },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
-                ) { Text("Save & Connect") }
+                ) { Text(androidx.compose.ui.res.stringResource(R.string.save_and_connect)) }
                 if (status.isNotEmpty()) {
                     Text(
                         status,
@@ -312,13 +326,14 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    "Appearance",
+                    stringResource(R.string.appearance),
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
                 )
 
                 Box {
+                    // Theme selector card (localized)
                     OutlinedCard(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -330,9 +345,13 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Column {
-                                Text("App Theme", fontWeight = FontWeight.SemiBold)
                                 Text(
-                                    text = themeOptions.find { it.first == currentTheme }?.second ?: "Auto-detect",
+                                    androidx.compose.ui.res.stringResource(R.string.app_theme),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = themeOptions.find { it.first == currentTheme }?.second
+                                        ?: androidx.compose.ui.res.stringResource(R.string.theme_auto_detect),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -359,6 +378,107 @@ fun SettingsScreen(
                             )
                         }
                     }
+
+                    // Language selector (persistent to Android SharedPreferences).
+                    var languageExpanded by remember { mutableStateOf(false) }
+                    var selectedLanguage by remember { mutableStateOf<String?>(null) }
+
+                    // Dynamically build options from the Rust backend using native Java Locale resolution
+                    val systemDefaultLabel = stringResource(R.string.language_system)
+                    val languageOptions = remember(systemDefaultLabel) {
+                        val options = mutableListOf<Pair<String?, String>>(
+                            null to systemDefaultLabel
+                        )
+                        val locales = try {
+                            api.getAvailableLocales()
+                        } catch (e: Exception) {
+                            emptyList<String>()
+                        }
+                        for (code in locales) {
+                            val loc = java.util.Locale.forLanguageTag(code)
+                            // Gets the native name (e.g. "Français", "Deutsch") and capitalizes it
+                            val nativeName = loc.getDisplayName(loc)
+                            val capitalized = nativeName.replaceFirstChar {
+                                if (it.isLowerCase()) it.titlecase(loc) else it.toString()
+                            }
+                            options.add(code to capitalized)
+                        }
+                        options
+                    }
+
+                    // Load persisted choice when reloading settings
+                    LaunchedEffect(Unit) {
+                        val prefs = context.getSharedPreferences("cfait_prefs", android.content.Context.MODE_PRIVATE)
+                        val savedLang = prefs.getString("language", null)
+                        selectedLanguage = if (savedLang == "auto") null else savedLang
+                    }
+
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                            .clickable { languageExpanded = true },
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text(
+                                    stringResource(R.string.language),
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    // Display the pretty label for the selected code
+                                    text = languageOptions.find { it.first == selectedLanguage }?.second
+                                        ?: systemDefaultLabel,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            NfIcon(NfIcons.ARROW_DOWN, 12.sp)
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = languageExpanded,
+                        onDismissRequest = { languageExpanded = false },
+                        modifier = Modifier.fillMaxWidth(0.9f)
+                    ) {
+                        languageOptions.forEach { (code, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    val prefs = context.getSharedPreferences(
+                                        "cfait_prefs",
+                                        android.content.Context.MODE_PRIVATE
+                                    )
+                                    val saveVal = code ?: "auto"
+                                    prefs.edit().putString("language", saveVal).apply()
+                                    selectedLanguage = code
+                                    languageExpanded = false
+
+                                    // Update Rust backend
+                                    api.setLocale(code ?: java.util.Locale.getDefault().language)
+
+                                    // Update Android UI (safely recreates the Activity)
+                                    if (code != null) {
+                                        androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
+                                            androidx.core.os.LocaleListCompat.forLanguageTags(code)
+                                        )
+                                    } else {
+                                        androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
+                                            androidx.core.os.LocaleListCompat.getEmptyLocaleList()
+                                        )
+                                    }
+                                },
+                                leadingIcon = if (selectedLanguage == code) {
+                                    { NfIcon(NfIcons.CHECK, 16.sp) }
+                                } else null
+                            )
+                        }
+                    }
                 }
             }
 
@@ -366,7 +486,7 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    "Manage collections",
+                    stringResource(R.string.manage_collections),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -399,7 +519,7 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    "Preferences",
+                    stringResource(R.string.preferences),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -409,14 +529,17 @@ fun SettingsScreen(
                         hideCompleted = it
                         saveToDisk()
                     })
-                    Text("Hide completed and canceled tasks")
+                    Text(androidx.compose.ui.res.stringResource(R.string.hide_completed_and_canceled_tasks))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = autoRemind, onCheckedChange = { autoRemind = it })
-                    Text("Auto-remind on Due/Start")
+                    Text(androidx.compose.ui.res.stringResource(R.string.auto_remind_on_due_start))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                    Text("Default time (HH:MM):", modifier = Modifier.weight(1f))
+                    Text(
+                        androidx.compose.ui.res.stringResource(R.string.default_time_label),
+                        modifier = Modifier.weight(1f)
+                    )
                     OutlinedTextField(
                         value = defTime,
                         onValueChange = { defTime = it },
@@ -431,13 +554,16 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    "Background Sync",
+                    stringResource(R.string.background_sync),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Sync interval:", modifier = Modifier.weight(1f))
+                    Text(
+                        androidx.compose.ui.res.stringResource(R.string.sync_interval_label),
+                        modifier = Modifier.weight(1f)
+                    )
                     OutlinedTextField(
                         value = autoRefresh,
                         onValueChange = { autoRefresh = it },
@@ -453,17 +579,20 @@ fun SettingsScreen(
                 )
 
                 // Battery Optimization Warning
-                val powerManager = context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
-                val isIgnoringBatteryOptimizations = powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+                val powerManager =
+                    context.getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+                val isIgnoringBatteryOptimizations =
+                    powerManager?.isIgnoringBatteryOptimizations(context.packageName) ?: true
 
                 if (!isIgnoringBatteryOptimizations) {
                     Button(
                         onClick = {
                             try {
-                                val intent = android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                val intent =
+                                    android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
                                 context.startActivity(intent)
                             } catch (e: Exception) {
-                                status = "Cannot open battery settings"
+                                status = context.getString(R.string.cannot_open_battery_settings)
                             }
                         },
                         modifier = Modifier
@@ -474,7 +603,7 @@ fun SettingsScreen(
                             contentColor = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                     ) {
-                        Text("Disable Battery Optimizations (Fix Sync)")
+                        Text(androidx.compose.ui.res.stringResource(R.string.disable_battery_optimizations))
                     }
                     Text(
                         "Allow cfait to run in the background without restrictions for reliable synchronization and alarms.",
@@ -489,7 +618,7 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    "Calendar Integration",
+                    stringResource(R.string.calendar_integration),
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
@@ -501,7 +630,7 @@ fun SettingsScreen(
                         onCheckedChange = { createEventsForTasks = it },
                         enabled = !isCalendarBusy
                     )
-                    Text("Create calendar events for tasks with dates")
+                    Text(androidx.compose.ui.res.stringResource(R.string.create_calendar_events_for_tasks_with_dates))
                 }
                 Text(
                     "Events will be retroactively created. Use +cal/-cal per task to override.",
@@ -530,7 +659,7 @@ fun SettingsScreen(
                             Text("$currentBusyMessage...")
                         }
                     } else {
-                        Text("Delete all calendar events")
+                        Text(androidx.compose.ui.res.stringResource(R.string.delete_all_calendar_events))
                     }
                 }
 
@@ -546,7 +675,7 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    "Local Collections",
+                    stringResource(R.string.local_collections),
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
@@ -561,7 +690,7 @@ fun SettingsScreen(
                                 api.updateLocalCalendar(cal.href, name, color)
                                 reload()
                             } catch (e: Exception) {
-                                status = "Error: ${e.message}"
+                                status = context.getString(R.string.error, e.message ?: "")
                             }
                         }
                     },
@@ -571,7 +700,7 @@ fun SettingsScreen(
                                 api.deleteLocalCalendar(cal.href)
                                 reload()
                             } catch (e: Exception) {
-                                status = "Error: ${e.message}"
+                                status = context.getString(R.string.error, e.message ?: "")
                             }
                         }
                     },
@@ -594,7 +723,7 @@ fun SettingsScreen(
                             val shareIntent = Intent.createChooser(intent, "Export ${cal.name}")
                             context.startActivity(shareIntent)
                         } catch (e: Exception) {
-                            status = "Export Error: ${e.message}"
+                            status = context.getString(R.string.export_error, e.message ?: "")
                         }
                     },
                     onImport = {
@@ -612,7 +741,7 @@ fun SettingsScreen(
                                 api.createLocalCalendar("New Calendar", null)
                                 reload()
                             } catch (e: Exception) {
-                                status = "Error: ${e.message}"
+                                status = context.getString(R.string.error, e.message ?: "")
                             }
                         }
                     },
@@ -624,7 +753,7 @@ fun SettingsScreen(
                 ) {
                     NfIcon(NfIcons.ADD, 16.sp)
                     Spacer(Modifier.width(8.dp))
-                    Text("Create New Local Calendar")
+                    Text(androidx.compose.ui.res.stringResource(R.string.create_new_local_calendar))
                 }
             }
 
@@ -632,7 +761,7 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    "Aliases",
+                    stringResource(R.string.aliases),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp)
@@ -660,16 +789,16 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = newAliasKey,
                         onValueChange = { newAliasKey = it },
-                        label = { Text("Key (#tag/@@loc)") },
+                        label = { Text(androidx.compose.ui.res.stringResource(R.string.alias_key_label)) },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text("#tag") },
+                        placeholder = { Text(androidx.compose.ui.res.stringResource(R.string.placeholder_key_tag)) },
                     )
                     Spacer(Modifier.width(8.dp))
                     OutlinedTextField(
                         value = newAliasTags,
                         onValueChange = { newAliasTags = it },
-                        label = { Text("Value(s)") },
-                        placeholder = { Text("@@loc, #tag_b, !1") },
+                        label = { Text(androidx.compose.ui.res.stringResource(R.string.alias_value_label)) },
+                        placeholder = { Text(androidx.compose.ui.res.stringResource(R.string.placeholder_values)) },
                         modifier = Modifier.weight(1f),
                     )
                     IconButton(onClick = {
@@ -683,7 +812,7 @@ fun SettingsScreen(
                                     reload()
                                     if (status.startsWith("Error")) status = ""
                                 } catch (e: Exception) {
-                                    status = "Error adding alias: ${e.message}"
+                                    status = context.getString(R.string.error_adding_alias, e.message ?: "")
                                 }
                             }
                         }
@@ -695,7 +824,7 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Button(onClick = onAdvanced, modifier = Modifier.fillMaxWidth()) {
-                    Text("Advanced Settings")
+                    Text(androidx.compose.ui.res.stringResource(R.string.advanced_settings_button))
                 }
                 Spacer(Modifier.height(32.dp))
             }
@@ -728,7 +857,7 @@ fun LocalCalendarEditor(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.name_label)) },
                     modifier = Modifier.weight(1f),
                     singleLine = true
                 )
@@ -744,7 +873,7 @@ fun LocalCalendarEditor(
                         NfIcon(NfIcons.EXPORT, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(
-                        "Export",
+                        stringResource(R.string.export),
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 8.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -756,7 +885,7 @@ fun LocalCalendarEditor(
                         NfIcon(NfIcons.IMPORT, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(
-                        "Import",
+                        stringResource(R.string.import),
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 8.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -773,7 +902,7 @@ fun LocalCalendarEditor(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                "Color:",
+                stringResource(R.string.color_label),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

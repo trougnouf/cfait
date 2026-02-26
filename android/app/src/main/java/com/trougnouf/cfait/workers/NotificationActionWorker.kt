@@ -168,9 +168,10 @@ class NotificationActionWorker(
         val tapPending =
             PendingIntent.getActivity(context, task.uid.hashCode(), tapIntent, PendingIntent.FLAG_IMMUTABLE)
 
+        // Use Android string resources for titles and action labels so notifications are localizable
         val notification = NotificationCompat.Builder(context, CHANNEL_ALARMS)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("In Progress: ${task.summary}")
+            .setContentTitle(context.getString(R.string.notification_in_progress, task.summary))
             .setUsesChronometer(true)
             .setWhen(System.currentTimeMillis() - totalSpentMs)
             .setShowWhen(true)
@@ -178,8 +179,8 @@ class NotificationActionWorker(
             .setOngoing(true)
             .setDeleteIntent(pausePending)
             .setContentIntent(tapPending)
-            .addAction(R.drawable.ic_launcher_foreground, "Pause", pausePending)
-            .addAction(R.drawable.ic_launcher_foreground, "Done", donePending)
+            .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.pause), pausePending)
+            .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.done), donePending)
             .build()
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

@@ -261,20 +261,27 @@ pub struct MobileHelpSection {
 #[uniffi::export]
 impl CfaitMobile {
     pub fn get_syntax_help(&self) -> Vec<MobileHelpSection> {
-        crate::help::SYNTAX_HELP
-            .iter()
+        crate::help::get_syntax_help()
+            .into_iter()
             .map(|s| MobileHelpSection {
-                title: s.title.to_string(),
+                title: s.title,
                 items: s
                     .items
-                    .iter()
+                    .into_iter()
                     .map(|i| MobileHelpItem {
-                        keys: i.keys.to_string(),
-                        desc: i.desc.to_string(),
-                        example: i.example.to_string(),
+                        keys: i.keys,
+                        desc: i.desc,
+                        example: i.example,
                     })
                     .collect(),
             })
+            .collect()
+    }
+
+    pub fn get_available_locales(&self) -> Vec<String> {
+        rust_i18n::available_locales!()
+            .iter()
+            .map(|s| s.to_string())
             .collect()
     }
 }
@@ -474,6 +481,11 @@ impl CfaitMobile {
 
     pub fn create_debug_export(&self) -> Result<String, MobileError> {
         self.create_debug_export_internal()
+    }
+
+    // Expose locale switching to Kotlin
+    pub fn set_locale(&self, locale: String) {
+        rust_i18n::set_locale(&locale);
     }
 
     pub fn has_unsynced_changes(&self) -> bool {
@@ -938,7 +950,9 @@ impl CfaitMobile {
                                 .unwrap()
                                 .with_timezone(&Utc),
                         };
-                        check_implicit(dt, "Due now", "due");
+                        // Use rust_i18n lookup for localized description (Single Source of Truth)
+                        let alarm_due_now = rust_i18n::t!("alarm_due_now");
+                        check_implicit(dt, alarm_due_now.as_ref(), "due");
                     }
                     if let Some(start) = &task.dtstart {
                         let dt = match start {
@@ -949,7 +963,9 @@ impl CfaitMobile {
                                 .unwrap()
                                 .with_timezone(&Utc),
                         };
-                        check_implicit(dt, "Task starting", "start");
+                        // Use rust_i18n lookup for localized description (Single Source of Truth)
+                        let alarm_task_starting = rust_i18n::t!("alarm_task_starting");
+                        check_implicit(dt, alarm_task_starting.as_ref(), "start");
                     }
                 }
             }
