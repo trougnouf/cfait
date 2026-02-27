@@ -511,7 +511,7 @@ impl CfaitMobile {
     ) -> Result<String, MobileError> {
         let count = LocalStorage::import_from_ics(self.ctx.as_ref(), &calendar_href, &ics_content)
             .map_err(|e| MobileError::from(e.to_string()))?;
-        Ok(format!("Successfully imported {} task(s)", count))
+        Ok(rust_i18n::t!("import_success", count = count).to_string())
     }
 
     pub fn parse_smart_string(&self, input: String, is_search: bool) -> Vec<MobileSyntaxToken> {

@@ -572,7 +572,7 @@ fun SettingsScreen(
                     )
                 }
                 Text(
-                    "Note: Android enforces a minimum interval of 15 minutes.",
+                    stringResource(R.string.android_sync_note),
                     fontSize = 12.sp,
                     color = androidx.compose.ui.graphics.Color.Gray,
                     modifier = Modifier.padding(start = 4.dp, top = 4.dp, bottom = 8.dp)
@@ -606,7 +606,7 @@ fun SettingsScreen(
                         Text(androidx.compose.ui.res.stringResource(R.string.disable_battery_optimizations))
                     }
                     Text(
-                        "Allow cfait to run in the background without restrictions for reliable synchronization and alarms.",
+                        stringResource(R.string.battery_optimization_explain),
                         fontSize = 12.sp,
                         color = androidx.compose.ui.graphics.Color.Gray,
                         modifier = Modifier.padding(start = 4.dp, top = 4.dp)
@@ -633,7 +633,7 @@ fun SettingsScreen(
                     Text(androidx.compose.ui.res.stringResource(R.string.create_calendar_events_for_tasks_with_dates))
                 }
                 Text(
-                    "Events will be retroactively created. Use +cal/-cal per task to override.",
+                    stringResource(R.string.create_calendar_events_note),
                     fontSize = 12.sp,
                     color = androidx.compose.ui.graphics.Color.Gray,
                     modifier = Modifier.padding(start = 12.dp, bottom = 8.dp)
@@ -664,7 +664,7 @@ fun SettingsScreen(
                 }
 
                 Text(
-                    "This is fully reversible. Simply toggle 'Create calendar events' off and back on to recreate them.",
+                    stringResource(R.string.calendar_events_reversible_note),
                     fontSize = 12.sp,
                     color = androidx.compose.ui.graphics.Color.Gray,
                     modifier = Modifier.padding(start = 4.dp, top = 4.dp)
