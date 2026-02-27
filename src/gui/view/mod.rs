@@ -521,7 +521,7 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     let footer = row![
         tooltip(
             settings_btn,
-            text(rust_i18n::t!("settings_tooltip")).size(12),
+            text(rust_i18n::t!("settings"))).size(12),
             tooltip::Position::Top
         )
         .style(tooltip_style)

@@ -473,14 +473,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             if count > 0 {
                 let action = if app.create_events_for_tasks {
-                    "Created"
+                    rust_i18n::t!("calendar_action_created")
                 } else {
-                    "Deleted"
+                    rust_i18n::t!("calendar_action_deleted")
                 };
-                app.error_msg = Some(
+                let translated =
                     rust_i18n::t!("calendar_events_changed", action = action, count = count)
-                        .to_string(),
-                );
+                        .to_string();
+                app.error_msg = Some(format!("✓ {}", translated));
             } else {
                 app.error_msg = Some("No events were created or deleted".to_string());
             }

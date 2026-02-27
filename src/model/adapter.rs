@@ -599,13 +599,12 @@ impl IcsAdapter {
                 // NEW: Manual session parsing
                 if line.starts_with("X-CFAIT-SESSION:")
                     && let Some((_, val)) = line.split_once(':')
-                        && let Some((s_str, e_str)) = val.split_once(',')
-                            && let (Ok(start), Ok(end)) =
-                                (s_str.trim().parse::<i64>(), e_str.trim().parse::<i64>())
-                            {
-                                manual_sessions
-                                    .push(crate::model::item::WorkSession { start, end });
-                            }
+                    && let Some((s_str, e_str)) = val.split_once(',')
+                    && let (Ok(start), Ok(end)) =
+                        (s_str.trim().parse::<i64>(), e_str.trim().parse::<i64>())
+                {
+                    manual_sessions.push(crate::model::item::WorkSession { start, end });
+                }
             }
         }
 
@@ -1085,12 +1084,19 @@ impl IcsAdapter {
             event_desc.push_str(&task.description);
             event_desc.push_str("\n\n");
         }
-        event_desc.push_str("⚠️ This event was automatically created by Cfait from a task.\n");
+        // Keep symbols (emoji/check) in code, but localize the human-readable text.
+        event_desc.push_str(&format!(
+            "⚠️ {}\\n",
+            rust_i18n::t!("ics_event_auto_created")
+        ));
         if task.status == TaskStatus::Completed {
-            event_desc.push_str("✓ Task Completed\n");
+            event_desc.push_str(&format!(
+                "✓ {}\\n",
+                rust_i18n::t!("ics_event_task_completed")
+            ));
         } else {
-            event_desc.push_str("It will be automatically updated/overwritten when the task changes, and it might get deleted when the task is completed or canceled.\n");
-            event_desc.push_str("Any changes made directly to this event will be lost.\n");
+            event_desc.push_str(&format!("{}\\n", rust_i18n::t!("ics_event_auto_updated")));
+            event_desc.push_str(&format!("{}\\n", rust_i18n::t!("ics_event_changes_lost")));
         }
         event.description(&event_desc);
 
