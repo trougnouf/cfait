@@ -35,6 +35,7 @@ pub struct HelpSection {
 ///
 /// This function uses `rust_i18n::t!()` for all translatable strings so the
 /// result reflects the currently active locale.
+
 pub fn get_syntax_help() -> Vec<HelpSection> {
     vec![
         HelpSection {
@@ -62,12 +63,12 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "spent:X".to_string(),
-                    desc: rust_i18n::t!("help_metadata_relative_reminder").to_string(), // best-fit key
+                    desc: rust_i18n::t!("help_org_spent").to_string(), // Fixed mapping!
                     example: "spent:1h, spent:30m".to_string(),
                 },
                 HelpItem {
                     keys: "done:date".to_string(),
-                    desc: rust_i18n::t!("help_timeline_due_date").to_string(),
+                    desc: rust_i18n::t!("help_org_done").to_string(), // Fixed mapping!
                     example: "done:2024-01-01 15:30".to_string(),
                 },
                 HelpItem {

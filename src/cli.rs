@@ -15,38 +15,40 @@ pub fn print_help(binary_name: &str) {
     );
     println!();
 
-    // Usage (fall back to existing English headings where appropriate)
     println!("USAGE:");
     if is_gui {
-        println!("{}", rust_i18n::t!("cli_usage_gui", binary = binary_name));
-    } else {
-        println!("{}", rust_i18n::t!("cli_usage_tui", binary = binary_name));
         println!(
-            "{}",
+            "    {}",
+            rust_i18n::t!("cli_usage_gui", binary = binary_name)
+        );
+    } else {
+        println!(
+            "    {}",
+            rust_i18n::t!("cli_usage_tui", binary = binary_name)
+        );
+        println!(
+            "    {}",
             rust_i18n::t!("cli_usage_export", binary = binary_name)
         );
         println!(
-            "{}",
+            "    {}",
             rust_i18n::t!("cli_usage_import", binary = binary_name)
         );
-        println!("{}", rust_i18n::t!("cli_option_help"));
+        println!("    {} --help", binary_name);
     }
     println!();
 
     println!("{}", rust_i18n::t!("cli_options_heading"));
     if is_gui {
-        // GUI-specific option help lines localized
-        println!("{}", rust_i18n::t!("cli_option_force_ssd"));
-        println!("{}", rust_i18n::t!("cli_option_force_csd"));
-        println!("{}", rust_i18n::t!("cli_import_command"));
+        println!("    {}", rust_i18n::t!("cli_option_force_ssd"));
+        println!("    {}", rust_i18n::t!("cli_option_force_csd"));
     } else {
-        println!("{}", rust_i18n::t!("cli_option_root"));
+        println!("    {}", rust_i18n::t!("cli_option_root"));
     }
-    println!("{}", rust_i18n::t!("cli_option_help"));
+    println!("    {}", rust_i18n::t!("cli_option_help"));
 
     println!();
 
-    // Sync/Export sections (localized)
     if !is_gui {
         println!("{}", rust_i18n::t!("cli_sync_commands_heading"));
         println!(
@@ -57,7 +59,8 @@ pub fn print_help(binary_name: &str) {
             "{}",
             rust_i18n::t!("cli_sync_command_daemon", binary = binary_name)
         );
-        // Import examples/localized short descriptions
+        println!();
+
         println!("{}", rust_i18n::t!("cli_import_command"));
         println!(
             "{}",
@@ -68,21 +71,16 @@ pub fn print_help(binary_name: &str) {
         println!("{}", rust_i18n::t!("cli_export_command"));
         println!(
             "{}",
-            rust_i18n::t!("cli_usage_export", binary = binary_name)
-        );
-        println!(
-            "{}",
             rust_i18n::t!("cli_export_examples", binary = binary_name)
         );
         println!();
     }
 
-    // GUI vs TUI specific notes
     if is_gui {
         println!("{}", rust_i18n::t!("cli_gui_note"));
     } else {
         println!("{}", rust_i18n::t!("cli_keybindings_heading"));
-        println!("{}", rust_i18n::t!("cli_press_question"));
+        println!("    {}", rust_i18n::t!("cli_press_question"));
         println!();
         println!("{}", rust_i18n::t!("cli_smart_input_heading"));
         for sec in crate::help::get_syntax_help() {
@@ -92,12 +90,12 @@ pub fn print_help(binary_name: &str) {
             }
         }
         println!();
-        println!("{}", rust_i18n::t!("cli_examples"));
-        // The `cli_examples` key contains a multi-line examples block in the SSOT
+        println!("{}", rust_i18n::t!("cli_examples_heading"));
         println!("{}", rust_i18n::t!("cli_examples"));
     }
 
     println!();
-    println!("{}", rust_i18n::t!("cli_more_info_repo"));
-    println!("{}", rust_i18n::t!("cli_more_info_license"));
+    println!("MORE INFO:");
+    println!("    {}", rust_i18n::t!("cli_more_info_repo"));
+    println!("    {}", rust_i18n::t!("cli_more_info_license"));
 }
