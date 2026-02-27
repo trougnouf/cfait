@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.core.MobileTask
+import com.trougnouf.cfait.R
 import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime

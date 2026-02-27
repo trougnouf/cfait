@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
 import com.trougnouf.cfait.core.MobileTask
@@ -76,7 +77,7 @@ fun TaskDetailScreen(
             }
         AlertDialog(
             onDismissRequest = { showMoveDialog = false },
-            title = { Text(androidx.compose.ui.res.stringResource(R.string.move_to_calendar_title)) },
+            title = { Text(androidx.compose.ui.res.stringResource(R.string.move_task_title)) },
             text = {
                 LazyColumn {
                     items(targetCals) { cal ->
@@ -101,7 +102,7 @@ fun TaskDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(androidx.compose.ui.res.stringResource(R.string.task_edit_title)) },
+                title = { Text(androidx.compose.ui.res.stringResource(R.string.edit_task_title)) },
                 navigationIcon = { IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) } },
                 actions = {
                     if (task!!.geo != null) {
@@ -117,7 +118,7 @@ fun TaskDetailScreen(
                     if (enabledCalendarCount > 1) {
                         TextButton(onClick = {
                             showMoveDialog = true
-                        }) { Text(androidx.compose.ui.res.stringResource(R.string.move_label)) }
+                        }) { Text(androidx.compose.ui.res.stringResource(R.string.menu_move)) }
                     }
                     TextButton(
                         onClick = {
@@ -126,7 +127,7 @@ fun TaskDetailScreen(
                             // so we can leave this screen immediately without killing the save process.
                             onSave(smartInput, description)
                         },
-                    ) { Text(androidx.compose.ui.res.stringResource(R.string.task_save_button)) }
+                    ) { Text(androidx.compose.ui.res.stringResource(R.string.save)) }
                 },
             )
         },
@@ -161,7 +162,7 @@ fun TaskDetailScreen(
 
             if (task!!.blockedByNames.isNotEmpty()) {
                 Text(
-                    androidx.compose.ui.res.stringResource(R.string.blocked_by_label),
+                    androidx.compose.ui.res.stringResource(R.string.blocked_by),
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp

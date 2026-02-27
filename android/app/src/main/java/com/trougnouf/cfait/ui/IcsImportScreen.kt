@@ -15,6 +15,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
+import com.trougnouf.cfait.R
+import kotlinx.coroutines.launch
 
 @Composable
 fun IcsImportScreen(
@@ -80,9 +82,10 @@ fun IcsImportScreen(
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
-                if (taskCount != null) {
+                val currentTaskCount = taskCount
+                if (currentTaskCount != null) {
                     Text(
-                        stringResource(R.string.found_tasks_to_import, taskCount),
+                        stringResource(R.string.found_tasks_to_import, currentTaskCount),
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
@@ -141,7 +144,7 @@ fun IcsImportScreen(
                     }
                 },
                 modifier = Modifier.weight(1f),
-                enabled = selectedCalendar != null && taskCount != null && taskCount!! > 0
+                enabled = selectedCalendar != null && (taskCount ?: 0) > 0
             ) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),

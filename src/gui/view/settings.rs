@@ -8,7 +8,7 @@ use crate::storage::LOCAL_CALENDAR_HREF;
 use iced::widget::{
     MouseArea, Space, button, checkbox, column, container, row, scrollable, text, text_input,
 };
-use iced::{Color, Element, Length};
+use iced::{Color, Element, Length, Theme};
 #[cfg(feature = "gui")]
 use iced_aw::color_picker;
 
@@ -165,7 +165,26 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         .spacing(10)
         .align_y(iced::Alignment::Center);
 
-        lang_picker_row.into()
+        column![
+            lang_picker_row,
+            button(
+                text(rust_i18n::t!(
+                    "translation_help",
+                    url = "translate.codeberg.org"
+                ))
+                .size(12)
+                .style(|theme: &Theme| text::Style {
+                    color: Some(theme.extended_palette().primary.base.color)
+                })
+            )
+            .style(button::text)
+            .padding(0)
+            .on_press(Message::OpenUrl(
+                "https://translate.codeberg.org/projects/cfait/".to_string()
+            ))
+        ]
+        .spacing(5)
+        .into()
     } else {
         Space::new().width(0).into()
     };

@@ -298,7 +298,7 @@ fn support_card<'a>() -> Element<'a, Message> {
         icon(HEART_HAND).size(20).style(|_: &Theme| text::Style {
             color: Some(Color::from_rgb(1.0, 0.4, 0.4))
         }),
-        text(rust_i18n::t!("support_card_title")))
+        text(rust_i18n::t!("support_card_title"))
             .size(18)
             .style(|theme: &Theme| text::Style {
                 color: Some(theme.extended_palette().background.base.text)

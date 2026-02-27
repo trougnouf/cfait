@@ -75,7 +75,7 @@ fun HelpScreen(onBack: () -> Unit) {
                             modifier = Modifier.width(52.5.dp).height(20.dp)
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(androidx.compose.ui.res.stringResource(R.string.help_and_about))
+                        Text(androidx.compose.ui.res.stringResource(R.string.help_about))
                     }
                 },
                 navigationIcon = {
@@ -354,7 +354,7 @@ fun HelpScreen(onBack: () -> Unit) {
                             NfIcon(NfIcons.HEART_HAND, 18.sp, Color(0xFFE57373))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                androidx.compose.ui.res.stringResource(R.string.support_development),
+                                androidx.compose.ui.res.stringResource(R.string.support_card_title),
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )

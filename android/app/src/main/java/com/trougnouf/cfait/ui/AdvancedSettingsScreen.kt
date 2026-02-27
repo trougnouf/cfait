@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
 import com.trougnouf.cfait.core.CfaitMobile
+import com.trougnouf.cfait.R
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -49,7 +50,7 @@ fun AdvancedSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.advanced_settings_title)) },
+                title = { Text(stringResource(R.string.advanced_settings_button)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) }
                 }
@@ -157,7 +158,7 @@ fun AdvancedSettingsScreen(
 
             // Debug Section (Moved from SettingsScreen)
             Text(
-                stringResource(R.string.debug),
+                stringResource(R.string.export_debug_share_title),
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 color = MaterialTheme.colorScheme.error,
@@ -221,7 +222,7 @@ fun AdvancedSettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     NfIcon(NfIcons.ARCHIVE_ARROW_UP, 16.sp)
                     Spacer(Modifier.width(8.dp))
-                    Text(stringResource(R.string.export_debug_zip))
+                    Text(stringResource(R.string.export))
                 }
             }
 

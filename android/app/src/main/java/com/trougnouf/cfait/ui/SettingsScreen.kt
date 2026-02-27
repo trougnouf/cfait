@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
+import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
 import kotlinx.coroutines.launch
@@ -80,15 +81,23 @@ fun SettingsScreen(
 
     var themeExpanded by remember { mutableStateOf(false) }
     // Use localized labels for theme options so they appear translated on Android.
-    val themeOptions = remember {
+    val themeAutoStr = stringResource(R.string.theme_auto_detect)
+    val themeLightStr = stringResource(R.string.theme_light)
+    val themeDarkStr = stringResource(R.string.theme_dark)
+    val themeDynLightStr =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) stringResource(R.string.theme_dynamic_light) else ""
+    val themeDynDarkStr =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) stringResource(R.string.theme_dynamic_dark) else ""
+
+    val themeOptions = remember(themeAutoStr, themeLightStr, themeDarkStr, themeDynLightStr, themeDynDarkStr) {
         val list = mutableListOf(
-            "auto" to stringResource(R.string.theme_auto_detect),
-            "light" to stringResource(R.string.theme_light),
-            "dark" to stringResource(R.string.theme_dark)
+            "auto" to themeAutoStr,
+            "light" to themeLightStr,
+            "dark" to themeDarkStr
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            list.add("dynamic_light" to stringResource(R.string.theme_dynamic_light))
-            list.add("dynamic_dark" to stringResource(R.string.theme_dynamic_dark))
+            list.add("dynamic_light" to themeDynLightStr)
+            list.add("dynamic_dark" to themeDynDarkStr)
         }
         list
     }
@@ -326,7 +335,7 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    stringResource(R.string.appearance),
+                    stringResource(R.string.app_theme),
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(bottom = 8.dp),
                     color = MaterialTheme.colorScheme.primary,
@@ -533,7 +542,7 @@ fun SettingsScreen(
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = autoRemind, onCheckedChange = { autoRemind = it })
-                    Text(androidx.compose.ui.res.stringResource(R.string.auto_remind_on_due_start))
+                    Text(androidx.compose.ui.res.stringResource(R.string.auto_remind_on_due_start_label))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                     Text(
@@ -690,7 +699,7 @@ fun SettingsScreen(
                                 api.updateLocalCalendar(cal.href, name, color)
                                 reload()
                             } catch (e: Exception) {
-                                status = context.getString(R.string.error, e.message ?: "")
+                                status = "Error: ${e.message}"
                             }
                         }
                     },
@@ -700,7 +709,7 @@ fun SettingsScreen(
                                 api.deleteLocalCalendar(cal.href)
                                 reload()
                             } catch (e: Exception) {
-                                status = context.getString(R.string.error, e.message ?: "")
+                                status = "Error: ${e.message}"
                             }
                         }
                     },
@@ -741,7 +750,7 @@ fun SettingsScreen(
                                 api.createLocalCalendar("New Calendar", null)
                                 reload()
                             } catch (e: Exception) {
-                                status = context.getString(R.string.error, e.message ?: "")
+                                status = "Error: ${e.message}"
                             }
                         }
                     },
@@ -761,7 +770,7 @@ fun SettingsScreen(
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
-                    stringResource(R.string.aliases),
+                    stringResource(R.string.tag_aliases),
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(bottom = 8.dp)
