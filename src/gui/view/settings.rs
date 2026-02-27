@@ -519,7 +519,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             let import_btn = button(
                 row![
                     icon::icon(icon::IMPORT).size(14),
-                    text(rust_i18n::t!("import")).size(10)
+                    text(rust_i18n::t!("import_action")).size(10)
                 ]
                 .spacing(3)
                 .align_y(iced::Alignment::Center),

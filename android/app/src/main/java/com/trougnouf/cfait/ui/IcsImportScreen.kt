@@ -52,7 +52,7 @@ fun IcsImportScreen(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                stringResource(R.string.import),
+                stringResource(R.string.import_action),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -148,7 +148,7 @@ fun IcsImportScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     NfIcon(NfIcons.IMPORT, 16.sp, MaterialTheme.colorScheme.onPrimary)
-                    Text(androidx.compose.ui.res.stringResource(R.string.import))
+                    Text(androidx.compose.ui.res.stringResource(R.string.import_action))
                 }
             }
         }

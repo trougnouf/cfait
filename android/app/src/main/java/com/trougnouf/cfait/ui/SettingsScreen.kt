@@ -885,7 +885,7 @@ fun LocalCalendarEditor(
                         NfIcon(NfIcons.IMPORT, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(
-                        stringResource(R.string.import),
+                        stringResource(R.string.import_action),
                         style = MaterialTheme.typography.labelSmall,
                         fontSize = 8.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

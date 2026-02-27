@@ -177,7 +177,7 @@
   "hide": "Masquer",
   "hide_completed_and_canceled_tasks": "Masquer les tâches terminées et annulées",
   "hide_fully_completed_tags": "Masquer les tags ne contenant que des tâches terminées",
-  "import": "Importer",
+  "import_action": "Importer",
   "import_error": "Erreur d'importation : %{error}",
   "import_failed": "Échec de l'importation : %{error}",
   "import_success": "Importation réussie de %{count} tâche(s)",

@@ -1250,10 +1250,14 @@ fn view_ics_import_dialog<'a>(
         .padding([8, 16])
         .on_press(Message::IcsImportDialogCancel);
 
-    let import_btn = button(text(rust_i18n::t!("import")).size(14).font(iced::Font {
-        weight: iced::font::Weight::Bold,
-        ..Default::default()
-    }))
+    let import_btn = button(
+        text(rust_i18n::t!("import_action"))
+            .size(14)
+            .font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..Default::default()
+            }),
+    )
     .style(iced::widget::button::primary)
     .padding([8, 16]);
 
