@@ -1,4 +1,5 @@
 //! Tests for `client/core.rs`, moved from an inline module.
+#![cfg(feature = "test_hooks")]
 use cfait::client::core::RustyClient;
 use cfait::journal::Action;
 use cfait::journal::Journal;
