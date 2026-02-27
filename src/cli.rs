@@ -18,60 +18,102 @@ pub fn print_help(binary_name: &str) {
     println!("USAGE:");
     if is_gui {
         println!(
-            "    {}",
-            rust_i18n::t!("cli_usage_gui", binary = binary_name)
+            "    {} [--root <path>] [--force-ssd] [--force-csd] [{}]",
+            binary_name,
+            rust_i18n::t!("cli_file_path_placeholder")
         );
     } else {
+        println!("    {} [--root <path>]", binary_name);
+        println!("    {} export [--collection <id>]", binary_name);
         println!(
-            "    {}",
-            rust_i18n::t!("cli_usage_tui", binary = binary_name)
-        );
-        println!(
-            "    {}",
-            rust_i18n::t!("cli_usage_export", binary = binary_name)
-        );
-        println!(
-            "    {}",
-            rust_i18n::t!("cli_usage_import", binary = binary_name)
+            "    {} import <{}> [--collection <id>]",
+            binary_name,
+            rust_i18n::t!("cli_file_placeholder")
         );
         println!("    {} --help", binary_name);
     }
     println!();
 
+    // Helper to align commands and descriptions uniformly without tabs
+    let print_cmd = |cmd: &str, desc: String| {
+        // Pads the command column to exactly 43 characters
+        println!("    {cmd:43} {desc}");
+    };
+
     println!("{}", rust_i18n::t!("cli_options_heading"));
     if is_gui {
-        println!("    {}", rust_i18n::t!("cli_option_force_ssd"));
-        println!("    {}", rust_i18n::t!("cli_option_force_csd"));
+        print_cmd(
+            "--force-ssd",
+            rust_i18n::t!("cli_desc_force_ssd").to_string(),
+        );
+        print_cmd(
+            "--force-csd",
+            rust_i18n::t!("cli_desc_force_csd").to_string(),
+        );
     } else {
-        println!("    {}", rust_i18n::t!("cli_option_root"));
+        print_cmd(
+            "-r, --root <path>",
+            rust_i18n::t!("cli_desc_root").to_string(),
+        );
     }
-    println!("    {}", rust_i18n::t!("cli_option_help"));
+    print_cmd("-h, --help", rust_i18n::t!("cli_desc_help").to_string());
 
     println!();
 
     if !is_gui {
         println!("{}", rust_i18n::t!("cli_sync_commands_heading"));
-        println!(
-            "{}",
-            rust_i18n::t!("cli_sync_command_sync", binary = binary_name)
+        print_cmd(
+            &format!("{binary_name} sync"),
+            rust_i18n::t!("cli_desc_sync").to_string(),
         );
-        println!(
-            "{}",
-            rust_i18n::t!("cli_sync_command_daemon", binary = binary_name)
-        );
+
+        let daemon_cmd = format!("{binary_name} daemon");
+        let daemon_desc = rust_i18n::t!("cli_desc_daemon").to_string();
+        let mut lines = daemon_desc.split('\n');
+
+        // Print first line with the command
+        if let Some(first) = lines.next() {
+            print_cmd(&daemon_cmd, first.to_string());
+        }
+        // Print subsequent lines perfectly aligned under the description column
+        for line in lines {
+            println!("    {:43} {}", "", line);
+        }
         println!();
 
         println!("{}", rust_i18n::t!("cli_import_command"));
-        println!(
-            "{}",
-            rust_i18n::t!("cli_import_examples", binary = binary_name)
+        print_cmd(
+            &format!(
+                "{binary_name} import <{}>",
+                rust_i18n::t!("cli_file_placeholder")
+            ),
+            rust_i18n::t!("cli_desc_import_default").to_string(),
+        );
+        print_cmd(
+            &format!(
+                "{binary_name} import <{}> --collection <id>",
+                rust_i18n::t!("cli_file_placeholder")
+            ),
+            rust_i18n::t!("cli_desc_import_specific").to_string(),
         );
         println!();
 
         println!("{}", rust_i18n::t!("cli_export_command"));
-        println!(
-            "{}",
-            rust_i18n::t!("cli_export_examples", binary = binary_name)
+        print_cmd(
+            &format!("{binary_name} export"),
+            rust_i18n::t!("cli_desc_export_default").to_string(),
+        );
+        print_cmd(
+            &format!("{binary_name} export --collection <id>"),
+            rust_i18n::t!("cli_desc_export_specific").to_string(),
+        );
+        print_cmd(
+            &format!("{binary_name} export > backup.ics"),
+            rust_i18n::t!("cli_desc_export_file").to_string(),
+        );
+        print_cmd(
+            &format!("{binary_name} export | grep 'SUMMARY'"),
+            rust_i18n::t!("cli_desc_export_filter").to_string(),
         );
         println!();
     }
@@ -96,6 +138,12 @@ pub fn print_help(binary_name: &str) {
 
     println!();
     println!("MORE INFO:");
-    println!("    {}", rust_i18n::t!("cli_more_info_repo"));
-    println!("    {}", rust_i18n::t!("cli_more_info_license"));
+    println!(
+        "    {:<15} https://codeberg.org/trougnouf/cfait",
+        rust_i18n::t!("cli_repo_label")
+    );
+    println!(
+        "    {:<15} GPL-3.0",
+        rust_i18n::t!("cli_license_label")
+    );
 }

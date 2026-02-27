@@ -35,7 +35,6 @@ pub struct HelpSection {
 ///
 /// This function uses `rust_i18n::t!()` for all translatable strings so the
 /// result reflects the currently active locale.
-
 pub fn get_syntax_help() -> Vec<HelpSection> {
     vec![
         HelpSection {
