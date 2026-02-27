@@ -109,13 +109,20 @@
   "export_error": "Export error: %{error}",
   "export_local_tasks_to_server": "Export local tasks to server",
   "export_select_destination_collection": "Export: select destination collection",
+  "calendar_events_changed": {
+    "one": "✓ %{action} %{count} calendar event",
+    "other": "✓ %{action} %{count} calendar events"
+  },
   "export_select_source_collection": "Export: select source collection",
   "export_to": "Export to:",
   "failed_to_read_ics_file": "Failed to read ICS file",
   "filter_duration": "Filter duration",
   "focus_hide_others": "Focus (hide others)",
   "force_sync": "Force sync",
-  "found_tasks_to_import": "Found %{count} tasks to import",
+  "found_tasks_to_import": {
+    "one": "Found 1 task to import",
+    "other": "Found %{count} tasks to import"
+  },
   "go_to_location": "Go to location: @@%{loc}",
   "go_to_tag": "Go to tag: #%{tag}",
   "help": "Help",
@@ -176,7 +183,10 @@
   "import_error": "Import error: %{error}",
   "import_failed": "Import failed: %{error}",
   "import_file_name": "File: %{file}",
-  "import_success": "Successfully imported %{count} tasks",
+  "import_success": {
+    "one": "Successfully imported 1 task",
+    "other": "Successfully imported %{count} tasks"
+  },
   "include_unset": "Include unset",
   "insufficient_permissions": "Insufficient permissions",
   "jump_to_random_task": "Jump to random task",
@@ -296,7 +306,10 @@
   "task_save_button": "Save",
   "task_smart_syntax_label": "Task (smart syntax)",
   "tasks": "Tasks",
-  "tasks_count": "%{count} tasks",
+  "tasks_count": {
+    "one": "1 task",
+    "other": "%{count} tasks"
+  },
   "theme_auto_detect": "Auto-detect",
   "theme_dark": "Dark",
   "theme_dynamic_dark": "Dynamic dark",

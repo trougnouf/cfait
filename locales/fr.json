@@ -109,6 +109,10 @@
   "export_debug_status_failed": "Échec de l'exportation : %{error}",
   "export_error": "Erreur d'exportation : %{error}",
   "export_local_tasks_to_server": "Exporter les tâches locales vers le serveur",
+  "calendar_events_changed": {
+    "one": "✓ %{action} %{count} événement de calendrier",
+    "other": "✓ %{action} %{count} événements de calendrier"
+  },
   "export_select_destination_collection": "Export : choisir la collection de destination",
   "export_select_source_collection": "Export : choisir la collection source",
   "export_to": "Exporter vers :",
@@ -116,7 +120,10 @@
   "filter_duration": "Filtrer par durée",
   "focus_hide_others": "Focus (masquer les autres)",
   "force_sync": "Forcer la synchronisation",
-  "found_tasks_to_import": "%{count} tâches trouvées à importer",
+  "found_tasks_to_import": {
+    "one": "1 tâche trouvée à importer",
+    "other": "%{count} tâches trouvées à importer"
+  },
   "go_to_location": "Aller au lieu : @@%{loc}",
   "go_to_tag": "Aller au tag : #%{tag}",
   "help": "Aide",
@@ -177,7 +184,10 @@
   "import_error": "Erreur d'importation : %{error}",
   "import_failed": "Échec de l'importation : %{error}",
   "import_file_name": "Fichier : %{file}",
-  "import_success": "Importation réussie de %{count} tâches",
+  "import_success": {
+    "one": "Importation réussie de %{count} tâche",
+    "other": "Importation réussie de %{count} tâches"
+  },
   "include_unset": "Inclure non défini",
   "insufficient_permissions": "Permissions insuffisantes",
   "jump_to_random_task": "Sauter vers une tâche aléatoire",
@@ -302,7 +312,10 @@
   "task_save_button": "Enregistrer",
   "task_smart_syntax_label": "Tâche (syntaxe intelligente)",
   "tasks": "Tâches",
-  "tasks_count": "%{count} tâches",
+  "tasks_count": {
+    "one": "%{count} tâche",
+    "other": "%{count} tâches"
+  },
   "theme_auto_detect": "Détection auto",
   "theme_dark": "Sombre",
   "theme_dynamic_dark": "Sombre dynamique",
