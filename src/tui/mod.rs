@@ -347,6 +347,75 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
             // Find the task in the store to display details
             if let Some((task, _)) = app_state.store.get_task_mut(&t_uid) {
                 app_state.active_alarm = Some((task.clone(), a_uid));
+                // Trigger a refresh so if it's done remotely, it will disappear soon.
+                let _ = action_tx.try_send(crate::tui::action::Action::Refresh);
+            }
+        }
+
+        // Prune obsolete active alarm
+        if let Some((active_task, a_uid)) = &app_state.active_alarm {
+            let mut keep = false;
+            if let Some(store_task) = app_state.store.get_task_ref(&active_task.uid) {
+                if !store_task.status.is_done() {
+                    if a_uid.starts_with("implicit_") {
+                        let parts: Vec<&str> = a_uid.split('|').collect();
+                        if parts.len() >= 2 {
+                            let type_key_with_colon = parts[0];
+                            let expected_ts = parts[1];
+
+                            let config = crate::config::Config::load(app_state.ctx.as_ref())
+                                .unwrap_or_default();
+                            let default_time = chrono::NaiveTime::parse_from_str(
+                                &config.default_reminder_time,
+                                "%H:%M",
+                            )
+                            .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+
+                            let mut current_ts = None;
+                            if type_key_with_colon == "implicit_due:" {
+                                if let Some(due) = &store_task.due {
+                                    let dt = match due {
+                                        crate::model::DateType::Specific(t) => *t,
+                                        crate::model::DateType::AllDay(d) => d
+                                            .and_time(default_time)
+                                            .and_local_timezone(chrono::Local)
+                                            .unwrap()
+                                            .with_timezone(&chrono::Utc),
+                                    };
+                                    current_ts = Some(dt.to_rfc3339());
+                                }
+                            } else if type_key_with_colon == "implicit_start:" {
+                                if let Some(start) = &store_task.dtstart {
+                                    let dt = match start {
+                                        crate::model::DateType::Specific(t) => *t,
+                                        crate::model::DateType::AllDay(d) => d
+                                            .and_time(default_time)
+                                            .and_local_timezone(chrono::Local)
+                                            .unwrap()
+                                            .with_timezone(&chrono::Utc),
+                                    };
+                                    current_ts = Some(dt.to_rfc3339());
+                                }
+                            }
+                            if current_ts.as_deref() == Some(expected_ts) {
+                                keep = true;
+                            }
+                        }
+                    } else if let Some(store_alarm) =
+                        store_task.alarms.iter().find(|a| a.uid == *a_uid)
+                    {
+                        if store_alarm.acknowledged.is_none() {
+                            keep = true;
+                        }
+                    }
+                }
+            }
+            if !keep {
+                app_state.active_alarm = None;
+                if app_state.mode == crate::tui::state::InputMode::Snoozing {
+                    app_state.mode = crate::tui::state::InputMode::Normal;
+                    app_state.reset_input();
+                }
             }
         }
 

@@ -201,6 +201,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::AlarmSignalReceived(msg) => {
+            let mut triggered = false;
             match &*msg {
                 AlarmMessage::Fire(task_uid, alarm_uid) => {
                     if let Some((task, _)) = app.store.get_task_mut(task_uid) {
@@ -227,11 +228,16 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                                     }
                                 };
                             app.ringing_tasks.push((task.clone(), alarm_obj));
+                            triggered = true;
                         }
                     }
                 }
             }
-            Task::none()
+            if triggered {
+                Task::done(Message::Refresh)
+            } else {
+                Task::none()
+            }
         }
         Message::SnoozeAlarm(t_uid, a_uid, mins) => {
             app.ringing_tasks
@@ -244,6 +250,71 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             tasks::handle(app, Message::DismissAlarm(t_uid, a_uid))
         }
     };
+
+    // Prune ringing tasks that are no longer valid (done, canceled, or alarm acknowledged/snoozed/removed)
+    app.ringing_tasks.retain(|(t, alarm)| {
+        if let Some(store_task) = app.store.get_task_ref(&t.uid) {
+            if store_task.status.is_done() {
+                return false;
+            }
+
+            if alarm.uid.starts_with("implicit_") {
+                let parts: Vec<&str> = alarm.uid.split('|').collect();
+                if parts.len() >= 2 {
+                    let type_key_with_colon = parts[0];
+                    let expected_ts = parts[1];
+
+                    let config = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
+                    let default_time =
+                        chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
+                            .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+
+                    let mut current_ts = None;
+                    if type_key_with_colon == "implicit_due:" {
+                        if let Some(due) = &store_task.due {
+                            let dt = match due {
+                                crate::model::DateType::Specific(t) => *t,
+                                crate::model::DateType::AllDay(d) => d
+                                    .and_time(default_time)
+                                    .and_local_timezone(chrono::Local)
+                                    .unwrap()
+                                    .with_timezone(&chrono::Utc),
+                            };
+                            current_ts = Some(dt.to_rfc3339());
+                        }
+                    } else if type_key_with_colon == "implicit_start:" {
+                        if let Some(start) = &store_task.dtstart {
+                            let dt = match start {
+                                crate::model::DateType::Specific(t) => *t,
+                                crate::model::DateType::AllDay(d) => d
+                                    .and_time(default_time)
+                                    .and_local_timezone(chrono::Local)
+                                    .unwrap()
+                                    .with_timezone(&chrono::Utc),
+                            };
+                            current_ts = Some(dt.to_rfc3339());
+                        }
+                    }
+                    if current_ts.as_deref() != Some(expected_ts) {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            } else {
+                if let Some(store_alarm) = store_task.alarms.iter().find(|a| a.uid == alarm.uid) {
+                    if store_alarm.acknowledged.is_some() {
+                        return false;
+                    }
+                } else {
+                    return false; // explicit alarm was removed
+                }
+            }
+            true
+        } else {
+            false
+        }
+    });
 
     if app.editing_uid.is_some() {
         app.current_placeholder = rust_i18n::t!("edit_task_title").to_string();
