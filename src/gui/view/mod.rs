@@ -622,7 +622,11 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     };
 
     let active_count = app.tasks.iter().filter(|t| !t.status.is_done()).count();
-    let mut subtitle = rust_i18n::t!("tasks_count", count = active_count).to_string();
+    let mut subtitle = if active_count == 1 {
+        rust_i18n::t!("tasks_count.one").to_string()
+    } else {
+        rust_i18n::t!("tasks_count.other", count = active_count).to_string()
+    };
 
     let search_text = app.search_value.text();
     if !search_text.is_empty() {
@@ -1175,9 +1179,13 @@ fn view_ics_import_dialog<'a>(
         text(rust_i18n::t!("import_file_name", file = file_name))
             .size(14)
             .color(Color::from_rgb(0.7, 0.7, 0.7)),
-        text(rust_i18n::t!("found_tasks_to_import", count = task_count))
-            .size(14)
-            .color(Color::from_rgb(0.7, 0.7, 0.7)),
+        text(if task_count == 1 {
+            rust_i18n::t!("found_tasks_to_import.one").to_string()
+        } else {
+            rust_i18n::t!("found_tasks_to_import.other", count = task_count).to_string()
+        })
+        .size(14)
+        .color(Color::from_rgb(0.7, 0.7, 0.7)),
     ]
     .spacing(5)
     .align_x(iced::Alignment::Center);

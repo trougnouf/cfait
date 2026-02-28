@@ -478,9 +478,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 } else {
                     rust_i18n::t!("calendar_action_deleted")
                 };
-                let translated =
-                    rust_i18n::t!("calendar_events_changed", action = action, count = count)
-                        .to_string();
+
+                let translated = if count == 1 {
+                    rust_i18n::t!(
+                        "calendar_events_changed.one",
+                        action = action,
+                        count = count
+                    )
+                    .to_string()
+                } else {
+                    rust_i18n::t!(
+                        "calendar_events_changed.other",
+                        action = action,
+                        count = count
+                    )
+                    .to_string()
+                };
+
                 app.error_msg = Some(format!("✓ {}", translated));
             } else {
                 app.error_msg = Some("No events were created or deleted".to_string());

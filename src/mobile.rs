@@ -511,7 +511,12 @@ impl CfaitMobile {
     ) -> Result<String, MobileError> {
         let count = LocalStorage::import_from_ics(self.ctx.as_ref(), &calendar_href, &ics_content)
             .map_err(|e| MobileError::from(e.to_string()))?;
-        Ok(rust_i18n::t!("import_success", count = count).to_string())
+        let msg = if count == 1 {
+            rust_i18n::t!("import_success.one").to_string()
+        } else {
+            rust_i18n::t!("import_success.other", count = count).to_string()
+        };
+        Ok(msg)
     }
 
     pub fn parse_smart_string(&self, input: String, is_search: bool) -> Vec<MobileSyntaxToken> {
@@ -1690,61 +1695,60 @@ impl CfaitMobile {
         }
 
         if notif_type == "alarm"
-            && let Some(a_uid) = alarm_uid {
-                if let Some(alarm) = task.alarms.iter().find(|a| a.uid == a_uid) {
-                    if alarm.acknowledged.is_some() {
-                        return false;
-                    }
-                } else if a_uid.starts_with("implicit_") {
-                    let parts: Vec<&str> = a_uid.split('|').collect();
-                    if parts.len() >= 2 {
-                        let type_key_with_colon = parts[0];
-                        let expected_ts = parts[1];
-
-                        let config =
-                            crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
-                        let default_time = chrono::NaiveTime::parse_from_str(
-                            &config.default_reminder_time,
-                            "%H:%M",
-                        )
-                        .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
-
-                        let mut current_ts = None;
-                        if type_key_with_colon == "implicit_due:" {
-                            if let Some(due) = &task.due {
-                                let dt = match due {
-                                    crate::model::DateType::Specific(t) => *t,
-                                    crate::model::DateType::AllDay(d) => d
-                                        .and_time(default_time)
-                                        .and_local_timezone(chrono::Local)
-                                        .unwrap()
-                                        .with_timezone(&chrono::Utc),
-                                };
-                                current_ts = Some(dt.to_rfc3339());
-                            }
-                        } else if type_key_with_colon == "implicit_start:"
-                            && let Some(start) = &task.dtstart {
-                                let dt = match start {
-                                    crate::model::DateType::Specific(t) => *t,
-                                    crate::model::DateType::AllDay(d) => d
-                                        .and_time(default_time)
-                                        .and_local_timezone(chrono::Local)
-                                        .unwrap()
-                                        .with_timezone(&chrono::Utc),
-                                };
-                                current_ts = Some(dt.to_rfc3339());
-                            }
-
-                        // If the date changed or was removed, the old implicit alarm is obsolete
-                        if current_ts.as_deref() != Some(expected_ts) {
-                            return false;
-                        }
-                    }
-                } else {
-                    // Explicit alarm no longer exists
+            && let Some(a_uid) = alarm_uid
+        {
+            if let Some(alarm) = task.alarms.iter().find(|a| a.uid == a_uid) {
+                if alarm.acknowledged.is_some() {
                     return false;
                 }
+            } else if a_uid.starts_with("implicit_") {
+                let parts: Vec<&str> = a_uid.split('|').collect();
+                if parts.len() >= 2 {
+                    let type_key_with_colon = parts[0];
+                    let expected_ts = parts[1];
+
+                    let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+                    let default_time =
+                        chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
+                            .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+
+                    let mut current_ts = None;
+                    if type_key_with_colon == "implicit_due:" {
+                        if let Some(due) = &task.due {
+                            let dt = match due {
+                                crate::model::DateType::Specific(t) => *t,
+                                crate::model::DateType::AllDay(d) => d
+                                    .and_time(default_time)
+                                    .and_local_timezone(chrono::Local)
+                                    .unwrap()
+                                    .with_timezone(&chrono::Utc),
+                            };
+                            current_ts = Some(dt.to_rfc3339());
+                        }
+                    } else if type_key_with_colon == "implicit_start:"
+                        && let Some(start) = &task.dtstart
+                    {
+                        let dt = match start {
+                            crate::model::DateType::Specific(t) => *t,
+                            crate::model::DateType::AllDay(d) => d
+                                .and_time(default_time)
+                                .and_local_timezone(chrono::Local)
+                                .unwrap()
+                                .with_timezone(&chrono::Utc),
+                        };
+                        current_ts = Some(dt.to_rfc3339());
+                    }
+
+                    // If the date changed or was removed, the old implicit alarm is obsolete
+                    if current_ts.as_deref() != Some(expected_ts) {
+                        return false;
+                    }
+                }
+            } else {
+                // Explicit alarm no longer exists
+                return false;
             }
+        }
 
         true
     }
