@@ -674,36 +674,36 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         .spacing(10)
         .align_y(iced::Alignment::Center);
 
-    if app.unsynced_changes {
-        left_section = left_section.push(
-            container(
-                text(rust_i18n::t!("unsynced"))
-                    .size(10)
-                    .style(|theme: &Theme| text::Style {
-                        color: Some(theme.extended_palette().background.base.text),
-                    }),
-            )
-            .style(|_| container::Style {
-                background: Some(Color::from_rgb(0.8, 0.5, 0.0).into()),
-                border: iced::Border {
-                    radius: 4.0.into(),
-                    ..Default::default()
-                },
-                ..Default::default()
-            })
-            .padding(3),
-        );
-    }
+    let (sync_icon_char, sync_icon_color, sync_tooltip) = if app.unsynced_changes {
+        (
+            icon::SYNC_ALERT,
+            Color::from_rgb(0.92, 0.0, 0.0), // Red (#EB0000)
+            rust_i18n::t!("unsynced").to_string(),
+        )
+    } else if app.last_sync_failed {
+        (
+            icon::SYNC_OFF,
+            Color::from_rgb(1.0, 0.702, 0.0), // Amber (#FFB300)
+            rust_i18n::t!("sync_failed_retry").to_string(),
+        )
+    } else {
+        (
+            icon::REFRESH,
+            app.theme().extended_palette().background.base.text,
+            rust_i18n::t!("force_sync").to_string(),
+        )
+    };
 
-    let refresh_btn = iced::widget::button(icon::icon(icon::REFRESH).size(16))
-        .style(iced::widget::button::text)
-        .padding(4)
-        .on_press(Message::Refresh);
+    let refresh_btn =
+        iced::widget::button(icon::icon(sync_icon_char).size(16).color(sync_icon_color))
+            .style(iced::widget::button::text)
+            .padding(4)
+            .on_press(Message::Refresh);
 
     left_section = left_section.push(
         tooltip(
             refresh_btn,
-            text(rust_i18n::t!("force_sync")).size(12),
+            text(sync_tooltip).size(12),
             tooltip::Position::Bottom,
         )
         .style(tooltip_style)

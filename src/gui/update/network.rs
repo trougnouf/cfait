@@ -33,8 +33,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             if let Some(w) = warning {
                 app.error_msg = Some(w);
+                app.last_sync_failed = true;
             } else {
                 app.error_msg = None;
+                app.last_sync_failed = false;
             }
 
             app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
@@ -145,6 +147,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::Loaded(Err(e)) => {
             app.error_msg = Some(format!("Connection Failed: {}", e));
+            app.last_sync_failed = true;
 
             if let Some(tx) = &app.alarm_tx {
                 let _ = tx.try_send(SystemEvent::EnableAlarms);
@@ -160,6 +163,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.store.insert(href.clone(), tasks);
             }
 
+            app.last_sync_failed = false;
             refresh_filtered_tasks(app);
             app.loading = false;
 
@@ -168,11 +172,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::RefreshedAll(Err(e)) => {
             app.error_msg = Some(format!("Sync warning: {}", e));
+            app.last_sync_failed = true;
             app.loading = false;
             Task::none()
         }
         Message::TasksRefreshed(Ok((href, mut tasks))) => {
             app.error_msg = None;
+            app.last_sync_failed = false;
             Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &href);
             app.store.insert(href.clone(), tasks);
 
@@ -186,6 +192,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::TasksRefreshed(Err(e)) => {
             app.error_msg = Some(format!("Fetch: {}", e));
+            app.last_sync_failed = true;
             app.loading = false;
             Task::none()
         }
@@ -196,6 +203,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             app.store.update_or_add_task(updated);
 
+            app.last_sync_failed = false;
             app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
             if app.unsynced_changes {
                 app.error_msg = Some("Offline: Changes queued.".to_string());
@@ -205,6 +213,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::SyncSaved(Err(e)) => {
             app.error_msg = Some(format!("Sync Error: {}", e));
+            app.last_sync_failed = true;
             Task::none()
         }
         Message::SyncToggleComplete(boxed_res) => match *boxed_res {
@@ -220,11 +229,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     }
                     app.store.update_or_add_task(created);
                 }
+                app.last_sync_failed = false;
                 refresh_filtered_tasks(app);
                 Task::none()
             }
             Err(e) => {
                 app.error_msg = Some(format!("Toggle Error: {}", e));
+                app.last_sync_failed = true;
                 Task::none()
             }
         },
@@ -249,15 +260,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.creating_child_of = None;
 
             app.selected_uid = Some(new_task.uid.clone());
+            app.last_sync_failed = false;
 
             Task::none()
         }
         Message::TaskMoved(Err(e)) => {
             app.error_msg = Some(format!("Move failed: {}", e));
+            app.last_sync_failed = true;
             Task::none()
         }
         Message::MigrationComplete(Ok(count)) => {
             app.loading = false;
+            app.last_sync_failed = false;
             app.error_msg = Some(format!("Exported {} tasks successfully.", count));
             if let Some(client) = &app.client {
                 app.loading = true;
@@ -270,7 +284,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::MigrationComplete(Err(e)) => {
             app.loading = false;
+            app.last_sync_failed = true;
             app.error_msg = Some(format!("Export failed: {}", e));
+            Task::none()
+        }
+        Message::DeleteComplete(Ok(())) => {
+            app.last_sync_failed = false;
+            app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
+            Task::none()
+        }
+        Message::DeleteComplete(Err(e)) => {
+            app.error_msg = Some(format!("Delete Error: {}", e));
+            app.last_sync_failed = true;
             Task::none()
         }
         _ => Task::none(),

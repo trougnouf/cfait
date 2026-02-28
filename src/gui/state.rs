@@ -103,6 +103,7 @@ pub struct GuiApp {
     pub expanded_tasks: HashSet<String>,
     pub expanded_done_groups: HashSet<String>,
     pub unsynced_changes: bool,
+    pub last_sync_failed: bool,
 
     // Computed State (Persisted for view borrowing)
     pub current_placeholder: String,
@@ -279,6 +280,7 @@ impl Default for GuiApp {
             expanded_tasks: HashSet::new(),
             expanded_done_groups: HashSet::new(),
             unsynced_changes: false,
+            last_sync_failed: false,
 
             current_placeholder: "Add a task...".to_string(),
             search_placeholder: "Search...".to_string(),

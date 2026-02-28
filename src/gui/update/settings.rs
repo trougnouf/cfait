@@ -470,6 +470,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::BackfillEventsComplete(Ok(count)) => {
             app.deleting_events = false;
+            app.last_sync_failed = false;
 
             if count > 0 {
                 let action = if app.create_events_for_tasks {
@@ -488,6 +489,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::BackfillEventsComplete(Err(e)) => {
             app.deleting_events = false;
+            app.last_sync_failed = true;
             app.error_msg = Some(format!("Backfill error: {}", e));
             Task::none()
         }

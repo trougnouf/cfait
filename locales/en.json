@@ -303,6 +303,7 @@
   "strikethrough_completed": "Cross-off (strikethrough) done tasks",
   "support_card_title": "Support development",
   "sync_error": "Sync error: %{error}",
+  "sync_failed_retry": "Sync failed. Click to retry.",
   "sync_interval_label": "Sync interval:",
   "syntax_help": "Syntax help",
   "tag_aliases": "Tag aliases",
