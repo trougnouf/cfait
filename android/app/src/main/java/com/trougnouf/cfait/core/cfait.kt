@@ -17,27 +17,27 @@ package com.trougnouf.cfait.core
 // compile the Rust component. The easiest way to ensure this is to bundle the Kotlin
 // helpers directly inline like we're doing here.
 
-import com.sun.jna.Library
+import com.sun.jna.Callback
 import com.sun.jna.IntegerType
+import com.sun.jna.Library
 import com.sun.jna.Native
 import com.sun.jna.Pointer
 import com.sun.jna.Structure
-import com.sun.jna.Callback
 import com.sun.jna.ptr.*
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
-import java.nio.CharBuffer
-import java.nio.charset.CodingErrorAction
-import java.util.concurrent.atomic.AtomicLong
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.CharBuffer
+import java.nio.charset.CodingErrorAction
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import kotlin.coroutines.resume
 
 // This is a helper for safely working with byte buffers returned from the Rust code.
 // A rust-owned buffer is represented by its capacity, its current length, and a
@@ -51,29 +51,41 @@ open class RustBuffer : Structure() {
     // Note: `capacity` and `len` are actually `ULong` values, but JVM only supports signed values.
     // When dealing with these fields, make sure to call `toULong()`.
     @JvmField var capacity: Long = 0
+
     @JvmField var len: Long = 0
+
     @JvmField var data: Pointer? = null
 
-    class ByValue: RustBuffer(), Structure.ByValue
-    class ByReference: RustBuffer(), Structure.ByReference
+    class ByValue :
+        RustBuffer(),
+        Structure.ByValue
 
-   internal fun setValue(other: RustBuffer) {
+    class ByReference :
+        RustBuffer(),
+        Structure.ByReference
+
+    internal fun setValue(other: RustBuffer) {
         capacity = other.capacity
         len = other.len
         data = other.data
     }
 
     companion object {
-        internal fun alloc(size: ULong = 0UL) = uniffiRustCall() { status ->
-            // Note: need to convert the size to a `Long` value to make this work with JVM.
-            UniffiLib.ffi_cfait_rustbuffer_alloc(size.toLong(), status)
-        }.also {
-            if(it.data == null) {
-               throw RuntimeException("RustBuffer.alloc() returned null data pointer (size=${size})")
-           }
-        }
+        internal fun alloc(size: ULong = 0UL) =
+            uniffiRustCall { status ->
+                // Note: need to convert the size to a `Long` value to make this work with JVM.
+                UniffiLib.ffi_cfait_rustbuffer_alloc(size.toLong(), status)
+            }.also {
+                if (it.data == null) {
+                    throw RuntimeException("RustBuffer.alloc() returned null data pointer (size=$size)")
+                }
+            }
 
-        internal fun create(capacity: ULong, len: ULong, data: Pointer?): RustBuffer.ByValue {
+        internal fun create(
+            capacity: ULong,
+            len: ULong,
+            data: Pointer?,
+        ): RustBuffer.ByValue {
             var buf = RustBuffer.ByValue()
             buf.capacity = capacity.toLong()
             buf.len = len.toLong()
@@ -81,9 +93,10 @@ open class RustBuffer : Structure() {
             return buf
         }
 
-        internal fun free(buf: RustBuffer.ByValue) = uniffiRustCall() { status ->
-            UniffiLib.ffi_cfait_rustbuffer_free(buf, status)
-        }
+        internal fun free(buf: RustBuffer.ByValue) =
+            uniffiRustCall { status ->
+                UniffiLib.ffi_cfait_rustbuffer_free(buf, status)
+            }
     }
 
     @Suppress("TooGenericExceptionThrown")
@@ -102,10 +115,14 @@ open class RustBuffer : Structure() {
 @Structure.FieldOrder("len", "data")
 internal open class ForeignBytes : Structure() {
     @JvmField var len: Int = 0
+
     @JvmField var data: Pointer? = null
 
-    class ByValue : ForeignBytes(), Structure.ByValue
+    class ByValue :
+        ForeignBytes(),
+        Structure.ByValue
 }
+
 /**
  * The FfiConverter interface handles converter types to and from the FFI
  *
@@ -135,7 +152,10 @@ public interface FfiConverter<KotlinType, FfiType> {
     fun allocationSize(value: KotlinType): ULong
 
     // Write a Kotlin type to a `ByteBuffer`
-    fun write(value: KotlinType, buf: ByteBuffer)
+    fun write(
+        value: KotlinType,
+        buf: ByteBuffer,
+    )
 
     // Lower a value into a `RustBuffer`
     //
@@ -146,9 +166,10 @@ public interface FfiConverter<KotlinType, FfiType> {
     fun lowerIntoRustBuffer(value: KotlinType): RustBuffer.ByValue {
         val rbuf = RustBuffer.alloc(allocationSize(value))
         try {
-            val bbuf = rbuf.data!!.getByteBuffer(0, rbuf.capacity).also {
-                it.order(ByteOrder.BIG_ENDIAN)
-            }
+            val bbuf =
+                rbuf.data!!.getByteBuffer(0, rbuf.capacity).also {
+                    it.order(ByteOrder.BIG_ENDIAN)
+                }
             write(value, bbuf)
             rbuf.writeField("len", bbuf.position().toLong())
             return rbuf
@@ -165,11 +186,11 @@ public interface FfiConverter<KotlinType, FfiType> {
     fun liftFromRustBuffer(rbuf: RustBuffer.ByValue): KotlinType {
         val byteBuf = rbuf.asByteBuffer()!!
         try {
-           val item = read(byteBuf)
-           if (byteBuf.hasRemaining()) {
-               throw RuntimeException("junk remaining in buffer after lifting, something is very wrong!!")
-           }
-           return item
+            val item = read(byteBuf)
+            if (byteBuf.hasRemaining()) {
+                throw RuntimeException("junk remaining in buffer after lifting, something is very wrong!!")
+            }
+            return item
         } finally {
             RustBuffer.free(rbuf)
         }
@@ -181,8 +202,9 @@ public interface FfiConverter<KotlinType, FfiType> {
  *
  * @suppress
  */
-public interface FfiConverterRustBuffer<KotlinType>: FfiConverter<KotlinType, RustBuffer.ByValue> {
+public interface FfiConverterRustBuffer<KotlinType> : FfiConverter<KotlinType, RustBuffer.ByValue> {
     override fun lift(value: RustBuffer.ByValue) = liftFromRustBuffer(value)
+
     override fun lower(value: KotlinType) = lowerIntoRustBuffer(value)
 }
 // A handful of classes and functions to support the generated data structures.
@@ -195,24 +217,24 @@ internal const val UNIFFI_CALL_UNEXPECTED_ERROR = 2.toByte()
 @Structure.FieldOrder("code", "error_buf")
 internal open class UniffiRustCallStatus : Structure() {
     @JvmField var code: Byte = 0
+
     @JvmField var error_buf: RustBuffer.ByValue = RustBuffer.ByValue()
 
-    class ByValue: UniffiRustCallStatus(), Structure.ByValue
+    class ByValue :
+        UniffiRustCallStatus(),
+        Structure.ByValue
 
-    fun isSuccess(): Boolean {
-        return code == UNIFFI_CALL_SUCCESS
-    }
+    fun isSuccess(): Boolean = code == UNIFFI_CALL_SUCCESS
 
-    fun isError(): Boolean {
-        return code == UNIFFI_CALL_ERROR
-    }
+    fun isError(): Boolean = code == UNIFFI_CALL_ERROR
 
-    fun isPanic(): Boolean {
-        return code == UNIFFI_CALL_UNEXPECTED_ERROR
-    }
+    fun isPanic(): Boolean = code == UNIFFI_CALL_UNEXPECTED_ERROR
 
     companion object {
-        fun create(code: Byte, errorBuf: RustBuffer.ByValue): UniffiRustCallStatus.ByValue {
+        fun create(
+            code: Byte,
+            errorBuf: RustBuffer.ByValue,
+        ): UniffiRustCallStatus.ByValue {
             val callStatus = UniffiRustCallStatus.ByValue()
             callStatus.code = code
             callStatus.error_buf = errorBuf
@@ -221,7 +243,9 @@ internal open class UniffiRustCallStatus : Structure() {
     }
 }
 
-class InternalException(message: String) : kotlin.Exception(message)
+class InternalException(
+    message: String,
+) : kotlin.Exception(message)
 
 /**
  * Each top-level error class has a companion object that can lift the error from the call status's rust buffer
@@ -229,7 +253,7 @@ class InternalException(message: String) : kotlin.Exception(message)
  * @suppress
  */
 interface UniffiRustCallStatusErrorHandler<E> {
-    fun lift(error_buf: RustBuffer.ByValue): E;
+    fun lift(error_buf: RustBuffer.ByValue): E
 }
 
 // Helpers for calling Rust
@@ -237,7 +261,10 @@ interface UniffiRustCallStatusErrorHandler<E> {
 // synchronize itself
 
 // Call a rust function that returns a Result<>.  Pass in the Error class companion that corresponds to the Err
-private inline fun <U, E: kotlin.Exception> uniffiRustCallWithError(errorHandler: UniffiRustCallStatusErrorHandler<E>, callback: (UniffiRustCallStatus) -> U): U {
+private inline fun <U, E : kotlin.Exception> uniffiRustCallWithError(
+    errorHandler: UniffiRustCallStatusErrorHandler<E>,
+    callback: (UniffiRustCallStatus) -> U,
+): U {
     var status = UniffiRustCallStatus()
     val return_value = callback(status)
     uniffiCheckCallStatus(errorHandler, status)
@@ -245,7 +272,10 @@ private inline fun <U, E: kotlin.Exception> uniffiRustCallWithError(errorHandler
 }
 
 // Check UniffiRustCallStatus and throw an error if the call wasn't successful
-private fun<E: kotlin.Exception> uniffiCheckCallStatus(errorHandler: UniffiRustCallStatusErrorHandler<E>, status: UniffiRustCallStatus) {
+private fun <E : kotlin.Exception> uniffiCheckCallStatus(
+    errorHandler: UniffiRustCallStatusErrorHandler<E>,
+    status: UniffiRustCallStatus,
+) {
     if (status.isSuccess()) {
         return
     } else if (status.isError()) {
@@ -269,7 +299,7 @@ private fun<E: kotlin.Exception> uniffiCheckCallStatus(errorHandler: UniffiRustC
  *
  * @suppress
  */
-object UniffiNullRustCallStatusErrorHandler: UniffiRustCallStatusErrorHandler<InternalException> {
+object UniffiNullRustCallStatusErrorHandler : UniffiRustCallStatusErrorHandler<InternalException> {
     override fun lift(error_buf: RustBuffer.ByValue): InternalException {
         RustBuffer.free(error_buf)
         return InternalException("Unexpected CALL_ERROR")
@@ -277,44 +307,54 @@ object UniffiNullRustCallStatusErrorHandler: UniffiRustCallStatusErrorHandler<In
 }
 
 // Call a rust function that returns a plain value
-private inline fun <U> uniffiRustCall(callback: (UniffiRustCallStatus) -> U): U {
-    return uniffiRustCallWithError(UniffiNullRustCallStatusErrorHandler, callback)
-}
+private inline fun <U> uniffiRustCall(callback: (UniffiRustCallStatus) -> U): U =
+    uniffiRustCallWithError(UniffiNullRustCallStatusErrorHandler, callback)
 
-internal inline fun<T> uniffiTraitInterfaceCall(
+internal inline fun <T> uniffiTraitInterfaceCall(
     callStatus: UniffiRustCallStatus,
     makeCall: () -> T,
     writeReturn: (T) -> Unit,
 ) {
     try {
         writeReturn(makeCall())
-    } catch(e: kotlin.Exception) {
-        val err = try { e.stackTraceToString() } catch(_: Throwable) { "" }
+    } catch (e: kotlin.Exception) {
+        val err =
+            try {
+                e.stackTraceToString()
+            } catch (_: Throwable) {
+                ""
+            }
         callStatus.code = UNIFFI_CALL_UNEXPECTED_ERROR
         callStatus.error_buf = FfiConverterString.lower(err)
     }
 }
 
-internal inline fun<T, reified E: Throwable> uniffiTraitInterfaceCallWithError(
+internal inline fun <T, reified E : Throwable> uniffiTraitInterfaceCallWithError(
     callStatus: UniffiRustCallStatus,
     makeCall: () -> T,
     writeReturn: (T) -> Unit,
-    lowerError: (E) -> RustBuffer.ByValue
+    lowerError: (E) -> RustBuffer.ByValue,
 ) {
     try {
         writeReturn(makeCall())
-    } catch(e: kotlin.Exception) {
+    } catch (e: kotlin.Exception) {
         if (e is E) {
             callStatus.code = UNIFFI_CALL_ERROR
             callStatus.error_buf = lowerError(e)
         } else {
-            val err = try { e.stackTraceToString() } catch(_: Throwable) { "" }
+            val err =
+                try {
+                    e.stackTraceToString()
+                } catch (_: Throwable) {
+                    ""
+                }
             callStatus.code = UNIFFI_CALL_UNEXPECTED_ERROR
             callStatus.error_buf = FfiConverterString.lower(err)
         }
     }
 }
-// Initial value and increment amount for handles. 
+
+// Initial value and increment amount for handles.
 // These ensure that Kotlin-generated handles always have the lowest bit set
 private const val UNIFFI_HANDLEMAP_INITIAL = 1.toLong()
 private const val UNIFFI_HANDLEMAP_DELTA = 2.toLong()
@@ -322,10 +362,13 @@ private const val UNIFFI_HANDLEMAP_DELTA = 2.toLong()
 // Map handles to objects
 //
 // This is used pass an opaque 64-bit handle representing a foreign object to the Rust code.
-internal class UniffiHandleMap<T: Any> {
+internal class UniffiHandleMap<T : Any> {
     private val map = ConcurrentHashMap<Long, T>()
-    // Start 
-    private val counter = java.util.concurrent.atomic.AtomicLong(UNIFFI_HANDLEMAP_INITIAL)
+
+    // Start
+    private val counter =
+        java.util.concurrent.atomic
+            .AtomicLong(UNIFFI_HANDLEMAP_INITIAL)
 
     val size: Int
         get() = map.size
@@ -344,14 +387,10 @@ internal class UniffiHandleMap<T: Any> {
     }
 
     // Get an object from the handle map
-    fun get(handle: Long): T {
-        return map.get(handle) ?: throw InternalException("UniffiHandleMap.get: Invalid handle")
-    }
+    fun get(handle: Long): T = map.get(handle) ?: throw InternalException("UniffiHandleMap.get: Invalid handle")
 
     // Remove an entry from the handlemap and get the Kotlin object back
-    fun remove(handle: Long): T {
-        return map.remove(handle) ?: throw InternalException("UniffiHandleMap: Invalid handle")
-    }
+    fun remove(handle: Long): T = map.remove(handle) ?: throw InternalException("UniffiHandleMap: Invalid handle")
 }
 
 // Contains loading, initialization code,
@@ -367,18 +406,24 @@ private fun findLibraryName(componentName: String): String {
 
 // Define FFI callback types
 internal interface UniffiRustFutureContinuationCallback : com.sun.jna.Callback {
-    fun callback(`data`: Long,`pollResult`: Byte,)
+    fun callback(
+        `data`: Long,
+        `pollResult`: Byte,
+    )
 }
+
 internal interface UniffiForeignFutureDroppedCallback : com.sun.jna.Callback {
-    fun callback(`handle`: Long,)
+    fun callback(`handle`: Long)
 }
+
 internal interface UniffiCallbackInterfaceFree : com.sun.jna.Callback {
-    fun callback(`handle`: Long,)
+    fun callback(`handle`: Long)
 }
+
 internal interface UniffiCallbackInterfaceClone : com.sun.jna.Callback {
-    fun callback(`handle`: Long,)
-    : Long
+    fun callback(`handle`: Long): Long
 }
+
 @Structure.FieldOrder("handle", "free")
 internal open class UniffiForeignFutureDroppedCallbackStruct(
     @JvmField internal var `handle`: Long = 0.toLong(),
@@ -387,14 +432,15 @@ internal open class UniffiForeignFutureDroppedCallbackStruct(
     class UniffiByValue(
         `handle`: Long = 0.toLong(),
         `free`: UniffiForeignFutureDroppedCallback? = null,
-    ): UniffiForeignFutureDroppedCallbackStruct(`handle`,`free`,), Structure.ByValue
+    ) : UniffiForeignFutureDroppedCallbackStruct(`handle`, `free`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureDroppedCallbackStruct) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureDroppedCallbackStruct) {
         `handle` = other.`handle`
         `free` = other.`free`
     }
-
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultU8(
     @JvmField internal var `returnValue`: Byte = 0.toByte(),
@@ -403,17 +449,22 @@ internal open class UniffiForeignFutureResultU8(
     class UniffiByValue(
         `returnValue`: Byte = 0.toByte(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultU8(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultU8(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultU8) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultU8) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteU8 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultU8.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultU8.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultI8(
     @JvmField internal var `returnValue`: Byte = 0.toByte(),
@@ -422,17 +473,22 @@ internal open class UniffiForeignFutureResultI8(
     class UniffiByValue(
         `returnValue`: Byte = 0.toByte(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultI8(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultI8(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultI8) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultI8) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteI8 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultI8.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultI8.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultU16(
     @JvmField internal var `returnValue`: Short = 0.toShort(),
@@ -441,17 +497,22 @@ internal open class UniffiForeignFutureResultU16(
     class UniffiByValue(
         `returnValue`: Short = 0.toShort(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultU16(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultU16(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultU16) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultU16) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteU16 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultU16.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultU16.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultI16(
     @JvmField internal var `returnValue`: Short = 0.toShort(),
@@ -460,17 +521,22 @@ internal open class UniffiForeignFutureResultI16(
     class UniffiByValue(
         `returnValue`: Short = 0.toShort(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultI16(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultI16(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultI16) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultI16) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteI16 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultI16.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultI16.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultU32(
     @JvmField internal var `returnValue`: Int = 0,
@@ -479,17 +545,22 @@ internal open class UniffiForeignFutureResultU32(
     class UniffiByValue(
         `returnValue`: Int = 0,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultU32(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultU32(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultU32) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultU32) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteU32 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultU32.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultU32.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultI32(
     @JvmField internal var `returnValue`: Int = 0,
@@ -498,17 +569,22 @@ internal open class UniffiForeignFutureResultI32(
     class UniffiByValue(
         `returnValue`: Int = 0,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultI32(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultI32(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultI32) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultI32) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteI32 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultI32.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultI32.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultU64(
     @JvmField internal var `returnValue`: Long = 0.toLong(),
@@ -517,17 +593,22 @@ internal open class UniffiForeignFutureResultU64(
     class UniffiByValue(
         `returnValue`: Long = 0.toLong(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultU64(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultU64(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultU64) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultU64) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteU64 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultU64.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultU64.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultI64(
     @JvmField internal var `returnValue`: Long = 0.toLong(),
@@ -536,17 +617,22 @@ internal open class UniffiForeignFutureResultI64(
     class UniffiByValue(
         `returnValue`: Long = 0.toLong(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultI64(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultI64(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultI64) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultI64) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteI64 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultI64.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultI64.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultF32(
     @JvmField internal var `returnValue`: Float = 0.0f,
@@ -555,17 +641,22 @@ internal open class UniffiForeignFutureResultF32(
     class UniffiByValue(
         `returnValue`: Float = 0.0f,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultF32(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultF32(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultF32) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultF32) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteF32 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultF32.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultF32.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultF64(
     @JvmField internal var `returnValue`: Double = 0.0,
@@ -574,17 +665,22 @@ internal open class UniffiForeignFutureResultF64(
     class UniffiByValue(
         `returnValue`: Double = 0.0,
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultF64(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultF64(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultF64) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultF64) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteF64 : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultF64.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultF64.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("returnValue", "callStatus")
 internal open class UniffiForeignFutureResultRustBuffer(
     @JvmField internal var `returnValue`: RustBuffer.ByValue = RustBuffer.ByValue(),
@@ -593,32 +689,41 @@ internal open class UniffiForeignFutureResultRustBuffer(
     class UniffiByValue(
         `returnValue`: RustBuffer.ByValue = RustBuffer.ByValue(),
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultRustBuffer(`returnValue`,`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultRustBuffer(`returnValue`, `callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultRustBuffer) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultRustBuffer) {
         `returnValue` = other.`returnValue`
         `callStatus` = other.`callStatus`
     }
+}
 
-}
 internal interface UniffiForeignFutureCompleteRustBuffer : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultRustBuffer.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultRustBuffer.UniffiByValue,
+    )
 }
+
 @Structure.FieldOrder("callStatus")
 internal open class UniffiForeignFutureResultVoid(
     @JvmField internal var `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
 ) : Structure() {
     class UniffiByValue(
         `callStatus`: UniffiRustCallStatus.ByValue = UniffiRustCallStatus.ByValue(),
-    ): UniffiForeignFutureResultVoid(`callStatus`,), Structure.ByValue
+    ) : UniffiForeignFutureResultVoid(`callStatus`),
+        Structure.ByValue
 
-   internal fun uniffiSetValue(other: UniffiForeignFutureResultVoid) {
+    internal fun uniffiSetValue(other: UniffiForeignFutureResultVoid) {
         `callStatus` = other.`callStatus`
     }
-
 }
+
 internal interface UniffiForeignFutureCompleteVoid : com.sun.jna.Callback {
-    fun callback(`callbackData`: Long,`result`: UniffiForeignFutureResultVoid.UniffiByValue,)
+    fun callback(
+        `callbackData`: Long,
+        `result`: UniffiForeignFutureResultVoid.UniffiByValue,
+    )
 }
 
 // A JNA Library to expose the extern-C FFI definitions.
@@ -643,366 +748,682 @@ internal object IntegrityCheckingUniffiLib {
         uniffiCheckContractApiVersion(this)
         uniffiCheckApiChecksums(this)
     }
-    external fun uniffi_cfait_checksum_func_init_tokio_runtime(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_add_alias(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_add_dependency(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_add_related_to(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_add_task_smart(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_change_priority(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_connect(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_create_debug_export(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_create_local_calendar(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_create_missing_calendar_events(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_delete_all_calendar_events(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_delete_local_calendar(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_delete_task(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_export_local_ics(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_locations(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_tags(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_available_locales(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_calendars(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_config(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_syntax_help(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_task_by_uid(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_has_any_tasks(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_has_unsynced_changes(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_import_local_ics(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_isolate_calendar(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_load_from_cache(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_migrate_local_to(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_move_task(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_parse_duration_string(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_pause_task(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_remove_alias(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_remove_dependency(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_remove_related_to(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_save_config(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_set_default_calendar(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_set_locale(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_set_parent(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_set_status_cancelled(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_set_status_process(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_snooze_alarm(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_start_task(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_stop_task(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_sync(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_toggle_task(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_update_local_calendar(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_update_task_description(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_update_task_smart(
-    ): Short
-    external fun uniffi_cfait_checksum_method_cfaitmobile_yank_task(
-    ): Short
-    external fun uniffi_cfait_checksum_constructor_cfaitmobile_new(
-    ): Short
-    external fun ffi_cfait_uniffi_contract_version(
-    ): Int
 
-        
+    external fun uniffi_cfait_checksum_func_init_tokio_runtime(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_add_alias(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_add_dependency(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_add_related_to(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_add_task_smart(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_change_priority(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_connect(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_create_debug_export(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_create_local_calendar(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_create_missing_calendar_events(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_delete_all_calendar_events(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_delete_local_calendar(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_delete_task(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_export_local_ics(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_locations(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_tags(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_available_locales(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_calendars(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_config(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_syntax_help(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_task_by_uid(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_has_any_tasks(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_has_unsynced_changes(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_import_local_ics(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_isolate_calendar(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_load_from_cache(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_migrate_local_to(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_move_task(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_parse_duration_string(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_parse_smart_string(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_pause_task(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_remove_alias(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_remove_dependency(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_remove_related_to(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_save_config(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_set_default_calendar(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_set_locale(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_set_parent(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_set_status_cancelled(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_set_status_process(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_should_keep_notification(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_snooze_alarm(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_start_task(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_stop_task(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_sync(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_toggle_task(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_update_local_calendar(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_update_task_description(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_update_task_smart(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_yank_task(): Short
+
+    external fun uniffi_cfait_checksum_constructor_cfaitmobile_new(): Short
+
+    external fun ffi_cfait_uniffi_contract_version(): Int
 }
 
 internal object UniffiLib {
-    
     // The Cleaner for the whole library
     internal val CLEANER: UniffiCleaner by lazy {
         UniffiCleaner.create()
     }
-    
 
     init {
         Native.register(UniffiLib::class.java, findLibraryName(componentName = "cfait"))
-        
     }
-    external fun uniffi_cfait_fn_clone_cfaitmobile(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_cfait_fn_free_cfaitmobile(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_cfait_fn_constructor_cfaitmobile_new(`androidFilesDir`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_add_alias(`ptr`: Long,`key`: RustBuffer.ByValue,`tags`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_add_dependency(`ptr`: Long,`taskUid`: RustBuffer.ByValue,`blockerUid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_add_related_to(`ptr`: Long,`taskUid`: RustBuffer.ByValue,`relatedUid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_add_task_smart(`ptr`: Long,`input`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_change_priority(`ptr`: Long,`uid`: RustBuffer.ByValue,`delta`: Byte,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_connect(`ptr`: Long,`url`: RustBuffer.ByValue,`user`: RustBuffer.ByValue,`pass`: RustBuffer.ByValue,`insecure`: Byte,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_create_debug_export(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_cfait_fn_method_cfaitmobile_create_local_calendar(`ptr`: Long,`name`: RustBuffer.ByValue,`color`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_create_missing_calendar_events(`ptr`: Long,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_delete_all_calendar_events(`ptr`: Long,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_delete_local_calendar(`ptr`: Long,`href`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_delete_task(`ptr`: Long,`uid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_dismiss_alarm(`ptr`: Long,`taskUid`: RustBuffer.ByValue,`alarmUid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_export_local_ics(`ptr`: Long,`calendarHref`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_cfait_fn_method_cfaitmobile_get_all_locations(`ptr`: Long,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_get_all_tags(`ptr`: Long,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_get_available_locales(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_cfait_fn_method_cfaitmobile_get_calendars(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_cfait_fn_method_cfaitmobile_get_config(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_cfait_fn_method_cfaitmobile_get_firing_alarms(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_cfait_fn_method_cfaitmobile_get_next_alarm_timestamp(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_cfait_fn_method_cfaitmobile_get_next_global_alarm_time(`ptr`: Long,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_get_random_task_uid(`ptr`: Long,`filterTags`: RustBuffer.ByValue,`filterLocations`: RustBuffer.ByValue,`searchQuery`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_get_syntax_help(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_cfait_fn_method_cfaitmobile_get_task_by_uid(`ptr`: Long,`uid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_get_tasks_related_to(`ptr`: Long,`uid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(`ptr`: Long,`filterTags`: RustBuffer.ByValue,`filterLocations`: RustBuffer.ByValue,`searchQuery`: RustBuffer.ByValue,`expandedGroups`: RustBuffer.ByValue,`matchAllCategories`: Byte,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_has_any_tasks(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Byte
-external fun uniffi_cfait_fn_method_cfaitmobile_has_unsynced_changes(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Byte
-external fun uniffi_cfait_fn_method_cfaitmobile_import_local_ics(`ptr`: Long,`calendarHref`: RustBuffer.ByValue,`icsContent`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_cfait_fn_method_cfaitmobile_isolate_calendar(`ptr`: Long,`href`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_cfait_fn_method_cfaitmobile_load_from_cache(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_cfait_fn_method_cfaitmobile_migrate_local_to(`ptr`: Long,`sourceHref`: RustBuffer.ByValue,`targetHref`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_move_task(`ptr`: Long,`uid`: RustBuffer.ByValue,`newCalHref`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_parse_duration_string(`ptr`: Long,`val`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_cfait_fn_method_cfaitmobile_parse_smart_string(`ptr`: Long,`input`: RustBuffer.ByValue,`isSearch`: Byte,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun uniffi_cfait_fn_method_cfaitmobile_pause_task(`ptr`: Long,`uid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_remove_alias(`ptr`: Long,`key`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_cfait_fn_method_cfaitmobile_remove_dependency(`ptr`: Long,`taskUid`: RustBuffer.ByValue,`blockerUid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_remove_related_to(`ptr`: Long,`taskUid`: RustBuffer.ByValue,`relatedUid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_save_config(`ptr`: Long,`url`: RustBuffer.ByValue,`user`: RustBuffer.ByValue,`pass`: RustBuffer.ByValue,`insecure`: Byte,`hideCompleted`: Byte,`disabledCalendars`: RustBuffer.ByValue,`sortCutoffMonths`: RustBuffer.ByValue,`urgentDays`: Int,`urgentPrio`: Byte,`defaultPriority`: Byte,`startGracePeriodDays`: Int,`autoReminders`: Byte,`defaultReminderTime`: RustBuffer.ByValue,`snoozeShort`: Int,`createEventsForTasks`: Byte,`deleteEventsOnCompletion`: Byte,`autoRefreshInterval`: Int,`trashRetention`: Int,`maxDoneRoots`: Int,`maxDoneSubtasks`: Int,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_cfait_fn_method_cfaitmobile_set_calendar_visibility(`ptr`: Long,`href`: RustBuffer.ByValue,`visible`: Byte,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_cfait_fn_method_cfaitmobile_set_default_calendar(`ptr`: Long,`href`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_cfait_fn_method_cfaitmobile_set_locale(`ptr`: Long,`locale`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun uniffi_cfait_fn_method_cfaitmobile_set_parent(`ptr`: Long,`childUid`: RustBuffer.ByValue,`parentUid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_set_status_cancelled(`ptr`: Long,`uid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_set_status_process(`ptr`: Long,`uid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_snooze_alarm(`ptr`: Long,`taskUid`: RustBuffer.ByValue,`alarmUid`: RustBuffer.ByValue,`minutes`: Int,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_start_task(`ptr`: Long,`uid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_stop_task(`ptr`: Long,`uid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_sync(`ptr`: Long,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_toggle_task(`ptr`: Long,`uid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_update_local_calendar(`ptr`: Long,`href`: RustBuffer.ByValue,`name`: RustBuffer.ByValue,`color`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_update_task_description(`ptr`: Long,`uid`: RustBuffer.ByValue,`description`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_update_task_smart(`ptr`: Long,`uid`: RustBuffer.ByValue,`smartInput`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_method_cfaitmobile_yank_task(`ptr`: Long,`uid`: RustBuffer.ByValue,
-): Long
-external fun uniffi_cfait_fn_func_init_tokio_runtime(uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun ffi_cfait_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun ffi_cfait_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun ffi_cfait_rustbuffer_free(`buf`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
-external fun ffi_cfait_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun ffi_cfait_rust_future_poll_u8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_cfait_rust_future_cancel_u8(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_free_u8(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_complete_u8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Byte
-external fun ffi_cfait_rust_future_poll_i8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_cfait_rust_future_cancel_i8(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_free_i8(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_complete_i8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Byte
-external fun ffi_cfait_rust_future_poll_u16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_cfait_rust_future_cancel_u16(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_free_u16(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_complete_u16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Short
-external fun ffi_cfait_rust_future_poll_i16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_cfait_rust_future_cancel_i16(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_free_i16(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_complete_i16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Short
-external fun ffi_cfait_rust_future_poll_u32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_cfait_rust_future_cancel_u32(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_free_u32(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_complete_u32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Int
-external fun ffi_cfait_rust_future_poll_i32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_cfait_rust_future_cancel_i32(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_free_i32(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_complete_i32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Int
-external fun ffi_cfait_rust_future_poll_u64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_cfait_rust_future_cancel_u64(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_free_u64(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_complete_u64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun ffi_cfait_rust_future_poll_i64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_cfait_rust_future_cancel_i64(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_free_i64(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_complete_i64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Long
-external fun ffi_cfait_rust_future_poll_f32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_cfait_rust_future_cancel_f32(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_free_f32(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_complete_f32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Float
-external fun ffi_cfait_rust_future_poll_f64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_cfait_rust_future_cancel_f64(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_free_f64(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_complete_f64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Double
-external fun ffi_cfait_rust_future_poll_rust_buffer(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_cfait_rust_future_cancel_rust_buffer(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_free_rust_buffer(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_complete_rust_buffer(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): RustBuffer.ByValue
-external fun ffi_cfait_rust_future_poll_void(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
-): Unit
-external fun ffi_cfait_rust_future_cancel_void(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_free_void(`handle`: Long,
-): Unit
-external fun ffi_cfait_rust_future_complete_void(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
-): Unit
 
-    
+    external fun uniffi_cfait_fn_clone_cfaitmobile(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_cfait_fn_free_cfaitmobile(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_cfait_fn_constructor_cfaitmobile_new(
+        `androidFilesDir`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_add_alias(
+        `ptr`: Long,
+        `key`: RustBuffer.ByValue,
+        `tags`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_add_dependency(
+        `ptr`: Long,
+        `taskUid`: RustBuffer.ByValue,
+        `blockerUid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_add_related_to(
+        `ptr`: Long,
+        `taskUid`: RustBuffer.ByValue,
+        `relatedUid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_add_task_smart(
+        `ptr`: Long,
+        `input`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_change_priority(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+        `delta`: Byte,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_connect(
+        `ptr`: Long,
+        `url`: RustBuffer.ByValue,
+        `user`: RustBuffer.ByValue,
+        `pass`: RustBuffer.ByValue,
+        `insecure`: Byte,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_create_debug_export(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_create_local_calendar(
+        `ptr`: Long,
+        `name`: RustBuffer.ByValue,
+        `color`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_create_missing_calendar_events(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_delete_all_calendar_events(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_delete_local_calendar(
+        `ptr`: Long,
+        `href`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_delete_task(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_dismiss_alarm(
+        `ptr`: Long,
+        `taskUid`: RustBuffer.ByValue,
+        `alarmUid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_export_local_ics(
+        `ptr`: Long,
+        `calendarHref`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_all_locations(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_all_tags(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_available_locales(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_calendars(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_config(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_firing_alarms(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_next_alarm_timestamp(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_next_global_alarm_time(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_random_task_uid(
+        `ptr`: Long,
+        `filterTags`: RustBuffer.ByValue,
+        `filterLocations`: RustBuffer.ByValue,
+        `searchQuery`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_syntax_help(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_task_by_uid(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_tasks_related_to(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
+        `ptr`: Long,
+        `filterTags`: RustBuffer.ByValue,
+        `filterLocations`: RustBuffer.ByValue,
+        `searchQuery`: RustBuffer.ByValue,
+        `expandedGroups`: RustBuffer.ByValue,
+        `matchAllCategories`: Byte,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_has_any_tasks(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_has_unsynced_changes(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_import_local_ics(
+        `ptr`: Long,
+        `calendarHref`: RustBuffer.ByValue,
+        `icsContent`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_isolate_calendar(
+        `ptr`: Long,
+        `href`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_load_from_cache(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_migrate_local_to(
+        `ptr`: Long,
+        `sourceHref`: RustBuffer.ByValue,
+        `targetHref`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_move_task(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+        `newCalHref`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_parse_duration_string(
+        `ptr`: Long,
+        `val`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_parse_smart_string(
+        `ptr`: Long,
+        `input`: RustBuffer.ByValue,
+        `isSearch`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_pause_task(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_remove_alias(
+        `ptr`: Long,
+        `key`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_remove_dependency(
+        `ptr`: Long,
+        `taskUid`: RustBuffer.ByValue,
+        `blockerUid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_remove_related_to(
+        `ptr`: Long,
+        `taskUid`: RustBuffer.ByValue,
+        `relatedUid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_save_config(
+        `ptr`: Long,
+        `url`: RustBuffer.ByValue,
+        `user`: RustBuffer.ByValue,
+        `pass`: RustBuffer.ByValue,
+        `insecure`: Byte,
+        `hideCompleted`: Byte,
+        `disabledCalendars`: RustBuffer.ByValue,
+        `sortCutoffMonths`: RustBuffer.ByValue,
+        `urgentDays`: Int,
+        `urgentPrio`: Byte,
+        `defaultPriority`: Byte,
+        `startGracePeriodDays`: Int,
+        `autoReminders`: Byte,
+        `defaultReminderTime`: RustBuffer.ByValue,
+        `snoozeShort`: Int,
+        `createEventsForTasks`: Byte,
+        `deleteEventsOnCompletion`: Byte,
+        `autoRefreshInterval`: Int,
+        `trashRetention`: Int,
+        `maxDoneRoots`: Int,
+        `maxDoneSubtasks`: Int,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_set_calendar_visibility(
+        `ptr`: Long,
+        `href`: RustBuffer.ByValue,
+        `visible`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_set_default_calendar(
+        `ptr`: Long,
+        `href`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_set_locale(
+        `ptr`: Long,
+        `locale`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_set_parent(
+        `ptr`: Long,
+        `childUid`: RustBuffer.ByValue,
+        `parentUid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_set_status_cancelled(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_set_status_process(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_should_keep_notification(
+        `ptr`: Long,
+        `taskUid`: RustBuffer.ByValue,
+        `notifType`: RustBuffer.ByValue,
+        `alarmUid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_snooze_alarm(
+        `ptr`: Long,
+        `taskUid`: RustBuffer.ByValue,
+        `alarmUid`: RustBuffer.ByValue,
+        `minutes`: Int,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_start_task(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_stop_task(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_sync(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_toggle_task(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_update_local_calendar(
+        `ptr`: Long,
+        `href`: RustBuffer.ByValue,
+        `name`: RustBuffer.ByValue,
+        `color`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_update_task_description(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+        `description`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_update_task_smart(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+        `smartInput`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_yank_task(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_func_init_tokio_runtime(uniffi_out_err: UniffiRustCallStatus): Unit
+
+    external fun ffi_cfait_rustbuffer_alloc(
+        `size`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun ffi_cfait_rustbuffer_from_bytes(
+        `bytes`: ForeignBytes.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun ffi_cfait_rustbuffer_free(
+        `buf`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun ffi_cfait_rustbuffer_reserve(
+        `buf`: RustBuffer.ByValue,
+        `additional`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun ffi_cfait_rust_future_poll_u8(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_cfait_rust_future_cancel_u8(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_free_u8(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_complete_u8(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
+
+    external fun ffi_cfait_rust_future_poll_i8(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_cfait_rust_future_cancel_i8(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_free_i8(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_complete_i8(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
+
+    external fun ffi_cfait_rust_future_poll_u16(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_cfait_rust_future_cancel_u16(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_free_u16(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_complete_u16(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Short
+
+    external fun ffi_cfait_rust_future_poll_i16(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_cfait_rust_future_cancel_i16(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_free_i16(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_complete_i16(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Short
+
+    external fun ffi_cfait_rust_future_poll_u32(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_cfait_rust_future_cancel_u32(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_free_u32(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_complete_u32(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Int
+
+    external fun ffi_cfait_rust_future_poll_i32(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_cfait_rust_future_cancel_i32(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_free_i32(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_complete_i32(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Int
+
+    external fun ffi_cfait_rust_future_poll_u64(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_cfait_rust_future_cancel_u64(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_free_u64(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_complete_u64(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun ffi_cfait_rust_future_poll_i64(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_cfait_rust_future_cancel_i64(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_free_i64(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_complete_i64(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun ffi_cfait_rust_future_poll_f32(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_cfait_rust_future_cancel_f32(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_free_f32(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_complete_f32(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Float
+
+    external fun ffi_cfait_rust_future_poll_f64(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_cfait_rust_future_cancel_f64(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_free_f64(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_complete_f64(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Double
+
+    external fun ffi_cfait_rust_future_poll_rust_buffer(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_cfait_rust_future_cancel_rust_buffer(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_free_rust_buffer(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_complete_rust_buffer(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun ffi_cfait_rust_future_poll_void(
+        `handle`: Long,
+        `callback`: UniffiRustFutureContinuationCallback,
+        `callbackData`: Long,
+    ): Unit
+
+    external fun ffi_cfait_rust_future_cancel_void(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_free_void(`handle`: Long): Unit
+
+    external fun ffi_cfait_rust_future_complete_void(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
 }
 
 private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
@@ -1014,6 +1435,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI contract version mismatch: try cleaning and rebuilding your project")
     }
 }
+
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_func_init_tokio_runtime() != 54401.toShort()) {
@@ -1160,6 +1582,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_status_process() != 55709.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_should_keep_notification() != 42926.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_snooze_alarm() != 62948.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1211,33 +1636,37 @@ internal const val UNIFFI_RUST_FUTURE_POLL_WAKE = 1.toByte()
 internal val uniffiContinuationHandleMap = UniffiHandleMap<CancellableContinuation<Byte>>()
 
 // FFI type for Rust future continuations
-internal object uniffiRustFutureContinuationCallbackImpl: UniffiRustFutureContinuationCallback {
-    override fun callback(data: Long, pollResult: Byte) {
+internal object uniffiRustFutureContinuationCallbackImpl : UniffiRustFutureContinuationCallback {
+    override fun callback(
+        data: Long,
+        pollResult: Byte,
+    ) {
         uniffiContinuationHandleMap.remove(data).resume(pollResult)
     }
 }
 
-internal suspend fun<T, F, E: kotlin.Exception> uniffiRustCallAsync(
+internal suspend fun <T, F, E : kotlin.Exception> uniffiRustCallAsync(
     rustFuture: Long,
     pollFunc: (Long, UniffiRustFutureContinuationCallback, Long) -> Unit,
     completeFunc: (Long, UniffiRustCallStatus) -> F,
     freeFunc: (Long) -> Unit,
     liftFunc: (F) -> T,
-    errorHandler: UniffiRustCallStatusErrorHandler<E>
+    errorHandler: UniffiRustCallStatusErrorHandler<E>,
 ): T {
     try {
         do {
-            val pollResult = suspendCancellableCoroutine<Byte> { continuation ->
-                pollFunc(
-                    rustFuture,
-                    uniffiRustFutureContinuationCallbackImpl,
-                    uniffiContinuationHandleMap.insert(continuation)
-                )
-            }
-        } while (pollResult != UNIFFI_RUST_FUTURE_POLL_READY);
+            val pollResult =
+                suspendCancellableCoroutine<Byte> { continuation ->
+                    pollFunc(
+                        rustFuture,
+                        uniffiRustFutureContinuationCallbackImpl,
+                        uniffiContinuationHandleMap.insert(continuation),
+                    )
+                }
+        } while (pollResult != UNIFFI_RUST_FUTURE_POLL_READY)
 
         return liftFunc(
-            uniffiRustCallWithError(errorHandler, { status -> completeFunc(rustFuture, status) })
+            uniffiRustCallWithError(errorHandler, { status -> completeFunc(rustFuture, status) }),
         )
     } finally {
         freeFunc(rustFuture)
@@ -1245,7 +1674,6 @@ internal suspend fun<T, F, E: kotlin.Exception> uniffiRustCallAsync(
 }
 
 // Public interface members begin here.
-
 
 // Interface implemented by anything that can contain an object reference.
 //
@@ -1257,11 +1685,15 @@ internal suspend fun<T, F, E: kotlin.Exception> uniffiRustCallAsync(
 // helper method to execute a block and destroy the object at the end.
 interface Disposable {
     fun destroy()
+
     companion object {
         fun destroy(vararg args: Any?) {
             for (arg in args) {
                 when (arg) {
-                    is Disposable -> arg.destroy()
+                    is Disposable -> {
+                        arg.destroy()
+                    }
+
                     is ArrayList<*> -> {
                         for (idx in arg.indices) {
                             val element = arg[idx]
@@ -1270,6 +1702,7 @@ interface Disposable {
                             }
                         }
                     }
+
                     is Map<*, *> -> {
                         for (element in arg.values) {
                             if (element is Disposable) {
@@ -1277,6 +1710,7 @@ interface Disposable {
                             }
                         }
                     }
+
                     is Iterable<*> -> {
                         for (element in arg) {
                             if (element is Disposable) {
@@ -1305,7 +1739,7 @@ inline fun <T : Disposable?, R> T.use(block: (T) -> R) =
         }
     }
 
-/** 
+/**
  * Placeholder object used to signal that we're constructing an interface with a FFI handle.
  *
  * This is the first argument for interface constructors that input a raw handle. It exists is that
@@ -1316,12 +1750,13 @@ inline fun <T : Disposable?, R> T.use(block: (T) -> R) =
  * */
 object UniffiWithHandle
 
-/** 
+/**
  * Used to instantiate an interface without an actual pointer, for fakes in tests, mostly.
  *
  * @suppress
  * */
 object NoHandle
+
 /**
  * The cleaner interface for Object finalization code to run.
  * This is the entry point to any implementation that we're using.
@@ -1337,17 +1772,24 @@ interface UniffiCleaner {
         fun clean()
     }
 
-    fun register(value: Any, cleanUpTask: Runnable): UniffiCleaner.Cleanable
+    fun register(
+        value: Any,
+        cleanUpTask: Runnable,
+    ): UniffiCleaner.Cleanable
 
     companion object
 }
 
 // The fallback Jna cleaner, which is available for both Android, and the JVM.
 private class UniffiJnaCleaner : UniffiCleaner {
-    private val cleaner = com.sun.jna.internal.Cleaner.getCleaner()
+    private val cleaner =
+        com.sun.jna.internal.Cleaner
+            .getCleaner()
 
-    override fun register(value: Any, cleanUpTask: Runnable): UniffiCleaner.Cleanable =
-        UniffiJnaCleanable(cleaner.register(value, cleanUpTask))
+    override fun register(
+        value: Any,
+        cleanUpTask: Runnable,
+    ): UniffiCleaner.Cleanable = UniffiJnaCleanable(cleaner.register(value, cleanUpTask))
 }
 
 private class UniffiJnaCleanable(
@@ -1355,7 +1797,6 @@ private class UniffiJnaCleanable(
 ) : UniffiCleaner.Cleanable {
     override fun clean() = cleanable.clean()
 }
-
 
 // We decide at uniffi binding generation time whether we were
 // using Android or not.
@@ -1375,14 +1816,18 @@ private fun UniffiCleaner.Companion.create(): UniffiCleaner =
     }
 
 private class JavaLangRefCleaner : UniffiCleaner {
-    val cleaner = java.lang.ref.Cleaner.create()
+    val cleaner =
+        java.lang.ref.Cleaner
+            .create()
 
-    override fun register(value: Any, cleanUpTask: Runnable): UniffiCleaner.Cleanable =
-        JavaLangRefCleanable(cleaner.register(value, cleanUpTask))
+    override fun register(
+        value: Any,
+        cleanUpTask: Runnable,
+    ): UniffiCleaner.Cleanable = JavaLangRefCleanable(cleaner.register(value, cleanUpTask))
 }
 
 private class JavaLangRefCleanable(
-    val cleanable: java.lang.ref.Cleaner.Cleanable
+    val cleanable: java.lang.ref.Cleaner.Cleanable,
 ) : UniffiCleaner.Cleanable {
     override fun clean() = cleanable.clean()
 }
@@ -1390,22 +1835,19 @@ private class JavaLangRefCleanable(
 /**
  * @suppress
  */
-public object FfiConverterUByte: FfiConverter<UByte, Byte> {
-    override fun lift(value: Byte): UByte {
-        return value.toUByte()
-    }
+public object FfiConverterUByte : FfiConverter<UByte, Byte> {
+    override fun lift(value: Byte): UByte = value.toUByte()
 
-    override fun read(buf: ByteBuffer): UByte {
-        return lift(buf.get())
-    }
+    override fun read(buf: ByteBuffer): UByte = lift(buf.get())
 
-    override fun lower(value: UByte): Byte {
-        return value.toByte()
-    }
+    override fun lower(value: UByte): Byte = value.toByte()
 
     override fun allocationSize(value: UByte) = 1UL
 
-    override fun write(value: UByte, buf: ByteBuffer) {
+    override fun write(
+        value: UByte,
+        buf: ByteBuffer,
+    ) {
         buf.put(value.toByte())
     }
 }
@@ -1413,22 +1855,19 @@ public object FfiConverterUByte: FfiConverter<UByte, Byte> {
 /**
  * @suppress
  */
-public object FfiConverterByte: FfiConverter<Byte, Byte> {
-    override fun lift(value: Byte): Byte {
-        return value
-    }
+public object FfiConverterByte : FfiConverter<Byte, Byte> {
+    override fun lift(value: Byte): Byte = value
 
-    override fun read(buf: ByteBuffer): Byte {
-        return buf.get()
-    }
+    override fun read(buf: ByteBuffer): Byte = buf.get()
 
-    override fun lower(value: Byte): Byte {
-        return value
-    }
+    override fun lower(value: Byte): Byte = value
 
     override fun allocationSize(value: Byte) = 1UL
 
-    override fun write(value: Byte, buf: ByteBuffer) {
+    override fun write(
+        value: Byte,
+        buf: ByteBuffer,
+    ) {
         buf.put(value)
     }
 }
@@ -1436,22 +1875,19 @@ public object FfiConverterByte: FfiConverter<Byte, Byte> {
 /**
  * @suppress
  */
-public object FfiConverterUInt: FfiConverter<UInt, Int> {
-    override fun lift(value: Int): UInt {
-        return value.toUInt()
-    }
+public object FfiConverterUInt : FfiConverter<UInt, Int> {
+    override fun lift(value: Int): UInt = value.toUInt()
 
-    override fun read(buf: ByteBuffer): UInt {
-        return lift(buf.getInt())
-    }
+    override fun read(buf: ByteBuffer): UInt = lift(buf.getInt())
 
-    override fun lower(value: UInt): Int {
-        return value.toInt()
-    }
+    override fun lower(value: UInt): Int = value.toInt()
 
     override fun allocationSize(value: UInt) = 4UL
 
-    override fun write(value: UInt, buf: ByteBuffer) {
+    override fun write(
+        value: UInt,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.toInt())
     }
 }
@@ -1459,22 +1895,19 @@ public object FfiConverterUInt: FfiConverter<UInt, Int> {
 /**
  * @suppress
  */
-public object FfiConverterInt: FfiConverter<Int, Int> {
-    override fun lift(value: Int): Int {
-        return value
-    }
+public object FfiConverterInt : FfiConverter<Int, Int> {
+    override fun lift(value: Int): Int = value
 
-    override fun read(buf: ByteBuffer): Int {
-        return buf.getInt()
-    }
+    override fun read(buf: ByteBuffer): Int = buf.getInt()
 
-    override fun lower(value: Int): Int {
-        return value
-    }
+    override fun lower(value: Int): Int = value
 
     override fun allocationSize(value: Int) = 4UL
 
-    override fun write(value: Int, buf: ByteBuffer) {
+    override fun write(
+        value: Int,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value)
     }
 }
@@ -1482,22 +1915,19 @@ public object FfiConverterInt: FfiConverter<Int, Int> {
 /**
  * @suppress
  */
-public object FfiConverterULong: FfiConverter<ULong, Long> {
-    override fun lift(value: Long): ULong {
-        return value.toULong()
-    }
+public object FfiConverterULong : FfiConverter<ULong, Long> {
+    override fun lift(value: Long): ULong = value.toULong()
 
-    override fun read(buf: ByteBuffer): ULong {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): ULong = lift(buf.getLong())
 
-    override fun lower(value: ULong): Long {
-        return value.toLong()
-    }
+    override fun lower(value: ULong): Long = value.toLong()
 
     override fun allocationSize(value: ULong) = 8UL
 
-    override fun write(value: ULong, buf: ByteBuffer) {
+    override fun write(
+        value: ULong,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(value.toLong())
     }
 }
@@ -1505,22 +1935,19 @@ public object FfiConverterULong: FfiConverter<ULong, Long> {
 /**
  * @suppress
  */
-public object FfiConverterLong: FfiConverter<Long, Long> {
-    override fun lift(value: Long): Long {
-        return value
-    }
+public object FfiConverterLong : FfiConverter<Long, Long> {
+    override fun lift(value: Long): Long = value
 
-    override fun read(buf: ByteBuffer): Long {
-        return buf.getLong()
-    }
+    override fun read(buf: ByteBuffer): Long = buf.getLong()
 
-    override fun lower(value: Long): Long {
-        return value
-    }
+    override fun lower(value: Long): Long = value
 
     override fun allocationSize(value: Long) = 8UL
 
-    override fun write(value: Long, buf: ByteBuffer) {
+    override fun write(
+        value: Long,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(value)
     }
 }
@@ -1528,22 +1955,19 @@ public object FfiConverterLong: FfiConverter<Long, Long> {
 /**
  * @suppress
  */
-public object FfiConverterBoolean: FfiConverter<Boolean, Byte> {
-    override fun lift(value: Byte): Boolean {
-        return value.toInt() != 0
-    }
+public object FfiConverterBoolean : FfiConverter<Boolean, Byte> {
+    override fun lift(value: Byte): Boolean = value.toInt() != 0
 
-    override fun read(buf: ByteBuffer): Boolean {
-        return lift(buf.get())
-    }
+    override fun read(buf: ByteBuffer): Boolean = lift(buf.get())
 
-    override fun lower(value: Boolean): Byte {
-        return if (value) 1.toByte() else 0.toByte()
-    }
+    override fun lower(value: Boolean): Byte = if (value) 1.toByte() else 0.toByte()
 
     override fun allocationSize(value: Boolean) = 1UL
 
-    override fun write(value: Boolean, buf: ByteBuffer) {
+    override fun write(
+        value: Boolean,
+        buf: ByteBuffer,
+    ) {
         buf.put(lower(value))
     }
 }
@@ -1551,7 +1975,7 @@ public object FfiConverterBoolean: FfiConverter<Boolean, Byte> {
 /**
  * @suppress
  */
-public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
+public object FfiConverterString : FfiConverter<String, RustBuffer.ByValue> {
     // Note: we don't inherit from FfiConverterRustBuffer, because we use a
     // special encoding when lowering/lifting.  We can use `RustBuffer.len` to
     // store our length and avoid writing it out to the buffer.
@@ -1598,13 +2022,15 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
         return sizeForLength + sizeForString
     }
 
-    override fun write(value: String, buf: ByteBuffer) {
+    override fun write(
+        value: String,
+        buf: ByteBuffer,
+    ) {
         val byteBuf = toUtf8(value)
         buf.putInt(byteBuf.limit())
         buf.put(byteBuf)
     }
 }
-
 
 // This template implements a class for working with a Rust struct via a handle
 // to the live Rust struct on the other side of the FFI.
@@ -1700,135 +2126,232 @@ public object FfiConverterString: FfiConverter<String, RustBuffer.ByValue> {
 // [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
 //
 
-
 public interface CfaitMobileInterface {
-    
-    suspend fun `addAlias`(`key`: kotlin.String, `tags`: List<kotlin.String>)
-    
-    suspend fun `addDependency`(`taskUid`: kotlin.String, `blockerUid`: kotlin.String)
-    
-    suspend fun `addRelatedTo`(`taskUid`: kotlin.String, `relatedUid`: kotlin.String)
-    
+    suspend fun `addAlias`(
+        `key`: kotlin.String,
+        `tags`: List<kotlin.String>,
+    )
+
+    suspend fun `addDependency`(
+        `taskUid`: kotlin.String,
+        `blockerUid`: kotlin.String,
+    )
+
+    suspend fun `addRelatedTo`(
+        `taskUid`: kotlin.String,
+        `relatedUid`: kotlin.String,
+    )
+
     suspend fun `addTaskSmart`(`input`: kotlin.String): kotlin.String
-    
-    suspend fun `changePriority`(`uid`: kotlin.String, `delta`: kotlin.Byte)
-    
-    suspend fun `connect`(`url`: kotlin.String, `user`: kotlin.String, `pass`: kotlin.String, `insecure`: kotlin.Boolean): kotlin.String
-    
+
+    suspend fun `changePriority`(
+        `uid`: kotlin.String,
+        `delta`: kotlin.Byte,
+    )
+
+    suspend fun `connect`(
+        `url`: kotlin.String,
+        `user`: kotlin.String,
+        `pass`: kotlin.String,
+        `insecure`: kotlin.Boolean,
+    ): kotlin.String
+
     fun `createDebugExport`(): kotlin.String
-    
-    suspend fun `createLocalCalendar`(`name`: kotlin.String, `color`: kotlin.String?): kotlin.String
-    
+
+    suspend fun `createLocalCalendar`(
+        `name`: kotlin.String,
+        `color`: kotlin.String?,
+    ): kotlin.String
+
     suspend fun `createMissingCalendarEvents`(): kotlin.UInt
-    
+
     suspend fun `deleteAllCalendarEvents`(): kotlin.UInt
-    
+
     suspend fun `deleteLocalCalendar`(`href`: kotlin.String)
-    
+
     suspend fun `deleteTask`(`uid`: kotlin.String)
-    
-    suspend fun `dismissAlarm`(`taskUid`: kotlin.String, `alarmUid`: kotlin.String)
-    
+
+    suspend fun `dismissAlarm`(
+        `taskUid`: kotlin.String,
+        `alarmUid`: kotlin.String,
+    )
+
     fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String
-    
+
     suspend fun `getAllLocations`(): List<MobileLocation>
-    
+
     suspend fun `getAllTags`(): List<MobileTag>
-    
+
     fun `getAvailableLocales`(): List<kotlin.String>
-    
+
     fun `getCalendars`(): List<MobileCalendar>
-    
+
     fun `getConfig`(): MobileConfig
-    
+
     fun `getFiringAlarms`(): List<MobileAlarmInfo>
-    
+
     fun `getNextAlarmTimestamp`(): kotlin.Long?
-    
+
     suspend fun `getNextGlobalAlarmTime`(): kotlin.Long?
-    
-    suspend fun `getRandomTaskUid`(`filterTags`: List<kotlin.String>, `filterLocations`: List<kotlin.String>, `searchQuery`: kotlin.String): kotlin.String?
-    
+
+    suspend fun `getRandomTaskUid`(
+        `filterTags`: List<kotlin.String>,
+        `filterLocations`: List<kotlin.String>,
+        `searchQuery`: kotlin.String,
+    ): kotlin.String?
+
     fun `getSyntaxHelp`(): List<MobileHelpSection>
-    
+
     suspend fun `getTaskByUid`(`uid`: kotlin.String): MobileTask?
-    
+
     suspend fun `getTasksRelatedTo`(`uid`: kotlin.String): List<MobileRelatedTask>
-    
-    suspend fun `getViewTasks`(`filterTags`: List<kotlin.String>, `filterLocations`: List<kotlin.String>, `searchQuery`: kotlin.String, `expandedGroups`: List<kotlin.String>, `matchAllCategories`: kotlin.Boolean): MobileViewData
-    
+
+    suspend fun `getViewTasks`(
+        `filterTags`: List<kotlin.String>,
+        `filterLocations`: List<kotlin.String>,
+        `searchQuery`: kotlin.String,
+        `expandedGroups`: List<kotlin.String>,
+        `matchAllCategories`: kotlin.Boolean,
+    ): MobileViewData
+
     /**
      * Returns true if the in-memory store contains any tasks across any calendars.
      * This is useful for clients to distinguish "no data at all" from "filters produced no results".
      */
     fun `hasAnyTasks`(): kotlin.Boolean
-    
+
     fun `hasUnsyncedChanges`(): kotlin.Boolean
-    
-    fun `importLocalIcs`(`calendarHref`: kotlin.String, `icsContent`: kotlin.String): kotlin.String
-    
+
+    fun `importLocalIcs`(
+        `calendarHref`: kotlin.String,
+        `icsContent`: kotlin.String,
+    ): kotlin.String
+
     fun `isolateCalendar`(`href`: kotlin.String)
-    
+
     fun `loadFromCache`()
-    
-    suspend fun `migrateLocalTo`(`sourceHref`: kotlin.String, `targetHref`: kotlin.String): kotlin.String
-    
-    suspend fun `moveTask`(`uid`: kotlin.String, `newCalHref`: kotlin.String)
-    
+
+    suspend fun `migrateLocalTo`(
+        `sourceHref`: kotlin.String,
+        `targetHref`: kotlin.String,
+    ): kotlin.String
+
+    suspend fun `moveTask`(
+        `uid`: kotlin.String,
+        `newCalHref`: kotlin.String,
+    )
+
     fun `parseDurationString`(`val`: kotlin.String): kotlin.UInt?
-    
-    fun `parseSmartString`(`input`: kotlin.String, `isSearch`: kotlin.Boolean): List<MobileSyntaxToken>
-    
+
+    fun `parseSmartString`(
+        `input`: kotlin.String,
+        `isSearch`: kotlin.Boolean,
+    ): List<MobileSyntaxToken>
+
     suspend fun `pauseTask`(`uid`: kotlin.String)
-    
+
     fun `removeAlias`(`key`: kotlin.String)
-    
-    suspend fun `removeDependency`(`taskUid`: kotlin.String, `blockerUid`: kotlin.String)
-    
-    suspend fun `removeRelatedTo`(`taskUid`: kotlin.String, `relatedUid`: kotlin.String)
-    
-    fun `saveConfig`(`url`: kotlin.String, `user`: kotlin.String, `pass`: kotlin.String, `insecure`: kotlin.Boolean, `hideCompleted`: kotlin.Boolean, `disabledCalendars`: List<kotlin.String>, `sortCutoffMonths`: kotlin.UInt?, `urgentDays`: kotlin.UInt, `urgentPrio`: kotlin.UByte, `defaultPriority`: kotlin.UByte, `startGracePeriodDays`: kotlin.UInt, `autoReminders`: kotlin.Boolean, `defaultReminderTime`: kotlin.String, `snoozeShort`: kotlin.UInt, `createEventsForTasks`: kotlin.Boolean, `deleteEventsOnCompletion`: kotlin.Boolean, `autoRefreshInterval`: kotlin.UInt, `trashRetention`: kotlin.UInt, `maxDoneRoots`: kotlin.UInt, `maxDoneSubtasks`: kotlin.UInt)
-    
-    fun `setCalendarVisibility`(`href`: kotlin.String, `visible`: kotlin.Boolean)
-    
+
+    suspend fun `removeDependency`(
+        `taskUid`: kotlin.String,
+        `blockerUid`: kotlin.String,
+    )
+
+    suspend fun `removeRelatedTo`(
+        `taskUid`: kotlin.String,
+        `relatedUid`: kotlin.String,
+    )
+
+    fun `saveConfig`(
+        `url`: kotlin.String,
+        `user`: kotlin.String,
+        `pass`: kotlin.String,
+        `insecure`: kotlin.Boolean,
+        `hideCompleted`: kotlin.Boolean,
+        `disabledCalendars`: List<kotlin.String>,
+        `sortCutoffMonths`: kotlin.UInt?,
+        `urgentDays`: kotlin.UInt,
+        `urgentPrio`: kotlin.UByte,
+        `defaultPriority`: kotlin.UByte,
+        `startGracePeriodDays`: kotlin.UInt,
+        `autoReminders`: kotlin.Boolean,
+        `defaultReminderTime`: kotlin.String,
+        `snoozeShort`: kotlin.UInt,
+        `createEventsForTasks`: kotlin.Boolean,
+        `deleteEventsOnCompletion`: kotlin.Boolean,
+        `autoRefreshInterval`: kotlin.UInt,
+        `trashRetention`: kotlin.UInt,
+        `maxDoneRoots`: kotlin.UInt,
+        `maxDoneSubtasks`: kotlin.UInt,
+    )
+
+    fun `setCalendarVisibility`(
+        `href`: kotlin.String,
+        `visible`: kotlin.Boolean,
+    )
+
     fun `setDefaultCalendar`(`href`: kotlin.String)
-    
+
     fun `setLocale`(`locale`: kotlin.String)
-    
-    suspend fun `setParent`(`childUid`: kotlin.String, `parentUid`: kotlin.String?)
-    
+
+    suspend fun `setParent`(
+        `childUid`: kotlin.String,
+        `parentUid`: kotlin.String?,
+    )
+
     suspend fun `setStatusCancelled`(`uid`: kotlin.String)
-    
+
     suspend fun `setStatusProcess`(`uid`: kotlin.String)
-    
-    suspend fun `snoozeAlarm`(`taskUid`: kotlin.String, `alarmUid`: kotlin.String, `minutes`: kotlin.UInt)
-    
+
+    suspend fun `shouldKeepNotification`(
+        `taskUid`: kotlin.String,
+        `notifType`: kotlin.String,
+        `alarmUid`: kotlin.String?,
+    ): kotlin.Boolean
+
+    suspend fun `snoozeAlarm`(
+        `taskUid`: kotlin.String,
+        `alarmUid`: kotlin.String,
+        `minutes`: kotlin.UInt,
+    )
+
     suspend fun `startTask`(`uid`: kotlin.String)
-    
+
     suspend fun `stopTask`(`uid`: kotlin.String)
-    
+
     suspend fun `sync`(): kotlin.String
-    
+
     suspend fun `toggleTask`(`uid`: kotlin.String)
-    
-    suspend fun `updateLocalCalendar`(`href`: kotlin.String, `name`: kotlin.String, `color`: kotlin.String?)
-    
-    suspend fun `updateTaskDescription`(`uid`: kotlin.String, `description`: kotlin.String)
-    
-    suspend fun `updateTaskSmart`(`uid`: kotlin.String, `smartInput`: kotlin.String)
-    
+
+    suspend fun `updateLocalCalendar`(
+        `href`: kotlin.String,
+        `name`: kotlin.String,
+        `color`: kotlin.String?,
+    )
+
+    suspend fun `updateTaskDescription`(
+        `uid`: kotlin.String,
+        `description`: kotlin.String,
+    )
+
+    suspend fun `updateTaskSmart`(
+        `uid`: kotlin.String,
+        `smartInput`: kotlin.String,
+    )
+
     suspend fun `yankTask`(`uid`: kotlin.String)
-    
+
     companion object
 }
 
-open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
-{
-
-    @Suppress("UNUSED_PARAMETER")
+open class CfaitMobile :
+    Disposable,
+    AutoCloseable,
+    CfaitMobileInterface {
     /**
      * @suppress
      */
+    @Suppress("UNUSED_PARAMETER")
     constructor(withHandle: UniffiWithHandle, handle: Long) {
         this.handle = handle
         this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
@@ -1847,13 +2370,12 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         this.cleanable = null
     }
     constructor(`androidFilesDir`: kotlin.String) :
-        this(UniffiWithHandle, 
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_constructor_cfaitmobile_new(
-    
-        FfiConverterString.lower(`androidFilesDir`),_status)
-}
-    )
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_cfait_fn_constructor_cfaitmobile_new(FfiConverterString.lower(`androidFilesDir`), _status)
+            },
+        )
 
     protected val handle: Long
     protected val cleanable: UniffiCleaner.Cleanable?
@@ -1888,7 +2410,7 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
             if (c == Long.MAX_VALUE) {
                 throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
             }
-        } while (! this.callCounter.compareAndSet(c, c + 1L))
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
         // Now we can safely do the method call without the handle being freed concurrently.
         try {
             return block(this.uniffiCloneHandle())
@@ -1902,11 +2424,13 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
 
     // Use a static inner class instead of a closure so as not to accidentally
     // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(private val handle: Long) : Runnable {
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
         override fun run() {
             if (handle == 0.toLong()) {
                 // Fake object created with `NoHandle`, don't try to free.
-                return;
+                return
             }
             uniffiRustCall { status ->
                 UniffiLib.uniffi_cfait_fn_free_cfaitmobile(handle, status)
@@ -1919,22 +2443,24 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
      */
     fun uniffiCloneHandle(): Long {
         if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object");
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
-        return uniffiRustCall() { status ->
+        return uniffiRustCall { status ->
             UniffiLib.uniffi_cfait_fn_clone_cfaitmobile(handle, status)
         }
     }
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `addAlias`(`key`: kotlin.String, `tags`: List<kotlin.String>) {
-        return uniffiRustCallAsync(
+    override suspend fun `addAlias`(
+        `key`: kotlin.String,
+        `tags`: List<kotlin.String>,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_add_alias(
                 uniffiHandle,
-                FfiConverterString.lower(`key`),FfiConverterSequenceString.lower(`tags`),
+                FfiConverterString.lower(`key`),
+                FfiConverterSequenceString.lower(`tags`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -1942,21 +2468,21 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-    }
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `addDependency`(`taskUid`: kotlin.String, `blockerUid`: kotlin.String) {
-        return uniffiRustCallAsync(
+    override suspend fun `addDependency`(
+        `taskUid`: kotlin.String,
+        `blockerUid`: kotlin.String,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_add_dependency(
                 uniffiHandle,
-                FfiConverterString.lower(`taskUid`),FfiConverterString.lower(`blockerUid`),
+                FfiConverterString.lower(`taskUid`),
+                FfiConverterString.lower(`blockerUid`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -1964,21 +2490,21 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-    }
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `addRelatedTo`(`taskUid`: kotlin.String, `relatedUid`: kotlin.String) {
-        return uniffiRustCallAsync(
+    override suspend fun `addRelatedTo`(
+        `taskUid`: kotlin.String,
+        `relatedUid`: kotlin.String,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_add_related_to(
                 uniffiHandle,
-                FfiConverterString.lower(`taskUid`),FfiConverterString.lower(`relatedUid`),
+                FfiConverterString.lower(`taskUid`),
+                FfiConverterString.lower(`relatedUid`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -1986,184 +2512,40 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-    }
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `addTaskSmart`(`input`: kotlin.String) : kotlin.String {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_add_task_smart(
-                uniffiHandle,
-                FfiConverterString.lower(`input`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterString.lift(it) },
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
+    override suspend fun `addTaskSmart`(`input`: kotlin.String): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_add_task_smart(
+                    uniffiHandle,
+                    FfiConverterString.lower(`input`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `changePriority`(`uid`: kotlin.String, `delta`: kotlin.Byte) {
-        return uniffiRustCallAsync(
+    override suspend fun `changePriority`(
+        `uid`: kotlin.String,
+        `delta`: kotlin.Byte,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_change_priority(
                 uniffiHandle,
-                FfiConverterString.lower(`uid`),FfiConverterByte.lower(`delta`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
-
-    
-    @Throws(MobileException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `connect`(`url`: kotlin.String, `user`: kotlin.String, `pass`: kotlin.String, `insecure`: kotlin.Boolean) : kotlin.String {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_connect(
-                uniffiHandle,
-                FfiConverterString.lower(`url`),FfiConverterString.lower(`user`),FfiConverterString.lower(`pass`),FfiConverterBoolean.lower(`insecure`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterString.lift(it) },
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
-
-    
-    @Throws(MobileException::class)override fun `createDebugExport`(): kotlin.String {
-            return FfiConverterString.lift(
-    callWithHandle {
-    uniffiRustCallWithError(MobileException) { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_debug_export(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
-
-    
-    @Throws(MobileException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `createLocalCalendar`(`name`: kotlin.String, `color`: kotlin.String?) : kotlin.String {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_local_calendar(
-                uniffiHandle,
-                FfiConverterString.lower(`name`),FfiConverterOptionalString.lower(`color`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterString.lift(it) },
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
-
-    
-    @Throws(MobileException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `createMissingCalendarEvents`() : kotlin.UInt {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_missing_calendar_events(
-                uniffiHandle,
-                
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_u32(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_u32(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_u32(future) },
-        // lift function
-        { FfiConverterUInt.lift(it) },
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
-
-    
-    @Throws(MobileException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `deleteAllCalendarEvents`() : kotlin.UInt {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_delete_all_calendar_events(
-                uniffiHandle,
-                
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_u32(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_u32(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_u32(future) },
-        // lift function
-        { FfiConverterUInt.lift(it) },
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
-
-    
-    @Throws(MobileException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `deleteLocalCalendar`(`href`: kotlin.String) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_delete_local_calendar(
-                uniffiHandle,
-                FfiConverterString.lower(`href`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
-
-    
-    @Throws(MobileException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `deleteTask`(`uid`: kotlin.String) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_delete_task(
-                uniffiHandle,
                 FfiConverterString.lower(`uid`),
+                FfiConverterByte.lower(`delta`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -2171,21 +2553,158 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-    }
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `dismissAlarm`(`taskUid`: kotlin.String, `alarmUid`: kotlin.String) {
-        return uniffiRustCallAsync(
+    override suspend fun `connect`(
+        `url`: kotlin.String,
+        `user`: kotlin.String,
+        `pass`: kotlin.String,
+        `insecure`: kotlin.Boolean,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_connect(
+                    uniffiHandle,
+                    FfiConverterString.lower(`url`),
+                    FfiConverterString.lower(`user`),
+                    FfiConverterString.lower(`pass`),
+                    FfiConverterBoolean.lower(`insecure`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    override fun `createDebugExport`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCallWithError(MobileException) { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_debug_export(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `createLocalCalendar`(
+        `name`: kotlin.String,
+        `color`: kotlin.String?,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_local_calendar(
+                    uniffiHandle,
+                    FfiConverterString.lower(`name`),
+                    FfiConverterOptionalString.lower(`color`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `createMissingCalendarEvents`(): kotlin.UInt =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_missing_calendar_events(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_u32(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_u32(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_u32(future) },
+            // lift function
+            { FfiConverterUInt.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `deleteAllCalendarEvents`(): kotlin.UInt =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_delete_all_calendar_events(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_u32(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_u32(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_u32(future) },
+            // lift function
+            { FfiConverterUInt.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `deleteLocalCalendar`(`href`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_delete_local_calendar(
+                    uniffiHandle,
+                    FfiConverterString.lower(`href`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `deleteTask`(`uid`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_delete_task(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `dismissAlarm`(
+        `taskUid`: kotlin.String,
+        `alarmUid`: kotlin.String,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_dismiss_alarm(
                 uniffiHandle,
-                FfiConverterString.lower(`taskUid`),FfiConverterString.lower(`alarmUid`),
+                FfiConverterString.lower(`taskUid`),
+                FfiConverterString.lower(`alarmUid`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -2193,391 +2712,337 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-    }
 
-    
-    @Throws(MobileException::class)override fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String {
-            return FfiConverterString.lift(
-    callWithHandle {
-    uniffiRustCallWithError(MobileException) { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_export_local_ics(
-        it,
-        FfiConverterString.lower(`calendarHref`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(MobileException::class)
+    override fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCallWithError(MobileException) { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_export_local_ics(
+                        it,
+                        FfiConverterString.lower(`calendarHref`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getAllLocations`() : List<MobileLocation> {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_all_locations(
-                uniffiHandle,
-                
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterSequenceTypeMobileLocation.lift(it) },
-        // Error FFI converter
-        UniffiNullRustCallStatusErrorHandler,
-    )
-    }
+    override suspend fun `getAllLocations`(): List<MobileLocation> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_all_locations(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceTypeMobileLocation.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
 
-    
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getAllTags`() : List<MobileTag> {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_all_tags(
-                uniffiHandle,
-                
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterSequenceTypeMobileTag.lift(it) },
-        // Error FFI converter
-        UniffiNullRustCallStatusErrorHandler,
-    )
-    }
+    override suspend fun `getAllTags`(): List<MobileTag> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_all_tags(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceTypeMobileTag.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
 
-    override fun `getAvailableLocales`(): List<kotlin.String> {
-            return FfiConverterSequenceString.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_available_locales(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+    override fun `getAvailableLocales`(): List<kotlin.String> =
+        FfiConverterSequenceString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_available_locales(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    override fun `getCalendars`(): List<MobileCalendar> {
-            return FfiConverterSequenceTypeMobileCalendar.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_calendars(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+    override fun `getCalendars`(): List<MobileCalendar> =
+        FfiConverterSequenceTypeMobileCalendar.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_calendars(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    override fun `getConfig`(): MobileConfig {
-            return FfiConverterTypeMobileConfig.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_config(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+    override fun `getConfig`(): MobileConfig =
+        FfiConverterTypeMobileConfig.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_config(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    override fun `getFiringAlarms`(): List<MobileAlarmInfo> {
-            return FfiConverterSequenceTypeMobileAlarmInfo.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_firing_alarms(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+    override fun `getFiringAlarms`(): List<MobileAlarmInfo> =
+        FfiConverterSequenceTypeMobileAlarmInfo.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_firing_alarms(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    override fun `getNextAlarmTimestamp`(): kotlin.Long? {
-            return FfiConverterOptionalLong.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_next_alarm_timestamp(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+    override fun `getNextAlarmTimestamp`(): kotlin.Long? =
+        FfiConverterOptionalLong.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_next_alarm_timestamp(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getNextGlobalAlarmTime`() : kotlin.Long? {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_next_global_alarm_time(
-                uniffiHandle,
-                
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterOptionalLong.lift(it) },
-        // Error FFI converter
-        UniffiNullRustCallStatusErrorHandler,
-    )
-    }
+    override suspend fun `getNextGlobalAlarmTime`(): kotlin.Long? =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_next_global_alarm_time(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterOptionalLong.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
 
-    
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getRandomTaskUid`(`filterTags`: List<kotlin.String>, `filterLocations`: List<kotlin.String>, `searchQuery`: kotlin.String) : kotlin.String? {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_random_task_uid(
-                uniffiHandle,
-                FfiConverterSequenceString.lower(`filterTags`),FfiConverterSequenceString.lower(`filterLocations`),FfiConverterString.lower(`searchQuery`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterOptionalString.lift(it) },
-        // Error FFI converter
-        UniffiNullRustCallStatusErrorHandler,
-    )
-    }
+    override suspend fun `getRandomTaskUid`(
+        `filterTags`: List<kotlin.String>,
+        `filterLocations`: List<kotlin.String>,
+        `searchQuery`: kotlin.String,
+    ): kotlin.String? =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_random_task_uid(
+                    uniffiHandle,
+                    FfiConverterSequenceString.lower(`filterTags`),
+                    FfiConverterSequenceString.lower(`filterLocations`),
+                    FfiConverterString.lower(`searchQuery`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterOptionalString.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
 
-    override fun `getSyntaxHelp`(): List<MobileHelpSection> {
-            return FfiConverterSequenceTypeMobileHelpSection.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_syntax_help(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+    override fun `getSyntaxHelp`(): List<MobileHelpSection> =
+        FfiConverterSequenceTypeMobileHelpSection.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_syntax_help(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getTaskByUid`(`uid`: kotlin.String) : MobileTask? {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_task_by_uid(
-                uniffiHandle,
-                FfiConverterString.lower(`uid`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterOptionalTypeMobileTask.lift(it) },
-        // Error FFI converter
-        UniffiNullRustCallStatusErrorHandler,
-    )
-    }
+    override suspend fun `getTaskByUid`(`uid`: kotlin.String): MobileTask? =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_task_by_uid(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterOptionalTypeMobileTask.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
 
-    
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getTasksRelatedTo`(`uid`: kotlin.String) : List<MobileRelatedTask> {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_tasks_related_to(
-                uniffiHandle,
-                FfiConverterString.lower(`uid`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterSequenceTypeMobileRelatedTask.lift(it) },
-        // Error FFI converter
-        UniffiNullRustCallStatusErrorHandler,
-    )
-    }
+    override suspend fun `getTasksRelatedTo`(`uid`: kotlin.String): List<MobileRelatedTask> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_tasks_related_to(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceTypeMobileRelatedTask.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
 
-    
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getViewTasks`(`filterTags`: List<kotlin.String>, `filterLocations`: List<kotlin.String>, `searchQuery`: kotlin.String, `expandedGroups`: List<kotlin.String>, `matchAllCategories`: kotlin.Boolean) : MobileViewData {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
-                uniffiHandle,
-                FfiConverterSequenceString.lower(`filterTags`),FfiConverterSequenceString.lower(`filterLocations`),FfiConverterString.lower(`searchQuery`),FfiConverterSequenceString.lower(`expandedGroups`),FfiConverterBoolean.lower(`matchAllCategories`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterTypeMobileViewData.lift(it) },
-        // Error FFI converter
-        UniffiNullRustCallStatusErrorHandler,
-    )
-    }
+    override suspend fun `getViewTasks`(
+        `filterTags`: List<kotlin.String>,
+        `filterLocations`: List<kotlin.String>,
+        `searchQuery`: kotlin.String,
+        `expandedGroups`: List<kotlin.String>,
+        `matchAllCategories`: kotlin.Boolean,
+    ): MobileViewData =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
+                    uniffiHandle,
+                    FfiConverterSequenceString.lower(`filterTags`),
+                    FfiConverterSequenceString.lower(`filterLocations`),
+                    FfiConverterString.lower(`searchQuery`),
+                    FfiConverterSequenceString.lower(`expandedGroups`),
+                    FfiConverterBoolean.lower(`matchAllCategories`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeMobileViewData.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
 
-    
     /**
      * Returns true if the in-memory store contains any tasks across any calendars.
      * This is useful for clients to distinguish "no data at all" from "filters produced no results".
-     */override fun `hasAnyTasks`(): kotlin.Boolean {
-            return FfiConverterBoolean.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_has_any_tasks(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+     */
+    override fun `hasAnyTasks`(): kotlin.Boolean =
+        FfiConverterBoolean.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_has_any_tasks(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    override fun `hasUnsyncedChanges`(): kotlin.Boolean {
-            return FfiConverterBoolean.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_has_unsynced_changes(
-        it,
-        _status)
-}
-    }
-    )
-    }
-    
+    override fun `hasUnsyncedChanges`(): kotlin.Boolean =
+        FfiConverterBoolean.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_has_unsynced_changes(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-    @Throws(MobileException::class)override fun `importLocalIcs`(`calendarHref`: kotlin.String, `icsContent`: kotlin.String): kotlin.String {
-            return FfiConverterString.lift(
-    callWithHandle {
-    uniffiRustCallWithError(MobileException) { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_import_local_ics(
-        it,
-        FfiConverterString.lower(`calendarHref`),FfiConverterString.lower(`icsContent`),_status)
-}
-    }
-    )
-    }
-    
+    @Throws(MobileException::class)
+    override fun `importLocalIcs`(
+        `calendarHref`: kotlin.String,
+        `icsContent`: kotlin.String,
+    ): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCallWithError(MobileException) { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_import_local_ics(
+                        it,
+                        FfiConverterString.lower(`calendarHref`),
+                        FfiConverterString.lower(`icsContent`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
-    @Throws(MobileException::class)override fun `isolateCalendar`(`href`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(MobileException) { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_isolate_calendar(
-        it,
-        FfiConverterString.lower(`href`),_status)
-}
-    }
-    
-    
+    @Throws(MobileException::class)
+    override fun `isolateCalendar`(`href`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCallWithError(MobileException) { _status ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_isolate_calendar(
+                    it,
+                    FfiConverterString.lower(`href`),
+                    _status,
+                )
+            }
+        }
 
-    override fun `loadFromCache`()
-        = 
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_load_from_cache(
-        it,
-        _status)
-}
-    }
-    
-    
+    override fun `loadFromCache`() =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_load_from_cache(
+                    it,
+                    _status,
+                )
+            }
+        }
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `migrateLocalTo`(`sourceHref`: kotlin.String, `targetHref`: kotlin.String) : kotlin.String {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_migrate_local_to(
-                uniffiHandle,
-                FfiConverterString.lower(`sourceHref`),FfiConverterString.lower(`targetHref`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterString.lift(it) },
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
+    override suspend fun `migrateLocalTo`(
+        `sourceHref`: kotlin.String,
+        `targetHref`: kotlin.String,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_migrate_local_to(
+                    uniffiHandle,
+                    FfiConverterString.lower(`sourceHref`),
+                    FfiConverterString.lower(`targetHref`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `moveTask`(`uid`: kotlin.String, `newCalHref`: kotlin.String) {
-        return uniffiRustCallAsync(
+    override suspend fun `moveTask`(
+        `uid`: kotlin.String,
+        `newCalHref`: kotlin.String,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_move_task(
                 uniffiHandle,
-                FfiConverterString.lower(`uid`),FfiConverterString.lower(`newCalHref`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
-
-    override fun `parseDurationString`(`val`: kotlin.String): kotlin.UInt? {
-            return FfiConverterOptionalUInt.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_parse_duration_string(
-        it,
-        FfiConverterString.lower(`val`),_status)
-}
-    }
-    )
-    }
-    
-
-    override fun `parseSmartString`(`input`: kotlin.String, `isSearch`: kotlin.Boolean): List<MobileSyntaxToken> {
-            return FfiConverterSequenceTypeMobileSyntaxToken.lift(
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_parse_smart_string(
-        it,
-        FfiConverterString.lower(`input`),FfiConverterBoolean.lower(`isSearch`),_status)
-}
-    }
-    )
-    }
-    
-
-    
-    @Throws(MobileException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `pauseTask`(`uid`: kotlin.String) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_pause_task(
-                uniffiHandle,
                 FfiConverterString.lower(`uid`),
+                FfiConverterString.lower(`newCalHref`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -2585,34 +3050,82 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-    }
 
-    
-    @Throws(MobileException::class)override fun `removeAlias`(`key`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(MobileException) { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_remove_alias(
-        it,
-        FfiConverterString.lower(`key`),_status)
-}
-    }
-    
-    
+    override fun `parseDurationString`(`val`: kotlin.String): kotlin.UInt? =
+        FfiConverterOptionalUInt.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_parse_duration_string(
+                        it,
+                        FfiConverterString.lower(`val`),
+                        _status,
+                    )
+                }
+            },
+        )
 
-    
+    override fun `parseSmartString`(
+        `input`: kotlin.String,
+        `isSearch`: kotlin.Boolean,
+    ): List<MobileSyntaxToken> =
+        FfiConverterSequenceTypeMobileSyntaxToken.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_parse_smart_string(
+                        it,
+                        FfiConverterString.lower(`input`),
+                        FfiConverterBoolean.lower(`isSearch`),
+                        _status,
+                    )
+                }
+            },
+        )
+
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `removeDependency`(`taskUid`: kotlin.String, `blockerUid`: kotlin.String) {
-        return uniffiRustCallAsync(
+    override suspend fun `pauseTask`(`uid`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_pause_task(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    override fun `removeAlias`(`key`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCallWithError(MobileException) { _status ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_remove_alias(
+                    it,
+                    FfiConverterString.lower(`key`),
+                    _status,
+                )
+            }
+        }
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `removeDependency`(
+        `taskUid`: kotlin.String,
+        `blockerUid`: kotlin.String,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_remove_dependency(
                 uniffiHandle,
-                FfiConverterString.lower(`taskUid`),FfiConverterString.lower(`blockerUid`),
+                FfiConverterString.lower(`taskUid`),
+                FfiConverterString.lower(`blockerUid`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -2620,21 +3133,21 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-    }
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `removeRelatedTo`(`taskUid`: kotlin.String, `relatedUid`: kotlin.String) {
-        return uniffiRustCallAsync(
+    override suspend fun `removeRelatedTo`(
+        `taskUid`: kotlin.String,
+        `relatedUid`: kotlin.String,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_remove_related_to(
                 uniffiHandle,
-                FfiConverterString.lower(`taskUid`),FfiConverterString.lower(`relatedUid`),
+                FfiConverterString.lower(`taskUid`),
+                FfiConverterString.lower(`relatedUid`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -2642,72 +3155,110 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
+
+    @Throws(MobileException::class)
+    override fun `saveConfig`(
+        `url`: kotlin.String,
+        `user`: kotlin.String,
+        `pass`: kotlin.String,
+        `insecure`: kotlin.Boolean,
+        `hideCompleted`: kotlin.Boolean,
+        `disabledCalendars`: List<kotlin.String>,
+        `sortCutoffMonths`: kotlin.UInt?,
+        `urgentDays`: kotlin.UInt,
+        `urgentPrio`: kotlin.UByte,
+        `defaultPriority`: kotlin.UByte,
+        `startGracePeriodDays`: kotlin.UInt,
+        `autoReminders`: kotlin.Boolean,
+        `defaultReminderTime`: kotlin.String,
+        `snoozeShort`: kotlin.UInt,
+        `createEventsForTasks`: kotlin.Boolean,
+        `deleteEventsOnCompletion`: kotlin.Boolean,
+        `autoRefreshInterval`: kotlin.UInt,
+        `trashRetention`: kotlin.UInt,
+        `maxDoneRoots`: kotlin.UInt,
+        `maxDoneSubtasks`: kotlin.UInt,
+    ) = callWithHandle {
+        uniffiRustCallWithError(MobileException) { _status ->
+            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_save_config(
+                it,
+                FfiConverterString.lower(`url`),
+                FfiConverterString.lower(`user`),
+                FfiConverterString.lower(`pass`),
+                FfiConverterBoolean.lower(`insecure`),
+                FfiConverterBoolean.lower(`hideCompleted`),
+                FfiConverterSequenceString.lower(`disabledCalendars`),
+                FfiConverterOptionalUInt.lower(`sortCutoffMonths`),
+                FfiConverterUInt.lower(`urgentDays`),
+                FfiConverterUByte.lower(`urgentPrio`),
+                FfiConverterUByte.lower(`defaultPriority`),
+                FfiConverterUInt.lower(`startGracePeriodDays`),
+                FfiConverterBoolean.lower(`autoReminders`),
+                FfiConverterString.lower(`defaultReminderTime`),
+                FfiConverterUInt.lower(`snoozeShort`),
+                FfiConverterBoolean.lower(`createEventsForTasks`),
+                FfiConverterBoolean.lower(`deleteEventsOnCompletion`),
+                FfiConverterUInt.lower(`autoRefreshInterval`),
+                FfiConverterUInt.lower(`trashRetention`),
+                FfiConverterUInt.lower(`maxDoneRoots`),
+                FfiConverterUInt.lower(`maxDoneSubtasks`),
+                _status,
+            )
+        }
     }
 
-    
-    @Throws(MobileException::class)override fun `saveConfig`(`url`: kotlin.String, `user`: kotlin.String, `pass`: kotlin.String, `insecure`: kotlin.Boolean, `hideCompleted`: kotlin.Boolean, `disabledCalendars`: List<kotlin.String>, `sortCutoffMonths`: kotlin.UInt?, `urgentDays`: kotlin.UInt, `urgentPrio`: kotlin.UByte, `defaultPriority`: kotlin.UByte, `startGracePeriodDays`: kotlin.UInt, `autoReminders`: kotlin.Boolean, `defaultReminderTime`: kotlin.String, `snoozeShort`: kotlin.UInt, `createEventsForTasks`: kotlin.Boolean, `deleteEventsOnCompletion`: kotlin.Boolean, `autoRefreshInterval`: kotlin.UInt, `trashRetention`: kotlin.UInt, `maxDoneRoots`: kotlin.UInt, `maxDoneSubtasks`: kotlin.UInt)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(MobileException) { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_save_config(
-        it,
-        FfiConverterString.lower(`url`),FfiConverterString.lower(`user`),FfiConverterString.lower(`pass`),FfiConverterBoolean.lower(`insecure`),FfiConverterBoolean.lower(`hideCompleted`),FfiConverterSequenceString.lower(`disabledCalendars`),FfiConverterOptionalUInt.lower(`sortCutoffMonths`),FfiConverterUInt.lower(`urgentDays`),FfiConverterUByte.lower(`urgentPrio`),FfiConverterUByte.lower(`defaultPriority`),FfiConverterUInt.lower(`startGracePeriodDays`),FfiConverterBoolean.lower(`autoReminders`),FfiConverterString.lower(`defaultReminderTime`),FfiConverterUInt.lower(`snoozeShort`),FfiConverterBoolean.lower(`createEventsForTasks`),FfiConverterBoolean.lower(`deleteEventsOnCompletion`),FfiConverterUInt.lower(`autoRefreshInterval`),FfiConverterUInt.lower(`trashRetention`),FfiConverterUInt.lower(`maxDoneRoots`),FfiConverterUInt.lower(`maxDoneSubtasks`),_status)
-}
+    @Throws(MobileException::class)
+    override fun `setCalendarVisibility`(
+        `href`: kotlin.String,
+        `visible`: kotlin.Boolean,
+    ) = callWithHandle {
+        uniffiRustCallWithError(MobileException) { _status ->
+            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_calendar_visibility(
+                it,
+                FfiConverterString.lower(`href`),
+                FfiConverterBoolean.lower(`visible`),
+                _status,
+            )
+        }
     }
-    
-    
 
-    
-    @Throws(MobileException::class)override fun `setCalendarVisibility`(`href`: kotlin.String, `visible`: kotlin.Boolean)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(MobileException) { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_calendar_visibility(
-        it,
-        FfiConverterString.lower(`href`),FfiConverterBoolean.lower(`visible`),_status)
-}
-    }
-    
-    
+    @Throws(MobileException::class)
+    override fun `setDefaultCalendar`(`href`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCallWithError(MobileException) { _status ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_default_calendar(
+                    it,
+                    FfiConverterString.lower(`href`),
+                    _status,
+                )
+            }
+        }
 
-    
-    @Throws(MobileException::class)override fun `setDefaultCalendar`(`href`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(MobileException) { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_default_calendar(
-        it,
-        FfiConverterString.lower(`href`),_status)
-}
-    }
-    
-    
+    override fun `setLocale`(`locale`: kotlin.String) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_locale(
+                    it,
+                    FfiConverterString.lower(`locale`),
+                    _status,
+                )
+            }
+        }
 
-    override fun `setLocale`(`locale`: kotlin.String)
-        = 
-    callWithHandle {
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_locale(
-        it,
-        FfiConverterString.lower(`locale`),_status)
-}
-    }
-    
-    
-
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `setParent`(`childUid`: kotlin.String, `parentUid`: kotlin.String?) {
-        return uniffiRustCallAsync(
+    override suspend fun `setParent`(
+        `childUid`: kotlin.String,
+        `parentUid`: kotlin.String?,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_parent(
                 uniffiHandle,
-                FfiConverterString.lower(`childUid`),FfiConverterOptionalString.lower(`parentUid`),
+                FfiConverterString.lower(`childUid`),
+                FfiConverterOptionalString.lower(`parentUid`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -2715,65 +3266,85 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-    }
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `setStatusCancelled`(`uid`: kotlin.String) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_status_cancelled(
-                uniffiHandle,
-                FfiConverterString.lower(`uid`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
+    override suspend fun `setStatusCancelled`(`uid`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_status_cancelled(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `setStatusProcess`(`uid`: kotlin.String) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_status_process(
-                uniffiHandle,
-                FfiConverterString.lower(`uid`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
+    override suspend fun `setStatusProcess`(`uid`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_set_status_process(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
-    
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `shouldKeepNotification`(
+        `taskUid`: kotlin.String,
+        `notifType`: kotlin.String,
+        `alarmUid`: kotlin.String?,
+    ): kotlin.Boolean =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_should_keep_notification(
+                    uniffiHandle,
+                    FfiConverterString.lower(`taskUid`),
+                    FfiConverterString.lower(`notifType`),
+                    FfiConverterOptionalString.lower(`alarmUid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_i8(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_i8(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_i8(future) },
+            // lift function
+            { FfiConverterBoolean.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
+
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `snoozeAlarm`(`taskUid`: kotlin.String, `alarmUid`: kotlin.String, `minutes`: kotlin.UInt) {
-        return uniffiRustCallAsync(
+    override suspend fun `snoozeAlarm`(
+        `taskUid`: kotlin.String,
+        `alarmUid`: kotlin.String,
+        `minutes`: kotlin.UInt,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_snooze_alarm(
                 uniffiHandle,
-                FfiConverterString.lower(`taskUid`),FfiConverterString.lower(`alarmUid`),FfiConverterUInt.lower(`minutes`),
+                FfiConverterString.lower(`taskUid`),
+                FfiConverterString.lower(`alarmUid`),
+                FfiConverterUInt.lower(`minutes`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -2781,108 +3352,98 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-    }
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `startTask`(`uid`: kotlin.String) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_start_task(
-                uniffiHandle,
-                FfiConverterString.lower(`uid`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
+    override suspend fun `startTask`(`uid`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_start_task(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `stopTask`(`uid`: kotlin.String) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_stop_task(
-                uniffiHandle,
-                FfiConverterString.lower(`uid`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
+    override suspend fun `stopTask`(`uid`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_stop_task(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `sync`() : kotlin.String {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_sync(
-                uniffiHandle,
-                
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
-        // lift function
-        { FfiConverterString.lift(it) },
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
+    override suspend fun `sync`(): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_sync(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `toggleTask`(`uid`: kotlin.String) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_toggle_task(
-                uniffiHandle,
-                FfiConverterString.lower(`uid`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
+    override suspend fun `toggleTask`(`uid`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_toggle_task(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `updateLocalCalendar`(`href`: kotlin.String, `name`: kotlin.String, `color`: kotlin.String?) {
-        return uniffiRustCallAsync(
+    override suspend fun `updateLocalCalendar`(
+        `href`: kotlin.String,
+        `name`: kotlin.String,
+        `color`: kotlin.String?,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_update_local_calendar(
                 uniffiHandle,
-                FfiConverterString.lower(`href`),FfiConverterString.lower(`name`),FfiConverterOptionalString.lower(`color`),
+                FfiConverterString.lower(`href`),
+                FfiConverterString.lower(`name`),
+                FfiConverterOptionalString.lower(`color`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -2890,21 +3451,21 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-    }
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `updateTaskDescription`(`uid`: kotlin.String, `description`: kotlin.String) {
-        return uniffiRustCallAsync(
+    override suspend fun `updateTaskDescription`(
+        `uid`: kotlin.String,
+        `description`: kotlin.String,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_update_task_description(
                 uniffiHandle,
-                FfiConverterString.lower(`uid`),FfiConverterString.lower(`description`),
+                FfiConverterString.lower(`uid`),
+                FfiConverterString.lower(`description`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -2912,21 +3473,21 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-    }
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `updateTaskSmart`(`uid`: kotlin.String, `smartInput`: kotlin.String) {
-        return uniffiRustCallAsync(
+    override suspend fun `updateTaskSmart`(
+        `uid`: kotlin.String,
+        `smartInput`: kotlin.String,
+    ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_update_task_smart(
                 uniffiHandle,
-                FfiConverterString.lower(`uid`),FfiConverterString.lower(`smartInput`),
+                FfiConverterString.lower(`uid`),
+                FfiConverterString.lower(`smartInput`),
             )
         },
         { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
@@ -2934,150 +3495,112 @@ open class CfaitMobile: Disposable, AutoCloseable, CfaitMobileInterface
         { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
         // lift function
         { Unit },
-        
         // Error FFI converter
         MobileException.ErrorHandler,
     )
-    }
 
-    
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `yankTask`(`uid`: kotlin.String) {
-        return uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_yank_task(
-                uniffiHandle,
-                FfiConverterString.lower(`uid`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        
-        // Error FFI converter
-        MobileException.ErrorHandler,
-    )
-    }
+    override suspend fun `yankTask`(`uid`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_yank_task(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
-    
-
-    
-
-
-    
-    
     /**
      * @suppress
      */
     companion object
-    
 }
-
 
 /**
  * @suppress
  */
-public object FfiConverterTypeCfaitMobile: FfiConverter<CfaitMobile, Long> {
-    override fun lower(value: CfaitMobile): Long {
-        return value.uniffiCloneHandle()
-    }
+public object FfiConverterTypeCfaitMobile : FfiConverter<CfaitMobile, Long> {
+    override fun lower(value: CfaitMobile): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): CfaitMobile {
-        return CfaitMobile(UniffiWithHandle, value)
-    }
+    override fun lift(value: Long): CfaitMobile = CfaitMobile(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): CfaitMobile {
-        return lift(buf.getLong())
-    }
+    override fun read(buf: ByteBuffer): CfaitMobile = lift(buf.getLong())
 
     override fun allocationSize(value: CfaitMobile) = 8UL
 
-    override fun write(value: CfaitMobile, buf: ByteBuffer) {
+    override fun write(
+        value: CfaitMobile,
+        buf: ByteBuffer,
+    ) {
         buf.putLong(lower(value))
     }
 }
 
-
-
-data class MobileAlarmInfo (
-    var `taskUid`: kotlin.String
-    , 
-    var `alarmUid`: kotlin.String
-    , 
-    var `title`: kotlin.String
-    , 
-    var `body`: kotlin.String
-    
-){
-    
-
-    
-
-    
+data class MobileAlarmInfo(
+    var `taskUid`: kotlin.String,
+    var `alarmUid`: kotlin.String,
+    var `title`: kotlin.String,
+    var `body`: kotlin.String,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeMobileAlarmInfo: FfiConverterRustBuffer<MobileAlarmInfo> {
-    override fun read(buf: ByteBuffer): MobileAlarmInfo {
-        return MobileAlarmInfo(
+public object FfiConverterTypeMobileAlarmInfo : FfiConverterRustBuffer<MobileAlarmInfo> {
+    override fun read(buf: ByteBuffer): MobileAlarmInfo =
+        MobileAlarmInfo(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: MobileAlarmInfo) = (
+    override fun allocationSize(value: MobileAlarmInfo) =
+        (
             FfiConverterString.allocationSize(value.`taskUid`) +
-            FfiConverterString.allocationSize(value.`alarmUid`) +
-            FfiConverterString.allocationSize(value.`title`) +
-            FfiConverterString.allocationSize(value.`body`)
-    )
+                FfiConverterString.allocationSize(value.`alarmUid`) +
+                FfiConverterString.allocationSize(value.`title`) +
+                FfiConverterString.allocationSize(value.`body`)
+        )
 
-    override fun write(value: MobileAlarmInfo, buf: ByteBuffer) {
-            FfiConverterString.write(value.`taskUid`, buf)
-            FfiConverterString.write(value.`alarmUid`, buf)
-            FfiConverterString.write(value.`title`, buf)
-            FfiConverterString.write(value.`body`, buf)
+    override fun write(
+        value: MobileAlarmInfo,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`taskUid`, buf)
+        FfiConverterString.write(value.`alarmUid`, buf)
+        FfiConverterString.write(value.`title`, buf)
+        FfiConverterString.write(value.`body`, buf)
     }
 }
 
-
-
-data class MobileCalendar (
-    var `name`: kotlin.String
-    , 
-    var `href`: kotlin.String
-    , 
-    var `color`: kotlin.String?
-    , 
-    var `isVisible`: kotlin.Boolean
-    , 
-    var `isLocal`: kotlin.Boolean
-    , 
-    var `isDisabled`: kotlin.Boolean
-    
-){
-    
-
-    
-
-    
+data class MobileCalendar(
+    var `name`: kotlin.String,
+    var `href`: kotlin.String,
+    var `color`: kotlin.String?,
+    var `isVisible`: kotlin.Boolean,
+    var `isLocal`: kotlin.Boolean,
+    var `isDisabled`: kotlin.Boolean,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeMobileCalendar: FfiConverterRustBuffer<MobileCalendar> {
-    override fun read(buf: ByteBuffer): MobileCalendar {
-        return MobileCalendar(
+public object FfiConverterTypeMobileCalendar : FfiConverterRustBuffer<MobileCalendar> {
+    override fun read(buf: ByteBuffer): MobileCalendar =
+        MobileCalendar(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterOptionalString.read(buf),
@@ -3085,87 +3608,62 @@ public object FfiConverterTypeMobileCalendar: FfiConverterRustBuffer<MobileCalen
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
         )
-    }
 
-    override fun allocationSize(value: MobileCalendar) = (
+    override fun allocationSize(value: MobileCalendar) =
+        (
             FfiConverterString.allocationSize(value.`name`) +
-            FfiConverterString.allocationSize(value.`href`) +
-            FfiConverterOptionalString.allocationSize(value.`color`) +
-            FfiConverterBoolean.allocationSize(value.`isVisible`) +
-            FfiConverterBoolean.allocationSize(value.`isLocal`) +
-            FfiConverterBoolean.allocationSize(value.`isDisabled`)
-    )
+                FfiConverterString.allocationSize(value.`href`) +
+                FfiConverterOptionalString.allocationSize(value.`color`) +
+                FfiConverterBoolean.allocationSize(value.`isVisible`) +
+                FfiConverterBoolean.allocationSize(value.`isLocal`) +
+                FfiConverterBoolean.allocationSize(value.`isDisabled`)
+        )
 
-    override fun write(value: MobileCalendar, buf: ByteBuffer) {
-            FfiConverterString.write(value.`name`, buf)
-            FfiConverterString.write(value.`href`, buf)
-            FfiConverterOptionalString.write(value.`color`, buf)
-            FfiConverterBoolean.write(value.`isVisible`, buf)
-            FfiConverterBoolean.write(value.`isLocal`, buf)
-            FfiConverterBoolean.write(value.`isDisabled`, buf)
+    override fun write(
+        value: MobileCalendar,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`name`, buf)
+        FfiConverterString.write(value.`href`, buf)
+        FfiConverterOptionalString.write(value.`color`, buf)
+        FfiConverterBoolean.write(value.`isVisible`, buf)
+        FfiConverterBoolean.write(value.`isLocal`, buf)
+        FfiConverterBoolean.write(value.`isDisabled`, buf)
     }
 }
 
-
-
-data class MobileConfig (
-    var `url`: kotlin.String
-    , 
-    var `username`: kotlin.String
-    , 
-    var `defaultCalendar`: kotlin.String?
-    , 
-    var `allowInsecure`: kotlin.Boolean
-    , 
-    var `hideCompleted`: kotlin.Boolean
-    , 
-    var `tagAliases`: Map<kotlin.String, List<kotlin.String>>
-    , 
-    var `disabledCalendars`: List<kotlin.String>
-    , 
-    var `sortCutoffMonths`: kotlin.UInt?
-    , 
-    var `urgentDays`: kotlin.UInt
-    , 
-    var `urgentPrio`: kotlin.UByte
-    , 
-    var `defaultPriority`: kotlin.UByte
-    , 
-    var `startGracePeriodDays`: kotlin.UInt
-    , 
-    var `autoReminders`: kotlin.Boolean
-    , 
-    var `defaultReminderTime`: kotlin.String
-    , 
-    var `snoozeShort`: kotlin.UInt
-    , 
-    var `createEventsForTasks`: kotlin.Boolean
-    , 
-    var `deleteEventsOnCompletion`: kotlin.Boolean
-    , 
-    var `autoRefreshInterval`: kotlin.UInt
-    , 
-    var `trashRetention`: kotlin.UInt
-    , 
-    var `maxDoneRoots`: kotlin.UInt
-    , 
-    var `maxDoneSubtasks`: kotlin.UInt
-    
-){
-    
-
-    
-
-    
+data class MobileConfig(
+    var `url`: kotlin.String,
+    var `username`: kotlin.String,
+    var `defaultCalendar`: kotlin.String?,
+    var `allowInsecure`: kotlin.Boolean,
+    var `hideCompleted`: kotlin.Boolean,
+    var `tagAliases`: Map<kotlin.String, List<kotlin.String>>,
+    var `disabledCalendars`: List<kotlin.String>,
+    var `sortCutoffMonths`: kotlin.UInt?,
+    var `urgentDays`: kotlin.UInt,
+    var `urgentPrio`: kotlin.UByte,
+    var `defaultPriority`: kotlin.UByte,
+    var `startGracePeriodDays`: kotlin.UInt,
+    var `autoReminders`: kotlin.Boolean,
+    var `defaultReminderTime`: kotlin.String,
+    var `snoozeShort`: kotlin.UInt,
+    var `createEventsForTasks`: kotlin.Boolean,
+    var `deleteEventsOnCompletion`: kotlin.Boolean,
+    var `autoRefreshInterval`: kotlin.UInt,
+    var `trashRetention`: kotlin.UInt,
+    var `maxDoneRoots`: kotlin.UInt,
+    var `maxDoneSubtasks`: kotlin.UInt,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeMobileConfig: FfiConverterRustBuffer<MobileConfig> {
-    override fun read(buf: ByteBuffer): MobileConfig {
-        return MobileConfig(
+public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig> {
+    override fun read(buf: ByteBuffer): MobileConfig =
+        MobileConfig(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterOptionalString.read(buf),
@@ -3188,394 +3686,313 @@ public object FfiConverterTypeMobileConfig: FfiConverterRustBuffer<MobileConfig>
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
         )
-    }
 
-    override fun allocationSize(value: MobileConfig) = (
+    override fun allocationSize(value: MobileConfig) =
+        (
             FfiConverterString.allocationSize(value.`url`) +
-            FfiConverterString.allocationSize(value.`username`) +
-            FfiConverterOptionalString.allocationSize(value.`defaultCalendar`) +
-            FfiConverterBoolean.allocationSize(value.`allowInsecure`) +
-            FfiConverterBoolean.allocationSize(value.`hideCompleted`) +
-            FfiConverterMapStringSequenceString.allocationSize(value.`tagAliases`) +
-            FfiConverterSequenceString.allocationSize(value.`disabledCalendars`) +
-            FfiConverterOptionalUInt.allocationSize(value.`sortCutoffMonths`) +
-            FfiConverterUInt.allocationSize(value.`urgentDays`) +
-            FfiConverterUByte.allocationSize(value.`urgentPrio`) +
-            FfiConverterUByte.allocationSize(value.`defaultPriority`) +
-            FfiConverterUInt.allocationSize(value.`startGracePeriodDays`) +
-            FfiConverterBoolean.allocationSize(value.`autoReminders`) +
-            FfiConverterString.allocationSize(value.`defaultReminderTime`) +
-            FfiConverterUInt.allocationSize(value.`snoozeShort`) +
-            FfiConverterBoolean.allocationSize(value.`createEventsForTasks`) +
-            FfiConverterBoolean.allocationSize(value.`deleteEventsOnCompletion`) +
-            FfiConverterUInt.allocationSize(value.`autoRefreshInterval`) +
-            FfiConverterUInt.allocationSize(value.`trashRetention`) +
-            FfiConverterUInt.allocationSize(value.`maxDoneRoots`) +
-            FfiConverterUInt.allocationSize(value.`maxDoneSubtasks`)
-    )
+                FfiConverterString.allocationSize(value.`username`) +
+                FfiConverterOptionalString.allocationSize(value.`defaultCalendar`) +
+                FfiConverterBoolean.allocationSize(value.`allowInsecure`) +
+                FfiConverterBoolean.allocationSize(value.`hideCompleted`) +
+                FfiConverterMapStringSequenceString.allocationSize(value.`tagAliases`) +
+                FfiConverterSequenceString.allocationSize(value.`disabledCalendars`) +
+                FfiConverterOptionalUInt.allocationSize(value.`sortCutoffMonths`) +
+                FfiConverterUInt.allocationSize(value.`urgentDays`) +
+                FfiConverterUByte.allocationSize(value.`urgentPrio`) +
+                FfiConverterUByte.allocationSize(value.`defaultPriority`) +
+                FfiConverterUInt.allocationSize(value.`startGracePeriodDays`) +
+                FfiConverterBoolean.allocationSize(value.`autoReminders`) +
+                FfiConverterString.allocationSize(value.`defaultReminderTime`) +
+                FfiConverterUInt.allocationSize(value.`snoozeShort`) +
+                FfiConverterBoolean.allocationSize(value.`createEventsForTasks`) +
+                FfiConverterBoolean.allocationSize(value.`deleteEventsOnCompletion`) +
+                FfiConverterUInt.allocationSize(value.`autoRefreshInterval`) +
+                FfiConverterUInt.allocationSize(value.`trashRetention`) +
+                FfiConverterUInt.allocationSize(value.`maxDoneRoots`) +
+                FfiConverterUInt.allocationSize(value.`maxDoneSubtasks`)
+        )
 
-    override fun write(value: MobileConfig, buf: ByteBuffer) {
-            FfiConverterString.write(value.`url`, buf)
-            FfiConverterString.write(value.`username`, buf)
-            FfiConverterOptionalString.write(value.`defaultCalendar`, buf)
-            FfiConverterBoolean.write(value.`allowInsecure`, buf)
-            FfiConverterBoolean.write(value.`hideCompleted`, buf)
-            FfiConverterMapStringSequenceString.write(value.`tagAliases`, buf)
-            FfiConverterSequenceString.write(value.`disabledCalendars`, buf)
-            FfiConverterOptionalUInt.write(value.`sortCutoffMonths`, buf)
-            FfiConverterUInt.write(value.`urgentDays`, buf)
-            FfiConverterUByte.write(value.`urgentPrio`, buf)
-            FfiConverterUByte.write(value.`defaultPriority`, buf)
-            FfiConverterUInt.write(value.`startGracePeriodDays`, buf)
-            FfiConverterBoolean.write(value.`autoReminders`, buf)
-            FfiConverterString.write(value.`defaultReminderTime`, buf)
-            FfiConverterUInt.write(value.`snoozeShort`, buf)
-            FfiConverterBoolean.write(value.`createEventsForTasks`, buf)
-            FfiConverterBoolean.write(value.`deleteEventsOnCompletion`, buf)
-            FfiConverterUInt.write(value.`autoRefreshInterval`, buf)
-            FfiConverterUInt.write(value.`trashRetention`, buf)
-            FfiConverterUInt.write(value.`maxDoneRoots`, buf)
-            FfiConverterUInt.write(value.`maxDoneSubtasks`, buf)
+    override fun write(
+        value: MobileConfig,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`url`, buf)
+        FfiConverterString.write(value.`username`, buf)
+        FfiConverterOptionalString.write(value.`defaultCalendar`, buf)
+        FfiConverterBoolean.write(value.`allowInsecure`, buf)
+        FfiConverterBoolean.write(value.`hideCompleted`, buf)
+        FfiConverterMapStringSequenceString.write(value.`tagAliases`, buf)
+        FfiConverterSequenceString.write(value.`disabledCalendars`, buf)
+        FfiConverterOptionalUInt.write(value.`sortCutoffMonths`, buf)
+        FfiConverterUInt.write(value.`urgentDays`, buf)
+        FfiConverterUByte.write(value.`urgentPrio`, buf)
+        FfiConverterUByte.write(value.`defaultPriority`, buf)
+        FfiConverterUInt.write(value.`startGracePeriodDays`, buf)
+        FfiConverterBoolean.write(value.`autoReminders`, buf)
+        FfiConverterString.write(value.`defaultReminderTime`, buf)
+        FfiConverterUInt.write(value.`snoozeShort`, buf)
+        FfiConverterBoolean.write(value.`createEventsForTasks`, buf)
+        FfiConverterBoolean.write(value.`deleteEventsOnCompletion`, buf)
+        FfiConverterUInt.write(value.`autoRefreshInterval`, buf)
+        FfiConverterUInt.write(value.`trashRetention`, buf)
+        FfiConverterUInt.write(value.`maxDoneRoots`, buf)
+        FfiConverterUInt.write(value.`maxDoneSubtasks`, buf)
     }
 }
 
-
-
-data class MobileHelpItem (
-    var `keys`: kotlin.String
-    , 
-    var `desc`: kotlin.String
-    , 
-    var `example`: kotlin.String
-    
-){
-    
-
-    
-
-    
+data class MobileHelpItem(
+    var `keys`: kotlin.String,
+    var `desc`: kotlin.String,
+    var `example`: kotlin.String,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeMobileHelpItem: FfiConverterRustBuffer<MobileHelpItem> {
-    override fun read(buf: ByteBuffer): MobileHelpItem {
-        return MobileHelpItem(
+public object FfiConverterTypeMobileHelpItem : FfiConverterRustBuffer<MobileHelpItem> {
+    override fun read(buf: ByteBuffer): MobileHelpItem =
+        MobileHelpItem(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: MobileHelpItem) = (
+    override fun allocationSize(value: MobileHelpItem) =
+        (
             FfiConverterString.allocationSize(value.`keys`) +
-            FfiConverterString.allocationSize(value.`desc`) +
-            FfiConverterString.allocationSize(value.`example`)
-    )
+                FfiConverterString.allocationSize(value.`desc`) +
+                FfiConverterString.allocationSize(value.`example`)
+        )
 
-    override fun write(value: MobileHelpItem, buf: ByteBuffer) {
-            FfiConverterString.write(value.`keys`, buf)
-            FfiConverterString.write(value.`desc`, buf)
-            FfiConverterString.write(value.`example`, buf)
+    override fun write(
+        value: MobileHelpItem,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`keys`, buf)
+        FfiConverterString.write(value.`desc`, buf)
+        FfiConverterString.write(value.`example`, buf)
     }
 }
 
-
-
-data class MobileHelpSection (
-    var `title`: kotlin.String
-    , 
-    var `items`: List<MobileHelpItem>
-    
-){
-    
-
-    
-
-    
+data class MobileHelpSection(
+    var `title`: kotlin.String,
+    var `items`: List<MobileHelpItem>,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeMobileHelpSection: FfiConverterRustBuffer<MobileHelpSection> {
-    override fun read(buf: ByteBuffer): MobileHelpSection {
-        return MobileHelpSection(
+public object FfiConverterTypeMobileHelpSection : FfiConverterRustBuffer<MobileHelpSection> {
+    override fun read(buf: ByteBuffer): MobileHelpSection =
+        MobileHelpSection(
             FfiConverterString.read(buf),
             FfiConverterSequenceTypeMobileHelpItem.read(buf),
         )
-    }
 
-    override fun allocationSize(value: MobileHelpSection) = (
+    override fun allocationSize(value: MobileHelpSection) =
+        (
             FfiConverterString.allocationSize(value.`title`) +
-            FfiConverterSequenceTypeMobileHelpItem.allocationSize(value.`items`)
-    )
+                FfiConverterSequenceTypeMobileHelpItem.allocationSize(value.`items`)
+        )
 
-    override fun write(value: MobileHelpSection, buf: ByteBuffer) {
-            FfiConverterString.write(value.`title`, buf)
-            FfiConverterSequenceTypeMobileHelpItem.write(value.`items`, buf)
+    override fun write(
+        value: MobileHelpSection,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`title`, buf)
+        FfiConverterSequenceTypeMobileHelpItem.write(value.`items`, buf)
     }
 }
 
-
-
-data class MobileLocation (
-    var `name`: kotlin.String
-    , 
-    var `count`: kotlin.UInt
-    
-){
-    
-
-    
-
-    
+data class MobileLocation(
+    var `name`: kotlin.String,
+    var `count`: kotlin.UInt,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeMobileLocation: FfiConverterRustBuffer<MobileLocation> {
-    override fun read(buf: ByteBuffer): MobileLocation {
-        return MobileLocation(
+public object FfiConverterTypeMobileLocation : FfiConverterRustBuffer<MobileLocation> {
+    override fun read(buf: ByteBuffer): MobileLocation =
+        MobileLocation(
             FfiConverterString.read(buf),
             FfiConverterUInt.read(buf),
         )
-    }
 
-    override fun allocationSize(value: MobileLocation) = (
+    override fun allocationSize(value: MobileLocation) =
+        (
             FfiConverterString.allocationSize(value.`name`) +
-            FfiConverterUInt.allocationSize(value.`count`)
-    )
+                FfiConverterUInt.allocationSize(value.`count`)
+        )
 
-    override fun write(value: MobileLocation, buf: ByteBuffer) {
-            FfiConverterString.write(value.`name`, buf)
-            FfiConverterUInt.write(value.`count`, buf)
+    override fun write(
+        value: MobileLocation,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`name`, buf)
+        FfiConverterUInt.write(value.`count`, buf)
     }
 }
 
-
-
-data class MobileRelatedTask (
-    var `uid`: kotlin.String
-    , 
-    var `summary`: kotlin.String
-    
-){
-    
-
-    
-
-    
+data class MobileRelatedTask(
+    var `uid`: kotlin.String,
+    var `summary`: kotlin.String,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeMobileRelatedTask: FfiConverterRustBuffer<MobileRelatedTask> {
-    override fun read(buf: ByteBuffer): MobileRelatedTask {
-        return MobileRelatedTask(
+public object FfiConverterTypeMobileRelatedTask : FfiConverterRustBuffer<MobileRelatedTask> {
+    override fun read(buf: ByteBuffer): MobileRelatedTask =
+        MobileRelatedTask(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: MobileRelatedTask) = (
+    override fun allocationSize(value: MobileRelatedTask) =
+        (
             FfiConverterString.allocationSize(value.`uid`) +
-            FfiConverterString.allocationSize(value.`summary`)
-    )
+                FfiConverterString.allocationSize(value.`summary`)
+        )
 
-    override fun write(value: MobileRelatedTask, buf: ByteBuffer) {
-            FfiConverterString.write(value.`uid`, buf)
-            FfiConverterString.write(value.`summary`, buf)
+    override fun write(
+        value: MobileRelatedTask,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`uid`, buf)
+        FfiConverterString.write(value.`summary`, buf)
     }
 }
 
-
-
-data class MobileSyntaxToken (
-    var `kind`: MobileSyntaxType
-    , 
-    var `start`: kotlin.Int
-    , 
-    var `end`: kotlin.Int
-    
-){
-    
-
-    
-
-    
+data class MobileSyntaxToken(
+    var `kind`: MobileSyntaxType,
+    var `start`: kotlin.Int,
+    var `end`: kotlin.Int,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeMobileSyntaxToken: FfiConverterRustBuffer<MobileSyntaxToken> {
-    override fun read(buf: ByteBuffer): MobileSyntaxToken {
-        return MobileSyntaxToken(
+public object FfiConverterTypeMobileSyntaxToken : FfiConverterRustBuffer<MobileSyntaxToken> {
+    override fun read(buf: ByteBuffer): MobileSyntaxToken =
+        MobileSyntaxToken(
             FfiConverterTypeMobileSyntaxType.read(buf),
             FfiConverterInt.read(buf),
             FfiConverterInt.read(buf),
         )
-    }
 
-    override fun allocationSize(value: MobileSyntaxToken) = (
+    override fun allocationSize(value: MobileSyntaxToken) =
+        (
             FfiConverterTypeMobileSyntaxType.allocationSize(value.`kind`) +
-            FfiConverterInt.allocationSize(value.`start`) +
-            FfiConverterInt.allocationSize(value.`end`)
-    )
+                FfiConverterInt.allocationSize(value.`start`) +
+                FfiConverterInt.allocationSize(value.`end`)
+        )
 
-    override fun write(value: MobileSyntaxToken, buf: ByteBuffer) {
-            FfiConverterTypeMobileSyntaxType.write(value.`kind`, buf)
-            FfiConverterInt.write(value.`start`, buf)
-            FfiConverterInt.write(value.`end`, buf)
+    override fun write(
+        value: MobileSyntaxToken,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeMobileSyntaxType.write(value.`kind`, buf)
+        FfiConverterInt.write(value.`start`, buf)
+        FfiConverterInt.write(value.`end`, buf)
     }
 }
 
-
-
-data class MobileTag (
-    var `name`: kotlin.String
-    , 
-    var `count`: kotlin.UInt
-    , 
-    var `isUncategorized`: kotlin.Boolean
-    
-){
-    
-
-    
-
-    
+data class MobileTag(
+    var `name`: kotlin.String,
+    var `count`: kotlin.UInt,
+    var `isUncategorized`: kotlin.Boolean,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeMobileTag: FfiConverterRustBuffer<MobileTag> {
-    override fun read(buf: ByteBuffer): MobileTag {
-        return MobileTag(
+public object FfiConverterTypeMobileTag : FfiConverterRustBuffer<MobileTag> {
+    override fun read(buf: ByteBuffer): MobileTag =
+        MobileTag(
             FfiConverterString.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterBoolean.read(buf),
         )
-    }
 
-    override fun allocationSize(value: MobileTag) = (
+    override fun allocationSize(value: MobileTag) =
+        (
             FfiConverterString.allocationSize(value.`name`) +
-            FfiConverterUInt.allocationSize(value.`count`) +
-            FfiConverterBoolean.allocationSize(value.`isUncategorized`)
-    )
+                FfiConverterUInt.allocationSize(value.`count`) +
+                FfiConverterBoolean.allocationSize(value.`isUncategorized`)
+        )
 
-    override fun write(value: MobileTag, buf: ByteBuffer) {
-            FfiConverterString.write(value.`name`, buf)
-            FfiConverterUInt.write(value.`count`, buf)
-            FfiConverterBoolean.write(value.`isUncategorized`, buf)
+    override fun write(
+        value: MobileTag,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`name`, buf)
+        FfiConverterUInt.write(value.`count`, buf)
+        FfiConverterBoolean.write(value.`isUncategorized`, buf)
     }
 }
 
-
-
-data class MobileTask (
-    var `uid`: kotlin.String
-    , 
-    var `summary`: kotlin.String
-    , 
-    var `description`: kotlin.String
-    , 
-    var `isDone`: kotlin.Boolean
-    , 
-    var `priority`: kotlin.UByte
-    , 
-    var `dueDateIso`: kotlin.String?
-    , 
-    var `completedDateIso`: kotlin.String?
-    , 
-    var `isAlldayDue`: kotlin.Boolean
-    , 
-    var `startDateIso`: kotlin.String?
-    , 
-    var `isAlldayStart`: kotlin.Boolean
-    , 
-    var `hasAlarms`: kotlin.Boolean
-    , 
-    var `isFutureStart`: kotlin.Boolean
-    , 
-    var `durationMins`: kotlin.UInt?
-    , 
-    var `durationMaxMins`: kotlin.UInt?
-    , 
-    var `calendarHref`: kotlin.String
-    , 
-    var `categories`: List<kotlin.String>
-    , 
-    var `isRecurring`: kotlin.Boolean
-    , 
-    var `parentUid`: kotlin.String?
-    , 
-    var `smartString`: kotlin.String
-    , 
-    var `depth`: kotlin.UInt
-    , 
-    var `isBlocked`: kotlin.Boolean
-    , 
-    var `statusString`: kotlin.String
-    , 
-    var `blockedByNames`: List<kotlin.String>
-    , 
-    var `blockedByUids`: List<kotlin.String>
-    , 
-    var `blockingUids`: List<kotlin.String>
-    , 
-    var `blockingNames`: List<kotlin.String>
-    , 
-    var `relatedToUids`: List<kotlin.String>
-    , 
-    var `relatedToNames`: List<kotlin.String>
-    , 
-    var `isPaused`: kotlin.Boolean
-    , 
-    var `location`: kotlin.String?
-    , 
-    var `url`: kotlin.String?
-    , 
-    var `geo`: kotlin.String?
-    , 
-    var `timeSpentSeconds`: kotlin.ULong
-    , 
-    var `lastStartedAt`: kotlin.Long?
-    , 
-    var `virtualType`: kotlin.String
-    , 
-    var `virtualPayload`: kotlin.String
-    , 
-    var `visibleCategories`: List<kotlin.String>
-    , 
-    var `visibleLocation`: kotlin.String?
-    
-){
-    
-
-    
-
-    
+data class MobileTask(
+    var `uid`: kotlin.String,
+    var `summary`: kotlin.String,
+    var `description`: kotlin.String,
+    var `isDone`: kotlin.Boolean,
+    var `priority`: kotlin.UByte,
+    var `dueDateIso`: kotlin.String?,
+    var `completedDateIso`: kotlin.String?,
+    var `isAlldayDue`: kotlin.Boolean,
+    var `startDateIso`: kotlin.String?,
+    var `isAlldayStart`: kotlin.Boolean,
+    var `hasAlarms`: kotlin.Boolean,
+    var `isFutureStart`: kotlin.Boolean,
+    var `durationMins`: kotlin.UInt?,
+    var `durationMaxMins`: kotlin.UInt?,
+    var `calendarHref`: kotlin.String,
+    var `categories`: List<kotlin.String>,
+    var `isRecurring`: kotlin.Boolean,
+    var `parentUid`: kotlin.String?,
+    var `smartString`: kotlin.String,
+    var `depth`: kotlin.UInt,
+    var `isBlocked`: kotlin.Boolean,
+    var `statusString`: kotlin.String,
+    var `blockedByNames`: List<kotlin.String>,
+    var `blockedByUids`: List<kotlin.String>,
+    var `blockingUids`: List<kotlin.String>,
+    var `blockingNames`: List<kotlin.String>,
+    var `relatedToUids`: List<kotlin.String>,
+    var `relatedToNames`: List<kotlin.String>,
+    var `isPaused`: kotlin.Boolean,
+    var `location`: kotlin.String?,
+    var `url`: kotlin.String?,
+    var `geo`: kotlin.String?,
+    var `timeSpentSeconds`: kotlin.ULong,
+    var `lastStartedAt`: kotlin.Long?,
+    var `virtualType`: kotlin.String,
+    var `virtualPayload`: kotlin.String,
+    var `visibleCategories`: List<kotlin.String>,
+    var `visibleLocation`: kotlin.String?,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeMobileTask: FfiConverterRustBuffer<MobileTask> {
-    override fun read(buf: ByteBuffer): MobileTask {
-        return MobileTask(
+public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
+    override fun read(buf: ByteBuffer): MobileTask =
+        MobileTask(
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
@@ -3615,176 +4032,165 @@ public object FfiConverterTypeMobileTask: FfiConverterRustBuffer<MobileTask> {
             FfiConverterSequenceString.read(buf),
             FfiConverterOptionalString.read(buf),
         )
-    }
 
-    override fun allocationSize(value: MobileTask) = (
+    override fun allocationSize(value: MobileTask) =
+        (
             FfiConverterString.allocationSize(value.`uid`) +
-            FfiConverterString.allocationSize(value.`summary`) +
-            FfiConverterString.allocationSize(value.`description`) +
-            FfiConverterBoolean.allocationSize(value.`isDone`) +
-            FfiConverterUByte.allocationSize(value.`priority`) +
-            FfiConverterOptionalString.allocationSize(value.`dueDateIso`) +
-            FfiConverterOptionalString.allocationSize(value.`completedDateIso`) +
-            FfiConverterBoolean.allocationSize(value.`isAlldayDue`) +
-            FfiConverterOptionalString.allocationSize(value.`startDateIso`) +
-            FfiConverterBoolean.allocationSize(value.`isAlldayStart`) +
-            FfiConverterBoolean.allocationSize(value.`hasAlarms`) +
-            FfiConverterBoolean.allocationSize(value.`isFutureStart`) +
-            FfiConverterOptionalUInt.allocationSize(value.`durationMins`) +
-            FfiConverterOptionalUInt.allocationSize(value.`durationMaxMins`) +
-            FfiConverterString.allocationSize(value.`calendarHref`) +
-            FfiConverterSequenceString.allocationSize(value.`categories`) +
-            FfiConverterBoolean.allocationSize(value.`isRecurring`) +
-            FfiConverterOptionalString.allocationSize(value.`parentUid`) +
-            FfiConverterString.allocationSize(value.`smartString`) +
-            FfiConverterUInt.allocationSize(value.`depth`) +
-            FfiConverterBoolean.allocationSize(value.`isBlocked`) +
-            FfiConverterString.allocationSize(value.`statusString`) +
-            FfiConverterSequenceString.allocationSize(value.`blockedByNames`) +
-            FfiConverterSequenceString.allocationSize(value.`blockedByUids`) +
-            FfiConverterSequenceString.allocationSize(value.`blockingUids`) +
-            FfiConverterSequenceString.allocationSize(value.`blockingNames`) +
-            FfiConverterSequenceString.allocationSize(value.`relatedToUids`) +
-            FfiConverterSequenceString.allocationSize(value.`relatedToNames`) +
-            FfiConverterBoolean.allocationSize(value.`isPaused`) +
-            FfiConverterOptionalString.allocationSize(value.`location`) +
-            FfiConverterOptionalString.allocationSize(value.`url`) +
-            FfiConverterOptionalString.allocationSize(value.`geo`) +
-            FfiConverterULong.allocationSize(value.`timeSpentSeconds`) +
-            FfiConverterOptionalLong.allocationSize(value.`lastStartedAt`) +
-            FfiConverterString.allocationSize(value.`virtualType`) +
-            FfiConverterString.allocationSize(value.`virtualPayload`) +
-            FfiConverterSequenceString.allocationSize(value.`visibleCategories`) +
-            FfiConverterOptionalString.allocationSize(value.`visibleLocation`)
-    )
+                FfiConverterString.allocationSize(value.`summary`) +
+                FfiConverterString.allocationSize(value.`description`) +
+                FfiConverterBoolean.allocationSize(value.`isDone`) +
+                FfiConverterUByte.allocationSize(value.`priority`) +
+                FfiConverterOptionalString.allocationSize(value.`dueDateIso`) +
+                FfiConverterOptionalString.allocationSize(value.`completedDateIso`) +
+                FfiConverterBoolean.allocationSize(value.`isAlldayDue`) +
+                FfiConverterOptionalString.allocationSize(value.`startDateIso`) +
+                FfiConverterBoolean.allocationSize(value.`isAlldayStart`) +
+                FfiConverterBoolean.allocationSize(value.`hasAlarms`) +
+                FfiConverterBoolean.allocationSize(value.`isFutureStart`) +
+                FfiConverterOptionalUInt.allocationSize(value.`durationMins`) +
+                FfiConverterOptionalUInt.allocationSize(value.`durationMaxMins`) +
+                FfiConverterString.allocationSize(value.`calendarHref`) +
+                FfiConverterSequenceString.allocationSize(value.`categories`) +
+                FfiConverterBoolean.allocationSize(value.`isRecurring`) +
+                FfiConverterOptionalString.allocationSize(value.`parentUid`) +
+                FfiConverterString.allocationSize(value.`smartString`) +
+                FfiConverterUInt.allocationSize(value.`depth`) +
+                FfiConverterBoolean.allocationSize(value.`isBlocked`) +
+                FfiConverterString.allocationSize(value.`statusString`) +
+                FfiConverterSequenceString.allocationSize(value.`blockedByNames`) +
+                FfiConverterSequenceString.allocationSize(value.`blockedByUids`) +
+                FfiConverterSequenceString.allocationSize(value.`blockingUids`) +
+                FfiConverterSequenceString.allocationSize(value.`blockingNames`) +
+                FfiConverterSequenceString.allocationSize(value.`relatedToUids`) +
+                FfiConverterSequenceString.allocationSize(value.`relatedToNames`) +
+                FfiConverterBoolean.allocationSize(value.`isPaused`) +
+                FfiConverterOptionalString.allocationSize(value.`location`) +
+                FfiConverterOptionalString.allocationSize(value.`url`) +
+                FfiConverterOptionalString.allocationSize(value.`geo`) +
+                FfiConverterULong.allocationSize(value.`timeSpentSeconds`) +
+                FfiConverterOptionalLong.allocationSize(value.`lastStartedAt`) +
+                FfiConverterString.allocationSize(value.`virtualType`) +
+                FfiConverterString.allocationSize(value.`virtualPayload`) +
+                FfiConverterSequenceString.allocationSize(value.`visibleCategories`) +
+                FfiConverterOptionalString.allocationSize(value.`visibleLocation`)
+        )
 
-    override fun write(value: MobileTask, buf: ByteBuffer) {
-            FfiConverterString.write(value.`uid`, buf)
-            FfiConverterString.write(value.`summary`, buf)
-            FfiConverterString.write(value.`description`, buf)
-            FfiConverterBoolean.write(value.`isDone`, buf)
-            FfiConverterUByte.write(value.`priority`, buf)
-            FfiConverterOptionalString.write(value.`dueDateIso`, buf)
-            FfiConverterOptionalString.write(value.`completedDateIso`, buf)
-            FfiConverterBoolean.write(value.`isAlldayDue`, buf)
-            FfiConverterOptionalString.write(value.`startDateIso`, buf)
-            FfiConverterBoolean.write(value.`isAlldayStart`, buf)
-            FfiConverterBoolean.write(value.`hasAlarms`, buf)
-            FfiConverterBoolean.write(value.`isFutureStart`, buf)
-            FfiConverterOptionalUInt.write(value.`durationMins`, buf)
-            FfiConverterOptionalUInt.write(value.`durationMaxMins`, buf)
-            FfiConverterString.write(value.`calendarHref`, buf)
-            FfiConverterSequenceString.write(value.`categories`, buf)
-            FfiConverterBoolean.write(value.`isRecurring`, buf)
-            FfiConverterOptionalString.write(value.`parentUid`, buf)
-            FfiConverterString.write(value.`smartString`, buf)
-            FfiConverterUInt.write(value.`depth`, buf)
-            FfiConverterBoolean.write(value.`isBlocked`, buf)
-            FfiConverterString.write(value.`statusString`, buf)
-            FfiConverterSequenceString.write(value.`blockedByNames`, buf)
-            FfiConverterSequenceString.write(value.`blockedByUids`, buf)
-            FfiConverterSequenceString.write(value.`blockingUids`, buf)
-            FfiConverterSequenceString.write(value.`blockingNames`, buf)
-            FfiConverterSequenceString.write(value.`relatedToUids`, buf)
-            FfiConverterSequenceString.write(value.`relatedToNames`, buf)
-            FfiConverterBoolean.write(value.`isPaused`, buf)
-            FfiConverterOptionalString.write(value.`location`, buf)
-            FfiConverterOptionalString.write(value.`url`, buf)
-            FfiConverterOptionalString.write(value.`geo`, buf)
-            FfiConverterULong.write(value.`timeSpentSeconds`, buf)
-            FfiConverterOptionalLong.write(value.`lastStartedAt`, buf)
-            FfiConverterString.write(value.`virtualType`, buf)
-            FfiConverterString.write(value.`virtualPayload`, buf)
-            FfiConverterSequenceString.write(value.`visibleCategories`, buf)
-            FfiConverterOptionalString.write(value.`visibleLocation`, buf)
+    override fun write(
+        value: MobileTask,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`uid`, buf)
+        FfiConverterString.write(value.`summary`, buf)
+        FfiConverterString.write(value.`description`, buf)
+        FfiConverterBoolean.write(value.`isDone`, buf)
+        FfiConverterUByte.write(value.`priority`, buf)
+        FfiConverterOptionalString.write(value.`dueDateIso`, buf)
+        FfiConverterOptionalString.write(value.`completedDateIso`, buf)
+        FfiConverterBoolean.write(value.`isAlldayDue`, buf)
+        FfiConverterOptionalString.write(value.`startDateIso`, buf)
+        FfiConverterBoolean.write(value.`isAlldayStart`, buf)
+        FfiConverterBoolean.write(value.`hasAlarms`, buf)
+        FfiConverterBoolean.write(value.`isFutureStart`, buf)
+        FfiConverterOptionalUInt.write(value.`durationMins`, buf)
+        FfiConverterOptionalUInt.write(value.`durationMaxMins`, buf)
+        FfiConverterString.write(value.`calendarHref`, buf)
+        FfiConverterSequenceString.write(value.`categories`, buf)
+        FfiConverterBoolean.write(value.`isRecurring`, buf)
+        FfiConverterOptionalString.write(value.`parentUid`, buf)
+        FfiConverterString.write(value.`smartString`, buf)
+        FfiConverterUInt.write(value.`depth`, buf)
+        FfiConverterBoolean.write(value.`isBlocked`, buf)
+        FfiConverterString.write(value.`statusString`, buf)
+        FfiConverterSequenceString.write(value.`blockedByNames`, buf)
+        FfiConverterSequenceString.write(value.`blockedByUids`, buf)
+        FfiConverterSequenceString.write(value.`blockingUids`, buf)
+        FfiConverterSequenceString.write(value.`blockingNames`, buf)
+        FfiConverterSequenceString.write(value.`relatedToUids`, buf)
+        FfiConverterSequenceString.write(value.`relatedToNames`, buf)
+        FfiConverterBoolean.write(value.`isPaused`, buf)
+        FfiConverterOptionalString.write(value.`location`, buf)
+        FfiConverterOptionalString.write(value.`url`, buf)
+        FfiConverterOptionalString.write(value.`geo`, buf)
+        FfiConverterULong.write(value.`timeSpentSeconds`, buf)
+        FfiConverterOptionalLong.write(value.`lastStartedAt`, buf)
+        FfiConverterString.write(value.`virtualType`, buf)
+        FfiConverterString.write(value.`virtualPayload`, buf)
+        FfiConverterSequenceString.write(value.`visibleCategories`, buf)
+        FfiConverterOptionalString.write(value.`visibleLocation`, buf)
     }
 }
 
-
-
-data class MobileViewData (
-    var `tasks`: List<MobileTask>
-    , 
-    var `tags`: List<MobileTag>
-    , 
-    var `locations`: List<MobileLocation>
-    
-){
-    
-
-    
-
-    
+data class MobileViewData(
+    var `tasks`: List<MobileTask>,
+    var `tags`: List<MobileTag>,
+    var `locations`: List<MobileLocation>,
+) {
     companion object
 }
 
 /**
  * @suppress
  */
-public object FfiConverterTypeMobileViewData: FfiConverterRustBuffer<MobileViewData> {
-    override fun read(buf: ByteBuffer): MobileViewData {
-        return MobileViewData(
+public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileViewData> {
+    override fun read(buf: ByteBuffer): MobileViewData =
+        MobileViewData(
             FfiConverterSequenceTypeMobileTask.read(buf),
             FfiConverterSequenceTypeMobileTag.read(buf),
             FfiConverterSequenceTypeMobileLocation.read(buf),
         )
-    }
 
-    override fun allocationSize(value: MobileViewData) = (
+    override fun allocationSize(value: MobileViewData) =
+        (
             FfiConverterSequenceTypeMobileTask.allocationSize(value.`tasks`) +
-            FfiConverterSequenceTypeMobileTag.allocationSize(value.`tags`) +
-            FfiConverterSequenceTypeMobileLocation.allocationSize(value.`locations`)
-    )
+                FfiConverterSequenceTypeMobileTag.allocationSize(value.`tags`) +
+                FfiConverterSequenceTypeMobileLocation.allocationSize(value.`locations`)
+        )
 
-    override fun write(value: MobileViewData, buf: ByteBuffer) {
-            FfiConverterSequenceTypeMobileTask.write(value.`tasks`, buf)
-            FfiConverterSequenceTypeMobileTag.write(value.`tags`, buf)
-            FfiConverterSequenceTypeMobileLocation.write(value.`locations`, buf)
+    override fun write(
+        value: MobileViewData,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceTypeMobileTask.write(value.`tasks`, buf)
+        FfiConverterSequenceTypeMobileTag.write(value.`tags`, buf)
+        FfiConverterSequenceTypeMobileLocation.write(value.`locations`, buf)
     }
 }
 
-
-
-
 enum class HelpTab {
-    
     SYNTAX,
-    KEYBOARD;
-
-    
-
+    KEYBOARD,
+    ;
 
     companion object
 }
 
-
 /**
  * @suppress
  */
-public object FfiConverterTypeHelpTab: FfiConverterRustBuffer<HelpTab> {
-    override fun read(buf: ByteBuffer) = try {
-        HelpTab.values()[buf.getInt() - 1]
-    } catch (e: IndexOutOfBoundsException) {
-        throw RuntimeException("invalid enum value, something is very wrong!!", e)
-    }
+public object FfiConverterTypeHelpTab : FfiConverterRustBuffer<HelpTab> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            HelpTab.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
 
     override fun allocationSize(value: HelpTab) = 4UL
 
-    override fun write(value: HelpTab, buf: ByteBuffer) {
+    override fun write(
+        value: HelpTab,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.ordinal + 1)
     }
 }
 
-
-
-
-
-
-
-sealed class MobileException(message: String): kotlin.Exception(message) {
-        
-        class Generic(message: String) : MobileException(message)
-        
+sealed class MobileException(
+    message: String,
+) : kotlin.Exception(message) {
+    class Generic(
+        message: String,
+    ) : MobileException(message)
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<MobileException> {
         override fun lift(error_buf: RustBuffer.ByValue): MobileException = FfiConverterTypeMobileError.lift(error_buf)
@@ -3795,35 +4201,28 @@ sealed class MobileException(message: String): kotlin.Exception(message) {
  * @suppress
  */
 public object FfiConverterTypeMobileError : FfiConverterRustBuffer<MobileException> {
-    override fun read(buf: ByteBuffer): MobileException {
-        
-            return when(buf.getInt()) {
+    override fun read(buf: ByteBuffer): MobileException =
+        when (buf.getInt()) {
             1 -> MobileException.Generic(FfiConverterString.read(buf))
             else -> throw RuntimeException("invalid error enum value, something is very wrong!!")
         }
-        
-    }
 
-    override fun allocationSize(value: MobileException): ULong {
-        return 4UL
-    }
+    override fun allocationSize(value: MobileException): ULong = 4UL
 
-    override fun write(value: MobileException, buf: ByteBuffer) {
-        when(value) {
+    override fun write(
+        value: MobileException,
+        buf: ByteBuffer,
+    ) {
+        when (value) {
             is MobileException.Generic -> {
                 buf.putInt(1)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
-
 }
 
-
-
-
 enum class MobileSyntaxType {
-    
     TEXT,
     PRIORITY,
     DUE_DATE,
@@ -3838,41 +4237,37 @@ enum class MobileSyntaxType {
     REMINDER,
     CALENDAR,
     FILTER,
-    OPERATOR;
-
-    
-
+    OPERATOR,
+    ;
 
     companion object
 }
 
-
 /**
  * @suppress
  */
-public object FfiConverterTypeMobileSyntaxType: FfiConverterRustBuffer<MobileSyntaxType> {
-    override fun read(buf: ByteBuffer) = try {
-        MobileSyntaxType.values()[buf.getInt() - 1]
-    } catch (e: IndexOutOfBoundsException) {
-        throw RuntimeException("invalid enum value, something is very wrong!!", e)
-    }
+public object FfiConverterTypeMobileSyntaxType : FfiConverterRustBuffer<MobileSyntaxType> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            MobileSyntaxType.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
 
     override fun allocationSize(value: MobileSyntaxType) = 4UL
 
-    override fun write(value: MobileSyntaxType, buf: ByteBuffer) {
+    override fun write(
+        value: MobileSyntaxType,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.ordinal + 1)
     }
 }
 
-
-
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterOptionalUInt: FfiConverterRustBuffer<kotlin.UInt?> {
+public object FfiConverterOptionalUInt : FfiConverterRustBuffer<kotlin.UInt?> {
     override fun read(buf: ByteBuffer): kotlin.UInt? {
         if (buf.get().toInt() == 0) {
             return null
@@ -3888,7 +4283,10 @@ public object FfiConverterOptionalUInt: FfiConverterRustBuffer<kotlin.UInt?> {
         }
     }
 
-    override fun write(value: kotlin.UInt?, buf: ByteBuffer) {
+    override fun write(
+        value: kotlin.UInt?,
+        buf: ByteBuffer,
+    ) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -3898,13 +4296,10 @@ public object FfiConverterOptionalUInt: FfiConverterRustBuffer<kotlin.UInt?> {
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterOptionalLong: FfiConverterRustBuffer<kotlin.Long?> {
+public object FfiConverterOptionalLong : FfiConverterRustBuffer<kotlin.Long?> {
     override fun read(buf: ByteBuffer): kotlin.Long? {
         if (buf.get().toInt() == 0) {
             return null
@@ -3920,7 +4315,10 @@ public object FfiConverterOptionalLong: FfiConverterRustBuffer<kotlin.Long?> {
         }
     }
 
-    override fun write(value: kotlin.Long?, buf: ByteBuffer) {
+    override fun write(
+        value: kotlin.Long?,
+        buf: ByteBuffer,
+    ) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -3930,13 +4328,10 @@ public object FfiConverterOptionalLong: FfiConverterRustBuffer<kotlin.Long?> {
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?> {
+public object FfiConverterOptionalString : FfiConverterRustBuffer<kotlin.String?> {
     override fun read(buf: ByteBuffer): kotlin.String? {
         if (buf.get().toInt() == 0) {
             return null
@@ -3952,7 +4347,10 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?>
         }
     }
 
-    override fun write(value: kotlin.String?, buf: ByteBuffer) {
+    override fun write(
+        value: kotlin.String?,
+        buf: ByteBuffer,
+    ) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -3962,13 +4360,10 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?>
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterOptionalTypeMobileTask: FfiConverterRustBuffer<MobileTask?> {
+public object FfiConverterOptionalTypeMobileTask : FfiConverterRustBuffer<MobileTask?> {
     override fun read(buf: ByteBuffer): MobileTask? {
         if (buf.get().toInt() == 0) {
             return null
@@ -3984,7 +4379,10 @@ public object FfiConverterOptionalTypeMobileTask: FfiConverterRustBuffer<MobileT
         }
     }
 
-    override fun write(value: MobileTask?, buf: ByteBuffer) {
+    override fun write(
+        value: MobileTask?,
+        buf: ByteBuffer,
+    ) {
         if (value == null) {
             buf.put(0)
         } else {
@@ -3994,13 +4392,10 @@ public object FfiConverterOptionalTypeMobileTask: FfiConverterRustBuffer<MobileT
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.String>> {
+public object FfiConverterSequenceString : FfiConverterRustBuffer<List<kotlin.String>> {
     override fun read(buf: ByteBuffer): List<kotlin.String> {
         val len = buf.getInt()
         return List<kotlin.String>(len) {
@@ -4014,7 +4409,10 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<kotlin.String>, buf: ByteBuffer) {
+    override fun write(
+        value: List<kotlin.String>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterString.write(it, buf)
@@ -4022,13 +4420,10 @@ public object FfiConverterSequenceString: FfiConverterRustBuffer<List<kotlin.Str
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeMobileAlarmInfo: FfiConverterRustBuffer<List<MobileAlarmInfo>> {
+public object FfiConverterSequenceTypeMobileAlarmInfo : FfiConverterRustBuffer<List<MobileAlarmInfo>> {
     override fun read(buf: ByteBuffer): List<MobileAlarmInfo> {
         val len = buf.getInt()
         return List<MobileAlarmInfo>(len) {
@@ -4042,7 +4437,10 @@ public object FfiConverterSequenceTypeMobileAlarmInfo: FfiConverterRustBuffer<Li
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<MobileAlarmInfo>, buf: ByteBuffer) {
+    override fun write(
+        value: List<MobileAlarmInfo>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileAlarmInfo.write(it, buf)
@@ -4050,13 +4448,10 @@ public object FfiConverterSequenceTypeMobileAlarmInfo: FfiConverterRustBuffer<Li
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeMobileCalendar: FfiConverterRustBuffer<List<MobileCalendar>> {
+public object FfiConverterSequenceTypeMobileCalendar : FfiConverterRustBuffer<List<MobileCalendar>> {
     override fun read(buf: ByteBuffer): List<MobileCalendar> {
         val len = buf.getInt()
         return List<MobileCalendar>(len) {
@@ -4070,7 +4465,10 @@ public object FfiConverterSequenceTypeMobileCalendar: FfiConverterRustBuffer<Lis
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<MobileCalendar>, buf: ByteBuffer) {
+    override fun write(
+        value: List<MobileCalendar>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileCalendar.write(it, buf)
@@ -4078,13 +4476,10 @@ public object FfiConverterSequenceTypeMobileCalendar: FfiConverterRustBuffer<Lis
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeMobileHelpItem: FfiConverterRustBuffer<List<MobileHelpItem>> {
+public object FfiConverterSequenceTypeMobileHelpItem : FfiConverterRustBuffer<List<MobileHelpItem>> {
     override fun read(buf: ByteBuffer): List<MobileHelpItem> {
         val len = buf.getInt()
         return List<MobileHelpItem>(len) {
@@ -4098,7 +4493,10 @@ public object FfiConverterSequenceTypeMobileHelpItem: FfiConverterRustBuffer<Lis
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<MobileHelpItem>, buf: ByteBuffer) {
+    override fun write(
+        value: List<MobileHelpItem>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileHelpItem.write(it, buf)
@@ -4106,13 +4504,10 @@ public object FfiConverterSequenceTypeMobileHelpItem: FfiConverterRustBuffer<Lis
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeMobileHelpSection: FfiConverterRustBuffer<List<MobileHelpSection>> {
+public object FfiConverterSequenceTypeMobileHelpSection : FfiConverterRustBuffer<List<MobileHelpSection>> {
     override fun read(buf: ByteBuffer): List<MobileHelpSection> {
         val len = buf.getInt()
         return List<MobileHelpSection>(len) {
@@ -4126,7 +4521,10 @@ public object FfiConverterSequenceTypeMobileHelpSection: FfiConverterRustBuffer<
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<MobileHelpSection>, buf: ByteBuffer) {
+    override fun write(
+        value: List<MobileHelpSection>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileHelpSection.write(it, buf)
@@ -4134,13 +4532,10 @@ public object FfiConverterSequenceTypeMobileHelpSection: FfiConverterRustBuffer<
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeMobileLocation: FfiConverterRustBuffer<List<MobileLocation>> {
+public object FfiConverterSequenceTypeMobileLocation : FfiConverterRustBuffer<List<MobileLocation>> {
     override fun read(buf: ByteBuffer): List<MobileLocation> {
         val len = buf.getInt()
         return List<MobileLocation>(len) {
@@ -4154,7 +4549,10 @@ public object FfiConverterSequenceTypeMobileLocation: FfiConverterRustBuffer<Lis
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<MobileLocation>, buf: ByteBuffer) {
+    override fun write(
+        value: List<MobileLocation>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileLocation.write(it, buf)
@@ -4162,13 +4560,10 @@ public object FfiConverterSequenceTypeMobileLocation: FfiConverterRustBuffer<Lis
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeMobileRelatedTask: FfiConverterRustBuffer<List<MobileRelatedTask>> {
+public object FfiConverterSequenceTypeMobileRelatedTask : FfiConverterRustBuffer<List<MobileRelatedTask>> {
     override fun read(buf: ByteBuffer): List<MobileRelatedTask> {
         val len = buf.getInt()
         return List<MobileRelatedTask>(len) {
@@ -4182,7 +4577,10 @@ public object FfiConverterSequenceTypeMobileRelatedTask: FfiConverterRustBuffer<
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<MobileRelatedTask>, buf: ByteBuffer) {
+    override fun write(
+        value: List<MobileRelatedTask>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileRelatedTask.write(it, buf)
@@ -4190,13 +4588,10 @@ public object FfiConverterSequenceTypeMobileRelatedTask: FfiConverterRustBuffer<
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeMobileSyntaxToken: FfiConverterRustBuffer<List<MobileSyntaxToken>> {
+public object FfiConverterSequenceTypeMobileSyntaxToken : FfiConverterRustBuffer<List<MobileSyntaxToken>> {
     override fun read(buf: ByteBuffer): List<MobileSyntaxToken> {
         val len = buf.getInt()
         return List<MobileSyntaxToken>(len) {
@@ -4210,7 +4605,10 @@ public object FfiConverterSequenceTypeMobileSyntaxToken: FfiConverterRustBuffer<
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<MobileSyntaxToken>, buf: ByteBuffer) {
+    override fun write(
+        value: List<MobileSyntaxToken>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileSyntaxToken.write(it, buf)
@@ -4218,13 +4616,10 @@ public object FfiConverterSequenceTypeMobileSyntaxToken: FfiConverterRustBuffer<
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeMobileTag: FfiConverterRustBuffer<List<MobileTag>> {
+public object FfiConverterSequenceTypeMobileTag : FfiConverterRustBuffer<List<MobileTag>> {
     override fun read(buf: ByteBuffer): List<MobileTag> {
         val len = buf.getInt()
         return List<MobileTag>(len) {
@@ -4238,7 +4633,10 @@ public object FfiConverterSequenceTypeMobileTag: FfiConverterRustBuffer<List<Mob
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<MobileTag>, buf: ByteBuffer) {
+    override fun write(
+        value: List<MobileTag>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileTag.write(it, buf)
@@ -4246,13 +4644,10 @@ public object FfiConverterSequenceTypeMobileTag: FfiConverterRustBuffer<List<Mob
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeMobileTask: FfiConverterRustBuffer<List<MobileTask>> {
+public object FfiConverterSequenceTypeMobileTask : FfiConverterRustBuffer<List<MobileTask>> {
     override fun read(buf: ByteBuffer): List<MobileTask> {
         val len = buf.getInt()
         return List<MobileTask>(len) {
@@ -4266,7 +4661,10 @@ public object FfiConverterSequenceTypeMobileTask: FfiConverterRustBuffer<List<Mo
         return sizeForLength + sizeForItems
     }
 
-    override fun write(value: List<MobileTask>, buf: ByteBuffer) {
+    override fun write(
+        value: List<MobileTask>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileTask.write(it, buf)
@@ -4274,13 +4672,10 @@ public object FfiConverterSequenceTypeMobileTask: FfiConverterRustBuffer<List<Mo
     }
 }
 
-
-
-
 /**
  * @suppress
  */
-public object FfiConverterMapStringSequenceString: FfiConverterRustBuffer<Map<kotlin.String, List<kotlin.String>>> {
+public object FfiConverterMapStringSequenceString : FfiConverterRustBuffer<Map<kotlin.String, List<kotlin.String>>> {
     override fun read(buf: ByteBuffer): Map<kotlin.String, List<kotlin.String>> {
         val len = buf.getInt()
         return buildMap<kotlin.String, List<kotlin.String>>(len) {
@@ -4294,14 +4689,19 @@ public object FfiConverterMapStringSequenceString: FfiConverterRustBuffer<Map<ko
 
     override fun allocationSize(value: Map<kotlin.String, List<kotlin.String>>): ULong {
         val spaceForMapSize = 4UL
-        val spaceForChildren = value.map { (k, v) ->
-            FfiConverterString.allocationSize(k) +
-            FfiConverterSequenceString.allocationSize(v)
-        }.sum()
+        val spaceForChildren =
+            value
+                .map { (k, v) ->
+                    FfiConverterString.allocationSize(k) +
+                        FfiConverterSequenceString.allocationSize(v)
+                }.sum()
         return spaceForMapSize + spaceForChildren
     }
 
-    override fun write(value: Map<kotlin.String, List<kotlin.String>>, buf: ByteBuffer) {
+    override fun write(
+        value: Map<kotlin.String, List<kotlin.String>>,
+        buf: ByteBuffer,
+    ) {
         buf.putInt(value.size)
         // The parens on `(k, v)` here ensure we're calling the right method,
         // which is important for compatibility with older android devices.
@@ -4313,21 +4713,8 @@ public object FfiConverterMapStringSequenceString: FfiConverterRustBuffer<Map<ko
     }
 }
 
-
-
-
-
-
-
-
-    @Throws(MobileException::class) fun `initTokioRuntime`()
-        = 
+@Throws(MobileException::class)
+fun `initTokioRuntime`() =
     uniffiRustCallWithError(MobileException) { _status ->
-    UniffiLib.uniffi_cfait_fn_func_init_tokio_runtime(
-    
-        _status)
-}
-    
-    
-
-
+        UniffiLib.uniffi_cfait_fn_func_init_tokio_runtime(_status)
+    }

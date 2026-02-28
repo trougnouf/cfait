@@ -65,4 +65,30 @@ object AlarmScheduler {
             e.printStackTrace()
         }
     }
+
+    suspend fun cleanupObsoleteNotifications(context: Context, api: CfaitMobile) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val notificationManager =
+                context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            try {
+                val activeNotifications = notificationManager.activeNotifications
+                for (statusBarNotif in activeNotifications) {
+                    val extras = statusBarNotif.notification.extras
+                    val taskUid = extras.getString("cfait_task_uid")
+                    val notifType = extras.getString("cfait_notif_type")
+                    val alarmUid = extras.getString("cfait_alarm_uid")
+
+                    if (taskUid != null && notifType != null) {
+                        val keep = api.shouldKeepNotification(taskUid, notifType, alarmUid)
+                        if (!keep) {
+                            Log.d("CfaitAlarm", "Canceling obsolete notification for task: $taskUid")
+                            notificationManager.cancel(statusBarNotif.id)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("CfaitAlarm", "Failed to cleanup notifications", e)
+            }
+        }
+    }
 }

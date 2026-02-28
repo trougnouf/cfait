@@ -32,6 +32,7 @@ class PeriodicSyncWorker(
 
             // Ensure alarms are up-to-date after sync
             AlarmScheduler.scheduleNextAlarm(context, api)
+            AlarmScheduler.cleanupObsoleteNotifications(context, api)
 
             // Notify UI to refresh if open
             val intent = Intent("com.trougnouf.cfait.REFRESH_UI")

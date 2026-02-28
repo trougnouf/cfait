@@ -111,6 +111,10 @@ class NotificationActionWorker(
 
             // Refresh UI and Scheduler
             AlarmScheduler.scheduleNextAlarm(context, api)
+            AlarmScheduler.cleanupObsoleteNotifications(
+                context,
+                api
+            ) // <- Add cleanup pass to prune stale notifications
             val intent = Intent(BROADCAST_REFRESH)
             intent.setPackage(context.packageName)
             context.sendBroadcast(intent)
@@ -181,6 +185,10 @@ class NotificationActionWorker(
             .setContentIntent(tapPending)
             .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.pause), pausePending)
             .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.done), donePending)
+            .addExtras(android.os.Bundle().apply {
+                putString("cfait_task_uid", task.uid)
+                putString("cfait_notif_type", "ongoing")
+            })
             .build()
 
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager

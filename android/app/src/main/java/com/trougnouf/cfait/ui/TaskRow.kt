@@ -522,7 +522,7 @@ fun TaskRow(
 
                     DropdownMenuItem(text = {
                         Text(
-                            androidx.compose.ui.res.stringResource(R.string.menu_delete),
+                            androidx.compose.ui.res.stringResource(R.string.delete),
                             color = MaterialTheme.colorScheme.error
                         )
                     }, onClick = {

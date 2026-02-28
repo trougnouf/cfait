@@ -248,6 +248,7 @@ fun CfaitNavHost(
                 defaultPriority = config.defaultPriority.toInt() // Fetch config value
                 hasUnsynced = api.hasUnsyncedChanges()
                 AlarmScheduler.scheduleNextAlarm(context, api)
+                AlarmScheduler.cleanupObsoleteNotifications(context, api)
 
                 // Dynamically update Background Sync Worker based on config
                 val interval = config.autoRefreshInterval

@@ -157,6 +157,11 @@ class AlarmWorker(
             .addAction(customSnoozeAction)
             .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.start), startPending)
             .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.done), donePending)
+            .addExtras(android.os.Bundle().apply {
+                putString("cfait_task_uid", taskUid)
+                putString("cfait_alarm_uid", alarmUid)
+                putString("cfait_notif_type", "alarm")
+            })
             .build()
 
         NotificationManagerCompat.from(context).notify(alarmUid.hashCode(), notification)
