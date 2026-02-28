@@ -373,7 +373,7 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
             items: vec![
                 HelpItem {
                     keys: "c".to_string(),
-                    desc: rust_i18n::t!("help_keyboard_link_yanked_child").to_string(),
+                    desc: rust_i18n::t!("help_metadata_link_yanked_child").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
@@ -383,12 +383,12 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "b".to_string(),
-                    desc: rust_i18n::t!("help_keyboard_mark_blocked_by_yanked").to_string(),
+                    desc: rust_i18n::t!("help_metadata_mark_blocked").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "l".to_string(),
-                    desc: rust_i18n::t!("help_keyboard_relate_to_yanked").to_string(),
+                    desc: rust_i18n::t!("help_metadata_relate_selected").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
@@ -403,12 +403,12 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "L".to_string(),
-                    desc: rust_i18n::t!("help_keyboard_jump_related_tasks").to_string(),
+                    desc: rust_i18n::t!("help_metadata_jump_related").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "Enter".to_string(),
-                    desc: rust_i18n::t!("help_keyboard_toggle_subtasks_expansion").to_string(),
+                    desc: rust_i18n::t!("help_metadata_toggle_subtasks").to_string(),
                     example: "".to_string(),
                 },
             ],
@@ -438,12 +438,12 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "*".to_string(),
-                    desc: rust_i18n::t!("help_keyboard_clear_filters").to_string(),
+                    desc: rust_i18n::t!("support_clear_filters").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "Right".to_string(),
-                    desc: rust_i18n::t!("help_keyboard_isolate_calendar").to_string(),
+                    desc: rust_i18n::t!("support_isolate_calendar").to_string(),
                     example: "".to_string(),
                 },
             ],

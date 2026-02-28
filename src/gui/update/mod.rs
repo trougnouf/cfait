@@ -282,8 +282,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                             };
                             current_ts = Some(dt.to_rfc3339());
                         }
-                    } else if type_key_with_colon == "implicit_start:" {
-                        if let Some(start) = &store_task.dtstart {
+                    } else if type_key_with_colon == "implicit_start:"
+                        && let Some(start) = &store_task.dtstart {
                             let dt = match start {
                                 crate::model::DateType::Specific(t) => *t,
                                 crate::model::DateType::AllDay(d) => d
@@ -294,21 +294,18 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                             };
                             current_ts = Some(dt.to_rfc3339());
                         }
-                    }
                     if current_ts.as_deref() != Some(expected_ts) {
                         return false;
                     }
                 } else {
                     return false;
                 }
-            } else {
-                if let Some(store_alarm) = store_task.alarms.iter().find(|a| a.uid == alarm.uid) {
-                    if store_alarm.acknowledged.is_some() {
-                        return false;
-                    }
-                } else {
-                    return false; // explicit alarm was removed
+            } else if let Some(store_alarm) = store_task.alarms.iter().find(|a| a.uid == alarm.uid) {
+                if store_alarm.acknowledged.is_some() {
+                    return false;
                 }
+            } else {
+                return false; // explicit alarm was removed
             }
             true
         } else {

@@ -355,8 +355,8 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
         // Prune obsolete active alarm
         if let Some((active_task, a_uid)) = &app_state.active_alarm {
             let mut keep = false;
-            if let Some(store_task) = app_state.store.get_task_ref(&active_task.uid) {
-                if !store_task.status.is_done() {
+            if let Some(store_task) = app_state.store.get_task_ref(&active_task.uid)
+                && !store_task.status.is_done() {
                     if a_uid.starts_with("implicit_") {
                         let parts: Vec<&str> = a_uid.split('|').collect();
                         if parts.len() >= 2 {
@@ -384,8 +384,8 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                                     };
                                     current_ts = Some(dt.to_rfc3339());
                                 }
-                            } else if type_key_with_colon == "implicit_start:" {
-                                if let Some(start) = &store_task.dtstart {
+                            } else if type_key_with_colon == "implicit_start:"
+                                && let Some(start) = &store_task.dtstart {
                                     let dt = match start {
                                         crate::model::DateType::Specific(t) => *t,
                                         crate::model::DateType::AllDay(d) => d
@@ -396,20 +396,16 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                                     };
                                     current_ts = Some(dt.to_rfc3339());
                                 }
-                            }
                             if current_ts.as_deref() == Some(expected_ts) {
                                 keep = true;
                             }
                         }
                     } else if let Some(store_alarm) =
                         store_task.alarms.iter().find(|a| a.uid == *a_uid)
-                    {
-                        if store_alarm.acknowledged.is_none() {
+                        && store_alarm.acknowledged.is_none() {
                             keep = true;
                         }
-                    }
                 }
-            }
             if !keep {
                 app_state.active_alarm = None;
                 if app_state.mode == crate::tui::state::InputMode::Snoozing {

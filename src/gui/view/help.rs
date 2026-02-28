@@ -53,7 +53,7 @@ pub fn view_help<'a>(tab: HelpTab, _app: &'a GuiApp) -> Element<'a, Message> {
             })
             .width(Length::Fill)
             .on_press(Message::OpenHelp(HelpTab::Syntax)),
-        button(text(rust_i18n::t!("help_keyboard")))
+        button(text(rust_i18n::t!("keyboard_shortcuts")))
             .style(if tab == HelpTab::Keyboard {
                 iced::widget::button::primary
             } else {

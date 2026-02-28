@@ -351,7 +351,7 @@
   "help_keyboard_move_selection": "Move selection down / up",
   "help_keyboard_scroll_page": "Scroll page down / up",
   "help_keyboard_zoom_ui": "Zoom UI in / out / reset (GUI)",
-  "help_keyboard_zoom_example": "Ctrl + Scroll also works",
+  "help_keyboard_zoom_note": "Ctrl + Scroll also works",
 
   "help_metadata_link_yanked_child": "Link yanked as child",
   "help_metadata_mark_blocked": "Mark selected as blocked by yanked",
@@ -362,7 +362,7 @@
 
   "support_toggle_tag_match_logic": "Toggle tag match logic",
   "support_toggle_hide_completed_tasks": "Toggle hide completed tasks",
-  "support_clear_filters": "Clear all filters / Show all calendars",
+  "support_clear_filters": "Clear all filters / Show all collections",
   "support_switch_sidebar_tab": "Switch sidebar tab (Calendars, Tags, Locations)",
-  "support_isolate_calendar": "Isolate calendar / Focus tag or location"
+  "support_isolate_calendar": "Isolate collection / Focus tag or location"
 }
