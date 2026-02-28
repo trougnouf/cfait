@@ -947,7 +947,7 @@ impl Task {
                         + chrono::Duration::minutes(match alarm.trigger {
                             AlarmTrigger::Relative(mins) => mins as i64,
                             _ => 0,
-                        } as i64)
+                        })
                 }
             };
 

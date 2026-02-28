@@ -1,5 +1,5 @@
-/* File: ./android/app/src/main/java/com/trougnouf/cfait/ui/SettingsScreen.kt
- *
+// File: ./android/app/src/main/java/com/trougnouf/cfait/ui/SettingsScreen.kt
+/*
  * Settings screen for the Android client (Compose).
  * This variant moves Trash Retention to the Advanced Settings screen,
  * so the inline trash field and its state have been removed.
@@ -130,6 +130,37 @@ fun SettingsScreen(
 
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    var languageExpanded by remember { mutableStateOf(false) }
+    var selectedLanguage by remember { mutableStateOf<String?>(null) }
+
+    // Load persisted choice when reloading settings
+    LaunchedEffect(Unit) {
+        val prefs = context.getSharedPreferences("cfait_prefs", android.content.Context.MODE_PRIVATE)
+        val savedLang = prefs.getString("language", null)
+        selectedLanguage = if (savedLang == "auto") null else savedLang
+    }
+
+    val systemDefaultLabel = stringResource(R.string.language_system)
+    val languageOptions = remember(systemDefaultLabel) {
+        val options = mutableListOf<Pair<String?, String>>(
+            null to systemDefaultLabel
+        )
+        val locales = try {
+            api.getAvailableLocales()
+        } catch (e: Exception) {
+            emptyList<String>()
+        }
+        for (code in locales) {
+            val loc = java.util.Locale.forLanguageTag(code)
+            val nativeName = loc.getDisplayName(loc)
+            val capitalized = nativeName.replaceFirstChar {
+                if (it.isLowerCase()) it.titlecase(loc) else it.toString()
+            }
+            options.add(code to capitalized)
+        }
+        options
+    }
 
     fun formatDuration(m: UInt): String {
         val min = m.toInt()
@@ -331,161 +362,147 @@ fun SettingsScreen(
                 }
             }
 
-            // 2. Appearance
+            // 2. Appearance & Language
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
-                Text(
-                    stringResource(R.string.app_theme),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                )
 
-                Box {
-                    // Theme selector card (localized)
-                    OutlinedCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { themeExpanded = true },
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(
-                                    androidx.compose.ui.res.stringResource(R.string.app_theme),
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = themeOptions.find { it.first == currentTheme }?.second
-                                        ?: androidx.compose.ui.res.stringResource(R.string.theme_auto_detect),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            NfIcon(NfIcons.ARROW_DOWN, 12.sp)
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = themeExpanded,
-                        onDismissRequest = { themeExpanded = false },
-                        modifier = Modifier.fillMaxWidth(0.9f)
-                    ) {
-                        themeOptions.forEach { (key, label) ->
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    onThemeChange(key)
-                                    themeExpanded = false
-                                },
-                                leadingIcon = if (currentTheme == key) {
-                                    { NfIcon(NfIcons.CHECK, 16.sp) }
-                                } else null
-                            )
-                        }
-                    }
-
-                    // Language selector (persistent to Android SharedPreferences).
-                    var languageExpanded by remember { mutableStateOf(false) }
-                    var selectedLanguage by remember { mutableStateOf<String?>(null) }
-
-                    // Dynamically build options from the Rust backend using native Java Locale resolution
-                    val systemDefaultLabel = stringResource(R.string.language_system)
-                    val languageOptions = remember(systemDefaultLabel) {
-                        val options = mutableListOf<Pair<String?, String>>(
-                            null to systemDefaultLabel
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Theme
+                    Column {
+                        Text(
+                            stringResource(R.string.app_theme),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                            color = MaterialTheme.colorScheme.primary,
                         )
-                        val locales = try {
-                            api.getAvailableLocales()
-                        } catch (e: Exception) {
-                            emptyList<String>()
-                        }
-                        for (code in locales) {
-                            val loc = java.util.Locale.forLanguageTag(code)
-                            // Gets the native name (e.g. "Français", "Deutsch") and capitalizes it
-                            val nativeName = loc.getDisplayName(loc)
-                            val capitalized = nativeName.replaceFirstChar {
-                                if (it.isLowerCase()) it.titlecase(loc) else it.toString()
-                            }
-                            options.add(code to capitalized)
-                        }
-                        options
-                    }
-
-                    // Load persisted choice when reloading settings
-                    LaunchedEffect(Unit) {
-                        val prefs = context.getSharedPreferences("cfait_prefs", android.content.Context.MODE_PRIVATE)
-                        val savedLang = prefs.getString("language", null)
-                        selectedLanguage = if (savedLang == "auto") null else savedLang
-                    }
-
-                    OutlinedCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp)
-                            .clickable { languageExpanded = true },
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column {
-                                Text(
-                                    stringResource(R.string.language),
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    // Display the pretty label for the selected code
-                                    text = languageOptions.find { it.first == selectedLanguage }?.second
-                                        ?: systemDefaultLabel,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            NfIcon(NfIcons.ARROW_DOWN, 12.sp)
-                        }
-                    }
-
-                    DropdownMenu(
-                        expanded = languageExpanded,
-                        onDismissRequest = { languageExpanded = false },
-                        modifier = Modifier.fillMaxWidth(0.9f)
-                    ) {
-                        languageOptions.forEach { (code, label) ->
-                            DropdownMenuItem(
-                                text = { Text(label) },
-                                onClick = {
-                                    val prefs = context.getSharedPreferences(
-                                        "cfait_prefs",
-                                        android.content.Context.MODE_PRIVATE
-                                    )
-                                    val saveVal = code ?: "auto"
-                                    prefs.edit().putString("language", saveVal).apply()
-                                    selectedLanguage = code
-                                    languageExpanded = false
-
-                                    // Update Rust backend
-                                    api.setLocale(code ?: java.util.Locale.getDefault().language)
-
-                                    // Update Android UI (safely recreates the Activity)
-                                    if (code != null) {
-                                        androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
-                                            androidx.core.os.LocaleListCompat.forLanguageTags(code)
+                        Box {
+                            OutlinedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { themeExpanded = true },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text(
+                                            stringResource(R.string.app_theme),
+                                            fontWeight = FontWeight.SemiBold
                                         )
-                                    } else {
-                                        androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
-                                            androidx.core.os.LocaleListCompat.getEmptyLocaleList()
+                                        Text(
+                                            text = themeOptions.find { it.first == currentTheme }?.second
+                                                ?: stringResource(R.string.theme_auto_detect),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                },
-                                leadingIcon = if (selectedLanguage == code) {
-                                    { NfIcon(NfIcons.CHECK, 16.sp) }
-                                } else null
-                            )
+                                    NfIcon(NfIcons.ARROW_DOWN, 12.sp)
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = themeExpanded,
+                                onDismissRequest = { themeExpanded = false },
+                                modifier = Modifier.fillMaxWidth(0.9f)
+                            ) {
+                                themeOptions.forEach { (key, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            onThemeChange(key)
+                                            themeExpanded = false
+                                        },
+                                        leadingIcon = if (currentTheme == key) {
+                                            { NfIcon(NfIcons.CHECK, 16.sp) }
+                                        } else null
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Language
+                    Column {
+                        Text(
+                            stringResource(R.string.language),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+
+                        Box {
+                            OutlinedCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { languageExpanded = true },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text(
+                                            stringResource(R.string.language),
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = languageOptions.find { it.first == selectedLanguage }?.second
+                                                ?: systemDefaultLabel,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    NfIcon(NfIcons.ARROW_DOWN, 12.sp)
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = languageExpanded,
+                                onDismissRequest = { languageExpanded = false },
+                                modifier = Modifier.fillMaxWidth(0.9f)
+                            ) {
+                                languageOptions.forEach { (code, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            val prefs = context.getSharedPreferences(
+                                                "cfait_prefs",
+                                                android.content.Context.MODE_PRIVATE
+                                            )
+                                            val saveVal = code ?: "auto"
+                                            prefs.edit().putString("language", saveVal).apply()
+                                            selectedLanguage = code
+                                            languageExpanded = false
+
+                                            // Update Rust backend
+                                            api.setLocale(code ?: java.util.Locale.getDefault().language)
+
+                                            // Update Android UI (Native API 33+ or AppCompat API < 33)
+                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                                val localeManager = context.getSystemService(android.app.LocaleManager::class.java)
+                                                localeManager.applicationLocales = if (code != null) {
+                                                    android.os.LocaleList.forLanguageTags(code)
+                                                } else {
+                                                    android.os.LocaleList.getEmptyLocaleList()
+                                                }
+                                            } else {
+                                                androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
+                                                    if (code != null) androidx.core.os.LocaleListCompat.forLanguageTags(code)
+                                                    else androidx.core.os.LocaleListCompat.getEmptyLocaleList()
+                                                )
+                                                // Force recreate for ComponentActivity on older APIs
+                                                (context as? android.app.Activity)?.recreate()
+                                            }
+                                        },
+                                        leadingIcon = if (selectedLanguage == code) {
+                                            { NfIcon(NfIcons.CHECK, 16.sp) }
+                                        } else null
+                                    )
+                                }
+                            }
                         }
                     }
                 }
