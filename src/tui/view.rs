@@ -1046,7 +1046,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
     if let Some((task, _alarm_uid)) = &state.active_alarm {
         let area = centered_rect(60, 40, f.area());
         let block = Block::default()
-            .title(format!(" {} ", rust_i18n::t!("reminder_title_upper")))
+            .title(format!(" {} ", rust_i18n::t!("reminder_title"))) // TODO upper?
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::LightRed));
         let mut lines = vec![

@@ -409,7 +409,7 @@ fun TaskRow(
                 }
                 DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                     DropdownMenuItem(
-                        text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_edit)) },
+                        text = { Text(androidx.compose.ui.res.stringResource(R.string.edit)) },
                         onClick = {
                             expanded = false
                             onClick(task.uid)
@@ -420,11 +420,11 @@ fun TaskRow(
                         text = {
                             Text(
                                 if (task.statusString == "InProcess") {
-                                    androidx.compose.ui.res.stringResource(R.string.menu_pause)
+                                    androidx.compose.ui.res.stringResource(R.string.pause)
                                 } else if (task.isPaused) {
                                     androidx.compose.ui.res.stringResource(R.string.menu_resume)
                                 } else {
-                                    androidx.compose.ui.res.stringResource(R.string.menu_start)
+                                    androidx.compose.ui.res.stringResource(R.string.start)
                                 },
                             )
                         },
@@ -441,7 +441,7 @@ fun TaskRow(
                     )
                     if (task.statusString == "InProcess" || task.isPaused) {
                         DropdownMenuItem(
-                            text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_stop_reset)) },
+                            text = { Text(androidx.compose.ui.res.stringResource(R.string.stop_reset)) },
                             onClick = {
                                 expanded = false
                                 onAction("stop")
@@ -449,7 +449,7 @@ fun TaskRow(
                             leadingIcon = { NfIcon(NfIcons.DEBUG_STOP, 16.sp) })
                     }
                     DropdownMenuItem(
-                        text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_increase_prio)) },
+                        text = { Text(androidx.compose.ui.res.stringResource(R.string.increase_priority)) },
                         onClick = {
                             expanded = false
                             onAction("prio_up")
@@ -473,7 +473,7 @@ fun TaskRow(
                     }
 
                     DropdownMenuItem(
-                        text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_create_subtask)) },
+                        text = { Text(androidx.compose.ui.res.stringResource(R.string.create_subtask)) },
                         onClick = {
                             expanded = false
                             onAction("create_child")

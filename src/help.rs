@@ -309,7 +309,7 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
             ],
         },
         HelpSection {
-            title: rust_i18n::t!("menu_edit").to_string(),
+            title: rust_i18n::t!("edit").to_string(),
             items: vec![
                 HelpItem {
                     keys: "a".to_string(),
@@ -353,7 +353,7 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "+ / -".to_string(),
-                    desc: rust_i18n::t!("menu_increase_prio").to_string(),
+                    desc: rust_i18n::t!("increase_priority").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
