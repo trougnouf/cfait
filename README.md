@@ -506,3 +506,4 @@ Have a question, found a bug, a great idea, or just want to chat?
 
 *   **🗨️ Chat:** on [#Cfait:matrix.org](https://matrix.to/#/#Cfait:matrix.org).
 *   **🐛 Report a Bug / ✨ Request a Feature:** [Open an issue on Codeberg](https://codeberg.org/trougnouf/cfait/issues) (or [Github](https://github.com/trougnouf/cfait/issues)).
+*   **🌐 Translate:** Help translate Cfait on [Codeberg Translate](https://translate.codeberg.org/projects/cfait/).
