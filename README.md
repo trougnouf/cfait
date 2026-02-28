@@ -434,7 +434,7 @@ If you are using the Terminal interface (or the GUI), here are the essentials (*
 *   `s`: Toggle **Start / Pause**
 *   `S`: **Stop** (Reset to Needs Action)
 *   `x`: **Cancel** task
-*   `d`: **Delete** task
+*   `Delete`: **Delete** task
 *   `R`: **Random Jump** (weighted random, ignores completed/cancelled tasks)
 
 **Organization & Hierarchy**
@@ -453,8 +453,6 @@ If you are using the Terminal interface (or the GUI), here are the essentials (*
 **Note:** The sidebar shows hierarchical tags and locations. For example, if you have tasks with `#work:project:urgent` and `#work:meeting`, they'll be organized under the `#work` parent in the sidebar.
 
 The GUI also supports `/` for search and `a` for adding tasks.
-
-The configuration file is documented in https://codeberg.org/trougnouf/cfait/wiki/Configuration
 
 <a name="support"></a>
 ## 🤗 Support

@@ -85,7 +85,6 @@ fn handle_hotkey(
                 match (s_lower.as_str(), modifiers.shift()) {
                     ("j", false) => Some(Message::SelectNextTask),
                     ("k", false) => Some(Message::SelectPrevTask),
-                    ("d", false) => Some(Message::DeleteSelected),
                     ("e", false) => Some(Message::EditSelected),
                     ("e", true) => Some(Message::EditSelectedDescription),
                     ("s", false) => Some(Message::ToggleActiveSelected),
@@ -126,6 +125,8 @@ fn handle_hotkey(
             keyboard::Key::Named(Named::PageUp) => Some(Message::SelectPrevPage),
             keyboard::Key::Named(Named::Space) => Some(Message::ToggleSelected),
             keyboard::Key::Named(Named::Escape) => Some(Message::EscapePressed),
+            // Use the Delete key (instead of the letter 'd') to delete the selected task
+            keyboard::Key::Named(Named::Delete) => Some(Message::DeleteSelected),
 
             _ => None,
         }

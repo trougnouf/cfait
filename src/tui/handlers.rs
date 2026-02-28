@@ -80,7 +80,7 @@ pub async fn handle_key_event(
             // Fall through to normal input handling below
         } else {
             match key.code {
-                KeyCode::Char('D') | KeyCode::Char('d') => {
+                KeyCode::Delete | KeyCode::Char('D') | KeyCode::Char('d') => {
                     if let Some((t, _)) = state.store.get_task_mut(&task.uid)
                         && t.handle_dismiss(&alarm_uid)
                     {
@@ -760,7 +760,7 @@ pub async fn handle_key_event(
                     return Some(Action::UpdateTask(updated));
                 }
             }
-            KeyCode::Char('d') => {
+            KeyCode::Delete => {
                 if let Some(view_task) = state.get_selected_task() {
                     let uid = view_task.uid.clone();
                     let is_trash = view_task.calendar_href == LOCAL_TRASH_HREF;

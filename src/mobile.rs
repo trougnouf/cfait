@@ -1689,8 +1689,8 @@ impl CfaitMobile {
             return task.status == crate::model::TaskStatus::InProcess;
         }
 
-        if notif_type == "alarm" {
-            if let Some(a_uid) = alarm_uid {
+        if notif_type == "alarm"
+            && let Some(a_uid) = alarm_uid {
                 if let Some(alarm) = task.alarms.iter().find(|a| a.uid == a_uid) {
                     if alarm.acknowledged.is_some() {
                         return false;
@@ -1722,8 +1722,8 @@ impl CfaitMobile {
                                 };
                                 current_ts = Some(dt.to_rfc3339());
                             }
-                        } else if type_key_with_colon == "implicit_start:" {
-                            if let Some(start) = &task.dtstart {
+                        } else if type_key_with_colon == "implicit_start:"
+                            && let Some(start) = &task.dtstart {
                                 let dt = match start {
                                     crate::model::DateType::Specific(t) => *t,
                                     crate::model::DateType::AllDay(d) => d
@@ -1734,7 +1734,6 @@ impl CfaitMobile {
                                 };
                                 current_ts = Some(dt.to_rfc3339());
                             }
-                        }
 
                         // If the date changed or was removed, the old implicit alarm is obsolete
                         if current_ts.as_deref() != Some(expected_ts) {
@@ -1746,7 +1745,6 @@ impl CfaitMobile {
                     return false;
                 }
             }
-        }
 
         true
     }

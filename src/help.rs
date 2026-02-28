@@ -325,7 +325,7 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                     example: "".to_string(),
                 },
                 HelpItem {
-                    keys: "d".to_string(),
+                    keys: "Delete".to_string(),
                     desc: rust_i18n::t!("delete").to_string(),
                     example: "".to_string(),
                 },
