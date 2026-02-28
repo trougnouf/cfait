@@ -1,4 +1,4 @@
-// File: src/gui/update/network.rs
+// File: ./src/gui/update/network.rs
 use crate::cache::Cache;
 use crate::config::Config;
 use crate::gui::async_ops::*;
@@ -129,7 +129,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let _ = tx.try_send(SystemEvent::EnableAlarms);
             }
 
-            let scroll_cmd = scroll_to_selected(app, true);
+            // FIXED: Set focus to false so it doesn't steal focus from text inputs
+            // when loading completes in the background.
+            let scroll_cmd = scroll_to_selected(app, false);
 
             if app.error_msg.is_none() {
                 app.loading = true;
@@ -161,7 +163,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             app.loading = false;
 
-            scroll_to_selected(app, true)
+            // FIXED: Do not steal focus after background sync completes
+            scroll_to_selected(app, false)
         }
         Message::RefreshedAll(Err(e)) => {
             app.error_msg = Some(format!("Sync warning: {}", e));
@@ -176,7 +179,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.active_cal_href.as_deref() == Some(&href) {
                 refresh_filtered_tasks(app);
                 app.loading = false;
-                return scroll_to_selected(app, true);
+                // FIXED: Do not steal focus after changing calendars
+                return scroll_to_selected(app, false);
             }
             Task::none()
         }
