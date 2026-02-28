@@ -39,7 +39,6 @@ pub fn run_with_ics_file(
         window_icon::from_file_data(include_bytes!("../../assets/autogen/cfait.png"), None).ok();
 
     iced::application(
-        // Pass force_ssd down into app initialization
         move || GuiApp::new_with_ics(ics_file_path.clone(), override_root.clone(), force_ssd),
         GuiApp::update,
         GuiApp::view,
@@ -47,10 +46,8 @@ pub fn run_with_ics_file(
     .title(GuiApp::title)
     .subscription(GuiApp::subscription)
     .theme(GuiApp::theme)
-    // Window-level styling: pick an appropriate background depending on SSD vs CSD
-    .style(|state, _appearance| {
-        // `state` is &GuiApp here; obtain the Theme into a local binding so its
-        // palette does not borrow from a temporary value that is dropped.
+    .scale_factor(|state: &GuiApp| state.ui_scale)
+    .style(|state: &GuiApp, _theme: &Theme| {
         let theme_binding = state.theme();
         let palette = theme_binding.extended_palette();
         iced::theme::Style {
@@ -67,8 +64,8 @@ pub fn run_with_ics_file(
     })
     .window(window::Settings {
         icon: window_icon,
-        decorations: force_ssd,  // Enable native decorations when forced
-        transparent: !force_ssd, // Only allow transparency when not using native decorations
+        decorations: force_ssd,
+        transparent: !force_ssd,
         platform_specific: window::settings::PlatformSpecific {
             #[cfg(target_os = "linux")]
             application_id: String::from("cfait"),

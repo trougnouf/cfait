@@ -32,6 +32,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 handle(app, Message::ToggleDetails(uid))
             }
         }
+        // --- UI Zoom (global scale factor) ---
+        Message::ZoomIn => {
+            // Increase scale by 10%, clamp at 300%
+            app.ui_scale = (app.ui_scale + 0.1).min(3.0);
+            Task::none()
+        }
+        Message::ZoomOut => {
+            // Decrease scale by 10%, clamp at 50%
+            app.ui_scale = (app.ui_scale - 0.1).max(0.5);
+            Task::none()
+        }
+        Message::ZoomReset => {
+            app.ui_scale = 1.0;
+            Task::none()
+        }
+
         Message::SelectNextPage => {
             if app.tasks.is_empty() {
                 return Task::none();

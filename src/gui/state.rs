@@ -194,6 +194,9 @@ pub struct GuiApp {
 
     // ADDED: Auto Refresh
     pub auto_refresh_interval_mins: u32,
+
+    // ADDED: UI Scale (for global zooming)
+    pub ui_scale: f32,
 }
 
 impl Default for GuiApp {
@@ -353,6 +356,9 @@ impl Default for GuiApp {
             },
 
             auto_refresh_interval_mins: 30,
+
+            // Default UI scale
+            ui_scale: 1.0,
 
             last_click: None,
 

@@ -1,3 +1,4 @@
+cfait/locales/en.json
 {
   "active_alarm": "Active alarm",
   "add": "Add",
@@ -351,5 +352,28 @@
   "max": "Max",
   "min": "Min",
   "notifications_and_reminders": "Notifications and reminders",
-  "translation_help": "Help translate Cfait: %{url}"
+  "translation_help": "Help translate Cfait: %{url}",
+
+  "help_title": "Help & about",
+  "increase_priority": "Increase priority",
+  "move_label": "Move",
+
+  "help_keyboard_switch_focus": "Switch focus",
+  "help_keyboard_move_selection": "Move selection down / up",
+  "help_keyboard_scroll_page": "Scroll page down / up",
+  "help_keyboard_zoom_ui": "Zoom UI in / out / reset (GUI)",
+  "help_keyboard_zoom_example": "Ctrl + Scroll also works",
+
+  "help_metadata_link_yanked_child": "Link yanked as child",
+  "help_metadata_mark_blocked": "Mark selected as blocked by yanked",
+  "help_metadata_relate_selected": "Relate selected to yanked",
+  "help_metadata_demote": "Demote (make child of task above)",
+  "help_metadata_jump_related": "Jump to related tasks menu",
+  "help_metadata_toggle_subtasks": "Toggle completed subtasks expansion",
+
+  "support_toggle_tag_match_logic": "Toggle tag match logic",
+  "support_toggle_hide_completed_tasks": "Toggle hide completed tasks",
+  "support_clear_filters": "Clear all filters / Show all calendars",
+  "support_switch_sidebar_tab": "Switch sidebar tab (Calendars, Tags, Locations)",
+  "support_isolate_calendar": "Isolate calendar / Focus tag or location"
 }

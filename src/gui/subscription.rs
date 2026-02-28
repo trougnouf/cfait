@@ -2,6 +2,10 @@
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp, SidebarMode};
 use iced::{Subscription, event, keyboard, window};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+// Tracks the Command/Ctrl modifier state statelessly so Mouse events can check it
+static CMD_HELD: AtomicBool = AtomicBool::new(false);
 
 pub fn subscription(app: &GuiApp) -> Subscription<Message> {
     use iced::keyboard::key::Named;
@@ -60,8 +64,36 @@ fn handle_hotkey(
 ) -> Option<Message> {
     use iced::keyboard::key::Named;
 
+    // Track modifier state globally for mouse events
+    if let iced::Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) = &evt {
+        CMD_HELD.store(
+            modifiers.control() || modifiers.command(),
+            Ordering::Relaxed,
+        );
+    }
+
+    // Handle Ctrl + Scroll (Zoom In/Out)
+    if let iced::Event::Mouse(iced::mouse::Event::WheelScrolled { delta }) = &evt
+        && CMD_HELD.load(Ordering::Relaxed) {
+            match delta {
+                iced::mouse::ScrollDelta::Lines { y, .. }
+                | iced::mouse::ScrollDelta::Pixels { y, .. } => {
+                    if *y > 0.0 {
+                        return Some(Message::ZoomIn);
+                    } else if *y < 0.0 {
+                        return Some(Message::ZoomOut);
+                    }
+                }
+            }
+        }
+
+    // Handle Ctrl + Middle Click (Zoom Reset)
+    if let iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Middle)) = &evt
+        && CMD_HELD.load(Ordering::Relaxed) {
+            return Some(Message::ZoomReset);
+        }
+
     // Allow Escape to work even when input is captured — notify the app that Esc was pressed while captured.
-    // The tasks update handler will decide whether to CancelEdit immediately (modal) or to SnapToSelected (non-modal).
     if status == iced::event::Status::Captured {
         if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = evt
             && key == keyboard::Key::Named(Named::Escape)
@@ -72,7 +104,21 @@ fn handle_hotkey(
     }
 
     if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = evt {
-        // Ignore if Ctrl/Alt/Cmd is held (avoids conflict with system shortcuts)
+        // Catch zoom shortcuts (Ctrl/Cmd + '+' / '-' / '0') BEFORE we ignore modifier combinations.
+        let is_cmd = modifiers.command() || modifiers.control();
+
+        if is_cmd
+            && let keyboard::Key::Character(s) = key.as_ref() {
+                // Using .as_ref() bypasses the unstable str_as_str feature
+                match s {
+                    "+" | "=" => return Some(Message::ZoomIn),
+                    "-" => return Some(Message::ZoomOut),
+                    "0" => return Some(Message::ZoomReset),
+                    _ => {}
+                }
+            }
+
+        // Ignore if Ctrl/Alt/Cmd is held for everything else
         if modifiers.command() || modifiers.control() || modifiers.alt() {
             return None;
         }
@@ -82,7 +128,7 @@ fn handle_hotkey(
             keyboard::Key::Character(s) => {
                 let s_lower = s.to_lowercase();
                 // Match on lowercase char + shift state tuple for alphabetic keys
-                match (s_lower.as_str(), modifiers.shift()) {
+                match (s_lower.as_ref(), modifiers.shift()) {
                     ("j", false) => Some(Message::SelectNextTask),
                     ("k", false) => Some(Message::SelectPrevTask),
                     ("e", false) => Some(Message::EditSelected),

@@ -1,4 +1,7 @@
-// Defines all messages used for the Elm architecture in the GUI.
+/*
+File: cfait/src/gui/message.rs
+Defines all messages used for the Elm architecture in the GUI.
+*/
 
 use crate::client::RustyClient;
 use crate::config::{AppTheme, Config};
@@ -82,6 +85,11 @@ pub enum Message {
     FocusInput,
     FocusSearch,
     Refresh,
+
+    // Zoom controls (Ctrl/Cmd + '+' / '-' / '0')
+    ZoomIn,
+    ZoomOut,
+    ZoomReset,
 
     // --- View & Filter ---
     SetMinDuration(Option<u32>),

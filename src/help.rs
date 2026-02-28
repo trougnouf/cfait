@@ -188,7 +188,7 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "rem:10m".to_string(),
                     desc: rust_i18n::t!("help_metadata_relative_reminder").to_string(),
-                    example: "Adjusts if date changes".to_string(),
+                    example: rust_i18n::t!("help_metadata_adjusts_if_due_changes").to_string(),
                 },
                 HelpItem {
                     keys: "rem:in 5m".to_string(),
@@ -268,7 +268,8 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
 /// Returns localized keyboard help sections.
 ///
 /// Many of the keyboard descriptions are short action names; where a translation
-/// key exists we use it, otherwise we fall back to concise English phrases.
+/// key exists we use it, otherwise we fall back to concise translation keys so
+/// the text can be localized.
 pub fn get_keyboard_help() -> Vec<HelpSection> {
     vec![
         HelpSection {
@@ -276,7 +277,8 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
             items: vec![
                 HelpItem {
                     keys: "?".to_string(),
-                    desc: rust_i18n::t!("help_title").to_string(), // "Help & about"
+                    // prefer the "about" label already in translations
+                    desc: rust_i18n::t!("help_about").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
@@ -287,17 +289,22 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "Tab".to_string(),
                     desc: rust_i18n::t!("toggle_matching_logic").to_string(), // best-effort mapping
-                    example: "Switch focus".to_string(),
+                    example: rust_i18n::t!("help_keyboard_switch_focus").to_string(),
                 },
                 HelpItem {
                     keys: "j / k".to_string(),
-                    desc: "Move selection down / up".to_string(),
+                    desc: rust_i18n::t!("help_keyboard_move_selection").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "PgDn / PgUp".to_string(),
-                    desc: "Scroll page down / up".to_string(),
+                    desc: rust_i18n::t!("help_keyboard_scroll_page").to_string(),
                     example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Ctrl + / - / 0".to_string(),
+                    desc: rust_i18n::t!("help_keyboard_zoom_ui").to_string(),
+                    example: rust_i18n::t!("help_keyboard_zoom_note").to_string(),
                 },
             ],
         },
@@ -341,12 +348,12 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "x".to_string(),
-                    desc: "Cancel".to_string(),
+                    desc: rust_i18n::t!("cancel").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "+ / -".to_string(),
-                    desc: rust_i18n::t!("increase_priority").to_string(),
+                    desc: rust_i18n::t!("menu_increase_prio").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
@@ -366,42 +373,42 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
             items: vec![
                 HelpItem {
                     keys: "c".to_string(),
-                    desc: "Link yanked as child".to_string(),
+                    desc: rust_i18n::t!("help_keyboard_link_yanked_child").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "C".to_string(),
-                    desc: "Create new subtask".to_string(),
+                    desc: rust_i18n::t!("create_subtask").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "b".to_string(),
-                    desc: "Mark selected as blocked by yanked".to_string(),
+                    desc: rust_i18n::t!("help_keyboard_mark_blocked_by_yanked").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "l".to_string(),
-                    desc: "Relate selected to yanked".to_string(),
+                    desc: rust_i18n::t!("help_keyboard_relate_to_yanked").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "> / .".to_string(),
-                    desc: "Demote (make child of task above)".to_string(),
+                    desc: rust_i18n::t!("make_child").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "< / ,".to_string(),
-                    desc: "Promote (remove parent)".to_string(),
+                    desc: rust_i18n::t!("promote_remove_parent").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "L".to_string(),
-                    desc: "Jump to related tasks menu".to_string(),
+                    desc: rust_i18n::t!("help_keyboard_jump_related_tasks").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "Enter".to_string(),
-                    desc: "Toggle completed subtasks expansion".to_string(),
+                    desc: rust_i18n::t!("help_keyboard_toggle_subtasks_expansion").to_string(),
                     example: "".to_string(),
                 },
             ],
@@ -417,26 +424,26 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "1, 2, 3".to_string(),
                     desc: rust_i18n::t!("menu_move").to_string(),
-                    example: "Switch sidebar tab (Calendars, Tags, Locations)".to_string(),
+                    example: rust_i18n::t!("help_keyboard_switch_sidebar_tab").to_string(),
                 },
                 HelpItem {
                     keys: "m".to_string(),
-                    desc: "Toggle tag match logic".to_string(),
+                    desc: rust_i18n::t!("toggle_matching_logic").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "H".to_string(),
-                    desc: "Toggle hide completed tasks".to_string(),
+                    desc: rust_i18n::t!("hide_completed_and_canceled_tasks").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "*".to_string(),
-                    desc: "Clear all filters / Show all calendars".to_string(),
+                    desc: rust_i18n::t!("help_keyboard_clear_filters").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
                     keys: "Right".to_string(),
-                    desc: "Isolate calendar / Focus tag or location".to_string(),
+                    desc: rust_i18n::t!("help_keyboard_isolate_calendar").to_string(),
                     example: "".to_string(),
                 },
             ],
