@@ -1201,7 +1201,18 @@ impl TaskStore {
                 t.is_blocked = check_is_blocked_explicit(&t, &completed_uids);
                 t.is_implicitly_blocked =
                     !t.is_blocked && check_is_effectively_blocked(&t, &completed_uids);
-                t.effective_priority = t.priority;
+                // Penalize blocked tasks by lowering their effective priority so they sort after non-blocked
+                // tasks within the same rank. Numeric priority: lower is better, so increase the numeric
+                // value for blocked tasks (worse priority). Clamp to 9.
+                t.effective_priority = if t.is_blocked || t.is_implicitly_blocked {
+                    if t.priority == 0 {
+                        9
+                    } else {
+                        (t.priority.saturating_add(3)).min(9)
+                    }
+                } else {
+                    t.priority
+                };
                 t.effective_due = t.due.clone();
                 t.effective_dtstart = t.dtstart.clone();
                 t
