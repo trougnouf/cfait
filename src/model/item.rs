@@ -511,18 +511,21 @@ impl Task {
 
         let now = Utc::now();
 
-        // Tasks that start significantly in the future are deferred in ranking.
-        if let Some(start) = &self.dtstart {
-            let start_time = start.to_start_comparison_time();
-            let grace_threshold = now + chrono::Duration::days(start_grace_period_days as i64);
-            if start_time > grace_threshold && !self.has_recent_acknowledged_alarm() {
-                return 7;
+        // De-prioritize future or blocked tasks, but ONLY if they are not already ongoing.
+        if self.status != TaskStatus::InProcess {
+            // Tasks that start significantly in the future are deferred in ranking.
+            if let Some(start) = &self.dtstart {
+                let start_time = start.to_start_comparison_time();
+                let grace_threshold = now + chrono::Duration::days(start_grace_period_days as i64);
+                if start_time > grace_threshold && !self.has_recent_acknowledged_alarm() {
+                    return 7;
+                }
             }
-        }
 
-        // Effectively blocked tasks are deprioritized below normal tasks.
-        if effectively_blocked {
-            return 6;
+            // Effectively blocked tasks are deprioritized below normal tasks.
+            if effectively_blocked {
+                return 6;
+            }
         }
 
         // Urgency buckets based on explicit priority and near due date.
@@ -931,7 +934,7 @@ impl Task {
 
             let trigger_dt = match alarm.trigger {
                 AlarmTrigger::Absolute(dt) => dt,
-                AlarmTrigger::Relative(mins) => {
+                _ => {
                     // Relative triggers are anchored to due or dtstart (prefer due)
                     let anchor = if let Some(DateType::Specific(d)) = self.due {
                         d
@@ -940,7 +943,11 @@ impl Task {
                     } else {
                         continue;
                     };
-                    anchor + chrono::Duration::minutes(mins as i64)
+                    anchor
+                        + chrono::Duration::minutes(match alarm.trigger {
+                            AlarmTrigger::Relative(mins) => mins as i64,
+                            _ => 0,
+                        } as i64)
                 }
             };
 
@@ -1030,8 +1037,8 @@ impl Task {
         };
 
         for cat in &self.categories {
-            if let Some(targets) = aliases.get(cat) {
-                process_expansions(targets);
+            if let Some(val) = aliases.get(cat) {
+                process_expansions(val);
             }
             let mut search = cat.as_str();
             while let Some(idx) = search.rfind(':') {

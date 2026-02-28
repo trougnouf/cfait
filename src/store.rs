@@ -925,13 +925,17 @@ impl TaskStore {
                         if t.status.is_done() {
                             return false;
                         }
-                        if let Some(start) = &t.dtstart
-                            && start.to_start_comparison_time() > now
-                        {
-                            return false;
-                        }
-                        if check_is_effectively_blocked(t, &completed_uids) {
-                            return false;
+                        // InProcess (ongoing) tasks should be considered actionable/ready
+                        // even if they would otherwise be treated as blocked or start in the future.
+                        if t.status != TaskStatus::InProcess {
+                            if let Some(start) = &t.dtstart
+                                && start.to_start_comparison_time() > now
+                            {
+                                return false;
+                            }
+                            if check_is_effectively_blocked(t, &completed_uids) {
+                                return false;
+                            }
                         }
                     }
 
