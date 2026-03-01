@@ -973,7 +973,12 @@ impl RustyClient {
 
         Journal::push(self.ctx.as_ref(), Action::Create(task.clone()))
             .map_err(|e| e.to_string())?;
-        self.sync_journal().await
+        let (warnings, synced) = self.sync_journal().await?;
+        if let Some(s) = synced.into_iter().find(|t| t.uid == task.uid) {
+            task.etag = s.etag;
+            task.href = s.href;
+        }
+        Ok(warnings)
     }
 
     pub async fn update_task(&self, task: &mut Task) -> Result<Vec<String>, String> {
@@ -994,7 +999,12 @@ impl RustyClient {
 
         Journal::push(self.ctx.as_ref(), Action::Update(task.clone()))
             .map_err(|e| e.to_string())?;
-        self.sync_journal().await
+        let (warnings, synced) = self.sync_journal().await?;
+        if let Some(s) = synced.into_iter().find(|t| t.uid == task.uid) {
+            task.etag = s.etag;
+            task.href = s.href;
+        }
+        Ok(warnings)
     }
 
     pub async fn delete_task(&self, task: &Task) -> Result<Vec<String>, String> {
@@ -1008,7 +1018,8 @@ impl RustyClient {
 
         Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()))
             .map_err(|e| e.to_string())?;
-        self.sync_journal().await
+        let (warnings, _) = self.sync_journal().await?;
+        Ok(warnings)
     }
 
     pub async fn move_task(
@@ -1040,7 +1051,7 @@ impl RustyClient {
 
             Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()))
                 .map_err(|e| e.to_string())?;
-            let logs = self.sync_journal().await?;
+            let (logs, _) = self.sync_journal().await?;
             return Ok((new_task, logs));
         }
 
@@ -1092,8 +1103,12 @@ impl RustyClient {
         .map_err(|e| e.to_string())?;
         let mut t = task.clone();
         t.calendar_href = new_calendar_href.to_string();
-        let logs = self.sync_journal().await?;
-        Ok((t, logs))
+        let (warnings, synced) = self.sync_journal().await?;
+        if let Some(s) = synced.into_iter().find(|st| st.uid == task.uid) {
+            t.etag = s.etag;
+            t.href = s.href;
+        }
+        Ok((t, warnings))
     }
 
     pub async fn migrate_tasks(

@@ -60,7 +60,8 @@ async fn test_sync_journal_moves_failed_task_to_recovery() {
         None,
     )
     .unwrap();
-    let warnings = client.sync_journal().await.unwrap();
+    let (warnings, _synced): (Vec<String>, Vec<cfait::model::Task>) =
+        client.sync_journal().await.unwrap();
 
     assert!(
         warnings

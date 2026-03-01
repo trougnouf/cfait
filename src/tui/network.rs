@@ -237,6 +237,20 @@ pub async fn run_network_actor(
                 let href = new_task.calendar_href.clone();
                 match client.create_task(&mut new_task).await {
                     Ok(msgs) => {
+                        // Emit metadata-only sync event so the TUI can patch ETag/href
+                        let _ = event_tx
+                            .send(AppEvent::TaskSynced {
+                                uid: new_task.uid.clone(),
+                                href: new_task.href.clone(),
+                                etag: if new_task.etag.is_empty() {
+                                    "pending_refresh".to_string()
+                                } else {
+                                    new_task.etag.clone()
+                                },
+                                sequence: new_task.sequence,
+                            })
+                            .await;
+
                         if let Ok(t) = client.get_tasks(&href).await {
                             let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
                         }
@@ -262,6 +276,20 @@ pub async fn run_network_actor(
                 let href = task.calendar_href.clone();
                 match client.update_task(&mut task).await {
                     Ok(msgs) => {
+                        // Emit metadata-only sync event so the TUI can patch ETag/href
+                        let _ = event_tx
+                            .send(AppEvent::TaskSynced {
+                                uid: task.uid.clone(),
+                                href: task.href.clone(),
+                                etag: if task.etag.is_empty() {
+                                    "pending_refresh".to_string()
+                                } else {
+                                    task.etag.clone()
+                                },
+                                sequence: task.sequence,
+                            })
+                            .await;
+
                         let s: String = if msgs.is_empty() {
                             rust_i18n::t!("status_saved").to_string()
                         } else {
@@ -357,7 +385,21 @@ pub async fn run_network_actor(
             Action::MoveTask(task, new_href) => {
                 let old_href = task.calendar_href.clone();
                 match client.move_task(&task, &new_href).await {
-                    Ok((_, msgs)) => {
+                    Ok((moved_task, msgs)) => {
+                        // Emit metadata-only sync event so the TUI can patch ETag/href for the moved item
+                        let _ = event_tx
+                            .send(AppEvent::TaskSynced {
+                                uid: moved_task.uid.clone(),
+                                href: moved_task.href.clone(),
+                                etag: if moved_task.etag.is_empty() {
+                                    "pending_refresh".to_string()
+                                } else {
+                                    moved_task.etag.clone()
+                                },
+                                sequence: moved_task.sequence,
+                            })
+                            .await;
+
                         let s: String = if msgs.is_empty() {
                             rust_i18n::t!("status_moved").to_string()
                         } else {

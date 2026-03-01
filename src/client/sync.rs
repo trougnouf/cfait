@@ -313,7 +313,7 @@ impl RustyClient {
         }
     }
 
-    pub async fn sync_journal(&self) -> Result<Vec<String>, String> {
+    pub async fn sync_journal(&self) -> Result<(Vec<String>, Vec<Task>), String> {
         // Load and compact journal once at the start
         let mut journal = Journal::load(self.ctx.as_ref());
         let mut tmp_j = Journal {
@@ -324,6 +324,7 @@ impl RustyClient {
 
         let client = self.client.as_ref().ok_or("Offline")?;
         let mut warnings = Vec::new();
+        let mut synced_tasks: Vec<Task> = Vec::new();
 
         // Load config for the create_events_for_tasks flag
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
@@ -542,6 +543,24 @@ impl RustyClient {
                         new_etag_to_propagate = Some(fetched);
                     }
 
+                    // Collect the synced task with updated metadata
+                    let mut synced_task = match &next_action {
+                        Action::Create(t) | Action::Update(t) | Action::Move(t, _) => {
+                            Some(t.clone())
+                        }
+                        Action::Delete(_) => None,
+                    };
+
+                    if let Some(ref mut t) = synced_task {
+                        if let Some(ref e) = new_etag_to_propagate {
+                            t.etag = e.clone();
+                        }
+                        if let Some((_, ref new_href)) = new_href_to_propagate {
+                            t.href = new_href.clone();
+                        }
+                        synced_tasks.push(t.clone());
+                    }
+
                     // Update in-memory queue instead of writing to disk each time
                     let should_remove = if let Some(head) = journal.queue.first() {
                         actions_match_identity(head, &next_action)
@@ -632,7 +651,7 @@ impl RustyClient {
         })
         .map_err(|e| e.to_string())?;
 
-        Ok(warnings)
+        Ok((warnings, synced_tasks))
     }
 
     async fn attempt_conflict_resolution(&self, local_task: &Task) -> Option<(Action, String)> {

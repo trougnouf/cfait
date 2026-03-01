@@ -51,6 +51,20 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
             state.refresh_filtered_view();
             state.loading = false;
         }
+        AppEvent::TaskSynced {
+            uid,
+            href,
+            etag,
+            sequence,
+        } => {
+            if let Some((existing, _)) = state.store.get_task_mut(&uid) {
+                existing.href = href;
+                existing.etag = etag;
+                if sequence > existing.sequence {
+                    existing.sequence = sequence;
+                }
+            }
+        }
     }
 }
 

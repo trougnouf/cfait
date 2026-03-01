@@ -201,7 +201,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 updated.etag = "pending_refresh".to_string();
             }
 
-            app.store.update_or_add_task(updated);
+            // FIX: One-way data flow. Only patch server metadata.
+            if let Some((existing, _)) = app.store.get_task_mut(&updated.uid) {
+                existing.href = updated.href;
+                existing.etag = updated.etag;
+                if updated.sequence > existing.sequence {
+                    existing.sequence = updated.sequence;
+                }
+            } else {
+                app.store.update_or_add_task(updated);
+            }
 
             app.last_sync_failed = false;
             app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
@@ -221,14 +230,32 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if updated.etag.is_empty() {
                     updated.etag = "pending_refresh".to_string();
                 }
-                app.store.update_or_add_task(updated);
+
+                if let Some((existing, _)) = app.store.get_task_mut(&updated.uid) {
+                    existing.href = updated.href;
+                    existing.etag = updated.etag;
+                    if updated.sequence > existing.sequence {
+                        existing.sequence = updated.sequence;
+                    }
+                } else {
+                    app.store.update_or_add_task(updated);
+                }
 
                 if let Some(mut created) = created_opt {
                     if created.etag.is_empty() {
                         created.etag = "pending_refresh".to_string();
                     }
-                    app.store.update_or_add_task(created);
+                    if let Some((existing, _)) = app.store.get_task_mut(&created.uid) {
+                        existing.href = created.href;
+                        existing.etag = created.etag;
+                        if created.sequence > existing.sequence {
+                            existing.sequence = created.sequence;
+                        }
+                    } else {
+                        app.store.update_or_add_task(created);
+                    }
                 }
+
                 app.last_sync_failed = false;
                 refresh_filtered_tasks(app);
                 Task::none()
@@ -244,9 +271,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 new_task.etag = "pending_refresh".to_string();
             }
 
-            if let Some(map) = app.store.calendars.get_mut(&new_task.calendar_href) {
-                map.insert(new_task.uid.clone(), new_task.clone());
+            if let Some((existing, _)) = app.store.get_task_mut(&new_task.uid) {
+                existing.href = new_task.href.clone();
+                existing.etag = new_task.etag.clone();
+                if new_task.sequence > existing.sequence {
+                    existing.sequence = new_task.sequence;
+                }
+            }
 
+            if let Some(map) = app.store.calendars.get(&new_task.calendar_href) {
                 let list: Vec<_> = map.values().cloned().collect();
                 let (_, token) = Cache::load(app.ctx.as_ref(), &new_task.calendar_href)
                     .unwrap_or((vec![], None));

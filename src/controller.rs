@@ -47,16 +47,45 @@ impl TaskController {
     async fn persist_change(&self, action: Action) -> Result<Vec<String>, String> {
         let client_guard = self.client.lock().await;
 
-        if let Some(client) = &*client_guard {
+        let uid = match &action {
+            Action::Create(t) => t.uid.clone(),
+            Action::Update(t) => t.uid.clone(),
+            Action::Delete(t) => t.uid.clone(),
+            Action::Move(t, _) => t.uid.clone(),
+        };
+
+        let res = if let Some(client) = &*client_guard {
             // Push action to journal before attempting network sync for safety.
             Journal::push(self.ctx.as_ref(), action).map_err(|e| e.to_string())?;
             // Attempt to flush the journal; return any warnings produced by sync.
-            client.sync_journal().await
+            let (warnings, synced) = client.sync_journal().await?;
+
+            // Patch the store with newly acquired ETags/Hrefs to prevent Precondition Failed loops
+            let mut store = self.store.lock().await;
+            for s in synced {
+                if let Some((existing, _)) = store.get_task_mut(&s.uid) {
+                    existing.etag = s.etag;
+                    existing.href = s.href;
+                }
+            }
+
+            Ok(warnings)
         } else {
             // Offline: persist the action locally and return indicating queued state.
             Journal::push(self.ctx.as_ref(), action).map_err(|e| e.to_string())?;
             Ok(vec!["Offline: Changes queued.".to_string()])
+        };
+
+        // Ensure the task is flagged as pending so subsequent rapid edits
+        // will safely force-overwrite the server instead of throwing a 412.
+        let mut store = self.store.lock().await;
+        if let Some((existing, _)) = store.get_task_mut(&uid)
+            && existing.etag.is_empty()
+        {
+            existing.etag = "pending_refresh".to_string();
         }
+
+        res
     }
 
     /// Create a task.
@@ -73,8 +102,13 @@ impl TaskController {
         if let Some(client) = &*client_guard
             && client.create_task(&mut task).await.is_ok()
         {
-            // Update store with server-assigned fields (ETag, href)
-            self.store.lock().await.update_or_add_task(task.clone());
+            // FIX: Only update store with server-assigned metadata (ETag, href).
+            // Do not overwrite the entire task; it might have changed concurrently.
+            let mut store = self.store.lock().await;
+            if let Some((existing, _)) = store.get_task_mut(&task.uid) {
+                existing.href = task.href.clone();
+                existing.etag = task.etag.clone();
+            }
             return Ok(task.uid);
         }
 
@@ -173,7 +207,9 @@ impl TaskController {
         }
 
         // Standard update path
-        store.update_or_add_task(task.clone());
+        // FIX: Removed `store.update_or_add_task(task.clone());` here.
+        // The UI already updated the store optimistically before calling this.
+        // Overwriting it introduces an async race condition.
         drop(store);
 
         if task.calendar_href.starts_with("local://") {
