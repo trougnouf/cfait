@@ -36,8 +36,8 @@ class CfaitApplication : Application() {
         if (savedLang != null && savedLang != "auto") {
             api.setLocale(savedLang)
         } else {
-            // Detect Android system language
-            api.setLocale(java.util.Locale.getDefault().language)
+            // Detect Android system language (e.g., en-US -> en_US)
+            api.setLocale(java.util.Locale.getDefault().toLanguageTag().replace("-", "_"))
         }
     }
 

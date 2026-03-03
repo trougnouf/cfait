@@ -8,6 +8,7 @@
 package com.trougnouf.cfait.ui
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -152,7 +153,9 @@ fun SettingsScreen(
             emptyList<String>()
         }
         for (code in locales) {
-            val loc = java.util.Locale.forLanguageTag(code)
+            // Android/Java Locale parser expects BCP-47 tags with hyphens, not underscores
+            val bcp47Code = code.replace("_", "-")
+            val loc = java.util.Locale.forLanguageTag(bcp47Code)
             val nativeName = loc.getDisplayName(loc)
             val capitalized = nativeName.replaceFirstChar {
                 if (it.isLowerCase()) it.titlecase(loc) else it.toString()
@@ -482,15 +485,18 @@ fun SettingsScreen(
 
                                             // Update Android UI (Native API 33+ or AppCompat API < 33)
                                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                                val localeManager = context.getSystemService(android.app.LocaleManager::class.java)
+                                                val localeManager =
+                                                    context.getSystemService(android.app.LocaleManager::class.java)
                                                 localeManager.applicationLocales = if (code != null) {
-                                                    android.os.LocaleList.forLanguageTags(code)
+                                                    android.os.LocaleList.forLanguageTags(code.replace("_", "-"))
                                                 } else {
                                                     android.os.LocaleList.getEmptyLocaleList()
                                                 }
                                             } else {
                                                 androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(
-                                                    if (code != null) androidx.core.os.LocaleListCompat.forLanguageTags(code)
+                                                    if (code != null) androidx.core.os.LocaleListCompat.forLanguageTags(
+                                                        code.replace("_", "-")
+                                                    )
                                                     else androidx.core.os.LocaleListCompat.getEmptyLocaleList()
                                                 )
                                                 // Force recreate for ComponentActivity on older APIs
@@ -503,6 +509,27 @@ fun SettingsScreen(
                                     )
                                 }
                             }
+
+                            // Translation help link (matches GUI settings): clickable and opens the online translation project
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(R.string.translation_help, "translate.codeberg.org"),
+                                modifier = Modifier
+                                    .clickable {
+                                        try {
+                                            val intent = Intent(
+                                                Intent.ACTION_VIEW,
+                                                Uri.parse("https://translate.codeberg.org/projects/cfait/")
+                                            )
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            // Ignore failures to open the URL
+                                        }
+                                    }
+                                    .padding(start = 16.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
                     }
                 }

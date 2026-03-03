@@ -170,9 +170,25 @@ tasks.register<Copy>("copyFonts") {
              return@doLast
          }
 
+         // Iterate each JSON locale file in the locales directory
          localesDir.listFiles { file -> file.extension == "json" }?.forEach { jsonFile ->
              val lang = jsonFile.nameWithoutExtension
-             val targetFolder = if (lang == "en") "values" else "values-$lang"
+
+             // Convert language code to Android BCP-47 resource directory qualifier
+             // Android's AAPT2 does not accept underscores in resource qualifiers.
+             // For complex tags (scripts/regions) convert "zh_Hans" or "pt_BR" into BCP-47 'b+' format:
+             // e.g., zh_Hans -> values-b+zh+Hans
+             val androidQualifier = if (lang == "en") {
+                 "" // default `values`
+             } else if (lang.contains("_") || lang.contains("-")) {
+                 // Replace both underscores and hyphens with '+' and prefix with '-b+'
+                 "-b+" + lang.replace("_", "+").replace("-", "+")
+             } else {
+                 // Simple languages like 'fr' -> values-fr
+                 "-$lang"
+             }
+
+             val targetFolder = "values$androidQualifier"
              val valuesDir = File(resDir, targetFolder)
              valuesDir.mkdirs()
 
@@ -200,7 +216,7 @@ tasks.register<Copy>("copyFonts") {
                          .replace("\n", "\\n")
                          .replace("?", "\\?") // Android needs question marks escaped
 
-                     // FIX 1: Escape @ at the beginning to prevent AAPT treating it as a resource reference
+                     // Escape @ at the beginning to prevent AAPT treating it as a resource reference
                      if (escapedValue.startsWith("@")) {
                          escapedValue = "\\" + escapedValue
                      }
@@ -213,7 +229,7 @@ tasks.register<Copy>("copyFonts") {
                          "%${argIndex++}\$s"
                      }
 
-                     // FIX 2: If there are no arguments but there is a '%', disable formatting to prevent crash
+                     // If there are no arguments but there is a '%', disable formatting to prevent crash
                      val formattedAttr = if (!hasArgs && escapedValue.contains("%")) " formatted=\"false\"" else ""
 
                      writer.write("    <string name=\"$key\"$formattedAttr>$escapedValue</string>\n")
