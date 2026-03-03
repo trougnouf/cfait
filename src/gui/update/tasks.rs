@@ -414,8 +414,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::MakeChild(target_uid) => {
-            if let Some(parent_uid) = app.yanked_uid.clone() {
-                if let Some(orig) = app.store.get_task_ref(&target_uid) {
+            if let Some(parent_uid) = app.yanked_uid.clone()
+                && let Some(orig) = app.store.get_task_ref(&target_uid) {
                     let mut updated = orig.clone();
                     updated.parent_uid = Some(parent_uid.clone());
                     app.selected_uid = Some(target_uid.clone());
@@ -431,7 +431,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         |res| Message::ControllerActionComplete(Box::new(res)),
                     );
                 }
-            }
             Task::none()
         }
 

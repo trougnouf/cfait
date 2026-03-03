@@ -414,7 +414,7 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
             ],
         },
         HelpSection {
-            title: rust_i18n::t!("support_card_title").to_string(),
+            title: rust_i18n::t!("search_and_filtering").to_string(),
             items: vec![
                 HelpItem {
                     keys: "/".to_string(),
@@ -423,8 +423,8 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "1, 2, 3".to_string(),
-                    desc: rust_i18n::t!("menu_move").to_string(),
-                    example: rust_i18n::t!("help_keyboard_switch_sidebar_tab").to_string(),
+                    desc: rust_i18n::t!("support_switch_sidebar_tab").to_string(),
+                    example: rust_i18n::t!("support_switch_sidebar_tab").to_string(),
                 },
                 HelpItem {
                     keys: "m".to_string(),

@@ -101,11 +101,10 @@ impl TaskController {
         // Flag as pending in memory to prevent Precondition Failed loops
         {
             let mut store = self.store.lock().await;
-            if let Some((existing, _)) = store.get_task_mut(&uid) {
-                if existing.etag.is_empty() {
+            if let Some((existing, _)) = store.get_task_mut(&uid)
+                && existing.etag.is_empty() {
                     existing.etag = "pending_refresh".to_string();
                 }
-            }
         }
 
         // Durable push to journal BEFORE network attempt
