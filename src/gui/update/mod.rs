@@ -13,7 +13,6 @@ use iced::Task;
 pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
     let task = match message {
         Message::FontLoaded(_) => Task::none(),
-        Message::DeleteComplete(_) => network::handle(app, message),
         Message::Tick => Task::none(), // Just forces a view redraw
 
         Message::ConfigLoaded(_)
@@ -166,9 +165,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::Loaded(_)
         | Message::RefreshedAll(_)
         | Message::TasksRefreshed(_)
-        | Message::SyncSaved(_)
-        | Message::SyncToggleComplete(_)
-        | Message::TaskMoved(_)
+        | Message::ControllerActionComplete(_)
         | Message::MigrationComplete(_) => network::handle(app, message),
 
         Message::SnapToSelected { focus } => {
@@ -283,24 +280,26 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                             current_ts = Some(dt.to_rfc3339());
                         }
                     } else if type_key_with_colon == "implicit_start:"
-                        && let Some(start) = &store_task.dtstart {
-                            let dt = match start {
-                                crate::model::DateType::Specific(t) => *t,
-                                crate::model::DateType::AllDay(d) => d
-                                    .and_time(default_time)
-                                    .and_local_timezone(chrono::Local)
-                                    .unwrap()
-                                    .with_timezone(&chrono::Utc),
-                            };
-                            current_ts = Some(dt.to_rfc3339());
-                        }
+                        && let Some(start) = &store_task.dtstart
+                    {
+                        let dt = match start {
+                            crate::model::DateType::Specific(t) => *t,
+                            crate::model::DateType::AllDay(d) => d
+                                .and_time(default_time)
+                                .and_local_timezone(chrono::Local)
+                                .unwrap()
+                                .with_timezone(&chrono::Utc),
+                        };
+                        current_ts = Some(dt.to_rfc3339());
+                    }
                     if current_ts.as_deref() != Some(expected_ts) {
                         return false;
                     }
                 } else {
                     return false;
                 }
-            } else if let Some(store_alarm) = store_task.alarms.iter().find(|a| a.uid == alarm.uid) {
+            } else if let Some(store_alarm) = store_task.alarms.iter().find(|a| a.uid == alarm.uid)
+            {
                 if store_alarm.acknowledged.is_some() {
                     return false;
                 }

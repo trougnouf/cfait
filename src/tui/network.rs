@@ -233,38 +233,29 @@ pub async fn run_network_actor(
                 }
             },
 
-            Action::CreateTask(mut new_task) => {
-                let href = new_task.calendar_href.clone();
-                match client.create_task(&mut new_task).await {
-                    Ok(msgs) => {
-                        // Emit metadata-only sync event so the TUI can patch ETag/href
+            Action::CreateTask(new_task) => {
+                // Delegate to TaskController (single source of truth).
+                // Build a controller instance that has access to the same in-memory store
+                // and a client wrapper so background syncs can be triggered.
+                let client_container = Arc::new(Mutex::new(Some(client.clone())));
+                let controller = TaskController::new(store.clone(), client_container, ctx.clone());
+
+                match controller.create_task(new_task).await {
+                    Ok(_uid) => {
+                        // Re-read the controller store and emit a TasksLoaded event so UI refreshes.
+                        let s = controller.store.lock().await;
+                        let mut results: Vec<(String, Vec<crate::model::Task>)> = Vec::new();
+                        for (href, map) in &s.calendars {
+                            results.push((href.clone(), map.values().cloned().collect()));
+                        }
+                        let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
+
                         let _ = event_tx
-                            .send(AppEvent::TaskSynced {
-                                uid: new_task.uid.clone(),
-                                href: new_task.href.clone(),
-                                etag: if new_task.etag.is_empty() {
-                                    "pending_refresh".to_string()
-                                } else {
-                                    new_task.etag.clone()
-                                },
-                                sequence: new_task.sequence,
+                            .send(AppEvent::Status {
+                                key: "status_created".to_string(),
+                                human: rust_i18n::t!("status_created").to_string(),
                             })
                             .await;
-
-                        if let Ok(t) = client.get_tasks(&href).await {
-                            let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
-                        }
-                        let s: String = if msgs.is_empty() {
-                            rust_i18n::t!("status_created").to_string()
-                        } else {
-                            msgs.join("; ")
-                        };
-                        let key = if msgs.is_empty() {
-                            "status_created".to_string()
-                        } else {
-                            "status_custom".to_string()
-                        };
-                        let _ = event_tx.send(AppEvent::Status { key, human: s }).await;
                     }
                     Err(e) => {
                         let _ = event_tx.send(AppEvent::Error(e)).await;
@@ -272,67 +263,66 @@ pub async fn run_network_actor(
                 }
             }
 
-            Action::UpdateTask(mut task) => {
-                let href = task.calendar_href.clone();
-                match client.update_task(&mut task).await {
-                    Ok(msgs) => {
-                        // Emit metadata-only sync event so the TUI can patch ETag/href
+            Action::UpdateTask(task) => {
+                // Use controller to perform update (handles recurrence, history, children).
+                let client_container = Arc::new(Mutex::new(Some(client.clone())));
+                let controller = TaskController::new(store.clone(), client_container, ctx.clone());
+
+                match controller.update_task(task.clone()).await {
+                    Ok(_warnings) => {
+                        // Re-read the controller store and emit TasksLoaded so UI refreshes.
+                        let s = controller.store.lock().await;
+                        let mut results: Vec<(String, Vec<crate::model::Task>)> = Vec::new();
+                        for (href, map) in &s.calendars {
+                            results.push((href.clone(), map.values().cloned().collect()));
+                        }
+                        let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
+
                         let _ = event_tx
-                            .send(AppEvent::TaskSynced {
-                                uid: task.uid.clone(),
-                                href: task.href.clone(),
-                                etag: if task.etag.is_empty() {
-                                    "pending_refresh".to_string()
-                                } else {
-                                    task.etag.clone()
-                                },
-                                sequence: task.sequence,
+                            .send(AppEvent::Status {
+                                key: "status_saved".to_string(),
+                                human: rust_i18n::t!("status_saved").to_string(),
                             })
                             .await;
-
-                        let s: String = if msgs.is_empty() {
-                            rust_i18n::t!("status_saved").to_string()
-                        } else {
-                            msgs.join("; ")
-                        };
-                        let key = if msgs.is_empty() {
-                            "status_saved".to_string()
-                        } else {
-                            "status_custom".to_string()
-                        };
-                        let _ = event_tx.send(AppEvent::Status { key, human: s }).await;
                     }
                     Err(e) => {
                         let _ = event_tx.send(AppEvent::Error(e)).await;
-                        // On error, reload to revert
-                        if let Ok(t) = client.get_tasks(&href).await {
-                            let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
+                        // Attempt best-effort reload from client to revert local view
+                        if let Ok(t) = client.get_tasks(&task.calendar_href).await {
+                            let _ = event_tx
+                                .send(AppEvent::TasksLoaded(vec![(task.calendar_href.clone(), t)]))
+                                .await;
                         }
                     }
                 }
             }
 
-            Action::DeleteTask(task) => {
-                let href = task.calendar_href.clone();
-                match client.delete_task(&task).await {
-                    Ok(msgs) => {
-                        let s: String = if msgs.is_empty() {
-                            rust_i18n::t!("status_deleted").to_string()
-                        } else {
-                            msgs.join("; ")
-                        };
-                        let key = if msgs.is_empty() {
-                            "status_deleted".to_string()
-                        } else {
-                            "status_custom".to_string()
-                        };
-                        let _ = event_tx.send(AppEvent::Status { key, human: s }).await;
+            Action::DeleteTask(uid) => {
+                // Controller will handle soft-vs-hard delete, journaling and local trash logic.
+                let client_container = Arc::new(Mutex::new(Some(client.clone())));
+                let controller = TaskController::new(store.clone(), client_container, ctx.clone());
+
+                match controller.delete_task(&uid).await {
+                    Ok(_warnings) => {
+                        // Re-read store and emit TasksLoaded for updated UI.
+                        let s = controller.store.lock().await;
+                        let mut results: Vec<(String, Vec<crate::model::Task>)> = Vec::new();
+                        for (href, map) in &s.calendars {
+                            results.push((href.clone(), map.values().cloned().collect()));
+                        }
+                        let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
+
+                        let _ = event_tx
+                            .send(AppEvent::Status {
+                                key: "status_deleted".to_string(),
+                                human: rust_i18n::t!("status_deleted").to_string(),
+                            })
+                            .await;
                     }
                     Err(e) => {
                         let _ = event_tx.send(AppEvent::Error(e)).await;
-                        if let Ok(t) = client.get_tasks(&href).await {
-                            let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
-                        }
+                        // Best-effort: reload calendar of interest if possible.
+                        // We don't know the original href here; rely on client refresh if needed.
                     }
                 }
             }
@@ -382,45 +372,27 @@ pub async fn run_network_actor(
                 }
             }
 
-            Action::MoveTask(task, new_href) => {
-                let old_href = task.calendar_href.clone();
-                match client.move_task(&task, &new_href).await {
-                    Ok((moved_task, msgs)) => {
-                        // Emit metadata-only sync event so the TUI can patch ETag/href for the moved item
+            Action::MoveTask(uid, new_href) => {
+                // Use TaskController to perform the move (handles local<->remote transitions).
+                let client_container = Arc::new(Mutex::new(Some(client.clone())));
+                let controller = TaskController::new(store.clone(), client_container, ctx.clone());
+
+                match controller.move_task(&uid, &new_href).await {
+                    Ok(_warnings) => {
+                        // Re-read the controller store and emit TasksLoaded so the UI reflects both calendars.
+                        let s = controller.store.lock().await;
+                        let mut results: Vec<(String, Vec<crate::model::Task>)> = Vec::new();
+                        for (href, map) in &s.calendars {
+                            results.push((href.clone(), map.values().cloned().collect()));
+                        }
+                        let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
+
                         let _ = event_tx
-                            .send(AppEvent::TaskSynced {
-                                uid: moved_task.uid.clone(),
-                                href: moved_task.href.clone(),
-                                etag: if moved_task.etag.is_empty() {
-                                    "pending_refresh".to_string()
-                                } else {
-                                    moved_task.etag.clone()
-                                },
-                                sequence: moved_task.sequence,
+                            .send(AppEvent::Status {
+                                key: "status_moved".to_string(),
+                                human: rust_i18n::t!("status_moved").to_string(),
                             })
                             .await;
-
-                        let s: String = if msgs.is_empty() {
-                            rust_i18n::t!("status_moved").to_string()
-                        } else {
-                            msgs.join("; ")
-                        };
-                        let key = if msgs.is_empty() {
-                            "status_moved".to_string()
-                        } else {
-                            "status_custom".to_string()
-                        };
-                        let _ = event_tx.send(AppEvent::Status { key, human: s }).await;
-                        if let Ok(t1) = client.get_tasks(&old_href).await {
-                            let _ = event_tx
-                                .send(AppEvent::TasksLoaded(vec![(old_href, t1)]))
-                                .await;
-                        }
-                        if let Ok(t2) = client.get_tasks(&new_href).await {
-                            let _ = event_tx
-                                .send(AppEvent::TasksLoaded(vec![(new_href, t2)]))
-                                .await;
-                        }
                     }
                     Err(e) => {
                         let _ = event_tx

@@ -948,188 +948,47 @@ impl RustyClient {
         Ok(final_results)
     }
 
-    pub async fn create_task(&self, task: &mut Task) -> Result<Vec<String>, String> {
-        if task.calendar_href.starts_with("local://") {
-            let task_clone = task.clone();
-            LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
-                if let Some(idx) = all.iter().position(|t| t.uid == task_clone.uid) {
-                    all[idx] = task_clone;
-                } else {
-                    all.push(task_clone);
-                }
-            })
-            .map_err(|e| e.to_string())?;
-            return Ok(vec![]);
-        }
+    // Removed: create_task moved to TaskController.
+    // The RustyClient is now a dumb network layer and should not perform high-level
+    // create/update/delete/move operations. Use `TaskController::create_task` for
+    // CRUD operations which will handle journaling, local storage and background sync.
 
-        let cal_path = task.calendar_href.clone();
-        let filename = format!("{}.ics", task.uid);
-        let full_href = if cal_path.ends_with('/') {
-            format!("{}{}", cal_path, filename)
-        } else {
-            format!("{}/{}", cal_path, filename)
-        };
-        task.href = full_href;
+    // Removed: update_task moved to TaskController.
+    // The RustyClient is now a dumb network layer and should not perform high-level
+    // create/update/delete/move operations. Use `TaskController::update_task` for
+    // CRUD operations which will handle journaling, local storage and background sync.
 
-        Journal::push(self.ctx.as_ref(), Action::Create(task.clone()))
-            .map_err(|e| e.to_string())?;
-        let (warnings, synced) = self.sync_journal().await?;
-        if let Some(s) = synced.into_iter().find(|t| t.uid == task.uid) {
-            task.etag = s.etag;
-            task.href = s.href;
-        }
-        Ok(warnings)
-    }
+    // Removed: delete_task moved to TaskController.
+    // The RustyClient is now a dumb network layer and should not perform high-level
+    // create/update/delete/move operations. Use `TaskController::delete_task` for
+    // CRUD operations which will handle journaling, local storage and background sync.
 
-    pub async fn update_task(&self, task: &mut Task) -> Result<Vec<String>, String> {
-        task.sequence += 1;
-
-        if task.calendar_href.starts_with("local://") {
-            let task_clone = task.clone();
-            LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
-                if let Some(idx) = all.iter().position(|t| t.uid == task_clone.uid) {
-                    all[idx] = task_clone;
-                } else {
-                    all.push(task_clone);
-                }
-            })
-            .map_err(|e| e.to_string())?;
-            return Ok(vec![]);
-        }
-
-        Journal::push(self.ctx.as_ref(), Action::Update(task.clone()))
-            .map_err(|e| e.to_string())?;
-        let (warnings, synced) = self.sync_journal().await?;
-        if let Some(s) = synced.into_iter().find(|t| t.uid == task.uid) {
-            task.etag = s.etag;
-            task.href = s.href;
-        }
-        Ok(warnings)
-    }
-
-    pub async fn delete_task(&self, task: &Task) -> Result<Vec<String>, String> {
-        if task.calendar_href.starts_with("local://") {
-            LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
-                all.retain(|t| t.uid != task.uid);
-            })
-            .map_err(|e| e.to_string())?;
-            return Ok(vec![]);
-        }
-
-        Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()))
-            .map_err(|e| e.to_string())?;
-        let (warnings, _) = self.sync_journal().await?;
-        Ok(warnings)
-    }
-
-    pub async fn move_task(
-        &self,
-        task: &Task,
-        new_calendar_href: &str,
-    ) -> Result<(Task, Vec<String>), String> {
-        // Local -> Local move
-        if task.calendar_href.starts_with("local://") && new_calendar_href.starts_with("local://") {
-            let mut new_task = task.clone();
-            new_task.calendar_href = new_calendar_href.to_string();
-
-            let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), new_calendar_href, |all| {
-                all.push(new_task.clone());
-            });
-            let _ = self.delete_task(task).await;
-            return Ok((new_task, vec![]));
-        }
-
-        // Remote -> Local move
-        if !task.calendar_href.starts_with("local://") && new_calendar_href.starts_with("local://")
-        {
-            let mut new_task = task.clone();
-            new_task.calendar_href = new_calendar_href.to_string();
-
-            let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), new_calendar_href, |all| {
-                all.push(new_task.clone());
-            });
-
-            Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()))
-                .map_err(|e| e.to_string())?;
-            let (logs, _) = self.sync_journal().await?;
-            return Ok((new_task, logs));
-        }
-
-        // Local->remote migration: attempt create+verify, otherwise journal a move.
-        if task.calendar_href.starts_with("local://") && !new_calendar_href.starts_with("local://")
-        {
-            let mut new_task = task.clone();
-            new_task.calendar_href = new_calendar_href.to_string();
-            let cal_path = new_calendar_href.trim_end_matches('/');
-            let filename = format!("{}.ics", task.uid);
-            let expected_remote_href = format!("{}/{}", cal_path, filename);
-
-            new_task.href = String::new();
-            new_task.etag = String::new();
-
-            let logs = self.create_task(&mut new_task).await?;
-
-            let verify_target = if !new_task.href.is_empty() {
-                new_task.href.clone()
-            } else {
-                expected_remote_href.clone()
-            };
-
-            match self.fetch_remote_task(&verify_target).await {
-                Some(remote_task) => {
-                    if remote_task.uid != task.uid {
-                        return Err(format!(
-                            "Migration Verification Failed: Server returned UID '{}' but uploaded '{}'. Local preserved.",
-                            remote_task.uid, task.uid
-                        ));
-                    }
-                    let _ = self.delete_task(task).await?;
-                    return Ok((remote_task, logs));
-                }
-                None => {
-                    return Err(format!(
-                        "Migration Verification Failed: Task '{}' uploaded but not retrievable immediately. Local preserved.",
-                        task.summary
-                    ));
-                }
-            }
-        }
-
-        // Otherwise (Remote -> Remote), queue a Move action in the journal and trigger sync.
-        Journal::push(
-            self.ctx.as_ref(),
-            Action::Move(task.clone(), new_calendar_href.to_string()),
-        )
-        .map_err(|e| e.to_string())?;
-        let mut t = task.clone();
-        t.calendar_href = new_calendar_href.to_string();
-        let (warnings, synced) = self.sync_journal().await?;
-        if let Some(s) = synced.into_iter().find(|st| st.uid == task.uid) {
-            t.etag = s.etag;
-            t.href = s.href;
-        }
-        Ok((t, warnings))
-    }
+    // Removed: move_task moved to TaskController.
+    // The RustyClient is now a dumb network layer and should not perform high-level
+    // create/update/delete/move operations. Use `TaskController::move_task` for
+    // CRUD operations which will handle journaling, local storage and background sync.
 
     pub async fn migrate_tasks(
         &self,
         tasks: Vec<Task>,
         target_calendar_href: &str,
     ) -> Result<usize, String> {
-        let futures = tasks.into_iter().map(|task| {
-            let client = self.clone();
-            let target = target_calendar_href.to_string();
-            async move { client.move_task(&task, &target).await.ok() }
-        });
-
-        let mut stream = stream::iter(futures).buffer_unordered(1);
-        let mut count = 0;
-        while let Some(res) = stream.next().await {
-            if res.is_some() {
-                count += 1;
-            }
+        // Durable enqueue all Move actions into the journal, then attempt a sync.
+        // This keeps the client layer simple (no direct MOVE logic here) and
+        // leverages the sync engine to perform the network operations.
+        for task in tasks.into_iter() {
+            Journal::push(
+                self.ctx.as_ref(),
+                Action::Move(task, target_calendar_href.to_string()),
+            )
+            .map_err(|e| e.to_string())?;
         }
-        Ok(count)
+
+        // Attempt to sync the journal now and return the number of tasks that were synced.
+        match self.sync_journal().await {
+            Ok((_warns, synced)) => Ok(synced.len()),
+            Err(e) => Err(e),
+        }
     }
 
     pub(crate) async fn fetch_etag(&self, path: &str) -> Option<String> {

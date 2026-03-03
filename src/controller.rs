@@ -1,4 +1,4 @@
-// File: src/controller.rs
+// File: ./src/controller.rs
 //! Central logic controller for Task operations.
 //! This is the single source of truth for all business logic (create, update, delete, etc.).
 //! All UI layers (TUI, GUI, Mobile) must delegate actions to this controller to ensure
@@ -36,56 +36,100 @@ impl TaskController {
     /// Internal helper: persist an Action.
     ///
     /// Strategy:
-    /// 1. If a network client is available, push the action to the local Journal
+    /// 1. If the action targets a local calendar (`local://...`), write directly to `LocalStorage`
+    ///    and skip the `Journal` entirely.
+    /// 2. If a network client is available, push the action to the local Journal
     ///    (so the action is durable) before attempting an immediate sync. Pushing
     ///    to the journal first ensures that a crash during sync does not lose the
     ///    user's intent.
-    /// 2. If the client is present, trigger `client.sync_journal()` to attempt
+    /// 3. If the client is present, trigger `client.sync_journal()` to attempt
     ///    delivering queued actions to the server and return any warnings.
-    /// 3. If no client is available (offline), keep the action in the journal and
+    /// 4. If no client is available (offline), keep the action in the journal and
     ///    return a quiet success indicating the change is queued.
     async fn persist_change(&self, action: Action) -> Result<Vec<String>, String> {
-        let client_guard = self.client.lock().await;
+        let is_local = match &action {
+            Action::Create(t) | Action::Update(t) | Action::Delete(t) => {
+                t.calendar_href.starts_with("local://")
+            }
+            Action::Move(t, _) => t.calendar_href.starts_with("local://"),
+        };
+
+        if is_local {
+            match &action {
+                Action::Create(t) | Action::Update(t) => {
+                    let task_clone = t.clone();
+                    let _ =
+                        LocalStorage::modify_for_href(self.ctx.as_ref(), &t.calendar_href, |all| {
+                            if let Some(idx) =
+                                all.iter().position(|item| item.uid == task_clone.uid)
+                            {
+                                all[idx] = task_clone;
+                            } else {
+                                all.push(task_clone);
+                            }
+                        });
+                }
+                Action::Delete(t) => {
+                    let _ =
+                        LocalStorage::modify_for_href(self.ctx.as_ref(), &t.calendar_href, |all| {
+                            all.retain(|item| item.uid != t.uid);
+                        });
+                }
+                Action::Move(t, target_href) => {
+                    let _ =
+                        LocalStorage::modify_for_href(self.ctx.as_ref(), &t.calendar_href, |all| {
+                            all.retain(|item| item.uid != t.uid);
+                        });
+                    if target_href.starts_with("local://") {
+                        let mut moved = t.clone();
+                        moved.calendar_href = target_href.clone();
+                        let _ =
+                            LocalStorage::modify_for_href(self.ctx.as_ref(), target_href, |all| {
+                                all.push(moved);
+                            });
+                    }
+                }
+            }
+            return Ok(vec![]);
+        }
 
         let uid = match &action {
-            Action::Create(t) => t.uid.clone(),
-            Action::Update(t) => t.uid.clone(),
-            Action::Delete(t) => t.uid.clone(),
+            Action::Create(t) | Action::Update(t) | Action::Delete(t) => t.uid.clone(),
             Action::Move(t, _) => t.uid.clone(),
         };
 
-        let res = if let Some(client) = &*client_guard {
-            // Push action to journal before attempting network sync for safety.
-            Journal::push(self.ctx.as_ref(), action).map_err(|e| e.to_string())?;
-            // Attempt to flush the journal; return any warnings produced by sync.
-            let (warnings, synced) = client.sync_journal().await?;
-
-            // Patch the store with newly acquired ETags/Hrefs to prevent Precondition Failed loops
+        // Flag as pending in memory to prevent Precondition Failed loops
+        {
             let mut store = self.store.lock().await;
-            for s in synced {
-                if let Some((existing, _)) = store.get_task_mut(&s.uid) {
-                    existing.etag = s.etag;
-                    existing.href = s.href;
+            if let Some((existing, _)) = store.get_task_mut(&uid) {
+                if existing.etag.is_empty() {
+                    existing.etag = "pending_refresh".to_string();
                 }
             }
-
-            Ok(warnings)
-        } else {
-            // Offline: persist the action locally and return indicating queued state.
-            Journal::push(self.ctx.as_ref(), action).map_err(|e| e.to_string())?;
-            Ok(vec!["Offline: Changes queued.".to_string()])
-        };
-
-        // Ensure the task is flagged as pending so subsequent rapid edits
-        // will safely force-overwrite the server instead of throwing a 412.
-        let mut store = self.store.lock().await;
-        if let Some((existing, _)) = store.get_task_mut(&uid)
-            && existing.etag.is_empty()
-        {
-            existing.etag = "pending_refresh".to_string();
         }
 
-        res
+        // Durable push to journal BEFORE network attempt
+        Journal::push(self.ctx.as_ref(), action).map_err(|e| e.to_string())?;
+
+        let client_opt = self.client.lock().await.clone();
+        if let Some(client) = client_opt {
+            let store_ref = self.store.clone();
+            // Fire and forget the sync to keep the UI instant
+            tokio::spawn(async move {
+                if let Ok((_warns, synced)) = client.sync_journal().await {
+                    let mut s = store_ref.lock().await;
+                    for sync_task in synced {
+                        if let Some((existing, _)) = s.get_task_mut(&sync_task.uid) {
+                            existing.etag = sync_task.etag;
+                            existing.href = sync_task.href;
+                        }
+                    }
+                }
+            });
+            Ok(vec![])
+        } else {
+            Ok(vec!["Offline: Changes queued.".to_string()])
+        }
     }
 
     /// Create a task.
@@ -96,38 +140,20 @@ impl TaskController {
     ///    update the store with any server-assigned metadata (etag/href).
     /// 3. If offline or remote failure, journal the Create action for background sync.
     pub async fn create_task(&self, mut task: Task) -> Result<String, String> {
+        // Pre-compute full_href for remote tasks so it's ready for the UI instantly
+        if !task.calendar_href.starts_with("local://") {
+            let cal_path = task.calendar_href.clone();
+            let filename = format!("{}.ics", task.uid);
+            let full_href = if cal_path.ends_with('/') {
+                format!("{}{}", cal_path, filename)
+            } else {
+                format!("{}/{}", cal_path, filename)
+            };
+            task.href = full_href;
+        }
+
         self.store.lock().await.add_task(task.clone());
-
-        let client_guard = self.client.lock().await;
-        if let Some(client) = &*client_guard
-            && client.create_task(&mut task).await.is_ok()
-        {
-            // FIX: Only update store with server-assigned metadata (ETag, href).
-            // Do not overwrite the entire task; it might have changed concurrently.
-            let mut store = self.store.lock().await;
-            if let Some((existing, _)) = store.get_task_mut(&task.uid) {
-                existing.href = task.href.clone();
-                existing.etag = task.etag.clone();
-            }
-            return Ok(task.uid);
-        }
-
-        // If the task is local-only, persist to local storage immediately.
-        if task.calendar_href.starts_with("local://") {
-            let task_clone = task.clone();
-            LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
-                if let Some(idx) = all.iter().position(|t| t.uid == task_clone.uid) {
-                    all[idx] = task_clone;
-                } else {
-                    all.push(task_clone);
-                }
-            })
-            .map_err(|e| e.to_string())?;
-        } else {
-            // Remote create failed / offline: journal the create for later sync.
-            Journal::push(self.ctx.as_ref(), Action::Create(task.clone()))
-                .map_err(|e| e.to_string())?;
-        }
+        let _ = self.persist_change(Action::Create(task.clone())).await;
 
         Ok(task.uid)
     }
@@ -142,7 +168,9 @@ impl TaskController {
     ///   d) persist both mutations (history create + next update) via journaling/sync.
     ///
     /// For non-recurring updates, perform optimistic store update and persist the Update.
-    pub async fn update_task(&self, task: Task) -> Result<Vec<String>, String> {
+    pub async fn update_task(&self, mut task: Task) -> Result<Vec<String>, String> {
+        task.sequence += 1;
+
         let mut store = self.store.lock().await;
 
         // Detect a recurring task being completed (transition from not-done -> done).
@@ -173,31 +201,8 @@ impl TaskController {
             let mut logs = self.persist_change(Action::Create(history)).await?;
 
             if let Some(next) = next_opt {
-                if next.calendar_href.starts_with("local://") {
-                    let _ = LocalStorage::modify_for_href(
-                        self.ctx.as_ref(),
-                        &next.calendar_href,
-                        |all| {
-                            if let Some(idx) = all.iter().position(|t| t.uid == next.uid) {
-                                all[idx] = next.clone();
-                            } else {
-                                all.push(next.clone());
-                            }
-                        },
-                    );
-                } else {
-                    let next_logs = self.persist_change(Action::Update(next)).await?;
-                    logs.extend(next_logs);
-                }
-            } else if task.calendar_href.starts_with("local://") {
-                let _ =
-                    LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
-                        if let Some(idx) = all.iter().position(|t| t.uid == task.uid) {
-                            all[idx] = task.clone();
-                        } else {
-                            all.push(task.clone());
-                        }
-                    });
+                let next_logs = self.persist_change(Action::Update(next)).await?;
+                logs.extend(next_logs);
             } else {
                 let next_logs = self.persist_change(Action::Update(task)).await?;
                 logs.extend(next_logs);
@@ -207,22 +212,8 @@ impl TaskController {
         }
 
         // Standard update path
-        // FIX: Removed `store.update_or_add_task(task.clone());` here.
-        // The UI already updated the store optimistically before calling this.
-        // Overwriting it introduces an async race condition.
+        store.update_or_add_task(task.clone());
         drop(store);
-
-        if task.calendar_href.starts_with("local://") {
-            let task_clone = task.clone();
-            let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
-                if let Some(idx) = all.iter().position(|t| t.uid == task_clone.uid) {
-                    all[idx] = task_clone;
-                } else {
-                    all.push(task_clone);
-                }
-            });
-            return Ok(vec![]);
-        }
 
         self.persist_change(Action::Update(task)).await
     }
@@ -256,16 +247,6 @@ impl TaskController {
         if retention == 0 || is_already_trash {
             let (task, _) = store.delete_task(uid).ok_or("Task not found".to_string())?;
             drop(store);
-
-            if task.calendar_href.starts_with("local://") {
-                let task_clone = task.clone();
-                let _ =
-                    LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
-                        all.retain(|t| t.uid != task_clone.uid);
-                    });
-                return Ok(vec![]);
-            }
-
             return self.persist_change(Action::Delete(task)).await;
         }
 
@@ -293,30 +274,14 @@ impl TaskController {
             params: vec![],
         });
 
-        // Save the moved item in the store (and local storage by update_or_add_task).
         store.update_or_add_task(updated.clone());
         drop(store);
 
-        let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), LOCAL_TRASH_HREF, |all| {
-            if let Some(idx) = all.iter().position(|t| t.uid == updated.uid) {
-                all[idx] = updated.clone();
-            } else {
-                all.push(updated.clone());
-            }
-        });
+        // Save the updated task to the trash local collection
+        let _ = self.persist_change(Action::Create(updated)).await;
 
-        // If the original item was remote, persist a Delete action so the server removes it.
-        if !original.calendar_href.starts_with("local://") {
-            self.persist_change(Action::Delete(original)).await
-        } else {
-            // Local source: explicitly remove from original local storage
-            let task_clone = original.clone();
-            let _ =
-                LocalStorage::modify_for_href(self.ctx.as_ref(), &original.calendar_href, |all| {
-                    all.retain(|t| t.uid != task_clone.uid);
-                });
-            Ok(vec![])
-        }
+        // Delete the original
+        self.persist_change(Action::Delete(original)).await
     }
 
     /// Prune items from the trash that have exceeded retention.
@@ -335,7 +300,7 @@ impl TaskController {
         }
 
         let now = Utc::now();
-        let mut uids_to_purge = Vec::new();
+        let mut tasks_to_purge = Vec::new();
 
         let mut store = self.store.lock().await;
 
@@ -349,19 +314,23 @@ impl TaskController {
                 {
                     let age_days = (now - dt.with_timezone(&Utc)).num_days();
                     if age_days >= retention_days {
-                        uids_to_purge.push(task.uid.clone());
+                        tasks_to_purge.push(task.uid.clone());
                     }
                 }
             }
         }
 
-        let mut count = 0;
-        for uid in uids_to_purge {
+        let mut purged_tasks = Vec::new();
+        for uid in tasks_to_purge {
             if let Some((task, _)) = store.delete_task(&uid) {
-                // Keep journal consistent: push a Delete action for background sync if necessary.
-                let _ = Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()));
-                count += 1;
+                purged_tasks.push(task);
             }
+        }
+        drop(store);
+
+        let count = purged_tasks.len();
+        for task in purged_tasks {
+            let _ = self.persist_change(Action::Delete(task)).await;
         }
 
         Ok(count)
@@ -434,22 +403,6 @@ impl TaskController {
             .ok_or("Task not found".to_string())?;
         drop(store);
 
-        if original.calendar_href.starts_with("local://") {
-            let task_clone = original.clone();
-            let _ =
-                LocalStorage::modify_for_href(self.ctx.as_ref(), &original.calendar_href, |all| {
-                    all.retain(|t| t.uid != task_clone.uid);
-                });
-        }
-
-        if new_cal_href.starts_with("local://") {
-            let mut moved = original.clone();
-            moved.calendar_href = new_cal_href.to_string();
-            let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), new_cal_href, |all| {
-                all.push(moved);
-            });
-        }
-
         if !original.calendar_href.starts_with("local://") && !new_cal_href.starts_with("local://")
         {
             self.persist_change(Action::Move(original, new_cal_href.to_string()))
@@ -457,15 +410,22 @@ impl TaskController {
         } else if !original.calendar_href.starts_with("local://")
             && new_cal_href.starts_with("local://")
         {
-            self.persist_change(Action::Delete(original)).await
-        } else if original.calendar_href.starts_with("local://")
-            && !new_cal_href.starts_with("local://")
-        {
+            let _ = self.persist_change(Action::Delete(original.clone())).await;
             let mut moved = original.clone();
             moved.calendar_href = new_cal_href.to_string();
             self.persist_change(Action::Create(moved)).await
+        } else if original.calendar_href.starts_with("local://")
+            && !new_cal_href.starts_with("local://")
+        {
+            let _ = self.persist_change(Action::Delete(original.clone())).await;
+            let mut moved = original.clone();
+            moved.calendar_href = new_cal_href.to_string();
+            moved.href = String::new();
+            moved.etag = String::new();
+            self.persist_change(Action::Create(moved)).await
         } else {
-            Ok(vec![])
+            self.persist_change(Action::Move(original, new_cal_href.to_string()))
+                .await
         }
     }
 }

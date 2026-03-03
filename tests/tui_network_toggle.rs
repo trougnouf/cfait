@@ -82,6 +82,10 @@ async fn test_tui_toggle_task_does_not_revert_status() {
         }
     }
 
+    // Wait a short moment to allow the detached `tokio::spawn` inside the TaskController
+    // to complete its network request against the mock server.
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+
     m_put.assert();
 
     let _ = action_tx.send(Action::Quit).await;

@@ -187,12 +187,17 @@ pub fn apply_alias_retroactively(
 
     refresh_filtered_tasks(app);
 
-    if let Some(client) = &app.client {
+    if let Some(_client) = &app.client {
         let mut commands = Vec::new();
         for t in modified_tasks {
             commands.push(Task::perform(
-                async_update_wrapper(client.clone(), t),
-                Message::SyncSaved,
+                async_controller_dispatch(
+                    app.ctx.clone(),
+                    app.client.clone(),
+                    app.store.clone(),
+                    ControllerAction::Update(t),
+                ),
+                |res| Message::ControllerActionComplete(Box::new(res)),
             ));
         }
         return Some(Task::batch(commands));

@@ -1,4 +1,10 @@
-// File: src/gui/update/tasks.rs
+// File: ./src/gui/update/tasks.rs
+//
+// Simplified GUI task handlers: always dispatch controller actions via
+// `async_controller_dispatch` (which accepts the `Option<RustyClient>` and
+// routes offline vs online automatically). Removed offline helper functions
+// and unused imports to silence warnings after the TaskController refactor.
+
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{GuiApp, SidebarMode};
@@ -6,10 +12,8 @@ use crate::gui::update::common::{
     apply_alias_retroactively, refresh_filtered_tasks, save_config, scroll_to_selected,
     scroll_to_selected_delayed,
 };
-use crate::journal::{Action, Journal};
 use crate::model::{Task as TodoTask, extract_inline_aliases};
-use crate::storage::{LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
-use chrono::{NaiveTime, Utc};
+use chrono::NaiveTime;
 use iced::Task;
 use iced::widget::text_editor;
 use std::collections::HashMap;
@@ -23,10 +27,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.input_value.perform(action);
             Task::none()
         }
+
         Message::DescriptionChanged(action) => {
             app.description_value.perform(action);
             Task::none()
         }
+
         Message::StartCreateChild(parent_uid) => {
             app.creating_child_of = Some(parent_uid.clone());
             app.selected_uid = Some(parent_uid.clone());
@@ -49,6 +55,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             iced::widget::operation::focus(iced::widget::Id::new("main_input"))
         }
+
         Message::SubmitTask => handle_submit(app),
 
         Message::EditTaskStart(index) => {
@@ -65,6 +72,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
         Message::CancelEdit => {
             app.input_value = text_editor::Content::new();
             app.description_value = text_editor::Content::new();
@@ -75,59 +83,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::ToggleTask(index, _) => {
             if let Some(view_task) = app.tasks.get(index) {
-                let uid = view_task.uid.clone();
-                app.selected_uid = Some(uid.clone());
-                if let Some((primary, secondary, children)) = app.store.toggle_task(&uid) {
-                    refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
-                        let mut commands = vec![];
-                        if let Some(sec) = secondary {
-                            commands.push(Task::perform(
-                                async_create_wrapper(client.clone(), primary),
-                                Message::SyncSaved,
-                            ));
-                            commands.push(Task::perform(
-                                async_update_wrapper(client.clone(), sec),
-                                Message::SyncSaved,
-                            ));
-                        } else {
-                            commands.push(Task::perform(
-                                async_update_wrapper(client.clone(), primary),
-                                Message::SyncSaved,
-                            ));
-                        }
-                        for child in children {
-                            commands.push(Task::perform(
-                                async_update_wrapper(client.clone(), child),
-                                Message::SyncSaved,
-                            ));
-                        }
-                        return Task::batch(commands);
-                    } else {
-                        if let Some(sec) = secondary {
-                            let _ = crate::journal::Journal::push(
-                                app.ctx.as_ref(),
-                                Action::Create(primary),
-                            );
-                            let _ = crate::journal::Journal::push(
-                                app.ctx.as_ref(),
-                                Action::Update(sec),
-                            );
-                        } else {
-                            let _ = crate::journal::Journal::push(
-                                app.ctx.as_ref(),
-                                Action::Update(primary),
-                            );
-                        }
-                        for child in children {
-                            let _ = crate::journal::Journal::push(
-                                app.ctx.as_ref(),
-                                Action::Update(child),
-                            );
-                        }
-                        app.unsynced_changes = true;
-                    }
-                }
+                app.selected_uid = Some(view_task.uid.clone());
+                return Task::perform(
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        app.store.clone(),
+                        ControllerAction::Toggle(view_task.uid.clone()),
+                    ),
+                    |res| Message::ControllerActionComplete(Box::new(res)),
+                );
             }
             Task::none()
         }
@@ -141,86 +106,20 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             Task::none()
         }
+
         Message::DeleteTask(index) => {
             if let Some(view_task) = app.tasks.get(index) {
-                let is_trash = view_task.calendar_href == LOCAL_TRASH_HREF;
-
-                if app.trash_retention_days > 0 && !is_trash {
-                    let uid = view_task.uid.clone();
-
-                    let _ = LocalCalendarRegistry::ensure_trash_calendar_exists(app.ctx.as_ref());
-                    if !app.calendars.iter().any(|c| c.href == LOCAL_TRASH_HREF) {
-                        app.calendars.push(crate::model::CalendarListEntry {
-                            name: "Trash".to_string(),
-                            href: LOCAL_TRASH_HREF.to_string(),
-                            color: Some("#808080".to_string()),
-                        });
-                    }
-
-                    app.store
-                        .calendars
-                        .entry(LOCAL_TRASH_HREF.to_string())
-                        .or_default();
-
-                    if let Some((original, mut updated)) =
-                        app.store.move_task(&uid, LOCAL_TRASH_HREF.to_string())
-                    {
-                        let now_str = Utc::now().to_rfc3339();
-                        updated
-                            .unmapped_properties
-                            .retain(|p| p.key != "X-TRASHED-DATE");
-                        updated.unmapped_properties.push(crate::model::RawProperty {
-                            key: "X-TRASHED-DATE".to_string(),
-                            value: now_str,
-                            params: vec![],
-                        });
-
-                        app.store.update_or_add_task(updated.clone());
-                        refresh_filtered_tasks(app);
-
-                        let _ = LocalStorage::modify_for_href(
-                            app.ctx.as_ref(),
-                            LOCAL_TRASH_HREF,
-                            |all| {
-                                if let Some(idx) = all.iter().position(|t| t.uid == updated.uid) {
-                                    all[idx] = updated.clone();
-                                } else {
-                                    all.push(updated.clone());
-                                }
-                            },
-                        );
-
-                        if original.calendar_href.starts_with("local://") {
-                            let task_clone = original.clone();
-                            let _ = LocalStorage::modify_for_href(
-                                app.ctx.as_ref(),
-                                &original.calendar_href,
-                                |all| {
-                                    all.retain(|t| t.uid != task_clone.uid);
-                                },
-                            );
-                            return Task::none();
-                        } else if let Some(client) = &app.client {
-                            return Task::perform(
-                                async_delete_wrapper(client.clone(), original),
-                                Message::DeleteComplete,
-                            );
-                        } else {
-                            app.unsynced_changes = true;
-                            let _ = Journal::push(app.ctx.as_ref(), Action::Delete(original));
-                        }
-                    }
-                } else if let Some((deleted_task, _)) = app.store.delete_task(&view_task.uid) {
-                    refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
-                        return Task::perform(
-                            async_delete_wrapper(client.clone(), deleted_task),
-                            Message::DeleteComplete,
-                        );
-                    } else {
-                        handle_offline_delete(app, deleted_task);
-                    }
-                }
+                let uid = view_task.uid.clone();
+                app.selected_uid = Some(uid.clone());
+                return Task::perform(
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        app.store.clone(),
+                        ControllerAction::Delete(uid),
+                    ),
+                    |res| Message::ControllerActionComplete(Box::new(res)),
+                );
             }
             Task::none()
         }
@@ -236,12 +135,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
         Message::PromoteSelected => {
             if let Some(uid) = &app.selected_uid {
                 return handle(app, Message::RemoveParent(uid.clone()));
             }
             Task::none()
         }
+
         Message::DemoteSelected => {
             if let Some(uid) = &app.selected_uid
                 && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
@@ -255,6 +156,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
         Message::YankSelected => {
             if let Some(uid) = &app.selected_uid {
                 app.yanked_uid = Some(uid.clone());
@@ -262,6 +164,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
         Message::KeyboardLinkChild => {
             if let Some(parent_uid) = &app.yanked_uid
                 && let Some(selected_uid) = &app.selected_uid
@@ -278,6 +181,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
         Message::KeyboardAddDependency => {
             if let Some(_yanked) = &app.yanked_uid
                 && let Some(selected) = &app.selected_uid
@@ -286,6 +190,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
         Message::KeyboardAddRelation => {
             if let Some(_yanked) = &app.yanked_uid
                 && let Some(selected) = &app.selected_uid
@@ -294,6 +199,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
         Message::ToggleActiveSelected => {
             if let Some(uid) = &app.selected_uid
                 && let Some(t) = app.tasks.iter().find(|t| t.uid == *uid)
@@ -306,12 +212,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
         Message::StopSelected => {
             if let Some(uid) = &app.selected_uid {
                 return handle(app, Message::StopTask(uid.clone()));
             }
             Task::none()
         }
+
         Message::CancelSelected => {
             if let Some(uid) = &app.selected_uid
                 && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
@@ -323,6 +231,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
         Message::ChangePrioritySelected(delta) => {
             if let Some(uid) = &app.selected_uid
                 && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
@@ -340,168 +249,129 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         .change_priority(&view_task.uid, delta, app.default_priority)
                 {
                     refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
-                        return Task::perform(
-                            async_update_wrapper(client.clone(), updated),
-                            Message::SyncSaved,
-                        );
-                    } else {
-                        handle_offline_update(app, updated);
-                    }
+                    return Task::perform(
+                        async_controller_dispatch(
+                            app.ctx.clone(),
+                            app.client.clone(), // pass Option<RustyClient> directly
+                            app.store.clone(),
+                            ControllerAction::Update(updated),
+                        ),
+                        |res| Message::ControllerActionComplete(Box::new(res)),
+                    );
                 }
             }
             Task::none()
         }
+
         Message::SetTaskStatus(index, new_status) => {
             if let Some(view_task) = app.tasks.get(index) {
                 app.selected_uid = Some(view_task.uid.clone());
-                if let Some((primary, secondary, children)) =
-                    app.store.set_status(&view_task.uid, new_status)
-                {
-                    refresh_filtered_tasks(app);
-                    if let Some(client) = &app.client {
-                        let mut commands = vec![];
-                        if let Some(sec) = secondary {
-                            commands.push(Task::perform(
-                                async_create_wrapper(client.clone(), primary),
-                                Message::SyncSaved,
-                            ));
-                            commands.push(Task::perform(
-                                async_update_wrapper(client.clone(), sec),
-                                Message::SyncSaved,
-                            ));
-                        } else {
-                            commands.push(Task::perform(
-                                async_update_wrapper(client.clone(), primary),
-                                Message::SyncSaved,
-                            ));
-                        }
-                        for child in children {
-                            commands.push(Task::perform(
-                                async_update_wrapper(client.clone(), child),
-                                Message::SyncSaved,
-                            ));
-                        }
-                        return Task::batch(commands);
-                    } else {
-                        if let Some(sec) = secondary {
-                            let _ = crate::journal::Journal::push(
-                                app.ctx.as_ref(),
-                                Action::Create(primary),
-                            );
-                            let _ = crate::journal::Journal::push(
-                                app.ctx.as_ref(),
-                                Action::Update(sec),
-                            );
-                        } else {
-                            let _ = crate::journal::Journal::push(
-                                app.ctx.as_ref(),
-                                Action::Update(primary),
-                            );
-                        }
-                        for child in children {
-                            let _ = crate::journal::Journal::push(
-                                app.ctx.as_ref(),
-                                Action::Update(child),
-                            );
-                        }
-                        app.unsynced_changes = true;
-                    }
-                }
+                let mut updated = view_task.clone();
+                updated.status = new_status;
+                // Delegate to controller for persistence/recurrence handling.
+                return Task::perform(
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        app.store.clone(),
+                        ControllerAction::Update(updated),
+                    ),
+                    |res| Message::ControllerActionComplete(Box::new(res)),
+                );
             }
             Task::none()
         }
+
         Message::StartTask(uid) => {
             let updated_tasks = app.store.set_status_in_process(&uid);
             if !updated_tasks.is_empty() {
                 app.selected_uid = Some(uid.clone());
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    let mut commands = Vec::new();
-                    for t in updated_tasks {
-                        commands.push(Task::perform(
-                            async_update_wrapper(client.clone(), t),
-                            Message::SyncSaved,
-                        ));
-                    }
-                    return Task::batch(commands);
-                } else {
-                    for t in updated_tasks {
-                        handle_offline_update(app, t);
-                    }
+                let mut commands = Vec::new();
+                for t in updated_tasks {
+                    commands.push(Task::perform(
+                        async_controller_dispatch(
+                            app.ctx.clone(),
+                            app.client.clone(),
+                            app.store.clone(),
+                            ControllerAction::Update(t),
+                        ),
+                        |res| Message::ControllerActionComplete(Box::new(res)),
+                    ));
                 }
+                return Task::batch(commands);
             }
             Task::none()
         }
+
         Message::PauseTask(uid) => {
             let updated_tasks = app.store.pause_task(&uid);
             if !updated_tasks.is_empty() {
                 app.selected_uid = Some(uid.clone());
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    let mut commands = Vec::new();
-                    for t in updated_tasks {
-                        commands.push(Task::perform(
-                            async_update_wrapper(client.clone(), t),
-                            Message::SyncSaved,
-                        ));
-                    }
-                    return Task::batch(commands);
-                } else {
-                    for t in updated_tasks {
-                        handle_offline_update(app, t);
-                    }
+                let mut commands = Vec::new();
+                for t in updated_tasks {
+                    commands.push(Task::perform(
+                        async_controller_dispatch(
+                            app.ctx.clone(),
+                            app.client.clone(),
+                            app.store.clone(),
+                            ControllerAction::Update(t),
+                        ),
+                        |res| Message::ControllerActionComplete(Box::new(res)),
+                    ));
                 }
+                return Task::batch(commands);
             }
             Task::none()
         }
+
         Message::StopTask(uid) => {
             let updated_tasks = app.store.stop_task(&uid);
             if !updated_tasks.is_empty() {
                 app.selected_uid = Some(uid.clone());
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    let mut commands = Vec::new();
-                    for t in updated_tasks {
-                        commands.push(Task::perform(
-                            async_update_wrapper(client.clone(), t),
-                            Message::SyncSaved,
-                        ));
-                    }
-                    return Task::batch(commands);
-                } else {
-                    for t in updated_tasks {
-                        handle_offline_update(app, t);
-                    }
+                let mut commands = Vec::new();
+                for t in updated_tasks {
+                    commands.push(Task::perform(
+                        async_controller_dispatch(
+                            app.ctx.clone(),
+                            app.client.clone(),
+                            app.store.clone(),
+                            ControllerAction::Update(t),
+                        ),
+                        |res| Message::ControllerActionComplete(Box::new(res)),
+                    ));
                 }
+                return Task::batch(commands);
             }
             Task::none()
         }
+
         Message::YankTask(uid) => {
             app.yanked_uid = Some(uid.clone());
             app.selected_uid = Some(uid);
             scroll_to_selected(app, false)
         }
+
         Message::ClearYank => {
             app.yanked_uid = None;
             Task::none()
         }
+
         Message::EscCaptured => {
-            // Esc pressed while an input widget had capture (input focused).
-            // Decide behavior here: if we're in a modal edit (editing or creating child),
-            // cancel immediately. Otherwise just snap focus to the selected (soft escape).
+            // If editing/creating child -> cancel and focus back; otherwise soft escape.
             if app.editing_uid.is_some() || app.creating_child_of.is_some() {
-                // Modal edit: hard cancel immediately (revert)
                 app.input_value = text_editor::Content::new();
                 app.description_value = text_editor::Content::new();
                 app.editing_uid = None;
                 app.creating_child_of = None;
                 scroll_to_selected_delayed(app, true)
             } else {
-                // Non-modal (searching/drafting): just move focus to the task list (step 1)
                 scroll_to_selected_delayed(app, true)
             }
         }
+
         Message::EscapePressed => {
             let mut needs_refresh = false;
             let mut captured_action = false;
@@ -516,7 +386,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.yanked_uid = None;
                 captured_action = true;
             } else if !app.input_value.text().is_empty() {
-                // Clear draft input on second Esc
                 app.input_value = text_editor::Content::new();
                 captured_action = true;
             } else if !app.search_value.text().is_empty() {
@@ -543,71 +412,80 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             Task::none()
         }
-        Message::MakeChild(target_uid) => {
-            let parent_opt = app.yanked_uid.clone();
 
-            if let Some(parent_uid) = parent_opt
-                && let Some(updated) = app.store.set_parent(&target_uid, Some(parent_uid.clone()))
-            {
-                app.selected_uid = Some(target_uid);
-                app.yanked_uid = None;
-                refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
+        Message::MakeChild(target_uid) => {
+            if let Some(parent_uid) = app.yanked_uid.clone() {
+                if let Some(orig) = app.store.get_task_ref(&target_uid) {
+                    let mut updated = orig.clone();
+                    updated.parent_uid = Some(parent_uid.clone());
+                    app.selected_uid = Some(target_uid.clone());
+                    app.yanked_uid = None;
+                    refresh_filtered_tasks(app);
                     return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
+                        async_controller_dispatch(
+                            app.ctx.clone(),
+                            app.client.clone(),
+                            app.store.clone(),
+                            ControllerAction::Update(updated),
+                        ),
+                        |res| Message::ControllerActionComplete(Box::new(res)),
                     );
-                } else {
-                    handle_offline_update(app, updated);
                 }
             }
             Task::none()
         }
+
         Message::RemoveParent(child_uid) => {
             if let Some(updated) = app.store.set_parent(&child_uid, None) {
                 app.selected_uid = Some(child_uid);
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
-                    );
-                } else {
-                    handle_offline_update(app, updated);
-                }
+                return Task::perform(
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        app.store.clone(),
+                        ControllerAction::Update(updated),
+                    ),
+                    |res| Message::ControllerActionComplete(Box::new(res)),
+                );
             }
             Task::none()
         }
+
         Message::RemoveDependency(task_uid, dep_uid) => {
             if let Some(updated) = app.store.remove_dependency(&task_uid, &dep_uid) {
                 app.selected_uid = Some(task_uid);
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
-                    );
-                } else {
-                    handle_offline_update(app, updated);
-                }
+                return Task::perform(
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        app.store.clone(),
+                        ControllerAction::Update(updated),
+                    ),
+                    |res| Message::ControllerActionComplete(Box::new(res)),
+                );
             }
             Task::none()
         }
+
         Message::RemoveRelatedTo(task_uid, related_uid) => {
             if let Some(updated) = app.store.remove_related_to(&task_uid, &related_uid) {
                 app.selected_uid = Some(task_uid);
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
-                    );
-                } else {
-                    handle_offline_update(app, updated);
-                }
+                return Task::perform(
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        app.store.clone(),
+                        ControllerAction::Update(updated),
+                    ),
+                    |res| Message::ControllerActionComplete(Box::new(res)),
+                );
             }
             Task::none()
         }
+
         Message::AddDependency(target_uid) => {
             let blocker_opt = app.yanked_uid.clone();
 
@@ -617,17 +495,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.selected_uid = Some(target_uid);
                 app.yanked_uid = None;
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
-                    );
-                } else {
-                    handle_offline_update(app, updated);
-                }
+                return Task::perform(
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        app.store.clone(),
+                        ControllerAction::Update(updated),
+                    ),
+                    |res| Message::ControllerActionComplete(Box::new(res)),
+                );
             }
             Task::none()
         }
+
         Message::AddRelatedTo(target_uid) => {
             let related_opt = app.yanked_uid.clone();
 
@@ -637,69 +517,32 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.selected_uid = Some(target_uid);
                 app.yanked_uid = None;
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), updated),
-                        Message::SyncSaved,
-                    );
-                } else {
-                    handle_offline_update(app, updated);
-                }
+                return Task::perform(
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        app.store.clone(),
+                        ControllerAction::Update(updated),
+                    ),
+                    |res| Message::ControllerActionComplete(Box::new(res)),
+                );
             }
             Task::none()
         }
+
         Message::MoveTask(task_uid, target_href) => {
-            if let Some((original, _updated)) = app.store.move_task(&task_uid, target_href.clone())
-            {
-                app.selected_uid = Some(task_uid);
-                refresh_filtered_tasks(app);
-
-                if original.calendar_href.starts_with("local://") {
-                    let task_clone = original.clone();
-                    let _ = LocalStorage::modify_for_href(
-                        app.ctx.as_ref(),
-                        &original.calendar_href,
-                        |all| {
-                            all.retain(|t| t.uid != task_clone.uid);
-                        },
-                    );
-                }
-                if target_href.starts_with("local://") {
-                    let mut moved = original.clone();
-                    moved.calendar_href = target_href.clone();
-                    let _ = LocalStorage::modify_for_href(app.ctx.as_ref(), &target_href, |all| {
-                        all.push(moved);
-                    });
-                }
-
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_move_wrapper(client.clone(), original.clone(), target_href),
-                        Message::TaskMoved,
-                    );
-                } else {
-                    app.unsynced_changes = true;
-
-                    if !original.calendar_href.starts_with("local://")
-                        && !target_href.starts_with("local://")
-                    {
-                        let _ =
-                            Journal::push(app.ctx.as_ref(), Action::Move(original, target_href));
-                    } else if !original.calendar_href.starts_with("local://")
-                        && target_href.starts_with("local://")
-                    {
-                        let _ = Journal::push(app.ctx.as_ref(), Action::Delete(original));
-                    } else if original.calendar_href.starts_with("local://")
-                        && !target_href.starts_with("local://")
-                    {
-                        let mut moved = original.clone();
-                        moved.calendar_href = target_href;
-                        let _ = Journal::push(app.ctx.as_ref(), Action::Create(moved));
-                    }
-                }
-            }
-            Task::none()
+            app.selected_uid = Some(task_uid.clone());
+            Task::perform(
+                async_controller_dispatch(
+                    app.ctx.clone(),
+                    app.client.clone(),
+                    app.store.clone(),
+                    ControllerAction::Move(task_uid, target_href),
+                ),
+                |res| Message::ControllerActionComplete(Box::new(res)),
+            )
         }
+
         Message::MigrateLocalTo(source_href, target_href) => {
             if let Some(local_map) = app.store.calendars.get(&source_href) {
                 let tasks_to_move: Vec<_> = local_map.values().cloned().collect();
@@ -708,6 +551,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     return Task::none();
                 }
                 app.loading = true;
+
+                // async_migrate_wrapper requires a concrete RustyClient, so only call it when
+                // we have an active client. Otherwise surface an error to the user.
                 if let Some(client) = &app.client {
                     return Task::perform(
                         async_migrate_wrapper(client.clone(), tasks_to_move, target_href),
@@ -720,10 +566,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
         Message::SnoozeCustomInput(val) => {
             app.snooze_custom_input = val;
             Task::none()
         }
+
         Message::SnoozeCustomSubmit(t_uid, a_uid) => {
             app.ringing_tasks
                 .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
@@ -737,6 +585,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             handle(app, Message::SnoozeAlarm(t_uid, a_uid, mins))
         }
+
         Message::CompleteTaskFromAlarm(t_uid, a_uid) => {
             app.ringing_tasks
                 .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
@@ -748,6 +597,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
         Message::CancelTaskFromAlarm(t_uid, a_uid) => {
             app.ringing_tasks
                 .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
@@ -760,68 +610,46 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+
         Message::SnoozeAlarm(t_uid, a_uid, mins) => {
             if let Some((task, _)) = app.store.get_task_mut(&t_uid)
                 && task.handle_snooze(&a_uid, mins)
             {
                 let t_clone = task.clone();
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), t_clone),
-                        Message::SyncSaved,
-                    );
-                } else {
-                    handle_offline_update(app, t_clone);
-                }
+                return Task::perform(
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        app.store.clone(),
+                        ControllerAction::Update(t_clone),
+                    ),
+                    |res| Message::ControllerActionComplete(Box::new(res)),
+                );
             }
             Task::none()
         }
+
         Message::DismissAlarm(t_uid, a_uid) => {
             if let Some((task, _)) = app.store.get_task_mut(&t_uid)
                 && task.handle_dismiss(&a_uid)
             {
                 let t_clone = task.clone();
                 refresh_filtered_tasks(app);
-                if let Some(client) = &app.client {
-                    return Task::perform(
-                        async_update_wrapper(client.clone(), t_clone),
-                        Message::SyncSaved,
-                    );
-                } else {
-                    handle_offline_update(app, t_clone);
-                }
+                return Task::perform(
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        app.store.clone(),
+                        ControllerAction::Update(t_clone),
+                    ),
+                    |res| Message::ControllerActionComplete(Box::new(res)),
+                );
             }
             Task::none()
         }
+
         _ => Task::none(),
-    }
-}
-
-fn handle_offline_update(app: &mut GuiApp, task: TodoTask) {
-    app.unsynced_changes = true;
-    if task.calendar_href.starts_with("local://") {
-        let task_clone = task.clone();
-        let _ = LocalStorage::modify_for_href(app.ctx.as_ref(), &task.calendar_href, |all| {
-            if let Some(idx) = all.iter().position(|t| t.uid == task_clone.uid) {
-                all[idx] = task_clone;
-            } else {
-                all.push(task_clone);
-            }
-        });
-    } else {
-        let _ = Journal::push(app.ctx.as_ref(), Action::Update(task));
-    }
-}
-
-fn handle_offline_delete(app: &mut GuiApp, task: TodoTask) {
-    app.unsynced_changes = true;
-    if task.calendar_href.starts_with("local://") {
-        let _ = LocalStorage::modify_for_href(app.ctx.as_ref(), &task.calendar_href, |all| {
-            all.retain(|t| t.uid != task.uid);
-        });
-    } else {
-        let _ = Journal::push(app.ctx.as_ref(), Action::Delete(task));
     }
 }
 
@@ -918,17 +746,18 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
             refresh_filtered_tasks(app);
 
-            if let Some(client) = &app.client {
-                let save_cmd = Task::perform(
-                    async_update_wrapper(client.clone(), task_copy),
-                    Message::SyncSaved,
-                );
-                retroactive_sync_batch.push(save_cmd);
-                return Task::batch(retroactive_sync_batch);
-            } else {
-                handle_offline_update(app, task_copy);
-                return Task::none();
-            }
+            // Delegate persistence via controller dispatch (online/offline handled by dispatcher).
+            let save_cmd = Task::perform(
+                async_controller_dispatch(
+                    app.ctx.clone(),
+                    app.client.clone(),
+                    app.store.clone(),
+                    ControllerAction::Update(task_copy),
+                ),
+                |res| Message::ControllerActionComplete(Box::new(res)),
+            );
+            retroactive_sync_batch.push(save_cmd);
+            return Task::batch(retroactive_sync_batch);
         }
     } else if !clean_input.is_empty() {
         let mut new_task = TodoTask::new(&clean_input, &app.tag_aliases, config_time);
@@ -958,43 +787,24 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
             let scroll_cmd = scroll_to_selected_delayed(app, false);
 
-            if let Some(client) = &app.client {
-                let create_cmd = Task::perform(
-                    async_create_wrapper(client.clone(), new_task),
-                    Message::SyncSaved,
-                );
+            // Always route via controller dispatch; dispatcher will journal if offline.
+            let create_cmd = Task::perform(
+                async_controller_dispatch(
+                    app.ctx.clone(),
+                    app.client.clone(),
+                    app.store.clone(),
+                    ControllerAction::Create(new_task),
+                ),
+                |res| Message::ControllerActionComplete(Box::new(res)),
+            );
 
-                let focus_cmd = iced::widget::operation::focus(iced::widget::Id::new("main_input"));
+            let focus_cmd = iced::widget::operation::focus(iced::widget::Id::new("main_input"));
 
-                retroactive_sync_batch.push(create_cmd);
-                retroactive_sync_batch.push(scroll_cmd);
-                retroactive_sync_batch.push(focus_cmd);
+            retroactive_sync_batch.push(create_cmd);
+            retroactive_sync_batch.push(scroll_cmd);
+            retroactive_sync_batch.push(focus_cmd);
 
-                return Task::batch(retroactive_sync_batch);
-            } else {
-                if new_task.calendar_href.starts_with("local://") {
-                    let task_clone = new_task.clone();
-                    let _ = LocalStorage::modify_for_href(
-                        app.ctx.as_ref(),
-                        &new_task.calendar_href,
-                        |all| {
-                            if let Some(idx) = all.iter().position(|t| t.uid == task_clone.uid) {
-                                all[idx] = task_clone;
-                            } else {
-                                all.push(task_clone);
-                            }
-                        },
-                    );
-                } else {
-                    let _ = Journal::push(app.ctx.as_ref(), Action::Create(new_task.clone()));
-                }
-
-                app.unsynced_changes = true;
-                let focus_cmd = iced::widget::operation::focus(iced::widget::Id::new("main_input"));
-                retroactive_sync_batch.push(scroll_cmd);
-                retroactive_sync_batch.push(focus_cmd);
-                return Task::batch(retroactive_sync_batch);
-            }
+            return Task::batch(retroactive_sync_batch);
         }
     }
 

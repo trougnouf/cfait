@@ -22,10 +22,11 @@ pub enum Action {
     SwitchCalendar(String),
     CreateTask(Task),
     UpdateTask(Task),
-    DeleteTask(Task),
+    DeleteTask(String), // UID
     Refresh,
     Quit,
-    MoveTask(Task, String),
+    MoveTask(String, String), // UID, target_href
+    ToggleTask(String),       // UID
     StartCreateChild(String),
     MigrateLocal(String, String), // (source_calendar_href, target_calendar_href)
     ToggleCalendarVisibility(String),

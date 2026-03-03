@@ -848,14 +848,14 @@ pub async fn handle_key_event(
                             // 6. Delete Original
                             // We emit DeleteTask for the original. The network actor will see it as a delete
                             // and remove it from the server. The local trash copy is safe.
-                            return Some(Action::DeleteTask(original));
+                            return Some(Action::DeleteTask(original.uid.clone()));
                         }
                     } else {
                         // --- HARD DELETE ---
                         if let Some((deleted, _)) = state.store.delete_task(&uid) {
                             state.refresh_filtered_view();
                             update_alarms(state);
-                            return Some(Action::DeleteTask(deleted));
+                            return Some(Action::DeleteTask(deleted.uid.clone()));
                         }
                     }
                 }
@@ -1320,7 +1320,10 @@ pub async fn handle_key_event(
 
                     state.message = "Moving task...".to_string();
                     state.mode = InputMode::Normal;
-                    return Some(Action::MoveTask(original_task, target_href.clone()));
+                    return Some(Action::MoveTask(
+                        original_task.uid.clone(),
+                        target_href.clone(),
+                    ));
                 }
                 state.mode = InputMode::Normal;
             }

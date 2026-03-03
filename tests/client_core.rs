@@ -146,109 +146,54 @@ async fn test_recovery_calendar_visibility() {
     );
 }
 
-// --- MOVE TASK TESTS (previously inline) ---
+// --- MOVE TASK TESTS (updated to use TaskController) ---
 
 #[tokio::test]
 #[serial]
-async fn test_move_task_verify_success_preserves_remote_and_deletes_local() {
+async fn test_controller_move_local_to_remote() {
+    // Use explicit TestContext for filesystem isolation
     let ctx = std::sync::Arc::new(cfait::context::TestContext::new());
 
-    let mut server = mockito::Server::new_async().await;
-    let url = server.url();
+    // Create an in-memory TaskStore and put a local task into it and into LocalStorage
+    let store = std::sync::Arc::new(tokio::sync::Mutex::new(cfait::store::TaskStore::new(
+        ctx.clone(),
+    )));
 
-    let mut task = Task::new("T1", &HashMap::new(), None);
+    let mut task = Task::new("T1", &std::collections::HashMap::new(), None);
     task.uid = "uid-123".to_string();
     task.calendar_href = "local://src".to_string();
-    LocalStorage::save_for_href(ctx.as_ref(), "local://src", &[task.clone()]).unwrap();
 
-    let dest = format!("{}/dest/", url);
-    let expected_remote_href = format!("{}/{}.ics", dest.trim_end_matches('/'), task.uid);
+    // Persist to LocalStorage and add to the in-memory store
+    cfait::storage::LocalStorage::save_for_href(ctx.as_ref(), "local://src", &[task.clone()])
+        .unwrap();
+    store.lock().await.add_task(task.clone());
 
-    let _mock_put = server
-        .mock("PUT", mockito::Matcher::Any)
-        .with_status(201)
-        .with_header("ETag", "\"new-etag\"")
-        .create_async()
-        .await;
+    // Construct a TaskController with no network client (offline)
+    let client_arc = std::sync::Arc::new(tokio::sync::Mutex::new(None));
+    let controller = cfait::controller::TaskController::new(store.clone(), client_arc, ctx.clone());
 
-    // Ensure the initializer has an explicit type so OnceLock can infer the contained Mutex<Option<...>> type.
-    let hook = TEST_FETCH_REMOTE_HOOK.get_or_init(|| {
-        Mutex::new(None::<Box<dyn Fn(&str) -> Option<Task> + Send + Sync + 'static>>)
-    });
-    {
-        let mut guard = hook.lock().unwrap();
-        let t_clone = task.clone();
-        let expected_href_clone = expected_remote_href.clone();
-        let dest_clone = dest.clone();
-        *guard = Some(Box::new(move |href: &str| {
-            if href == expected_href_clone {
-                let mut rt = t_clone.clone();
-                rt.calendar_href = dest_clone.clone();
-                rt.href = expected_href_clone.clone();
-                Some(rt)
-            } else {
-                None
-            }
-        }));
-    }
+    let dest = "https://example.com/cal/dest/";
+    let res = controller.move_task(&task.uid, dest).await;
+    assert!(
+        res.is_ok(),
+        "Expected controller move_task to succeed in queuing migration"
+    );
 
-    let client = RustyClient::new(ctx.clone(), &url, "user", "pass", true, None).unwrap();
-    let res = client.move_task(&task, &dest).await.unwrap();
+    // Source should be deleted from local storage
+    let src_tasks =
+        cfait::storage::LocalStorage::load_for_href(ctx.as_ref(), "local://src").unwrap();
+    assert!(
+        src_tasks.is_empty(),
+        "Source local storage should be deleted after move"
+    );
 
-    let src_tasks = LocalStorage::load_for_href(ctx.as_ref(), "local://src").unwrap();
-    assert!(src_tasks.is_empty(), "Source should be deleted");
-    assert_eq!(res.0.uid, "uid-123");
+    // Journal should now contain ONLY a Create(remote) because local Deletes
+    // are executed immediately on disk and bypass the journal queue.
+    let j = cfait::journal::Journal::load(ctx.as_ref());
+    assert_eq!(j.queue.len(), 1, "Expected one action in journal (Create)");
 
-    if let Some(h) = TEST_FETCH_REMOTE_HOOK.get() {
-        *h.lock().unwrap() = None;
-    }
-}
-
-#[tokio::test]
-#[serial]
-async fn test_move_task_verify_failure_preserves_local() {
-    let ctx = std::sync::Arc::new(cfait::context::TestContext::new());
-
-    let mut server = mockito::Server::new_async().await;
-    let url = server.url();
-
-    let mut task = Task::new("T2", &HashMap::new(), None);
-    task.uid = "uid-456".to_string();
-    task.calendar_href = "local://src2".to_string();
-    LocalStorage::save_for_href(ctx.as_ref(), "local://src2", &[task.clone()]).unwrap();
-
-    let dest = format!("{}/dest2/", url);
-    let expected_remote_href = format!("{}/{}.ics", dest.trim_end_matches('/'), task.uid);
-
-    let _mock_put = server
-        .mock("PUT", mockito::Matcher::Any)
-        .with_status(201)
-        .with_header("ETag", "\"new-etag\"")
-        .create_async()
-        .await;
-
-    // Ensure the initializer has an explicit type so OnceLock can infer the contained Mutex<Option<...>> type.
-    let hook = TEST_FETCH_REMOTE_HOOK.get_or_init(|| {
-        Mutex::new(None::<Box<dyn Fn(&str) -> Option<Task> + Send + Sync + 'static>>)
-    });
-    {
-        let mut guard = hook.lock().unwrap();
-        let expected_href_clone = expected_remote_href.clone();
-        *guard = Some(Box::new(move |href: &str| {
-            assert_eq!(href, expected_href_clone);
-            None
-        }));
-    }
-
-    let client = RustyClient::new(ctx.clone(), &url, "user", "pass", true, None).unwrap();
-    let res = client.move_task(&task, &dest).await;
-    assert!(res.is_err(), "Move should fail verification and return Err");
-
-    let src_tasks = LocalStorage::load_for_href(ctx.as_ref(), "local://src2").unwrap();
-    assert_eq!(src_tasks.len(), 1);
-    assert_eq!(src_tasks[0].uid, "uid-456");
-
-    if let Some(h) = TEST_FETCH_REMOTE_HOOK.get() {
-        *h.lock().unwrap() = None;
+    match &j.queue[0] {
+        cfait::journal::Action::Create(t) => assert_eq!(t.calendar_href, dest),
+        other => panic!("Expected action to be Create(remote), got: {:?}", other),
     }
 }

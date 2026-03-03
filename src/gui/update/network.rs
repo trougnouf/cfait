@@ -10,7 +10,6 @@ use crate::model::CalendarListEntry;
 use crate::storage::{LOCAL_CALENDAR_HREF, LOCAL_CALENDAR_NAME, LocalCalendarRegistry};
 use crate::system::SystemEvent;
 use iced::Task;
-use iced::widget::text_editor;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
@@ -196,141 +195,20 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.loading = false;
             Task::none()
         }
-        Message::SyncSaved(Ok(mut updated)) => {
-            if updated.etag.is_empty() {
-                updated.etag = "pending_refresh".to_string();
-            }
-
-            // FIX: One-way data flow. Only patch server metadata.
-            if let Some((existing, _)) = app.store.get_task_mut(&updated.uid) {
-                existing.href = updated.href;
-                existing.etag = updated.etag;
-                if updated.sequence > existing.sequence {
-                    existing.sequence = updated.sequence;
-                }
-            } else {
-                app.store.update_or_add_task(updated);
-            }
-
-            app.last_sync_failed = false;
-            app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
-            if app.unsynced_changes {
-                app.error_msg = Some("Offline: Changes queued.".to_string());
-            }
-            refresh_filtered_tasks(app);
-            Task::none()
-        }
-        Message::SyncSaved(Err(e)) => {
-            app.error_msg = Some(format!("Sync Error: {}", e));
-            app.last_sync_failed = true;
-            Task::none()
-        }
-        Message::SyncToggleComplete(boxed_res) => match *boxed_res {
-            Ok((mut updated, created_opt)) => {
-                if updated.etag.is_empty() {
-                    updated.etag = "pending_refresh".to_string();
-                }
-
-                if let Some((existing, _)) = app.store.get_task_mut(&updated.uid) {
-                    existing.href = updated.href;
-                    existing.etag = updated.etag;
-                    if updated.sequence > existing.sequence {
-                        existing.sequence = updated.sequence;
-                    }
-                } else {
-                    app.store.update_or_add_task(updated);
-                }
-
-                if let Some(mut created) = created_opt {
-                    if created.etag.is_empty() {
-                        created.etag = "pending_refresh".to_string();
-                    }
-                    if let Some((existing, _)) = app.store.get_task_mut(&created.uid) {
-                        existing.href = created.href;
-                        existing.etag = created.etag;
-                        if created.sequence > existing.sequence {
-                            existing.sequence = created.sequence;
-                        }
-                    } else {
-                        app.store.update_or_add_task(created);
-                    }
-                }
-
+        Message::ControllerActionComplete(boxed_res) => match *boxed_res {
+            Ok(new_store) => {
+                app.store = new_store;
                 app.last_sync_failed = false;
+                app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
                 refresh_filtered_tasks(app);
                 Task::none()
             }
             Err(e) => {
-                app.error_msg = Some(format!("Toggle Error: {}", e));
+                app.error_msg = Some(format!("Action Error: {}", e));
                 app.last_sync_failed = true;
                 Task::none()
             }
         },
-        Message::TaskMoved(Ok(mut new_task)) => {
-            if new_task.etag.is_empty() {
-                new_task.etag = "pending_refresh".to_string();
-            }
-
-            if let Some((existing, _)) = app.store.get_task_mut(&new_task.uid) {
-                existing.href = new_task.href.clone();
-                existing.etag = new_task.etag.clone();
-                if new_task.sequence > existing.sequence {
-                    existing.sequence = new_task.sequence;
-                }
-            }
-
-            if let Some(map) = app.store.calendars.get(&new_task.calendar_href) {
-                let list: Vec<_> = map.values().cloned().collect();
-                let (_, token) = Cache::load(app.ctx.as_ref(), &new_task.calendar_href)
-                    .unwrap_or((vec![], None));
-                let _ = Cache::save(app.ctx.as_ref(), &new_task.calendar_href, &list, token);
-            }
-            refresh_filtered_tasks(app);
-
-            app.input_value = text_editor::Content::new();
-            app.description_value = text_editor::Content::new();
-            app.editing_uid = None;
-            app.creating_child_of = None;
-
-            app.selected_uid = Some(new_task.uid.clone());
-            app.last_sync_failed = false;
-
-            Task::none()
-        }
-        Message::TaskMoved(Err(e)) => {
-            app.error_msg = Some(format!("Move failed: {}", e));
-            app.last_sync_failed = true;
-            Task::none()
-        }
-        Message::MigrationComplete(Ok(count)) => {
-            app.loading = false;
-            app.last_sync_failed = false;
-            app.error_msg = Some(format!("Exported {} tasks successfully.", count));
-            if let Some(client) = &app.client {
-                app.loading = true;
-                return Task::perform(
-                    async_fetch_all_wrapper(client.clone(), app.calendars.clone()),
-                    Message::RefreshedAll,
-                );
-            }
-            Task::none()
-        }
-        Message::MigrationComplete(Err(e)) => {
-            app.loading = false;
-            app.last_sync_failed = true;
-            app.error_msg = Some(format!("Export failed: {}", e));
-            Task::none()
-        }
-        Message::DeleteComplete(Ok(())) => {
-            app.last_sync_failed = false;
-            app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
-            Task::none()
-        }
-        Message::DeleteComplete(Err(e)) => {
-            app.error_msg = Some(format!("Delete Error: {}", e));
-            app.last_sync_failed = true;
-            Task::none()
-        }
         _ => Task::none(),
     }
 }
