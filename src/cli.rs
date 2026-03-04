@@ -116,6 +116,52 @@ pub fn print_help(binary_name: &str) {
             rust_i18n::t!("cli_desc_export_filter").to_string(),
         );
         println!();
+
+        // New: Non-interactive task action commands
+        println!("{}", rust_i18n::t!("cli_action_commands_heading"));
+        print_cmd(
+            &format!("{} {}", binary_name, rust_i18n::t!("cli_command_add")),
+            rust_i18n::t!("cli_desc_add").to_string(),
+        );
+        print_cmd(
+            &format!(
+                "{} {} [{}]",
+                binary_name,
+                rust_i18n::t!("cli_command_list"),
+                rust_i18n::t!("cli_flag_all")
+            ),
+            rust_i18n::t!("cli_desc_list").to_string(),
+        );
+        print_cmd(
+            &format!(
+                "{} {} [{}]",
+                binary_name,
+                rust_i18n::t!("cli_command_search"),
+                rust_i18n::t!("cli_flag_all")
+            ),
+            rust_i18n::t!("cli_desc_search").to_string(),
+        );
+        print_cmd(
+            &format!("{} {}", binary_name, rust_i18n::t!("cli_command_view")),
+            rust_i18n::t!("cli_desc_view").to_string(),
+        );
+        print_cmd(
+            &format!("{} {}", binary_name, rust_i18n::t!("cli_command_start")),
+            rust_i18n::t!("cli_desc_start").to_string(),
+        );
+        print_cmd(
+            &format!("{} {}", binary_name, rust_i18n::t!("cli_command_pause")),
+            rust_i18n::t!("cli_desc_pause").to_string(),
+        );
+        print_cmd(
+            &format!("{} {}", binary_name, rust_i18n::t!("cli_command_toggle")),
+            rust_i18n::t!("cli_desc_toggle").to_string(),
+        );
+        print_cmd(
+            &format!("{} {}", binary_name, rust_i18n::t!("cli_command_delete")),
+            rust_i18n::t!("cli_desc_delete").to_string(),
+        );
+        println!();
     }
 
     if is_gui {
@@ -142,8 +188,5 @@ pub fn print_help(binary_name: &str) {
         "    {:<15} https://codeberg.org/trougnouf/cfait",
         rust_i18n::t!("cli_repo_label")
     );
-    println!(
-        "    {:<15} GPL-3.0",
-        rust_i18n::t!("cli_license_label")
-    );
+    println!("    {:<15} GPL-3.0", rust_i18n::t!("cli_license_label"));
 }
