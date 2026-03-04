@@ -922,8 +922,26 @@ pub async fn handle_key_event(
                 if let Some(t) = state.get_selected_task() {
                     let uid = t.uid.clone();
                     let summary = t.summary.clone();
+
+                    // Compute the text to copy while only holding the immutable borrow,
+                    // then mutate state (to avoid borrow-checker error).
+                    let text = if t.description.is_empty() {
+                        t.to_smart_string()
+                    } else {
+                        format!("{}\n\n{}", t.to_smart_string(), t.description)
+                    };
+
+                    // Now it's safe to update yank state
                     state.yanked_uid = Some(uid);
-                    state.message = format!("Yanked: {}", summary);
+
+                    // Copy to clipboard using OSC 52 (base64 payload)
+                    use base64::Engine;
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(text);
+                    print!("\x1b]52;c;{}\x07", b64);
+                    use std::io::Write;
+                    let _ = std::io::stdout().flush();
+
+                    state.message = format!("Yanked & Copied: {}", summary);
                 }
             }
             KeyCode::Char('b') => {

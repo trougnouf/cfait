@@ -285,6 +285,8 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     let (action_tx, action_rx) = mpsc::channel(10);
     let (event_tx, mut event_rx) = mpsc::channel(10);
 
+    let mut prev_mode = app_state.mode;
+
     // --- 4. NETWORK THREAD ---
     let network_config = network::NetworkActorConfig {
         url,
@@ -356,56 +358,58 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
         if let Some((active_task, a_uid)) = &app_state.active_alarm {
             let mut keep = false;
             if let Some(store_task) = app_state.store.get_task_ref(&active_task.uid)
-                && !store_task.status.is_done() {
-                    if a_uid.starts_with("implicit_") {
-                        let parts: Vec<&str> = a_uid.split('|').collect();
-                        if parts.len() >= 2 {
-                            let type_key_with_colon = parts[0];
-                            let expected_ts = parts[1];
+                && !store_task.status.is_done()
+            {
+                if a_uid.starts_with("implicit_") {
+                    let parts: Vec<&str> = a_uid.split('|').collect();
+                    if parts.len() >= 2 {
+                        let type_key_with_colon = parts[0];
+                        let expected_ts = parts[1];
 
-                            let config = crate::config::Config::load(app_state.ctx.as_ref())
-                                .unwrap_or_default();
-                            let default_time = chrono::NaiveTime::parse_from_str(
-                                &config.default_reminder_time,
-                                "%H:%M",
-                            )
-                            .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+                        let config =
+                            crate::config::Config::load(app_state.ctx.as_ref()).unwrap_or_default();
+                        let default_time = chrono::NaiveTime::parse_from_str(
+                            &config.default_reminder_time,
+                            "%H:%M",
+                        )
+                        .unwrap_or_else(|_| chrono::NaiveTime::from_hms_opt(9, 0, 0).unwrap());
 
-                            let mut current_ts = None;
-                            if type_key_with_colon == "implicit_due:" {
-                                if let Some(due) = &store_task.due {
-                                    let dt = match due {
-                                        crate::model::DateType::Specific(t) => *t,
-                                        crate::model::DateType::AllDay(d) => d
-                                            .and_time(default_time)
-                                            .and_local_timezone(chrono::Local)
-                                            .unwrap()
-                                            .with_timezone(&chrono::Utc),
-                                    };
-                                    current_ts = Some(dt.to_rfc3339());
-                                }
-                            } else if type_key_with_colon == "implicit_start:"
-                                && let Some(start) = &store_task.dtstart {
-                                    let dt = match start {
-                                        crate::model::DateType::Specific(t) => *t,
-                                        crate::model::DateType::AllDay(d) => d
-                                            .and_time(default_time)
-                                            .and_local_timezone(chrono::Local)
-                                            .unwrap()
-                                            .with_timezone(&chrono::Utc),
-                                    };
-                                    current_ts = Some(dt.to_rfc3339());
-                                }
-                            if current_ts.as_deref() == Some(expected_ts) {
-                                keep = true;
+                        let mut current_ts = None;
+                        if type_key_with_colon == "implicit_due:" {
+                            if let Some(due) = &store_task.due {
+                                let dt = match due {
+                                    crate::model::DateType::Specific(t) => *t,
+                                    crate::model::DateType::AllDay(d) => d
+                                        .and_time(default_time)
+                                        .and_local_timezone(chrono::Local)
+                                        .unwrap()
+                                        .with_timezone(&chrono::Utc),
+                                };
+                                current_ts = Some(dt.to_rfc3339());
                             }
+                        } else if type_key_with_colon == "implicit_start:"
+                            && let Some(start) = &store_task.dtstart
+                        {
+                            let dt = match start {
+                                crate::model::DateType::Specific(t) => *t,
+                                crate::model::DateType::AllDay(d) => d
+                                    .and_time(default_time)
+                                    .and_local_timezone(chrono::Local)
+                                    .unwrap()
+                                    .with_timezone(&chrono::Utc),
+                            };
+                            current_ts = Some(dt.to_rfc3339());
                         }
-                    } else if let Some(store_alarm) =
-                        store_task.alarms.iter().find(|a| a.uid == *a_uid)
-                        && store_alarm.acknowledged.is_none() {
+                        if current_ts.as_deref() == Some(expected_ts) {
                             keep = true;
                         }
+                    }
+                } else if let Some(store_alarm) = store_task.alarms.iter().find(|a| a.uid == *a_uid)
+                    && store_alarm.acknowledged.is_none()
+                {
+                    keep = true;
                 }
+            }
             if !keep {
                 app_state.active_alarm = None;
                 if app_state.mode == crate::tui::state::InputMode::Snoozing {
@@ -450,6 +454,16 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                 }
                 _ => {}
             }
+        }
+
+        // Toggle mouse capture based on mode so user can natively select text
+        if app_state.mode != prev_mode {
+            if app_state.mode == InputMode::EditingDescription {
+                let _ = execute!(terminal.backend_mut(), DisableMouseCapture);
+            } else if prev_mode == InputMode::EditingDescription {
+                let _ = execute!(terminal.backend_mut(), EnableMouseCapture);
+            }
+            prev_mode = app_state.mode;
         }
     }
 

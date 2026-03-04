@@ -631,7 +631,12 @@ fun HomeScreen(
                     "prio_down" -> api.changePriority(task.uid, -1)
                     "yank" -> {
                         yankedUid = task.uid
-                        val clipData = ClipData.newPlainText("task_uid", task.uid)
+                        val textToCopy = if (task.description.isEmpty()) {
+                            task.smartString
+                        } else {
+                            "${task.smartString}\n\n${task.description}"
+                        }
+                        val clipData = ClipData.newPlainText("task_details", textToCopy)
                         clipboard.setClipEntry(ClipEntry(clipData))
                     }
 

@@ -160,7 +160,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::YankSelected => {
             if let Some(uid) = &app.selected_uid {
                 app.yanked_uid = Some(uid.clone());
-                return scroll_to_selected(app, false);
+                let mut tasks = vec![scroll_to_selected(app, false)];
+                if let Some(t) = app.tasks.iter().find(|task| task.uid == *uid) {
+                    let text = if t.description.is_empty() {
+                        t.to_smart_string()
+                    } else {
+                        format!("{}\n\n{}", t.to_smart_string(), t.description)
+                    };
+                    tasks.push(iced::clipboard::write(text));
+                }
+                return Task::batch(tasks);
             }
             Task::none()
         }
@@ -350,8 +359,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::YankTask(uid) => {
             app.yanked_uid = Some(uid.clone());
-            app.selected_uid = Some(uid);
-            scroll_to_selected(app, false)
+            app.selected_uid = Some(uid.clone());
+            let mut tasks = vec![scroll_to_selected(app, false)];
+            if let Some(t) = app.tasks.iter().find(|task| task.uid == uid) {
+                let text = if t.description.is_empty() {
+                    t.to_smart_string()
+                } else {
+                    format!("{}\n\n{}", t.to_smart_string(), t.description)
+                };
+                tasks.push(iced::clipboard::write(text));
+            }
+            Task::batch(tasks)
         }
 
         Message::ClearYank => {
@@ -415,22 +433,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::MakeChild(target_uid) => {
             if let Some(parent_uid) = app.yanked_uid.clone()
-                && let Some(orig) = app.store.get_task_ref(&target_uid) {
-                    let mut updated = orig.clone();
-                    updated.parent_uid = Some(parent_uid.clone());
-                    app.selected_uid = Some(target_uid.clone());
-                    app.yanked_uid = None;
-                    refresh_filtered_tasks(app);
-                    return Task::perform(
-                        async_controller_dispatch(
-                            app.ctx.clone(),
-                            app.client.clone(),
-                            app.store.clone(),
-                            ControllerAction::Update(updated),
-                        ),
-                        |res| Message::ControllerActionComplete(Box::new(res)),
-                    );
-                }
+                && let Some(orig) = app.store.get_task_ref(&target_uid)
+            {
+                let mut updated = orig.clone();
+                updated.parent_uid = Some(parent_uid.clone());
+                app.selected_uid = Some(target_uid.clone());
+                app.yanked_uid = None;
+                refresh_filtered_tasks(app);
+                return Task::perform(
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        app.store.clone(),
+                        ControllerAction::Update(updated),
+                    ),
+                    |res| Message::ControllerActionComplete(Box::new(res)),
+                );
+            }
             Task::none()
         }
 
