@@ -639,7 +639,7 @@ impl CfaitMobile {
             for loc in locals {
                 // Special-case: hide empty trash and recovery calendars from mobile list
                 if loc.href == crate::storage::LOCAL_TRASH_HREF || loc.href == "local://recovery" {
-                    if let Some(map) = store.calendars.get(crate::storage::LOCAL_TRASH_HREF) {
+                    if let Some(map) = store.calendars.get(&loc.href) {
                         if map.is_empty() {
                             continue;
                         }
@@ -672,6 +672,16 @@ impl CfaitMobile {
                 });
             }
         }
+        result.sort_by_key(|c| {
+            if c.href == "local://recovery" {
+                1
+            } else if c.href == crate::storage::LOCAL_TRASH_HREF {
+                2
+            } else {
+                0
+            }
+        });
+
         result
     }
 

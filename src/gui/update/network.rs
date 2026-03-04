@@ -58,6 +58,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             app.calendars = cals.clone();
+            app.sort_calendars();
 
             app.store.clear();
 

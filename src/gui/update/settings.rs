@@ -67,6 +67,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
             }
             app.calendars = cached_cals;
+            app.sort_calendars();
 
             app.store.clear();
 
@@ -143,6 +144,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ObSubmit => {
             app.calendars.retain(|c| !c.href.starts_with("local://"));
             app.calendars.extend(app.local_cals_editing.clone());
+            app.sort_calendars();
 
             if app.ob_sort_months_input.trim().is_empty() {
                 app.sort_cutoff_months = None;
@@ -188,6 +190,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::CancelSettings => {
             app.calendars.retain(|c| !c.href.starts_with("local://"));
             app.calendars.extend(app.local_cals_editing.clone());
+            app.sort_calendars();
 
             save_config(app);
             refresh_filtered_tasks(app);
@@ -622,6 +625,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if !app.calendars.iter().any(|c| c.href == new_cal.href) {
                 app.calendars.push(new_cal.clone());
             }
+            app.sort_calendars();
 
             app.store.insert(new_cal.href.clone(), vec![]);
 

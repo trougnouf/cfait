@@ -24,7 +24,16 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
             state.message = format!("Error: {}", s);
             state.loading = false;
         }
-        AppEvent::CalendarsLoaded(cals) => {
+        AppEvent::CalendarsLoaded(mut cals) => {
+            cals.sort_by_key(|c| {
+                if c.href == "local://recovery" {
+                    1
+                } else if c.href == crate::storage::LOCAL_TRASH_HREF {
+                    2
+                } else {
+                    0
+                }
+            });
             state.calendars = cals;
 
             if let Some(def) = default_cal

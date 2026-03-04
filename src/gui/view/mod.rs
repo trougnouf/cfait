@@ -56,25 +56,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         AppState::Help(tab) => view_help(tab, app),
         AppState::Active => {
             let content_height = match app.sidebar_mode {
-                SidebarMode::Calendars => {
-                    app.calendars
-                        .iter()
-                        .filter(|c| !app.disabled_calendars.contains(&c.href))
-                        .filter(|c| {
-                            if c.href == crate::storage::LOCAL_TRASH_HREF
-                                || c.href == "local://recovery"
-                            {
-                                app.store
-                                    .calendars
-                                    .get(&c.href)
-                                    .is_some_and(|m| !m.is_empty())
-                            } else {
-                                true
-                            }
-                        })
-                        .count() as f32
-                        * 44.0
-                }
+                SidebarMode::Calendars => app.get_filtered_calendars().len() as f32 * 44.0,
                 SidebarMode::Categories => app.cached_categories.len() as f32 * 34.0,
                 SidebarMode::Locations => app.cached_locations.len() as f32 * 34.0,
             };
@@ -596,11 +578,10 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     let other_visible_cals: Vec<&crate::model::CalendarListEntry> =
         if !app.loading && app.sidebar_mode != SidebarMode::Calendars {
-            app.calendars
-                .iter()
+            app.get_filtered_calendars()
+                .into_iter()
                 .filter(|c| {
-                    !app.disabled_calendars.contains(&c.href)
-                        && !app.hidden_calendars.contains(&c.href)
+                    !app.hidden_calendars.contains(&c.href)
                         && Some(&c.href) != app.active_cal_href.as_ref()
                 })
                 .collect()
