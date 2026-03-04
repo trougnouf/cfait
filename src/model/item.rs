@@ -71,6 +71,28 @@ pub enum DateType {
     Specific(DateTime<Utc>),
 }
 
+pub fn safe_local_to_utc(date: NaiveDate, time: NaiveTime) -> DateTime<Utc> {
+    let ndt = date.and_time(time);
+    match ndt.and_local_timezone(Local) {
+        chrono::LocalResult::Single(dt) => dt.with_timezone(&Utc),
+        chrono::LocalResult::Ambiguous(dt1, _) => dt1.with_timezone(&Utc), // prefer standard time over daylight
+        chrono::LocalResult::None => {
+            // Time falls in a DST gap. Resolve by advancing the time by 1 hour (which is usually valid),
+            // then subtracting 1 hour in UTC. This maps the invalid local time to the UTC time just before the jump.
+            let shifted = ndt + chrono::Duration::hours(1);
+            match shifted.and_local_timezone(Local) {
+                chrono::LocalResult::Single(dt2) | chrono::LocalResult::Ambiguous(dt2, _) => {
+                    dt2.with_timezone(&Utc) - chrono::Duration::hours(1)
+                }
+                chrono::LocalResult::None => {
+                    // Extremely rare fallback (e.g. 2-hour gap): Give up and use UTC.
+                    chrono::TimeZone::from_utc_datetime(&Utc, &ndt)
+                }
+            }
+        }
+    }
+}
+
 impl DateType {
     pub fn to_date_naive(&self) -> NaiveDate {
         match self {
@@ -83,12 +105,9 @@ impl DateType {
     /// items, or the actual timestamp for specific datetimes.
     pub fn to_comparison_time(&self) -> DateTime<Utc> {
         match self {
-            DateType::AllDay(d) => d
-                .and_hms_opt(23, 59, 59)
-                .unwrap()
-                .and_local_timezone(chrono::Local)
-                .unwrap()
-                .with_timezone(&chrono::Utc),
+            DateType::AllDay(d) => {
+                safe_local_to_utc(*d, chrono::NaiveTime::from_hms_opt(23, 59, 59).unwrap())
+            }
             DateType::Specific(dt) => *dt,
         }
     }
@@ -97,12 +116,9 @@ impl DateType {
     /// all-day items and the exact dt for specific datetimes.
     pub fn to_start_comparison_time(&self) -> DateTime<Utc> {
         match self {
-            DateType::AllDay(d) => d
-                .and_hms_opt(0, 0, 0)
-                .unwrap()
-                .and_local_timezone(chrono::Local)
-                .unwrap()
-                .with_timezone(&chrono::Utc),
+            DateType::AllDay(d) => {
+                safe_local_to_utc(*d, chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+            }
             DateType::Specific(dt) => *dt,
         }
     }
@@ -120,6 +136,13 @@ impl DateType {
                     local.format("%Y-%m-%d %H:%M").to_string()
                 }
             }
+        }
+    }
+
+    pub fn to_utc_with_default_time(&self, default_time: NaiveTime) -> DateTime<Utc> {
+        match self {
+            DateType::Specific(dt) => *dt,
+            DateType::AllDay(d) => safe_local_to_utc(*d, default_time),
         }
     }
 }

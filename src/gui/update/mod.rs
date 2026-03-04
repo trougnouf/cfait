@@ -1,4 +1,4 @@
-// File: src/gui/update/mod.rs
+// File: ./src/gui/update/mod.rs
 pub mod common;
 pub mod network;
 pub mod settings;
@@ -269,28 +269,14 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                     let mut current_ts = None;
                     if type_key_with_colon == "implicit_due:" {
                         if let Some(due) = &store_task.due {
-                            let dt = match due {
-                                crate::model::DateType::Specific(t) => *t,
-                                crate::model::DateType::AllDay(d) => d
-                                    .and_time(default_time)
-                                    .and_local_timezone(chrono::Local)
-                                    .unwrap()
-                                    .with_timezone(&chrono::Utc),
-                            };
-                            current_ts = Some(dt.to_rfc3339());
+                            current_ts =
+                                Some(due.to_utc_with_default_time(default_time).to_rfc3339());
                         }
                     } else if type_key_with_colon == "implicit_start:"
                         && let Some(start) = &store_task.dtstart
                     {
-                        let dt = match start {
-                            crate::model::DateType::Specific(t) => *t,
-                            crate::model::DateType::AllDay(d) => d
-                                .and_time(default_time)
-                                .and_local_timezone(chrono::Local)
-                                .unwrap()
-                                .with_timezone(&chrono::Utc),
-                        };
-                        current_ts = Some(dt.to_rfc3339());
+                        current_ts =
+                            Some(start.to_utc_with_default_time(default_time).to_rfc3339());
                     }
                     if current_ts.as_deref() != Some(expected_ts) {
                         return false;

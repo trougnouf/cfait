@@ -102,9 +102,10 @@ impl TaskController {
         {
             let mut store = self.store.lock().await;
             if let Some((existing, _)) = store.get_task_mut(&uid)
-                && existing.etag.is_empty() {
-                    existing.etag = "pending_refresh".to_string();
-                }
+                && existing.etag.is_empty()
+            {
+                existing.etag = "pending_refresh".to_string();
+            }
         }
 
         // Durable push to journal BEFORE network attempt
@@ -193,6 +194,45 @@ impl TaskController {
                 store.update_or_add_task(task.clone());
             }
 
+            let mut reset_children: Vec<Task> = Vec::new();
+            if next_opt.is_some() {
+                let mut adjacency: std::collections::HashMap<String, Vec<String>> =
+                    std::collections::HashMap::new();
+                for map in store.calendars.values() {
+                    for t in map.values() {
+                        if let Some(p) = &t.parent_uid {
+                            adjacency.entry(p.clone()).or_default().push(t.uid.clone());
+                        }
+                    }
+                }
+
+                let mut queue = vec![task.uid.clone()];
+                let mut descendants = std::collections::HashSet::new();
+
+                while let Some(parent) = queue.pop() {
+                    if let Some(children) = adjacency.get(&parent) {
+                        for child_uid in children {
+                            if descendants.insert(child_uid.clone()) {
+                                queue.push(child_uid.clone());
+                            }
+                        }
+                    }
+                }
+
+                for child_uid in descendants {
+                    if let Some((child, _)) = store.get_task_mut(&child_uid)
+                        && child.status.is_done() {
+                            child.status = crate::model::TaskStatus::NeedsAction;
+                            child.percent_complete = None;
+                            child
+                                .unmapped_properties
+                                .retain(|p| p.key.to_uppercase() != "COMPLETED");
+
+                            reset_children.push(child.clone());
+                        }
+                }
+            }
+
             // Drop the lock before performing network/disk operations.
             drop(store);
 
@@ -205,6 +245,12 @@ impl TaskController {
             } else {
                 let next_logs = self.persist_change(Action::Update(task)).await?;
                 logs.extend(next_logs);
+            }
+
+            for child in reset_children {
+                if let Ok(w) = self.persist_change(Action::Update(child)).await {
+                    logs.extend(w);
+                }
             }
 
             return Ok(logs);

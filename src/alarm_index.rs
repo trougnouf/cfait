@@ -1,3 +1,4 @@
+// File: ./src/alarm_index.rs
 // Manages an optimized index for fast alarm lookups.
 //
 // This module provides a separate index file (alarm_index.json) that contains
@@ -126,7 +127,7 @@ impl AlarmIndex {
         auto_reminders_enabled: bool,
         default_reminder_time: &str,
     ) -> Self {
-        use chrono::{Local, NaiveTime};
+        use chrono::NaiveTime;
 
         let mut alarms = Vec::new();
         let now = Utc::now();
@@ -225,27 +226,13 @@ impl AlarmIndex {
 
                         // Check for implicit due date alarm
                         if let Some(due) = &task.due {
-                            let dt = match due {
-                                DateType::Specific(t) => *t,
-                                DateType::AllDay(d) => d
-                                    .and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc),
-                            };
+                            let dt = due.to_utc_with_default_time(default_time);
                             add_implicit(dt, "Due now", "due");
                         }
 
                         // Check for implicit start date alarm
                         if let Some(start) = &task.dtstart {
-                            let dt = match start {
-                                DateType::Specific(t) => *t,
-                                DateType::AllDay(d) => d
-                                    .and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc),
-                            };
+                            let dt = start.to_utc_with_default_time(default_time);
                             add_implicit(dt, "Starting now", "start");
                         }
                     }

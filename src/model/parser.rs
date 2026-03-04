@@ -1,3 +1,4 @@
+// File: ./src/model/parser.rs
 /*
 File: cfait/src/model/parser.rs
 Logic for parsing smart input strings into task properties.
@@ -7,7 +8,7 @@ date-only form with an optional separate time token following it.
 */
 
 use crate::model::{Alarm, DateType, Task};
-use chrono::{Datelike, Duration, Local, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveTime, Utc};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -1339,6 +1340,16 @@ fn calculate_first_occurrence(rrule: &str, today: NaiveDate) -> NaiveDate {
 }
 
 // Helper to look ahead for a time string and merge it
+fn safe_local_to_utc(date: NaiveDate, time: NaiveTime) -> DateTime<Utc> {
+    match date.and_time(time).and_local_timezone(Local) {
+        chrono::LocalResult::Single(dt) => dt.with_timezone(&Utc),
+        chrono::LocalResult::Ambiguous(dt1, _) => dt1.with_timezone(&Utc),
+        chrono::LocalResult::None => {
+            chrono::TimeZone::from_utc_datetime(&Utc, &date.and_time(time))
+        }
+    }
+}
+
 fn finalize_date_token(
     d: NaiveDate,
     stream: &[String],
@@ -1349,12 +1360,7 @@ fn finalize_date_token(
         let next_token = &stream[next_idx];
         if let Some(t) = parse_time_string(next_token) {
             *consumed += 1;
-            let local_dt = d
-                .and_time(t)
-                .and_local_timezone(Local)
-                .unwrap()
-                .with_timezone(&Utc);
-            return DateType::Specific(local_dt);
+            return DateType::Specific(safe_local_to_utc(d, t));
         }
     }
     DateType::AllDay(d)
@@ -1498,11 +1504,7 @@ pub fn apply_smart_input(
                         let today = Local::now().date_naive();
                         let first_date = calculate_first_occurrence(&rrule_str, today);
 
-                        let dt_specific = first_date
-                            .and_time(t)
-                            .and_local_timezone(Local)
-                            .unwrap()
-                            .with_timezone(&Utc);
+                        let dt_specific = safe_local_to_utc(first_date, t);
 
                         let date_val = DateType::Specific(dt_specific);
                         task.due = Some(date_val.clone());
@@ -1645,11 +1647,7 @@ pub fn apply_smart_input(
                         consumed += 1;
                     }
 
-                    let local_dt = target_date
-                        .and_time(time)
-                        .and_local_timezone(Local)
-                        .unwrap()
-                        .with_timezone(&Utc);
+                    let local_dt = safe_local_to_utc(target_date, time);
 
                     task.alarms.push(Alarm::new_absolute(local_dt));
                 } else {
@@ -1663,11 +1661,7 @@ pub fn apply_smart_input(
                 // B. Time Only (rem:8pm) -> Today at 8pm
                 else if let Some(t) = parse_time_string(clean_val) {
                     let now = Local::now().date_naive();
-                    let dt = now
-                        .and_time(t)
-                        .and_local_timezone(Local)
-                        .unwrap()
-                        .with_timezone(&Utc);
+                    let dt = safe_local_to_utc(now, t);
                     task.alarms.push(Alarm::new_absolute(dt));
                 }
                 // C. Date + Optional Time (rem:2025-12-27 12:30, rem:tomorrow 9am)
@@ -1688,11 +1682,7 @@ pub fn apply_smart_input(
                         .unwrap_or_else(|| NaiveTime::from_hms_opt(8, 0, 0).unwrap());
                     let t = time_part.unwrap_or(fallback);
 
-                    let dt = d
-                        .and_time(t)
-                        .and_local_timezone(Local)
-                        .unwrap()
-                        .with_timezone(&Utc);
+                    let dt = safe_local_to_utc(d, t);
                     task.alarms.push(Alarm::new_absolute(dt));
                 } else {
                     summary_words.push(unescape(token));
@@ -1712,7 +1702,7 @@ pub fn apply_smart_input(
                 // Case 1: Try parsing as a full datetime first (e.g., "done:2024-01-01 15:30")
                 if let Ok(ndt) = chrono::NaiveDateTime::parse_from_str(clean_val, "%Y-%m-%d %H:%M")
                 {
-                    let utc_dt = ndt.and_local_timezone(Local).unwrap().with_timezone(&Utc);
+                    let utc_dt = safe_local_to_utc(ndt.date(), ndt.time());
                     task.set_completion_date(Some(utc_dt));
                     consumed = 1; // The entire datetime was in one token
                     matched = true;
@@ -1726,12 +1716,9 @@ pub fn apply_smart_input(
                     // Convert DateType to a specific DateTime<Utc> for set_completion_date
                     let utc_dt = match dt {
                         DateType::Specific(t) => t,
-                        DateType::AllDay(d) => d
-                            .and_hms_opt(12, 0, 0)
-                            .unwrap()
-                            .and_local_timezone(Local)
-                            .unwrap()
-                            .with_timezone(&Utc),
+                        DateType::AllDay(d) => {
+                            safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap())
+                        }
                     };
 
                     task.set_completion_date(Some(utc_dt));
@@ -1904,28 +1891,7 @@ pub fn apply_smart_input(
                     consumed = temp_consumed;
                 } else if let Some(t) = parse_time_string(clean) {
                     let now = Local::now().date_naive();
-                    // FIX: Ensure correct handling of time-only token and LocalResult variants.
-                    // Construct the local DateTime robustly by matching the LocalResult returned
-                    // from `and_local_timezone`. Prefer the single result, otherwise pick the
-                    // earliest ambiguous result, and finally fall back to trying with the
-                    // actual current local date or Local::now() as a last resort.
-                    let local_dt = match now.and_time(t).and_local_timezone(Local) {
-                        chrono::LocalResult::Single(dt) => dt,
-                        chrono::LocalResult::Ambiguous(dt1, _dt2) => dt1, // choose earliest
-                        chrono::LocalResult::None => {
-                            // Try again using Local::now()'s date, in case `now` above is unsuitable.
-                            match Local::now()
-                                .date_naive()
-                                .and_time(t)
-                                .and_local_timezone(Local)
-                            {
-                                chrono::LocalResult::Single(dt) => dt,
-                                chrono::LocalResult::Ambiguous(dt1, _dt2) => dt1,
-                                chrono::LocalResult::None => Local::now(), // ultimate fallback
-                            }
-                        }
-                    };
-                    let dt = local_dt.with_timezone(&Utc);
+                    let dt = safe_local_to_utc(now, t);
                     let dt_type = DateType::Specific(dt);
                     if set_start {
                         task.dtstart = Some(dt_type.clone());
@@ -1977,11 +1943,7 @@ pub fn apply_smart_input(
                         let today = Local::now().date_naive();
                         let first_date = calculate_first_occurrence(&rrule, today);
 
-                        let dt_specific = first_date
-                            .and_time(t)
-                            .and_local_timezone(Local)
-                            .unwrap()
-                            .with_timezone(&Utc);
+                        let dt_specific = safe_local_to_utc(first_date, t);
 
                         let date_val = DateType::Specific(dt_specific);
                         if set_start {
@@ -2015,11 +1977,7 @@ pub fn apply_smart_input(
                                 let today = Local::now().date_naive();
                                 let first_date = calculate_first_occurrence(&rrule_str, today);
 
-                                let dt_specific = first_date
-                                    .and_time(t)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc);
+                                let dt_specific = safe_local_to_utc(first_date, t);
 
                                 let date_val = DateType::Specific(dt_specific);
                                 task.due = Some(date_val.clone());
@@ -2048,23 +2006,7 @@ pub fn apply_smart_input(
                 has_recurrence = true;
             } else if let Some(t) = parse_time_string(val) {
                 let now = Local::now().date_naive();
-                // Construct the local DateTime robustly by matching LocalResult
-                let local_dt = match now.and_time(t).and_local_timezone(Local) {
-                    chrono::LocalResult::Single(dt) => dt,
-                    chrono::LocalResult::Ambiguous(dt1, _dt2) => dt1,
-                    chrono::LocalResult::None => {
-                        match Local::now()
-                            .date_naive()
-                            .and_time(t)
-                            .and_local_timezone(Local)
-                        {
-                            chrono::LocalResult::Single(dt) => dt,
-                            chrono::LocalResult::Ambiguous(dt1, _dt2) => dt1,
-                            chrono::LocalResult::None => Local::now(),
-                        }
-                    }
-                };
-                let dt = local_dt.with_timezone(&Utc);
+                let dt = safe_local_to_utc(now, t);
                 let dt_type = DateType::Specific(dt);
                 if set_start {
                     task.dtstart = Some(dt_type.clone());

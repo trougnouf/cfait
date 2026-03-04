@@ -379,13 +379,10 @@ impl IcsAdapter {
                 NaiveDateTime::parse_from_str(val, "%Y%m%dT%H%M%S")
                     .ok()
                     .map(|d| {
-                        let dt = chrono::Local
-                            .from_local_datetime(&d)
-                            .earliest()
-                            .unwrap_or_else(|| {
-                                Utc.from_utc_datetime(&d).with_timezone(&chrono::Local)
-                            });
-                        DateType::Specific(dt.with_timezone(&Utc))
+                        DateType::Specific(crate::model::item::safe_local_to_utc(
+                            d.date(),
+                            d.time(),
+                        ))
                     })
             }
         };
@@ -418,13 +415,10 @@ impl IcsAdapter {
                             exdates.push(DateType::Specific(Utc.from_utc_datetime(&dt)));
                         }
                     } else if let Ok(dt) = NaiveDateTime::parse_from_str(part, "%Y%m%dT%H%M%S") {
-                        let local = chrono::Local
-                            .from_local_datetime(&dt)
-                            .earliest()
-                            .unwrap_or_else(|| {
-                                Utc.from_utc_datetime(&dt).with_timezone(&chrono::Local)
-                            });
-                        exdates.push(DateType::Specific(local.with_timezone(&Utc)));
+                        exdates.push(DateType::Specific(crate::model::item::safe_local_to_utc(
+                            dt.date(),
+                            dt.time(),
+                        )));
                     }
                 }
             }

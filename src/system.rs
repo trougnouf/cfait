@@ -3,7 +3,7 @@
 use crate::config::Config; // Import Config
 use crate::context::StandardContext; // Import StandardContext, remove unused AppContext trait
 use crate::model::{Alarm, AlarmTrigger, DateType, Task}; // Import DateType
-use chrono::{Local, NaiveTime, Utc}; // Import Time helpers
+use chrono::{NaiveTime, Utc}; // Import Time helpers
 use notify_rust::Notification;
 use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc;
@@ -70,14 +70,7 @@ pub fn spawn_alarm_actor(
                     if config.auto_reminders {
                         // Check Due Date
                         if let Some(due) = &task.due {
-                            let trigger_dt = match due {
-                                DateType::Specific(dt) => *dt,
-                                DateType::AllDay(d) => d
-                                    .and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc),
-                            };
+                            let trigger_dt = due.to_utc_with_default_time(default_time);
 
                             // Don't fire if ANY alarm (even acknowledged/dismissed) exists for this exact time.
                             // This prevents firing on restart after dismissal.
@@ -99,14 +92,7 @@ pub fn spawn_alarm_actor(
 
                         // Check Start Date (Same logic)
                         if let Some(start) = &task.dtstart {
-                            let trigger_dt = match start {
-                                DateType::Specific(dt) => *dt,
-                                DateType::AllDay(d) => d
-                                    .and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc),
-                            };
+                            let trigger_dt = start.to_utc_with_default_time(default_time);
 
                             if !task.has_alarm_at(trigger_dt) {
                                 let ts_str = trigger_dt.to_rfc3339();
