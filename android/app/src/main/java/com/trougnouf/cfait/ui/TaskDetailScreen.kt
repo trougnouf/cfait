@@ -341,7 +341,7 @@ fun TaskDetailScreen(
                         value = sessionInput,
                         onValueChange = { sessionInput = it },
                         placeholder = { Text(stringResource(R.string.eg) + " 30m, yesterday 2h") },
-                        modifier = Modifier.weight(1f).height(50.dp),
+                        modifier = Modifier.weight(1f),
                         singleLine = true
                     )
                     IconButton(

@@ -1246,10 +1246,10 @@ fun HomeScreen(
                                 focusedIndicatorColor = Color.Transparent,
                                 unfocusedIndicatorColor = Color.Transparent,
                             ),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 4.dp)
-                                .height(48.dp)
                                 .focusRequester(searchFocusRequester),
                         )
                     }
