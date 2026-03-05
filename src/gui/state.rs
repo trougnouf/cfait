@@ -105,6 +105,11 @@ pub struct GuiApp {
     pub unsynced_changes: bool,
     pub last_sync_failed: bool,
 
+    // Session UI state
+    pub adding_session_uid: Option<String>,
+    pub session_input: iced::widget::text_editor::Content,
+    pub show_all_sessions: HashSet<String>,
+
     // Computed State (Persisted for view borrowing)
     pub current_placeholder: String,
     pub search_placeholder: String,
@@ -315,6 +320,11 @@ impl Default for GuiApp {
             expanded_done_groups: HashSet::new(),
             unsynced_changes: false,
             last_sync_failed: false,
+
+            // Session UI defaults
+            adding_session_uid: None,
+            session_input: iced::widget::text_editor::Content::new(),
+            show_all_sessions: HashSet::new(),
 
             current_placeholder: "Add a task...".to_string(),
             search_placeholder: "Search...".to_string(),

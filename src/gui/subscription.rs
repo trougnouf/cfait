@@ -74,24 +74,26 @@ fn handle_hotkey(
 
     // Handle Ctrl + Scroll (Zoom In/Out)
     if let iced::Event::Mouse(iced::mouse::Event::WheelScrolled { delta }) = &evt
-        && CMD_HELD.load(Ordering::Relaxed) {
-            match delta {
-                iced::mouse::ScrollDelta::Lines { y, .. }
-                | iced::mouse::ScrollDelta::Pixels { y, .. } => {
-                    if *y > 0.0 {
-                        return Some(Message::ZoomIn);
-                    } else if *y < 0.0 {
-                        return Some(Message::ZoomOut);
-                    }
+        && CMD_HELD.load(Ordering::Relaxed)
+    {
+        match delta {
+            iced::mouse::ScrollDelta::Lines { y, .. }
+            | iced::mouse::ScrollDelta::Pixels { y, .. } => {
+                if *y > 0.0 {
+                    return Some(Message::ZoomIn);
+                } else if *y < 0.0 {
+                    return Some(Message::ZoomOut);
                 }
             }
         }
+    }
 
     // Handle Ctrl + Middle Click (Zoom Reset)
     if let iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Middle)) = &evt
-        && CMD_HELD.load(Ordering::Relaxed) {
-            return Some(Message::ZoomReset);
-        }
+        && CMD_HELD.load(Ordering::Relaxed)
+    {
+        return Some(Message::ZoomReset);
+    }
 
     // Allow Escape to work even when input is captured — notify the app that Esc was pressed while captured.
     if status == iced::event::Status::Captured {
@@ -107,16 +109,15 @@ fn handle_hotkey(
         // Catch zoom shortcuts (Ctrl/Cmd + '+' / '-' / '0') BEFORE we ignore modifier combinations.
         let is_cmd = modifiers.command() || modifiers.control();
 
-        if is_cmd
-            && let keyboard::Key::Character(s) = key.as_ref() {
-                // Using .as_ref() bypasses the unstable str_as_str feature
-                match s {
-                    "+" | "=" => return Some(Message::ZoomIn),
-                    "-" => return Some(Message::ZoomOut),
-                    "0" => return Some(Message::ZoomReset),
-                    _ => {}
-                }
+        if is_cmd && let keyboard::Key::Character(s) = key.as_ref() {
+            // Using .as_ref() bypasses the unstable str_as_str feature
+            match s {
+                "+" | "=" => return Some(Message::ZoomIn),
+                "-" => return Some(Message::ZoomOut),
+                "0" => return Some(Message::ZoomReset),
+                _ => {}
             }
+        }
 
         // Ignore if Ctrl/Alt/Cmd is held for everything else
         if modifiers.command() || modifiers.control() || modifiers.alt() {
@@ -139,6 +140,8 @@ fn handle_hotkey(
                     ("y", false) => Some(Message::YankSelected),
                     ("c", false) => Some(Message::KeyboardLinkChild),
                     ("c", true) => Some(Message::KeyboardCreateChild),
+                    ("t", false) => Some(Message::KeyboardAddSession),
+                    ("t", true) => Some(Message::KeyboardToggleSessions),
                     ("b", false) => Some(Message::KeyboardAddDependency),
                     ("l", false) => Some(Message::KeyboardAddRelation),
                     ("a", false) => Some(Message::FocusInput),

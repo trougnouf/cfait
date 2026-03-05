@@ -1,5 +1,12 @@
-// File: src/tui/handlers.rs
-// Handles keyboard input and system events for the TUI.
+/*
+File: src/tui/handlers.rs
+Handles keyboard input and system events for the TUI.
+This file is a near-complete copy of the application's TUI input handler,
+with additions for quick session logging (t) and session management (T).
+It also avoids deprecated/removed chrono helpers by using NaiveDateTime::from_timestamp_opt
+and DateTime::<Utc>::from_utc(...) to construct timezone-aware values.
+*/
+
 use crate::config::Config;
 use crate::model::parser::{extract_inline_aliases, validate_alias_integrity};
 use crate::model::{Task, TaskStatus};
@@ -14,6 +21,7 @@ use tokio::sync::mpsc::Sender;
 
 // Weighted-random helper from the shared store
 use crate::store::select_weighted_random_index;
+use rust_i18n::t;
 
 pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Option<String>) {
     // Ensure the [UNSYNCED] badge reflects the current journal state on every event
@@ -660,6 +668,47 @@ pub async fn handle_key_event(
                 }
             }
 
+            // Quick log: start a session input for the selected task
+            KeyCode::Char('t') => {
+                if let Some(summary) = state.get_selected_task().map(|t| t.summary.clone()) {
+                    state.mode = InputMode::AddingSession;
+                    state.reset_input();
+                    state.message =
+                        t!("tui_log_time_prompt", name = summary, eg = t!("eg")).to_string();
+                }
+            }
+
+            // Manage sessions: open session list popup for selected task
+            KeyCode::Char('T') => {
+                if let Some(sessions) = state.get_selected_task().map(|t| t.sessions.clone()) {
+                    let mut items = Vec::new();
+                    for (i, session) in sessions.iter().enumerate() {
+                        let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
+                            .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                            .with_timezone(&chrono::Local);
+                        let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
+                            .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                            .with_timezone(&chrono::Local);
+                        let dur = (session.end - session.start) / 60;
+                        let display = format!(
+                            "{} - {} ({}m)",
+                            s_dt.format("%Y-%m-%d %H:%M"),
+                            e_dt.format("%H:%M"),
+                            dur
+                        );
+                        items.push((i, display));
+                    }
+                    if !items.is_empty() {
+                        state.session_items = items;
+                        state.session_selection_state.select(Some(0));
+                        state.mode = InputMode::ManagingSessions;
+                        state.message = t!("tui_manage_sessions_prompt").to_string();
+                    } else {
+                        state.message = t!("no_sessions_recorded").to_string();
+                    }
+                }
+            }
+
             KeyCode::Char(' ') => {
                 if state.active_focus == Focus::Main {
                     if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
@@ -1098,7 +1147,7 @@ pub async fn handle_key_event(
                     // Add incoming relations
                     let incoming_related = state.store.get_tasks_related_to(&task.uid);
                     for (related_uid, related_name) in incoming_related {
-                        items.push((related_uid, format!("← {}", related_name)));
+                        items.push((related_uid.clone(), format!("← {}", related_name)));
                     }
 
                     if !items.is_empty() {
@@ -1310,6 +1359,72 @@ pub async fn handle_key_event(
             }
             _ => {}
         },
+        InputMode::AddingSession => match key.code {
+            KeyCode::Enter => {
+                let input = state.input_buffer.clone();
+                if let Some(session) = crate::model::parser::parse_session_input(&input) {
+                    if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
+                        && let Some((t_mut, _)) = state.store.get_task_mut(&uid)
+                    {
+                        t_mut.add_session(session);
+                        let cloned = t_mut.clone();
+                        state.refresh_filtered_view();
+                        state.mode = InputMode::Normal;
+                        state.reset_input();
+                        return Some(Action::UpdateTask(cloned));
+                    }
+                } else {
+                    state.message = "Failed to parse time format.".to_string();
+                }
+            }
+            KeyCode::Esc => {
+                state.mode = InputMode::Normal;
+                state.reset_input();
+            }
+            KeyCode::Char(c) => state.enter_char(c),
+            KeyCode::Backspace => state.delete_char(),
+            KeyCode::Left => state.move_cursor_left(),
+            KeyCode::Right => state.move_cursor_right(),
+            _ => {}
+        },
+
+        InputMode::ManagingSessions => match key.code {
+            KeyCode::Esc => {
+                state.mode = InputMode::Normal;
+                state.message = String::new();
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let len = state.session_items.len();
+                if len > 0 {
+                    let current = state.session_selection_state.selected().unwrap_or(0);
+                    let next = if current >= len - 1 { 0 } else { current + 1 };
+                    state.session_selection_state.select(Some(next));
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                let len = state.session_items.len();
+                if len > 0 {
+                    let current = state.session_selection_state.selected().unwrap_or(0);
+                    let prev = if current == 0 { len - 1 } else { current - 1 };
+                    state.session_selection_state.select(Some(prev));
+                }
+            }
+            KeyCode::Delete | KeyCode::Char('x') => {
+                if let Some(idx) = state.session_selection_state.selected()
+                    && let Some(&(real_idx, _)) = state.session_items.get(idx)
+                    && let Some(uid) = state.get_selected_task().map(|t| t.uid.clone())
+                    && let Some((t_mut, _)) = state.store.get_task_mut(&uid)
+                {
+                    t_mut.remove_session(real_idx);
+                    let cloned = t_mut.clone();
+                    state.mode = InputMode::Normal;
+                    state.refresh_filtered_view();
+                    return Some(Action::UpdateTask(cloned));
+                }
+            }
+            _ => {}
+        },
+
         InputMode::Moving => match key.code {
             KeyCode::Esc => {
                 state.mode = InputMode::Normal;

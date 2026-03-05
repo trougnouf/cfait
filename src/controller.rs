@@ -113,20 +113,21 @@ impl TaskController {
 
         let client_opt = self.client.lock().await.clone();
         if let Some(client) = client_opt {
-            let store_ref = self.store.clone();
-            // Fire and forget the sync to keep the UI instant
-            tokio::spawn(async move {
-                if let Ok((_warns, synced)) = client.sync_journal().await {
-                    let mut s = store_ref.lock().await;
-                    for sync_task in synced {
-                        if let Some((existing, _)) = s.get_task_mut(&sync_task.uid) {
-                            existing.etag = sync_task.etag;
-                            existing.href = sync_task.href;
-                        }
+            // Await the sync directly so ETags are applied to the active store before returning
+            if let Ok((warns, synced)) = client.sync_journal().await {
+                let mut s = self.store.lock().await;
+                for sync_task in synced {
+                    if let Some((existing, _)) = s.get_task_mut(&sync_task.uid) {
+                        existing.etag = sync_task.etag;
+                        existing.href = sync_task.href;
                     }
                 }
-            });
-            Ok(vec![])
+                Ok(warns)
+            } else {
+                Ok(vec![
+                    "Network error: Changes queued for next sync.".to_string(),
+                ])
+            }
         } else {
             Ok(vec!["Offline: Changes queued.".to_string()])
         }
@@ -221,15 +222,16 @@ impl TaskController {
 
                 for child_uid in descendants {
                     if let Some((child, _)) = store.get_task_mut(&child_uid)
-                        && child.status.is_done() {
-                            child.status = crate::model::TaskStatus::NeedsAction;
-                            child.percent_complete = None;
-                            child
-                                .unmapped_properties
-                                .retain(|p| p.key.to_uppercase() != "COMPLETED");
+                        && child.status.is_done()
+                    {
+                        child.status = crate::model::TaskStatus::NeedsAction;
+                        child.percent_complete = None;
+                        child
+                            .unmapped_properties
+                            .retain(|p| p.key.to_uppercase() != "COMPLETED");
 
-                            reset_children.push(child.clone());
-                        }
+                        reset_children.push(child.clone());
+                    }
                 }
             }
 

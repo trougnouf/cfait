@@ -446,6 +446,23 @@ impl Task {
         }
     }
 
+    /// Safely add a work session and update the total tracked time.
+    pub fn add_session(&mut self, session: WorkSession) {
+        let dur = (session.end - session.start).max(0) as u64;
+        self.time_spent_seconds = self.time_spent_seconds.saturating_add(dur);
+        self.sessions.push(session);
+        self.sessions.sort_by_key(|s| s.start);
+    }
+
+    /// Safely remove a work session by index and update the total tracked time.
+    pub fn remove_session(&mut self, idx: usize) {
+        if idx < self.sessions.len() {
+            let session = self.sessions.remove(idx);
+            let dur = (session.end - session.start).max(0) as u64;
+            self.time_spent_seconds = self.time_spent_seconds.saturating_sub(dur);
+        }
+    }
+
     /// Construct a new task from smart-syntax input. This is a thin constructor that
     /// initializes fields and delegates parsing to the smart-input parser.
     pub fn new(

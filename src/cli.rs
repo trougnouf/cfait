@@ -117,7 +117,7 @@ pub fn print_help(binary_name: &str) {
         );
         println!();
 
-        // New: Non-interactive task action commands
+        // Non-interactive task action commands
         println!("{}", rust_i18n::t!("cli_action_commands_heading"));
         print_cmd(
             &format!("{} {}", binary_name, rust_i18n::t!("cli_command_add")),

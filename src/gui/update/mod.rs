@@ -106,7 +106,15 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ChangePrioritySelected(_)
         | Message::CompleteTaskFromAlarm(_, _)
         | Message::CancelTaskFromAlarm(_, _)
-        | Message::ToggleDoneGroup(_) => tasks::handle(app, message),
+        | Message::ToggleDoneGroup(_)
+        | Message::StartAddSession(_)
+        | Message::SessionInputChanged(_)
+        | Message::SubmitSession
+        | Message::CancelAddSession
+        | Message::DeleteSession(_, _)
+        | Message::ToggleShowAllSessions(_)
+        | Message::KeyboardAddSession
+        | Message::KeyboardToggleSessions => tasks::handle(app, message),
 
         Message::TabPressed(_)
         | Message::FocusInput

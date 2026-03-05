@@ -1514,6 +1514,34 @@ pub fn apply_smart_input(
                     }
                 }
             }
+        } else if let Some(rrule) = token
+            .strip_prefix("rec:")
+            .and_then(parse_recurrence)
+            .or_else(|| token.strip_prefix('@').and_then(parse_recurrence))
+            .or_else(|| {
+                if token_lower.starts_with("freq=") {
+                    Some(token.to_string()) // Preserve original case
+                } else {
+                    None
+                }
+            })
+        {
+            task.rrule = Some(rrule.clone());
+            has_recurrence = true;
+
+            // Check for time (e.g. "@daily 8pm")
+            if i + consumed < stream.len() {
+                let potential_time = &stream[i + consumed];
+                if let Some(t) = parse_time_string(potential_time) {
+                    let today = Local::now().date_naive();
+                    let first_date = calculate_first_occurrence(&rrule, today);
+                    let dt_specific = safe_local_to_utc(first_date, t);
+                    let date_val = DateType::Specific(dt_specific);
+                    task.due = Some(date_val.clone());
+                    task.dtstart = Some(date_val);
+                    consumed += 1;
+                }
+            }
         }
         // Handle "until <date>" - only if recurrence is already defined
         else if has_recurrence && token_lower == "until" && i + 1 < stream.len() {
@@ -2135,4 +2163,81 @@ pub fn apply_smart_input(
         // Clamp start to due to avoid invalid ranges where start > due.
         task.dtstart = Some(due.clone());
     }
+}
+
+pub fn parse_session_input(input: &str) -> Option<crate::model::item::WorkSession> {
+    use chrono::Local;
+    let now = Local::now();
+    let mut target_date = now.date_naive();
+
+    let tokens: Vec<&str> = input.split_whitespace().collect();
+    if tokens.is_empty() {
+        return None;
+    }
+
+    let mut duration_mins = None;
+    let mut start_time = None;
+    let mut end_time = None;
+
+    for token in tokens {
+        let lower = token.to_lowercase();
+        if lower == "today" {
+            target_date = now.date_naive();
+        } else if lower == "yesterday" {
+            target_date = now.date_naive() - chrono::Duration::days(1);
+        } else if let Ok(d) = chrono::NaiveDate::parse_from_str(&lower, "%Y-%m-%d") {
+            target_date = d;
+        } else if lower.contains('-') && lower.split('-').count() == 2 {
+            let parts: Vec<&str> = lower.split('-').collect();
+            if let (Some(t1), Some(t2)) = (parse_time_string(parts[0]), parse_time_string(parts[1]))
+            {
+                start_time = Some(t1);
+                end_time = Some(t2);
+            }
+        } else if let Some(mins) = parse_duration(&lower) {
+            duration_mins = Some(mins);
+        } else if let Some(t) = parse_time_string(&lower) {
+            start_time = Some(t);
+        }
+    }
+
+    if let (Some(s), Some(e)) = (start_time, end_time) {
+        let start_dt = crate::model::item::safe_local_to_utc(target_date, s);
+        let mut end_dt = crate::model::item::safe_local_to_utc(target_date, e);
+        if end_dt < start_dt {
+            end_dt += chrono::Duration::days(1);
+        }
+        return Some(crate::model::item::WorkSession {
+            start: start_dt.timestamp(),
+            end: end_dt.timestamp(),
+        });
+    }
+
+    if let Some(dur) = duration_mins {
+        if let Some(s) = start_time {
+            let start_dt = crate::model::item::safe_local_to_utc(target_date, s);
+            let end_dt = start_dt + chrono::Duration::minutes(dur as i64);
+            return Some(crate::model::item::WorkSession {
+                start: start_dt.timestamp(),
+                end: end_dt.timestamp(),
+            });
+        } else if target_date == now.date_naive() {
+            let end_dt = now.with_timezone(&chrono::Utc);
+            let start_dt = end_dt - chrono::Duration::minutes(dur as i64);
+            return Some(crate::model::item::WorkSession {
+                start: start_dt.timestamp(),
+                end: end_dt.timestamp(),
+            });
+        } else {
+            let s = chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap();
+            let start_dt = crate::model::item::safe_local_to_utc(target_date, s);
+            let end_dt = start_dt + chrono::Duration::minutes(dur as i64);
+            return Some(crate::model::item::WorkSession {
+                start: start_dt.timestamp(),
+                end: end_dt.timestamp(),
+            });
+        }
+    }
+
+    None
 }

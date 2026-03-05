@@ -149,3 +149,96 @@ impl Highlighter for SmartInputHighlighter {
         0
     }
 }
+pub struct SessionHighlighter {
+    is_dark: bool,
+}
+
+impl Default for SessionHighlighter {
+    fn default() -> Self {
+        Self { is_dark: true }
+    }
+}
+
+impl Highlighter for SessionHighlighter {
+    type Settings = bool;
+    type Highlight = highlighter::Format<Font>;
+    type Iterator<'a> = std::vec::IntoIter<(Range<usize>, Self::Highlight)>;
+
+    fn new(settings: &Self::Settings) -> Self {
+        Self { is_dark: *settings }
+    }
+
+    fn update(&mut self, settings: &Self::Settings) {
+        self.is_dark = *settings;
+    }
+
+    fn change_line(&mut self, _line: usize) {}
+    fn current_line(&self) -> usize {
+        0
+    }
+
+    fn highlight_line(&mut self, line: &str) -> Self::Iterator<'_> {
+        let mut spans = Vec::new();
+        let mut cursor = 0;
+
+        for word in line.split_whitespace() {
+            let start = line[cursor..].find(word).unwrap() + cursor;
+            let end = start + word.len();
+
+            if start > cursor {
+                spans.push((
+                    cursor..start,
+                    highlighter::Format {
+                        color: None,
+                        font: None,
+                    },
+                ));
+            }
+
+            let lower = word.to_lowercase();
+            let format = if crate::model::parser::parse_duration(&lower).is_some() {
+                // Duration matches
+                highlighter::Format {
+                    color: Some(Color::from_rgb(0.6, 0.6, 0.6)),
+                    font: None,
+                }
+            } else if lower == "today"
+                || lower == "yesterday"
+                || chrono::NaiveDate::parse_from_str(&lower, "%Y-%m-%d").is_ok()
+            {
+                // Date matches
+                highlighter::Format {
+                    color: Some(Color::from_rgb(0.2, 0.6, 1.0)),
+                    font: None,
+                }
+            } else if lower.contains(':') && (lower.contains('-') || lower.len() <= 5) {
+                // Time or Time Range matches
+                highlighter::Format {
+                    color: Some(Color::from_rgb(0.4, 0.8, 0.4)),
+                    font: None,
+                }
+            } else {
+                // Default text
+                highlighter::Format {
+                    color: None,
+                    font: None,
+                }
+            };
+
+            spans.push((start..end, format));
+            cursor = end;
+        }
+
+        if cursor < line.len() {
+            spans.push((
+                cursor..line.len(),
+                highlighter::Format {
+                    color: None,
+                    font: None,
+                },
+            ));
+        }
+
+        spans.into_iter()
+    }
+}

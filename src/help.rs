@@ -61,11 +61,6 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     example: "~30m, ~1.5h, ~15m-45m".to_string(),
                 },
                 HelpItem {
-                    keys: "spent:X".to_string(),
-                    desc: rust_i18n::t!("help_org_spent").to_string(), // Fixed mapping!
-                    example: "spent:1h, spent:30m".to_string(),
-                },
-                HelpItem {
                     keys: "done:date".to_string(),
                     desc: rust_i18n::t!("help_org_done").to_string(), // Fixed mapping!
                     example: "done:2024-01-01 15:30".to_string(),

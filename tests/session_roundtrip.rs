@@ -21,8 +21,8 @@ fn test_session_roundtrip_persistence() {
     let ics_string = original.to_ics();
 
     // Ensure the custom property is present in the output
-    assert!(ics_string.contains("X-CFAIT-SESSION:1700000000,1700003600"));
-    assert!(ics_string.contains("X-CFAIT-SESSION:1700007200,1700010800"));
+    assert!(ics_string.contains("X-CFAIT-SESSION:1700000000/1700003600"));
+    assert!(ics_string.contains("X-CFAIT-SESSION:1700007200/1700010800"));
 
     // Deserialize back
     let restored = Task::from_ics(

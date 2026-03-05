@@ -457,7 +457,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(client) = client_opt {
                 app.deleting_events = true;
 
-                // NEW: Auto-disable event creation
+                // Auto-disable event creation
                 app.create_events_for_tasks = false;
                 save_config(app);
 

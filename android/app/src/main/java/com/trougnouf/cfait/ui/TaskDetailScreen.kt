@@ -305,6 +305,131 @@ fun TaskDetailScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
 
+            // --- Work Sessions Block ---
+            var showAddSession by remember { mutableStateOf(false) }
+            var sessionInput by remember { mutableStateOf("") }
+            var showAllSessions by remember { mutableStateOf(false) }
+
+            if (task!!.sessions.isNotEmpty() || showAddSession) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val totalMins = task!!.sessions.sumOf { (it.endMs - it.startMs) / 60000 }
+                    Text(
+                        stringResource(R.string.time_tracked_duration, totalMins / 60, totalMins % 60),
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                    if (!showAddSession) {
+                        IconButton(onClick = { showAddSession = true }, modifier = Modifier.size(24.dp)) {
+                            NfIcon(NfIcons.ADD, 16.sp, MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+
+                if (showAddSession) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = sessionInput,
+                            onValueChange = { sessionInput = it },
+                            placeholder = { Text(stringResource(R.string.eg) + " 30m, yesterday 2h") },
+                            modifier = Modifier.weight(1f).height(50.dp),
+                            singleLine = true
+                        )
+                        IconButton(
+                            onClick = {
+                                if (sessionInput.isNotBlank()) {
+                                    scope.launch {
+                                        try {
+                                            api.addSession(uid, sessionInput)
+                                            sessionInput = ""
+                                            showAddSession = false
+                                            reload()
+                                        } catch (e: Exception) {
+                                            android.widget.Toast.makeText(
+                                                androidx.compose.ui.platform.LocalContext.current,
+                                                "Format error: ${e.message}",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                }
+                            }
+                        ) { NfIcon(NfIcons.CHECK, 16.sp, MaterialTheme.colorScheme.primary) }
+                        IconButton(onClick = { showAddSession = false }) {
+                            NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+
+                val visibleSessions = if (showAllSessions) {
+                    task!!.sessions.reversed()
+                } else {
+                    task!!.sessions.reversed().take(3)
+                }
+
+                visibleSessions.forEachIndexed { revIdx, session ->
+                    // Convert reversed index back to absolute index for deletion
+                    val absoluteIdx = task!!.sessions.size - 1 - revIdx
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                    ) {
+                        val startDt = java.time.Instant.ofEpochMilli(session.startMs)
+                            .atZone(java.time.ZoneId.systemDefault())
+                        val endDt = java.time.Instant.ofEpochMilli(session.endMs)
+                            .atZone(java.time.ZoneId.systemDefault())
+                        val formatterDate = java.time.format.DateTimeFormatter.ofPattern("MMM dd, HH:mm")
+                        val formatterTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+                        val durMins = (session.endMs - session.startMs) / 60000
+
+                        Text(
+                            "${startDt.format(formatterDate)} - ${endDt.format(formatterTime)} (${durMins}m)",
+                            fontSize = 12.sp,
+                            color = androidx.compose.ui.graphics.Color.Gray,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    api.deleteSession(uid, absoluteIdx.toUInt())
+                                    reload()
+                                }
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
+                        }
+                    }
+                }
+
+                if (task!!.sessions.size > 3) {
+                    TextButton(
+                        onClick = { showAllSessions = !showAllSessions },
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.height(24.dp)
+                    ) {
+                        Text(
+                            if (showAllSessions) stringResource(R.string.show_less) else stringResource(
+                                R.string.show_older_sessions,
+                                task!!.sessions.size - 3
+                            ),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                    }
+                }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
+
             var incomingRelated by remember { mutableStateOf<List<MobileRelatedTask>>(emptyList()) }
 
             LaunchedEffect(task) {

@@ -667,6 +667,84 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        // Start showing the inline add-session input for the given task.
+        Message::StartAddSession(uid) => {
+            app.adding_session_uid = Some(uid.clone());
+            app.session_input = iced::widget::text_editor::Content::new();
+            app.expanded_tasks.insert(uid.clone());
+            // Focus the inline input (best-effort; may be a no-op depending on widget tree)
+            iced::widget::operation::focus(iced::widget::Id::from(format!("session_input_{}", uid)))
+        }
+
+        // Update session input buffer (from the TextEditor/widget)
+        Message::SessionInputChanged(action) => {
+            if let iced::widget::text_editor::Action::Edit(iced::widget::text_editor::Edit::Enter) =
+                action
+            {
+                return handle(app, Message::SubmitSession);
+            }
+            app.session_input.perform(action);
+            Task::none()
+        }
+
+        Message::CancelAddSession => {
+            app.adding_session_uid = None;
+            app.session_input = iced::widget::text_editor::Content::new();
+            Task::none()
+        }
+
+        // Submit the session text: parse and apply to the selected task, then persist via controller.
+        Message::SubmitSession => {
+            if let Some(uid) = &app.adding_session_uid {
+                let input_text = app.session_input.text();
+                if let Some(session) = crate::model::parser::parse_session_input(&input_text)
+                    && let Some((t_mut, _)) = app.store.get_task_mut(uid)
+                {
+                    t_mut.add_session(session);
+                    let cloned = t_mut.clone();
+                    app.adding_session_uid = None;
+                    app.session_input = iced::widget::text_editor::Content::new();
+                    crate::gui::update::common::refresh_filtered_tasks(app);
+
+                    return Task::perform(
+                        crate::gui::async_ops::async_controller_dispatch(
+                            app.ctx.clone(),
+                            app.client.clone(),
+                            app.store.clone(),
+                            crate::gui::async_ops::ControllerAction::Update(cloned),
+                        ),
+                        |res| Message::ControllerActionComplete(Box::new(res)),
+                    );
+                }
+            }
+            Task::none()
+        }
+
+        // Toggle whether to show all sessions for a task in its expanded details
+        Message::ToggleShowAllSessions(uid) => {
+            app.expanded_tasks.insert(uid.clone());
+            if app.show_all_sessions.contains(&uid) {
+                app.show_all_sessions.remove(&uid);
+            } else {
+                app.show_all_sessions.insert(uid);
+            }
+            Task::none()
+        }
+
+        Message::KeyboardAddSession => {
+            if let Some(selected_uid) = &app.selected_uid {
+                return handle(app, Message::StartAddSession(selected_uid.clone()));
+            }
+            Task::none()
+        }
+
+        Message::KeyboardToggleSessions => {
+            if let Some(selected_uid) = &app.selected_uid {
+                return handle(app, Message::ToggleDetails(selected_uid.clone()));
+            }
+            Task::none()
+        }
+
         _ => Task::none(),
     }
 }

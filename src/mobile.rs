@@ -124,6 +124,12 @@ pub struct MobileSyntaxToken {
 }
 
 #[derive(uniffi::Record)]
+pub struct MobileWorkSession {
+    pub start_ms: i64,
+    pub end_ms: i64,
+}
+
+#[derive(uniffi::Record)]
 pub struct MobileTask {
     pub uid: String,
     pub summary: String,
@@ -163,6 +169,9 @@ pub struct MobileTask {
     // Time-tracking fields exposed to mobile clients
     pub time_spent_seconds: u64,
     pub last_started_at: Option<i64>,
+
+    // Work sessions history
+    pub sessions: Vec<MobileWorkSession>,
 
     // Virtual task hinting for clients to render expand/collapse rows
     // Values are:
@@ -400,7 +409,17 @@ fn task_to_mobile(
         time_spent_seconds: t.time_spent_seconds,
         last_started_at: t.last_started_at,
 
-        // Virtual hint fields for mobile/GUI clients
+        // Sessions history (convert seconds -> milliseconds for mobile)
+        sessions: t
+            .sessions
+            .iter()
+            .map(|s| MobileWorkSession {
+                start_ms: s.start * 1000,
+                end_ms: s.end * 1000,
+            })
+            .collect(),
+
+        // Virtual hint fields for mobile clients
         virtual_type: v_type,
         virtual_payload: v_payload,
 
@@ -573,6 +592,53 @@ impl CfaitMobile {
 
     pub fn parse_duration_string(&self, val: String) -> Option<u32> {
         crate::model::parser::parse_duration(&val)
+    }
+
+    pub async fn add_session(&self, uid: String, input: String) -> Result<(), MobileError> {
+        if let Some(session) = crate::model::parser::parse_session_input(&input) {
+            // Acquire store lock and mutate in-place
+            let mut store = self.controller.store.lock().await;
+            if let Some((task, _)) = store.get_task_mut(&uid) {
+                task.add_session(session);
+                let cloned = task.clone();
+                drop(store);
+                // Persist via controller
+                self.controller
+                    .update_task(cloned)
+                    .await
+                    .map_err(MobileError::from)?;
+                // Rebuild alarms/index after mutation
+                let store_locked = self.controller.store.lock().await;
+                self.rebuild_alarm_index_sync(&store_locked);
+                Ok(())
+            } else {
+                Err(MobileError::from("Task not found"))
+            }
+        } else {
+            Err(MobileError::from("Invalid time format"))
+        }
+    }
+
+    pub async fn delete_session(&self, uid: String, index: u32) -> Result<(), MobileError> {
+        // Acquire store lock and mutate in-place
+        let mut store = self.controller.store.lock().await;
+        if let Some((task, _)) = store.get_task_mut(&uid) {
+            let idx = index as usize;
+            task.remove_session(idx);
+            let cloned = task.clone();
+            drop(store);
+            // Persist via controller
+            self.controller
+                .update_task(cloned)
+                .await
+                .map_err(MobileError::from)?;
+            // Rebuild alarms/index after mutation
+            let store_locked = self.controller.store.lock().await;
+            self.rebuild_alarm_index_sync(&store_locked);
+            Ok(())
+        } else {
+            Err(MobileError::from("Task not found"))
+        }
     }
 
     #[allow(clippy::too_many_arguments)]

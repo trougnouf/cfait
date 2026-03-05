@@ -215,19 +215,6 @@ impl TaskDisplay for Task {
             // Always output the full datetime for completed tasks
         }
 
-        // Output spent time
-        if self.time_spent_seconds > 0 {
-            // Round to nearest minute for display
-            let mins = self.time_spent_seconds / 60;
-            if mins > 0 {
-                if mins.is_multiple_of(60) {
-                    s.push_str(&format!(" spent:{}h", mins / 60));
-                } else {
-                    s.push_str(&format!(" spent:{}m", mins));
-                }
-            }
-        }
-
         s
     }
 }

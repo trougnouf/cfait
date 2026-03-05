@@ -16,6 +16,7 @@ use crate::tui::action::SidebarMode;
 use crate::tui::state::{AppState, Focus, InputMode};
 
 use chrono::Utc;
+use rust_i18n::t;
 
 use ratatui::{
     Frame,
@@ -695,6 +696,40 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             }
             details_md.push('\n');
         }
+
+        // --- Work Sessions (recent) ---
+        if !task.sessions.is_empty() {
+            let mut total_mins: i64 = 0;
+            let mut session_lines: Vec<String> = Vec::new();
+            // Show most recent sessions first
+            for session in task.sessions.iter().rev() {
+                total_mins += (session.end - session.start) / 60;
+                let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
+                    .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                    .with_timezone(&chrono::Local);
+                let dur = (session.end - session.start) / 60;
+                session_lines.push(format!("- {} ({}m)", s_dt.format("%b %d, %H:%M"), dur));
+            }
+            details_md.push_str(&format!(
+                "### {}\n",
+                t!(
+                    "time_tracked_duration",
+                    h = total_mins / 60,
+                    m = total_mins % 60
+                )
+            ));
+            for line in session_lines.into_iter().take(3) {
+                details_md.push_str(&line);
+                details_md.push('\n');
+            }
+            if task.sessions.len() > 3 {
+                details_md.push_str(&format!(
+                    "*{}*\n",
+                    t!("tui_older_sessions_hidden", count = task.sessions.len() - 3)
+                ));
+            }
+            details_md.push('\n');
+        }
     }
 
     if details_md.is_empty() {
@@ -800,7 +835,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         InputMode::Creating
         | InputMode::Editing
         | InputMode::Searching
-        | InputMode::EditingDescription => {
+        | InputMode::EditingDescription
+        | InputMode::AddingSession => {
             // Determine input title and color. If filters are the culprit, make search show red.
             let (mut title_str, prefix, color) = match state.mode {
                 InputMode::Searching => {
@@ -840,6 +876,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         )
                     }
                 }
+                InputMode::AddingSession => (" Log Time ".to_string(), "> ", Color::Green),
                 _ => (
                     format!(" {} ", rust_i18n::t!("mode_create")),
                     "> ",
@@ -1040,6 +1077,25 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .highlight_style(Style::default().bg(Color::Blue).fg(Color::White));
         f.render_widget(Clear, area);
         f.render_stateful_widget(popup, area, &mut state.relationship_selection_state);
+    }
+
+    // Session management popup (opened when managing sessions)
+    if state.mode == InputMode::ManagingSessions {
+        let area = centered_rect(60, 50, f.area());
+        let items: Vec<ListItem> = state
+            .session_items
+            .iter()
+            .map(|(_, display_name)| ListItem::new(display_name.as_str()))
+            .collect();
+        let popup = List::new(items)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(format!(" {} ", t!("tui_manage_sessions_title"))),
+            )
+            .highlight_style(Style::default().bg(Color::Blue));
+        f.render_widget(Clear, area);
+        f.render_stateful_widget(popup, area, &mut state.session_selection_state);
     }
 
     // Alarm popup (simplified rendering if active)

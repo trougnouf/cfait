@@ -178,13 +178,6 @@ impl IcsAdapter {
         if let Some(ts) = task.last_started_at {
             todo.add_property("X-LAST-START", ts.to_string());
         }
-        // NEW: Safely serialize work sessions to the server
-        for session in &task.sessions {
-            todo.append_multi_property(icalendar::Property::new(
-                "X-CFAIT-SESSION",
-                format!("{},{}", session.start, session.end),
-            ));
-        }
 
         for raw in &task.unmapped_properties {
             let mut prop = icalendar::Property::new(&raw.key, &raw.value);
@@ -197,6 +190,25 @@ impl IcsAdapter {
         let mut calendar = Calendar::new();
         calendar.push(todo);
         let mut ics = calendar.to_string();
+
+        // Safely serialize work sessions to the server
+        if !task.sessions.is_empty() {
+            let mut session_lines = String::new();
+            for session in &task.sessions {
+                session_lines.push_str(&format!(
+                    "X-CFAIT-SESSION:{}/{}\r\n",
+                    session.start, session.end
+                ));
+            }
+            if let Some(idx) = ics.rfind("END:VTODO") {
+                let (start, end) = ics.split_at(idx);
+                let mut buffer = String::with_capacity(ics.len() + session_lines.len());
+                buffer.push_str(start);
+                buffer.push_str(&session_lines);
+                buffer.push_str(end);
+                ics = buffer;
+            }
+        }
 
         if !task.categories.is_empty() {
             let escaped_cats: Vec<String> = task
@@ -532,7 +544,7 @@ impl IcsAdapter {
         let mut dependencies = Vec::new();
         let mut related_to = Vec::new();
 
-        // NEW: Manually parse sessions from unfolded text to ensure we catch all of them
+        // Manually parse sessions from unfolded text to ensure we catch all of them
         // regardless of how icalendar crate groups X- properties.
         let mut manual_sessions = Vec::new();
 
@@ -590,14 +602,24 @@ impl IcsAdapter {
                     }
                 }
 
-                // NEW: Manual session parsing
+                // Manual session parsing
                 if line.starts_with("X-CFAIT-SESSION:")
                     && let Some((_, val)) = line.split_once(':')
-                    && let Some((s_str, e_str)) = val.split_once(',')
-                    && let (Ok(start), Ok(end)) =
-                        (s_str.trim().parse::<i64>(), e_str.trim().parse::<i64>())
                 {
-                    manual_sessions.push(crate::model::item::WorkSession { start, end });
+                    // Un-escape comma in case a previous version escaped it, and fallback to slash
+                    let clean_val = val.replace("\\,", ",");
+                    let parts = if clean_val.contains('/') {
+                        clean_val.split_once('/')
+                    } else {
+                        clean_val.split_once(',')
+                    };
+
+                    if let Some((s_str, e_str)) = parts
+                        && let (Ok(start), Ok(end)) =
+                            (s_str.trim().parse::<i64>(), e_str.trim().parse::<i64>())
+                    {
+                        manual_sessions.push(crate::model::item::WorkSession { start, end });
+                    }
                 }
             }
         }
@@ -776,14 +798,9 @@ impl IcsAdapter {
         // 1. GENERATE WORK SESSIONS (The "Past" blocks for time tracking)
         // These are always generated if present into separate ICS files.
         for (index, session) in task.sessions.iter().enumerate() {
-            let start_utc = Utc
-                .timestamp_opt(session.start, 0)
-                .single()
-                .unwrap_or(Utc::now());
-            let end_utc = Utc
-                .timestamp_opt(session.end, 0)
-                .single()
-                .unwrap_or(Utc::now());
+            let start_utc =
+                chrono::DateTime::from_timestamp(session.start, 0).unwrap_or_else(Utc::now);
+            let end_utc = chrono::DateTime::from_timestamp(session.end, 0).unwrap_or_else(Utc::now);
 
             // Skip invalid sessions
             if end_utc <= start_utc {
@@ -898,9 +915,6 @@ impl IcsAdapter {
                         // If both exist + duration, usually implies "Scheduled block".
                         // Let's anchor to START if available, otherwise DUE?
                         // The prompt implied current behavior anchors to DUE.
-                        // Let's stick to DUE-based anchoring if both are present to ensure deadline visibility.
-
-                        // Wait, previous "Quirk 1" discussion said it anchors to DUE.
                         // Let's keep that for now unless specific requirement changed.
                         match d {
                             DateType::AllDay(date) => {

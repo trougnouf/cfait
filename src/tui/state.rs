@@ -28,6 +28,8 @@ pub enum InputMode {
     Exporting,
     Snoozing,
     RelationshipBrowsing,
+    AddingSession,
+    ManagingSessions,
     Help(crate::help::HelpTab),
 }
 
@@ -93,6 +95,10 @@ pub struct AppState {
     // Relationship browsing state
     pub relationship_items: Vec<(String, String)>, // (uid, display_name)
     pub relationship_selection_state: ListState,
+
+    // Session management state (for quick-log and session editor)
+    pub session_items: Vec<(usize, String)>,
+    pub session_selection_state: ListState,
 
     // Track unsynced status
     pub unsynced_changes: bool,
@@ -180,6 +186,8 @@ impl AppState {
 
             relationship_items: Vec::new(),
             relationship_selection_state: ListState::default(),
+            session_items: Vec::new(),
+            session_selection_state: ListState::default(),
 
             unsynced_changes: false, // Default false
             alarm_actor_tx: None,

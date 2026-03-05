@@ -120,6 +120,8 @@ pub const BELL: char = '\u{f0f3}'; // nf-fa-bell
 pub const PALETTE_COLOR: char = '\u{e22b}'; // nf-fae-palette_color
 pub const HOURGLASS_START: char = '\u{f251}'; // nf-fa-hourglass_start
 pub const HOURGLASS_END: char = '\u{f253}'; // nf-fa-hourglass_end (NEW)
+pub const TIMER_PLUS: char = '\u{f1ae3}'; // nf-md-timer_plus_outline
+pub const TIMER_SETTINGS: char = '\u{f1924}'; // nf-md-timer_settings_outline
 
 // Random Dice Icons
 pub const RANDOM_ICONS: &[char] = &[

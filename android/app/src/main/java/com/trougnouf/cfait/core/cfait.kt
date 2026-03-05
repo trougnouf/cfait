@@ -757,6 +757,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_add_related_to(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_add_session(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_add_task_smart(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_change_priority(): Short
@@ -772,6 +774,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_all_calendar_events(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_local_calendar(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_delete_session(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_task(): Short
 
@@ -913,6 +917,12 @@ internal object UniffiLib {
         `relatedUid`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_add_session(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+        `input`: RustBuffer.ByValue,
+    ): Long
+
     external fun uniffi_cfait_fn_method_cfaitmobile_add_task_smart(
         `ptr`: Long,
         `input`: RustBuffer.ByValue,
@@ -950,6 +960,12 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_delete_local_calendar(
         `ptr`: Long,
         `href`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_delete_session(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+        `index`: Int,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_delete_task(
@@ -1450,6 +1466,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_related_to() != 44547.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_session() != 41352.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_task_smart() != 4490.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1472,6 +1491,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_local_calendar() != 4754.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_session() != 10164.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_task() != 39654.toShort()) {
@@ -2142,6 +2164,11 @@ public interface CfaitMobileInterface {
         `relatedUid`: kotlin.String,
     )
 
+    suspend fun `addSession`(
+        `uid`: kotlin.String,
+        `input`: kotlin.String,
+    )
+
     suspend fun `addTaskSmart`(`input`: kotlin.String): kotlin.String
 
     suspend fun `changePriority`(
@@ -2168,6 +2195,11 @@ public interface CfaitMobileInterface {
     suspend fun `deleteAllCalendarEvents`(): kotlin.UInt
 
     suspend fun `deleteLocalCalendar`(`href`: kotlin.String)
+
+    suspend fun `deleteSession`(
+        `uid`: kotlin.String,
+        `index`: kotlin.UInt,
+    )
 
     suspend fun `deleteTask`(`uid`: kotlin.String)
 
@@ -2518,6 +2550,28 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `addSession`(
+        `uid`: kotlin.String,
+        `input`: kotlin.String,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_add_session(
+                uniffiHandle,
+                FfiConverterString.lower(`uid`),
+                FfiConverterString.lower(`input`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        MobileException.ErrorHandler,
+    )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `addTaskSmart`(`input`: kotlin.String): kotlin.String =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -2674,6 +2728,28 @@ open class CfaitMobile :
             // Error FFI converter
             MobileException.ErrorHandler,
         )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `deleteSession`(
+        `uid`: kotlin.String,
+        `index`: kotlin.UInt,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_delete_session(
+                uniffiHandle,
+                FfiConverterString.lower(`uid`),
+                FfiConverterUInt.lower(`index`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        MobileException.ErrorHandler,
+    )
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -3979,6 +4055,7 @@ data class MobileTask(
     var `geo`: kotlin.String?,
     var `timeSpentSeconds`: kotlin.ULong,
     var `lastStartedAt`: kotlin.Long?,
+    var `sessions`: List<MobileWorkSession>,
     var `virtualType`: kotlin.String,
     var `virtualPayload`: kotlin.String,
     var `visibleCategories`: List<kotlin.String>,
@@ -4027,6 +4104,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterOptionalString.read(buf),
             FfiConverterULong.read(buf),
             FfiConverterOptionalLong.read(buf),
+            FfiConverterSequenceTypeMobileWorkSession.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterSequenceString.read(buf),
@@ -4069,6 +4147,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterOptionalString.allocationSize(value.`geo`) +
                 FfiConverterULong.allocationSize(value.`timeSpentSeconds`) +
                 FfiConverterOptionalLong.allocationSize(value.`lastStartedAt`) +
+                FfiConverterSequenceTypeMobileWorkSession.allocationSize(value.`sessions`) +
                 FfiConverterString.allocationSize(value.`virtualType`) +
                 FfiConverterString.allocationSize(value.`virtualPayload`) +
                 FfiConverterSequenceString.allocationSize(value.`visibleCategories`) +
@@ -4113,6 +4192,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterOptionalString.write(value.`geo`, buf)
         FfiConverterULong.write(value.`timeSpentSeconds`, buf)
         FfiConverterOptionalLong.write(value.`lastStartedAt`, buf)
+        FfiConverterSequenceTypeMobileWorkSession.write(value.`sessions`, buf)
         FfiConverterString.write(value.`virtualType`, buf)
         FfiConverterString.write(value.`virtualPayload`, buf)
         FfiConverterSequenceString.write(value.`visibleCategories`, buf)
@@ -4153,6 +4233,38 @@ public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileView
         FfiConverterSequenceTypeMobileTask.write(value.`tasks`, buf)
         FfiConverterSequenceTypeMobileTag.write(value.`tags`, buf)
         FfiConverterSequenceTypeMobileLocation.write(value.`locations`, buf)
+    }
+}
+
+data class MobileWorkSession(
+    var `startMs`: kotlin.Long,
+    var `endMs`: kotlin.Long,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileWorkSession : FfiConverterRustBuffer<MobileWorkSession> {
+    override fun read(buf: ByteBuffer): MobileWorkSession =
+        MobileWorkSession(
+            FfiConverterLong.read(buf),
+            FfiConverterLong.read(buf),
+        )
+
+    override fun allocationSize(value: MobileWorkSession) =
+        (
+            FfiConverterLong.allocationSize(value.`startMs`) +
+                FfiConverterLong.allocationSize(value.`endMs`)
+        )
+
+    override fun write(
+        value: MobileWorkSession,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterLong.write(value.`startMs`, buf)
+        FfiConverterLong.write(value.`endMs`, buf)
     }
 }
 
@@ -4668,6 +4780,34 @@ public object FfiConverterSequenceTypeMobileTask : FfiConverterRustBuffer<List<M
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileTask.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMobileWorkSession : FfiConverterRustBuffer<List<MobileWorkSession>> {
+    override fun read(buf: ByteBuffer): List<MobileWorkSession> {
+        val len = buf.getInt()
+        return List<MobileWorkSession>(len) {
+            FfiConverterTypeMobileWorkSession.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MobileWorkSession>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMobileWorkSession.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<MobileWorkSession>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMobileWorkSession.write(it, buf)
         }
     }
 }
