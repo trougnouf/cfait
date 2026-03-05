@@ -91,6 +91,7 @@ object NfIcons {
     val LITECOIN = get(0xf0a61)
     val ETHEREUM = get(0xed58)
     val SEARCH = get(0xf002)
+    val SEARCH_STOP = get(0xeb4e)
     val MENU = get(0xf0c9)
     val DOTS_CIRCLE = get(0xf1978)
     val COPY = get(0xf0c5)
@@ -113,6 +114,7 @@ object NfIcons {
     val BELL = get(0xf0f3)
     val HOURGLASS_START = get(0xf251)
     val HOURGLASS_END = get(0xf253)
+    val TIMER_PLUS = get(0xf1ae3)
 
     // RANDOM_ICONS
     val DICE_D20 = get(0xeef5)

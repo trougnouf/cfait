@@ -120,45 +120,43 @@ pub fn print_help(binary_name: &str) {
         // Non-interactive task action commands
         println!("{}", rust_i18n::t!("cli_action_commands_heading"));
         print_cmd(
-            &format!("{} {}", binary_name, rust_i18n::t!("cli_command_add")),
+            &format!(
+                "{} add <{}>",
+                binary_name,
+                rust_i18n::t!("cli_task_placeholder")
+            ),
             rust_i18n::t!("cli_desc_add").to_string(),
         );
         print_cmd(
-            &format!(
-                "{} {} [{}]",
-                binary_name,
-                rust_i18n::t!("cli_command_list"),
-                rust_i18n::t!("cli_flag_all")
-            ),
+            &format!("{} list [--all]", binary_name),
             rust_i18n::t!("cli_desc_list").to_string(),
         );
         print_cmd(
             &format!(
-                "{} {} [{}]",
+                "{} search <{}> [--all]",
                 binary_name,
-                rust_i18n::t!("cli_command_search"),
-                rust_i18n::t!("cli_flag_all")
+                rust_i18n::t!("cli_query_placeholder")
             ),
             rust_i18n::t!("cli_desc_search").to_string(),
         );
         print_cmd(
-            &format!("{} {}", binary_name, rust_i18n::t!("cli_command_view")),
+            &format!("{} view <uid>", binary_name),
             rust_i18n::t!("cli_desc_view").to_string(),
         );
         print_cmd(
-            &format!("{} {}", binary_name, rust_i18n::t!("cli_command_start")),
+            &format!("{} start <uid>", binary_name),
             rust_i18n::t!("cli_desc_start").to_string(),
         );
         print_cmd(
-            &format!("{} {}", binary_name, rust_i18n::t!("cli_command_pause")),
+            &format!("{} pause <uid>", binary_name),
             rust_i18n::t!("cli_desc_pause").to_string(),
         );
         print_cmd(
-            &format!("{} {}", binary_name, rust_i18n::t!("cli_command_toggle")),
+            &format!("{} toggle <uid>", binary_name),
             rust_i18n::t!("cli_desc_toggle").to_string(),
         );
         print_cmd(
-            &format!("{} {}", binary_name, rust_i18n::t!("cli_command_delete")),
+            &format!("{} delete <uid>", binary_name),
             rust_i18n::t!("cli_desc_delete").to_string(),
         );
         println!();
@@ -179,7 +177,18 @@ pub fn print_help(binary_name: &str) {
         }
         println!();
         println!("{}", rust_i18n::t!("cli_examples_heading"));
-        println!("{}", rust_i18n::t!("cli_examples"));
+        println!("    Buy cookies !1 @2025-01-16 #shopping rem:2025-01-16 8am");
+        println!("    Exercise @daily ~30m #health rem:8am");
+        println!(
+            "    Meeting @tomorrow 2pm ~1h +cal {}",
+            rust_i18n::t!("cli_example_force_cal")
+        );
+        println!("    Plant plum tree #tree_planting !3 ~2h @@home:garden");
+        println!("    #tree_planting:=#gardening,@@home");
+        println!(
+            "    @@aldi:=#groceries,#shopping {}",
+            rust_i18n::t!("cli_example_loc_alias")
+        );
     }
 
     println!();

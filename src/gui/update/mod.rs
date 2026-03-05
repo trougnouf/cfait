@@ -324,8 +324,12 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             .find(|c| Some(&c.href) == app.active_cal_href.as_ref())
             .map(|c| c.name.as_str())
             .unwrap_or("Default");
-        app.current_placeholder =
-            rust_i18n::t!("new_task_placeholder_full", target = target_name).to_string();
+        app.current_placeholder = format!(
+            "{} ({} {} !1 @tomorrow #groceries ~30m)",
+            rust_i18n::t!("add_task_to_target", target = target_name),
+            rust_i18n::t!("eg"),
+            rust_i18n::t!("example_buy_cat_food")
+        );
     }
 
     // Persist search/notes placeholder translations

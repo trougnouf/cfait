@@ -141,7 +141,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
         let custom_snooze_row = row![
             text_input(
-                &rust_i18n::t!("snooze_custom_placeholder"),
+                &format!(
+                    "{} ({} 30m)",
+                    rust_i18n::t!("snooze_custom_title"),
+                    rust_i18n::t!("eg")
+                ),
                 &app.snooze_custom_input
             )
             .on_input(Message::SnoozeCustomInput)

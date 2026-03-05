@@ -673,8 +673,11 @@ pub async fn handle_key_event(
                 if let Some(summary) = state.get_selected_task().map(|t| t.summary.clone()) {
                     state.mode = InputMode::AddingSession;
                     state.reset_input();
-                    state.message =
-                        t!("tui_log_time_prompt", name = summary, eg = t!("eg")).to_string();
+                    state.message = format!(
+                        "{} ({} 30m, yesterday 1h):",
+                        t!("tui_log_time_prompt", name = summary),
+                        t!("eg")
+                    );
                 }
             }
 
