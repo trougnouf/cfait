@@ -168,7 +168,9 @@ class NotificationActionWorker(
         )
 
         // Tap opens app
-        val tapIntent = Intent(context, MainActivity::class.java)
+        val tapIntent = Intent(context, MainActivity::class.java).apply {
+            putExtra("focus_task_uid", task.uid)
+        }
         val tapPending =
             PendingIntent.getActivity(context, task.uid.hashCode(), tapIntent, PendingIntent.FLAG_IMMUTABLE)
 

@@ -345,12 +345,19 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
 
         // B. Alarm Signals
         // Check if the alarm actor sent a "Fire" message
-        if let Ok(AlarmMessage::Fire(t_uid, a_uid)) = gui_alarm_rx.try_recv() {
-            // Find the task in the store to display details
-            if let Some((task, _)) = app_state.store.get_task_mut(&t_uid) {
-                app_state.active_alarm = Some((task.clone(), a_uid));
-                // Trigger a refresh so if it's done remotely, it will disappear soon.
-                let _ = action_tx.try_send(crate::tui::action::Action::Refresh);
+        if let Ok(msg) = gui_alarm_rx.try_recv() {
+            match msg {
+                AlarmMessage::Fire(t_uid, a_uid) => {
+                    // Find the task in the store to display details
+                    if let Some((task, _)) = app_state.store.get_task_mut(&t_uid) {
+                        app_state.active_alarm = Some((task.clone(), a_uid));
+                        // Trigger a refresh so if it's done remotely, it will disappear soon.
+                        let _ = action_tx.try_send(crate::tui::action::Action::Refresh);
+                    }
+                }
+                AlarmMessage::FocusTask(_t_uid) => {
+                    // Ignored in TUI, terminal interfaces typically don't process OS notification clicks efficiently
+                }
             }
         }
 

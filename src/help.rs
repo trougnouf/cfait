@@ -318,7 +318,8 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "E".to_string(),
-                    desc: rust_i18n::t!("edit_task_title").to_string(),
+                    // Change this from edit_task_title to edit_description_title
+                    desc: rust_i18n::t!("edit_description_title").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {

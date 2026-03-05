@@ -381,6 +381,12 @@ fun CfaitNavHost(
 
     LaunchedEffect(intent) {
         intent?.let {
+            val focusUid = it.getStringExtra("focus_task_uid")
+            if (focusUid != null) {
+                autoScrollUid = focusUid
+                it.removeExtra("focus_task_uid")
+            }
+
             if (it.action == Intent.ACTION_VIEW) {
                 val uri: Uri? = it.data
                 uri?.let { fileUri ->

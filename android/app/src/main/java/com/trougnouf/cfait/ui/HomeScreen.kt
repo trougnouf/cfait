@@ -1057,151 +1057,7 @@ fun HomeScreen(
     ) {
         Scaffold(
             topBar = {
-                if (isSearchActive) {
-                    LaunchedEffect(Unit) {
-                        searchFocusRequester.requestFocus()
-                    }
-                    TopAppBar(
-                        title = {
-                            TextField(
-                                value = searchQuery,
-                                onValueChange = { searchQuery = it },
-                                placeholder = { Text(stringResource(R.string.search_placeholder)) },
-                                singleLine = true,
-                                visualTransformation = remember(isDark) {
-                                    SmartSyntaxTransformation(
-                                        api,
-                                        isDark,
-                                        true
-                                    )
-                                }, // Added
-                                colors =
-                                    TextFieldDefaults.colors(
-                                        focusedContainerColor = Color.Transparent,
-                                        unfocusedContainerColor = Color.Transparent,
-                                        focusedIndicatorColor = Color.Transparent,
-                                        unfocusedIndicatorColor = Color.Transparent,
-                                    ),
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .focusRequester(searchFocusRequester),
-                            )
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = {
-                                isSearchActive = false
-                                searchQuery = ""
-                            }) { NfIcon(NfIcons.BACK, 20.sp) }
-                        },
-                    )
-                } else {
-                    val headerTitle: @Composable () -> Unit = {
-                        val textMeasurer = rememberTextMeasurer()
-                        val density = LocalDensity.current
-
-                        val activeCal = calendars.find { it.href == defaultCalHref }
-                        val activeCalName = activeCal?.name ?: "Local"
-                        val activeColorHex = activeCal?.color
-                        val activeColor =
-                            if (activeColorHex != null) parseHexColor(activeColorHex) else MaterialTheme.colorScheme.onSurface
-
-                        val otherVisible = calendars.filter {
-                            !it.isDisabled && it.isVisible && it.href != defaultCalHref
-                        }
-
-                        val activeCount = tasks.count { !it.isDone }
-                        val countText = if (tasks.isNotEmpty()) "($activeCount)" else ""
-
-                        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                            val maxWidth = constraints.maxWidth.toFloat()
-
-                            val textStyle = LocalTextStyle.current.copy(
-                                fontSize = 18.sp
-                            )
-                            val smallTextStyle = LocalTextStyle.current.copy(
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
-
-                            val nameResult = textMeasurer.measure(
-                                text = activeCalName,
-                                style = textStyle.copy(color = activeColor)
-                            )
-                            val countResult = textMeasurer.measure(
-                                text = if (countText.isNotEmpty()) " $countText" else "",
-                                style = smallTextStyle
-                            )
-                            val plusResult = textMeasurer.measure(text = "+", style = smallTextStyle)
-                            val dotsResult = textMeasurer.measure(text = "...", style = smallTextStyle)
-
-                            val iconSizePx = with(density) { 28.dp.toPx() }
-                            val spacerAfterIconPx = with(density) { 8.dp.toPx() }
-                            val safetyMarginPx = with(density) { 16.dp.toPx() }
-
-                            val availableForPlus =
-                                maxWidth - iconSizePx - spacerAfterIconPx - nameResult.size.width - countResult.size.width - safetyMarginPx
-
-                            val maxVisiblePlus = if (availableForPlus > 0 && plusResult.size.width > 0) {
-                                (availableForPlus / plusResult.size.width).toInt()
-                            } else 0
-
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(28.dp),
-                                )
-                                Spacer(Modifier.width(8.dp))
-
-                                Text(
-                                    text = activeCalName,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = activeColor,
-                                )
-
-                                if (otherVisible.isNotEmpty()) {
-                                    if (otherVisible.size <= maxVisiblePlus) {
-                                        otherVisible.forEach { cal ->
-                                            val c = cal.color?.let { parseHexColor(it) } ?: Color.Gray
-                                            Text(
-                                                text = "+",
-                                                color = c,
-                                                fontSize = 13.sp
-                                            )
-                                        }
-                                    } else {
-                                        val spaceWithDots = availableForPlus - dotsResult.size.width
-                                        val fitWithDots = if (spaceWithDots > 0 && plusResult.size.width > 0) {
-                                            (spaceWithDots / plusResult.size.width).toInt()
-                                        } else 0
-                                        val visibleCount = fitWithDots.coerceAtLeast(0)
-
-                                        otherVisible.take(visibleCount).forEach { cal ->
-                                            val c = cal.color?.let { parseHexColor(it) } ?: Color.Gray
-                                            Text(
-                                                text = "+",
-                                                color = c,
-                                                fontSize = 13.sp
-                                            )
-                                        }
-                                        ColoredOverflowDots()
-                                    }
-                                }
-
-                                if (countText.isNotEmpty()) {
-                                    Text(
-                                        text = " $countText",
-                                        fontSize = 13.sp,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                        maxLines = 1,
-                                    )
-                                }
-                            }
-                        }
-                    }
-
+                Column {
                     TopAppBar(
                         title = headerTitle,
                         navigationIcon = {
@@ -1213,7 +1069,6 @@ fun HomeScreen(
                             }
                         },
                         actions = {
-                            // Use a single Row with negative spacing to control all icon gaps uniformly
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy((-12).dp)
@@ -1221,12 +1076,14 @@ fun HomeScreen(
                                 IconButton(onClick = { jumpToRandomTask() }) {
                                     NfIcon(currentRandomIcon, 20.sp)
                                 }
-                                IconButton(onClick = { isSearchActive = true }) {
-                                    NfIcon(NfIcons.SEARCH, 18.sp)
+                                IconButton(onClick = {
+                                    isSearchActive = !isSearchActive
+                                    if (!isSearchActive) searchQuery = ""
+                                }) {
+                                    NfIcon(if (isSearchActive) NfIcons.CROSS else NfIcons.SEARCH, 18.sp)
                                 }
 
                                 if (isLoading || isManualSyncing || activeOpCount > 0 || isPullRefreshing) {
-                                    // Wrap the spinner in a Box that mimics the size of an IconButton (48dp)
                                     Box(
                                         modifier = Modifier.size(48.dp),
                                         contentAlignment = Alignment.Center
@@ -1252,175 +1109,359 @@ fun HomeScreen(
                             }
                         },
                     )
+
+                    if (isSearchActive) {
+                        LaunchedEffect(Unit) {
+                            searchFocusRequester.requestFocus()
+                        }
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text(stringResource(R.string.search_placeholder)) },
+                            singleLine = true,
+                            visualTransformation = remember(isDark) {
+                                SmartSyntaxTransformation(api, isDark, true)
+                            },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .focusRequester(searchFocusRequester),
+                        )
+                    }
                 }
             },
-            bottomBar = {
-                Column {
-                    if (creatingChildTask != null) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                NfIcon(NfIcons.CHILD, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    stringResource(R.string.new_child_of, creatingChildTask.summary),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                IconButton(
-                                    onClick = { creatingChildUid = null },
-                                    modifier = Modifier.size(24.dp),
-                                ) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer) }
-                            }
-                        }
-                    } else if (yankedTask != null) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                NfIcon(NfIcons.LINK, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer)
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    stringResource(R.string.yanked_label) + " " + yankedTask.summary,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                IconButton(
-                                    onClick = {
-                                        yankedUid = null
-                                    },
-                                    modifier =
-                                        Modifier.size(
-                                            24.dp,
-                                        ),
-                                ) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer) }
-                            }
-                        }
-                    }
-                    Surface(tonalElevation = 3.dp) {
-                        Row(
-                            Modifier.padding(16.dp).navigationBarsPadding().imePadding(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedTextField(
-                                value = newTaskText,
-                                onValueChange = { newTaskText = it },
-                                placeholder = { Text(stringResource(R.string.new_task_placeholder)) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
-                                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
-                                keyboardActions = KeyboardActions(onSend = {
-                                    if (newTaskText.isNotBlank()) addTask(
-                                        newTaskText
-                                    )
-                                }),
+            val headerTitle : @Composable () -> Unit = {
+        val textMeasurer = rememberTextMeasurer()
+        val density = LocalDensity.current
+
+        val activeCal = calendars.find { it.href == defaultCalHref }
+        val activeCalName = activeCal?.name ?: "Local"
+        val activeColorHex = activeCal?.color
+        val activeColor =
+            if (activeColorHex != null) parseHexColor(activeColorHex) else MaterialTheme.colorScheme.onSurface
+
+        val otherVisible = calendars.filter {
+            !it.isDisabled && it.isVisible && it.href != defaultCalHref
+        }
+
+        val activeCount = tasks.count { !it.isDone }
+        val countText = if (tasks.isNotEmpty()) "($activeCount)" else ""
+
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val maxWidth = constraints.maxWidth.toFloat()
+
+            val textStyle = LocalTextStyle.current.copy(
+                fontSize = 18.sp
+            )
+            val smallTextStyle = LocalTextStyle.current.copy(
+                fontSize = 13.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+
+            val nameResult = textMeasurer.measure(
+                text = activeCalName,
+                style = textStyle.copy(color = activeColor)
+            )
+            val countResult = textMeasurer.measure(
+                text = if (countText.isNotEmpty()) " $countText" else "",
+                style = smallTextStyle
+            )
+            val plusResult = textMeasurer.measure(text = "+", style = smallTextStyle)
+            val dotsResult = textMeasurer.measure(text = "...", style = smallTextStyle)
+
+            val iconSizePx = with(density) { 28.dp.toPx() }
+            val spacerAfterIconPx = with(density) { 8.dp.toPx() }
+            val safetyMarginPx = with(density) { 16.dp.toPx() }
+
+            val availableForPlus =
+                maxWidth - iconSizePx - spacerAfterIconPx - nameResult.size.width - countResult.size.width - safetyMarginPx
+
+            val maxVisiblePlus = if (availableForPlus > 0 && plusResult.size.width > 0) {
+                (availableForPlus / plusResult.size.width).toInt()
+            } else 0
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+
+                Text(
+                    text = activeCalName,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = activeColor,
+                )
+
+                if (otherVisible.isNotEmpty()) {
+                    if (otherVisible.size <= maxVisiblePlus) {
+                        otherVisible.forEach { cal ->
+                            val c = cal.color?.let { parseHexColor(it) } ?: Color.Gray
+                            Text(
+                                text = "+",
+                                color = c,
+                                fontSize = 13.sp
                             )
                         }
+                    } else {
+                        val spaceWithDots = availableForPlus - dotsResult.size.width
+                        val fitWithDots = if (spaceWithDots > 0 && plusResult.size.width > 0) {
+                            (spaceWithDots / plusResult.size.width).toInt()
+                        } else 0
+                        val visibleCount = fitWithDots.coerceAtLeast(0)
+
+                        otherVisible.take(visibleCount).forEach { cal ->
+                            val c = cal.color?.let { parseHexColor(it) } ?: Color.Gray
+                            Text(
+                                text = "+",
+                                color = c,
+                                fontSize = 13.sp
+                            )
+                        }
+                        ColoredOverflowDots()
                     }
                 }
-            },
-        ) { padding ->
-            Box(Modifier.padding(padding).fillMaxSize()) {
-                Column(Modifier.fillMaxSize()) {
 
-                    val activeIsLocal = calendars.find { it.href == defaultCalHref }?.isLocal == true
-                    if (activeIsLocal && remoteCals.isNotEmpty()) {
-                        FilledTonalButton(
-                            onClick = { showExportSourceDialog = true },
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                            colors =
-                                ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                                ),
-                            contentPadding = PaddingValues(vertical = 8.dp),
-                        ) {
-                            NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.export_local_tasks_to_server))
-                        }
+                if (countText.isNotEmpty()) {
+                    Text(
+                        text = " $countText",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+
+        TopAppBar(
+            title = headerTitle,
+            navigationIcon = {
+                IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                    NfIcon(
+                        NfIcons.MENU,
+                        20.sp
+                    )
+                }
+            },
+            actions = {
+                // Use a single Row with negative spacing to control all icon gaps uniformly
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy((-12).dp)
+                ) {
+                    IconButton(onClick = { jumpToRandomTask() }) {
+                        NfIcon(currentRandomIcon, 20.sp)
+                    }
+                    IconButton(onClick = { isSearchActive = true }) {
+                        NfIcon(NfIcons.SEARCH, 18.sp)
                     }
 
-                    PullToRefreshBox(
-                        isRefreshing = false,
-                        onRefresh = { handlePullRefresh() },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        LazyColumn(
-                            state = listState,
-                            contentPadding = PaddingValues(bottom = 80.dp),
-                            modifier = Modifier.fillMaxSize(),
+                    if (isLoading || isManualSyncing || activeOpCount > 0 || isPullRefreshing) {
+                        // Wrap the spinner in a Box that mimics the size of an IconButton (48dp)
+                        Box(
+                            modifier = Modifier.size(48.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            items(tasks, key = { it.uid }) { task ->
-                                if (task.virtualType == "none") {
-                                    val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    } else {
+                        val (icon, iconColor) =
+                            when {
+                                localHasUnsynced -> Pair(NfIcons.SYNC_ALERT, Color(0xFFEB0000))
+                                lastSyncFailed -> Pair(NfIcons.SYNC_OFF, Color(0xFFFFB300))
+                                else -> Pair(NfIcons.REFRESH, MaterialTheme.colorScheme.onSurface)
+                            }
 
-                                    // Resolve parent info for inheritance hiding
-                                    val parent = task.parentUid?.let { taskMap[it] }
-                                    val pCats = parent?.categories ?: emptyList()
-                                    val pLoc = parent?.location
+                        IconButton(onClick = { handleRefresh() }) {
+                            NfIcon(icon, 18.sp, color = iconColor)
+                        }
+                    }
+                    IconButton(onClick = onSettings) { NfIcon(NfIcons.SETTINGS, 20.sp) }
+                }
+            },
+        )
+    }
+},
+bottomBar = {
+    Column {
+        if (creatingChildTask != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    NfIcon(NfIcons.CHILD, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        stringResource(R.string.new_child_of, creatingChildTask.summary),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(
+                        onClick = { creatingChildUid = null },
+                        modifier = Modifier.size(24.dp),
+                    ) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer) }
+                }
+            }
+        } else if (yankedTask != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    NfIcon(NfIcons.LINK, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        stringResource(R.string.yanked_label) + " " + yankedTask.summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(
+                        onClick = {
+                            yankedUid = null
+                        },
+                        modifier =
+                            Modifier.size(
+                                24.dp,
+                            ),
+                    ) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer) }
+                }
+            }
+        }
+        Surface(tonalElevation = 3.dp) {
+            Row(
+                Modifier.padding(16.dp).navigationBarsPadding().imePadding(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = newTaskText,
+                    onValueChange = { newTaskText = it },
+                    placeholder = { Text(stringResource(R.string.new_task_placeholder)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
+                    keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = {
+                        if (newTaskText.isNotBlank()) addTask(
+                            newTaskText
+                        )
+                    }),
+                )
+            }
+        }
+    }
+},
+) {
+    padding ->
+    Box(Modifier.padding(padding).fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
 
-                                    TaskRow(
-                                        task = task,
-                                        calColor = calColor,
-                                        isDark = isDark,
-                                        onToggle = { toggleTask(task) },
-                                        onAction = { act -> onTaskAction(act, task) },
-                                        onClick = onTaskClick,
-                                        yankedUid = yankedUid,
-                                        enabledCalendarCount = enabledCalendarCount,
-                                        parentCategories = pCats,
-                                        parentLocation = pLoc,
-                                        aliasMap = aliases,
-                                        isHighlighted = task.uid == highlightedUid,
-                                        incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
-                                    )
+            val activeIsLocal = calendars.find { it.href == defaultCalHref }?.isLocal == true
+            if (activeIsLocal && remoteCals.isNotEmpty()) {
+                FilledTonalButton(
+                    onClick = { showExportSourceDialog = true },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                    colors =
+                        ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ),
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                ) {
+                    NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.export_local_tasks_to_server))
+                }
+            }
+
+            PullToRefreshBox(
+                isRefreshing = false,
+                onRefresh = { handlePullRefresh() },
+                modifier = Modifier.weight(1f),
+            ) {
+                LazyColumn(
+                    state = listState,
+                    contentPadding = PaddingValues(bottom = 80.dp),
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(tasks, key = { it.uid }) { task ->
+                        if (task.virtualType == "none") {
+                            val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+
+                            // Resolve parent info for inheritance hiding
+                            val parent = task.parentUid?.let { taskMap[it] }
+                            val pCats = parent?.categories ?: emptyList()
+                            val pLoc = parent?.location
+
+                            TaskRow(
+                                task = task,
+                                calColor = calColor,
+                                isDark = isDark,
+                                onToggle = { toggleTask(task) },
+                                onAction = { act -> onTaskAction(act, task) },
+                                onClick = onTaskClick,
+                                yankedUid = yankedUid,
+                                enabledCalendarCount = enabledCalendarCount,
+                                parentCategories = pCats,
+                                parentLocation = pLoc,
+                                aliasMap = aliases,
+                                isHighlighted = task.uid == highlightedUid,
+                                incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
+                            )
+                        } else {
+                            VirtualTaskRow(task = task) {
+                                val key = task.virtualPayload
+                                expandedGroups = if (expandedGroups.contains(key)) {
+                                    expandedGroups - key
                                 } else {
-                                    VirtualTaskRow(task = task) {
-                                        val key = task.virtualPayload
-                                        expandedGroups = if (expandedGroups.contains(key)) {
-                                            expandedGroups - key
-                                        } else {
-                                            expandedGroups + key
-                                        }
-                                    }
+                                    expandedGroups + key
                                 }
                             }
                         }
                     }
                 }
+            }
+        }
 
-                // Scroll to top FAB
-                if (showScrollToTop) {
-                    FloatingActionButton(
-                        onClick = {
-                            isProgrammaticScroll = true
-                            showScrollToTop = false
-                            scope.launch {
-                                listState.animateScrollToItem(0)
-                                isProgrammaticScroll = false
-                            }
-                        },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .navigationBarsPadding()
-                            .offset(x = (-45).dp, y = 40.dp),
-                        containerColor = Color.Transparent,
-                    ) {
-                        NfIcon(scrollToTopIcon, 28.sp, color = Color(0xf2660000))
+        // Scroll to top FAB
+        if (showScrollToTop) {
+            FloatingActionButton(
+                onClick = {
+                    isProgrammaticScroll = true
+                    showScrollToTop = false
+                    scope.launch {
+                        listState.animateScrollToItem(0)
+                        isProgrammaticScroll = false
                     }
-                }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .navigationBarsPadding()
+                    .offset(x = (-45).dp, y = 40.dp),
+                containerColor = Color.Transparent,
+            ) {
+                NfIcon(scrollToTopIcon, 28.sp, color = Color(0xf2660000))
             }
         }
     }
+}
+}
 }

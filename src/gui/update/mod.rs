@@ -237,6 +237,9 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                         }
                     }
                 }
+                AlarmMessage::FocusTask(task_uid) => {
+                    return Task::done(Message::JumpToTask(task_uid.clone()));
+                }
             }
             if triggered {
                 Task::done(Message::Refresh)

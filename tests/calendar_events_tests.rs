@@ -134,3 +134,26 @@ fn test_event_generation_cancelled_with_sessions() {
     assert!(main_event.1.contains("SUMMARY:Cancelled project"));
     assert!(main_event.1.contains("STATUS:CANCELLED"));
 }
+
+#[test]
+fn test_event_generation_completed_with_emoji() {
+    use cfait::model::item::{DateType, Task, TaskStatus};
+    use chrono::NaiveDate;
+    use std::collections::HashMap;
+
+    let mut task = Task::new("Completed project", &HashMap::new(), None);
+    task.uid = "test-completed".to_string();
+    task.status = TaskStatus::Completed;
+    task.due = Some(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2025, 2, 15).unwrap(),
+    ));
+
+    let result = task.to_event_ics();
+    assert!(
+        !result.is_empty(),
+        "Completed task should generate an event"
+    );
+
+    let main_event = result.iter().find(|(s, _)| s.is_empty()).unwrap();
+    assert!(main_event.1.contains("SUMMARY:🗹 Completed project"));
+}

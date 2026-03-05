@@ -1077,11 +1077,16 @@ impl IcsAdapter {
         let mut event = Event::new();
         event.add_property("UID", &uid);
 
-        let summary = match suffix {
+        let mut summary = match suffix {
             "-start" => format!("{} (start)", task.summary),
             "-due" => format!("{} (due)", task.summary),
             _ => task.summary.clone(),
         };
+
+        if task.status == crate::model::TaskStatus::Completed {
+            summary = format!("🗹 {}", summary);
+        }
+
         event.summary(&summary);
 
         event.timestamp(Utc::now());

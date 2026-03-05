@@ -12,6 +12,7 @@ use tokio::time::{Duration, Instant, sleep_until};
 #[derive(Debug, Clone)]
 pub enum AlarmMessage {
     Fire(String, String), // TaskUID, AlarmUID
+    FocusTask(String),    // TaskUID
 }
 
 // New enum to control the actor
@@ -165,12 +166,25 @@ pub fn spawn_alarm_actor(
                                     .clone()
                                     .unwrap_or_else(|| rust_i18n::t!("reminder").to_string());
 
+                                let ui_tx_clone = ui_sender.clone();
+                                let task_uid_clone = task.uid.clone();
                                 std::thread::spawn(move || {
-                                    let _ = Notification::new()
-                                        .summary(&summary)
+                                    let mut n = Notification::new();
+                                    n.summary(&summary)
                                         .body(&body)
                                         .appname("Cfait")
-                                        .show();
+                                        .action("default", "Open");
+
+                                    if let Ok(handle) = n.show() {
+                                        handle.wait_for_action(move |action| {
+                                            if action == "default"
+                                                && let Some(tx) = &ui_tx_clone {
+                                                    let _ = tx.try_send(AlarmMessage::FocusTask(
+                                                        task_uid_clone.clone(),
+                                                    ));
+                                                }
+                                        });
+                                    }
                                 });
                             }
                         } else {
