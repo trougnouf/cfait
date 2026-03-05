@@ -1,4 +1,5 @@
 // File: ./src/model/parser.rs
+// File: ./src/model/parser.rs
 /*
 File: cfait/src/model/parser.rs
 Logic for parsing smart input strings into task properties.
@@ -504,8 +505,10 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
                     }
                 }
             }
-            // CASE C: "rem:tomorrow", "rem:2025...", "rem:10m"
-            else if !clean_val.is_empty() && parse_smart_date(clean_val).is_some() {
+            // CASE C: "rem:tomorrow", "rem:2025...", "rem:monday"
+            else if !clean_val.is_empty()
+                && (parse_smart_date(clean_val).is_some() || parse_next_date(clean_val).is_some())
+            {
                 // Look ahead for time (rem:tomorrow 16:00)
                 if let Some(next_idx) = find_next_token(i + 1)
                     && is_time_format(&words[next_idx].2)
@@ -518,7 +521,7 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
                 && let Some(next_idx) = find_next_token(i + 1)
             {
                 let next_word = &words[next_idx].2;
-                if parse_smart_date(next_word).is_some() {
+                if parse_smart_date(next_word).is_some() || parse_next_date(next_word).is_some() {
                     words_consumed = next_idx - i + 1;
                     if let Some(time_idx) = find_next_token(next_idx + 1)
                         && is_time_format(&words[time_idx].2)
@@ -1686,14 +1689,20 @@ pub fn apply_smart_input(
                 if let Some(d) = parse_duration(clean_val) {
                     task.alarms.push(Alarm::new_relative(d));
                 }
-                // B. Time Only (rem:8pm) -> Today at 8pm
+                // B. Time Only (rem:8pm) -> Today or Tomorrow at 8pm
                 else if let Some(t) = parse_time_string(clean_val) {
-                    let now = Local::now().date_naive();
-                    let dt = safe_local_to_utc(now, t);
+                    let now_local = Local::now();
+                    let mut target_date = now_local.date_naive();
+                    if t <= now_local.time() {
+                        target_date += Duration::days(1);
+                    }
+                    let dt = safe_local_to_utc(target_date, t);
                     task.alarms.push(Alarm::new_absolute(dt));
                 }
-                // C. Date + Optional Time (rem:2025-12-27 12:30, rem:tomorrow 9am)
-                else if let Some(d) = parse_smart_date(clean_val) {
+                // C. Date + Optional Time (rem:2025-12-27 12:30, rem:tomorrow 9am, rem:monday 9am)
+                else if let Some(d) =
+                    parse_smart_date(clean_val).or_else(|| parse_next_date(clean_val))
+                {
                     // Look ahead for time
                     let mut time_part = None;
 
@@ -1918,8 +1927,12 @@ pub fn apply_smart_input(
                     }
                     consumed = temp_consumed;
                 } else if let Some(t) = parse_time_string(clean) {
-                    let now = Local::now().date_naive();
-                    let dt = safe_local_to_utc(now, t);
+                    let now_local = Local::now();
+                    let mut target_date = now_local.date_naive();
+                    if t <= now_local.time() {
+                        target_date += Duration::days(1);
+                    }
+                    let dt = safe_local_to_utc(target_date, t);
                     let dt_type = DateType::Specific(dt);
                     if set_start {
                         task.dtstart = Some(dt_type.clone());
@@ -2033,8 +2046,12 @@ pub fn apply_smart_input(
                 task.rrule = Some(rrule);
                 has_recurrence = true;
             } else if let Some(t) = parse_time_string(val) {
-                let now = Local::now().date_naive();
-                let dt = safe_local_to_utc(now, t);
+                let now_local = Local::now();
+                let mut target_date = now_local.date_naive();
+                if t <= now_local.time() {
+                    target_date += Duration::days(1);
+                }
+                let dt = safe_local_to_utc(target_date, t);
                 let dt_type = DateType::Specific(dt);
                 if set_start {
                     task.dtstart = Some(dt_type.clone());
