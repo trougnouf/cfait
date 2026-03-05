@@ -1,3 +1,4 @@
+// File: tests/alarm_tests.rs
 // Tests for basic alarm functionality.
 use cfait::model::{AlarmTrigger, DateType, Task};
 use chrono::{Duration, Local, Timelike};
@@ -69,7 +70,16 @@ fn test_reminder_absolute() {
         AlarmTrigger::Absolute(dt) => {
             let local = dt.with_timezone(&Local);
             assert_eq!(local.hour(), 8);
-            assert_eq!(local.date_naive(), Local::now().date_naive());
+
+            let now = Local::now();
+            // If it's already past 8am, the parser rolls it over to tomorrow
+            let expected_date = if chrono::NaiveTime::from_hms_opt(8, 0, 0).unwrap() <= now.time() {
+                now.date_naive() + Duration::days(1)
+            } else {
+                now.date_naive()
+            };
+
+            assert_eq!(local.date_naive(), expected_date);
         }
         _ => panic!("Expected absolute trigger"),
     }
