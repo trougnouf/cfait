@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -46,6 +47,7 @@ fun TaskDetailScreen(
     var showMoveDialog by remember { mutableStateOf(false) }
     val isDark = isSystemInDarkTheme()
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
 
     val enabledCalendarCount =
         remember(calendars) {
@@ -78,7 +80,7 @@ fun TaskDetailScreen(
             }
         AlertDialog(
             onDismissRequest = { showMoveDialog = false },
-            title = { Text(androidx.compose.ui.res.stringResource(R.string.move_task_title)) },
+            title = { Text(stringResource(R.string.move_task_title)) },
             text = {
                 LazyColumn {
                     items(targetCals) { cal ->
@@ -95,7 +97,7 @@ fun TaskDetailScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showMoveDialog = false
-                }) { Text(androidx.compose.ui.res.stringResource(R.string.cancel)) }
+                }) { Text(stringResource(R.string.cancel)) }
             },
         )
     }
@@ -103,7 +105,7 @@ fun TaskDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(androidx.compose.ui.res.stringResource(R.string.edit_task_title)) },
+                title = { Text(stringResource(R.string.edit_task_title)) },
                 navigationIcon = { IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) } },
                 actions = {
                     if (task!!.geo != null) {
@@ -119,7 +121,7 @@ fun TaskDetailScreen(
                     if (enabledCalendarCount > 1) {
                         TextButton(onClick = {
                             showMoveDialog = true
-                        }) { Text(androidx.compose.ui.res.stringResource(R.string.menu_move)) }
+                        }) { Text(stringResource(R.string.menu_move)) }
                     }
                     TextButton(
                         onClick = {
@@ -128,7 +130,7 @@ fun TaskDetailScreen(
                             // so we can leave this screen immediately without killing the save process.
                             onSave(smartInput, description)
                         },
-                    ) { Text(androidx.compose.ui.res.stringResource(R.string.save)) }
+                    ) { Text(stringResource(R.string.save)) }
                 },
             )
         },
@@ -144,7 +146,7 @@ fun TaskDetailScreen(
             OutlinedTextField(
                 value = smartInput,
                 onValueChange = { smartInput = it.replace("\n", "") }, // Manually block newlines
-                label = { Text(androidx.compose.ui.res.stringResource(R.string.task_smart_syntax_label)) },
+                label = { Text(stringResource(R.string.task_smart_syntax_label)) },
                 modifier = Modifier.fillMaxWidth(),
                 visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
                 // Removed singleLine = true to avoid cursor handle positioning issues on high DPI tablets
@@ -155,7 +157,7 @@ fun TaskDetailScreen(
                 }),
             )
             Text(
-                androidx.compose.ui.res.stringResource(R.string.help_syntax_short),
+                stringResource(R.string.help_syntax_short),
                 style = MaterialTheme.typography.bodySmall,
                 color = androidx.compose.ui.graphics.Color.Gray,
                 modifier = Modifier.padding(start = 4.dp, bottom = 16.dp),
@@ -163,7 +165,7 @@ fun TaskDetailScreen(
 
             if (task!!.blockedByNames.isNotEmpty()) {
                 Text(
-                    androidx.compose.ui.res.stringResource(R.string.blocked_by),
+                    stringResource(R.string.blocked_by),
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
@@ -210,7 +212,7 @@ fun TaskDetailScreen(
             // Blocking (Successors) - tasks that are blocked BY this task
             if (task!!.blockingNames.isNotEmpty()) {
                 Text(
-                    androidx.compose.ui.res.stringResource(R.string.blocking_label),
+                    stringResource(R.string.blocking_label),
                     color = MaterialTheme.colorScheme.tertiary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
@@ -258,7 +260,7 @@ fun TaskDetailScreen(
 
             if (task!!.relatedToNames.isNotEmpty()) {
                 Text(
-                    androidx.compose.ui.res.stringResource(R.string.related_to_label),
+                    stringResource(R.string.related_to_label),
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
@@ -442,7 +444,7 @@ fun TaskDetailScreen(
             }
             if (incomingRelated.isNotEmpty()) {
                 Text(
-                    androidx.compose.ui.res.stringResource(R.string.related_from_label),
+                    stringResource(R.string.related_from_label),
                     color = MaterialTheme.colorScheme.secondary,
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
@@ -491,7 +493,7 @@ fun TaskDetailScreen(
             OutlinedTextField(
                 value = description,
                 onValueChange = { description = it },
-                label = { Text(androidx.compose.ui.res.stringResource(R.string.description_label)) },
+                label = { Text(stringResource(R.string.description_label)) },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp),
                 textStyle = TextStyle(textAlign = androidx.compose.ui.text.style.TextAlign.Start),
             )
