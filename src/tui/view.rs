@@ -707,8 +707,17 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
                     .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
                     .with_timezone(&chrono::Local);
+                let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
+                    .unwrap_or_else(|| chrono::DateTime::from_timestamp(0, 0).unwrap())
+                    .with_timezone(&chrono::Local);
                 let dur = (session.end - session.start) / 60;
-                session_lines.push(format!("- {} ({}m)", s_dt.format("%b %d, %H:%M"), dur));
+                session_lines.push(format!(
+                    "- {} {}-{} *({}m)*",
+                    s_dt.format("%Y-%m-%d"),
+                    s_dt.format("%H:%M"),
+                    e_dt.format("%H:%M"),
+                    dur
+                ));
             }
             details_md.push_str(&format!(
                 "### {}\n",

@@ -691,8 +691,9 @@ pub async fn handle_key_event(
                             .with_timezone(&chrono::Local);
                         let dur = (session.end - session.start) / 60;
                         let display = format!(
-                            "{} - {} ({}m)",
-                            s_dt.format("%Y-%m-%d %H:%M"),
+                            "{} {}-{} ({}m)",
+                            s_dt.format("%Y-%m-%d"),
+                            s_dt.format("%H:%M"),
                             e_dt.format("%H:%M"),
                             dur
                         );

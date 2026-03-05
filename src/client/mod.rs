@@ -4,12 +4,10 @@ pub mod auth;
 pub mod cert;
 pub mod core;
 pub mod middleware;
-pub mod sync;
-pub mod redirect; // Restore this module
+pub mod redirect;
+pub mod sync; // Restore this module
 
 // Restore exports from local module
-pub use crate::client::redirect::{
-    FollowRedirectService, FollowRedirectLayer,
-};
+pub use crate::client::redirect::{FollowRedirectLayer, FollowRedirectService};
 
 pub use crate::client::core::{GET_CTAG, RustyClient};

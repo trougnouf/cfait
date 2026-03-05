@@ -1400,12 +1400,8 @@ pub fn view_task_row<'a>(
                         .with_timezone(&chrono::Local);
                     let dur = (session.end - session.start) / 60;
 
-                    let display = format!(
-                        "{} - {} ({}m)",
-                        s_dt.format("%b %d, %H:%M"),
-                        e_dt.format("%H:%M"),
-                        dur
-                    );
+                    let date_str = s_dt.format("%Y-%m-%d").to_string();
+                    let time_str = format!("{}-{}", s_dt.format("%H:%M"), e_dt.format("%H:%M"));
 
                     let del_btn = button(
                         icon::icon(icon::CROSS)
@@ -1418,10 +1414,17 @@ pub fn view_task_row<'a>(
 
                     details_col = details_col.push(
                         row![
-                            text(display).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)),
+                            text(format!("{} {}", date_str, time_str))
+                                .size(12)
+                                .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                            Space::new().width(Length::Fixed(6.0)),
+                            text(format!("({}m)", dur))
+                                .size(12)
+                                .color(Color::from_rgb(0.5, 0.5, 0.5)),
+                            Space::new().width(Length::Fill),
                             del_btn
                         ]
-                        .spacing(5)
+                        .spacing(0)
                         .align_y(iced::Alignment::Center),
                     );
                 }

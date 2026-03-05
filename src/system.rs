@@ -178,11 +178,12 @@ pub fn spawn_alarm_actor(
                                     if let Ok(handle) = n.show() {
                                         handle.wait_for_action(move |action| {
                                             if action == "default"
-                                                && let Some(tx) = &ui_tx_clone {
-                                                    let _ = tx.try_send(AlarmMessage::FocusTask(
-                                                        task_uid_clone.clone(),
-                                                    ));
-                                                }
+                                                && let Some(tx) = &ui_tx_clone
+                                            {
+                                                let _ = tx.try_send(AlarmMessage::FocusTask(
+                                                    task_uid_clone.clone(),
+                                                ));
+                                            }
                                         });
                                     }
                                 });

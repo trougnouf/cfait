@@ -247,6 +247,7 @@ fun HomeScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
+    var hasRequestedSearchFocus by rememberSaveable { mutableStateOf(false) }
 
     /**
      * Weighted random jump to a task.
@@ -1185,9 +1186,13 @@ fun HomeScreen(
                                 }
                                 IconButton(onClick = {
                                     isSearchActive = !isSearchActive
-                                    if (!isSearchActive) searchQuery = ""
+                                    if (!isSearchActive) {
+                                        searchQuery = ""
+                                        hasRequestedSearchFocus = false
+                                        keyboardController?.hide()
+                                    }
                                 }) {
-                                    NfIcon(if (isSearchActive) NfIcons.CROSS else NfIcons.SEARCH, 18.sp)
+                                    NfIcon(if (isSearchActive) NfIcons.SEARCH_STOP else NfIcons.SEARCH, 18.sp)
                                 }
 
                                 if (isLoading || isManualSyncing || activeOpCount > 0 || isPullRefreshing) {
@@ -1219,14 +1224,19 @@ fun HomeScreen(
                     )
 
                     if (isSearchActive) {
-                        LaunchedEffect(Unit) {
-                            searchFocusRequester.requestFocus()
+                        LaunchedEffect(isSearchActive) {
+                            if (!hasRequestedSearchFocus) {
+                                searchFocusRequester.requestFocus()
+                                keyboardController?.show()
+                                hasRequestedSearchFocus = true
+                            }
                         }
                         TextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            placeholder = { Text(stringResource(R.string.search_placeholder)) },
+                            placeholder = { Text(stringResource(R.string.search_placeholder), fontSize = 14.sp) },
                             singleLine = true,
+                            textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
                             visualTransformation = remember(isDark) {
                                 SmartSyntaxTransformation(api, isDark, true)
                             },
@@ -1238,7 +1248,8 @@ fun HomeScreen(
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .height(48.dp)
                                 .focusRequester(searchFocusRequester),
                         )
                     }
