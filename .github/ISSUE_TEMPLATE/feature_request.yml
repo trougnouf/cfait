@@ -1,6 +1,6 @@
 name: Feature Request
-about: Suggest an idea to improve this project.
-title: "FR: " 
+description: Suggest an idea to improve this project.
+title: "FR: "
 labels: [enhancement]
 body:
   - type: textarea
