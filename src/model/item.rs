@@ -557,7 +557,7 @@ impl Task {
             if let Some(start) = &self.dtstart {
                 let start_time = start.to_start_comparison_time();
                 let grace_threshold = now + chrono::Duration::days(start_grace_period_days as i64);
-                if start_time > grace_threshold && !self.has_recent_acknowledged_alarm() {
+                if start_time > grace_threshold && !self.has_active_or_recent_alarm() {
                     return 7;
                 }
             }
@@ -1010,8 +1010,28 @@ impl Task {
         })
     }
 
-    pub fn has_recent_acknowledged_alarm(&self) -> bool {
-        self.alarms.iter().any(|alarm| alarm.acknowledged.is_some())
+    pub fn has_active_or_recent_alarm(&self) -> bool {
+        let now = Utc::now();
+        self.alarms.iter().any(|alarm| {
+            if let Some(ack) = alarm.acknowledged {
+                (now - ack).num_hours().abs() < 24
+            } else {
+                let trigger_dt = match alarm.trigger {
+                    AlarmTrigger::Absolute(dt) => dt,
+                    AlarmTrigger::Relative(mins) => {
+                        let anchor = if let Some(DateType::Specific(d)) = self.due {
+                            d
+                        } else if let Some(DateType::Specific(s)) = self.dtstart {
+                            s
+                        } else {
+                            return false;
+                        };
+                        anchor + chrono::Duration::minutes(mins as i64)
+                    }
+                };
+                trigger_dt <= now && (now - trigger_dt).num_days() < 3
+            }
+        })
     }
 
     /// Add an implicit dismissed alarm record so UI can show it as acknowledged.
