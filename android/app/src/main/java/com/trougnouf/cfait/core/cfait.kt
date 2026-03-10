@@ -859,6 +859,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_sync(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_toggle_all_calendars(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_toggle_task(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_update_local_calendar(): Short
@@ -1208,6 +1210,12 @@ internal object UniffiLib {
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_sync(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_toggle_all_calendars(
+        `ptr`: Long,
+        `showAll`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
 
     external fun uniffi_cfait_fn_method_cfaitmobile_toggle_task(
         `ptr`: Long,
@@ -1617,6 +1625,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_sync() != 10497.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_all_calendars() != 29217.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_task() != 64765.toShort()) {
@@ -2352,6 +2363,8 @@ public interface CfaitMobileInterface {
     suspend fun `stopTask`(`uid`: kotlin.String)
 
     suspend fun `sync`(): kotlin.String
+
+    fun `toggleAllCalendars`(`showAll`: kotlin.Boolean)
 
     suspend fun `toggleTask`(`uid`: kotlin.String)
 
@@ -3487,6 +3500,18 @@ open class CfaitMobile :
             // Error FFI converter
             MobileException.ErrorHandler,
         )
+
+    @Throws(MobileException::class)
+    override fun `toggleAllCalendars`(`showAll`: kotlin.Boolean) =
+        callWithHandle {
+            uniffiRustCallWithError(MobileException) { _status ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_toggle_all_calendars(
+                    it,
+                    FfiConverterBoolean.lower(`showAll`),
+                    _status,
+                )
+            }
+        }
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")

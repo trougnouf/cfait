@@ -1106,7 +1106,20 @@ fun HomeScreen(
                     (availableForPlus / plusResult.size.width).toInt()
                 } else 0
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable(
+                        onClickLabel = stringResource(R.string.show_all_collections)
+                    ) {
+                        scope.launch {
+                            val areAllVisible = calendars.filter {
+                                it.href != "local://trash" && it.href != "local://recovery" && !it.isDisabled
+                            }.all { it.isVisible }
+                            api.toggleAllCalendars(!areAllVisible)
+                            onDataChanged()
+                        }
+                    }
+                ) {
                     Image(
                         painter = painterResource(id = R.drawable.ic_launcher_foreground),
                         contentDescription = null,

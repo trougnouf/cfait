@@ -786,6 +786,27 @@ impl CfaitMobile {
         config.save(self.ctx.as_ref()).map_err(MobileError::from)
     }
 
+    pub fn toggle_all_calendars(&self, show_all: bool) -> Result<(), MobileError> {
+        let mut config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        if show_all {
+            config.hidden_calendars.clear();
+            if config.default_calendar.as_deref() != Some(crate::storage::LOCAL_TRASH_HREF) {
+                config
+                    .hidden_calendars
+                    .push(crate::storage::LOCAL_TRASH_HREF.to_string());
+            }
+        } else {
+            let cals = self.get_calendars();
+            for cal in cals {
+                if config.default_calendar.as_ref() != Some(&cal.href)
+                    && !config.hidden_calendars.contains(&cal.href) {
+                        config.hidden_calendars.push(cal.href);
+                    }
+            }
+        }
+        config.save(self.ctx.as_ref()).map_err(MobileError::from)
+    }
+
     pub fn load_from_cache(&self) {
         let mut store = self.controller.store.blocking_lock();
         store.clear();

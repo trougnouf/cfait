@@ -639,11 +639,30 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         title_group = title_group.push(Space::new().width(10));
     }
 
-    title_group = title_group.push(
+    let are_all_visible = app
+        .get_filtered_calendars()
+        .iter()
+        .filter(|c| c.href != crate::storage::LOCAL_TRASH_HREF && c.href != "local://recovery")
+        .all(|c| !app.hidden_calendars.contains(&c.href));
+
+    let title_btn = iced::widget::button(
         text(title_text)
             .size(20)
             .font(iced::Font::DEFAULT)
             .style(title_style),
+    )
+    .style(iced::widget::button::text)
+    .padding(0)
+    .on_press(Message::ToggleAllCalendars(!are_all_visible));
+
+    title_group = title_group.push(
+        tooltip(
+            title_btn,
+            text(rust_i18n::t!("support_clear_filters")),
+            tooltip::Position::Bottom,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700)),
     );
 
     for other in other_visible_cals {
