@@ -1315,7 +1315,7 @@ fun HomeScreen(
                             OutlinedTextField(
                                 value = newTaskText,
                                 onValueChange = { newTaskText = it },
-                                placeholder = { Text("${stringResource(R.string.example_buy_cat_food)} !1 @tomorrow #groceries ~30m") },
+                                placeholder = { Text("${stringResource(R.string.example_buy_cat_food)} !1 @tomorrow #groceries") },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
                                 visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
