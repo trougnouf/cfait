@@ -1099,17 +1099,17 @@ impl IcsAdapter {
         }
         // Keep symbols (emoji/check) in code, but localize the human-readable text.
         event_desc.push_str(&format!(
-            "⚠️ {}\\n",
+            "⚠️ {}\n",
             rust_i18n::t!("ics_event_auto_created")
         ));
         if task.status == TaskStatus::Completed {
             event_desc.push_str(&format!(
-                "✓ {}\\n",
+                "✓ {}\n",
                 rust_i18n::t!("ics_event_task_completed")
             ));
         } else {
-            event_desc.push_str(&format!("{}\\n", rust_i18n::t!("ics_event_auto_updated")));
-            event_desc.push_str(&format!("{}\\n", rust_i18n::t!("ics_event_changes_lost")));
+            event_desc.push_str(&format!("{}\n", rust_i18n::t!("ics_event_auto_updated")));
+            event_desc.push_str(&format!("{}\n", rust_i18n::t!("ics_event_changes_lost")));
         }
         event.description(&event_desc);
 
