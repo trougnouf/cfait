@@ -354,11 +354,22 @@ fun TaskDetailScreen(
                                         showAddSession = false
                                         reload()
                                     } catch (e: Exception) {
-                                        android.widget.Toast.makeText(
-                                            context,
-                                            "Format error: ${e.message}",
-                                            android.widget.Toast.LENGTH_SHORT
-                                        ).show()
+                                        val msg = e.message ?: ""
+                                        if (msg.contains("Invalid time format") || msg.contains("Task not found")) {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "Format error: $msg",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        } else {
+                                            // The time session was successfully saved locally, but the
+                                            // subsequent network sync encountered an error.
+                                            // We gracefully swallow it to keep the UX seamless.
+                                            android.util.Log.e("CfaitUI", "Sync delayed after session: $msg")
+                                            sessionInput = ""
+                                            showAddSession = false
+                                            reload()
+                                        }
                                     }
                                 }
                             }
