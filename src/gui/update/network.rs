@@ -27,7 +27,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::Loaded(Ok((client, mut cals, mut tasks, mut active, warning))) => {
+        Message::Loaded(Ok((client, mut cals, mut tasks, active, warning))) => {
             app.client = Some(client.clone());
 
             if let Some(w) = warning {
@@ -82,6 +82,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
             }
 
+            let net_active = active;
+
             let mut valid_active = None;
             if let Some(current) = &app.active_cal_href
                 && app.calendars.iter().any(|c| c.href == *current)
@@ -91,25 +93,24 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             if valid_active.is_none()
-                && let Some(net_active) = active
-                && !app.hidden_calendars.contains(&net_active)
+                && let Some(ref net_active_href) = net_active
+                && !app.hidden_calendars.contains(net_active_href)
             {
-                valid_active = Some(net_active);
+                valid_active = Some(net_active_href.clone());
             }
 
             if valid_active.is_none() {
                 valid_active = Some(LOCAL_CALENDAR_HREF.to_string());
             }
 
-            active = valid_active;
-            app.active_cal_href = active.clone();
+            app.active_cal_href = valid_active.clone();
 
-            if let Some(href) = &active
+            if let Some(href) = net_active
                 && href != LOCAL_CALENDAR_HREF
                 && app.error_msg.is_none()
             {
-                Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, href);
-                app.store.insert(href.clone(), tasks);
+                Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &href);
+                app.store.insert(href, tasks);
             }
 
             if let Ok(cfg) = Config::load(app.ctx.as_ref()) {
