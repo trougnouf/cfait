@@ -165,6 +165,8 @@ class AlarmWorker(
             })
             .build()
 
-        NotificationManagerCompat.from(context).notify(alarmUid.hashCode(), notification)
+        // Derive notification ID from taskUid so that new events (like Due) overwrite old ones (like Start)
+        val notificationId = (taskUid + "_alarm").hashCode()
+        NotificationManagerCompat.from(context).notify(notificationId, notification)
     }
 }

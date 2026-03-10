@@ -37,7 +37,8 @@ class NotificationActionReceiver : BroadcastReceiver() {
         // Immediately dismiss the notification to provide instant user feedback.
         // Use a try-catch in case the notification permission was revoked.
         try {
-            NotificationManagerCompat.from(context).cancel(alarmUid.hashCode())
+            val notificationId = (taskUid + "_alarm").hashCode()
+            NotificationManagerCompat.from(context).cancel(notificationId)
         } catch (e: SecurityException) {
             Log.w("CfaitNotificationAction", "Could not cancel notification due to SecurityException", e)
         }
