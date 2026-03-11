@@ -30,6 +30,8 @@ fun AdvancedSettingsScreen(
     maxDoneSubtasks: String,
     trashRetention: String,
     deleteEventsOnCompletion: Boolean,
+    tabPosition: String,
+    onTabPositionChange: (String) -> Unit,
     onMaxDoneRootsChange: (String) -> Unit,
     onMaxDoneSubtasksChange: (String) -> Unit,
     onTrashRetentionChange: (String) -> Unit,
@@ -65,6 +67,34 @@ fun AdvancedSettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(scrollState)
         ) {
+            // Tab Position Section
+            Text(
+                stringResource(R.string.tab_position),
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            val tabOptions = listOf(
+                "top" to stringResource(R.string.tab_pos_top),
+                "bottom" to stringResource(R.string.tab_pos_bottom),
+                "hidden" to stringResource(R.string.tab_pos_hidden)
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            ) {
+                tabOptions.forEach { (key, label) ->
+                    FilterChip(
+                        selected = tabPosition == key,
+                        onClick = { onTabPositionChange(key) },
+                        label = { Text(label) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
+
             // Display Limits Section
             Text(
                 text = stringResource(R.string.display_limits),

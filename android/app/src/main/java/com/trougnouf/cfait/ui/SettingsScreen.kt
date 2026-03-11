@@ -54,9 +54,7 @@ fun SettingsScreen(
     onDeleteEvents: () -> Unit,
     onCreateEvents: () -> Unit,
     currentTheme: String,
-    onThemeChange: (String) -> Unit,
-    tabPosition: String,
-    onTabPositionChange: (String) -> Unit
+    onThemeChange: (String) -> Unit
 ) {
     var url by remember { mutableStateOf("") }
     var user by remember { mutableStateOf("") }
@@ -537,37 +535,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Tab Position
-            item {
-                HorizontalDivider(Modifier.padding(vertical = 16.dp))
-
-                Column {
-                    Text(
-                        stringResource(R.string.tab_position),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 8.dp, top = 8.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    val tabOptions = listOf(
-                        "top" to stringResource(R.string.tab_pos_top),
-                        "bottom" to stringResource(R.string.tab_pos_bottom),
-                        "hidden" to stringResource(R.string.tab_pos_hidden)
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        tabOptions.forEach { (key, label) ->
-                            FilterChip(
-                                selected = tabPosition == key,
-                                onClick = { onTabPositionChange(key) },
-                                label = { Text(label) },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-            }
 
             // 3. Manage Collections
             item {

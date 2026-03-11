@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
         // Retrieve saved theme preference (defaulting to "auto")
         val sharedPrefs = getSharedPreferences("cfait_ui_prefs", Context.MODE_PRIVATE)
         val savedTheme = sharedPrefs.getString("app_theme", "auto") ?: "auto"
-        val savedTabPos = sharedPrefs.getString("tab_position", "top") ?: "top"
+        val savedTabPos = sharedPrefs.getString("tab_position", "hidden") ?: "hidden"
 
         setContent {
             // Lift theme state to root so SettingsScreen can update it
@@ -484,9 +484,7 @@ fun CfaitNavHost(
                 onDeleteEvents = { handleDeleteEvents() },
                 onCreateEvents = { handleCreateMissingEvents() },
                 currentTheme = currentTheme,
-                onThemeChange = onThemeChange,
-                tabPosition = tabPosition,
-                onTabPositionChange = onTabPositionChange
+                onThemeChange = onThemeChange
             )
         }
 
@@ -516,6 +514,8 @@ fun CfaitNavHost(
                 maxDoneSubtasks = localSubs,
                 trashRetention = localTrash,
                 deleteEventsOnCompletion = deleteEvents,
+                tabPosition = tabPosition,
+                onTabPositionChange = onTabPositionChange,
                 onMaxDoneRootsChange = { localRoots = it },
                 onMaxDoneSubtasksChange = { localSubs = it },
                 onTrashRetentionChange = { localTrash = it },
