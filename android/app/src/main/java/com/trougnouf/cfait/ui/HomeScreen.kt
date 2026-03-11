@@ -34,6 +34,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -42,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
@@ -752,7 +754,6 @@ fun HomeScreen(
         )
     }
 
-    // Modal Drawer wrapper covers the entire screen, giving gesture priority edge detection.
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -974,19 +975,23 @@ fun HomeScreen(
                         // The leftmost tab is either CUSTOM or ALL. We keep it sticky.
                         val firstTab = tabs.first()
                         val isFirstSelected = pagerState.currentPage == 0
-                        Tab(
-                            selected = isFirstSelected,
-                            onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                            modifier = Modifier.weight(0.25f)
-                        ) {
-                            Text(
-                                text = firstTab.name,
-                                color = if (isFirstSelected) firstTab.color
-                                    ?: MaterialTheme.colorScheme.primary else Color.Gray,
-                                fontWeight = if (isFirstSelected) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 14.sp,
-                                maxLines = 1
-                            )
+
+                        Box(modifier = Modifier.weight(0.22f)) {
+                            Tab(
+                                selected = isFirstSelected,
+                                onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = firstTab.name,
+                                    color = if (isFirstSelected) firstTab.color
+                                        ?: MaterialTheme.colorScheme.primary else Color.Gray,
+                                    fontWeight = if (isFirstSelected) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
 
                         // Divider
@@ -997,9 +1002,9 @@ fun HomeScreen(
 
                         ScrollableTabRow(
                             selectedTabIndex = if (pagerState.currentPage > 0) pagerState.currentPage - 1 else 0,
-                            edgePadding = 8.dp,
+                            edgePadding = 0.dp,
                             containerColor = Color.Transparent,
-                            modifier = Modifier.weight(0.75f),
+                            modifier = Modifier.weight(0.78f),
                             divider = {},
                             indicator = { tabPositions ->
                                 if (pagerState.currentPage > 0 && pagerState.currentPage - 1 < tabPositions.size) {
@@ -1034,8 +1039,13 @@ fun HomeScreen(
             }
 
             val headerTitle: @Composable () -> Unit = {
+                val writeCal = calendars.find { it.href == defaultCalHref }
+                val headerName = writeCal?.name ?: stringResource(R.string.local_label)
+                val headerColor = writeCal?.color?.let { parseHexColor(it) } ?: MaterialTheme.colorScheme.onSurface
+
                 val currentTab = tabs.getOrNull(pagerState.currentPage)
-                val headerName = currentTab?.name ?: stringResource(R.string.all_collections_short)
+                val isCustom = currentTab?.id == "CUSTOM"
+                val isAll = currentTab?.id == "ALL"
 
                 val activeCount = remember(tasks, currentTab) {
                     if (currentTab != null) {
@@ -1044,27 +1054,89 @@ fun HomeScreen(
                 }
                 val countText = if (tasks.isNotEmpty() && activeCount > 0) "($activeCount)" else ""
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable(onClickLabel = stringResource(R.string.show_all_collections)) {
-                        scope.launch { drawerState.open() }
-                    }
-                ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                        contentDescription = null,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(text = headerName, maxLines = 1, overflow = TextOverflow.Ellipsis, color = activeColor)
+                val displayName = if (isAll) "$headerName ${context.getString(R.string.etc)}" else headerName
 
-                    if (countText.isNotEmpty()) {
-                        Text(
-                            text = " $countText",
-                            fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            maxLines = 1
+                val otherVisible = if (isCustom) {
+                    calendars.filter { it.href in currentTab!!.hrefs && it.href != writeCal?.href }
+                } else emptyList()
+
+                val textMeasurer = rememberTextMeasurer()
+                val density = LocalDensity.current
+
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val maxWidth = constraints.maxWidth.toFloat()
+
+                    val textStyle = LocalTextStyle.current.copy(fontSize = 18.sp)
+                    val smallTextStyle = LocalTextStyle.current.copy(
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+
+                    val nameResult = textMeasurer.measure(
+                        text = displayName,
+                        style = textStyle.copy(color = headerColor)
+                    )
+                    val countResult = textMeasurer.measure(
+                        text = if (countText.isNotEmpty()) " $countText" else "",
+                        style = smallTextStyle
+                    )
+                    val plusResult = textMeasurer.measure(text = "+", style = smallTextStyle)
+                    val dotsResult = textMeasurer.measure(text = "...", style = smallTextStyle)
+
+                    val iconSizePx = with(density) { 28.dp.toPx() }
+                    val spacerAfterIconPx = with(density) { 8.dp.toPx() }
+                    val safetyMarginPx = with(density) { 16.dp.toPx() }
+
+                    val availableForPlus =
+                        maxWidth - iconSizePx - spacerAfterIconPx - nameResult.size.width - countResult.size.width - safetyMarginPx
+
+                    val maxVisiblePlus = if (availableForPlus > 0 && plusResult.size.width > 0) {
+                        (availableForPlus / plusResult.size.width).toInt()
+                    } else 0
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable(onClickLabel = stringResource(R.string.show_all_collections)) {
+                            scope.launch { drawerState.open() }
+                        }
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp)
                         )
+                        Spacer(Modifier.width(8.dp))
+                        Text(text = displayName, maxLines = 1, overflow = TextOverflow.Ellipsis, color = headerColor)
+
+                        if (otherVisible.isNotEmpty()) {
+                            if (otherVisible.size <= maxVisiblePlus) {
+                                otherVisible.forEach { cal ->
+                                    val c = cal.color?.let { parseHexColor(it) } ?: Color.Gray
+                                    Text(text = "+", color = c, fontSize = 13.sp)
+                                }
+                            } else {
+                                val spaceWithDots = availableForPlus - dotsResult.size.width
+                                val fitWithDots = if (spaceWithDots > 0 && plusResult.size.width > 0) {
+                                    (spaceWithDots / plusResult.size.width).toInt()
+                                } else 0
+                                val visibleCount = fitWithDots.coerceAtLeast(0)
+
+                                otherVisible.take(visibleCount).forEach { cal ->
+                                    val c = cal.color?.let { parseHexColor(it) } ?: Color.Gray
+                                    Text(text = "+", color = c, fontSize = 13.sp)
+                                }
+                                ColoredOverflowDots()
+                            }
+                        }
+
+                        if (countText.isNotEmpty()) {
+                            Text(
+                                text = " $countText",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
@@ -1255,7 +1327,7 @@ fun HomeScreen(
                 Box(Modifier.padding(padding).fillMaxSize()) {
                     Column(Modifier.fillMaxSize()) {
 
-                        // Use targetPage so the button disappears instantly when a swipe begins
+                        // Export button only visible if currently on the local tab
                         val targetTabForExport = tabs.getOrNull(pagerState.targetPage)
                         val activeIsLocal = targetTabForExport?.id?.startsWith("local://") == true
 
