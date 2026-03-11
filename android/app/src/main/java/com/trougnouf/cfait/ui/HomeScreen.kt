@@ -27,11 +27,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -52,6 +55,15 @@ data class TabInfo(
     val color: Color?,
     val isWriteTarget: String?
 )
+
+@Composable
+fun ColoredOverflowDots() {
+    Row(verticalAlignment = Alignment.Bottom) {
+        Text(".", color = Color(0xFFFF4444), fontSize = 13.sp)
+        Text(".", color = Color(0xFF66BB6A), fontSize = 13.sp)
+        Text(".", color = Color(0xFF42A5F5), fontSize = 13.sp)
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -74,6 +86,13 @@ fun HomeScreen(
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val clipboard = LocalClipboard.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val isDark = isSystemInDarkTheme()
+    val hapticFeedback = LocalHapticFeedback.current
+
+    // --- State Declarations (Strictly hoisted to the top) ---
     var sidebarTab by rememberSaveable { mutableIntStateOf(0) }
     var isManualSyncing by remember { mutableStateOf(false) }
     var activeOpCount by remember { mutableIntStateOf(0) }
@@ -81,19 +100,11 @@ fun HomeScreen(
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
     var isPullRefreshing by remember { mutableStateOf(false) }
 
-    // --- Data processing for Pager and Visibility ---
     val enabledCals = remember(calendars) { calendars.filter { !it.isDisabled && it.href != "local://trash" } }
     val allHrefs = remember(enabledCals) { enabledCals.map { it.href }.toSet() }
     val backendVisibleHrefs = remember(enabledCals) { enabledCals.filter { it.isVisible }.map { it.href }.toSet() }
 
-    // Track a saved "Custom" visibility combination
     var customHrefs by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
-
-    LaunchedEffect(backendVisibleHrefs) {
-        if (backendVisibleHrefs.size > 1 && backendVisibleHrefs.size < allHrefs.size) {
-            customHrefs = backendVisibleHrefs
-        }
-    }
 
     val tabs = remember(enabledCals, customHrefs, allHrefs) {
         val list = mutableListOf<TabInfo>()
@@ -107,18 +118,15 @@ fun HomeScreen(
         list
     }
 
-    // Attempt to locate a matching starting page
     val initialPage = remember(tabs, defaultCalHref) {
         val idx = tabs.indexOfFirst { it.id == defaultCalHref }
         if (idx >= 0) idx else if (customHrefs.isNotEmpty()) 0 else 1
     }
 
-    val pagerState = rememberPagerState(
-        initialPage = initialPage,
-        pageCount = { tabs.size }
-    )
+    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { tabs.size })
+    var pendingTabId by remember { mutableStateOf<String?>(null) }
 
-    // Lift tags & locations directly tied to HomeScreen (populated by getViewData)
+    var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
     var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
     var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) }
 
@@ -127,83 +135,30 @@ fun HomeScreen(
     var matchAllCategories by rememberSaveable { mutableStateOf(true) }
     var expandedGroups by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
 
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var isSearchActive by rememberSaveable { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
+    var hasRequestedSearchFocus by rememberSaveable { mutableStateOf(false) }
+
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
-
     var childLockActive by rememberSaveable { mutableStateOf(false) }
     var yankLockActive by rememberSaveable { mutableStateOf(false) }
 
     var highlightedUid by remember { mutableStateOf(autoScrollUid) }
     var scrollTrigger by remember { mutableLongStateOf(0L) }
 
-    LaunchedEffect(autoScrollUid) {
-        if (autoScrollUid != null) {
-            highlightedUid = autoScrollUid
-        }
-    }
+    var newTaskText by remember { mutableStateOf("") }
+    var showExportSourceDialog by remember { mutableStateOf(false) }
+    var showExportDestDialog by remember { mutableStateOf(false) }
+    var exportSourceHref by remember { mutableStateOf<String?>(null) }
 
-    val locationTabIcon = rememberSaveable {
-        val icons = listOf(
-            NfIcons.LOCATION, NfIcons.EARTH_ASIA, NfIcons.EARTH_AMERICAS,
-            NfIcons.EARTH_AFRICA, NfIcons.EARTH_GENERIC, NfIcons.PLANET,
-            NfIcons.GALAXY, NfIcons.ISLAND, NfIcons.COMPASS,
-            NfIcons.MOUNTAINS, NfIcons.GLOBE, NfIcons.GLOBEMODEL,
-        )
-        icons.random()
-    }
+    var yankedUid by remember { mutableStateOf<String?>(null) }
+    val yankedTask = remember(tasks, yankedUid) { tasks.find { it.uid == yankedUid } }
+    var creatingChildUid by remember { mutableStateOf<String?>(null) }
+    val creatingChildTask = remember(tasks, creatingChildUid) { tasks.find { it.uid == creatingChildUid } }
 
-    val enabledCalendarCount = remember(calendars) { calendars.count { !it.isDisabled } }
-
-    LaunchedEffect(hasUnsynced) { localHasUnsynced = hasUnsynced }
-
-    // Sync Pager swipes with Backend Visibility and Write Target
-    LaunchedEffect(pagerState.settledPage) {
-        val currentTab = tabs.getOrNull(pagerState.settledPage) ?: return@LaunchedEffect
-
-        // 1. Update Write Target if applicable
-        if (currentTab.isWriteTarget != null && currentTab.isWriteTarget != defaultCalHref) {
-            api.setDefaultCalendar(currentTab.isWriteTarget)
-            onDataChanged()
-        }
-
-        // 2. Synchronize Backend Visibility to match the newly settled Tab
-        if (backendVisibleHrefs != currentTab.hrefs) {
-            val toUpdate = enabledCals.filter { cal ->
-                (cal.isVisible && !currentTab.hrefs.contains(cal.href)) ||
-                        (!cal.isVisible && currentTab.hrefs.contains(cal.href))
-            }
-            if (toUpdate.isNotEmpty()) {
-                toUpdate.forEach { cal ->
-                    api.setCalendarVisibility(cal.href, currentTab.hrefs.contains(cal.href))
-                }
-                onDataChanged()
-                // Do not call updateTaskList here; the UI handles filtering instantly via pageTasks.
-                // The backend sync is just so the sidebar and background sync logic stay aligned.
-            }
-        }
-    }
-
-    fun checkSyncStatus() {
-        scope.launch {
-            try {
-                localHasUnsynced = api.hasUnsyncedChanges()
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    var hasSetDefaultTab by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(calendars) {
-        if (!hasSetDefaultTab && calendars.isNotEmpty()) {
-            val hasRemote = calendars.any { !it.isLocal }
-            if (!hasRemote) sidebarTab = 1
-            hasSetDefaultTab = true
-        }
-    }
-
-    // Persistent scroll state for each page
     val listStates = remember { mutableStateMapOf<String, LazyListState>() }
-
     val activeListState = remember(pagerState.currentPage, tabs) {
         val key = tabs.getOrNull(pagerState.currentPage)?.id ?: "ALL_TASKS"
         listStates.getOrPut(key) { LazyListState() }
@@ -213,24 +168,6 @@ fun HomeScreen(
     var lastScrollPosition by remember { mutableIntStateOf(0) }
     var isProgrammaticScroll by remember { mutableStateOf(false) }
     val scrollToTopIcon = remember { getRandomScrollToTopIcon() }
-
-    LaunchedEffect(activeListState.firstVisibleItemIndex, activeListState.firstVisibleItemScrollOffset) {
-        val currentPosition =
-            activeListState.firstVisibleItemIndex * 10000 + activeListState.firstVisibleItemScrollOffset
-        val isScrollingUp = currentPosition < lastScrollPosition && activeListState.firstVisibleItemIndex > 0
-        val isScrollingDown = currentPosition > lastScrollPosition
-        lastScrollPosition = currentPosition
-
-        if (activeListState.firstVisibleItemIndex == 0 || isProgrammaticScroll || isScrollingDown) {
-            showScrollToTop = false
-        } else if (isScrollingUp) {
-            showScrollToTop = true
-            kotlinx.coroutines.delay(3000)
-            if (showScrollToTop && !isProgrammaticScroll) showScrollToTop = false
-        }
-    }
-
-    var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
 
     val randomIcons = remember {
         listOf(
@@ -251,10 +188,70 @@ fun HomeScreen(
     }
     var currentRandomIcon by remember { mutableStateOf(randomIcons.random()) }
 
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-    var isSearchActive by rememberSaveable { mutableStateOf(false) }
-    val searchFocusRequester = remember { FocusRequester() }
-    var hasRequestedSearchFocus by rememberSaveable { mutableStateOf(false) }
+    val locationTabIcon = rememberSaveable {
+        val icons = listOf(
+            NfIcons.LOCATION, NfIcons.EARTH_ASIA, NfIcons.EARTH_AMERICAS,
+            NfIcons.EARTH_AFRICA, NfIcons.EARTH_GENERIC, NfIcons.PLANET,
+            NfIcons.GALAXY, NfIcons.ISLAND, NfIcons.COMPASS,
+            NfIcons.MOUNTAINS, NfIcons.GLOBE, NfIcons.GLOBEMODEL,
+        )
+        icons.random()
+    }
+
+    val enabledCalendarCount = remember(calendars) { calendars.count { !it.isDisabled } }
+    val calColorMap = remember(calendars) {
+        calendars.associate { it.href to (it.color?.let { hex -> parseHexColor(hex) } ?: Color.Gray) }
+    }
+    val taskMap = remember(tasks) { tasks.associateBy { it.uid } }
+    val incomingRelationsMap = remember(tasks) {
+        val map = mutableMapOf<String, MutableList<String>>()
+        tasks.forEach { task ->
+            task.relatedToUids.forEach { relatedUid ->
+                map.getOrPut(relatedUid) { mutableListOf() }.add(task.uid)
+            }
+        }
+        map
+    }
+
+    var hasSetDefaultTab by rememberSaveable { mutableStateOf(false) }
+
+    val onSurfaceColor = MaterialTheme.colorScheme.onSurface
+    val activeColor by derivedStateOf {
+        val pageOffset = pagerState.currentPageOffsetFraction
+        val currentIndex = pagerState.currentPage
+        val targetIndex = if (pageOffset < 0) currentIndex - 1 else currentIndex + 1
+        val safeTarget = targetIndex.coerceIn(0, tabs.lastIndex)
+
+        val c1 = tabs.getOrNull(currentIndex)?.color ?: onSurfaceColor
+        val c2 = tabs.getOrNull(safeTarget)?.color ?: onSurfaceColor
+        lerp(c1, c2, kotlin.math.abs(pageOffset))
+    }
+
+    // --- Functions ---
+    fun updateTaskList() {
+        scope.launch {
+            try {
+                val viewData = api.getViewTasks(
+                    filterTags.toList(), filterLocations.toList(), searchQuery,
+                    expandedGroups.toList(), matchAllCategories
+                )
+                tasks = viewData.tasks
+                tags = viewData.tags
+                locations = viewData.locations
+                aliases = api.getConfig().tagAliases
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    fun checkSyncStatus() {
+        scope.launch {
+            try {
+                localHasUnsynced = api.hasUnsyncedChanges()
+            } catch (_: Exception) {
+            }
+        }
+    }
 
     fun jumpToRandomTask() {
         if (tasks.isEmpty()) return
@@ -283,155 +280,6 @@ fun HomeScreen(
             }
             highlightedUid = targetTask.uid
             scrollTrigger++
-        }
-    }
-
-    var newTaskText by remember { mutableStateOf("") }
-    var showExportSourceDialog by remember { mutableStateOf(false) }
-    var showExportDestDialog by remember { mutableStateOf(false) }
-    var exportSourceHref by remember { mutableStateOf<String?>(null) }
-    var yankedUid by remember { mutableStateOf<String?>(null) }
-    val yankedTask = remember(tasks, yankedUid) { tasks.find { it.uid == yankedUid } }
-    var creatingChildUid by remember { mutableStateOf<String?>(null) }
-    val creatingChildTask = remember(tasks, creatingChildUid) { tasks.find { it.uid == creatingChildUid } }
-    val clipboard = LocalClipboard.current
-    val context = LocalContext.current
-    val isDark = isSystemInDarkTheme()
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val calColorMap = remember(calendars) {
-        calendars.associate { it.href to (it.color?.let { hex -> parseHexColor(hex) } ?: Color.Gray) }
-    }
-
-    val taskMap = remember(tasks) { tasks.associateBy { it.uid } }
-
-    val incomingRelationsMap = remember(tasks) {
-        val map = mutableMapOf<String, MutableList<String>>()
-        tasks.forEach { task ->
-            task.relatedToUids.forEach { relatedUid ->
-                map.getOrPut(relatedUid) { mutableListOf() }.add(task.uid)
-            }
-        }
-        map
-    }
-
-    BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
-
-    BackHandler(
-        enabled = isSearchActive || searchQuery.isNotBlank() || yankedUid != null || filterTags.isNotEmpty() || filterLocations.isNotEmpty()
-    ) {
-        when {
-            isSearchActive -> isSearchActive = false
-            yankedUid != null -> {
-                yankedUid = null; yankLockActive = false
-            }
-
-            searchQuery.isNotBlank() -> searchQuery = ""
-            filterTags.isNotEmpty() || filterLocations.isNotEmpty() -> {
-                filterTags = emptySet()
-                filterLocations = emptySet()
-            }
-        }
-    }
-
-    fun updateTaskList() {
-        scope.launch {
-            try {
-                val viewData = api.getViewTasks(
-                    filterTags.toList(), filterLocations.toList(), searchQuery,
-                    expandedGroups.toList(), matchAllCategories
-                )
-                tasks = viewData.tasks
-                tags = viewData.tags
-                locations = viewData.locations
-                aliases = api.getConfig().tagAliases
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    LaunchedEffect(
-        searchQuery, filterTags, filterLocations, isLoading,
-        calendars, refreshTick, expandedGroups, matchAllCategories
-    ) {
-        updateTaskList()
-    }
-
-    val handleRefresh = {
-        scope.launch {
-            isManualSyncing = true
-            try {
-                api.sync()
-                lastSyncFailed = false
-                onDataChanged()
-                updateTaskList()
-            } catch (e: Exception) {
-                lastSyncFailed = true
-                Toast.makeText(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
-                    .show()
-                api.loadFromCache()
-                updateTaskList()
-            } finally {
-                checkSyncStatus()
-                isManualSyncing = false
-            }
-        }
-    }
-
-    val handlePullRefresh = {
-        scope.launch {
-            isPullRefreshing = true
-            try {
-                api.sync()
-                lastSyncFailed = false
-                onDataChanged()
-                updateTaskList()
-            } catch (e: Exception) {
-                lastSyncFailed = true
-                Toast.makeText(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
-                    .show()
-                api.loadFromCache()
-                updateTaskList()
-            } finally {
-                checkSyncStatus()
-                isPullRefreshing = false
-            }
-        }
-    }
-
-    // Scroll Logic: Fast in-memory resolution matching the selected page tasks
-    LaunchedEffect(scrollTrigger, autoScrollUid, tasks, pagerState.currentPage) {
-        if (highlightedUid != null && tasks.isNotEmpty()) {
-            val targetTask = tasks.find { it.uid == highlightedUid }
-            if (targetTask != null) {
-                val currentTab = tabs.getOrNull(pagerState.currentPage)
-                val needsTabSwitch = currentTab != null && !currentTab.hrefs.contains(targetTask.calendarHref)
-
-                if (needsTabSwitch) {
-                    val tabIndex = tabs.indexOfFirst { it.isWriteTarget == targetTask.calendarHref }
-                    if (tabIndex >= 0) {
-                        pagerState.animateScrollToPage(tabIndex)
-                    } else {
-                        pagerState.animateScrollToPage(0)
-                    }
-                }
-
-                val activeTab = tabs.getOrNull(pagerState.currentPage)
-                val currentList = if (activeTab != null) {
-                    tasks.filter { it.calendarHref in activeTab.hrefs }
-                } else tasks
-
-                val index = currentList.indexOfFirst { it.uid == highlightedUid }
-                if (index >= 0) {
-                    if (scrollTrigger > 0) {
-                        activeListState.scrollToItem(index)
-                        scrollTrigger = 0
-                    } else if (autoScrollUid != null) {
-                        activeListState.animateScrollToItem(index)
-                        kotlinx.coroutines.delay(2000)
-                        onAutoScrollComplete()
-                    }
-                }
-            }
         }
     }
 
@@ -488,17 +336,8 @@ fun HomeScreen(
                     highlightedUid = newUid
                     onDataChanged()
                     lastSyncFailed = false
-                    try {
-                        val viewData = api.getViewTasks(
-                            filterTags.toList(), filterLocations.toList(), searchQuery,
-                            expandedGroups.toList(), matchAllCategories
-                        )
-                        tasks = viewData.tasks
-                        tags = viewData.tags
-                        locations = viewData.locations
-                        scrollTrigger++
-                    } catch (_: Exception) {
-                    }
+                    updateTaskList()
+                    scrollTrigger++
                 } catch (_: Exception) {
                     lastSyncFailed = true
                 } finally {
@@ -593,6 +432,191 @@ fun HomeScreen(
             } finally {
                 checkSyncStatus()
                 activeOpCount--
+            }
+        }
+    }
+
+    val handleRefresh = {
+        scope.launch {
+            isManualSyncing = true
+            try {
+                api.sync()
+                lastSyncFailed = false
+                onDataChanged()
+                updateTaskList()
+            } catch (e: Exception) {
+                lastSyncFailed = true
+                Toast.makeText(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
+                    .show()
+                api.loadFromCache()
+                updateTaskList()
+            } finally {
+                checkSyncStatus()
+                isManualSyncing = false
+            }
+        }
+    }
+
+    val handlePullRefresh = {
+        scope.launch {
+            isPullRefreshing = true
+            try {
+                api.sync()
+                lastSyncFailed = false
+                onDataChanged()
+                updateTaskList()
+            } catch (e: Exception) {
+                lastSyncFailed = true
+                Toast.makeText(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
+                    .show()
+                api.loadFromCache()
+                updateTaskList()
+            } finally {
+                checkSyncStatus()
+                isPullRefreshing = false
+            }
+        }
+    }
+
+    // --- Effects ---
+
+    LaunchedEffect(backendVisibleHrefs) {
+        if (backendVisibleHrefs.size > 1 && backendVisibleHrefs.size < allHrefs.size) {
+            customHrefs = backendVisibleHrefs
+        }
+    }
+
+    LaunchedEffect(autoScrollUid) {
+        if (autoScrollUid != null) highlightedUid = autoScrollUid
+    }
+
+    LaunchedEffect(hasUnsynced) { localHasUnsynced = hasUnsynced }
+
+    LaunchedEffect(pendingTabId, tabs) {
+        if (pendingTabId != null) {
+            val idx = tabs.indexOfFirst { it.id == pendingTabId }
+            if (idx >= 0 && pagerState.currentPage != idx) {
+                pagerState.scrollToPage(idx)
+            }
+            pendingTabId = null
+        }
+    }
+
+    LaunchedEffect(pagerState.targetPage, tabs) {
+        val targetTab = tabs.getOrNull(pagerState.targetPage) ?: return@LaunchedEffect
+
+        if (targetTab.isWriteTarget != null && targetTab.isWriteTarget != defaultCalHref) {
+            api.setDefaultCalendar(targetTab.isWriteTarget)
+            onDataChanged()
+        }
+
+        if (backendVisibleHrefs != targetTab.hrefs) {
+            val toUpdate = enabledCals.filter { cal ->
+                (cal.isVisible && !targetTab.hrefs.contains(cal.href)) ||
+                        (!cal.isVisible && targetTab.hrefs.contains(cal.href))
+            }
+            if (toUpdate.isNotEmpty()) {
+                toUpdate.forEach { cal ->
+                    api.setCalendarVisibility(cal.href, targetTab.hrefs.contains(cal.href))
+                }
+                updateTaskList()
+                onDataChanged()
+            }
+        }
+    }
+
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage != pagerState.targetPage) {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+
+    LaunchedEffect(calendars) {
+        if (!hasSetDefaultTab && calendars.isNotEmpty()) {
+            val hasRemote = calendars.any { !it.isLocal }
+            if (!hasRemote) sidebarTab = 1
+            hasSetDefaultTab = true
+        }
+    }
+
+    LaunchedEffect(
+        searchQuery, filterTags, filterLocations, isLoading,
+        calendars, refreshTick, expandedGroups, matchAllCategories
+    ) {
+        updateTaskList()
+    }
+
+    LaunchedEffect(scrollTrigger, autoScrollUid, tasks, pagerState.currentPage) {
+        if (highlightedUid != null && tasks.isNotEmpty()) {
+            val targetTask = tasks.find { it.uid == highlightedUid }
+            if (targetTask != null) {
+                val currentTab = tabs.getOrNull(pagerState.currentPage)
+                val needsTabSwitch = currentTab != null && !currentTab.hrefs.contains(targetTask.calendarHref)
+
+                if (needsTabSwitch) {
+                    val tabIndex = tabs.indexOfFirst { it.isWriteTarget == targetTask.calendarHref }
+                    if (tabIndex >= 0) {
+                        pagerState.animateScrollToPage(tabIndex)
+                    } else {
+                        pagerState.animateScrollToPage(0)
+                    }
+                }
+
+                val activeTab = tabs.getOrNull(pagerState.currentPage)
+                val currentList = if (activeTab != null) {
+                    tasks.filter { it.calendarHref in activeTab.hrefs }
+                } else tasks
+
+                val index = currentList.indexOfFirst { it.uid == highlightedUid }
+                if (index >= 0) {
+                    val key = tabs.getOrNull(pagerState.currentPage)?.id ?: "ALL_TASKS"
+                    val listState = listStates[key]
+                    if (listState != null) {
+                        if (scrollTrigger > 0) {
+                            listState.scrollToItem(index)
+                            scrollTrigger = 0
+                        } else if (autoScrollUid != null) {
+                            listState.animateScrollToItem(index)
+                            kotlinx.coroutines.delay(2000)
+                            onAutoScrollComplete()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(activeListState.firstVisibleItemIndex, activeListState.firstVisibleItemScrollOffset) {
+        val currentPosition =
+            activeListState.firstVisibleItemIndex * 10000 + activeListState.firstVisibleItemScrollOffset
+        val isScrollingUp = currentPosition < lastScrollPosition && activeListState.firstVisibleItemIndex > 0
+        val isScrollingDown = currentPosition > lastScrollPosition
+        lastScrollPosition = currentPosition
+
+        if (activeListState.firstVisibleItemIndex == 0 || isProgrammaticScroll || isScrollingDown) {
+            showScrollToTop = false
+        } else if (isScrollingUp) {
+            showScrollToTop = true
+            kotlinx.coroutines.delay(3000)
+            if (showScrollToTop && !isProgrammaticScroll) showScrollToTop = false
+        }
+    }
+
+    BackHandler(enabled = drawerState.isOpen) { scope.launch { drawerState.close() } }
+
+    BackHandler(
+        enabled = isSearchActive || searchQuery.isNotBlank() || yankedUid != null || filterTags.isNotEmpty() || filterLocations.isNotEmpty()
+    ) {
+        when {
+            isSearchActive -> isSearchActive = false
+            yankedUid != null -> {
+                yankedUid = null; yankLockActive = false
+            }
+
+            searchQuery.isNotBlank() -> searchQuery = ""
+            filterTags.isNotEmpty() || filterLocations.isNotEmpty() -> {
+                filterTags = emptySet()
+                filterLocations = emptySet()
             }
         }
     }
@@ -799,17 +823,14 @@ fun HomeScreen(
                                         }
                                         onDataChanged()
                                         updateTaskList()
-                                        scope.launch {
-                                            val allIdx = tabs.indexOfFirst { it.id == "ALL" }
-                                            if (allIdx >= 0) pagerState.scrollToPage(allIdx)
-                                            drawerState.close()
-                                        }
+                                        pendingTabId = "ALL" // Jump to ALL tab immediately
+                                        scope.launch { drawerState.close() }
                                     },
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                                 ) { Text(androidx.compose.ui.res.stringResource(R.string.show_all_collections)) }
                                 HorizontalDivider()
                             }
-                            items(calendars.filter { !it.isDisabled }) { cal ->
+                            items(enabledCals) { cal ->
                                 val calColor = cal.color?.let { parseHexColor(it) } ?: Color.Gray
                                 val isDefault = cal.href == defaultCalHref
                                 val iconChar =
@@ -827,11 +848,15 @@ fun HomeScreen(
                                                 cal.href
                                             )
 
-                                            // Save combination locally if custom
+                                            // Determine target tab and save custom visibility
                                             if (currentVisible.size > 1 && currentVisible.size < allHrefs.size) {
                                                 customHrefs = currentVisible
+                                                pendingTabId = "CUSTOM"
                                             } else if (currentVisible.size == allHrefs.size) {
                                                 customHrefs = emptySet()
+                                                pendingTabId = "ALL"
+                                            } else if (currentVisible.size == 1) {
+                                                pendingTabId = currentVisible.first()
                                             }
 
                                             api.setCalendarVisibility(cal.href, !cal.isVisible)
@@ -845,8 +870,7 @@ fun HomeScreen(
                                         onClick = {
                                             api.setDefaultCalendar(cal.href)
                                             onDataChanged()
-                                            val targetIdx = tabs.indexOfFirst { it.id == cal.href }
-                                            if (targetIdx >= 0) scope.launch { pagerState.scrollToPage(targetIdx) }
+                                            pendingTabId = cal.href
                                             scope.launch { drawerState.close() }
                                         },
                                         modifier = Modifier.weight(1f),
@@ -859,8 +883,7 @@ fun HomeScreen(
                                         scope.launch {
                                             api.isolateCalendar(cal.href)
                                             onDataChanged()
-                                            val targetIdx = tabs.indexOfFirst { it.id == cal.href }
-                                            if (targetIdx >= 0) pagerState.scrollToPage(targetIdx)
+                                            pendingTabId = cal.href
                                             drawerState.close()
                                         }
                                     }) { NfIcon(NfIcons.ARROW_RIGHT, size = 18.sp) }
@@ -928,37 +951,70 @@ fun HomeScreen(
 
             val tabsContent: @Composable () -> Unit = {
                 if (tabPosition != "hidden" && tabs.isNotEmpty()) {
-                    ScrollableTabRow(
-                        selectedTabIndex = pagerState.currentPage,
-                        edgePadding = 0.dp,
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.height(40.dp),
-                        divider = {},
-                        indicator = { tabPositions ->
-                            if (pagerState.currentPage < tabPositions.size) {
-                                TabRowDefaults.PrimaryIndicator(
-                                    modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
-                                    color = tabs.getOrNull(pagerState.currentPage)?.color
-                                        ?: MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .background(MaterialTheme.colorScheme.surface),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        tabs.forEachIndexed { index, tab ->
-                            val targetColor = tab.color ?: MaterialTheme.colorScheme.onSurface
-                            Tab(
-                                selected = pagerState.currentPage == index,
-                                onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
-                                modifier = Modifier.padding(horizontal = 0.dp),
-                                text = {
-                                    Text(
-                                        text = tab.name,
-                                        color = if (pagerState.currentPage == index) targetColor else Color.Gray,
-                                        fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal,
-                                        fontSize = 14.sp
+                        // The leftmost tab is either CUSTOM or ALL. We keep it sticky.
+                        val firstTab = tabs.first()
+                        val isFirstSelected = pagerState.currentPage == 0
+                        Tab(
+                            selected = isFirstSelected,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                            modifier = Modifier.weight(0.25f)
+                        ) {
+                            Text(
+                                text = firstTab.name,
+                                color = if (isFirstSelected) firstTab.color
+                                    ?: MaterialTheme.colorScheme.primary else Color.Gray,
+                                fontWeight = if (isFirstSelected) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 14.sp,
+                                maxLines = 1
+                            )
+                        }
+
+                        // Divider
+                        Box(
+                            modifier = Modifier.width(1.dp).fillMaxHeight(0.6f)
+                                .background(Color.Gray.copy(alpha = 0.3f))
+                        )
+
+                        ScrollableTabRow(
+                            selectedTabIndex = if (pagerState.currentPage > 0) pagerState.currentPage - 1 else 0,
+                            edgePadding = 8.dp,
+                            containerColor = Color.Transparent,
+                            modifier = Modifier.weight(0.75f),
+                            divider = {},
+                            indicator = { tabPositions ->
+                                if (pagerState.currentPage > 0 && pagerState.currentPage - 1 < tabPositions.size) {
+                                    TabRowDefaults.PrimaryIndicator(
+                                        modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage - 1]),
+                                        color = tabs.getOrNull(pagerState.currentPage)?.color ?: activeColor
                                     )
                                 }
-                            )
+                            }
+                        ) {
+                            tabs.drop(1).forEachIndexed { index, tab ->
+                                val actualPage = index + 1
+                                val targetColor = tab.color ?: MaterialTheme.colorScheme.onSurface
+
+                                Tab(
+                                    selected = pagerState.currentPage == actualPage,
+                                    onClick = { scope.launch { pagerState.animateScrollToPage(actualPage) } },
+                                    modifier = Modifier.padding(horizontal = 0.dp),
+                                    text = {
+                                        Text(
+                                            text = tab.name,
+                                            color = if (pagerState.currentPage == actualPage) targetColor else Color.Gray,
+                                            fontWeight = if (pagerState.currentPage == actualPage) FontWeight.Bold else FontWeight.Normal,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -980,12 +1036,7 @@ fun HomeScreen(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable(onClickLabel = stringResource(R.string.show_all_collections)) {
-                        scope.launch {
-                            val areAllVisible =
-                                calendars.filter { it.href != "local://trash" && !it.isDisabled }.all { it.isVisible }
-                            api.toggleAllCalendars(!areAllVisible)
-                            onDataChanged()
-                        }
+                        scope.launch { drawerState.open() } // Use header as a shortcut to drawer
                     }
                 ) {
                     Image(
