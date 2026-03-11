@@ -1,19 +1,17 @@
 package com.trougnouf.cfait.ui
 
 import android.content.ClipData
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.KeyboardActions
@@ -30,7 +28,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
@@ -51,7 +48,6 @@ import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.*
 import kotlinx.coroutines.launch
 
-// Component for colored dots
 @Composable
 fun ColoredOverflowDots() {
     Row(verticalAlignment = Alignment.Bottom) {
@@ -89,10 +85,10 @@ fun HomeScreen(
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
     var isPullRefreshing by remember { mutableStateOf(false) }
 
-    // 1. Pager state for collection switching (ALL enabled calendars, not just visible)
+    // 1. Pager state for collection switching (Only VISIBLE & enabled calendars to prevent config bloating)
     val pagerItems = remember(calendars) {
-        val enabledCals = calendars.filter { !it.isDisabled && it.href != "local://trash" }
-        listOf(null) + enabledCals // null represents the "All" tab
+        val visibleCals = calendars.filter { it.isVisible && !it.isDisabled && it.href != "local://trash" }
+        listOf(null) + visibleCals // null represents the "All" tab
     }
 
     val initialPage = remember(pagerItems, defaultCalHref) {
@@ -159,8 +155,6 @@ fun HomeScreen(
                 api.setDefaultCalendar(selectedItem.href)
                 onDataChanged()
             }
-        } else {
-            // "All" tab selected: we don't force a default calendar change here.
         }
     }
 
@@ -192,12 +186,12 @@ fun HomeScreen(
     }
 
     // Store a persistent scroll state for each page
-    val listStates = remember { mutableStateMapOf<String, androidx.compose.foundation.lazy.LazyListState>() }
+    val listStates = remember { mutableStateMapOf<String, LazyListState>() }
 
     // Get the active list state based on the current page
     val activeListState = remember(pagerState.currentPage, pagerItems) {
         val key = pagerItems.getOrNull(pagerState.currentPage)?.href ?: "ALL_TASKS"
-        listStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() }
+        listStates.getOrPut(key) { LazyListState() } // Must use standard constructor here
     }
 
     var showScrollToTop by remember { mutableStateOf(false) }
@@ -402,17 +396,42 @@ fun HomeScreen(
         }
     }
 
-    LaunchedEffect(scrollTrigger, autoScrollUid, tasks) {
+    // Scroll Logic: Dynamically switch tabs if needed and locate the correct list index
+    LaunchedEffect(scrollTrigger, autoScrollUid, tasks, pagerState.currentPage) {
         if (highlightedUid != null && tasks.isNotEmpty()) {
-            val index = tasks.indexOfFirst { it.uid == highlightedUid }
-            if (index >= 0) {
-                if (scrollTrigger > 0) {
-                    activeListState.scrollToItem(index)
-                    scrollTrigger = 0
-                } else if (autoScrollUid != null) {
-                    activeListState.animateScrollToItem(index)
-                    kotlinx.coroutines.delay(2000)
-                    onAutoScrollComplete()
+            val targetTask = tasks.find { it.uid == highlightedUid }
+            if (targetTask != null) {
+                // Ensure we are on the right tab
+                val currentCal = pagerItems.getOrNull(pagerState.currentPage)
+                val needsTabSwitch = currentCal != null && currentCal.href != targetTask.calendarHref
+
+                if (needsTabSwitch) {
+                    val tabIndex = pagerItems.indexOfFirst { it?.href == targetTask.calendarHref }
+                    if (tabIndex >= 0) {
+                        pagerState.animateScrollToPage(tabIndex)
+                    } else {
+                        pagerState.animateScrollToPage(0)
+                    }
+                }
+
+                // Recalculate index based on the (now correct) active list
+                val visibleHrefs = calendars.filter { it.isVisible }.map { it.href }.toSet()
+                val currentList = if (pagerItems.getOrNull(pagerState.currentPage) == null) {
+                    tasks.filter { it.calendarHref in visibleHrefs }
+                } else {
+                    tasks.filter { it.calendarHref == targetTask.calendarHref }
+                }
+
+                val index = currentList.indexOfFirst { it.uid == highlightedUid }
+                if (index >= 0) {
+                    if (scrollTrigger > 0) {
+                        activeListState.scrollToItem(index)
+                        scrollTrigger = 0
+                    } else if (autoScrollUid != null) {
+                        activeListState.animateScrollToItem(index)
+                        kotlinx.coroutines.delay(2000)
+                        onAutoScrollComplete()
+                    }
                 }
             }
         }
@@ -1249,11 +1268,11 @@ fun HomeScreen(
                         HorizontalPager(
                             state = pagerState,
                             modifier = Modifier.fillMaxSize(),
-                            key = { page -> pagerItems.getOrNull(page)?.href ?: "ALL_TASKS" }
+                            key = { page -> pagerItems.getOrNull(page)?.href ?: "ALL_TASKS_$page" }
                         ) { page ->
                             val currentCal = pagerItems.getOrNull(page)
                             val pageKey = currentCal?.href ?: "ALL_TASKS"
-                            val pageListState = listStates.getOrPut(pageKey) { rememberLazyListState() }
+                            val pageListState = listStates.getOrPut(pageKey) { LazyListState() }
 
                             val pageTasks = remember(tasks, currentCal, calendars) {
                                 if (currentCal == null) {
@@ -1316,17 +1335,6 @@ fun HomeScreen(
                         containerColor = Color.Transparent,
                     ) { NfIcon(scrollToTopIcon, 28.sp, color = Color(0xf2660000)) }
                 }
-
-                Box(
-                    modifier = Modifier.fillMaxHeight().width(20.dp).align(Alignment.CenterStart)
-                        .pointerInput(Unit) {
-                            detectHorizontalDragGestures { _, dragAmount ->
-                                if (dragAmount > 5) {
-                                    scope.launch { drawerState.open() }
-                                }
-                            }
-                        }
-                )
             }
         }
     }
