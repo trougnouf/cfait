@@ -1255,7 +1255,10 @@ fun HomeScreen(
                 Box(Modifier.padding(padding).fillMaxSize()) {
                     Column(Modifier.fillMaxSize()) {
 
-                        val activeIsLocal = defaultCalHref?.startsWith("local://") == true
+                        // Use targetPage so the button disappears instantly when a swipe begins
+                        val targetTabForExport = tabs.getOrNull(pagerState.targetPage)
+                        val activeIsLocal = targetTabForExport?.id?.startsWith("local://") == true
+
                         if (activeIsLocal && remoteCals.isNotEmpty()) {
                             FilledTonalButton(
                                 onClick = { showExportSourceDialog = true },
