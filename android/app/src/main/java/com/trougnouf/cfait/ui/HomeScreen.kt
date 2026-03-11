@@ -16,6 +16,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -42,6 +43,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -81,6 +83,7 @@ fun HomeScreen(
     hasUnsynced: Boolean,
     autoScrollUid: String? = null,
     refreshTick: Long,
+    tabPosition: String,
     onGlobalRefresh: () -> Unit,
     onSettings: () -> Unit,
     onTaskClick: (String) -> Unit,
@@ -163,22 +166,15 @@ fun HomeScreen(
     // 2. Sync pager state with Rust core (Do NOT isolate, just set default for new tasks)
     LaunchedEffect(pagerState.settledPage) {
         val selectedItem = pagerItems.getOrNull(pagerState.settledPage)
-
-        // We only care about updating the default calendar (where the '+' button adds tasks).
-        // We do NOT change visibility states here. Swiping should never hide/unhide data.
         if (selectedItem != null) {
+            // Update the target for the "+" button, but keep all other data loaded
             if (defaultCalHref != selectedItem.href) {
                 api.setDefaultCalendar(selectedItem.href)
-                onDataChanged() // Triggers UI to update the '+' button target
-            }
-        } else {
-            // If swiped to "All Tasks" (null), you might want to set the default back to
-            // local://default, or just leave the last selected one as the default.
-            // Leaving it as-is is usually fine, or you can explicitly reset it:
-            if (defaultCalHref != "local://default") {
-                api.setDefaultCalendar("local://default")
                 onDataChanged()
             }
+        } else {
+            // Optionally explicitly reset to local if "All Tasks" is selected,
+            // but doing nothing preserves the quick-add context.
         }
     }
 
@@ -1052,6 +1048,11 @@ fun HomeScreen(
                                         onClick = {
                                             api.setDefaultCalendar(cal.href)
                                             onDataChanged()
+                                            val targetIdx = pagerItems.indexOfFirst { it?.href == cal.href }
+                                            if (targetIdx >= 0) {
+                                                scope.launch { pagerState.animateScrollToPage(targetIdx) }
+                                            }
+                                            scope.launch { drawerState.close() }
                                         },
                                         modifier = Modifier.weight(1f),
                                         colors =
@@ -1174,6 +1175,48 @@ fun HomeScreen(
                 }
             }
             val countText = if (tasks.isNotEmpty()) "($activeCount)" else ""
+
+            val tabsContent: @Composable () -> Unit = {
+                if (tabPosition != "hidden") {
+                    ScrollableTabRow(
+                        selectedTabIndex = pagerState.currentPage,
+                        edgePadding = 8.dp,
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier.height(44.dp),
+                        divider = {},
+                        indicator = { tabPositions ->
+                            if (pagerState.currentPage < tabPositions.size) {
+                                TabRowDefaults.PrimaryIndicator(
+                                    modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
+                                    color = activeColor
+                                )
+                            }
+                        }
+                    ) {
+                        pagerItems.forEachIndexed { index, cal ->
+                            val title = cal?.name ?: stringResource(R.string.all_tasks)
+                            val targetColor =
+                                cal?.color?.let { parseHexColor(it) } ?: MaterialTheme.colorScheme.onSurface
+
+                            Tab(
+                                selected = pagerState.currentPage == index,
+                                onClick = {
+                                    scope.launch { pagerState.animateScrollToPage(index) }
+                                },
+                                modifier = Modifier.padding(horizontal = 4.dp),
+                                text = {
+                                    Text(
+                                        text = title,
+                                        color = if (pagerState.currentPage == index) targetColor else Color.Gray,
+                                        fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+            }
 
             val otherVisible = calendars.filter {
                 !it.isDisabled && it.isVisible && it.href != currentVisualItem?.href
@@ -1373,253 +1416,270 @@ fun HomeScreen(
                         )
                     }
 
-                    // Scrollable Tab Row for collection switching
-                    ScrollableTabRow(
-                        selectedTabIndex = pagerState.currentPage,
-                        edgePadding = 16.dp,
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        indicator = { tabPositions ->
-                            TabRowDefaults.PrimaryIndicator(
-                                modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
-                                color = activeColor // <-- Use the derived lerp color here!
-                            )
-                        }
-                    ) {
-                        pagerItems.forEachIndexed { index, cal ->
-                            val title = cal?.name ?: stringResource(R.string.all_tasks)
-                            val targetColor =
-                                cal?.color?.let { parseHexColor(it) } ?: MaterialTheme.colorScheme.onSurface
-
-                            Tab(
-                                selected = pagerState.currentPage == index,
-                                onClick = {
-                                    scope.launch { pagerState.animateScrollToPage(index) }
-                                },
-                                text = {
-                                    Text(
-                                        text = title,
-                                        color = if (pagerState.currentPage == index) targetColor else Color.Gray,
-                                        fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                }
-                            )
-                        }
+                    if (tabPosition == "top") {
+                        tabsContent()
                     }
                 }
             },
             bottomBar = {
                 Column {
-                    if (creatingChildTask != null) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.tertiaryContainer,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                NfIcon(NfIcons.CHILD, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    stringResource(R.string.new_child_of, creatingChildTask.summary),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                IconButton(
-                                    onClick = { childLockActive = !childLockActive },
-                                    modifier = Modifier.size(24.dp)
+                    if (tabPosition == "bottom") {
+                        tabsContent()
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                    }
+                    bottomBar = {
+                        Column {
+                            if (creatingChildTask != null) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    NfIcon(
-                                        NfIcons.PLUS_LOCK,
-                                        16.sp,
-                                        if (childLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onTertiaryContainer.copy(
-                                            alpha = 0.5f
+                                    Row(
+                                        modifier = Modifier.padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        NfIcon(NfIcons.CHILD, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            stringResource(R.string.new_child_of, creatingChildTask.summary),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f),
                                         )
-                                    )
+                                        IconButton(
+                                            onClick = { childLockActive = !childLockActive },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            NfIcon(
+                                                NfIcons.PLUS_LOCK,
+                                                16.sp,
+                                                if (childLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onTertiaryContainer.copy(
+                                                    alpha = 0.5f
+                                                )
+                                            )
+                                        }
+                                        Spacer(Modifier.width(4.dp))
+                                        IconButton(
+                                            onClick = {
+                                                creatingChildUid = null
+                                                childLockActive = false
+                                            },
+                                            modifier = Modifier.size(24.dp),
+                                        ) {
+                                            NfIcon(
+                                                NfIcons.CROSS,
+                                                16.sp,
+                                                MaterialTheme.colorScheme.onTertiaryContainer
+                                            )
+                                        }
+                                    }
                                 }
-                                Spacer(Modifier.width(4.dp))
-                                IconButton(
-                                    onClick = {
-                                        creatingChildUid = null
-                                        childLockActive = false
-                                    },
-                                    modifier = Modifier.size(24.dp),
-                                ) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer) }
-                            }
-                        }
-                    } else if (yankedTask != null) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                NfIcon(NfIcons.LINK, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer)
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    stringResource(R.string.yanked_label) + " " + yankedTask.summary,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                IconButton(
-                                    onClick = { yankLockActive = !yankLockActive },
-                                    modifier = Modifier.size(24.dp)
+                            } else if (yankedTask != null) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    NfIcon(
-                                        NfIcons.LINK_LOCK,
-                                        16.sp,
-                                        if (yankLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer.copy(
-                                            alpha = 0.5f
+                                    Row(
+                                        modifier = Modifier.padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        NfIcon(NfIcons.LINK, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            stringResource(R.string.yanked_label) + " " + yankedTask.summary,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f),
                                         )
-                                    )
-                                }
-                                Spacer(Modifier.width(4.dp))
-                                IconButton(
-                                    onClick = {
-                                        yankedUid = null
-                                        yankLockActive = false
-                                    },
-                                    modifier = Modifier.size(24.dp),
-                                ) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer) }
-                            }
-                        }
-                    }
-                    Surface(tonalElevation = 3.dp) {
-                        Row(
-                            Modifier.padding(16.dp).navigationBarsPadding().imePadding(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            OutlinedTextField(
-                                value = newTaskText,
-                                onValueChange = { newTaskText = it },
-                                placeholder = { Text("${stringResource(R.string.example_buy_cat_food)} !1 @tomorrow #groceries") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
-                                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
-                                keyboardActions = KeyboardActions(onSend = {
-                                    if (newTaskText.isNotBlank()) addTask(
-                                        newTaskText
-                                    )
-                                }),
-                            )
-                        }
-                    }
-                }
-            },
-        ) { padding ->
-            Box(Modifier.padding(padding).fillMaxSize()) {
-                Column(Modifier.fillMaxSize()) {
-
-                    val activeIsLocal = calendars.find { it.href == defaultCalHref }?.isLocal == true
-                    if (activeIsLocal && remoteCals.isNotEmpty()) {
-                        FilledTonalButton(
-                            onClick = { showExportSourceDialog = true },
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                            colors =
-                                ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                                ),
-                            contentPadding = PaddingValues(vertical = 8.dp),
-                        ) {
-                            NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
-                            Spacer(Modifier.width(8.dp))
-                            Text(stringResource(R.string.export_local_tasks_to_server))
-                        }
-                    }
-
-                    PullToRefreshBox(
-                        isRefreshing = false,
-                        onRefresh = { handlePullRefresh() },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier.fillMaxSize(),
-                            key = { page -> pagerItems.getOrNull(page)?.href ?: "ALL_TASKS" } // <-- CRITICAL FIX
-                        ) { page ->
-                            val currentCal = pagerItems.getOrNull(page)
-                            val pageKey = currentCal?.href ?: "ALL_TASKS"
-                            val pageListState = listStates.getOrPut(pageKey) { rememberLazyListState() }
-
-                            // Locally filter tasks so the adjacent pages are already populated during the swipe
-                            val pageTasks = remember(tasks, currentCal) {
-                                if (currentCal == null) {
-                                    tasks // Show all
-                                } else {
-                                    tasks.filter { it.calendarHref == currentCal.href }
+                                        IconButton(
+                                            onClick = { yankLockActive = !yankLockActive },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            NfIcon(
+                                                NfIcons.LINK_LOCK,
+                                                16.sp,
+                                                if (yankLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer.copy(
+                                                    alpha = 0.5f
+                                                )
+                                            )
+                                        }
+                                        Spacer(Modifier.width(4.dp))
+                                        IconButton(
+                                            onClick = {
+                                                yankedUid = null
+                                                yankLockActive = false
+                                            },
+                                            modifier = Modifier.size(24.dp),
+                                        ) {
+                                            NfIcon(
+                                                NfIcons.CROSS,
+                                                16.sp,
+                                                MaterialTheme.colorScheme.onSecondaryContainer
+                                            )
+                                        }
+                                    }
                                 }
                             }
+                            Surface(tonalElevation = 3.dp) {
+                                Row(
+                                    Modifier.padding(16.dp).navigationBarsPadding().imePadding(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    OutlinedTextField(
+                                        value = newTaskText,
+                                        onValueChange = { newTaskText = it },
+                                        placeholder = { Text("${stringResource(R.string.example_buy_cat_food)} !1 @tomorrow #groceries") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true,
+                                        visualTransformation = remember(isDark) {
+                                            SmartSyntaxTransformation(
+                                                api,
+                                                isDark
+                                            )
+                                        },
+                                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
+                                        keyboardActions = KeyboardActions(onSend = {
+                                            if (newTaskText.isNotBlank()) addTask(
+                                                newTaskText
+                                            )
+                                        }),
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    ) { padding ->
+                    Box(Modifier.padding(padding).fillMaxSize()) {
+                        Column(Modifier.fillMaxSize()) {
 
-                            LazyColumn(
-                                state = pageListState,
-                                contentPadding = PaddingValues(bottom = 80.dp),
-                                modifier = Modifier.fillMaxSize(),
+                            val currentVisualItem = pagerItems.getOrNull(pagerState.currentPage)
+                            val activeIsLocal = currentVisualItem != null && currentVisualItem.isLocal
+                            if (activeIsLocal && remoteCals.isNotEmpty()) {
+                                FilledTonalButton(
+                                    onClick = { showExportSourceDialog = true },
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                                    colors =
+                                        ButtonDefaults.filledTonalButtonColors(
+                                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                        ),
+                                    contentPadding = PaddingValues(vertical = 8.dp),
+                                ) {
+                                    NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(stringResource(R.string.export_local_tasks_to_server))
+                                }
+                            }
+
+                            PullToRefreshBox(
+                                isRefreshing = false,
+                                onRefresh = { handlePullRefresh() },
+                                modifier = Modifier.weight(1f),
                             ) {
-                                items(pageTasks, key = { it.uid }) { task ->
-                                    if (task.virtualType == "none") {
-                                        val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+                                HorizontalPager(
+                                    state = pagerState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    key = { page ->
+                                        pagerItems.getOrNull(page)?.href ?: "ALL_TASKS"
+                                    } // <-- CRITICAL FIX
+                                ) { page ->
+                                    val currentCal = pagerItems.getOrNull(page)
+                                    val pageKey = currentCal?.href ?: "ALL_TASKS"
+                                    val pageListState = listStates.getOrPut(pageKey) { rememberLazyListState() }
 
-                                        // Resolve parent info for inheritance hiding
-                                        val parent = task.parentUid?.let { taskMap[it] }
-                                        val pCats = parent?.categories ?: emptyList()
-                                        val pLoc = parent?.location
+                                    // Locally filter tasks so the adjacent pages are already populated during the swipe
+                                    val pageTasks = remember(tasks, currentCal) {
+                                        if (currentCal == null) {
+                                            tasks // Show all
+                                        } else {
+                                            tasks.filter { it.calendarHref == currentCal.href }
+                                        }
+                                    }
 
-                                        TaskRow(
-                                            task = task,
-                                            calColor = calColor,
-                                            isDark = isDark,
-                                            onToggle = { toggleTask(task) },
-                                            onAction = { act -> onTaskAction(act, task) },
-                                            onClick = onTaskClick,
-                                            yankedUid = yankedUid,
-                                            enabledCalendarCount = enabledCalendarCount,
-                                            parentCategories = pCats,
-                                            parentLocation = pLoc,
-                                            aliasMap = aliases,
-                                            isHighlighted = task.uid == highlightedUid,
-                                            incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
-                                        )
-                                    } else {
-                                        VirtualTaskRow(task = task) {
-                                            val key = task.virtualPayload
-                                            expandedGroups = if (expandedGroups.contains(key)) {
-                                                expandedGroups - key
+                                    LazyColumn(
+                                        state = pageListState,
+                                        contentPadding = PaddingValues(bottom = 80.dp),
+                                        modifier = Modifier.fillMaxSize(),
+                                    ) {
+                                        items(pageTasks, key = { it.uid }) { task ->
+                                            if (task.virtualType == "none") {
+                                                val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+
+                                                // Resolve parent info for inheritance hiding
+                                                val parent = task.parentUid?.let { taskMap[it] }
+                                                val pCats = parent?.categories ?: emptyList()
+                                                val pLoc = parent?.location
+
+                                                TaskRow(
+                                                    task = task,
+                                                    calColor = calColor,
+                                                    isDark = isDark,
+                                                    onToggle = { toggleTask(task) },
+                                                    onAction = { act -> onTaskAction(act, task) },
+                                                    onClick = onTaskClick,
+                                                    yankedUid = yankedUid,
+                                                    enabledCalendarCount = enabledCalendarCount,
+                                                    parentCategories = pCats,
+                                                    parentLocation = pLoc,
+                                                    aliasMap = aliases,
+                                                    isHighlighted = task.uid == highlightedUid,
+                                                    incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
+                                                )
                                             } else {
-                                                expandedGroups + key
+                                                VirtualTaskRow(task = task) {
+                                                    val key = task.virtualPayload
+                                                    expandedGroups = if (expandedGroups.contains(key)) {
+                                                        expandedGroups - key
+                                                    } else {
+                                                        expandedGroups + key
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                }
 
-                // Scroll to top FAB - now using activeListState
-                if (showScrollToTop) {
-                    FloatingActionButton(
-                        onClick = {
-                            isProgrammaticScroll = true
-                            showScrollToTop = false
-                            scope.launch {
-                                activeListState.animateScrollToItem(0)
-                                isProgrammaticScroll = false
+                        // Scroll to top FAB - now using activeListState
+                        if (showScrollToTop) {
+                            FloatingActionButton(
+                                onClick = {
+                                    isProgrammaticScroll = true
+                                    showScrollToTop = false
+                                    scope.launch {
+                                        activeListState.animateScrollToItem(0)
+                                        isProgrammaticScroll = false
+                                    }
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .navigationBarsPadding()
+                                    .offset(x = (-45).dp, y = 40.dp),
+                                containerColor = Color.Transparent,
+                            ) {
+                                NfIcon(scrollToTopIcon, 28.sp, color = Color(0xf2660000))
                             }
-                        },
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .navigationBarsPadding()
-                            .offset(x = (-45).dp, y = 40.dp),
-                        containerColor = Color.Transparent,
-                    ) {
-                        NfIcon(scrollToTopIcon, 28.sp, color = Color(0xf2660000))
+                        }
+
+                        // Edge swipe detector to ensure Drawer opens easily without Pager interference
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(20.dp)
+                                .align(Alignment.CenterStart)
+                                .pointerInput(Unit) {
+                                    detectHorizontalDragGestures { _, dragAmount ->
+                                        if (dragAmount > 5) {
+                                            scope.launch { drawerState.open() }
+                                        }
+                                    }
+                                }
+                        )
                     }
                 }
-            }
-        }
-    }
-}
+                }

@@ -66,10 +66,12 @@ class MainActivity : ComponentActivity() {
         // Retrieve saved theme preference (defaulting to "auto")
         val sharedPrefs = getSharedPreferences("cfait_ui_prefs", Context.MODE_PRIVATE)
         val savedTheme = sharedPrefs.getString("app_theme", "auto") ?: "auto"
+        val savedTabPos = sharedPrefs.getString("tab_position", "top") ?: "top"
 
         setContent {
             // Lift theme state to root so SettingsScreen can update it
             var currentTheme by remember { mutableStateOf(savedTheme) }
+            var tabPosition by remember { mutableStateOf(savedTabPos) }
 
             // Determine the color scheme based on preference and system state
             val context = LocalContext.current
@@ -101,6 +103,11 @@ class MainActivity : ComponentActivity() {
                     onThemeChange = { newTheme ->
                         currentTheme = newTheme
                         sharedPrefs.edit().putString("app_theme", newTheme).apply()
+                    },
+                    tabPosition = tabPosition,
+                    onTabPositionChange = { newPos ->
+                        tabPosition = newPos
+                        sharedPrefs.edit().putString("tab_position", newPos).apply()
                     }
                 )
             }
@@ -119,7 +126,9 @@ fun CfaitNavHost(
     api: com.trougnouf.cfait.core.CfaitMobile,
     intent: Intent? = null,
     currentTheme: String,
-    onThemeChange: (String) -> Unit
+    onThemeChange: (String) -> Unit,
+    tabPosition: String,
+    onTabPositionChange: (String) -> Unit
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
@@ -429,6 +438,7 @@ fun CfaitNavHost(
                 hasUnsynced = hasUnsynced,
                 autoScrollUid = autoScrollUid,
                 refreshTick = refreshTick,
+                tabPosition = tabPosition,
                 onGlobalRefresh = { fastStart() },
                 onSettings = { navController.navigate("settings") },
                 onTaskClick = { uid -> navController.navigate("detail/$uid") },
@@ -474,7 +484,9 @@ fun CfaitNavHost(
                 onDeleteEvents = { handleDeleteEvents() },
                 onCreateEvents = { handleCreateMissingEvents() },
                 currentTheme = currentTheme,
-                onThemeChange = onThemeChange
+                onThemeChange = onThemeChange,
+                tabPosition = tabPosition,
+                onTabPositionChange = onTabPositionChange
             )
         }
 

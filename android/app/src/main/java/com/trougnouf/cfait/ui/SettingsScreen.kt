@@ -54,7 +54,9 @@ fun SettingsScreen(
     onDeleteEvents: () -> Unit,
     onCreateEvents: () -> Unit,
     currentTheme: String,
-    onThemeChange: (String) -> Unit
+    onThemeChange: (String) -> Unit,
+    tabPosition: String,
+    onTabPositionChange: (String) -> Unit
 ) {
     var url by remember { mutableStateOf("") }
     var user by remember { mutableStateOf("") }
