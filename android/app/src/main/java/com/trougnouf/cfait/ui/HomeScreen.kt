@@ -92,7 +92,7 @@ fun HomeScreen(
     val isDark = isSystemInDarkTheme()
     val hapticFeedback = LocalHapticFeedback.current
 
-    // --- State Declarations (Strictly hoisted to the top) ---
+    // --- State Declarations ---
     var sidebarTab by rememberSaveable { mutableIntStateOf(0) }
     var isManualSyncing by remember { mutableStateOf(false) }
     var activeOpCount by remember { mutableIntStateOf(0) }
@@ -502,24 +502,37 @@ fun HomeScreen(
         }
     }
 
+    // 1. Eager Fetch: Trigger DB load instantly when a swipe begins hitting a new target tab
     LaunchedEffect(pagerState.targetPage, tabs) {
+        if (tabs.isEmpty()) return@LaunchedEffect
         val targetTab = tabs.getOrNull(pagerState.targetPage) ?: return@LaunchedEffect
+        var needsFetch = false
+
+        enabledCals.forEach { cal ->
+            val shouldBeVisible = targetTab.hrefs.contains(cal.href)
+            if (cal.isVisible != shouldBeVisible) {
+                api.setCalendarVisibility(cal.href, shouldBeVisible)
+                needsFetch = true
+            }
+        }
 
         if (targetTab.isWriteTarget != null && targetTab.isWriteTarget != defaultCalHref) {
             api.setDefaultCalendar(targetTab.isWriteTarget)
-            onDataChanged()
         }
 
-        if (backendVisibleHrefs != targetTab.hrefs) {
-            val toUpdate = enabledCals.filter { cal ->
-                (cal.isVisible && !targetTab.hrefs.contains(cal.href)) ||
-                        (!cal.isVisible && targetTab.hrefs.contains(cal.href))
-            }
-            if (toUpdate.isNotEmpty()) {
-                toUpdate.forEach { cal ->
-                    api.setCalendarVisibility(cal.href, targetTab.hrefs.contains(cal.href))
-                }
-                updateTaskList()
+        if (needsFetch) {
+            updateTaskList()
+        }
+    }
+
+    // 2. Settled Sync: Update global Compose state safely after the swipe animation finishes
+    LaunchedEffect(pagerState.settledPage) {
+        if (!pagerState.isScrollInProgress) {
+            val settledTab = tabs.getOrNull(pagerState.settledPage) ?: return@LaunchedEffect
+            val writeCalMatches = defaultCalHref == settledTab.isWriteTarget || settledTab.isWriteTarget == null
+            val visibilityMatches = backendVisibleHrefs == settledTab.hrefs
+
+            if (!writeCalMatches || !visibilityMatches) {
                 onDataChanged()
             }
         }
@@ -823,7 +836,7 @@ fun HomeScreen(
                                         }
                                         onDataChanged()
                                         updateTaskList()
-                                        pendingTabId = "ALL" // Jump to ALL tab immediately
+                                        pendingTabId = "ALL"
                                         scope.launch { drawerState.close() }
                                     },
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -1021,11 +1034,9 @@ fun HomeScreen(
             }
 
             val headerTitle: @Composable () -> Unit = {
-                val writeCal = calendars.find { it.href == defaultCalHref }
-                val headerName = writeCal?.name ?: stringResource(R.string.local_label)
-                val headerColor = writeCal?.color?.let { parseHexColor(it) } ?: MaterialTheme.colorScheme.onSurface
-
                 val currentTab = tabs.getOrNull(pagerState.currentPage)
+                val headerName = currentTab?.name ?: stringResource(R.string.all_collections_short)
+
                 val activeCount = remember(tasks, currentTab) {
                     if (currentTab != null) {
                         tasks.count { !it.isDone && it.calendarHref in currentTab.hrefs }
@@ -1036,7 +1047,7 @@ fun HomeScreen(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable(onClickLabel = stringResource(R.string.show_all_collections)) {
-                        scope.launch { drawerState.open() } // Use header as a shortcut to drawer
+                        scope.launch { drawerState.open() }
                     }
                 ) {
                     Image(
@@ -1045,7 +1056,7 @@ fun HomeScreen(
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(Modifier.width(8.dp))
-                    Text(text = headerName, maxLines = 1, overflow = TextOverflow.Ellipsis, color = headerColor)
+                    Text(text = headerName, maxLines = 1, overflow = TextOverflow.Ellipsis, color = activeColor)
 
                     if (countText.isNotEmpty()) {
                         Text(
