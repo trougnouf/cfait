@@ -1,10 +1,3 @@
-// File: ./android/app/src/main/java/com/trougnouf/cfait/ui/HomeScreen.kt
-/*
-File: ./android/app/src/main/java/com/trougnouf/cfait/ui/HomeScreen.kt
-This file contains the HomeScreen composable with the random-jump behavior.
-Search-related state declarations were moved above `jumpToRandomTask` so the
-function can reference `searchQuery`.
-*/
 package com.trougnouf.cfait.ui
 
 import android.content.ClipData
@@ -15,20 +8,18 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -38,26 +29,24 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.hapticfeedback.HapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.*
 import kotlinx.coroutines.launch
@@ -72,13 +61,13 @@ fun ColoredOverflowDots() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     api: CfaitMobile,
     calendars: List<MobileCalendar>,
     defaultCalHref: String?,
-    defaultPriority: Int, // Accept the parameter
+    defaultPriority: Int,
     isLoading: Boolean,
     hasUnsynced: Boolean,
     autoScrollUid: String? = null,
@@ -88,7 +77,7 @@ fun HomeScreen(
     onSettings: () -> Unit,
     onTaskClick: (String) -> Unit,
     onDataChanged: () -> Unit,
-    onMigrateLocal: (String, String) -> Unit, // (sourceHref, targetHref)
+    onMigrateLocal: (String, String) -> Unit,
     onAutoScrollComplete: () -> Unit = {},
 ) {
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -100,10 +89,10 @@ fun HomeScreen(
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
     var isPullRefreshing by remember { mutableStateOf(false) }
 
-    // 1. Pager state for collection switching (ONLY visible calendars)
+    // 1. Pager state for collection switching (ALL enabled calendars, not just visible)
     val pagerItems = remember(calendars) {
-        val visibleCals = calendars.filter { !it.isDisabled && it.isVisible && it.href != "local://trash" }
-        listOf(null) + visibleCals // null represents "All Tasks"
+        val enabledCals = calendars.filter { !it.isDisabled && it.href != "local://trash" }
+        listOf(null) + enabledCals // null represents the "All" tab
     }
 
     val initialPage = remember(pagerItems, defaultCalHref) {
@@ -138,7 +127,6 @@ fun HomeScreen(
 
     // Highlighting State
     var highlightedUid by remember { mutableStateOf(autoScrollUid) }
-    // Trigger for scrolling to the highlighted item (separating 'Add' from 'Nav')
     var scrollTrigger by remember { mutableLongStateOf(0L) }
 
     LaunchedEffect(autoScrollUid) {
@@ -163,18 +151,16 @@ fun HomeScreen(
 
     LaunchedEffect(hasUnsynced) { localHasUnsynced = hasUnsynced }
 
-    // 2. Sync pager state with Rust core (Do NOT isolate, just set default for new tasks)
+    // Sync pager state with Rust core
     LaunchedEffect(pagerState.settledPage) {
         val selectedItem = pagerItems.getOrNull(pagerState.settledPage)
         if (selectedItem != null) {
-            // Update the target for the "+" button, but keep all other data loaded
             if (defaultCalHref != selectedItem.href) {
                 api.setDefaultCalendar(selectedItem.href)
                 onDataChanged()
             }
         } else {
-            // Optionally explicitly reset to local if "All Tasks" is selected,
-            // but doing nothing preserves the quick-add context.
+            // "All" tab selected: we don't force a default calendar change here.
         }
     }
 
@@ -182,15 +168,6 @@ fun HomeScreen(
     LaunchedEffect(pagerState.currentPage) {
         if (pagerState.currentPage != pagerState.targetPage) {
             hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        }
-    }
-
-    // Sync external navigation (Sidebar) into the Pager
-    LaunchedEffect(defaultCalHref, pagerItems) {
-        val targetIndex = pagerItems.indexOfFirst { it?.href == defaultCalHref }
-        val safeIndex = if (targetIndex >= 0) targetIndex else 0
-        if (pagerState.currentPage != safeIndex && !pagerState.isScrollInProgress) {
-            pagerState.animateScrollToPage(safeIndex)
         }
     }
 
@@ -218,7 +195,7 @@ fun HomeScreen(
     val listStates = remember { mutableStateMapOf<String, androidx.compose.foundation.lazy.LazyListState>() }
 
     // Get the active list state based on the current page
-    val activeListState: androidx.compose.foundation.lazy.LazyListState = remember(pagerState.currentPage, pagerItems) {
+    val activeListState = remember(pagerState.currentPage, pagerItems) {
         val key = pagerItems.getOrNull(pagerState.currentPage)?.href ?: "ALL_TASKS"
         listStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() }
     }
@@ -226,9 +203,7 @@ fun HomeScreen(
     var showScrollToTop by remember { mutableStateOf(false) }
     var lastScrollPosition by remember { mutableIntStateOf(0) }
 
-    // Flag to prevent the auto-hide logic from fighting the manual button press
     var isProgrammaticScroll by remember { mutableStateOf(false) }
-
     val scrollToTopIcon = remember { getRandomScrollToTopIcon() }
 
     // Color interpolation for swipe gestures (shared between title and tab indicator)
@@ -236,7 +211,6 @@ fun HomeScreen(
     val activeColor by derivedStateOf {
         val pageOffset = pagerState.currentPageOffsetFraction
         val currentIndex = pagerState.currentPage
-
         val targetIndex = if (pageOffset < 0) currentIndex - 1 else currentIndex + 1
         val safeTarget = targetIndex.coerceIn(0, pagerItems.lastIndex)
 
@@ -251,21 +225,19 @@ fun HomeScreen(
         val currentPosition =
             activeListState.firstVisibleItemIndex * 10000 + activeListState.firstVisibleItemScrollOffset
         val isScrollingUp =
-            currentPosition.compareTo(lastScrollPosition) < 0 && activeListState.firstVisibleItemIndex > 0
-        val isScrollingDown = currentPosition.compareTo(lastScrollPosition) > 0
+            currentPosition < lastScrollPosition && activeListState.firstVisibleItemIndex > 0
+        val isScrollingDown = currentPosition > lastScrollPosition
         lastScrollPosition = currentPosition
 
         if (activeListState.firstVisibleItemIndex == 0) {
             showScrollToTop = false
         } else if (isProgrammaticScroll) {
-            // Ignore scroll events caused by the FAB
             showScrollToTop = false
         } else if (isScrollingDown) {
             showScrollToTop = false
         } else if (isScrollingUp) {
             showScrollToTop = true
             kotlinx.coroutines.delay(3000)
-            // Only hide if we haven't started another interaction in the meantime
             if (showScrollToTop && !isProgrammaticScroll) {
                 showScrollToTop = false
             }
@@ -274,107 +246,41 @@ fun HomeScreen(
 
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
 
-    // Random Icon set for the Random-Jump action
-    // Expanded to match the Rust RANDOM_ICONS / Shared.kt list
     val randomIcons = remember {
         listOf(
-            NfIcons.DICE_D20,
-            NfIcons.DICE_D20_DUP,
-            NfIcons.DICE_D6,
-            NfIcons.DICE_MULTIPLE,
-            NfIcons.AUTO_FIX,
-            NfIcons.CRYSTAL_BALL,
-            NfIcons.ATOM,
-            NfIcons.CAT,
-            NfIcons.CAT_MD,
-            NfIcons.UNICORN,
-            NfIcons.UNICORN_VARIANT,
-            NfIcons.RAINBOW,
-            NfIcons.FRUIT_CHERRIES,
-            NfIcons.FRUIT_PINEAPPLE,
-            NfIcons.FRUIT_PEAR,
-            NfIcons.DOG,
-            NfIcons.PHOENIX,
-            NfIcons.LINUX,
-            NfIcons.TORTOISE,
-            NfIcons.FACE_SMILE_WINK,
-            NfIcons.ROBOT_LOVE_OUTLINE,
-            NfIcons.BOW_ARROW,
-            NfIcons.BULLSEYE_ARROW,
-            NfIcons.COINS,
-            NfIcons.COW,
-            NfIcons.DOLPHIN,
-            NfIcons.KIWI_BIRD,
-            NfIcons.DUCK,
-            NfIcons.FAE_TREE,
-            NfIcons.FA_TREE,
-            NfIcons.MD_TREE,
-            NfIcons.PLANT,
-            NfIcons.WIZARD_HAT,
-            NfIcons.STAR_SHOOTING_OUTLINE,
-            NfIcons.WEATHER_STARS,
-            NfIcons.KOALA,
-            NfIcons.SPIDER_THREAD,
-            NfIcons.SQUIRREL,
-            NfIcons.MUSHROOM_OUTLINE,
-            NfIcons.FLOWER,
-            NfIcons.BEE_FLOWER,
-            NfIcons.LINUX_FREEBSD,
-            NfIcons.BUG,
-            NfIcons.WEATHER_SUNNY,
-            NfIcons.FROG,
-            NfIcons.BINOCULARS,
-            NfIcons.ORANGE,
-            NfIcons.SNOWMAN,
-            NfIcons.GNU,
-            NfIcons.RUST,
-            NfIcons.R_BOX,
-            NfIcons.PEPPER_HOT,
-            NfIcons.SIGN_POST
+            NfIcons.DICE_D20, NfIcons.DICE_D20_DUP, NfIcons.DICE_D6, NfIcons.DICE_MULTIPLE,
+            NfIcons.AUTO_FIX, NfIcons.CRYSTAL_BALL, NfIcons.ATOM, NfIcons.CAT,
+            NfIcons.CAT_MD, NfIcons.UNICORN, NfIcons.UNICORN_VARIANT, NfIcons.RAINBOW,
+            NfIcons.FRUIT_CHERRIES, NfIcons.FRUIT_PINEAPPLE, NfIcons.FRUIT_PEAR, NfIcons.DOG,
+            NfIcons.PHOENIX, NfIcons.LINUX, NfIcons.TORTOISE, NfIcons.FACE_SMILE_WINK,
+            NfIcons.ROBOT_LOVE_OUTLINE, NfIcons.BOW_ARROW, NfIcons.BULLSEYE_ARROW, NfIcons.COINS,
+            NfIcons.COW, NfIcons.DOLPHIN, NfIcons.KIWI_BIRD, NfIcons.DUCK,
+            NfIcons.FAE_TREE, NfIcons.FA_TREE, NfIcons.MD_TREE, NfIcons.PLANT,
+            NfIcons.WIZARD_HAT, NfIcons.STAR_SHOOTING_OUTLINE, NfIcons.WEATHER_STARS, NfIcons.KOALA,
+            NfIcons.SPIDER_THREAD, NfIcons.SQUIRREL, NfIcons.MUSHROOM_OUTLINE, NfIcons.FLOWER,
+            NfIcons.BEE_FLOWER, NfIcons.LINUX_FREEBSD, NfIcons.BUG, NfIcons.WEATHER_SUNNY,
+            NfIcons.FROG, NfIcons.BINOCULARS, NfIcons.ORANGE, NfIcons.SNOWMAN,
+            NfIcons.GNU, NfIcons.RUST, NfIcons.R_BOX, NfIcons.PEPPER_HOT, NfIcons.SIGN_POST
         )
     }
     var currentRandomIcon by remember { mutableStateOf(randomIcons.random()) }
 
-    // Move search state above jumpToRandomTask so it is in scope
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
     var hasRequestedSearchFocus by rememberSaveable { mutableStateOf(false) }
 
-    /**
-     * Weighted random jump to a task.
-     * Priority 1 (High) = Weight 9
-     * Priority 9 (Low)  = Weight 1
-     * Priority 0 (None) = Default treated as 5
-     *
-     * Selection is delegated to the Rust core to keep weighting and filtering logic
-     * consistent across platforms (avoids duplicating algorithm in Kotlin).
-     *
-     * NOTE: This performs disk/network access and must run outside the UI thread.
-     */
     fun jumpToRandomTask() {
         if (tasks.isEmpty()) return
-
-        // Rotate the button icon for a visual cue (immediate, on UI thread)
         currentRandomIcon = randomIcons.random()
-
-        // Run the disk/network call asynchronously to avoid blocking UI
         scope.launch {
-            // Delegate selection to Rust core to ensure consistent weighting logic
-            // and filtering (ignoring done tasks, etc.)
             val targetUid = try {
-                api.getRandomTaskUid(
-                    filterTags.toList(),
-                    filterLocations.toList(),
-                    searchQuery
-                )
+                api.getRandomTaskUid(filterTags.toList(), filterLocations.toList(), searchQuery)
             } catch (_: Exception) {
                 null
             }
-
             if (targetUid != null) {
                 highlightedUid = targetUid
-                // Trigger scrolling to the highlighted item
                 scrollTrigger++
             }
         }
@@ -396,11 +302,8 @@ fun HomeScreen(
         calendars.associate { it.href to (it.color?.let { hex -> parseHexColor(hex) } ?: Color.Gray) }
     }
 
-    // Build a map for quick parent lookup
     val taskMap = remember(tasks) { tasks.associateBy { it.uid } }
 
-    // Build a map of incoming relations (which tasks are related TO this task)
-    // Maps taskUid -> list of UIDs that are related to it
     val incomingRelationsMap = remember(tasks) {
         val map = mutableMapOf<String, MutableList<String>>()
         tasks.forEach { task ->
@@ -417,23 +320,13 @@ fun HomeScreen(
         enabled = isSearchActive || searchQuery.isNotBlank() || yankedUid != null || filterTags.isNotEmpty() || filterLocations.isNotEmpty()
     ) {
         when {
-            // 1) If the search UI is active, exit it (like Escape on desktop).
-            isSearchActive -> {
-                isSearchActive = false
-            }
-
-            // 2) If a task is yanked, clear it next.
+            isSearchActive -> isSearchActive = false
             yankedUid != null -> {
                 yankedUid = null
                 yankLockActive = false
             }
 
-            // 3) If there's a search query text, clear it next.
-            searchQuery.isNotBlank() -> {
-                searchQuery = ""
-            }
-
-            // 4) Finally clear tag/location filters.
+            searchQuery.isNotBlank() -> searchQuery = ""
             filterTags.isNotEmpty() || filterLocations.isNotEmpty() -> {
                 filterTags = emptySet()
                 filterLocations = emptySet()
@@ -444,7 +337,6 @@ fun HomeScreen(
     fun updateTaskList() {
         scope.launch {
             try {
-                // 2. Fetch new view data
                 val viewData = api.getViewTasks(
                     filterTags.toList(),
                     filterLocations.toList(),
@@ -461,16 +353,9 @@ fun HomeScreen(
         }
     }
 
-    // React to changes in filters, sync status, AND expanded groups
     LaunchedEffect(
-        searchQuery,
-        filterTags,
-        filterLocations,
-        isLoading,
-        calendars,
-        refreshTick,
-        expandedGroups,
-        matchAllCategories
+        searchQuery, filterTags, filterLocations, isLoading,
+        calendars, refreshTick, expandedGroups, matchAllCategories
     ) {
         updateTaskList()
     }
@@ -517,19 +402,14 @@ fun HomeScreen(
         }
     }
 
-    // Scroll Logic: Handles both automatic navigation and manual additions
     LaunchedEffect(scrollTrigger, autoScrollUid, tasks) {
         if (highlightedUid != null && tasks.isNotEmpty()) {
             val index = tasks.indexOfFirst { it.uid == highlightedUid }
             if (index >= 0) {
                 if (scrollTrigger > 0) {
-                    // Manual Add Case: Use SNAP to ensure item is visible even if layout is resizing
-                    // This fixes the "Hidden behind keyboard" issue robustly
                     activeListState.scrollToItem(index)
-                    // Reset trigger to avoid repeat scrolling
                     scrollTrigger = 0
                 } else if (autoScrollUid != null) {
-                    // Navigation Case: Smooth scroll is preferred here
                     activeListState.animateScrollToItem(index)
                     kotlinx.coroutines.delay(2000)
                     onAutoScrollComplete()
@@ -541,10 +421,9 @@ fun HomeScreen(
     fun toggleTask(task: MobileTask) {
         val newIsDone = !task.isDone
         val newStatus = if (newIsDone) "Completed" else "NeedsAction"
-        tasks =
-            tasks.map {
-                if (it.uid == task.uid) it.copy(isDone = newIsDone, statusString = newStatus, isPaused = false) else it
-            }
+        tasks = tasks.map {
+            if (it.uid == task.uid) it.copy(isDone = newIsDone, statusString = newStatus, isPaused = false) else it
+        }
         scope.launch {
             activeOpCount++
             try {
@@ -574,57 +453,33 @@ fun HomeScreen(
             newTaskText = ""
             updateTaskList()
         } else if ((text.startsWith("@@") || text.startsWith("loc:")) && !text.contains(" ") && !isAliasDef) {
-            val loc =
-                if (text.startsWith("@@")) {
-                    text.removePrefix("@@")
-                } else {
-                    text.removePrefix("loc:")
-                }
-            val cleanLoc = loc.replace("\"", "")
-
-            filterLocations = setOf(cleanLoc)
+            val loc = if (text.startsWith("@@")) text.removePrefix("@@") else text.removePrefix("loc:")
+            filterLocations = setOf(loc.replace("\"", ""))
             sidebarTab = 2
             newTaskText = ""
             updateTaskList()
         } else {
             newTaskText = ""
             scope.launch {
-                // Keyboard remains open for batch entry
-
                 activeOpCount++
                 try {
                     val newUid = api.addTaskSmart(text)
-
                     if (creatingChildUid != null) {
                         api.setParent(newUid, creatingChildUid!!)
-                        if (!childLockActive) {
-                            creatingChildUid = null
-                        }
+                        if (!childLockActive) creatingChildUid = null
                     }
-
-                    // 1. Highlight the new task
                     highlightedUid = newUid
-
                     onDataChanged()
                     lastSyncFailed = false
                     try {
-                        // 2. Fetch new view data
                         val viewData = api.getViewTasks(
-                            filterTags.toList(),
-                            filterLocations.toList(),
-                            searchQuery,
-                            expandedGroups.toList(),
-                            matchAllCategories
+                            filterTags.toList(), filterLocations.toList(), searchQuery,
+                            expandedGroups.toList(), matchAllCategories
                         )
                         tasks = viewData.tasks
                         tags = viewData.tags
                         locations = viewData.locations
-
-                        // 3. Trigger Scroll
-                        // Incrementing scrollTrigger forces the LaunchedEffect to run
-                        // and execute scrollToItem (Snap)
                         scrollTrigger++
-
                     } catch (_: Exception) {
                     }
                 } catch (_: Exception) {
@@ -637,82 +492,49 @@ fun HomeScreen(
         }
     }
 
-    fun onTaskAction(
-        action: String,
-        task: MobileTask,
-    ) {
+    fun onTaskAction(action: String, task: MobileTask) {
         if (action == "move") {
-            taskToMove = task
-            return
+            taskToMove = task; return
         }
-
         if (action == "create_child") {
             creatingChildUid = task.uid
             yankedUid = null
-
-            // Pre-fill the input field with parent tags and location
             val sb = StringBuilder()
-
-            // Helper to quote values containing spaces for smart syntax
             fun quote(s: String): String =
                 if (s.contains(" ") || s.contains("\"")) "\"${s.replace("\"", "\\\"")}\"" else s
-
-            task.categories.forEach { cat ->
-                sb.append("#${quote(cat)} ")
-            }
-            task.location?.let { loc ->
-                sb.append("@@${quote(loc)} ")
-            }
+            task.categories.forEach { cat -> sb.append("#${quote(cat)} ") }
+            task.location?.let { loc -> sb.append("@@${quote(loc)} ") }
             newTaskText = sb.toString()
             return
         }
 
-        val updatedList =
-            tasks
-                .map { t ->
-                    if (t.uid == task.uid) {
-                        when (action) {
-                            "delete" -> null
-                            "cancel" -> t.copy(statusString = "Cancelled", isDone = true)
-                            "playpause" -> {
-                                if (t.statusString == "InProcess") {
-                                    t.copy(statusString = "NeedsAction", isPaused = true)
-                                } else {
-                                    t.copy(statusString = "InProcess", isPaused = false)
-                                }
-                            }
+        val updatedList = tasks.map { t ->
+            if (t.uid == task.uid) {
+                when (action) {
+                    "delete" -> null
+                    "cancel" -> t.copy(statusString = "Cancelled", isDone = true)
+                    "playpause" -> if (t.statusString == "InProcess") t.copy(
+                        statusString = "NeedsAction",
+                        isPaused = true
+                    ) else t.copy(statusString = "InProcess", isPaused = false)
 
-                            "stop" -> t.copy(statusString = "NeedsAction", isPaused = false)
-                            "prio_up" -> {
-                                var p = t.priority.toInt()
-                                // If unset, start at passed defaultPriority and apply the delta immediately.
-                                // Otherwise increase importance (decrease number).
-                                if (p == 0) {
-                                    p = (defaultPriority - 1).coerceAtLeast(1)
-                                } else if (p > 1) {
-                                    p -= 1
-                                }
-                                t.copy(priority = p.toUByte())
-                            }
-
-                            "prio_down" -> {
-                                var p = t.priority.toInt()
-                                // If unset, start at passed defaultPriority and apply the delta immediately.
-                                // Otherwise decrease importance (increase number).
-                                if (p == 0) {
-                                    p = (defaultPriority + 1).coerceAtMost(9)
-                                } else if (p < 9) {
-                                    p += 1
-                                }
-                                t.copy(priority = p.toUByte())
-                            }
-
-                            else -> t
-                        }
-                    } else {
-                        t
+                    "stop" -> t.copy(statusString = "NeedsAction", isPaused = false)
+                    "prio_up" -> {
+                        var p = t.priority.toInt()
+                        if (p == 0) p = (defaultPriority - 1).coerceAtLeast(1) else if (p > 1) p -= 1
+                        t.copy(priority = p.toUByte())
                     }
-                }.filterNotNull()
+
+                    "prio_down" -> {
+                        var p = t.priority.toInt()
+                        if (p == 0) p = (defaultPriority + 1).coerceAtMost(9) else if (p < 9) p += 1
+                        t.copy(priority = p.toUByte())
+                    }
+
+                    else -> t
+                }
+            } else t
+        }.filterNotNull()
         tasks = updatedList
 
         scope.launch {
@@ -727,34 +549,21 @@ fun HomeScreen(
                     "prio_down" -> api.changePriority(task.uid, -1)
                     "yank" -> {
                         yankedUid = task.uid
-                        val textToCopy = if (task.description.isEmpty()) {
-                            task.smartString
-                        } else {
-                            "${task.smartString}\n\n${task.description}"
-                        }
-                        val clipData = ClipData.newPlainText("task_details", textToCopy)
-                        clipboard.setClipEntry(ClipEntry(clipData))
+                        val textToCopy =
+                            if (task.description.isEmpty()) task.smartString else "${task.smartString}\n\n${task.description}"
+                        clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("task_details", textToCopy)))
                     }
 
-                    "block" -> {
-                        if (yankedUid != null) {
-                            api.addDependency(task.uid, yankedUid!!)
-                            if (!yankLockActive) yankedUid = null
-                        }
+                    "block" -> if (yankedUid != null) {
+                        api.addDependency(task.uid, yankedUid!!); if (!yankLockActive) yankedUid = null
                     }
 
-                    "child" -> {
-                        if (yankedUid != null) {
-                            api.setParent(task.uid, yankedUid!!)
-                            if (!yankLockActive) yankedUid = null
-                        }
+                    "child" -> if (yankedUid != null) {
+                        api.setParent(task.uid, yankedUid!!); if (!yankLockActive) yankedUid = null
                     }
 
-                    "related" -> {
-                        if (yankedUid != null) {
-                            api.addRelatedTo(task.uid, yankedUid!!)
-                            if (!yankLockActive) yankedUid = null
-                        }
+                    "related" -> if (yankedUid != null) {
+                        api.addRelatedTo(task.uid, yankedUid!!); if (!yankLockActive) yankedUid = null
                     }
                 }
                 updateTaskList()
@@ -775,44 +584,33 @@ fun HomeScreen(
 
     if (taskToMove != null) {
         val targetCals =
-            remember(calendars) {
-                calendars.filter { it.href != taskToMove!!.calendarHref && !it.isDisabled }
-            }
+            remember(calendars) { calendars.filter { it.href != taskToMove!!.calendarHref && !it.isDisabled } }
         AlertDialog(
             onDismissRequest = { taskToMove = null },
             title = { Text(stringResource(R.string.move_task_title)) },
             text = {
-                Column {
-                    Text(
-                        stringResource(R.string.select_destination),
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    LazyColumn {
-                        items(targetCals) { cal ->
-                            ListItem(
-                                headlineContent = { Text(cal.name) },
-                                leadingContent = { NfIcon(NfIcons.CALENDAR, 16.sp) },
-                                modifier =
-                                    Modifier.clickable {
-                                        scope.launch {
-                                            try {
-                                                api.moveTask(taskToMove!!.uid, cal.href)
-                                                taskToMove = null
-                                                updateTaskList()
-                                                onDataChanged()
-                                            } catch (e: Exception) {
-                                                Toast.makeText(
-                                                    context,
-                                                    context.getString(R.string.move_failed, e.message ?: ""),
-                                                    Toast.LENGTH_SHORT
-                                                )
-                                                    .show()
-                                            }
-                                        }
-                                    },
-                            )
-                        }
+                LazyColumn {
+                    items(targetCals) { cal ->
+                        ListItem(
+                            headlineContent = { Text(cal.name) },
+                            leadingContent = { NfIcon(NfIcons.CALENDAR, 16.sp) },
+                            modifier = Modifier.clickable {
+                                scope.launch {
+                                    try {
+                                        api.moveTask(taskToMove!!.uid, cal.href)
+                                        taskToMove = null
+                                        updateTaskList()
+                                        onDataChanged()
+                                    } catch (e: Exception) {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.move_failed, e.message ?: ""),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            },
+                        )
                     }
                 }
             },
@@ -836,12 +634,11 @@ fun HomeScreen(
                             ListItem(
                                 headlineContent = { Text(cal.name) },
                                 leadingContent = { NfIcon(NfIcons.CALENDAR, 16.sp) },
-                                modifier =
-                                    Modifier.clickable {
-                                        exportSourceHref = cal.href
-                                        showExportSourceDialog = false
-                                        showExportDestDialog = true
-                                    },
+                                modifier = Modifier.clickable {
+                                    exportSourceHref = cal.href
+                                    showExportSourceDialog = false
+                                    showExportDestDialog = true
+                                },
                             )
                         }
                     }
@@ -857,10 +654,7 @@ fun HomeScreen(
 
     if (showExportDestDialog) {
         AlertDialog(
-            onDismissRequest = {
-                showExportDestDialog = false
-                exportSourceHref = null
-            },
+            onDismissRequest = { showExportDestDialog = false; exportSourceHref = null },
             title = { Text(stringResource(R.string.export_select_destination_collection)) },
             text = {
                 Column {
@@ -883,25 +677,21 @@ fun HomeScreen(
                             ListItem(
                                 headlineContent = { Text(cal.name) },
                                 leadingContent = { NfIcon(NfIcons.CALENDAR, 16.sp) },
-                                modifier =
-                                    Modifier.clickable {
-                                        exportSourceHref?.let { sourceHref ->
-                                            onMigrateLocal(sourceHref, cal.href)
-                                        }
-                                        showExportDestDialog = false
-                                        exportSourceHref = null
-                                    },
+                                modifier = Modifier.clickable {
+                                    exportSourceHref?.let { sourceHref -> onMigrateLocal(sourceHref, cal.href) }
+                                    showExportDestDialog = false
+                                    exportSourceHref = null
+                                },
                             )
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showExportDestDialog = false
-                    exportSourceHref = null
-                }) {
-                    Text(androidx.compose.ui.res.stringResource(R.string.cancel))
+                TextButton(onClick = { showExportDestDialog = false; exportSourceHref = null }) {
+                    Text(
+                        stringResource(R.string.cancel)
+                    )
                 }
             },
         )
@@ -916,38 +706,30 @@ fun HomeScreen(
                         Tab(
                             selected = sidebarTab == 0,
                             onClick = { sidebarTab = 0 },
-                            icon = { NfIcon(NfIcons.CALENDARS_VIEW) },
-                        )
+                            icon = { NfIcon(NfIcons.CALENDARS_VIEW) })
                         Tab(
                             selected = sidebarTab == 1,
                             onClick = { sidebarTab = 1 },
-                            icon = { NfIcon(NfIcons.TAGS_VIEW) },
-                        )
+                            icon = { NfIcon(NfIcons.TAGS_VIEW) })
                         Tab(
                             selected = sidebarTab == 2,
                             onClick = { sidebarTab = 2 },
-                            icon = { NfIcon(locationTabIcon) },
-                        )
+                            icon = { NfIcon(locationTabIcon) })
                     }
 
-                    // --- STICKY HEADERS SECTION ---
                     if (sidebarTab == 1) {
                         val isAllTagsSelected = filterTags.isEmpty()
-                        // Use Filled TAG if selected (active), otherwise Outline
                         val iconStr = if (isAllTagsSelected) NfIcons.TAG else NfIcons.TAG_OUTLINE
 
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Left Side: All Tasks / Clear
                             Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .background(
-                                        if (isAllTagsSelected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f) else Color.Transparent,
-                                        androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
-                                    )
+                                modifier = Modifier.weight(1f).background(
+                                    if (isAllTagsSelected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f) else Color.Transparent,
+                                    androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                )
                                     .clickable { filterTags = emptySet(); scope.launch { drawerState.close() } }
                                     .padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
@@ -956,23 +738,17 @@ fun HomeScreen(
                                 Spacer(Modifier.width(12.dp))
                                 Text(stringResource(R.string.all_tasks), fontSize = 14.sp)
                             }
-
                             Spacer(Modifier.width(8.dp))
-
-                            // Right Side: AND / OR toggle
                             Surface(
                                 color = if (matchAllCategories) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer,
                                 shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
-                                modifier = Modifier.clickable {
-                                    matchAllCategories = !matchAllCategories
-                                }
+                                modifier = Modifier.clickable { matchAllCategories = !matchAllCategories }
                             ) {
                                 Text(
                                     text = if (matchAllCategories) stringResource(R.string.match_and) else stringResource(
                                         R.string.match_or
                                     ),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp, fontWeight = FontWeight.Bold,
                                     color = if (matchAllCategories) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
                                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                                 )
@@ -981,7 +757,6 @@ fun HomeScreen(
                         HorizontalDivider()
                     } else if (sidebarTab == 2) {
                         val isAllLocsSelected = filterLocations.isEmpty()
-                        // Use Filled MAP if selected (active), otherwise Outline (MAP_O)
                         val iconStr = if (isAllLocsSelected) NfIcons.MAP else NfIcons.MAP_O
 
                         CompactTagRow(
@@ -989,18 +764,12 @@ fun HomeScreen(
                             count = null,
                             color = MaterialTheme.colorScheme.onSurface,
                             isSelected = isAllLocsSelected,
-                            icon = iconStr, // Dynamic Icon
-                            onClick = {
-                                filterLocations = emptySet()
-                            },
-                            onFocus = {
-                                filterLocations = emptySet()
-                                scope.launch { drawerState.close() }
-                            }
+                            icon = iconStr,
+                            onClick = { filterLocations = emptySet() },
+                            onFocus = { filterLocations = emptySet(); scope.launch { drawerState.close() } }
                         )
                         HorizontalDivider()
                     }
-                    // -----------------------------
 
                     LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(bottom = 24.dp)) {
                         if (sidebarTab == 0) {
@@ -1008,13 +777,16 @@ fun HomeScreen(
                                 TextButton(
                                     onClick = {
                                         calendars.forEach {
-                                            // Don't unhide trash unless it is the active/default calendar
                                             if (it.href != "local://trash" || defaultCalHref == "local://trash") {
                                                 api.setCalendarVisibility(it.href, true)
                                             }
                                         }
                                         onDataChanged()
                                         updateTaskList()
+                                        scope.launch {
+                                            pagerState.animateScrollToPage(0)
+                                            drawerState.close()
+                                        }
                                     },
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                                 ) { Text(androidx.compose.ui.res.stringResource(R.string.show_all_collections)) }
@@ -1024,17 +796,11 @@ fun HomeScreen(
                                 val calColor = cal.color?.let { parseHexColor(it) } ?: Color.Gray
                                 val isDefault = cal.href == defaultCalHref
                                 val iconChar =
-                                    if (isDefault) {
-                                        NfIcons.WRITE_TARGET
-                                    } else if (cal.isVisible) {
-                                        NfIcons.VISIBLE
-                                    } else {
-                                        NfIcons.HIDDEN
-                                    }
+                                    if (isDefault) NfIcons.WRITE_TARGET else if (cal.isVisible) NfIcons.VISIBLE else NfIcons.HIDDEN
                                 val iconColor = if (isDefault || cal.isVisible) calColor else Color.Gray
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     IconButton(
                                         onClick = {
@@ -1055,36 +821,34 @@ fun HomeScreen(
                                             scope.launch { drawerState.close() }
                                         },
                                         modifier = Modifier.weight(1f),
-                                        colors =
-                                            ButtonDefaults.textButtonColors(
-                                                contentColor = if (isDefault) calColor else MaterialTheme.colorScheme.onSurface,
-                                            ),
+                                        colors = ButtonDefaults.textButtonColors(contentColor = if (isDefault) calColor else MaterialTheme.colorScheme.onSurface)
                                     ) {
                                         Text(
                                             cal.name,
                                             modifier = Modifier.fillMaxWidth(),
-                                            textAlign = TextAlign.Start,
+                                            textAlign = TextAlign.Start
                                         )
                                     }
                                     IconButton(onClick = {
                                         scope.launch {
                                             api.isolateCalendar(cal.href)
                                             onDataChanged()
+                                            val targetIdx = pagerItems.indexOfFirst { it?.href == cal.href }
+                                            if (targetIdx >= 0) {
+                                                pagerState.animateScrollToPage(targetIdx)
+                                            }
                                             drawerState.close()
                                         }
                                     }) { NfIcon(NfIcons.ARROW_RIGHT, size = 18.sp) }
                                 }
                             }
                         } else if (sidebarTab == 1) {
-                            // "All Tasks" item moved out of here to Sticky Section above
                             items(tags) { tag ->
                                 val isUncat = tag.isUncategorized
                                 val displayName = if (isUncat) "Uncategorized" else "#${tag.name}"
                                 val targetKey = if (isUncat) ":::uncategorized:::" else tag.name
                                 val isSelected = filterTags.contains(targetKey)
                                 val color = if (isUncat) Color.Gray else getTagColor(tag.name, isDark)
-
-                                // GUI icons style
                                 val iconStr = if (isSelected) NfIcons.TAG_CHECK else NfIcons.TAG_OUTLINE
 
                                 CompactTagRow(
@@ -1094,25 +858,14 @@ fun HomeScreen(
                                     isSelected = isSelected,
                                     icon = iconStr,
                                     onClick = {
-                                        // Toggle selection logic
-                                        filterTags = if (isSelected) {
-                                            filterTags - targetKey
-                                        } else {
-                                            filterTags + targetKey
-                                        }
+                                        filterTags = if (isSelected) filterTags - targetKey else filterTags + targetKey
                                     },
-                                    onFocus = {
-                                        // Focus logic: Exclusive select and close drawer
-                                        filterTags = setOf(targetKey)
-                                        scope.launch { drawerState.close() }
-                                    }
+                                    onFocus = { filterTags = setOf(targetKey); scope.launch { drawerState.close() } }
                                 )
                             }
                         } else {
-                            // "All Locations" item moved out of here to Sticky Section above
                             items(locations) { loc ->
                                 val isSelected = filterLocations.contains(loc.name)
-                                // GUI icons style: Gray MAP_PIN if unselected, Amber CHECK_CIRCLE if selected
                                 val iconStr = if (isSelected) NfIcons.CHECK_CIRCLE else NfIcons.MAP_PIN
                                 val itemColor = if (isSelected) Color(0xFFFFB300) else Color.Gray
 
@@ -1122,18 +875,12 @@ fun HomeScreen(
                                     color = itemColor,
                                     isSelected = isSelected,
                                     onClick = {
-                                        // Toggle selection logic
-                                        filterLocations = if (isSelected) {
-                                            filterLocations - loc.name
-                                        } else {
-                                            filterLocations + loc.name
-                                        }
+                                        filterLocations =
+                                            if (isSelected) filterLocations - loc.name else filterLocations + loc.name
                                     },
                                     icon = iconStr,
                                     onFocus = {
-                                        // Focus logic
-                                        filterLocations = setOf(loc.name)
-                                        scope.launch { drawerState.close() }
+                                        filterLocations = setOf(loc.name); scope.launch { drawerState.close() }
                                     }
                                 )
                             }
@@ -1141,13 +888,13 @@ fun HomeScreen(
                         item {
                             Box(
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 150.dp).padding(vertical = 32.dp),
-                                contentAlignment = Alignment.Center,
+                                contentAlignment = Alignment.Center
                             ) {
                                 Image(
                                     painter = painterResource(id = R.drawable.ic_launcher_foreground),
                                     contentDescription = "Cfait Logo",
                                     modifier = Modifier.size(120.dp),
-                                    contentScale = ContentScale.Fit,
+                                    contentScale = ContentScale.Fit
                                 )
                             }
                         }
@@ -1156,67 +903,61 @@ fun HomeScreen(
             }
         },
     ) {
+        val currentVisualItem = pagerItems.getOrNull(pagerState.currentPage)
+        val activeCalName = currentVisualItem?.name ?: stringResource(R.string.all_collections_short)
+
+        val tabsContent: @Composable () -> Unit = {
+            if (tabPosition != "hidden") {
+                ScrollableTabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    edgePadding = 0.dp,
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.height(40.dp),
+                    divider = {},
+                    indicator = { tabPositions ->
+                        if (pagerState.currentPage < tabPositions.size) {
+                            TabRowDefaults.PrimaryIndicator(
+                                modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
+                                color = activeColor
+                            )
+                        }
+                    }
+                ) {
+                    pagerItems.forEachIndexed { index, cal ->
+                        val title = cal?.name ?: stringResource(R.string.all_collections_short)
+                        val targetColor = cal?.color?.let { parseHexColor(it) } ?: MaterialTheme.colorScheme.onSurface
+
+                        Tab(
+                            selected = pagerState.currentPage == index,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(index) } },
+                            modifier = Modifier.padding(horizontal = 0.dp),
+                            text = {
+                                Text(
+                                    text = title,
+                                    color = if (pagerState.currentPage == index) targetColor else Color.Gray,
+                                    fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
         val headerTitle: @Composable () -> Unit = {
             val textMeasurer = rememberTextMeasurer()
             val density = LocalDensity.current
 
-            // 1. Bind strictly to the visual page, NOT the backend default
-            val currentVisualItem = pagerItems.getOrNull(pagerState.currentPage)
-            val activeCalName = currentVisualItem?.name ?: stringResource(R.string.all_tasks)
-
-            // 2. Use the shared activeColor from outer scope
-
-            // 3. Accurately count tasks for the current page
             val activeCount = remember(tasks, currentVisualItem) {
                 if (currentVisualItem == null) {
-                    tasks.count { !it.isDone }
+                    val visibleHrefs = calendars.filter { it.isVisible }.map { it.href }.toSet()
+                    tasks.count { !it.isDone && it.calendarHref in visibleHrefs }
                 } else {
                     tasks.count { !it.isDone && it.calendarHref == currentVisualItem.href }
                 }
             }
             val countText = if (tasks.isNotEmpty()) "($activeCount)" else ""
-
-            val tabsContent: @Composable () -> Unit = {
-                if (tabPosition != "hidden") {
-                    ScrollableTabRow(
-                        selectedTabIndex = pagerState.currentPage,
-                        edgePadding = 8.dp,
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.height(44.dp),
-                        divider = {},
-                        indicator = { tabPositions ->
-                            if (pagerState.currentPage < tabPositions.size) {
-                                TabRowDefaults.PrimaryIndicator(
-                                    modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
-                                    color = activeColor
-                                )
-                            }
-                        }
-                    ) {
-                        pagerItems.forEachIndexed { index, cal ->
-                            val title = cal?.name ?: stringResource(R.string.all_tasks)
-                            val targetColor =
-                                cal?.color?.let { parseHexColor(it) } ?: MaterialTheme.colorScheme.onSurface
-
-                            Tab(
-                                selected = pagerState.currentPage == index,
-                                onClick = {
-                                    scope.launch { pagerState.animateScrollToPage(index) }
-                                },
-                                modifier = Modifier.padding(horizontal = 4.dp),
-                                text = {
-                                    Text(
-                                        text = title,
-                                        color = if (pagerState.currentPage == index) targetColor else Color.Gray,
-                                        fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal,
-                                        fontSize = 14.sp
-                                    )
-                                }
-                            )
-                        }
-                    }
-                }
-            }
 
             val otherVisible = calendars.filter {
                 !it.isDisabled && it.isVisible && it.href != currentVisualItem?.href
@@ -1225,9 +966,7 @@ fun HomeScreen(
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val maxWidth = constraints.maxWidth.toFloat()
 
-                val textStyle = LocalTextStyle.current.copy(
-                    fontSize = 18.sp
-                )
+                val textStyle = LocalTextStyle.current.copy(fontSize = 18.sp)
                 val smallTextStyle = LocalTextStyle.current.copy(
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
@@ -1257,9 +996,7 @@ fun HomeScreen(
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable(
-                        onClickLabel = stringResource(R.string.show_all_collections)
-                    ) {
+                    modifier = Modifier.clickable(onClickLabel = stringResource(R.string.show_all_collections)) {
                         scope.launch {
                             val areAllVisible = calendars.filter {
                                 it.href != "local://trash" && it.href != "local://recovery" && !it.isDisabled
@@ -1272,26 +1009,16 @@ fun HomeScreen(
                     Image(
                         painter = painterResource(id = R.drawable.ic_launcher_foreground),
                         contentDescription = null,
-                        modifier = Modifier.size(28.dp),
+                        modifier = Modifier.size(28.dp)
                     )
                     Spacer(Modifier.width(8.dp))
-
-                    Text(
-                        text = activeCalName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = activeColor,
-                    )
+                    Text(text = activeCalName, maxLines = 1, overflow = TextOverflow.Ellipsis, color = activeColor)
 
                     if (otherVisible.isNotEmpty()) {
                         if (otherVisible.size <= maxVisiblePlus) {
                             otherVisible.forEach { cal ->
                                 val c = cal.color?.let { parseHexColor(it) } ?: Color.Gray
-                                Text(
-                                    text = "+",
-                                    color = c,
-                                    fontSize = 13.sp
-                                )
+                                Text(text = "+", color = c, fontSize = 13.sp)
                             }
                         } else {
                             val spaceWithDots = availableForPlus - dotsResult.size.width
@@ -1302,22 +1029,17 @@ fun HomeScreen(
 
                             otherVisible.take(visibleCount).forEach { cal ->
                                 val c = cal.color?.let { parseHexColor(it) } ?: Color.Gray
-                                Text(
-                                    text = "+",
-                                    color = c,
-                                    fontSize = 13.sp
-                                )
+                                Text(text = "+", color = c, fontSize = 13.sp)
                             }
                             ColoredOverflowDots()
                         }
                     }
-
                     if (countText.isNotEmpty()) {
                         Text(
                             text = " $countText",
                             fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            maxLines = 1,
+                            maxLines = 1
                         )
                     }
                 }
@@ -1338,70 +1060,47 @@ fun HomeScreen(
                             }
                         },
                         actions = {
-                            // Use a single Row with negative spacing to control all icon gaps uniformly
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy((-12).dp)
                             ) {
-                                IconButton(onClick = { jumpToRandomTask() }) {
-                                    NfIcon(currentRandomIcon, 20.sp)
-                                }
+                                IconButton(onClick = { jumpToRandomTask() }) { NfIcon(currentRandomIcon, 20.sp) }
                                 IconButton(onClick = {
                                     isSearchActive = !isSearchActive
                                     if (!isSearchActive) {
-                                        searchQuery = ""
-                                        hasRequestedSearchFocus = false
-                                        keyboardController?.hide()
+                                        searchQuery = ""; hasRequestedSearchFocus = false; keyboardController?.hide()
                                     }
-                                }) {
-                                    NfIcon(if (isSearchActive) NfIcons.SEARCH_STOP else NfIcons.SEARCH, 18.sp)
-                                }
+                                }) { NfIcon(if (isSearchActive) NfIcons.SEARCH_STOP else NfIcons.SEARCH, 18.sp) }
 
                                 if (isLoading || isManualSyncing || activeOpCount > 0 || isPullRefreshing) {
-                                    // Wrap the spinner in a Box that mimics the size of an IconButton (48dp)
-                                    Box(
-                                        modifier = Modifier.size(48.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(24.dp),
-                                            strokeWidth = 2.dp
-                                        )
+                                    Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                                     }
                                 } else {
-                                    val (icon, iconColor) =
-                                        when {
-                                            localHasUnsynced -> Pair(NfIcons.SYNC_ALERT, Color(0xFFEB0000))
-                                            lastSyncFailed -> Pair(NfIcons.SYNC_OFF, Color(0xFFFFB300))
-                                            else -> Pair(NfIcons.REFRESH, MaterialTheme.colorScheme.onSurface)
-                                        }
-
-                                    IconButton(onClick = { handleRefresh() }) {
-                                        NfIcon(icon, 18.sp, color = iconColor)
+                                    val (icon, iconColor) = when {
+                                        localHasUnsynced -> Pair(NfIcons.SYNC_ALERT, Color(0xFFEB0000))
+                                        lastSyncFailed -> Pair(NfIcons.SYNC_OFF, Color(0xFFFFB300))
+                                        else -> Pair(NfIcons.REFRESH, MaterialTheme.colorScheme.onSurface)
                                     }
+                                    IconButton(onClick = { handleRefresh() }) { NfIcon(icon, 18.sp, color = iconColor) }
                                 }
                                 IconButton(onClick = onSettings) { NfIcon(NfIcons.SETTINGS, 20.sp) }
                             }
                         },
                     )
-
                     if (isSearchActive) {
                         LaunchedEffect(isSearchActive) {
                             if (!hasRequestedSearchFocus) {
-                                searchFocusRequester.requestFocus()
-                                keyboardController?.show()
-                                hasRequestedSearchFocus = true
+                                searchFocusRequester.requestFocus(); keyboardController?.show(); hasRequestedSearchFocus =
+                                    true
                             }
                         }
                         TextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
                             placeholder = { Text(stringResource(R.string.search_placeholder), fontSize = 14.sp) },
-                            singleLine = true,
-                            textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
-                            visualTransformation = remember(isDark) {
-                                SmartSyntaxTransformation(api, isDark, true)
-                            },
+                            singleLine = true, textStyle = LocalTextStyle.current.copy(fontSize = 14.sp),
+                            visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark, true) },
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -1409,13 +1108,10 @@ fun HomeScreen(
                                 unfocusedIndicatorColor = Color.Transparent,
                             ),
                             shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
                                 .focusRequester(searchFocusRequester),
                         )
                     }
-
                     if (tabPosition == "top") {
                         tabsContent()
                     }
@@ -1427,259 +1123,211 @@ fun HomeScreen(
                         tabsContent()
                         HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                     }
-                    bottomBar = {
-                        Column {
-                            if (creatingChildTask != null) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                                    modifier = Modifier.fillMaxWidth()
+                    if (creatingChildTask != null) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                NfIcon(NfIcons.CHILD, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    stringResource(R.string.new_child_of, creatingChildTask.summary),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(
+                                    onClick = { childLockActive = !childLockActive },
+                                    modifier = Modifier.size(24.dp)
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        NfIcon(NfIcons.CHILD, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            stringResource(R.string.new_child_of, creatingChildTask.summary),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f),
+                                    NfIcon(
+                                        NfIcons.PLUS_LOCK,
+                                        16.sp,
+                                        if (childLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onTertiaryContainer.copy(
+                                            alpha = 0.5f
                                         )
-                                        IconButton(
-                                            onClick = { childLockActive = !childLockActive },
-                                            modifier = Modifier.size(24.dp)
-                                        ) {
-                                            NfIcon(
-                                                NfIcons.PLUS_LOCK,
-                                                16.sp,
-                                                if (childLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onTertiaryContainer.copy(
-                                                    alpha = 0.5f
-                                                )
-                                            )
-                                        }
-                                        Spacer(Modifier.width(4.dp))
-                                        IconButton(
-                                            onClick = {
-                                                creatingChildUid = null
-                                                childLockActive = false
-                                            },
-                                            modifier = Modifier.size(24.dp),
-                                        ) {
-                                            NfIcon(
-                                                NfIcons.CROSS,
-                                                16.sp,
-                                                MaterialTheme.colorScheme.onTertiaryContainer
-                                            )
-                                        }
-                                    }
-                                }
-                            } else if (yankedTask != null) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        NfIcon(NfIcons.LINK, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer)
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            stringResource(R.string.yanked_label) + " " + yankedTask.summary,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f),
-                                        )
-                                        IconButton(
-                                            onClick = { yankLockActive = !yankLockActive },
-                                            modifier = Modifier.size(24.dp)
-                                        ) {
-                                            NfIcon(
-                                                NfIcons.LINK_LOCK,
-                                                16.sp,
-                                                if (yankLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer.copy(
-                                                    alpha = 0.5f
-                                                )
-                                            )
-                                        }
-                                        Spacer(Modifier.width(4.dp))
-                                        IconButton(
-                                            onClick = {
-                                                yankedUid = null
-                                                yankLockActive = false
-                                            },
-                                            modifier = Modifier.size(24.dp),
-                                        ) {
-                                            NfIcon(
-                                                NfIcons.CROSS,
-                                                16.sp,
-                                                MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            Surface(tonalElevation = 3.dp) {
-                                Row(
-                                    Modifier.padding(16.dp).navigationBarsPadding().imePadding(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    OutlinedTextField(
-                                        value = newTaskText,
-                                        onValueChange = { newTaskText = it },
-                                        placeholder = { Text("${stringResource(R.string.example_buy_cat_food)} !1 @tomorrow #groceries") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true,
-                                        visualTransformation = remember(isDark) {
-                                            SmartSyntaxTransformation(
-                                                api,
-                                                isDark
-                                            )
-                                        },
-                                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
-                                        keyboardActions = KeyboardActions(onSend = {
-                                            if (newTaskText.isNotBlank()) addTask(
-                                                newTaskText
-                                            )
-                                        }),
                                     )
                                 }
-                            }
-                        }
-                    },
-                    ) { padding ->
-                    Box(Modifier.padding(padding).fillMaxSize()) {
-                        Column(Modifier.fillMaxSize()) {
-
-                            val currentVisualItem = pagerItems.getOrNull(pagerState.currentPage)
-                            val activeIsLocal = currentVisualItem != null && currentVisualItem.isLocal
-                            if (activeIsLocal && remoteCals.isNotEmpty()) {
-                                FilledTonalButton(
-                                    onClick = { showExportSourceDialog = true },
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                                    colors =
-                                        ButtonDefaults.filledTonalButtonColors(
-                                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                                        ),
-                                    contentPadding = PaddingValues(vertical = 8.dp),
+                                Spacer(Modifier.width(4.dp))
+                                IconButton(
+                                    onClick = { creatingChildUid = null; childLockActive = false },
+                                    modifier = Modifier.size(24.dp)
                                 ) {
-                                    NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(stringResource(R.string.export_local_tasks_to_server))
-                                }
-                            }
-
-                            PullToRefreshBox(
-                                isRefreshing = false,
-                                onRefresh = { handlePullRefresh() },
-                                modifier = Modifier.weight(1f),
-                            ) {
-                                HorizontalPager(
-                                    state = pagerState,
-                                    modifier = Modifier.fillMaxSize(),
-                                    key = { page ->
-                                        pagerItems.getOrNull(page)?.href ?: "ALL_TASKS"
-                                    } // <-- CRITICAL FIX
-                                ) { page ->
-                                    val currentCal = pagerItems.getOrNull(page)
-                                    val pageKey = currentCal?.href ?: "ALL_TASKS"
-                                    val pageListState = listStates.getOrPut(pageKey) { rememberLazyListState() }
-
-                                    // Locally filter tasks so the adjacent pages are already populated during the swipe
-                                    val pageTasks = remember(tasks, currentCal) {
-                                        if (currentCal == null) {
-                                            tasks // Show all
-                                        } else {
-                                            tasks.filter { it.calendarHref == currentCal.href }
-                                        }
-                                    }
-
-                                    LazyColumn(
-                                        state = pageListState,
-                                        contentPadding = PaddingValues(bottom = 80.dp),
-                                        modifier = Modifier.fillMaxSize(),
-                                    ) {
-                                        items(pageTasks, key = { it.uid }) { task ->
-                                            if (task.virtualType == "none") {
-                                                val calColor = calColorMap[task.calendarHref] ?: Color.Gray
-
-                                                // Resolve parent info for inheritance hiding
-                                                val parent = task.parentUid?.let { taskMap[it] }
-                                                val pCats = parent?.categories ?: emptyList()
-                                                val pLoc = parent?.location
-
-                                                TaskRow(
-                                                    task = task,
-                                                    calColor = calColor,
-                                                    isDark = isDark,
-                                                    onToggle = { toggleTask(task) },
-                                                    onAction = { act -> onTaskAction(act, task) },
-                                                    onClick = onTaskClick,
-                                                    yankedUid = yankedUid,
-                                                    enabledCalendarCount = enabledCalendarCount,
-                                                    parentCategories = pCats,
-                                                    parentLocation = pLoc,
-                                                    aliasMap = aliases,
-                                                    isHighlighted = task.uid == highlightedUid,
-                                                    incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
-                                                )
-                                            } else {
-                                                VirtualTaskRow(task = task) {
-                                                    val key = task.virtualPayload
-                                                    expandedGroups = if (expandedGroups.contains(key)) {
-                                                        expandedGroups - key
-                                                    } else {
-                                                        expandedGroups + key
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
+                                    NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
                                 }
                             }
                         }
-
-                        // Scroll to top FAB - now using activeListState
-                        if (showScrollToTop) {
-                            FloatingActionButton(
-                                onClick = {
-                                    isProgrammaticScroll = true
-                                    showScrollToTop = false
-                                    scope.launch {
-                                        activeListState.animateScrollToItem(0)
-                                        isProgrammaticScroll = false
-                                    }
-                                },
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .navigationBarsPadding()
-                                    .offset(x = (-45).dp, y = 40.dp),
-                                containerColor = Color.Transparent,
-                            ) {
-                                NfIcon(scrollToTopIcon, 28.sp, color = Color(0xf2660000))
+                    } else if (yankedTask != null) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                NfIcon(NfIcons.LINK, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    stringResource(R.string.yanked_label) + " " + yankedTask.summary,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(
+                                    onClick = { yankLockActive = !yankLockActive },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    NfIcon(
+                                        NfIcons.LINK_LOCK,
+                                        16.sp,
+                                        if (yankLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer.copy(
+                                            alpha = 0.5f
+                                        )
+                                    )
+                                }
+                                Spacer(Modifier.width(4.dp))
+                                IconButton(
+                                    onClick = { yankedUid = null; yankLockActive = false },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer)
+                                }
                             }
                         }
-
-                        // Edge swipe detector to ensure Drawer opens easily without Pager interference
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .width(20.dp)
-                                .align(Alignment.CenterStart)
-                                .pointerInput(Unit) {
-                                    detectHorizontalDragGestures { _, dragAmount ->
-                                        if (dragAmount > 5) {
-                                            scope.launch { drawerState.open() }
-                                        }
-                                    }
-                                }
-                        )
+                    }
+                    Surface(tonalElevation = 3.dp) {
+                        Row(
+                            Modifier.padding(16.dp).navigationBarsPadding().imePadding(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = newTaskText,
+                                onValueChange = { newTaskText = it },
+                                placeholder = { Text("${stringResource(R.string.example_buy_cat_food)} !1 @tomorrow #groceries") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
+                                keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
+                                keyboardActions = KeyboardActions(onSend = {
+                                    if (newTaskText.isNotBlank()) addTask(
+                                        newTaskText
+                                    )
+                                }),
+                            )
+                        }
                     }
                 }
+            }
+        ) { padding ->
+            Box(Modifier.padding(padding).fillMaxSize()) {
+                Column(Modifier.fillMaxSize()) {
+                    val activeIsLocal = currentVisualItem != null && currentVisualItem.isLocal
+                    if (activeIsLocal && remoteCals.isNotEmpty()) {
+                        FilledTonalButton(
+                            onClick = { showExportSourceDialog = true },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            ),
+                            contentPadding = PaddingValues(vertical = 8.dp),
+                        ) {
+                            NfIcon(NfIcons.EXPORT, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.export_local_tasks_to_server))
+                        }
+                    }
+
+                    PullToRefreshBox(
+                        isRefreshing = false,
+                        onRefresh = { handlePullRefresh() },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize(),
+                            key = { page -> pagerItems.getOrNull(page)?.href ?: "ALL_TASKS" }
+                        ) { page ->
+                            val currentCal = pagerItems.getOrNull(page)
+                            val pageKey = currentCal?.href ?: "ALL_TASKS"
+                            val pageListState = listStates.getOrPut(pageKey) { rememberLazyListState() }
+
+                            val pageTasks = remember(tasks, currentCal, calendars) {
+                                if (currentCal == null) {
+                                    val visibleHrefs = calendars.filter { it.isVisible }.map { it.href }.toSet()
+                                    tasks.filter { it.calendarHref in visibleHrefs }
+                                } else {
+                                    tasks.filter { it.calendarHref == currentCal.href }
+                                }
+                            }
+
+                            LazyColumn(
+                                state = pageListState,
+                                contentPadding = PaddingValues(bottom = 80.dp),
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                items(pageTasks, key = { it.uid }) { task ->
+                                    if (task.virtualType == "none") {
+                                        val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+                                        val parent = task.parentUid?.let { taskMap[it] }
+                                        val pCats = parent?.categories ?: emptyList()
+                                        val pLoc = parent?.location
+
+                                        TaskRow(
+                                            task = task,
+                                            calColor = calColor,
+                                            isDark = isDark,
+                                            onToggle = { toggleTask(task) },
+                                            onAction = { act -> onTaskAction(act, task) },
+                                            onClick = onTaskClick,
+                                            yankedUid = yankedUid,
+                                            enabledCalendarCount = enabledCalendarCount,
+                                            parentCategories = pCats,
+                                            parentLocation = pLoc,
+                                            aliasMap = aliases,
+                                            isHighlighted = task.uid == highlightedUid,
+                                            incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
+                                        )
+                                    } else {
+                                        VirtualTaskRow(task = task) {
+                                            val key = task.virtualPayload
+                                            expandedGroups =
+                                                if (expandedGroups.contains(key)) expandedGroups - key else expandedGroups + key
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
+
+                if (showScrollToTop) {
+                    FloatingActionButton(
+                        onClick = {
+                            isProgrammaticScroll = true
+                            showScrollToTop = false
+                            scope.launch { activeListState.animateScrollToItem(0); isProgrammaticScroll = false }
+                        },
+                        modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding()
+                            .offset(x = (-45).dp, y = 40.dp),
+                        containerColor = Color.Transparent,
+                    ) { NfIcon(scrollToTopIcon, 28.sp, color = Color(0xf2660000)) }
+                }
+
+                Box(
+                    modifier = Modifier.fillMaxHeight().width(20.dp).align(Alignment.CenterStart)
+                        .pointerInput(Unit) {
+                            detectHorizontalDragGestures { _, dragAmount ->
+                                if (dragAmount > 5) {
+                                    scope.launch { drawerState.open() }
+                                }
+                            }
+                        }
+                )
+            }
+        }
+    }
+}
