@@ -165,6 +165,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::FocusLocation(_)
         | Message::ToggleHideCompletedToggle
         | Message::CategoryMatchModeToggle
+        | Message::ToggleChildLock
+        | Message::ToggleYankLock
         | Message::ZoomIn
         | Message::ZoomOut
         | Message::ZoomReset => view::handle(app, message),

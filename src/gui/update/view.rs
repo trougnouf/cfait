@@ -86,6 +86,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         // Stateless toggles: read current state, flip it, call existing logic
+        Message::ToggleChildLock => {
+            app.child_lock_active = !app.child_lock_active;
+            Task::none()
+        }
+        Message::ToggleYankLock => {
+            app.yank_lock_active = !app.yank_lock_active;
+            Task::none()
+        }
         Message::ToggleHideCompletedToggle => {
             let new_val = !app.hide_completed;
             handle(app, Message::ToggleHideCompleted(new_val))

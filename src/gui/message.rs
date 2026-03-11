@@ -101,6 +101,8 @@ pub enum Message {
     ZoomReset,
 
     // --- View & Filter ---
+    ToggleChildLock,
+    ToggleYankLock,
     SetMinDuration(Option<u32>),
     SetMaxDuration(Option<u32>),
     ToggleIncludeUnsetDuration(bool),

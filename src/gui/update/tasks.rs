@@ -78,6 +78,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.description_value = text_editor::Content::new();
             app.editing_uid = None;
             app.creating_child_of = None;
+            app.child_lock_active = false;
             scroll_to_selected(app, true)
         }
 
@@ -374,6 +375,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::ClearYank => {
             app.yanked_uid = None;
+            app.yank_lock_active = false;
             Task::none()
         }
 
@@ -399,9 +401,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.description_value = text_editor::Content::new();
                 app.editing_uid = None;
                 app.creating_child_of = None;
+                app.child_lock_active = false;
                 captured_action = true;
             } else if app.yanked_uid.is_some() {
                 app.yanked_uid = None;
+                app.yank_lock_active = false;
                 captured_action = true;
             } else if !app.input_value.text().is_empty() {
                 app.input_value = text_editor::Content::new();
@@ -438,7 +442,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let mut updated = orig.clone();
                 updated.parent_uid = Some(parent_uid.clone());
                 app.selected_uid = Some(target_uid.clone());
-                app.yanked_uid = None;
+                if !app.yank_lock_active {
+                    app.yanked_uid = None;
+                }
                 refresh_filtered_tasks(app);
                 return Task::perform(
                     async_controller_dispatch(
@@ -511,7 +517,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some(updated) = app.store.add_dependency(&target_uid, blocker_uid.clone())
             {
                 app.selected_uid = Some(target_uid);
-                app.yanked_uid = None;
+                if !app.yank_lock_active {
+                    app.yanked_uid = None;
+                }
                 refresh_filtered_tasks(app);
                 return Task::perform(
                     async_controller_dispatch(
@@ -533,7 +541,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some(updated) = app.store.add_related_to(&target_uid, related_uid.clone())
             {
                 app.selected_uid = Some(target_uid);
-                app.yanked_uid = None;
+                if !app.yank_lock_active {
+                    app.yanked_uid = None;
+                }
                 refresh_filtered_tasks(app);
                 return Task::perform(
                     async_controller_dispatch(
@@ -859,7 +869,9 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         let mut new_task = TodoTask::new(&clean_input, &app.tag_aliases, config_time);
         if let Some(parent) = &app.creating_child_of {
             new_task.parent_uid = Some(parent.clone());
-            app.creating_child_of = None;
+            if !app.child_lock_active {
+                app.creating_child_of = None;
+            }
         }
 
         let target_href = app

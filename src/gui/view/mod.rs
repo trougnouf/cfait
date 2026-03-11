@@ -901,6 +901,22 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
                         ..Default::default()
                     }),
                 text(summary).size(14).width(Length::Fill),
+                button(icon::icon(icon::LINK_LOCK).size(14))
+                    .style(move |theme: &Theme, _status| {
+                        if app.yank_lock_active {
+                            iced::widget::button::Style {
+                                text_color: theme.extended_palette().primary.base.color,
+                                ..iced::widget::button::text(theme, _status)
+                            }
+                        } else {
+                            iced::widget::button::Style {
+                                text_color: Color::from_rgba(0.5, 0.5, 0.5, 0.7),
+                                ..iced::widget::button::text(theme, _status)
+                            }
+                        }
+                    })
+                    .padding(5)
+                    .on_press(Message::ToggleYankLock),
                 button(icon::icon(icon::CROSS).size(14))
                     .style(iced::widget::button::text)
                     .padding(5)
@@ -923,6 +939,64 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             }
         });
         main_col = main_col.push(yank_bar);
+    }
+
+    if let Some(uid) = &app.creating_child_of
+        && let Some(summary) = app.store.get_summary(uid)
+    {
+        let child_label = rust_i18n::t!("new_child_of", name = summary.clone());
+        let child_bar = container(
+            row![
+                icon::icon(icon::CHILD)
+                    .size(16)
+                    .style(|theme: &Theme| text::Style {
+                        color: Some(theme.extended_palette().primary.base.color)
+                    }),
+                text(child_label)
+                    .size(14)
+                    .font(iced::Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    })
+                    .width(Length::Fill),
+                button(icon::icon(icon::PLUS_LOCK).size(14))
+                    .style(move |theme: &Theme, _status| {
+                        if app.child_lock_active {
+                            iced::widget::button::Style {
+                                text_color: theme.extended_palette().primary.base.color,
+                                ..iced::widget::button::text(theme, _status)
+                            }
+                        } else {
+                            iced::widget::button::Style {
+                                text_color: Color::from_rgba(0.5, 0.5, 0.5, 0.7),
+                                ..iced::widget::button::text(theme, _status)
+                            }
+                        }
+                    })
+                    .padding(5)
+                    .on_press(Message::ToggleChildLock),
+                button(icon::icon(icon::CROSS).size(14))
+                    .style(iced::widget::button::text)
+                    .padding(5)
+                    .on_press(Message::EscapePressed)
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center),
+        )
+        .padding(10)
+        .style(|theme: &Theme| {
+            let palette = theme.extended_palette();
+            container::Style {
+                background: Some(palette.background.weak.color.into()),
+                border: iced::Border {
+                    color: palette.primary.base.color,
+                    width: 1.0,
+                    radius: 4.0.into(),
+                },
+                ..Default::default()
+            }
+        });
+        main_col = main_col.push(child_bar);
     }
 
     if search_text.starts_with('#') {

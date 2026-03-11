@@ -100,6 +100,9 @@ fun HomeScreen(
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
 
+    var childLockActive by rememberSaveable { mutableStateOf(false) }
+    var yankLockActive by rememberSaveable { mutableStateOf(false) }
+
     // Highlighting State
     var highlightedUid by remember { mutableStateOf(autoScrollUid) }
     // Trigger for scrolling to the highlighted item (separating 'Add' from 'Nav')
@@ -333,6 +336,7 @@ fun HomeScreen(
             // 2) If a task is yanked, clear it next.
             yankedUid != null -> {
                 yankedUid = null
+                yankLockActive = false
             }
 
             // 3) If there's a search query text, clear it next.
@@ -504,7 +508,9 @@ fun HomeScreen(
 
                     if (creatingChildUid != null) {
                         api.setParent(newUid, creatingChildUid!!)
-                        creatingChildUid = null
+                        if (!childLockActive) {
+                            creatingChildUid = null
+                        }
                     }
 
                     // 1. Highlight the new task
@@ -644,21 +650,21 @@ fun HomeScreen(
                     "block" -> {
                         if (yankedUid != null) {
                             api.addDependency(task.uid, yankedUid!!)
-                            yankedUid = null
+                            if (!yankLockActive) yankedUid = null
                         }
                     }
 
                     "child" -> {
                         if (yankedUid != null) {
                             api.setParent(task.uid, yankedUid!!)
-                            yankedUid = null
+                            if (!yankLockActive) yankedUid = null
                         }
                     }
 
                     "related" -> {
                         if (yankedUid != null) {
                             api.addRelatedTo(task.uid, yankedUid!!)
-                            yankedUid = null
+                            if (!yankLockActive) yankedUid = null
                         }
                     }
                 }
@@ -1287,7 +1293,23 @@ fun HomeScreen(
                                     modifier = Modifier.weight(1f),
                                 )
                                 IconButton(
-                                    onClick = { creatingChildUid = null },
+                                    onClick = { childLockActive = !childLockActive },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    NfIcon(
+                                        NfIcons.PLUS_LOCK,
+                                        16.sp,
+                                        if (childLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onTertiaryContainer.copy(
+                                            alpha = 0.5f
+                                        )
+                                    )
+                                }
+                                Spacer(Modifier.width(4.dp))
+                                IconButton(
+                                    onClick = {
+                                        creatingChildUid = null
+                                        childLockActive = false
+                                    },
                                     modifier = Modifier.size(24.dp),
                                 ) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.onTertiaryContainer) }
                             }
@@ -1309,13 +1331,24 @@ fun HomeScreen(
                                     modifier = Modifier.weight(1f),
                                 )
                                 IconButton(
+                                    onClick = { yankLockActive = !yankLockActive },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    NfIcon(
+                                        NfIcons.LINK_LOCK,
+                                        16.sp,
+                                        if (yankLockActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSecondaryContainer.copy(
+                                            alpha = 0.5f
+                                        )
+                                    )
+                                }
+                                Spacer(Modifier.width(4.dp))
+                                IconButton(
                                     onClick = {
                                         yankedUid = null
+                                        yankLockActive = false
                                     },
-                                    modifier =
-                                        Modifier.size(
-                                            24.dp,
-                                        ),
+                                    modifier = Modifier.size(24.dp),
                                 ) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.onSecondaryContainer) }
                             }
                         }

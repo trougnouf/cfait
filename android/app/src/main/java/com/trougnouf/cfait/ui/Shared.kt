@@ -51,6 +51,8 @@ object NfIcons {
     val DELETE = get(0xf1f8)
     val CHECK = get(0xf00c)
     val CROSS = get(0xf00d)
+    val PLUS_LOCK = get(0xf1a5d)
+    val LINK_LOCK = get(0xf10ba)
     val PLAY = get(0xeb2c)
     val PAUSE = get(0xf04c)
     val REPEAT = get(0xf0b6)

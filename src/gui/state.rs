@@ -73,6 +73,7 @@ pub struct GuiApp {
     pub selected_locations: HashSet<String>,
     pub match_all_categories: bool,
     pub yanked_uid: Option<String>,
+    pub yank_lock_active: bool,
 
     pub hovered_tag_uid: Option<String>,
 
@@ -100,6 +101,7 @@ pub struct GuiApp {
     pub search_value: text_editor::Content,
     pub editing_uid: Option<String>,
     pub creating_child_of: Option<String>,
+    pub child_lock_active: bool,
     pub expanded_tasks: HashSet<String>,
     pub expanded_done_groups: HashSet<String>,
     pub unsynced_changes: bool,
@@ -296,6 +298,7 @@ impl Default for GuiApp {
             selected_locations: HashSet::new(),
             match_all_categories: true,
             yanked_uid: None,
+            yank_lock_active: false,
             selected_uid: None,
 
             hovered_tag_uid: None,
@@ -316,6 +319,7 @@ impl Default for GuiApp {
             search_value: text_editor::Content::new(),
             editing_uid: None,
             creating_child_of: None,
+            child_lock_active: false,
             expanded_tasks: HashSet::new(),
             expanded_done_groups: HashSet::new(),
             unsynced_changes: false,
