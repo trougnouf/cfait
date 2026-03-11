@@ -108,7 +108,7 @@ jobs:
           tea release create \
             --repo "$REPO" \
             --title "Rolling Development Build" \
-            --note "Automated signed build, commit: ${{ github.sha }}" \
+            --note "Automated signed build. Commit: ${{ github.sha }}\nIncompatible with the Google Play Store version (different signature -> loss of local data)" \
             --prerelease \
             --asset "$APK_PATH" \
             "$TAG_NAME"

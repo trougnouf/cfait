@@ -8,16 +8,23 @@ function can reference `searchQuery`.
 package com.trougnouf.cfait.ui
 
 import android.content.ClipData
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -29,11 +36,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -44,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.*
 import kotlinx.coroutines.launch
@@ -84,6 +96,24 @@ fun HomeScreen(
     var lastSyncFailed by remember { mutableStateOf(false) }
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
     var isPullRefreshing by remember { mutableStateOf(false) }
+
+    // 1. Pager state for collection switching (ONLY visible calendars)
+    val pagerItems = remember(calendars) {
+        val visibleCals = calendars.filter { !it.isDisabled && it.isVisible && it.href != "local://trash" }
+        listOf(null) + visibleCals // null represents "All Tasks"
+    }
+
+    val initialPage = remember(pagerItems, defaultCalHref) {
+        val index = pagerItems.indexOfFirst { it?.href == defaultCalHref }
+        if (index >= 0) index else 0
+    }
+
+    val pagerState = rememberPagerState(
+        initialPage = initialPage,
+        pageCount = { pagerItems.size }
+    )
+
+    val hapticFeedback = LocalHapticFeedback.current
 
     // Lift tags & locations directly tied to HomeScreen (populated by getViewData)
     var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
@@ -130,6 +160,44 @@ fun HomeScreen(
 
     LaunchedEffect(hasUnsynced) { localHasUnsynced = hasUnsynced }
 
+    // 2. Sync pager state with Rust core (Do NOT isolate, just set default for new tasks)
+    LaunchedEffect(pagerState.settledPage) {
+        val selectedItem = pagerItems.getOrNull(pagerState.settledPage)
+
+        // We only care about updating the default calendar (where the '+' button adds tasks).
+        // We do NOT change visibility states here. Swiping should never hide/unhide data.
+        if (selectedItem != null) {
+            if (defaultCalHref != selectedItem.href) {
+                api.setDefaultCalendar(selectedItem.href)
+                onDataChanged() // Triggers UI to update the '+' button target
+            }
+        } else {
+            // If swiped to "All Tasks" (null), you might want to set the default back to
+            // local://default, or just leave the last selected one as the default.
+            // Leaving it as-is is usually fine, or you can explicitly reset it:
+            if (defaultCalHref != "local://default") {
+                api.setDefaultCalendar("local://default")
+                onDataChanged()
+            }
+        }
+    }
+
+    // Haptic feedback on page snap
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage != pagerState.targetPage) {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+
+    // Sync external navigation (Sidebar) into the Pager
+    LaunchedEffect(defaultCalHref, pagerItems) {
+        val targetIndex = pagerItems.indexOfFirst { it?.href == defaultCalHref }
+        val safeIndex = if (targetIndex >= 0) targetIndex else 0
+        if (pagerState.currentPage != safeIndex && !pagerState.isScrollInProgress) {
+            pagerState.animateScrollToPage(safeIndex)
+        }
+    }
+
     fun checkSyncStatus() {
         scope.launch {
             try {
@@ -150,7 +218,15 @@ fun HomeScreen(
         }
     }
 
-    val listState = rememberLazyListState()
+    // Store a persistent scroll state for each page
+    val listStates = remember { mutableStateMapOf<String, androidx.compose.foundation.lazy.LazyListState>() }
+
+    // Get the active list state based on the current page
+    val activeListState: androidx.compose.foundation.lazy.LazyListState = remember(pagerState.currentPage, pagerItems) {
+        val key = pagerItems.getOrNull(pagerState.currentPage)?.href ?: "ALL_TASKS"
+        listStates.getOrPut(key) { androidx.compose.foundation.lazy.LazyListState() }
+    }
+
     var showScrollToTop by remember { mutableStateOf(false) }
     var lastScrollPosition by remember { mutableIntStateOf(0) }
 
@@ -159,14 +235,31 @@ fun HomeScreen(
 
     val scrollToTopIcon = remember { getRandomScrollToTopIcon() }
 
+    // Color interpolation for swipe gestures (shared between title and tab indicator)
+    val onSurfaceColor = MaterialTheme.colorScheme.onSurface
+    val activeColor by derivedStateOf {
+        val pageOffset = pagerState.currentPageOffsetFraction
+        val currentIndex = pagerState.currentPage
+
+        val targetIndex = if (pageOffset < 0) currentIndex - 1 else currentIndex + 1
+        val safeTarget = targetIndex.coerceIn(0, pagerItems.lastIndex)
+
+        val c1 = pagerItems.getOrNull(currentIndex)?.color?.let { parseHexColor(it) } ?: onSurfaceColor
+        val c2 = pagerItems.getOrNull(safeTarget)?.color?.let { parseHexColor(it) } ?: onSurfaceColor
+
+        lerp(c1, c2, kotlin.math.abs(pageOffset))
+    }
+
     // Detect upward/downward scrolling
-    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
-        val currentPosition = listState.firstVisibleItemIndex * 10000 + listState.firstVisibleItemScrollOffset
-        val isScrollingUp = currentPosition < lastScrollPosition && listState.firstVisibleItemIndex > 0
-        val isScrollingDown = currentPosition > lastScrollPosition
+    LaunchedEffect(activeListState.firstVisibleItemIndex, activeListState.firstVisibleItemScrollOffset) {
+        val currentPosition =
+            activeListState.firstVisibleItemIndex * 10000 + activeListState.firstVisibleItemScrollOffset
+        val isScrollingUp =
+            currentPosition.compareTo(lastScrollPosition) < 0 && activeListState.firstVisibleItemIndex > 0
+        val isScrollingDown = currentPosition.compareTo(lastScrollPosition) > 0
         lastScrollPosition = currentPosition
 
-        if (listState.firstVisibleItemIndex == 0) {
+        if (activeListState.firstVisibleItemIndex == 0) {
             showScrollToTop = false
         } else if (isProgrammaticScroll) {
             // Ignore scroll events caused by the FAB
@@ -436,12 +529,12 @@ fun HomeScreen(
                 if (scrollTrigger > 0) {
                     // Manual Add Case: Use SNAP to ensure item is visible even if layout is resizing
                     // This fixes the "Hidden behind keyboard" issue robustly
-                    listState.scrollToItem(index)
+                    activeListState.scrollToItem(index)
                     // Reset trigger to avoid repeat scrolling
                     scrollTrigger = 0
                 } else if (autoScrollUid != null) {
                     // Navigation Case: Smooth scroll is preferred here
-                    listState.animateScrollToItem(index)
+                    activeListState.animateScrollToItem(index)
                     kotlinx.coroutines.delay(2000)
                     onAutoScrollComplete()
                 }
@@ -1066,18 +1159,25 @@ fun HomeScreen(
             val textMeasurer = rememberTextMeasurer()
             val density = LocalDensity.current
 
-            val activeCal = calendars.find { it.href == defaultCalHref }
-            val activeCalName = activeCal?.name ?: "Local"
-            val activeColorHex = activeCal?.color
-            val activeColor =
-                if (activeColorHex != null) parseHexColor(activeColorHex) else MaterialTheme.colorScheme.onSurface
+            // 1. Bind strictly to the visual page, NOT the backend default
+            val currentVisualItem = pagerItems.getOrNull(pagerState.currentPage)
+            val activeCalName = currentVisualItem?.name ?: stringResource(R.string.all_tasks)
+
+            // 2. Use the shared activeColor from outer scope
+
+            // 3. Accurately count tasks for the current page
+            val activeCount = remember(tasks, currentVisualItem) {
+                if (currentVisualItem == null) {
+                    tasks.count { !it.isDone }
+                } else {
+                    tasks.count { !it.isDone && it.calendarHref == currentVisualItem.href }
+                }
+            }
+            val countText = if (tasks.isNotEmpty()) "($activeCount)" else ""
 
             val otherVisible = calendars.filter {
-                !it.isDisabled && it.isVisible && it.href != defaultCalHref
+                !it.isDisabled && it.isVisible && it.href != currentVisualItem?.href
             }
-
-            val activeCount = tasks.count { !it.isDone }
-            val countText = if (tasks.isNotEmpty()) "($activeCount)" else ""
 
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val maxWidth = constraints.maxWidth.toFloat()
@@ -1272,6 +1372,39 @@ fun HomeScreen(
                                 .focusRequester(searchFocusRequester),
                         )
                     }
+
+                    // Scrollable Tab Row for collection switching
+                    ScrollableTabRow(
+                        selectedTabIndex = pagerState.currentPage,
+                        edgePadding = 16.dp,
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        indicator = { tabPositions ->
+                            TabRowDefaults.PrimaryIndicator(
+                                modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
+                                color = activeColor // <-- Use the derived lerp color here!
+                            )
+                        }
+                    ) {
+                        pagerItems.forEachIndexed { index, cal ->
+                            val title = cal?.name ?: stringResource(R.string.all_tasks)
+                            val targetColor =
+                                cal?.color?.let { parseHexColor(it) } ?: MaterialTheme.colorScheme.onSurface
+
+                            Tab(
+                                selected = pagerState.currentPage == index,
+                                onClick = {
+                                    scope.launch { pagerState.animateScrollToPage(index) }
+                                },
+                                text = {
+                                    Text(
+                                        text = title,
+                                        color = if (pagerState.currentPage == index) targetColor else Color.Gray,
+                                        fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            )
+                        }
+                    }
                 }
             },
             bottomBar = {
@@ -1403,42 +1536,61 @@ fun HomeScreen(
                         onRefresh = { handlePullRefresh() },
                         modifier = Modifier.weight(1f),
                     ) {
-                        LazyColumn(
-                            state = listState,
-                            contentPadding = PaddingValues(bottom = 80.dp),
+                        HorizontalPager(
+                            state = pagerState,
                             modifier = Modifier.fillMaxSize(),
-                        ) {
-                            items(tasks, key = { it.uid }) { task ->
-                                if (task.virtualType == "none") {
-                                    val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+                            key = { page -> pagerItems.getOrNull(page)?.href ?: "ALL_TASKS" } // <-- CRITICAL FIX
+                        ) { page ->
+                            val currentCal = pagerItems.getOrNull(page)
+                            val pageKey = currentCal?.href ?: "ALL_TASKS"
+                            val pageListState = listStates.getOrPut(pageKey) { rememberLazyListState() }
 
-                                    // Resolve parent info for inheritance hiding
-                                    val parent = task.parentUid?.let { taskMap[it] }
-                                    val pCats = parent?.categories ?: emptyList()
-                                    val pLoc = parent?.location
-
-                                    TaskRow(
-                                        task = task,
-                                        calColor = calColor,
-                                        isDark = isDark,
-                                        onToggle = { toggleTask(task) },
-                                        onAction = { act -> onTaskAction(act, task) },
-                                        onClick = onTaskClick,
-                                        yankedUid = yankedUid,
-                                        enabledCalendarCount = enabledCalendarCount,
-                                        parentCategories = pCats,
-                                        parentLocation = pLoc,
-                                        aliasMap = aliases,
-                                        isHighlighted = task.uid == highlightedUid,
-                                        incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
-                                    )
+                            // Locally filter tasks so the adjacent pages are already populated during the swipe
+                            val pageTasks = remember(tasks, currentCal) {
+                                if (currentCal == null) {
+                                    tasks // Show all
                                 } else {
-                                    VirtualTaskRow(task = task) {
-                                        val key = task.virtualPayload
-                                        expandedGroups = if (expandedGroups.contains(key)) {
-                                            expandedGroups - key
-                                        } else {
-                                            expandedGroups + key
+                                    tasks.filter { it.calendarHref == currentCal.href }
+                                }
+                            }
+
+                            LazyColumn(
+                                state = pageListState,
+                                contentPadding = PaddingValues(bottom = 80.dp),
+                                modifier = Modifier.fillMaxSize(),
+                            ) {
+                                items(pageTasks, key = { it.uid }) { task ->
+                                    if (task.virtualType == "none") {
+                                        val calColor = calColorMap[task.calendarHref] ?: Color.Gray
+
+                                        // Resolve parent info for inheritance hiding
+                                        val parent = task.parentUid?.let { taskMap[it] }
+                                        val pCats = parent?.categories ?: emptyList()
+                                        val pLoc = parent?.location
+
+                                        TaskRow(
+                                            task = task,
+                                            calColor = calColor,
+                                            isDark = isDark,
+                                            onToggle = { toggleTask(task) },
+                                            onAction = { act -> onTaskAction(act, task) },
+                                            onClick = onTaskClick,
+                                            yankedUid = yankedUid,
+                                            enabledCalendarCount = enabledCalendarCount,
+                                            parentCategories = pCats,
+                                            parentLocation = pLoc,
+                                            aliasMap = aliases,
+                                            isHighlighted = task.uid == highlightedUid,
+                                            incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
+                                        )
+                                    } else {
+                                        VirtualTaskRow(task = task) {
+                                            val key = task.virtualPayload
+                                            expandedGroups = if (expandedGroups.contains(key)) {
+                                                expandedGroups - key
+                                            } else {
+                                                expandedGroups + key
+                                            }
                                         }
                                     }
                                 }
@@ -1447,14 +1599,14 @@ fun HomeScreen(
                     }
                 }
 
-                // Scroll to top FAB
+                // Scroll to top FAB - now using activeListState
                 if (showScrollToTop) {
                     FloatingActionButton(
                         onClick = {
                             isProgrammaticScroll = true
                             showScrollToTop = false
                             scope.launch {
-                                listState.animateScrollToItem(0)
+                                activeListState.animateScrollToItem(0)
                                 isProgrammaticScroll = false
                             }
                         },
