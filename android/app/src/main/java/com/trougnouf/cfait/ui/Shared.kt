@@ -173,6 +173,8 @@ object NfIcons {
     val R_BOX = get(0xf0c1e)
     val PEPPER_HOT = get(0xef8b)
     val SIGN_POST = get(0xf277)
+    val DATABASE = get(0xf01bc)
+    val DATABASE_EYE_OUTLINE = get(0xf1922)
 
     val RELATED_FEMALE_FEMALE = get(0xf0a5a)
     val RELATED_MALE_MALE = get(0xf0a5e)

@@ -31,7 +31,9 @@ fun AdvancedSettingsScreen(
     trashRetention: String,
     deleteEventsOnCompletion: Boolean,
     tabPosition: String,
+    tabAutoHide: Boolean,
     onTabPositionChange: (String) -> Unit,
+    onTabAutoHideChange: (Boolean) -> Unit,
     onMaxDoneRootsChange: (String) -> Unit,
     onMaxDoneSubtasksChange: (String) -> Unit,
     onTrashRetentionChange: (String) -> Unit,
@@ -67,31 +69,35 @@ fun AdvancedSettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(scrollState)
         ) {
-            // Tab Position Section
+            // Collections Tab Section
             Text(
                 stringResource(R.string.tab_position),
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp)
+                modifier = Modifier.padding(bottom = 16.dp)
             )
-            val tabOptions = listOf(
-                "top" to stringResource(R.string.tab_pos_top),
-                "bottom" to stringResource(R.string.tab_pos_bottom),
-                "hidden" to stringResource(R.string.tab_pos_hidden)
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                FilterChip(
+                    selected = tabPosition == "top",
+                    onClick = { onTabPositionChange("top") },
+                    label = { Text(stringResource(R.string.tab_pos_top)) },
+                    modifier = Modifier.weight(1f)
+                )
+                FilterChip(
+                    selected = tabPosition == "bottom",
+                    onClick = { onTabPositionChange("bottom") },
+                    label = { Text(stringResource(R.string.tab_pos_bottom)) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
             Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
             ) {
-                tabOptions.forEach { (key, label) ->
-                    FilterChip(
-                        selected = tabPosition == key,
-                        onClick = { onTabPositionChange(key) },
-                        label = { Text(label) },
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+                Switch(checked = tabAutoHide, onCheckedChange = onTabAutoHideChange)
+                Spacer(Modifier.width(8.dp))
+                Text("Auto-hide collection tabs", style = MaterialTheme.typography.bodyMedium)
             }
             HorizontalDivider(Modifier.padding(vertical = 16.dp))
 

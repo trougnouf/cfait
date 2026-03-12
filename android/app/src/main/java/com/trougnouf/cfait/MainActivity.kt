@@ -66,12 +66,14 @@ class MainActivity : ComponentActivity() {
         // Retrieve saved theme preference (defaulting to "auto")
         val sharedPrefs = getSharedPreferences("cfait_ui_prefs", Context.MODE_PRIVATE)
         val savedTheme = sharedPrefs.getString("app_theme", "auto") ?: "auto"
-        val savedTabPos = sharedPrefs.getString("tab_position", "hidden") ?: "hidden"
+        val savedTabPos = sharedPrefs.getString("tab_position", "bottom") ?: "bottom"
+        val savedTabAutoHide = sharedPrefs.getBoolean("tab_auto_hide", true)
 
         setContent {
             // Lift theme state to root so SettingsScreen can update it
             var currentTheme by remember { mutableStateOf(savedTheme) }
             var tabPosition by remember { mutableStateOf(savedTabPos) }
+            var tabAutoHide by remember { mutableStateOf(savedTabAutoHide) }
 
             // Determine the color scheme based on preference and system state
             val context = LocalContext.current
@@ -108,6 +110,11 @@ class MainActivity : ComponentActivity() {
                     onTabPositionChange = { newPos ->
                         tabPosition = newPos
                         sharedPrefs.edit().putString("tab_position", newPos).apply()
+                    },
+                    tabAutoHide = tabAutoHide,
+                    onTabAutoHideChange = { newHide ->
+                        tabAutoHide = newHide
+                        sharedPrefs.edit().putBoolean("tab_auto_hide", newHide).apply()
                     }
                 )
             }
@@ -128,7 +135,9 @@ fun CfaitNavHost(
     currentTheme: String,
     onThemeChange: (String) -> Unit,
     tabPosition: String,
-    onTabPositionChange: (String) -> Unit
+    onTabPositionChange: (String) -> Unit,
+    tabAutoHide: Boolean,
+    onTabAutoHideChange: (Boolean) -> Unit
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
@@ -508,6 +517,9 @@ fun CfaitNavHost(
                 }
             }
 
+            // Get shared preferences in composable scope
+            val sharedPrefs = context.getSharedPreferences("cfait_ui_prefs", Context.MODE_PRIVATE)
+
             AdvancedSettingsScreen(
                 api = api,
                 maxDoneRoots = localRoots,
@@ -515,7 +527,9 @@ fun CfaitNavHost(
                 trashRetention = localTrash,
                 deleteEventsOnCompletion = deleteEvents,
                 tabPosition = tabPosition,
+                tabAutoHide = tabAutoHide,
                 onTabPositionChange = onTabPositionChange,
+                onTabAutoHideChange = onTabAutoHideChange,
                 onMaxDoneRootsChange = { localRoots = it },
                 onMaxDoneSubtasksChange = { localSubs = it },
                 onTrashRetentionChange = { localTrash = it },

@@ -7,6 +7,14 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -15,15 +23,18 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -79,6 +90,7 @@ fun HomeScreen(
     autoScrollUid: String? = null,
     refreshTick: Long,
     tabPosition: String,
+    tabAutoHide: Boolean = true,
     onGlobalRefresh: () -> Unit,
     onSettings: () -> Unit,
     onTaskClick: (String) -> Unit,
@@ -94,7 +106,7 @@ fun HomeScreen(
     val isDark = isSystemInDarkTheme()
     val hapticFeedback = LocalHapticFeedback.current
 
-    // --- State Declarations (Strictly hoisted to the top) ---
+    // --- State Declarations ---
     var sidebarTab by rememberSaveable { mutableIntStateOf(0) }
     var isManualSyncing by remember { mutableStateOf(false) }
     var activeOpCount by remember { mutableIntStateOf(0) }
@@ -106,11 +118,10 @@ fun HomeScreen(
     val allHrefs = remember(enabledCals) { enabledCals.map { it.href }.toSet() }
     val backendVisibleHrefs = remember(enabledCals) { enabledCals.filter { it.isVisible }.map { it.href }.toSet() }
 
-    // Explicitly managed custom visibility state to prevent swipe side-effects
     var customHrefs by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
     var customWriteTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    var localDefaultCalHref by remember(defaultCalHref) { mutableStateOf(defaultCalHref) }
 
-    // Only initialize customHrefs from backend once on startup if it contains a custom subset
     var hasInitializedCustom by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(backendVisibleHrefs) {
         if (!hasInitializedCustom && backendVisibleHrefs.size > 1 && backendVisibleHrefs.size < allHrefs.size) {
@@ -119,7 +130,9 @@ fun HomeScreen(
         }
     }
 
-    val tabs = remember(enabledCals, customHrefs, customWriteTarget, allHrefs) {
+    // Stable tabs list: Only recomposes if calendar list structures change, NOT on visibility changes.
+    // This entirely prevents the layout from flashing or snapping back mid-swipe!
+    val tabs = remember(enabledCals.map { it.href }, customHrefs, customWriteTarget, allHrefs) {
         val list = mutableListOf<TabInfo>()
         if (customHrefs.isNotEmpty() && customHrefs.size < allHrefs.size) {
             list.add(TabInfo("CUSTOM", "Custom", customHrefs, null, customWriteTarget))
@@ -131,28 +144,49 @@ fun HomeScreen(
         list
     }
 
-    val initialPage = remember(tabs, defaultCalHref) {
-        val idx = tabs.indexOfFirst { it.id == defaultCalHref }
+    val initialPage = remember(tabs, localDefaultCalHref) {
+        val idx = tabs.indexOfFirst { it.id == localDefaultCalHref }
         if (idx >= 0) idx else if (customHrefs.isNotEmpty()) 0 else 1
     }
 
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { tabs.size })
     var pendingTabId by remember { mutableStateOf<String?>(null) }
 
+    var isTabsTemporarilyVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(pagerState.isScrollInProgress) {
+        if (pagerState.isScrollInProgress) {
+            isTabsTemporarilyVisible = true
+        } else {
+            kotlinx.coroutines.delay(2500)
+            isTabsTemporarilyVisible = false
+        }
+    }
+
+    val showTabs = enabledCals.size > 1 && (!tabAutoHide || isTabsTemporarilyVisible)
+
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
     var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
     var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) }
 
-    // Local cache to make swiping instantaneous
+    // Local cache for instant swiping: Accumulate over time
     var taskCache by remember { mutableStateOf<Map<String, List<MobileTask>>>(emptyMap()) }
     LaunchedEffect(tasks) {
-        if (tasks.isNotEmpty()) {
-            val newCache = taskCache.toMutableMap()
-            tasks.groupBy { it.calendarHref }.forEach { (href, list) ->
-                newCache[href] = list
-            }
-            taskCache = newCache
+        val newCache = taskCache.toMutableMap()
+        val groupedTasks = tasks.groupBy { it.calendarHref }
+
+        // Update populated calendars
+        groupedTasks.forEach { (href, hrefTasks) ->
+            newCache[href] = hrefTasks
         }
+
+        // Find calendars that were active in the current tab but have 0 tasks now
+        val currentTab = tabs.getOrNull(pagerState.currentPage)
+        currentTab?.hrefs?.forEach { href ->
+            if (!groupedTasks.containsKey(href)) {
+                newCache[href] = emptyList() // Clear ghosts
+            }
+        }
+        taskCache = newCache
     }
 
     var filterTags by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
@@ -252,18 +286,6 @@ fun HomeScreen(
         lerp(c1, c2, kotlin.math.abs(pageOffset))
     }
 
-    // Auto-show hidden tabs temporarily when scrolling
-    var showHiddenTabs by remember { mutableStateOf(false) }
-    LaunchedEffect(pagerState.isScrollInProgress) {
-        if (pagerState.isScrollInProgress) {
-            showHiddenTabs = true
-        } else {
-            kotlinx.coroutines.delay(2500)
-            showHiddenTabs = false
-        }
-    }
-    val shouldShowTabs = tabPosition == "top" || tabPosition == "bottom" || (tabPosition == "hidden" && showHiddenTabs)
-
     // --- Functions ---
     fun updateTaskList() {
         scope.launch {
@@ -295,7 +317,6 @@ fun HomeScreen(
         currentRandomIcon = randomIcons.random()
         scope.launch {
             val currentTab = tabs.getOrNull(pagerState.currentPage) ?: return@launch
-            // Random respects what is currently visible in the tab
             val validTasks = tasks.filter {
                 it.calendarHref in currentTab.hrefs && !it.isDone && !it.isBlocked && !it.isFutureStart
             }
@@ -366,6 +387,13 @@ fun HomeScreen(
             scope.launch {
                 activeOpCount++
                 try {
+                    // FIX: Ensure the backend knows the correct target immediately,
+                    // even if the user typed this while the page was still settling.
+                    val activeTab = tabs.getOrNull(pagerState.currentPage)
+                    if (activeTab?.isWriteTarget != null && activeTab.isWriteTarget != defaultCalHref) {
+                        api.setDefaultCalendar(activeTab.isWriteTarget)
+                    }
+
                     val newUid = api.addTaskSmart(text)
                     if (creatingChildUid != null) {
                         api.setParent(newUid, creatingChildUid!!)
@@ -534,38 +562,31 @@ fun HomeScreen(
         }
     }
 
-    // Eager Fetch: Trigger DB load instantly when a swipe begins hitting a new target tab
-    LaunchedEffect(pagerState.targetPage, tabs) {
-        if (tabs.isEmpty()) return@LaunchedEffect
-        val targetTab = tabs.getOrNull(pagerState.targetPage) ?: return@LaunchedEffect
-        var needsFetch = false
-
-        enabledCals.forEach { cal ->
-            val shouldBeVisible = targetTab.hrefs.contains(cal.href)
-            if (cal.isVisible != shouldBeVisible) {
-                api.setCalendarVisibility(cal.href, shouldBeVisible)
-                needsFetch = true
-            }
-        }
-
-        if (targetTab.isWriteTarget != null && targetTab.isWriteTarget != defaultCalHref) {
-            api.setDefaultCalendar(targetTab.isWriteTarget)
-        }
-
-        if (needsFetch) {
-            updateTaskList()
-        }
-    }
-
-    // Settled Sync: Update global Compose state safely after the swipe animation finishes
+    // Eagerly update backend settings ONLY when the swipe settles.
+    // This prevents massive Disk I/O frame-drops during the swipe animation.
     LaunchedEffect(pagerState.settledPage) {
-        if (!pagerState.isScrollInProgress) {
-            val settledTab = tabs.getOrNull(pagerState.settledPage) ?: return@LaunchedEffect
-            val writeCalMatches = defaultCalHref == settledTab.isWriteTarget || settledTab.isWriteTarget == null
-            val visibilityMatches = backendVisibleHrefs == settledTab.hrefs
+        if (tabs.isEmpty() || pagerState.isScrollInProgress) return@LaunchedEffect
+        val settledTab = tabs.getOrNull(pagerState.settledPage) ?: return@LaunchedEffect
 
-            if (!writeCalMatches || !visibilityMatches) {
-                onDataChanged()
+        // Move FFI and Disk I/O off the main UI thread
+        scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            var needsRefresh = false
+            enabledCals.forEach { cal ->
+                val shouldBeVisible = settledTab.hrefs.contains(cal.href)
+                if (cal.isVisible != shouldBeVisible) {
+                    api.setCalendarVisibility(cal.href, shouldBeVisible)
+                    needsRefresh = true
+                }
+            }
+
+            if (settledTab.isWriteTarget != null && settledTab.isWriteTarget != defaultCalHref) {
+                api.setDefaultCalendar(settledTab.isWriteTarget)
+                needsRefresh = true
+            }
+
+            if (needsRefresh) {
+                updateTaskList()
+                onDataChanged() // Let parent know config changed
             }
         }
     }
@@ -885,6 +906,7 @@ fun HomeScreen(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    // Set visibility + Save custom combination
                                     IconButton(
                                         onClick = {
                                             val currentVisible =
@@ -893,15 +915,11 @@ fun HomeScreen(
                                                 cal.href
                                             )
 
-                                            // Explicitly save the custom selection
+                                            // Correct logic for Custom tab lifecycle
                                             if (currentVisible.size > 1 && currentVisible.size < allHrefs.size) {
                                                 customHrefs = currentVisible
-                                                pendingTabId = "CUSTOM"
-                                            } else if (currentVisible.size == allHrefs.size) {
+                                            } else {
                                                 customHrefs = emptySet()
-                                                pendingTabId = "ALL"
-                                            } else if (currentVisible.size == 1) {
-                                                pendingTabId = currentVisible.first()
                                             }
 
                                             api.setCalendarVisibility(cal.href, !cal.isVisible)
@@ -911,12 +929,23 @@ fun HomeScreen(
                                         enabled = !isDefault
                                     ) { NfIcon(iconChar, color = iconColor) }
 
+                                    // Set write target ONLY (do not close menu, do not jump tab)
                                     TextButton(
                                         onClick = {
-                                            // Make the clicked calendar the write target, ensure it's visible, and add to custom set
                                             api.setDefaultCalendar(cal.href)
+                                            localDefaultCalHref = cal.href // Instantly update header
+
                                             if (!cal.isVisible) {
                                                 api.setCalendarVisibility(cal.href, true)
+                                                val currentVisible =
+                                                    enabledCals.filter { it.isVisible }.map { it.href }.toMutableSet()
+                                                currentVisible.add(cal.href)
+                                                // Fix 5 is applied here
+                                                if (currentVisible.size > 1 && currentVisible.size < allHrefs.size) {
+                                                    customHrefs = currentVisible
+                                                } else {
+                                                    customHrefs = emptySet()
+                                                }
                                             }
                                             customWriteTarget = cal.href
                                             if (customHrefs.isNotEmpty() && cal.href !in customHrefs) {
@@ -930,6 +959,7 @@ fun HomeScreen(
                                         Text(cal.name, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start)
                                     }
 
+                                    // Jump to tab (isolate + close menu)
                                     IconButton(onClick = {
                                         scope.launch {
                                             api.isolateCalendar(cal.href)
@@ -1001,7 +1031,11 @@ fun HomeScreen(
         Box(Modifier.fillMaxSize()) {
 
             val tabsContent: @Composable () -> Unit = {
-                if (shouldShowTabs && tabs.size > 1) {
+                AnimatedVisibility(
+                    visible = showTabs && tabs.isNotEmpty(),
+                    enter = expandVertically(),
+                    exit = shrinkVertically()
+                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1014,60 +1048,36 @@ fun HomeScreen(
                             val customTabIdx = tabs.indexOfFirst { it.id == "CUSTOM" }
                             if (customTabIdx >= 0) {
                                 val isCustomSelected = pagerState.currentPage == customTabIdx
-                                Tab(
-                                    selected = isCustomSelected,
-                                    onClick = { scope.launch { pagerState.animateScrollToPage(customTabIdx) } },
-                                    modifier = Modifier.padding(horizontal = 0.dp)
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .clickable { scope.launch { pagerState.animateScrollToPage(customTabIdx) } }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 12.dp)
-                                    ) {
-                                        Text(
-                                            "\uF1922",
-                                            fontFamily = NerdFont,
-                                            fontSize = 14.sp,
-                                            color = if (isCustomSelected) MaterialTheme.colorScheme.primary else Color.Gray
-                                        )
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(
-                                            text = "Custom",
-                                            color = if (isCustomSelected) MaterialTheme.colorScheme.primary else Color.Gray,
-                                            fontWeight = if (isCustomSelected) FontWeight.Bold else FontWeight.Normal,
-                                            fontSize = 14.sp,
-                                            maxLines = 1
-                                        )
-                                    }
+                                    NfIcon(
+                                        NfIcons.DATABASE_EYE_OUTLINE,
+                                        size = 18.sp,
+                                        color = if (isCustomSelected) MaterialTheme.colorScheme.primary else Color.Gray
+                                    )
                                 }
                             }
 
                             val allTabIdx = tabs.indexOfFirst { it.id == "ALL" }
                             if (allTabIdx >= 0) {
                                 val isAllSelected = pagerState.currentPage == allTabIdx
-                                Tab(
-                                    selected = isAllSelected,
-                                    onClick = { scope.launch { pagerState.animateScrollToPage(allTabIdx) } },
-                                    modifier = Modifier.padding(horizontal = 0.dp)
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .clickable { scope.launch { pagerState.animateScrollToPage(allTabIdx) } }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
                                 ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(vertical = 8.dp, horizontal = 12.dp)
-                                    ) {
-                                        Text(
-                                            "\uF01BC",
-                                            fontFamily = NerdFont,
-                                            fontSize = 14.sp,
-                                            color = if (isAllSelected) MaterialTheme.colorScheme.primary else Color.Gray
-                                        )
-                                        Spacer(Modifier.width(4.dp))
-                                        Text(
-                                            text = "All",
-                                            color = if (isAllSelected) MaterialTheme.colorScheme.primary else Color.Gray,
-                                            fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Normal,
-                                            fontSize = 14.sp,
-                                            maxLines = 1
-                                        )
-                                    }
+                                    NfIcon(
+                                        NfIcons.DATABASE,
+                                        size = 18.sp,
+                                        color = if (isAllSelected) MaterialTheme.colorScheme.primary else Color.Gray
+                                    )
                                 }
                             }
                         }
@@ -1088,12 +1098,14 @@ fun HomeScreen(
                                 modifier = Modifier.weight(1f),
                                 divider = {},
                                 indicator = { tabPositions ->
-                                    if (pagerState.currentPage >= firstScrollableIdx && pagerState.currentPage - firstScrollableIdx < tabPositions.size) {
-                                        TabRowDefaults.PrimaryIndicator(
-                                            modifier = Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage - firstScrollableIdx]),
-                                            color = tabs.getOrNull(pagerState.currentPage)?.color ?: activeColor
-                                        )
-                                    }
+                                    val indicatorIndex = (pagerState.currentPage - firstScrollableIdx).coerceIn(
+                                        0,
+                                        tabPositions.lastIndex
+                                    )
+                                    TabRowDefaults.PrimaryIndicator(
+                                        modifier = Modifier.tabIndicatorOffset(tabPositions[indicatorIndex]),
+                                        color = tabs.getOrNull(pagerState.currentPage)?.color ?: activeColor
+                                    )
                                 }
                             ) {
                                 tabs.drop(firstScrollableIdx).forEachIndexed { index, tab ->
@@ -1109,8 +1121,7 @@ fun HomeScreen(
                                                 text = tab.name,
                                                 color = if (pagerState.currentPage == actualPage) targetColor else Color.Gray,
                                                 fontWeight = if (pagerState.currentPage == actualPage) FontWeight.Bold else FontWeight.Normal,
-                                                fontSize = 14.sp,
-                                                modifier = Modifier.padding(horizontal = 4.dp)
+                                                fontSize = 14.sp
                                             )
                                         }
                                     )
@@ -1126,7 +1137,7 @@ fun HomeScreen(
                 val isCustom = currentTab?.id == "CUSTOM"
                 val isAll = currentTab?.id == "ALL"
 
-                val writeCalHref = currentTab?.isWriteTarget ?: defaultCalHref
+                val writeCalHref = currentTab?.isWriteTarget ?: localDefaultCalHref
                 val writeCal = calendars.find { it.href == writeCalHref } ?: calendars.firstOrNull()
 
                 val headerName = writeCal?.name ?: stringResource(R.string.local_label)
@@ -1134,7 +1145,7 @@ fun HomeScreen(
 
                 val displayName = when {
                     isAll -> "$headerName etc."
-                    isCustom -> headerName // We'll add the dots manually below
+                    isCustom -> headerName // Dots appended below
                     else -> currentTab?.name ?: headerName
                 }
 
@@ -1309,14 +1320,13 @@ fun HomeScreen(
                                     .focusRequester(searchFocusRequester),
                             )
                         }
-                        if (tabPosition == "top" || (tabPosition == "hidden" && showHiddenTabs)) tabsContent()
+                        if (tabPosition == "top") tabsContent()
                     }
                 },
                 bottomBar = {
                     Column {
                         if (tabPosition == "bottom") {
                             tabsContent()
-                            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                         }
                         if (creatingChildTask != null) {
                             Surface(
@@ -1414,6 +1424,7 @@ fun HomeScreen(
                 Box(Modifier.padding(padding).fillMaxSize()) {
                     Column(Modifier.fillMaxSize()) {
 
+                        // Export button only visible if currently on the local tab
                         val targetTabForExport = tabs.getOrNull(pagerState.targetPage)
                         val activeIsLocal = targetTabForExport?.id?.startsWith("local://") == true
 
@@ -1447,13 +1458,14 @@ fun HomeScreen(
                                 val pageKey = currentTab?.id ?: "ALL_TASKS"
                                 val pageListState = listStates.getOrPut(pageKey) { LazyListState() }
 
-                                // Instantaneous list resolution via cache
+                                // Instantaneous list resolution via cache merging
                                 val pageTasks = remember(tasks, taskCache, currentTab) {
                                     if (currentTab == null) emptyList()
                                     else {
-                                        val fromTasks = tasks.filter { it.calendarHref in currentTab.hrefs }
-                                        if (fromTasks.isNotEmpty()) fromTasks
-                                        else currentTab.hrefs.flatMap { taskCache[it] ?: emptyList() }
+                                        val groupedTasks = tasks.groupBy { it.calendarHref }
+                                        currentTab.hrefs.flatMap { href ->
+                                            groupedTasks[href] ?: taskCache[href] ?: emptyList()
+                                        }
                                     }
                                 }
 
@@ -1510,17 +1522,38 @@ fun HomeScreen(
                 }
             }
 
-            // Global edge swipe detector (Increased width to 40dp for easier triggering)
+            // Global edge swipe detector
             if (drawerState.isClosed) {
                 Box(
                     modifier = Modifier
+                        .padding(top = 64.dp)
                         .fillMaxHeight()
                         .width(40.dp)
                         .align(Alignment.CenterStart)
                         .pointerInput(Unit) {
-                            detectHorizontalDragGestures { _, dragAmount ->
-                                if (dragAmount > 8) {
-                                    scope.launch { drawerState.open() }
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                var dragAmount = 0f
+
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    val change = event.changes.firstOrNull()
+
+                                    // Break the loop if the user lifts their finger
+                                    if (change == null || !change.pressed) break
+
+                                    // Use direct properties to completely avoid extension function import issues
+                                    dragAmount += (change.position.x - change.previousPosition.x)
+
+                                    if (dragAmount > 24) {
+                                        // User deliberately swiped right from the edge: Open drawer
+                                        scope.launch { drawerState.open() }
+                                        change.consume()
+                                        break
+                                    } else if (dragAmount < -12) {
+                                        // User swiping left into the pager: Yield gesture to the Pager
+                                        break
+                                    }
                                 }
                             }
                         }
