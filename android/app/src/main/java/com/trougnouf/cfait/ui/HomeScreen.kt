@@ -114,7 +114,10 @@ fun HomeScreen(
     var localHasUnsynced by remember { mutableStateOf(hasUnsynced) }
     var isPullRefreshing by remember { mutableStateOf(false) }
 
-    val enabledCals = remember(calendars) { calendars.filter { !it.isDisabled && it.href != "local://trash" } }
+    val enabledCals = remember(calendars) {
+        val filtered = calendars.filter { !it.isDisabled && it.href != "local://trash" }
+        filtered.filter { !it.isLocal } + filtered.filter { it.isLocal }
+    }
     val allHrefs = remember(enabledCals) { enabledCals.map { it.href }.toSet() }
     val backendVisibleHrefs = remember(enabledCals) { enabledCals.filter { it.isVisible }.map { it.href }.toSet() }
 
@@ -1287,6 +1290,7 @@ fun HomeScreen(
                                         }
                                     }) {
                                         val searchIconColor = when {
+                                            isSearchActive -> MaterialTheme.colorScheme.onSurface
                                             searchQuery.isNotBlank() && tasks.isEmpty() -> Color(0xFFE53935) // Red
                                             searchQuery.isNotBlank() -> Color(0xFF43A047) // Green
                                             else -> MaterialTheme.colorScheme.onSurface
@@ -1462,7 +1466,56 @@ fun HomeScreen(
                     }
                 }
             ) { padding ->
-                Box(Modifier.padding(padding).fillMaxSize()) {
+                Box(
+                    Modifier
+                        .padding(padding)
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            val edgeWidthPx = 40.dp.toPx()
+                            val touchSlop = viewConfiguration.touchSlop
+
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+
+                                // Only intercept if drawer is closed and touch is on the left edge
+                                if (!drawerState.isClosed || down.position.x > edgeWidthPx) {
+                                    return@awaitEachGesture
+                                }
+
+                                var dragX = 0f
+                                var dragY = 0f
+
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    val change = event.changes.firstOrNull()
+
+                                    if (change == null || !change.pressed) break
+
+                                    dragX += (change.position.x - change.previousPosition.x)
+                                    dragY += (change.position.y - change.previousPosition.y)
+
+                                    // Check if we broke the minimum distance to be considered a deliberate swipe
+                                    if (kotlin.math.abs(dragX) > touchSlop || kotlin.math.abs(dragY) > touchSlop) {
+                                        // If it's horizontal and moving right
+                                        if (dragX > touchSlop && kotlin.math.abs(dragX) > kotlin.math.abs(dragY)) {
+                                            scope.launch { drawerState.open() }
+                                            change.consume()
+
+                                            // Keep consuming events until finger is lifted so the Pager is completely blinded to this gesture
+                                            while (true) {
+                                                val nextEvent = awaitPointerEvent(PointerEventPass.Initial)
+                                                val nextChange = nextEvent.changes.firstOrNull()
+                                                if (nextChange == null || !nextChange.pressed) break
+                                                nextChange.consume()
+                                            }
+                                        }
+                                        // Break out and let the Pager take over if it was a left swipe or a vertical scroll
+                                        break
+                                    }
+                                }
+                            }
+                        }
+                ) {
                     Column(Modifier.fillMaxSize()) {
 
                         // Export button only visible if currently on the local tab
@@ -1581,41 +1634,6 @@ fun HomeScreen(
                                 .offset(x = (-45).dp, y = 40.dp),
                             containerColor = Color.Transparent,
                         ) { NfIcon(scrollToTopIcon, 28.sp, color = Color(0xf2660000)) }
-                    }
-
-                    // Global edge swipe detector (now correctly constrained between the bars)
-                    if (drawerState.isClosed) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxHeight()
-                                .width(40.dp)
-                                .align(Alignment.CenterStart)
-                                .pointerInput(Unit) {
-                                    awaitEachGesture {
-                                        awaitFirstDown(requireUnconsumed = false)
-                                        var dragAmount = 0f
-
-                                        while (true) {
-                                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                                            val change = event.changes.firstOrNull()
-
-                                            if (change == null || !change.pressed) break
-
-                                            dragAmount += (change.position.x - change.previousPosition.x)
-
-                                            if (dragAmount > 24) {
-                                                // Swiped right: Open drawer
-                                                scope.launch { drawerState.open() }
-                                                change.consume()
-                                                break
-                                            } else if (dragAmount < -12) {
-                                                // Swiping left: Yield to Pager
-                                                break
-                                            }
-                                        }
-                                    }
-                                }
-                        )
                     }
                 }
             }
