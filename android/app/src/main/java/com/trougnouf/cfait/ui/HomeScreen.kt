@@ -923,20 +923,45 @@ fun HomeScreen(
                                     // Set visibility + Save custom combination
                                     IconButton(
                                         onClick = {
-                                            val currentVisible =
-                                                enabledCals.filter { it.isVisible }.map { it.href }.toMutableSet()
-                                            if (cal.isVisible) currentVisible.remove(cal.href) else currentVisible.add(
-                                                cal.href
-                                            )
+                                            val currentTab = tabs.getOrNull(pagerState.currentPage)
+                                            val isIsolated =
+                                                currentTab != null && currentTab.id != "ALL" && currentTab.id != "CUSTOM"
+                                            val isTogglingOn = !cal.isVisible
 
-                                            // Correct logic for Custom tab lifecycle
-                                            if (currentVisible.size > 1 && currentVisible.size < allHrefs.size) {
-                                                customHrefs = currentVisible
+                                            if (isIsolated && isTogglingOn && currentTab!!.id != cal.href) {
+                                                // User is focused on one collection and enables another -> create a custom view
+                                                val isolatedHref = currentTab.id
+                                                val newCustomHrefs = setOf(isolatedHref, cal.href)
+                                                customHrefs = newCustomHrefs
+
+                                                // Sync backend visibility to this new custom set
+                                                enabledCals.forEach { c ->
+                                                    val shouldBeVisible = newCustomHrefs.contains(c.href)
+                                                    if (c.isVisible != shouldBeVisible) {
+                                                        api.setCalendarVisibility(c.href, shouldBeVisible)
+                                                    }
+                                                }
+                                                pendingTabId = "CUSTOM"
+
                                             } else {
-                                                customHrefs = emptySet()
-                                            }
+                                                // Standard behavior: curating the custom view
+                                                api.setCalendarVisibility(cal.href, !cal.isVisible)
 
-                                            api.setCalendarVisibility(cal.href, !cal.isVisible)
+                                                // Manually calculate the new visible set to update the Custom tab state
+                                                val currentVisibleHrefs =
+                                                    enabledCals.filter { it.isVisible }.map { it.href }.toMutableSet()
+                                                if (isTogglingOn) {
+                                                    currentVisibleHrefs.add(cal.href)
+                                                } else {
+                                                    currentVisibleHrefs.remove(cal.href)
+                                                }
+
+                                                if (currentVisibleHrefs.size > 1 && currentVisibleHrefs.size < allHrefs.size) {
+                                                    customHrefs = currentVisibleHrefs
+                                                } else {
+                                                    customHrefs = emptySet()
+                                                }
+                                            }
                                             onDataChanged()
                                             updateTaskList()
                                         },
@@ -946,26 +971,51 @@ fun HomeScreen(
                                     // Set write target ONLY (do not close menu, do not jump tab)
                                     TextButton(
                                         onClick = {
+                                            val currentTab = tabs.getOrNull(pagerState.currentPage)
+                                            val isIsolated =
+                                                currentTab != null && currentTab.id != "ALL" && currentTab.id != "CUSTOM"
+
                                             api.setDefaultCalendar(cal.href)
                                             localDefaultCalHref = cal.href // Instantly update header
+                                            customWriteTarget = cal.href
 
-                                            if (!cal.isVisible) {
-                                                api.setCalendarVisibility(cal.href, true)
-                                                val currentVisible =
-                                                    enabledCals.filter { it.isVisible }.map { it.href }.toMutableSet()
-                                                currentVisible.add(cal.href)
-                                                // Fix 5 is applied here
-                                                if (currentVisible.size > 1 && currentVisible.size < allHrefs.size) {
-                                                    customHrefs = currentVisible
-                                                } else {
-                                                    customHrefs = emptySet()
+                                            if (isIsolated && currentTab!!.id != cal.href) {
+                                                // We are on a single collection, and selected a DIFFERENT one as write target.
+                                                // Overwrite custom selection with exactly these two.
+                                                val isolatedHref = currentTab.id
+                                                customHrefs = setOf(isolatedHref, cal.href)
+
+                                                // Ensure only these two are visible globally
+                                                enabledCals.forEach { c ->
+                                                    val shouldBeVisible = (c.href == isolatedHref || c.href == cal.href)
+                                                    if (c.isVisible != shouldBeVisible) {
+                                                        api.setCalendarVisibility(c.href, shouldBeVisible)
+                                                    }
+                                                }
+
+                                                // Jump to custom tab
+                                                pendingTabId = "CUSTOM"
+                                            } else {
+                                                // Standard behavior (Already on ALL, CUSTOM, or clicking the focused collection)
+                                                if (!cal.isVisible) {
+                                                    api.setCalendarVisibility(cal.href, true)
+                                                    val currentVisible =
+                                                        enabledCals.filter { it.isVisible }.map { it.href }
+                                                            .toMutableSet()
+                                                    currentVisible.add(cal.href)
+
+                                                    if (currentVisible.size > 1 && currentVisible.size < allHrefs.size) {
+                                                        customHrefs = currentVisible
+                                                    } else {
+                                                        customHrefs = emptySet()
+                                                    }
+                                                }
+                                                if (customHrefs.isNotEmpty() && cal.href !in customHrefs) {
+                                                    customHrefs = customHrefs + cal.href
                                                 }
                                             }
-                                            customWriteTarget = cal.href
-                                            if (customHrefs.isNotEmpty() && cal.href !in customHrefs) {
-                                                customHrefs = customHrefs + cal.href
-                                            }
                                             onDataChanged()
+                                            updateTaskList()
                                         },
                                         modifier = Modifier.weight(1f),
                                         colors = ButtonDefaults.textButtonColors(contentColor = if (isDefault) calColor else MaterialTheme.colorScheme.onSurface)
