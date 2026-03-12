@@ -66,7 +66,7 @@ class MainActivity : ComponentActivity() {
         // Retrieve saved theme preference (defaulting to "auto")
         val sharedPrefs = getSharedPreferences("cfait_ui_prefs", Context.MODE_PRIVATE)
         val savedTheme = sharedPrefs.getString("app_theme", "auto") ?: "auto"
-        val savedTabPos = sharedPrefs.getString("tab_position", "bottom") ?: "bottom"
+        val savedTabPos = sharedPrefs.getString("tab_position", "hidden") ?: "hidden"
 
         setContent {
             // Lift theme state to root so SettingsScreen can update it
