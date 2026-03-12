@@ -1474,10 +1474,19 @@ fun HomeScreen(
                                 val pageTasks = remember(tasks, taskCache, currentTab) {
                                     if (currentTab == null) emptyList()
                                     else {
-                                        val groupedTasks = tasks.groupBy { it.calendarHref }
-                                        currentTab.hrefs.flatMap { href ->
-                                            groupedTasks[href] ?: taskCache[href] ?: emptyList()
+                                        // 1. Get live tasks for this tab, preserving the backend's perfect interleaved sort!
+                                        val liveTasks = tasks.filter { it.calendarHref in currentTab.hrefs }
+
+                                        // 2. Identify if any calendars are missing from the live list (e.g. during a fast swipe)
+                                        val presentHrefs = liveTasks.map { it.calendarHref }.toSet()
+                                        val missingHrefs = currentTab.hrefs - presentHrefs
+
+                                        // 3. Fallback to cache ONLY for the missing calendars to prevent blank screens
+                                        val cachedTasks = missingHrefs.flatMap { href ->
+                                            taskCache[href] ?: emptyList()
                                         }
+
+                                        liveTasks + cachedTasks
                                     }
                                 }
 
