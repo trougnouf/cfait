@@ -563,13 +563,16 @@ fun HomeScreen(
     }
 
     // Eagerly update backend settings ONLY when the swipe settles.
-    // This prevents massive Disk I/O frame-drops during the swipe animation.
     LaunchedEffect(pagerState.settledPage) {
         if (tabs.isEmpty() || pagerState.isScrollInProgress) return@LaunchedEffect
         val settledTab = tabs.getOrNull(pagerState.settledPage) ?: return@LaunchedEffect
 
-        // Move FFI and Disk I/O off the main UI thread
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            // FIX: Wait a fraction of a second so the Compose gesture subsystem
+            // fully releases the horizontal lock. This completely eliminates
+            // the delay preventing immediate vertical scrolling.
+            kotlinx.coroutines.delay(250)
+
             var needsRefresh = false
             enabledCals.forEach { cal ->
                 val shouldBeVisible = settledTab.hrefs.contains(cal.href)
@@ -1044,16 +1047,12 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // The leftmost sticky section (Custom and/or All)
-                        Row(modifier = Modifier.wrapContentWidth()) {
+                        Row(modifier = Modifier.wrapContentWidth(), verticalAlignment = Alignment.CenterVertically) {
                             val customTabIdx = tabs.indexOfFirst { it.id == "CUSTOM" }
                             if (customTabIdx >= 0) {
                                 val isCustomSelected = pagerState.currentPage == customTabIdx
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .clickable { scope.launch { pagerState.animateScrollToPage(customTabIdx) } }
-                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                IconButton(
+                                    onClick = { scope.launch { pagerState.animateScrollToPage(customTabIdx) } }
                                 ) {
                                     NfIcon(
                                         NfIcons.DATABASE_EYE_OUTLINE,
@@ -1066,12 +1065,8 @@ fun HomeScreen(
                             val allTabIdx = tabs.indexOfFirst { it.id == "ALL" }
                             if (allTabIdx >= 0) {
                                 val isAllSelected = pagerState.currentPage == allTabIdx
-                                Box(
-                                    contentAlignment = Alignment.Center,
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .clickable { scope.launch { pagerState.animateScrollToPage(allTabIdx) } }
-                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                IconButton(
+                                    onClick = { scope.launch { pagerState.animateScrollToPage(allTabIdx) } }
                                 ) {
                                     NfIcon(
                                         NfIcons.DATABASE,

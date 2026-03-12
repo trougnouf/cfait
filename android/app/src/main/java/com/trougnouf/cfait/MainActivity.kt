@@ -448,6 +448,7 @@ fun CfaitNavHost(
                 autoScrollUid = autoScrollUid,
                 refreshTick = refreshTick,
                 tabPosition = tabPosition,
+                tabAutoHide = tabAutoHide, // <-- ADD THIS LINE
                 onGlobalRefresh = { fastStart() },
                 onSettings = { navController.navigate("settings") },
                 onTaskClick = { uid -> navController.navigate("detail/$uid") },
