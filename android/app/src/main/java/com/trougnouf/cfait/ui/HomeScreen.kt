@@ -196,7 +196,6 @@ fun HomeScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     val searchFocusRequester = remember { FocusRequester() }
-    var hasRequestedSearchFocus by rememberSaveable { mutableStateOf(false) }
 
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
@@ -1283,10 +1282,21 @@ fun HomeScreen(
                                     IconButton(onClick = {
                                         isSearchActive = !isSearchActive
                                         if (!isSearchActive) {
-                                            searchQuery = ""; hasRequestedSearchFocus =
-                                                false; keyboardController?.hide()
+                                            searchQuery = ""
+                                            keyboardController?.hide()
                                         }
-                                    }) { NfIcon(if (isSearchActive) NfIcons.SEARCH_STOP else NfIcons.SEARCH, 18.sp) }
+                                    }) {
+                                        val searchIconColor = when {
+                                            searchQuery.isNotBlank() && tasks.isEmpty() -> Color(0xFFE53935) // Red
+                                            searchQuery.isNotBlank() -> Color(0xFF43A047) // Green
+                                            else -> MaterialTheme.colorScheme.onSurface
+                                        }
+                                        NfIcon(
+                                            if (isSearchActive) NfIcons.SEARCH_STOP else NfIcons.SEARCH,
+                                            18.sp,
+                                            color = searchIconColor
+                                        )
+                                    }
 
                                     if (isLoading || isManualSyncing || activeOpCount > 0 || isPullRefreshing) {
                                         Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
@@ -1315,9 +1325,12 @@ fun HomeScreen(
                         )
                         if (isSearchActive) {
                             LaunchedEffect(isSearchActive) {
-                                if (!hasRequestedSearchFocus) {
-                                    searchFocusRequester.requestFocus(); keyboardController?.show(); hasRequestedSearchFocus =
-                                        true
+                                // A tiny delay ensures the TextField is fully laid out in the Compose tree
+                                kotlinx.coroutines.delay(50)
+                                try {
+                                    searchFocusRequester.requestFocus()
+                                    keyboardController?.show()
+                                } catch (e: Exception) {
                                 }
                             }
                             TextField(
