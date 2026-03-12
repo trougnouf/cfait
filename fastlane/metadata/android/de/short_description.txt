@@ -1,0 +1,1 @@
+Starker, schneller & eleganter TODO / Aufgaben-Manager. (CalDAV & lokal)

@@ -1,0 +1,1 @@
+Gestore di attività / TODO potente, veloce ed elegante. (CalDAV e locale)
