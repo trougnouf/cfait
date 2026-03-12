@@ -175,6 +175,8 @@ pub fn spawn_alarm_actor(
                                         .appname("Cfait")
                                         .action("default", "Open");
 
+                                    // On non-windows, we get a handle and can wait for actions.
+                                    #[cfg(not(target_os = "windows"))]
                                     if let Ok(handle) = n.show() {
                                         handle.wait_for_action(move |action| {
                                             if action == "default"
@@ -185,6 +187,14 @@ pub fn spawn_alarm_actor(
                                                 ));
                                             }
                                         });
+                                    }
+
+                                    // On windows, show() returns () and we can't wait for actions.
+                                    // The notification will still appear, but clicking it will not
+                                    // focus the app window via this code path.
+                                    #[cfg(target_os = "windows")]
+                                    {
+                                        let _ = n.show();
                                     }
                                 });
                             }
