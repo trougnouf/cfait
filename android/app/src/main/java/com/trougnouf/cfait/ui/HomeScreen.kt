@@ -130,14 +130,13 @@ fun HomeScreen(
         }
     }
 
-    // Stable tabs list: Only recomposes if calendar list structures change, NOT on visibility changes.
-    // This entirely prevents the layout from flashing or snapping back mid-swipe!
+    // Stable tabs list: All -> Custom -> Rest
     val tabs = remember(enabledCals.map { it.href }, customHrefs, customWriteTarget, allHrefs) {
         val list = mutableListOf<TabInfo>()
+        list.add(TabInfo("ALL", "All", allHrefs, null, null))
         if (customHrefs.isNotEmpty() && customHrefs.size < allHrefs.size) {
             list.add(TabInfo("CUSTOM", "Custom", customHrefs, null, customWriteTarget))
         }
-        list.add(TabInfo("ALL", "All", allHrefs, null, null))
         enabledCals.forEach { cal ->
             list.add(TabInfo(cal.href, cal.name, setOf(cal.href), cal.color?.let { parseHexColor(it) }, cal.href))
         }
@@ -146,7 +145,7 @@ fun HomeScreen(
 
     val initialPage = remember(tabs, localDefaultCalHref) {
         val idx = tabs.indexOfFirst { it.id == localDefaultCalHref }
-        if (idx >= 0) idx else if (customHrefs.isNotEmpty()) 0 else 1
+        if (idx >= 0) idx else if (customHrefs.isNotEmpty()) tabs.indexOfFirst { it.id == "CUSTOM" } else 0
     }
 
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { tabs.size })
@@ -1046,22 +1045,8 @@ fun HomeScreen(
                             .background(MaterialTheme.colorScheme.surface),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // The leftmost sticky section (Custom and/or All)
+                        // The leftmost sticky section (All and/or Custom)
                         Row(modifier = Modifier.wrapContentWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            val customTabIdx = tabs.indexOfFirst { it.id == "CUSTOM" }
-                            if (customTabIdx >= 0) {
-                                val isCustomSelected = pagerState.currentPage == customTabIdx
-                                IconButton(
-                                    onClick = { scope.launch { pagerState.animateScrollToPage(customTabIdx) } }
-                                ) {
-                                    NfIcon(
-                                        NfIcons.DATABASE_EYE_OUTLINE,
-                                        size = 18.sp,
-                                        color = if (isCustomSelected) MaterialTheme.colorScheme.primary else Color.Gray
-                                    )
-                                }
-                            }
-
                             val allTabIdx = tabs.indexOfFirst { it.id == "ALL" }
                             if (allTabIdx >= 0) {
                                 val isAllSelected = pagerState.currentPage == allTabIdx
@@ -1072,6 +1057,20 @@ fun HomeScreen(
                                         NfIcons.DATABASE,
                                         size = 18.sp,
                                         color = if (isAllSelected) MaterialTheme.colorScheme.primary else Color.Gray
+                                    )
+                                }
+                            }
+
+                            val customTabIdx = tabs.indexOfFirst { it.id == "CUSTOM" }
+                            if (customTabIdx >= 0) {
+                                val isCustomSelected = pagerState.currentPage == customTabIdx
+                                IconButton(
+                                    onClick = { scope.launch { pagerState.animateScrollToPage(customTabIdx) } }
+                                ) {
+                                    NfIcon(
+                                        NfIcons.DATABASE_EYE_OUTLINE,
+                                        size = 18.sp,
+                                        color = if (isCustomSelected) MaterialTheme.colorScheme.primary else Color.Gray
                                     )
                                 }
                             }
@@ -1184,8 +1183,26 @@ fun HomeScreen(
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable(onClickLabel = stringResource(R.string.show_all_collections)) {
-                            scope.launch { drawerState.open() }
+                        modifier = Modifier.clickable {
+                            scope.launch {
+                                val currentTabId = tabs.getOrNull(pagerState.currentPage)?.id
+                                val targetWriteHref = writeCal?.href ?: localDefaultCalHref
+                                val writeCalIdx = tabs.indexOfFirst { it.id == targetWriteHref }
+
+                                if (currentTabId == targetWriteHref) {
+                                    // Already isolated. Toggle back to Custom or All.
+                                    val customIdx = tabs.indexOfFirst { it.id == "CUSTOM" }
+                                    val allIdx = tabs.indexOfFirst { it.id == "ALL" }
+                                    if (customIdx >= 0) {
+                                        pagerState.animateScrollToPage(customIdx)
+                                    } else if (allIdx >= 0) {
+                                        pagerState.animateScrollToPage(allIdx)
+                                    }
+                                } else if (writeCalIdx >= 0) {
+                                    // On All/Custom. Jump to isolated collection.
+                                    pagerState.animateScrollToPage(writeCalIdx)
+                                }
+                            }
                         }
                     ) {
                         Image(
@@ -1514,45 +1531,42 @@ fun HomeScreen(
                             containerColor = Color.Transparent,
                         ) { NfIcon(scrollToTopIcon, 28.sp, color = Color(0xf2660000)) }
                     }
-                }
-            }
 
-            // Global edge swipe detector
-            if (drawerState.isClosed) {
-                Box(
-                    modifier = Modifier
-                        .padding(top = 64.dp)
-                        .fillMaxHeight()
-                        .width(40.dp)
-                        .align(Alignment.CenterStart)
-                        .pointerInput(Unit) {
-                            awaitEachGesture {
-                                awaitFirstDown(requireUnconsumed = false)
-                                var dragAmount = 0f
+                    // Global edge swipe detector (now correctly constrained between the bars)
+                    if (drawerState.isClosed) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .width(40.dp)
+                                .align(Alignment.CenterStart)
+                                .pointerInput(Unit) {
+                                    awaitEachGesture {
+                                        awaitFirstDown(requireUnconsumed = false)
+                                        var dragAmount = 0f
 
-                                while (true) {
-                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                    val change = event.changes.firstOrNull()
+                                        while (true) {
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            val change = event.changes.firstOrNull()
 
-                                    // Break the loop if the user lifts their finger
-                                    if (change == null || !change.pressed) break
+                                            if (change == null || !change.pressed) break
 
-                                    // Use direct properties to completely avoid extension function import issues
-                                    dragAmount += (change.position.x - change.previousPosition.x)
+                                            dragAmount += (change.position.x - change.previousPosition.x)
 
-                                    if (dragAmount > 24) {
-                                        // User deliberately swiped right from the edge: Open drawer
-                                        scope.launch { drawerState.open() }
-                                        change.consume()
-                                        break
-                                    } else if (dragAmount < -12) {
-                                        // User swiping left into the pager: Yield gesture to the Pager
-                                        break
+                                            if (dragAmount > 24) {
+                                                // Swiped right: Open drawer
+                                                scope.launch { drawerState.open() }
+                                                change.consume()
+                                                break
+                                            } else if (dragAmount < -12) {
+                                                // Swiping left: Yield to Pager
+                                                break
+                                            }
+                                        }
                                     }
                                 }
-                            }
-                        }
-                )
+                        )
+                    }
+                }
             }
         }
     }

@@ -740,11 +740,13 @@ impl CfaitMobile {
         }
         result.sort_by_key(|c| {
             if c.href == "local://recovery" {
-                1
+                3
             } else if c.href == crate::storage::LOCAL_TRASH_HREF {
+                4
+            } else if c.is_local {
                 2
             } else {
-                0
+                1
             }
         });
 
@@ -799,9 +801,10 @@ impl CfaitMobile {
             let cals = self.get_calendars();
             for cal in cals {
                 if config.default_calendar.as_ref() != Some(&cal.href)
-                    && !config.hidden_calendars.contains(&cal.href) {
-                        config.hidden_calendars.push(cal.href);
-                    }
+                    && !config.hidden_calendars.contains(&cal.href)
+                {
+                    config.hidden_calendars.push(cal.href);
+                }
             }
         }
         config.save(self.ctx.as_ref()).map_err(MobileError::from)
