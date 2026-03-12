@@ -78,6 +78,132 @@
   </requires>
 
   <releases>
+    <release version="0.5.2" date="2026-03-12">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>Support i18n translations and add French</li>
+          <li>(android) Prune stale notifications (from done/canceled/snoozed/modified tasks)</li>
+          <li>Replace d with Delete key in TUI and GUI</li>
+          <li>(gui) Add network status to refresh icon (feature-parity with Android client)</li>
+          <li>(gui) Zoom in and out with ctrl++ ctrl+- (or ctrl+scroll), reset with ctrl+0 ( https://codeberg.org/trougnouf/cfait/issues/9 )</li>
+          <li>(alarm) Trim done/canceled notifications and refresh before firing them (GUI and TUI, feature parity with Android)</li>
+          <li>(sort) Put ongoing tasks in the ongoing bin even if they are blocked or have not started</li>
+          <li>(cli) Implement cli (non-interactive) add, list, search, toggle, start, pause, and delete commands</li>
+          <li>Yank copies task smart title and description, TUI description is selectable in edit screen</li>
+          <li>Time tracking management (list, add and delete sessions) in the UIs. Fix sessions synchronization and GUI unsynced state</li>
+          <li>Time tracking management (list, add and delete sessions) in the UIs. Fix sessions synchronization and GUI unsynced state</li>
+          <li>Create a new line (not blocking title/menus/status) for Android search, prepend completed calendar events with 🗹, opening a notification focuses on it, fix edit task/description string mismatch, fix Android compilation error</li>
+          <li>(all) show sessions with valid syntax, (android) use the same icons as in the GUI, ability to manually create sessions when none exist, reduce search input height</li>
+          <li>(parser) Parse days of the week and parse past time as the next day</li>
+          <li>(Android) Use task-bound hash for notifications s.t. newer alarms overwrite older ones</li>
+          <li>Clickable collection name (header) toggles show all collections (Android and GUI, https://codeberg.org/trougnouf/cfait/issues/24 )</li>
+          <li>Add a lock toggle for yanked tasks and create sub-tasks (GUI and Android clients, https://github.com/trougnouf/cfait/issues/13 )</li>
+          <li>(android) Swipe to switch collection ( https://codeberg.org/trougnouf/cfait/issues/3 )</li>
+          <li>(android) Improve swipe collections navigation</li>
+          <li>(android) Improve swipe collections navigation</li>
+          <li>(android) Improve swipe collections navigation (3)</li>
+          <li>(android) Improve swipe collections navigation (4)</li>
+          <li>(android) Improve swipe collections navigation (5)</li>
+          <li>(android) Improve swipe collections navigation (6: jump to "Custom" list when selecting multiple collections and speed-up swiping/switching collection tab)</li>
+          <li>(android) Improve swipe collections navigation (7: eliminate visual glitch in swiping animation)</li>
+          <li>(android) Improve swipe collections navigation (10)</li>
+          <li>(android) Improve and debug swipe collections navigation (11)</li>
+          <li>(android) Improve swipe collections navigation (12: fix auto-hide toggle and unresponsive custom tab, fix post-swipe vertical scroll delay)</li>
+          <li>(android) Improve swipe collections navigation (13: switch ordering, fix unresponsive area)</li>
+          <li>(android) Change search icon color when search is active in the background and auto-focus on search bar when it pops out</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>Fix Android build</li>
+          <li>(gui) Fix loss of input focus after a refresh</li>
+          <li>(help) Fix some mismatching strings</li>
+          <li>(strings) Fix pluralization</li>
+          <li>(android) Fix language selection overlap and application</li>
+          <li>(local) Process local tasks directly without going through the journal, fixes https://codeberg.org/trougnouf/cfait/issues/32</li>
+          <li>(android) Support BCP-47 locales</li>
+          <li>(locale) Fix mismatched strings</li>
+          <li>Fix some timezone edge cases</li>
+          <li>(ui) Ensure that local Trash and Recovery collections are shown on the bottom and only when not empty</li>
+          <li>Fix github issue templates</li>
+          <li>(android) Restore search field s.t. bottom of text is not cut-off</li>
+          <li>(gui) Fix an issue where another collection than the current active one(s) may be temporarily shown during synchronization</li>
+          <li>Fix calendar events' newline character</li>
+          <li>(Android) Fix error handling on addSession</li>
+          <li>(sorting) Prevent ghost alarms left by other clients from pinning future tasks to the top of the list</li>
+          <li>(android) Export local tasks dialog was shown when switching from Local to All/Custom</li>
+          <li>(android) Improve swipe collections navigation (14: restore interleaved sorting)</li>
+          <li>(android) Improve swipe collections navigation (16: fix half-swipes and panic back swipes after random)</li>
+          <li>(android) Improve swipe collections navigation (17: ensure checkboxes are still easily togglable, restore sorting (local last), unrelated/style: restore search icon color during search)</li>
+          <li>(android) Improve swipe collections navigation (17: create and jump to custom tab by selecting new write/viewable collection while focused on a different collection)</li>
+        </ul>
+        <p>Other:</p>
+        <ul>
+          <li>Translated using Weblate (French)</li>
+          <li>Translated using Weblate (French)</li>
+          <li>Translated using Weblate (French)</li>
+          <li>Added translation using Weblate (Chinese (Simplified Han script))</li>
+          <li>Translated using Weblate (Chinese (Simplified Han script))</li>
+          <li>Translated using Weblate (French)</li>
+          <li>Translated using Weblate (English)</li>
+          <li>Translated using Weblate (French)</li>
+          <li>Translated using Weblate (Chinese (Simplified Han script))</li>
+          <li>Translated using Weblate (Chinese (Simplified Han script))</li>
+          <li>Translated using Weblate (Chinese (Simplified Han script))</li>
+          <li>Translated using Weblate (French)</li>
+          <li>Translated using Weblate (Chinese (Simplified Han script))</li>
+          <li>Translated using Weblate (Chinese (Simplified Han script))</li>
+          <li>Added translation using Weblate (French)</li>
+          <li>Translated using Weblate (French)</li>
+        </ul>
+        <p>Refactor:</p>
+        <ul>
+          <li>Fix sync issue w/ rapidly changing states and consolidate sync logic across clients</li>
+        </ul>
+        <p>Documentation:</p>
+        <ul>
+          <li>Document boolean search</li>
+          <li>Update Android screenshot to v0.5.1</li>
+          <li>Fix CLI help menu</li>
+          <li>Remove unused strings and add missing translations</li>
+          <li>Fix CLI help alignment</li>
+          <li>Replace title case with sentence case</li>
+          <li>Update translations</li>
+          <li>Pluralize translations</li>
+          <li>Simplify translations</li>
+          <li>Improve fr translation</li>
+          <li>Add link to translation page in settings, fix Android compilation and add missing strings</li>
+          <li>Add link to translation page in settings, fix Android compilation and add missing strings</li>
+          <li>Add https://translate.codeberg.org/projects/cfait/ to README.md</li>
+          <li>Remove unused strings</li>
+          <li>Remove syntax strings which should not be translated from locales</li>
+          <li>Add de, es, it translations and complete fr</li>
+          <li>Localize short_description.txt (de, es, it)</li>
+          <li>Update GUI and Android screenshots to v0.5.2</li>
+        </ul>
+        <p>Performance:</p>
+        <ul>
+          <li>(android) Improve swipe collections navigation (15: improve switching performance)</li>
+        </ul>
+        <p>Styling:</p>
+        <ul>
+          <li>(android) Show collections list in the bottom by default, reduce spacing between collections, restore collection+++ behavior for Custom and replace All header</li>
+          <li>(android) Add settings+help combined icon (superposition of GNOME icons with dimmer red)</li>
+        </ul>
+        <p>Testing:</p>
+        <ul>
+          <li>Fix cargo check without --all-features (reported by Geoffrey Frogeye)</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>Cleanup duplicate strings</li>
+          <li>Fix tests</li>
+          <li>Fix Android compilation issues</li>
+          <li>Update test</li>
+          <li>(android) Reduce example task s.t. it fits in one line</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.1" date="2026-02-25">
       <description>
         <p>Features:</p>
