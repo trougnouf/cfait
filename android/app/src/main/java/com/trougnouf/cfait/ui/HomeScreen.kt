@@ -1319,7 +1319,13 @@ fun HomeScreen(
                                             )
                                         }
                                     }
-                                    IconButton(onClick = onSettings) { NfIcon(NfIcons.SETTINGS, 20.sp) }
+                                    IconButton(onClick = onSettings) {
+                                        Image(
+                                            painter = painterResource(id = R.drawable.gnome_settings_help_icons),
+                                            contentDescription = stringResource(R.string.settings),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
                                 }
                             },
                         )
