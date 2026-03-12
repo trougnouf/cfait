@@ -614,43 +614,53 @@ fun HomeScreen(
         updateTaskList()
     }
 
-    LaunchedEffect(scrollTrigger, autoScrollUid, tasks, pagerState.currentPage) {
-        if (highlightedUid != null && tasks.isNotEmpty()) {
-            val targetTask = tasks.find { it.uid == highlightedUid }
-            if (targetTask != null) {
-                val currentTab = tabs.getOrNull(pagerState.currentPage)
-                val needsTabSwitch = currentTab != null && !currentTab.hrefs.contains(targetTask.calendarHref)
+    LaunchedEffect(scrollTrigger, autoScrollUid, tasks) {
+        if (highlightedUid == null || tasks.isEmpty()) return@LaunchedEffect
+        // Only run if an explicit jump or intent was just requested
+        if (scrollTrigger == 0L && autoScrollUid == null) return@LaunchedEffect
 
-                if (needsTabSwitch) {
-                    val tabIndex = tabs.indexOfFirst { it.isWriteTarget == targetTask.calendarHref }
-                    if (tabIndex >= 0) {
-                        pagerState.animateScrollToPage(tabIndex)
-                    } else {
-                        pagerState.animateScrollToPage(0)
-                    }
-                }
+        try {
+            val targetTask = tasks.find { it.uid == highlightedUid } ?: return@LaunchedEffect
 
-                val activeTab = tabs.getOrNull(pagerState.currentPage)
-                val currentList = if (activeTab != null) {
-                    tasks.filter { it.calendarHref in activeTab.hrefs }
-                } else tasks
+            val currentTab = tabs.getOrNull(pagerState.currentPage)
+            val needsTabSwitch = currentTab != null && !currentTab.hrefs.contains(targetTask.calendarHref)
 
-                val index = currentList.indexOfFirst { it.uid == highlightedUid }
-                if (index >= 0) {
-                    val key = tabs.getOrNull(pagerState.currentPage)?.id ?: "ALL_TASKS"
-                    val listState = listStates[key]
-                    if (listState != null) {
-                        if (scrollTrigger > 0) {
-                            listState.scrollToItem(index)
-                            scrollTrigger = 0
-                        } else if (autoScrollUid != null) {
-                            listState.animateScrollToItem(index)
-                            kotlinx.coroutines.delay(2000)
-                            onAutoScrollComplete()
-                        }
-                    }
+            // 1. Jump Tab if needed
+            if (needsTabSwitch) {
+                val tabIndex = tabs.indexOfFirst { it.isWriteTarget == targetTask.calendarHref }
+                if (tabIndex >= 0) {
+                    // This naturally suspends the coroutine until the animation completes
+                    pagerState.animateScrollToPage(tabIndex)
+                } else {
+                    pagerState.animateScrollToPage(0)
                 }
             }
+
+            // 2. Find the index in the new tab's list
+            val activeTab = tabs.getOrNull(pagerState.currentPage)
+            val currentList = if (activeTab != null) {
+                tasks.filter { it.calendarHref in activeTab.hrefs }
+            } else tasks
+
+            val index = currentList.indexOfFirst { it.uid == highlightedUid }
+
+            // 3. Scroll the list
+            if (index >= 0) {
+                val key = tabs.getOrNull(pagerState.currentPage)?.id ?: "ALL_TASKS"
+                // Ensure the list state exists so we don't miss the scroll on unvisited tabs
+                val listState = listStates.getOrPut(key) { LazyListState() }
+
+                if (scrollTrigger > 0) {
+                    listState.scrollToItem(index)
+                } else if (autoScrollUid != null) {
+                    listState.animateScrollToItem(index)
+                    kotlinx.coroutines.delay(2000)
+                }
+            }
+        } finally {
+            // 4. Consume the triggers absolutely so it NEVER fights normal swiping
+            if (scrollTrigger > 0L) scrollTrigger = 0L
+            if (autoScrollUid != null) onAutoScrollComplete()
         }
     }
 
