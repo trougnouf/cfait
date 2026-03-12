@@ -108,7 +108,7 @@ jobs:
           tea release create \
             --repo "$REPO" \
             --title "Rolling Development Build" \
-            --note "Automated signed build. Commit: ${{ github.sha }}\nIncompatible with the Google Play Store version (different signature -> loss of local data)" \
+            --note "Automated signed build (incompatible with the Google Play Store signature). To download the last release, click on \"Download\" under its section. Commit: ${{ github.sha }}" \
             --prerelease \
             --asset "$APK_PATH" \
             "$TAG_NAME"
