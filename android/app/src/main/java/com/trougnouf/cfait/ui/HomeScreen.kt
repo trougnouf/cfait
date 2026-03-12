@@ -1470,23 +1470,36 @@ fun HomeScreen(
                                 val pageKey = currentTab?.id ?: "ALL_TASKS"
                                 val pageListState = listStates.getOrPut(pageKey) { LazyListState() }
 
-                                // Instantaneous list resolution via cache merging
+                                // Instantaneous list resolution via highly-optimized cache merging
                                 val pageTasks = remember(tasks, taskCache, currentTab) {
-                                    if (currentTab == null) emptyList()
-                                    else {
-                                        // 1. Get live tasks for this tab, preserving the backend's perfect interleaved sort!
-                                        val liveTasks = tasks.filter { it.calendarHref in currentTab.hrefs }
+                                    if (currentTab == null) return@remember emptyList()
 
-                                        // 2. Identify if any calendars are missing from the live list (e.g. during a fast swipe)
-                                        val presentHrefs = liveTasks.map { it.calendarHref }.toSet()
-                                        val missingHrefs = currentTab.hrefs - presentHrefs
+                                    val liveTasks = ArrayList<MobileTask>()
+                                    val presentHrefs = HashSet<String>()
 
-                                        // 3. Fallback to cache ONLY for the missing calendars to prevent blank screens
-                                        val cachedTasks = missingHrefs.flatMap { href ->
-                                            taskCache[href] ?: emptyList()
+                                    // 1. Single-pass filter: O(N) time, zero intermediate list allocations
+                                    for (task in tasks) {
+                                        if (currentTab.hrefs.contains(task.calendarHref)) {
+                                            liveTasks.add(task)
+                                            presentHrefs.add(task.calendarHref)
                                         }
+                                    }
 
-                                        liveTasks + cachedTasks
+                                    // 2. Fast-path: If all requested calendars are in the live list, return immediately.
+                                    // This preserves the Rust backend's perfect interleaved sorting 99% of the time.
+                                    if (presentHrefs.size == currentTab.hrefs.size) {
+                                        liveTasks
+                                    } else {
+                                        // 3. Slow-path: User just swiped, backend hasn't fetched the new calendar yet (~50ms window).
+                                        // We append the cached tasks to the bottom to prevent a blank screen.
+                                        val result = ArrayList<MobileTask>(liveTasks.size + 50)
+                                        result.addAll(liveTasks)
+
+                                        val missingHrefs = currentTab.hrefs - presentHrefs
+                                        for (href in missingHrefs) {
+                                            taskCache[href]?.let { result.addAll(it) }
+                                        }
+                                        result
                                     }
                                 }
 
