@@ -18,6 +18,9 @@ build() {
   cd "$pkgname-$pkgver"
   # Set the target directory to be at the root of the makepkg build area
   export CARGO_TARGET_DIR="$srcdir/target"
+  # Skip compiling the problematic fallback RNG.
+  # Linux's native getrandom() is used instead.
+  export AWS_LC_SYS_NO_JITTER_ENTROPY=1
   cargo build --release --features gui
 }
 
