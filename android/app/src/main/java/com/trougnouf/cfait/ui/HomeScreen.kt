@@ -702,7 +702,11 @@ fun HomeScreen(
     }
 
     val remoteCals = remember(calendars) { calendars.filter { !it.isLocal && !it.isDisabled } }
-    val localCals = remember(calendars) { calendars.filter { it.isLocal && !it.isDisabled } }
+    val localCals = remember(calendars) {
+        calendars.filter {
+            it.isLocal && !it.isDisabled && it.href != "local://trash" && it.href != "local://recovery"
+        }
+    }
 
     if (taskToMove != null) {
         val targetCals =
@@ -1570,7 +1574,9 @@ fun HomeScreen(
 
                         // Export button only visible if currently on the local tab
                         val targetTabForExport = tabs.getOrNull(pagerState.targetPage)
-                        val activeIsLocal = targetTabForExport?.id?.startsWith("local://") == true
+                        val activeIsLocal = targetTabForExport?.id?.startsWith("local://") == true &&
+                                            targetTabForExport.id != "local://trash" &&
+                                            targetTabForExport.id != "local://recovery"
 
                         if (activeIsLocal && remoteCals.isNotEmpty()) {
                             FilledTonalButton(

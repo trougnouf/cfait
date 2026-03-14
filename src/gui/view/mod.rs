@@ -839,7 +839,10 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     let export_ui: Element<'_, Message>;
     if let Some(active_href) = &app.active_cal_href {
-        if active_href.starts_with("local://") {
+        if active_href.starts_with("local://")
+            && active_href != crate::storage::LOCAL_TRASH_HREF
+            && active_href != "local://recovery"
+        {
             let targets: Vec<_> = app
                 .calendars
                 .iter()
