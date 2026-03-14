@@ -253,7 +253,7 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "(A | B) -C".to_string(),
                     desc: rust_i18n::t!("help_search_combine").to_string(),
-                    example: "(#work | #school) -is:done".to_string(),
+                    example: "is:ready (#work | #school) -@today".to_string(),
                 },
             ],
         },

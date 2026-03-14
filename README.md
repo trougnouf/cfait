@@ -53,7 +53,7 @@ You can use it comfortably from the command line (TUI), on your desktop (GUI), o
 *   **Dependencies:** Block tasks until others are done. You can create parent/child tasks or loose dependencies <small>(RFC9253)</small> (or manually block with `#blocked`).
 *   **Recurrence:** Powerful repetition rules for habits and recurrent tasks.
 *   **Inline Aliases:** Define shortcuts on the fly; typing `#gardening:=#fun,@@home` or `@@aldi:=#groceries,#shopping` applies the alias immediately and saves it for future use (retroactive).
-*   **Time tracking:** Start and pause tasks; Cfait automatically keeps track of the total time spent.
+*   **Time Tracking & Progress:** Start and pause tasks to automatically track the time spent. By combining this with an estimated duration (`~2h`), Cfait automatically calculates and visualizes your progress (e.g. `[1h / ~2h]`).
 *   **Cross-Platform:** Runs on Linux, Android, Windows, and MacOS.
 
 <a name="screenshots"></a>
@@ -414,7 +414,7 @@ Android:
 3. Tap "Export Local Tasks (.ics)"
 4. Choose where to save/share (Google Drive, Email, Files, etc.)
 
-The exported `.ics` any CalDAV-compatible application.
+The exported `.ics` files can be imported into any CalDAV-compatible application.
 
 <a name="tui-keybindings"></a>
 ## 🎮 TUI Keybindings

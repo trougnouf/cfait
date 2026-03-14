@@ -29,9 +29,11 @@ import com.trougnouf.cfait.R
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
+import com.trougnouf.cfait.core.CfaitMobile
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HelpScreen(onBack: () -> Unit) {
+fun HelpScreen(api: CfaitMobile, onBack: () -> Unit) {
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -64,6 +66,14 @@ fun HelpScreen(onBack: () -> Unit) {
         else -> R.drawable.nf_md_robot_confused_help_breeze_face_hugs
     }
 
+    val apiHelpData = remember { api.getSyntaxHelp() }
+
+    // Pre-resolve localized titles so we can map them back to icons
+    val orgTitle = androidx.compose.ui.res.stringResource(R.string.organization)
+    val timelineTitle = androidx.compose.ui.res.stringResource(R.string.timeline)
+    val recTitle = androidx.compose.ui.res.stringResource(R.string.recurrence)
+    val searchTitle = androidx.compose.ui.res.stringResource(R.string.search_and_filtering)
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -88,254 +98,22 @@ fun HelpScreen(onBack: () -> Unit) {
             modifier = Modifier.padding(p).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            item {
-                HelpSection(
-                    androidx.compose.ui.res.stringResource(R.string.organization),
-                    NfIcons.TAG,
-                    listOf(
-                        HelpItem(
-                            "!1",
-                            androidx.compose.ui.res.stringResource(R.string.help_org_priority),
-                            "!1, !5, !9"
-                        ),
-                        HelpItem(
-                            "#tag",
-                            androidx.compose.ui.res.stringResource(R.string.help_org_add_category),
-                            "#work, #dev:backend, #work:project:urgent"
-                        ),
-                        HelpItem(
-                            "#a:=#b,#c,@@d",
-                            androidx.compose.ui.res.stringResource(R.string.help_org_define_alias),
-                            "#tree_planting:=#gardening,@@home"
-                        ),
-                        HelpItem(
-                            "@@a:=#b,#c",
-                            androidx.compose.ui.res.stringResource(R.string.help_org_location_alias),
-                            "@@aldi:=#groceries,#shopping"
-                        ),
-                        HelpItem(
-                            "~30m or ~1h-2h",
-                            androidx.compose.ui.res.stringResource(R.string.help_org_estimated_duration),
-                            "~30m, ~1.5h, ~15m-45m"
-                        ),
-                        HelpItem(
-                            "@@loc",
-                            androidx.compose.ui.res.stringResource(R.string.help_org_location_hierarchy),
-                            "@@home, @@home:office, @@store:aldi:downtown"
-                        ),
-                        HelpItem(
-                            "\\#text",
-                            androidx.compose.ui.res.stringResource(R.string.help_org_escape_special),
-                            "\\#not-a-tag \\@not-a-date"
-                        ),
-                    ),
-                )
-            }
-
-            item {
-                HelpSection(
-                    androidx.compose.ui.res.stringResource(R.string.timeline),
-                    NfIcons.CALENDAR,
-                    listOf(
-                        HelpItem(
-                            "@date",
-                            androidx.compose.ui.res.stringResource(R.string.help_timeline_due_date),
-                            "@tomorrow, @2025-12-31"
-                        ),
-                        HelpItem(
-                            "^date",
-                            androidx.compose.ui.res.stringResource(R.string.help_timeline_start_date),
-                            "^next week, ^2025-01-01"
-                        ),
-                        HelpItem(
-                            "Offsets",
-                            androidx.compose.ui.res.stringResource(R.string.help_timeline_offsets),
-                            "1d, 2w, 3mo (optional: @2 weeks = @in 2 weeks)"
-                        ),
-                        HelpItem(
-                            "Weekdays",
-                            androidx.compose.ui.res.stringResource(R.string.help_timeline_weekdays),
-                            "@friday = @next friday, @monday"
-                        ),
-                        HelpItem(
-                            "Next period",
-                            androidx.compose.ui.res.stringResource(R.string.help_timeline_next_period),
-                            "@next week, @next month, @next year"
-                        ),
-                        HelpItem(
-                            "Keywords",
-                            androidx.compose.ui.res.stringResource(R.string.help_timeline_keywords),
-                            "today, tomorrow"
-                        ),
-                        HelpItem(
-                            "^@date",
-                            androidx.compose.ui.res.stringResource(R.string.help_timeline_set_both_dates),
-                            "^@tomorrow, ^@2d, ^@next friday"
-                        ),
-                    ),
-                )
-            }
-
-            item {
-                HelpSection(
-                    androidx.compose.ui.res.stringResource(R.string.recurrence),
-                    NfIcons.REPEAT,
-                    listOf(
-                        HelpItem(
-                            "@daily",
-                            androidx.compose.ui.res.stringResource(R.string.help_recurrence_quick_presets),
-                            "@daily, @weekly, @monthly, @yearly"
-                        ),
-                        HelpItem(
-                            "@every X",
-                            androidx.compose.ui.res.stringResource(R.string.help_recurrence_custom_intervals),
-                            "@every 3 days, @every 2 weeks"
-                        ),
-                        HelpItem(
-                            "@every <day>",
-                            androidx.compose.ui.res.stringResource(R.string.help_recurrence_specific_weekdays),
-                            "@every monday, @every monday,wednesday,friday"
-                        ),
-                        HelpItem(
-                            "until",
-                            androidx.compose.ui.res.stringResource(R.string.help_recurrence_until),
-                            "@daily until 2025-12-31"
-                        ),
-                        HelpItem(
-                            "except",
-                            androidx.compose.ui.res.stringResource(R.string.help_recurrence_except_dates),
-                            "except 2025-12-25,2026-01-01"
-                        ),
-                        HelpItem(
-                            "except day",
-                            androidx.compose.ui.res.stringResource(R.string.help_recurrence_except_day),
-                            "except mo,tue or except saturdays,sundays"
-                        ),
-                        HelpItem(
-                            "except month",
-                            androidx.compose.ui.res.stringResource(R.string.help_recurrence_except_month),
-                            "except oct,nov,dec or except march"
-                        ),
-                    ),
-                )
-            }
-
-            item {
-                HelpSection(
-                    androidx.compose.ui.res.stringResource(R.string.metadata),
-                    NfIcons.INFO,
-                    listOf(
-                        HelpItem(
-                            "url:",
-                            androidx.compose.ui.res.stringResource(R.string.help_metadata_attach_link),
-                            "url:https://perdu.com"
-                        ),
-                        HelpItem(
-                            "geo:",
-                            androidx.compose.ui.res.stringResource(R.string.help_metadata_coordinates),
-                            "geo:53.046070, -121.105264"
-                        ),
-                        HelpItem(
-                            "desc:",
-                            androidx.compose.ui.res.stringResource(R.string.help_metadata_append_description),
-                            "desc:\"Call back later\""
-                        ),
-                        HelpItem(
-                            "rem:10m",
-                            androidx.compose.ui.res.stringResource(R.string.help_metadata_relative_reminder),
-                            androidx.compose.ui.res.stringResource(R.string.help_metadata_adjusts_if_due_changes)
-                        ),
-                        HelpItem(
-                            "rem:in 5m",
-                            androidx.compose.ui.res.stringResource(R.string.help_metadata_relative_from_now),
-                            "rem:in 2h (5 min/2 hours from now)"
-                        ),
-                        HelpItem(
-                            "rem:next friday",
-                            androidx.compose.ui.res.stringResource(R.string.help_metadata_next_occurrence),
-                            "rem:next week, rem:next month"
-                        ),
-                        HelpItem(
-                            "rem:8am",
-                            androidx.compose.ui.res.stringResource(R.string.help_metadata_absolute_reminder),
-                            "rem:2025-01-20 9am, rem:2025-12-31 10:00"
-                        ),
-                        HelpItem(
-                            "+cal",
-                            androidx.compose.ui.res.stringResource(R.string.help_metadata_force_calendar),
-                            "Task @tomorrow +cal"
-                        ),
-                        HelpItem(
-                            "-cal",
-                            androidx.compose.ui.res.stringResource(R.string.help_metadata_prevent_calendar),
-                            "Private task @tomorrow -cal"
-                        ),
-                    ),
-                )
-            }
-
-            item {
-                HelpSection(
-                    androidx.compose.ui.res.stringResource(R.string.search_and_filtering),
-                    NfIcons.SEARCH,
-                    listOf(
-                        HelpItem(
-                            "text",
-                            androidx.compose.ui.res.stringResource(R.string.help_search_matches),
-                            "buy cat food"
-                        ),
-                        HelpItem(
-                            "#tag",
-                            androidx.compose.ui.res.stringResource(R.string.help_search_filter_tag),
-                            "#gardening"
-                        ),
-                        HelpItem(
-                            "is:ready",
-                            androidx.compose.ui.res.stringResource(R.string.help_search_is_ready),
-                            androidx.compose.ui.res.stringResource(R.string.help_search_is_ready_explain)
-                        ),
-                        HelpItem(
-                            "is:status",
-                            androidx.compose.ui.res.stringResource(R.string.help_search_filter_state),
-                            "is:done, is:started, is:active"
-                        ),
-                        HelpItem(
-                            "Operators",
-                            androidx.compose.ui.res.stringResource(R.string.help_search_operators),
-                            "~<20m (less than 20 min), !<4 (urgent)"
-                        ),
-                        HelpItem(
-                            "  Dates",
-                            androidx.compose.ui.res.stringResource(R.string.help_search_dates),
-                            "@<today (Overdue), ^>1w (Start 1+ weeks)"
-                        ),
-                        HelpItem(
-                            "  Date!",
-                            androidx.compose.ui.res.stringResource(R.string.help_search_date_exclaim),
-                            "@<today! (Overdue OR no due date)"
-                        ),
-                        HelpItem(
-                            "  Priority",
-                            androidx.compose.ui.res.stringResource(R.string.help_search_priority),
-                            "!<3 (High prio), !>=5"
-                        ),
-                        HelpItem(
-                            "  Duration",
-                            androidx.compose.ui.res.stringResource(R.string.help_search_duration),
-                            "~<15m (Quick tasks)"
-                        ),
-                        HelpItem(
-                            "  Location",
-                            androidx.compose.ui.res.stringResource(R.string.help_search_location),
-                            "@@home, @@store:aldi"
-                        ),
-                        HelpItem(
-                            "Combine",
-                            androidx.compose.ui.res.stringResource(R.string.help_search_combine),
-                            "is:ready #work ~<1h (Actionable work tasks under 1 hour)"
-                        ),
-                    ),
-                )
+            // Dynamically render sections from Rust API
+            apiHelpData.forEach { section ->
+                item {
+                    val iconStr = when (section.title) {
+                        orgTitle -> NfIcons.TAG
+                        timelineTitle -> NfIcons.CALENDAR
+                        recTitle -> NfIcons.REPEAT
+                        searchTitle -> NfIcons.SEARCH
+                        else -> NfIcons.INFO
+                    }
+                    HelpSection(
+                        title = section.title,
+                        icon = iconStr,
+                        items = section.items.map { HelpItem(it.keys, it.desc, it.example) }
+                    )
+                }
             }
 
             item {

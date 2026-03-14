@@ -559,7 +559,10 @@ fun CfaitNavHost(
             )
         }
         composable("help") {
-            HelpScreen(onBack = { navController.popBackStack() })
+            HelpScreen(
+                api = api,
+                onBack = { navController.popBackStack() }
+            )
         }
         composable("ics_import") {
             val content = icsContentToImport

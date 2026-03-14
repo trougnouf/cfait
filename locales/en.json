@@ -194,7 +194,7 @@
   "help_recurrence_quick_presets": "Quick presets",
   "help_recurrence_specific_weekdays": "Specific weekdays",
   "help_recurrence_until": "End date for recurrence",
-  "help_search_combine": "Boolean logic (AND, OR, NOT)",
+  "help_search_combine": "Combine filters (AND, OR, NOT)",
   "help_search_date_exclaim": "Include unset dates with '!' suffix",
   "help_search_dates": "Filter by timeframe",
   "help_search_duration": "Filter by duration",
