@@ -2,6 +2,7 @@
 // Compose UI screen for editing task details.
 package com.trougnouf.cfait.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -67,6 +68,10 @@ fun TaskDetailScreen(
     }
 
     LaunchedEffect(uid) { reload() }
+
+    BackHandler {
+        onBack()
+    }
 
     if (task == null) {
         Box(Modifier.fillMaxSize()) { CircularProgressIndicator(Modifier.align(Alignment.Center)) }

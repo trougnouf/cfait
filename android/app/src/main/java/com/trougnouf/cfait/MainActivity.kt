@@ -16,6 +16,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -43,6 +46,7 @@ import com.trougnouf.cfait.workers.PeriodicSyncWorker
 import com.trougnouf.cfait.core.MobileCalendar
 import com.trougnouf.cfait.core.MobileLocation
 import com.trougnouf.cfait.core.MobileTag
+import com.trougnouf.cfait.core.MobileTask
 import com.trougnouf.cfait.ui.HelpScreen
 import com.trougnouf.cfait.ui.HomeScreen
 import com.trougnouf.cfait.ui.IcsImportScreen
@@ -145,6 +149,11 @@ fun CfaitNavHost(
 
     // Data State
     var calendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
+    val listStates = remember { mutableStateMapOf<String, LazyListState>() }
+    var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
+    var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
+    var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) }
+    var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var defaultCalHref by remember { mutableStateOf<String?>(null) }
     var hasUnsynced by remember { mutableStateOf(false) }
     // Add state for default priority
@@ -441,6 +450,16 @@ fun CfaitNavHost(
             HomeScreen(
                 api = api,
                 calendars = calendars,
+                tasks = tasks,
+                tags = tags,
+                locations = locations,
+                aliases = aliases,
+                onUpdateViewData = { newTasks, newTags, newLocs, newAliases ->
+                    tasks = newTasks
+                    tags = newTags
+                    locations = newLocs
+                    aliases = newAliases
+                },
                 defaultCalHref = defaultCalHref,
                 defaultPriority = defaultPriority, // Pass it here
                 isLoading = isLoading,
@@ -449,6 +468,7 @@ fun CfaitNavHost(
                 refreshTick = refreshTick,
                 tabPosition = tabPosition,
                 tabAutoHide = tabAutoHide, // <-- ADD THIS LINE
+                listStates = listStates,
                 onGlobalRefresh = { fastStart() },
                 onSettings = { navController.navigate("settings") },
                 onTaskClick = { uid -> navController.navigate("detail/$uid") },

@@ -2,6 +2,7 @@
 package com.trougnouf.cfait.ui
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -44,6 +45,8 @@ fun AdvancedSettingsScreen(
     val scope = rememberCoroutineScope()
     var debugStatus by remember { mutableStateOf("") }
     var debugIsError by remember { mutableStateOf(false) }
+
+    BackHandler { onBack() }
 
     // Pre-resolve strings that will be referenced from non-composable contexts (eg. inside coroutine)
     val exportExporting = stringResource(R.string.export_debug_status_exporting)

@@ -32,6 +32,7 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -83,6 +84,11 @@ fun ColoredOverflowDots() {
 fun HomeScreen(
     api: CfaitMobile,
     calendars: List<MobileCalendar>,
+    tasks: List<MobileTask>,
+    tags: List<MobileTag>,
+    locations: List<MobileLocation>,
+    aliases: Map<String, List<String>>,
+    onUpdateViewData: (List<MobileTask>, List<MobileTag>, List<MobileLocation>, Map<String, List<String>>) -> Unit,
     defaultCalHref: String?,
     defaultPriority: Int,
     isLoading: Boolean,
@@ -91,6 +97,7 @@ fun HomeScreen(
     refreshTick: Long,
     tabPosition: String,
     tabAutoHide: Boolean = true,
+    listStates: SnapshotStateMap<String, LazyListState>,
     onGlobalRefresh: () -> Unit,
     onSettings: () -> Unit,
     onTaskClick: (String) -> Unit,
@@ -166,10 +173,6 @@ fun HomeScreen(
 
     val showTabs = enabledCals.size > 1 && (!tabAutoHide || isTabsTemporarilyVisible)
 
-    var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
-    var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
-    var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) }
-
     // Local cache for instant swiping: Accumulate over time
     var taskCache by remember { mutableStateOf<Map<String, List<MobileTask>>>(emptyMap()) }
     LaunchedEffect(tasks) {
@@ -201,24 +204,22 @@ fun HomeScreen(
     val searchFocusRequester = remember { FocusRequester() }
 
     var taskToMove by remember { mutableStateOf<MobileTask?>(null) }
-    var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var childLockActive by rememberSaveable { mutableStateOf(false) }
     var yankLockActive by rememberSaveable { mutableStateOf(false) }
 
     var highlightedUid by remember { mutableStateOf(autoScrollUid) }
     var scrollTrigger by remember { mutableLongStateOf(0L) }
 
-    var newTaskText by remember { mutableStateOf("") }
+    var newTaskText by rememberSaveable { mutableStateOf("") }
     var showExportSourceDialog by remember { mutableStateOf(false) }
     var showExportDestDialog by remember { mutableStateOf(false) }
     var exportSourceHref by remember { mutableStateOf<String?>(null) }
 
-    var yankedUid by remember { mutableStateOf<String?>(null) }
+    var yankedUid by rememberSaveable { mutableStateOf<String?>(null) }
     val yankedTask = remember(tasks, yankedUid) { tasks.find { it.uid == yankedUid } }
-    var creatingChildUid by remember { mutableStateOf<String?>(null) }
+    var creatingChildUid by rememberSaveable { mutableStateOf<String?>(null) }
     val creatingChildTask = remember(tasks, creatingChildUid) { tasks.find { it.uid == creatingChildUid } }
 
-    val listStates = remember { mutableStateMapOf<String, LazyListState>() }
     val activeListState = remember(pagerState.currentPage, tabs) {
         val key = tabs.getOrNull(pagerState.currentPage)?.id ?: "ALL_TASKS"
         listStates.getOrPut(key) { LazyListState() }
@@ -295,10 +296,7 @@ fun HomeScreen(
                     filterTags.toList(), filterLocations.toList(), searchQuery,
                     expandedGroups.toList(), matchAllCategories
                 )
-                tasks = viewData.tasks
-                tags = viewData.tags
-                locations = viewData.locations
-                aliases = api.getConfig().tagAliases
+                onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, api.getConfig().tagAliases)
             } catch (_: Exception) {
             }
         }
@@ -346,9 +344,10 @@ fun HomeScreen(
     fun toggleTask(task: MobileTask) {
         val newIsDone = !task.isDone
         val newStatus = if (newIsDone) "Completed" else "NeedsAction"
-        tasks = tasks.map {
+        val updatedList = tasks.map {
             if (it.uid == task.uid) it.copy(isDone = newIsDone, statusString = newStatus, isPaused = false) else it
         }
+        onUpdateViewData(updatedList, tags, locations, aliases)
         scope.launch {
             activeOpCount++
             try {
@@ -459,7 +458,7 @@ fun HomeScreen(
                 }
             } else t
         }.filterNotNull()
-        tasks = updatedList
+        onUpdateViewData(updatedList, tags, locations, aliases)
 
         scope.launch {
             activeOpCount++
