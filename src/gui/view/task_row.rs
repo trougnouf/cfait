@@ -731,7 +731,7 @@ pub fn view_task_row<'a>(
         let mut tags_width = 0.0;
 
         if has_metadata {
-            let show_pc = !task.status.is_done() && task.percent_complete.is_some();
+            let show_pc = !task.status.is_done() && task.percent_complete.unwrap_or(0) > 0;
 
             if is_blocked {
                 tags_width += 65.0;
@@ -865,7 +865,7 @@ pub fn view_task_row<'a>(
             let total_seconds = task.time_spent_seconds + current_session;
             let total_mins = (total_seconds / 60) as u32;
 
-            let show_pc = !task.status.is_done() && task.percent_complete.is_some();
+            let show_pc = !task.status.is_done() && task.percent_complete.unwrap_or(0) > 0;
 
             if total_mins > 0
                 || task.estimated_duration.is_some()

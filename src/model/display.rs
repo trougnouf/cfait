@@ -106,10 +106,8 @@ impl TaskDisplay for Task {
         };
 
         // Only display percentage if the task is actively actionable (not completed/cancelled)
-        let pc_str = if !self.status.is_done() {
-            self.percent_complete
-                .map(|pc| format!("{}%", pc))
-                .unwrap_or_default()
+        let pc_str = if !self.status.is_done() && self.percent_complete.unwrap_or(0) > 0 {
+            format!("{}%", self.percent_complete.unwrap())
         } else {
             String::new()
         };
@@ -243,10 +241,11 @@ impl TaskDisplay for Task {
         if let Some(comp) = self.completion_date() {
             let local = comp.with_timezone(&chrono::Local);
             s.push_str(&format!(" done:{}", local.format("%Y-%m-%d %H:%M")));
-        } else if let Some(pc) = self.percent_complete {
-            // New partial completion syntax
-            s.push_str(&format!(" done:{}%", pc));
-        }
+        } else if let Some(pc) = self.percent_complete
+            && pc > 0 {
+                // New partial completion syntax
+                s.push_str(&format!(" done:{}%", pc));
+            }
 
         s
     }

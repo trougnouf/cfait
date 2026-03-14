@@ -312,7 +312,7 @@ fun TaskRow(
                         }
                     }
 
-                    val showPc = !task.isDone && task.percentComplete != null
+                    val showPc = !task.isDone && task.percentComplete != null && task.percentComplete > 0u
 
                     if (liveDurationMins > 0 || task.durationMins != null || task.lastStartedAt != null || showPc) {
                         val spentStr = if (liveDurationMins > 0 || task.lastStartedAt != null) formatDuration(

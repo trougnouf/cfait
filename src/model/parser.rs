@@ -1429,15 +1429,7 @@ pub fn apply_smart_input(
     task.categories.clear();
     task.alarms.clear();
     task.exdates.clear();
-    task.time_spent_seconds = 0;
     task.percent_complete = None; // Reset percentage so edits apply cleanly
-    task.alarms.clear(); // Reset alarms
-    task.exdates.clear(); // Reset exdates
-    // Reset time-spent so explicit `spent:` tokens can override it on edit.
-    // We deliberately preserve `last_started_at` so an actively running timer
-    // is not stopped by editing the smart string unless the user explicitly
-    // includes a token that stops it.
-    task.time_spent_seconds = 0;
 
     // Added enum to defer alarm processing until dates are resolved
     enum PendingAlarm {
