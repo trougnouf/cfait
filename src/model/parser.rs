@@ -1427,6 +1427,10 @@ pub fn apply_smart_input(
     task.url = None;
     task.geo = None;
     task.categories.clear();
+    task.alarms.clear();
+    task.exdates.clear();
+    task.time_spent_seconds = 0;
+    task.percent_complete = None; // Reset percentage so edits apply cleanly
     task.alarms.clear(); // Reset alarms
     task.exdates.clear(); // Reset exdates
     // Reset time-spent so explicit `spent:` tokens can override it on edit.
@@ -1435,7 +1439,7 @@ pub fn apply_smart_input(
     // includes a token that stops it.
     task.time_spent_seconds = 0;
 
-    // Two-pass alarm parsing: store pending alarms to process after dates are resolved
+    // Added enum to defer alarm processing until dates are resolved
     enum PendingAlarm {
         Relative(u32),
         TimeOnly(NaiveTime),
@@ -1732,27 +1736,30 @@ pub fn apply_smart_input(
         }
         // 3. New Fields (@@, loc:, url:, geo:, desc:, !, ~, spent:, done:)
         else if let Some(_val) = token_lower.strip_prefix("done:") {
-            // Completed date/datetime token (done:)
             let clean_val = if token.len() > 5 { &token[5..] } else { "" };
-
             let mut matched = false;
 
             if !clean_val.is_empty() {
-                // Case 1: Try parsing as a full datetime first (e.g., "done:2024-01-01 15:30")
-                if let Ok(ndt) = chrono::NaiveDateTime::parse_from_str(clean_val, "%Y-%m-%d %H:%M")
+                // Support Percentage Completion (e.g. done:25%)
+                if clean_val.ends_with('%') {
+                    if let Ok(pc) = clean_val.trim_end_matches('%').parse::<u8>() {
+                        task.percent_complete = Some(pc.min(100));
+                        consumed = 1;
+                        matched = true;
+                    }
+                }
+                // Fallback to Date Completion
+                else if let Ok(ndt) =
+                    chrono::NaiveDateTime::parse_from_str(clean_val, "%Y-%m-%d %H:%M")
                 {
                     let utc_dt = safe_local_to_utc(ndt.date(), ndt.time());
                     task.set_completion_date(Some(utc_dt));
-                    consumed = 1; // The entire datetime was in one token
+                    consumed = 1;
                     matched = true;
-                }
-                // Case 2: Fallback to parsing date-only, with an optional time as the next token
-                else if let Some(d) = parse_smart_date(clean_val) {
+                } else if let Some(d) = parse_smart_date(clean_val) {
                     let mut temp_consumed = 1;
-                    // Check next token for time and finalize into DateType
                     let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
 
-                    // Convert DateType to a specific DateTime<Utc> for set_completion_date
                     let utc_dt = match dt {
                         DateType::Specific(t) => t,
                         DateType::AllDay(d) => {
@@ -2183,7 +2190,7 @@ pub fn apply_smart_input(
         task.dtstart = Some(due.clone());
     }
 
-    // Process pending alarms now that task dates are fully resolved
+    // MAP PENDING ALARMS TO TASK DATES
     for pending in pending_alarms {
         match pending {
             PendingAlarm::Relative(mins) => {
@@ -2193,19 +2200,15 @@ pub fn apply_smart_input(
                 task.alarms.push(Alarm::new_absolute(dt));
             }
             PendingAlarm::TimeOnly(t) => {
-                // Contextual snap: prefer DUE, then START, then fallback to today/tomorrow
                 let anchor_date = task
                     .due
                     .as_ref()
                     .or(task.dtstart.as_ref())
                     .map(|d| d.to_date_naive());
-
                 if let Some(target_date) = anchor_date {
-                    // Snap to task date
                     let dt = safe_local_to_utc(target_date, t);
                     task.alarms.push(Alarm::new_absolute(dt));
                 } else {
-                    // No dates on task, use today/tomorrow logic
                     let now_local = Local::now();
                     let mut target_date = now_local.date_naive();
                     if t <= now_local.time() {

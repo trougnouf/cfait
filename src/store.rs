@@ -443,10 +443,6 @@ impl TaskStore {
                 let mut changed = false;
                 if task.status == TaskStatus::InProcess {
                     task.status = TaskStatus::NeedsAction;
-                    let current_pc = task.percent_complete.unwrap_or(0);
-                    if current_pc == 0 {
-                        task.percent_complete = Some(50);
-                    }
                     changed = true;
                 }
 
@@ -498,9 +494,8 @@ impl TaskStore {
 
             if let Some((task, _)) = self.get_task_mut(&current_uid) {
                 let mut changed = false;
-                if task.status != TaskStatus::NeedsAction || task.percent_complete.is_some() {
+                if task.status != TaskStatus::NeedsAction {
                     task.status = TaskStatus::NeedsAction;
-                    task.percent_complete = None;
                     changed = true;
                 }
 

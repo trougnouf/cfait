@@ -135,6 +135,7 @@ pub struct MobileTask {
     pub summary: String,
     pub description: String,
     pub is_done: bool,
+    pub percent_complete: Option<u8>,
     pub priority: u8,
     pub due_date_iso: Option<String>,
     // NEW FIELD
@@ -374,6 +375,7 @@ fn task_to_mobile(
         summary: t.summary.clone(),
         description: t.description.clone(),
         is_done: t.status.is_done(),
+        percent_complete: t.percent_complete,
         priority: t.priority,
         due_date_iso: due_iso,
         // Include completed date field

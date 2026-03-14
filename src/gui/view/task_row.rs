@@ -731,6 +731,8 @@ pub fn view_task_row<'a>(
         let mut tags_width = 0.0;
 
         if has_metadata {
+            let show_pc = !task.status.is_done() && task.percent_complete.is_some();
+
             if is_blocked {
                 tags_width += 65.0;
             }
@@ -743,8 +745,12 @@ pub fn view_task_row<'a>(
             if task.estimated_duration.is_some()
                 || task.time_spent_seconds > 0
                 || task.last_started_at.is_some()
+                || show_pc
             {
                 tags_width += 50.0;
+                if show_pc {
+                    tags_width += 30.0; // Extra room for "100% | "
+                }
             }
             if task.rrule.is_some() {
                 tags_width += 30.0;
@@ -859,7 +865,12 @@ pub fn view_task_row<'a>(
             let total_seconds = task.time_spent_seconds + current_session;
             let total_mins = (total_seconds / 60) as u32;
 
-            if total_mins > 0 || task.estimated_duration.is_some() || task.last_started_at.is_some()
+            let show_pc = !task.status.is_done() && task.percent_complete.is_some();
+
+            if total_mins > 0
+                || task.estimated_duration.is_some()
+                || task.last_started_at.is_some()
+                || show_pc
             {
                 let fmt_dur = |m: u32| -> String {
                     if m >= 525600 {
@@ -891,7 +902,7 @@ pub fn view_task_row<'a>(
                     String::new()
                 };
 
-                let label = if total_mins > 0 || task.last_started_at.is_some() {
+                let time_label = if total_mins > 0 || task.last_started_at.is_some() {
                     if !est_label.is_empty() {
                         format!("{} / {}", fmt_dur(total_mins), est_label)
                     } else {
@@ -899,6 +910,22 @@ pub fn view_task_row<'a>(
                     }
                 } else {
                     est_label
+                };
+
+                let pc_str = if show_pc {
+                    task.percent_complete
+                        .map(|pc| format!("{}%", pc))
+                        .unwrap_or_default()
+                } else {
+                    String::new()
+                };
+
+                let label = if !pc_str.is_empty() && !time_label.is_empty() {
+                    format!("{} | {}", pc_str, time_label)
+                } else if !pc_str.is_empty() {
+                    pc_str
+                } else {
+                    time_label
                 };
 
                 let dur_bg = if task.last_started_at.is_some() {

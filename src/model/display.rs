@@ -35,9 +35,12 @@ pub fn random_related_icon(uid1: &str, uid2: &str) -> char {
 
 impl TaskDisplay for Task {
     fn is_paused(&self) -> bool {
+        // No longer relying exclusively on the 50% hack.
         self.status == TaskStatus::NeedsAction
-            && self.percent_complete.unwrap_or(0) > 0
-            && self.percent_complete.unwrap_or(0) < 100
+            && ((self.percent_complete.unwrap_or(0) > 0
+                && self.percent_complete.unwrap_or(0) < 100)
+                || self.time_spent_seconds > 0
+                || !self.sessions.is_empty())
     }
 
     fn checkbox_symbol(&self) -> &'static str {
@@ -90,14 +93,33 @@ impl TaskDisplay for Task {
             String::new()
         };
 
-        if total_mins > 0 || self.last_started_at.is_some() {
+        let time_str = if total_mins > 0 || self.last_started_at.is_some() {
             if !est_str.is_empty() {
-                format!("[{} / {}]", fmt_min(total_mins), est_str)
+                format!("{} / {}", fmt_min(total_mins), est_str)
             } else {
-                format!("[{}]", fmt_min(total_mins))
+                fmt_min(total_mins).to_string()
             }
         } else if !est_str.is_empty() {
-            format!("[{}]", est_str)
+            est_str.to_string()
+        } else {
+            String::new()
+        };
+
+        // Only display percentage if the task is actively actionable (not completed/cancelled)
+        let pc_str = if !self.status.is_done() {
+            self.percent_complete
+                .map(|pc| format!("{}%", pc))
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        if !pc_str.is_empty() && !time_str.is_empty() {
+            format!("[{}] | {}", pc_str, time_str)
+        } else if !pc_str.is_empty() {
+            format!("[{}]", pc_str)
+        } else if !time_str.is_empty() {
+            format!("[{}]", time_str)
         } else {
             String::new()
         }
@@ -196,9 +218,9 @@ impl TaskDisplay for Task {
                         .or(self.dtstart.as_ref())
                         .map(|d| d.to_date_naive());
 
-                    if Some(local.date_naive()) == task_date {
-                        s.push_str(&format!(" rem:{}", local.format("%H:%M")));
-                    } else if local.date_naive() == now.date_naive() {
+                    if Some(local.date_naive()) == task_date
+                        || local.date_naive() == now.date_naive()
+                    {
                         s.push_str(&format!(" rem:{}", local.format("%H:%M")));
                     } else if local.date_naive() == now.date_naive() + Duration::days(1) {
                         s.push_str(&format!(" rem:tomorrow {}", local.format("%H:%M")));
@@ -221,7 +243,9 @@ impl TaskDisplay for Task {
         if let Some(comp) = self.completion_date() {
             let local = comp.with_timezone(&chrono::Local);
             s.push_str(&format!(" done:{}", local.format("%Y-%m-%d %H:%M")));
-            // Always output the full datetime for completed tasks
+        } else if let Some(pc) = self.percent_complete {
+            // New partial completion syntax
+            s.push_str(&format!(" done:{}%", pc));
         }
 
         s

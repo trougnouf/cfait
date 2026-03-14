@@ -312,8 +312,9 @@ fun TaskRow(
                         }
                     }
 
-                    if (liveDurationMins > 0 || task.durationMins != null || task.lastStartedAt != null) {
-                        // UPDATE: Pass isEstimate=false for spent, isEstimate=true for duration
+                    val showPc = !task.isDone && task.percentComplete != null
+
+                    if (liveDurationMins > 0 || task.durationMins != null || task.lastStartedAt != null || showPc) {
                         val spentStr = if (liveDurationMins > 0 || task.lastStartedAt != null) formatDuration(
                             liveDurationMins.toUInt(),
                             isEstimate = false
@@ -322,10 +323,18 @@ fun TaskRow(
                             formatDuration(task.durationMins!!, task.durationMaxMins, isEstimate = true)
                         } else ""
 
-                        val label = when {
+                        val timeLabel = when {
                             spentStr.isNotEmpty() && estStr.isNotEmpty() -> "$spentStr / $estStr"
                             spentStr.isNotEmpty() -> spentStr
                             else -> estStr
+                        }
+
+                        val pcStr = if (showPc) "${task.percentComplete}%" else ""
+
+                        val label = when {
+                            pcStr.isNotEmpty() && timeLabel.isNotEmpty() -> "$pcStr | $timeLabel"
+                            pcStr.isNotEmpty() -> pcStr
+                            else -> timeLabel
                         }
 
                         // Use a specific color for active tracking to draw attention

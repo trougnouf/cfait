@@ -85,7 +85,7 @@ fn test_recurrence_advances_absolute_alarms() {
 
             // Should be approximately 1 month later (could be 28-31 days depending on month)
             let days_diff = (new_local.date_naive() - original_local.date_naive()).num_days();
-            assert!(days_diff >= 28 && days_diff <= 31);
+            assert!((28..=31).contains(&days_diff));
         }
         _ => panic!("Expected absolute alarm"),
     }
