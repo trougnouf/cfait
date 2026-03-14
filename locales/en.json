@@ -182,6 +182,7 @@
   "help_org_add_category": "Add category. Use ':' for sub-tags",
   "help_org_define_alias": "Define/update tag alias inline",
   "help_org_done": "Set completion date explicitly",
+  "help_org_done_percent": "Set partial completion percentage",
   "help_org_escape_special": "Escape special characters",
   "help_org_estimated_duration": "Estimated duration (single or range)",
   "help_org_location_alias": "Define/update location alias",

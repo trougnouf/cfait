@@ -66,6 +66,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     example: "done:2024-01-01 15:30".to_string(),
                 },
                 HelpItem {
+                    keys: "done:X%".to_string(),
+                    desc: rust_i18n::t!("help_org_done_percent").to_string(),
+                    example: "done:25%, done:70%".to_string(),
+                },
+                HelpItem {
                     keys: "#a:=#b".to_string(),
                     desc: rust_i18n::t!("help_org_define_alias").to_string(),
                     example: "#tree:=#gardening,@@home".to_string(),
