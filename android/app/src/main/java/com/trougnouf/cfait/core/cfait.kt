@@ -4050,6 +4050,7 @@ data class MobileTask(
     var `summary`: kotlin.String,
     var `description`: kotlin.String,
     var `isDone`: kotlin.Boolean,
+    var `percentComplete`: kotlin.UByte?,
     var `priority`: kotlin.UByte,
     var `dueDateIso`: kotlin.String?,
     var `completedDateIso`: kotlin.String?,
@@ -4099,6 +4100,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterOptionalUByte.read(buf),
             FfiConverterUByte.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
@@ -4142,6 +4144,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterString.allocationSize(value.`summary`) +
                 FfiConverterString.allocationSize(value.`description`) +
                 FfiConverterBoolean.allocationSize(value.`isDone`) +
+                FfiConverterOptionalUByte.allocationSize(value.`percentComplete`) +
                 FfiConverterUByte.allocationSize(value.`priority`) +
                 FfiConverterOptionalString.allocationSize(value.`dueDateIso`) +
                 FfiConverterOptionalString.allocationSize(value.`completedDateIso`) +
@@ -4187,6 +4190,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterString.write(value.`summary`, buf)
         FfiConverterString.write(value.`description`, buf)
         FfiConverterBoolean.write(value.`isDone`, buf)
+        FfiConverterOptionalUByte.write(value.`percentComplete`, buf)
         FfiConverterUByte.write(value.`priority`, buf)
         FfiConverterOptionalString.write(value.`dueDateIso`, buf)
         FfiConverterOptionalString.write(value.`completedDateIso`, buf)
@@ -4398,6 +4402,38 @@ public object FfiConverterTypeMobileSyntaxType : FfiConverterRustBuffer<MobileSy
         buf: ByteBuffer,
     ) {
         buf.putInt(value.ordinal + 1)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalUByte : FfiConverterRustBuffer<kotlin.UByte?> {
+    override fun read(buf: ByteBuffer): kotlin.UByte? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterUByte.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.UByte?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterUByte.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: kotlin.UByte?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterUByte.write(value, buf)
+        }
     }
 }
 
