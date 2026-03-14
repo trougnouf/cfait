@@ -1,0 +1,22 @@
+## [0.5.3] - 2026-03-14
+
+### 🚀 Features
+
+- Remove export dialog from the Trash and Recovery collections
+
+### 🐛 Bug Fixes
+
+- *(MacOS)* Fix MacOS compilation issue reported by Martin Stut
+- *(android)* Show Trash calendar when it is not empty ( https://github.com/trougnouf/cfait/issues/14 )
+- *(Android)* Compilation issue / missing import
+- *(pkg)* Fix Arch PKGBUILD compilation issue (AWS_LC_SYS_NO_JITTER_ENTROPY=1)
+
+### 📚 Documentation
+
+- Update F-Droid and flathub screenshots
+- Fix Android doc to track the other clients'
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix rolling release message
+- Update Rust toolchain to 1.94.0

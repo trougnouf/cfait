@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.5.3] - 2026-03-14
+
+### 🚀 Features
+
+- Remove export dialog from the Trash and Recovery collections
+
+### 🐛 Bug Fixes
+
+- *(MacOS)* Fix MacOS compilation issue reported by Martin Stut
+- *(android)* Show Trash calendar when it is not empty ( https://github.com/trougnouf/cfait/issues/14 )
+- *(Android)* Compilation issue / missing import
+- *(pkg)* Fix Arch PKGBUILD compilation issue (AWS_LC_SYS_NO_JITTER_ENTROPY=1)
+
+### 📚 Documentation
+
+- Update F-Droid and flathub screenshots
+- Fix Android doc to track the other clients'
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix rolling release message
+- Update Rust toolchain to 1.94.0
 ## [0.5.2] - 2026-03-12
 
 ### 🚀 Features
@@ -58,6 +80,7 @@
 - *(android)* Improve swipe collections navigation (16: fix half-swipes and panic back swipes after random)
 - *(android)* Improve swipe collections navigation (17: ensure checkboxes are still easily togglable, restore sorting (local last), unrelated/style: restore search icon color during search)
 - *(android)* Improve swipe collections navigation (17: create and jump to custom tab by selecting new write/viewable collection while focused on a different collection)
+- *(Windows)* Fix Windows compilation (notifications are fire-and-forget, not interactive)
 
 ### 💼 Other
 
@@ -147,6 +170,12 @@ Currently translated at 100.0% (1 of 1 strings)
 
 Translation: Cfait/Android fastlane short description
 Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-short-description/fr/
+- Update translation files
+
+Updated by "Cleanup translation files" add-on in Weblate.
+
+Translation: Cfait/Android fastlane short description
+Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-short-description/
 
 ### 🚜 Refactor
 
@@ -193,6 +222,7 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 - Fix Android compilation issues
 - Update test
 - *(android)* Reduce example task s.t. it fits in one line
+- Release cfait version 0.5.2
 ## [0.5.1] - 2026-02-25
 
 ### 🚀 Features
