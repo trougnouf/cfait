@@ -78,6 +78,34 @@
   </requires>
 
   <releases>
+    <release version="0.5.4" date="2026-03-14">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>Expose % done in the parser and UI and stop relying on % done for paused tasks ( https://github.com/trougnouf/cfait/issues/14 )</li>
+          <li>Remember the task list position when going back from editing a task</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>Fix flatpak compilation issue (AWS_LC_SYS_NO_JITTER_ENTROPY=1)</li>
+          <li>(alarm) Fix absolute time alarms (s.t. they are based on due date rather than now) and alarm recurrences ( https://github.com/trougnouf/cfait/issues/14 )</li>
+          <li>Ensure % completion does not spam the task list with 0% nor reset time spent</li>
+        </ul>
+        <p>Other:</p>
+        <ul>
+          <li>Translated using Weblate (German)</li>
+          <li>Translated using Weblate (Spanish)</li>
+          <li>Translated using Weblate (Italian)</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>Fix Android compilation issues, bump local collection and cache version, update documentation</li>
+          <li>(Android) Re-run uniffi-bindgen</li>
+          <li>Fix unused variables warnings when generating Android bindings</li>
+          <li>Fix Android compilation error</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.3" date="2026-03-14">
       <description>
         <p>Features:</p>

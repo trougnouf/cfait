@@ -1,5 +1,45 @@
 # Changelog
 
+## [0.5.4] - 2026-03-14
+
+### 🚀 Features
+
+- Expose % done in the parser and UI and stop relying on % done for paused tasks ( https://github.com/trougnouf/cfait/issues/14 )
+- Remember the task list position when going back from editing a task
+
+### 🐛 Bug Fixes
+
+- Fix flatpak compilation issue (AWS_LC_SYS_NO_JITTER_ENTROPY=1)
+- *(alarm)* Fix absolute time alarms (s.t. they are based on due date rather than now) and alarm recurrences ( https://github.com/trougnouf/cfait/issues/14 )
+- Ensure % completion does not spam the task list with 0% nor reset time spent
+
+### 💼 Other
+
+- Translated using Weblate (German)
+
+Currently translated at 98.1% (370 of 377 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
+- Translated using Weblate (Spanish)
+
+Currently translated at 98.1% (370 of 377 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Translated using Weblate (Italian)
+
+Currently translated at 98.1% (370 of 377 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix Android compilation issues, bump local collection and cache version, update documentation
+- *(Android)* Re-run uniffi-bindgen
+- Fix unused variables warnings when generating Android bindings
+- Fix Android compilation error
 ## [0.5.3] - 2026-03-14
 
 ### 🚀 Features
@@ -22,6 +62,7 @@
 
 - Fix rolling release message
 - Update Rust toolchain to 1.94.0
+- Release cfait version 0.5.3
 ## [0.5.2] - 2026-03-12
 
 ### 🚀 Features
