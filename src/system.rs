@@ -166,8 +166,20 @@ pub fn spawn_alarm_actor(
                                     .clone()
                                     .unwrap_or_else(|| rust_i18n::t!("reminder").to_string());
 
+                                #[cfg(all(
+                                    unix,
+                                    not(target_os = "macos"),
+                                    not(target_os = "android")
+                                ))]
                                 let ui_tx_clone = ui_sender.clone();
+
+                                #[cfg(all(
+                                    unix,
+                                    not(target_os = "macos"),
+                                    not(target_os = "android")
+                                ))]
                                 let task_uid_clone = task.uid.clone();
+
                                 std::thread::spawn(move || {
                                     let mut n = Notification::new();
                                     n.summary(&summary)
