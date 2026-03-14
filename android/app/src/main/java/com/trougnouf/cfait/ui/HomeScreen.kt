@@ -115,7 +115,7 @@ fun HomeScreen(
     var isPullRefreshing by remember { mutableStateOf(false) }
 
     val enabledCals = remember(calendars) {
-        val filtered = calendars.filter { !it.isDisabled && it.href != "local://trash" }
+        val filtered = calendars.filter { !it.isDisabled }
         filtered.filter { !it.isLocal } + filtered.filter { it.isLocal }
     }
     val allHrefs = remember(enabledCals) { enabledCals.map { it.href }.toSet() }
