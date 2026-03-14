@@ -312,7 +312,8 @@ fun TaskRow(
                         }
                     }
 
-                    val showPc = !task.isDone && task.percentComplete != null && task.percentComplete > 0u
+                    val pc = task.percentComplete
+                    val showPc = !task.isDone && pc != null && pc > 0u
 
                     if (liveDurationMins > 0 || task.durationMins != null || task.lastStartedAt != null || showPc) {
                         val spentStr = if (liveDurationMins > 0 || task.lastStartedAt != null) formatDuration(
@@ -329,7 +330,7 @@ fun TaskRow(
                             else -> estStr
                         }
 
-                        val pcStr = if (showPc) "${task.percentComplete}%" else ""
+                        val pcStr = if (showPc) "${pc}%" else ""
 
                         val label = when {
                             pcStr.isNotEmpty() && timeLabel.isNotEmpty() -> "$pcStr | $timeLabel"
