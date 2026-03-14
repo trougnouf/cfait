@@ -189,7 +189,16 @@ impl TaskDisplay for Task {
                     let local = dt.with_timezone(&Local);
                     let now = Local::now();
 
-                    if local.date_naive() == now.date_naive() {
+                    // Check if alarm date perfectly matches the task's own date
+                    let task_date = self
+                        .due
+                        .as_ref()
+                        .or(self.dtstart.as_ref())
+                        .map(|d| d.to_date_naive());
+
+                    if Some(local.date_naive()) == task_date {
+                        s.push_str(&format!(" rem:{}", local.format("%H:%M")));
+                    } else if local.date_naive() == now.date_naive() {
                         s.push_str(&format!(" rem:{}", local.format("%H:%M")));
                     } else if local.date_naive() == now.date_naive() + Duration::days(1) {
                         s.push_str(&format!(" rem:tomorrow {}", local.format("%H:%M")));

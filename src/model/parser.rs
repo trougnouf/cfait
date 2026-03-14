@@ -1435,6 +1435,14 @@ pub fn apply_smart_input(
     // includes a token that stops it.
     task.time_spent_seconds = 0;
 
+    // Two-pass alarm parsing: store pending alarms to process after dates are resolved
+    enum PendingAlarm {
+        Relative(u32),
+        TimeOnly(NaiveTime),
+        Absolute(DateTime<Utc>),
+    }
+    let mut pending_alarms = Vec::new();
+
     let user_tokens: Vec<String> = split_input_respecting_quotes(input)
         .into_iter()
         .map(|(_, _, s)| s)
@@ -1650,12 +1658,12 @@ pub fn apply_smart_input(
                         _ => amt, // assume minutes for m/min or bare numbers
                     };
 
-                    // 2. Create ABSOLUTE alarm (Now + Duration)
+                    // 2. Create ABSOLUTE alarm (Now + Duration) - this is different from rem:5m
                     let now = Local::now();
                     let target = now + Duration::minutes(mins as i64);
                     let target_utc = target.with_timezone(&Utc);
 
-                    task.alarms.push(Alarm::new_absolute(target_utc));
+                    pending_alarms.push(PendingAlarm::Absolute(target_utc));
 
                     consumed += 1 + extra; // Consume amount + unit tokens
                 } else {
@@ -1680,24 +1688,18 @@ pub fn apply_smart_input(
 
                     let local_dt = safe_local_to_utc(target_date, time);
 
-                    task.alarms.push(Alarm::new_absolute(local_dt));
+                    pending_alarms.push(PendingAlarm::Absolute(local_dt));
                 } else {
                     summary_words.push(unescape(token));
                 }
             } else if !clean_val.is_empty() {
                 // A. Duration (rem:10m)
                 if let Some(d) = parse_duration(clean_val) {
-                    task.alarms.push(Alarm::new_relative(d));
+                    pending_alarms.push(PendingAlarm::Relative(d));
                 }
-                // B. Time Only (rem:8pm) -> Today or Tomorrow at 8pm
+                // B. Time Only (rem:8pm) -> Store for later contextual resolution
                 else if let Some(t) = parse_time_string(clean_val) {
-                    let now_local = Local::now();
-                    let mut target_date = now_local.date_naive();
-                    if t <= now_local.time() {
-                        target_date += Duration::days(1);
-                    }
-                    let dt = safe_local_to_utc(target_date, t);
-                    task.alarms.push(Alarm::new_absolute(dt));
+                    pending_alarms.push(PendingAlarm::TimeOnly(t));
                 }
                 // C. Date + Optional Time (rem:2025-12-27 12:30, rem:tomorrow 9am, rem:monday 9am)
                 else if let Some(d) =
@@ -1720,7 +1722,7 @@ pub fn apply_smart_input(
                     let t = time_part.unwrap_or(fallback);
 
                     let dt = safe_local_to_utc(d, t);
-                    task.alarms.push(Alarm::new_absolute(dt));
+                    pending_alarms.push(PendingAlarm::Absolute(dt));
                 } else {
                     summary_words.push(unescape(token));
                 }
@@ -2179,6 +2181,41 @@ pub fn apply_smart_input(
     {
         // Clamp start to due to avoid invalid ranges where start > due.
         task.dtstart = Some(due.clone());
+    }
+
+    // Process pending alarms now that task dates are fully resolved
+    for pending in pending_alarms {
+        match pending {
+            PendingAlarm::Relative(mins) => {
+                task.alarms.push(Alarm::new_relative(mins));
+            }
+            PendingAlarm::Absolute(dt) => {
+                task.alarms.push(Alarm::new_absolute(dt));
+            }
+            PendingAlarm::TimeOnly(t) => {
+                // Contextual snap: prefer DUE, then START, then fallback to today/tomorrow
+                let anchor_date = task
+                    .due
+                    .as_ref()
+                    .or(task.dtstart.as_ref())
+                    .map(|d| d.to_date_naive());
+
+                if let Some(target_date) = anchor_date {
+                    // Snap to task date
+                    let dt = safe_local_to_utc(target_date, t);
+                    task.alarms.push(Alarm::new_absolute(dt));
+                } else {
+                    // No dates on task, use today/tomorrow logic
+                    let now_local = Local::now();
+                    let mut target_date = now_local.date_naive();
+                    if t <= now_local.time() {
+                        target_date += Duration::days(1);
+                    }
+                    let dt = safe_local_to_utc(target_date, t);
+                    task.alarms.push(Alarm::new_absolute(dt));
+                }
+            }
+        }
     }
 }
 

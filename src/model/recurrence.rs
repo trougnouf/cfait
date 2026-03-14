@@ -1,5 +1,5 @@
 // File: ./src/model/recurrence.rs
-use crate::model::item::{Alarm, DateType, RawProperty, Task, TaskStatus};
+use crate::model::item::{Alarm, AlarmTrigger, DateType, RawProperty, Task, TaskStatus};
 use chrono::{Local, Utc};
 use rrule::RRuleSet;
 use std::collections::HashSet; // Import HashSet for deduplication
@@ -182,6 +182,14 @@ impl RecurrenceEngine {
                 next_task
                     .alarms
                     .retain(|a: &Alarm| !a.is_snooze() && a.acknowledged.is_none());
+
+                // Advance explicit absolute alarms along with the task
+                let time_shift = next_start - seed_dt_utc;
+                for alarm in &mut next_task.alarms {
+                    if let AlarmTrigger::Absolute(ref mut dt) = alarm.trigger {
+                        *dt += time_shift;
+                    }
+                }
 
                 // FIX 3: Ensure exdates in the *new* task are clean (deduplicated)
                 // We keep the exdates in the new task so history is preserved, but we might as well clean them up.
