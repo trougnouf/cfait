@@ -175,8 +175,12 @@ pub fn spawn_alarm_actor(
                                         .appname("Cfait")
                                         .action("default", "Open");
 
-                                    // On non-windows, we get a handle and can wait for actions.
-                                    #[cfg(not(target_os = "windows"))]
+                                    // On Linux/BSD, we get a handle and can wait for actions.
+                                    #[cfg(all(
+                                        unix,
+                                        not(target_os = "macos"),
+                                        not(target_os = "android")
+                                    ))]
                                     if let Ok(handle) = n.show() {
                                         handle.wait_for_action(move |action| {
                                             if action == "default"
@@ -189,10 +193,14 @@ pub fn spawn_alarm_actor(
                                         });
                                     }
 
-                                    // On windows, show() returns () and we can't wait for actions.
+                                    // On windows, macos, and android we can't wait for actions.
                                     // The notification will still appear, but clicking it will not
                                     // focus the app window via this code path.
-                                    #[cfg(target_os = "windows")]
+                                    #[cfg(any(
+                                        target_os = "windows",
+                                        target_os = "macos",
+                                        target_os = "android"
+                                    ))]
                                     {
                                         let _ = n.show();
                                     }
