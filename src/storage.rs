@@ -418,13 +418,39 @@ impl LocalStorage {
         }
         let tasks = match old_version {
             0 | 1 => Self::migrate_v1_to_v2(json)?,
-            2 | 3 => {
+            2..=4 => {
                 let data: LocalStorageData = serde_json::from_str(json)?;
                 data.tasks
             }
             _ => return Err(anyhow::anyhow!("Unknown version {}", old_version)),
         };
         Ok(tasks)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_all_previous_versions_are_handled() {
+        // Ensure every version up to LOCAL_STORAGE_VERSION - 1 is explicitly handled
+        // in migrate_to_current and does not hit the "Unknown version" catch-all.
+        for v in 0..LOCAL_STORAGE_VERSION {
+            // Pass an invalid JSON string to trigger a parse error. The parse error
+            // will only be reached if the version is correctly matched.
+            let res = LocalStorage::migrate_to_current(v, "invalid_json");
+
+            if let Err(e) = res {
+                let err_msg = e.to_string();
+                assert!(
+                    !err_msg.contains("Unknown version"),
+                    "Version {} is not handled by migrate_to_current! Please update the match statement.", v
+                );
+            } else {
+                panic!("Expected a parse error for version {}, but migration somehow succeeded.", v);
+            }
+        }
     }
 }
 

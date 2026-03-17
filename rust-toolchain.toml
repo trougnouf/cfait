@@ -5,3 +5,4 @@ targets = [
     "armv7-linux-androideabi",
     "x86_64-linux-android"
 ]
+# Update Dockerfiles too! (reproducible builds with F-Droid)
