@@ -78,6 +78,14 @@
   </requires>
 
   <releases>
+    <release version="0.5.5" date="2026-03-17">
+      <description>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>Handle local v4-&gt;v5 migration and test version handling ( https://github.com/trougnouf/cfait/issues/15 )</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.4" date="2026-03-14">
       <description>
         <p>Features:</p>

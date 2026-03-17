@@ -1,0 +1,5 @@
+## [0.5.5] - 2026-03-17
+
+### 🐛 Bug Fixes
+
+- Handle local v4->v5 migration and test version handling ( https://github.com/trougnouf/cfait/issues/15 )
