@@ -538,36 +538,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Font Size
-            item {
-                HorizontalDivider(Modifier.padding(vertical = 16.dp))
-                Column {
-                    Text(
-                        stringResource(R.string.font_size),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 8.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            "${(fontScale * 100).toInt()}%",
-                            modifier = Modifier.width(45.dp),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Slider(
-                            value = fontScale,
-                            onValueChange = {
-                                val rounded = kotlin.math.round(it * 20f) / 20f // Lock to 0.05 steps
-                                onFontScaleChange(rounded)
-                            },
-                            valueRange = 0.75f..1.5f,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-            }
-
-
             // 3. Manage Collections
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
@@ -598,6 +568,35 @@ fun SettingsScreen(
                         saveToDisk()
                     })
                     Text(cal.name, modifier = Modifier.weight(1f))
+                }
+            }
+
+            // Font Size
+            item {
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                Column {
+                    Text(
+                        stringResource(R.string.font_size),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "${(fontScale * 100).toInt()}%",
+                            modifier = Modifier.width(45.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Slider(
+                            value = fontScale,
+                            onValueChange = {
+                                val rounded = kotlin.math.round(it * 20f) / 20f // Lock to 0.05 steps
+                                onFontScaleChange(rounded)
+                            },
+                            valueRange = 0.75f..1.5f,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
 
