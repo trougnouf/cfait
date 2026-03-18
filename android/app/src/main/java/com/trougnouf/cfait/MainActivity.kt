@@ -72,12 +72,14 @@ class MainActivity : ComponentActivity() {
         val savedTheme = sharedPrefs.getString("app_theme", "auto") ?: "auto"
         val savedTabPos = sharedPrefs.getString("tab_position", "bottom") ?: "bottom"
         val savedTabAutoHide = sharedPrefs.getBoolean("tab_auto_hide", true)
+        val savedFontScale = sharedPrefs.getFloat("font_scale", 1.0f)
 
         setContent {
             // Lift theme state to root so SettingsScreen can update it
             var currentTheme by remember { mutableStateOf(savedTheme) }
             var tabPosition by remember { mutableStateOf(savedTabPos) }
             var tabAutoHide by remember { mutableStateOf(savedTabAutoHide) }
+            var fontScale by remember { mutableFloatStateOf(savedFontScale) }
 
             // Determine the color scheme based on preference and system state
             val context = LocalContext.current
@@ -102,25 +104,39 @@ class MainActivity : ComponentActivity() {
             }
 
             MaterialTheme(colorScheme = colorScheme) {
-                CfaitNavHost(
-                    api = api,
-                    intent = intent,
-                    currentTheme = currentTheme,
-                    onThemeChange = { newTheme ->
-                        currentTheme = newTheme
-                        sharedPrefs.edit().putString("app_theme", newTheme).apply()
-                    },
-                    tabPosition = tabPosition,
-                    onTabPositionChange = { newPos ->
-                        tabPosition = newPos
-                        sharedPrefs.edit().putString("tab_position", newPos).apply()
-                    },
-                    tabAutoHide = tabAutoHide,
-                    onTabAutoHideChange = { newHide ->
-                        tabAutoHide = newHide
-                        sharedPrefs.edit().putBoolean("tab_auto_hide", newHide).apply()
-                    }
+                val currentDensity = androidx.compose.ui.platform.LocalDensity.current
+                val customDensity = androidx.compose.ui.unit.Density(
+                    density = currentDensity.density,
+                    fontScale = currentDensity.fontScale * fontScale
                 )
+                androidx.compose.runtime.CompositionLocalProvider(
+                    androidx.compose.ui.platform.LocalDensity provides customDensity
+                ) {
+                    CfaitNavHost(
+                        api = api,
+                        intent = intent,
+                        currentTheme = currentTheme,
+                        onThemeChange = { newTheme ->
+                            currentTheme = newTheme
+                            sharedPrefs.edit().putString("app_theme", newTheme).apply()
+                        },
+                        tabPosition = tabPosition,
+                        onTabPositionChange = { newPos ->
+                            tabPosition = newPos
+                            sharedPrefs.edit().putString("tab_position", newPos).apply()
+                        },
+                        tabAutoHide = tabAutoHide,
+                        onTabAutoHideChange = { newHide ->
+                            tabAutoHide = newHide
+                            sharedPrefs.edit().putBoolean("tab_auto_hide", newHide).apply()
+                        },
+                        fontScale = fontScale,
+                        onFontScaleChange = { newScale ->
+                            fontScale = newScale
+                            sharedPrefs.edit().putFloat("font_scale", newScale).apply()
+                        }
+                    )
+                }
             }
         }
     }
@@ -141,7 +157,9 @@ fun CfaitNavHost(
     tabPosition: String,
     onTabPositionChange: (String) -> Unit,
     tabAutoHide: Boolean,
-    onTabAutoHideChange: (Boolean) -> Unit
+    onTabAutoHideChange: (Boolean) -> Unit,
+    fontScale: Float,
+    onFontScaleChange: (Float) -> Unit
 ) {
     val navController = rememberNavController()
     val context = LocalContext.current
@@ -514,7 +532,9 @@ fun CfaitNavHost(
                 onDeleteEvents = { handleDeleteEvents() },
                 onCreateEvents = { handleCreateMissingEvents() },
                 currentTheme = currentTheme,
-                onThemeChange = onThemeChange
+                onThemeChange = onThemeChange,
+                fontScale = fontScale,
+                onFontScaleChange = onFontScaleChange
             )
         }
 

@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material3.Slider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,7 +55,9 @@ fun SettingsScreen(
     onDeleteEvents: () -> Unit,
     onCreateEvents: () -> Unit,
     currentTheme: String,
-    onThemeChange: (String) -> Unit
+    onThemeChange: (String) -> Unit,
+    fontScale: Float,
+    onFontScaleChange: (Float) -> Unit
 ) {
     var url by remember { mutableStateOf("") }
     var user by remember { mutableStateOf("") }
@@ -531,6 +534,35 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
+                    }
+                }
+            }
+
+            // Font Size
+            item {
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                Column {
+                    Text(
+                        stringResource(R.string.font_size),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "${(fontScale * 100).toInt()}%",
+                            modifier = Modifier.width(45.dp),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Slider(
+                            value = fontScale,
+                            onValueChange = {
+                                val rounded = kotlin.math.round(it * 20f) / 20f // Lock to 0.05 steps
+                                onFontScaleChange(rounded)
+                            },
+                            valueRange = 0.75f..1.5f,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
             }

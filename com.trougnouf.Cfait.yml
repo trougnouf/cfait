@@ -20,8 +20,8 @@ modules:
       append-path: /usr/lib/sdk/rust-stable/bin
       env:
         CARGO_HOME: /run/build/cfait/cargo
+        AWS_LC_SYS_NO_JITTER_ENTROPY: "1"
     build-commands:
-      - export AWS_LC_SYS_NO_JITTER_ENTROPY=1
       # Build the TUI binary
       - cargo --offline build --release --verbose --features tui
       # Build the GUI binary

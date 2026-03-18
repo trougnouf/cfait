@@ -147,6 +147,7 @@
   "failed_to_read_ics_file": "Failed to read ICS file",
   "filter_duration": "Filter duration",
   "focus_hide_others": "Focus (hide others)",
+  "font_size": "Font size",
   "force_sync": "Force sync",
   "found_tasks_to_import": {
     "one": "Found 1 task to import",
