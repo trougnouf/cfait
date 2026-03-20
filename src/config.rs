@@ -205,6 +205,9 @@ pub struct Config {
     #[serde(default = "default_max_done_subtasks")]
     pub max_done_subtasks: usize,
 
+    #[serde(default = "default_true")]
+    pub show_ongoing_notifications: bool,
+
     // Maps are typically at the end in TOML
     #[serde(default)]
     pub hidden_calendars: Vec<String>,
@@ -243,6 +246,7 @@ impl Default for Config {
             strikethrough_completed: false,
             max_done_roots: 20,
             max_done_subtasks: 5,
+            show_ongoing_notifications: true,
         }
     }
 }
@@ -419,6 +423,9 @@ impl Config {
                 out.push_str(
                     " # Integer: Limit completed subtasks shown in a parent before 'Expand'.",
                 );
+            } else if trimmed.starts_with("show_ongoing_notifications =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Display ongoing timer notification for active tasks.");
             } else if trimmed.starts_with("hidden_calendars =") {
                 out.push_str("# List of calendar HREFs currently toggled 'off' in the sidebar.\n");
                 out.push_str(line);

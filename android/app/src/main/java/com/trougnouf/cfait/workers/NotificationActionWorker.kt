@@ -34,6 +34,7 @@ class NotificationActionWorker(
         const val ACTION_DONE = "DONE"
         const val ACTION_CANCEL = "CANCEL"
         const val ACTION_DISMISS = "DISMISS"
+        const val ACTION_DISMISS_ONGOING = "DISMISS_ONGOING"
 
         const val BROADCAST_REFRESH = "com.trougnouf.cfait.REFRESH_UI"
         const val CHANNEL_ALARMS = "CFAIT_ALARMS"
@@ -73,7 +74,7 @@ class NotificationActionWorker(
                     // 3. Fetch fresh task data to get accurate time tracking info
                     val task = api.getTaskByUid(taskUid)
                     if (task != null) {
-                        showActiveTaskNotification(context, task, alarmUid)
+                        com.trougnouf.cfait.util.NotificationHelper.showActiveTaskNotification(context, task, alarmUid)
                     }
                 }
 
@@ -103,6 +104,12 @@ class NotificationActionWorker(
                     api.dismissAlarm(taskUid, alarmUid)
                 }
 
+                ACTION_DISMISS_ONGOING -> {
+                    // Record that user deliberately swiped away this specific ongoing notification
+                    val prefs = context.getSharedPreferences("cfait_ongoing_notifs", Context.MODE_PRIVATE)
+                    prefs.edit().putBoolean(taskUid, true).apply()
+                }
+
                 else -> {
                     Log.w("CfaitNotificationAction", "Unknown action: $action")
                     return Result.failure()
@@ -126,74 +133,4 @@ class NotificationActionWorker(
         }
     }
 
-    private fun showActiveTaskNotification(
-        context: Context,
-        task: com.trougnouf.cfait.core.MobileTask,
-        originalAlarmUid: String
-    ) {
-        val notificationId = task.uid.hashCode()
-
-        // Calculate base time for Chronometer
-        val now = System.currentTimeMillis()
-        val startTs = task.lastStartedAt ?: (now / 1000)
-        val currentSessionMs = (now - (startTs * 1000))
-        val totalSpentMs = (task.timeSpentSeconds.toLong() * 1000) + currentSessionMs
-
-        val chronoBase = SystemClock.elapsedRealtime() - totalSpentMs
-
-        // Pause Action
-        val pauseIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            this.action = ACTION_PAUSE
-            putExtra("T_UID", task.uid)
-            putExtra("A_UID", originalAlarmUid)
-        }
-        val pausePending = PendingIntent.getBroadcast(
-            context,
-            (task.uid + "PAUSE").hashCode(),
-            pauseIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // Done Action
-        val doneIntent = Intent(context, NotificationActionReceiver::class.java).apply {
-            this.action = ACTION_DONE
-            putExtra("T_UID", task.uid)
-            putExtra("A_UID", originalAlarmUid)
-        }
-        val donePending = PendingIntent.getBroadcast(
-            context,
-            (task.uid + "DONE_ACT").hashCode(),
-            doneIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        // Tap opens app
-        val tapIntent = Intent(context, MainActivity::class.java).apply {
-            putExtra("focus_task_uid", task.uid)
-        }
-        val tapPending =
-            PendingIntent.getActivity(context, task.uid.hashCode(), tapIntent, PendingIntent.FLAG_IMMUTABLE)
-
-        // Use Android string resources for titles and action labels so notifications are localizable
-        val notification = NotificationCompat.Builder(context, CHANNEL_ALARMS)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(context.getString(R.string.notification_in_progress, task.summary))
-            .setUsesChronometer(true)
-            .setWhen(System.currentTimeMillis() - totalSpentMs)
-            .setShowWhen(true)
-            .setOnlyAlertOnce(true)
-            .setOngoing(true)
-            .setDeleteIntent(pausePending)
-            .setContentIntent(tapPending)
-            .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.pause), pausePending)
-            .addAction(R.drawable.ic_launcher_foreground, context.getString(R.string.done), donePending)
-            .addExtras(android.os.Bundle().apply {
-                putString("cfait_task_uid", task.uid)
-                putString("cfait_notif_type", "ongoing")
-            })
-            .build()
-
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(notificationId, notification)
-    }
 }

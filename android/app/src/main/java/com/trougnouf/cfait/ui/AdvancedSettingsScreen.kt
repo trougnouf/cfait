@@ -31,6 +31,7 @@ fun AdvancedSettingsScreen(
     maxDoneSubtasks: String,
     trashRetention: String,
     deleteEventsOnCompletion: Boolean,
+    showOngoingNotifications: Boolean,
     tabPosition: String,
     tabAutoHide: Boolean,
     onTabPositionChange: (String) -> Unit,
@@ -39,6 +40,7 @@ fun AdvancedSettingsScreen(
     onMaxDoneSubtasksChange: (String) -> Unit,
     onTrashRetentionChange: (String) -> Unit,
     onDeleteEventsChange: (Boolean) -> Unit,
+    onShowOngoingNotificationsChange: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -143,6 +145,30 @@ fun AdvancedSettingsScreen(
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
             )
 
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
+
+            // Notifications Section
+            Text(
+                stringResource(R.string.notifications),
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = showOngoingNotifications,
+                    onCheckedChange = onShowOngoingNotificationsChange
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.show_ongoing_notifications_label))
+            }
+            Text(
+                stringResource(R.string.show_ongoing_notifications_explain),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            )
             HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
             // Calendar Integration Section

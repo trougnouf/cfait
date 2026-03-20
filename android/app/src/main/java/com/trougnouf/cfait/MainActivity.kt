@@ -54,6 +54,7 @@ import com.trougnouf.cfait.ui.SettingsScreen
 import com.trougnouf.cfait.ui.AdvancedSettingsScreen
 import com.trougnouf.cfait.ui.TaskDetailScreen
 import com.trougnouf.cfait.util.AlarmScheduler
+import com.trougnouf.cfait.util.NotificationHelper
 import com.trougnouf.cfait.workers.AlarmWorker
 import com.trougnouf.cfait.workers.CalendarMigrationWorker
 import com.trougnouf.cfait.workers.CalendarSyncWorker
@@ -294,6 +295,7 @@ fun CfaitNavHost(
                 hasUnsynced = api.hasUnsyncedChanges()
                 AlarmScheduler.scheduleNextAlarm(context, api)
                 AlarmScheduler.cleanupObsoleteNotifications(context, api)
+                NotificationHelper.updateOngoingNotifications(context, api)
 
                 // Dynamically update Background Sync Worker based on config
                 val interval = config.autoRefreshInterval
@@ -544,6 +546,7 @@ fun CfaitNavHost(
             var localSubs by remember { mutableStateOf("5") }
             var localTrash by remember { mutableStateOf("14") }
             var deleteEvents by remember { mutableStateOf(false) }
+            var showOngoingNotifs by remember { mutableStateOf(true) }
 
             LaunchedEffect(Unit) {
                 try {
@@ -552,6 +555,7 @@ fun CfaitNavHost(
                     localSubs = cfg.maxDoneSubtasks.toString()
                     localTrash = cfg.trashRetention.toString()
                     deleteEvents = cfg.deleteEventsOnCompletion
+                    showOngoingNotifs = cfg.showOngoingNotifications
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     // ignore
@@ -567,6 +571,7 @@ fun CfaitNavHost(
                 maxDoneSubtasks = localSubs,
                 trashRetention = localTrash,
                 deleteEventsOnCompletion = deleteEvents,
+                showOngoingNotifications = showOngoingNotifs,
                 tabPosition = tabPosition,
                 tabAutoHide = tabAutoHide,
                 onTabPositionChange = onTabPositionChange,
@@ -575,6 +580,7 @@ fun CfaitNavHost(
                 onMaxDoneSubtasksChange = { localSubs = it },
                 onTrashRetentionChange = { localTrash = it },
                 onDeleteEventsChange = { deleteEvents = it },
+                onShowOngoingNotificationsChange = { showOngoingNotifs = it },
                 onBack = {
                     // Save on exit
                     try {
@@ -588,7 +594,7 @@ fun CfaitNavHost(
                             cfg.defaultPriority, cfg.startGracePeriodDays, cfg.autoReminders,
                             cfg.defaultReminderTime, cfg.snoozeShort, cfg.createEventsForTasks,
                             deleteEvents, cfg.autoRefreshInterval,
-                            t, r, s // New values (added trash retention)
+                            t, r, s, showOngoingNotifs // New values (added trash retention and ongoing notifications)
                         )
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e

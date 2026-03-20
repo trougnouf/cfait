@@ -7,6 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.util.AlarmScheduler
+import com.trougnouf.cfait.util.NotificationHelper
 
 /**
  * Periodic background worker that performs a full sync and refreshes alarms/UI.
@@ -33,6 +34,7 @@ class PeriodicSyncWorker(
             // Ensure alarms are up-to-date after sync
             AlarmScheduler.scheduleNextAlarm(context, api)
             AlarmScheduler.cleanupObsoleteNotifications(context, api)
+            NotificationHelper.updateOngoingNotifications(context, api)
 
             // Notify UI to refresh if open
             val intent = Intent("com.trougnouf.cfait.REFRESH_UI")

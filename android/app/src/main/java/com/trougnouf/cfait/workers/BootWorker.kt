@@ -7,6 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.util.AlarmScheduler
+import com.trougnouf.cfait.util.NotificationHelper
 
 class BootWorker(
     private val context: Context,
@@ -22,6 +23,7 @@ class BootWorker(
             val api = app.api
 
             AlarmScheduler.scheduleNextAlarm(context, api)
+            NotificationHelper.updateOngoingNotifications(context, api)
             Result.success()
         } catch (e: Exception) {
             Log.e("CfaitBootWorker", "Error", e)

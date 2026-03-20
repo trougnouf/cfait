@@ -258,7 +258,8 @@ fun SettingsScreen(
             createEventsForTasks, deleteEventsOnCompletion,
             aRefresh,
             trashInt,
-            maxRootsInt, maxSubtasksInt
+            maxRootsInt, maxSubtasksInt,
+            cfg.showOngoingNotifications
         )
     }
 
