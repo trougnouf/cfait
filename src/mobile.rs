@@ -459,7 +459,7 @@ async fn apply_store_mutation_multi_boxed(
     }
 
     let store_locked = this.controller.store.lock().await;
-    this.rebuild_alarm_index_sync(&store_locked);
+    this.rebuild_alarm_index(&store_locked).await;
     Ok(())
 }
 
@@ -611,7 +611,7 @@ impl CfaitMobile {
                     .map_err(MobileError::from)?;
                 // Rebuild alarms/index after mutation
                 let store_locked = self.controller.store.lock().await;
-                self.rebuild_alarm_index_sync(&store_locked);
+                self.rebuild_alarm_index(&store_locked).await;
                 Ok(())
             } else {
                 Err(MobileError::from("Task not found"))
@@ -636,7 +636,7 @@ impl CfaitMobile {
                 .map_err(MobileError::from)?;
             // Rebuild alarms/index after mutation
             let store_locked = self.controller.store.lock().await;
-            self.rebuild_alarm_index_sync(&store_locked);
+            self.rebuild_alarm_index(&store_locked).await;
             Ok(())
         } else {
             Err(MobileError::from("Task not found"))
@@ -1406,7 +1406,7 @@ impl CfaitMobile {
         #[cfg(target_os = "android")]
         log::debug!("Rebuilding alarm index after adding {}", uid);
         let store_for_rebuild = self.controller.store.lock().await;
-        self.rebuild_alarm_index_sync(&store_for_rebuild);
+        self.rebuild_alarm_index(&store_for_rebuild).await;
         #[cfg(target_os = "android")]
         log::debug!("Alarm index rebuilt. Returning uid: {}", uid);
         Ok(uid)
@@ -1468,7 +1468,7 @@ impl CfaitMobile {
         }
 
         let store = self.controller.store.lock().await;
-        self.rebuild_alarm_index_sync(&store);
+        self.rebuild_alarm_index(&store).await;
         Ok(())
     }
 
@@ -1523,7 +1523,7 @@ impl CfaitMobile {
             .await
             .map_err(MobileError::from)?;
         let store = self.controller.store.lock().await;
-        self.rebuild_alarm_index_sync(&store);
+        self.rebuild_alarm_index(&store).await;
         Ok(())
     }
 
@@ -1534,7 +1534,7 @@ impl CfaitMobile {
             .map_err(MobileError::from)?;
 
         let store = self.controller.store.lock().await;
-        self.rebuild_alarm_index_sync(&store);
+        self.rebuild_alarm_index(&store).await;
         Ok(())
     }
 
@@ -1544,7 +1544,7 @@ impl CfaitMobile {
             .await
             .map_err(MobileError::from)?;
         let store = self.controller.store.lock().await;
-        self.rebuild_alarm_index_sync(&store);
+        self.rebuild_alarm_index(&store).await;
         Ok(())
     }
 
@@ -1633,7 +1633,7 @@ impl CfaitMobile {
             }
             let mut store = self.controller.store.lock().await;
             store.remove(&href);
-            self.rebuild_alarm_index_sync(&store);
+            self.rebuild_alarm_index(&store).await;
             Ok(())
         } else {
             Err(MobileError::from("Calendar not found"))
@@ -1656,7 +1656,7 @@ impl CfaitMobile {
         })
         .await?;
         let store = self.controller.store.lock().await;
-        self.rebuild_alarm_index_sync(&store);
+        self.rebuild_alarm_index(&store).await;
         Ok(())
     }
 
@@ -1679,7 +1679,7 @@ impl CfaitMobile {
         #[cfg(target_os = "android")]
         log::debug!("Rebuilding alarm index after dismiss");
         let store = self.controller.store.lock().await;
-        self.rebuild_alarm_index_sync(&store);
+        self.rebuild_alarm_index(&store).await;
         #[cfg(target_os = "android")]
         log::debug!("Dismiss successful");
         Ok(())
@@ -1875,7 +1875,7 @@ impl CfaitMobile {
             .map_err(MobileError::from)?;
 
         let store_locked = self.controller.store.lock().await;
-        self.rebuild_alarm_index_sync(&store_locked);
+        self.rebuild_alarm_index(&store_locked).await;
 
         Ok(())
     }
@@ -1946,15 +1946,15 @@ impl CfaitMobile {
                         store.insert(cal.href.clone(), cached);
                     }
                 }
-                self.rebuild_alarm_index_sync(&store);
+                self.rebuild_alarm_index(&store).await;
                 return Err(MobileError::from(e));
             }
         }
-        self.rebuild_alarm_index_sync(&store);
+        self.rebuild_alarm_index(&store).await;
         Ok(warning.unwrap_or_else(|| "Connected".to_string()))
     }
 
-    fn rebuild_alarm_index_sync(&self, store: &TaskStore) {
+    async fn rebuild_alarm_index(&self, store: &TaskStore) {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let index = AlarmIndex::rebuild_from_tasks(
             &store.calendars,
@@ -1965,7 +1965,7 @@ impl CfaitMobile {
             Ok(_) => {
                 #[cfg(target_os = "android")]
                 log::debug!("Alarm index rebuilt with {} alarms", index.len());
-                *self.alarm_index_cache.blocking_lock() = Some(index);
+                *self.alarm_index_cache.lock().await = Some(index);
             }
             Err(e) => {
                 #[cfg(target_os = "android")]

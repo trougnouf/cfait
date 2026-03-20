@@ -91,9 +91,13 @@ fun TaskDetailScreen(
                     items(targetCals) { cal ->
                         TextButton(onClick = {
                             scope.launch {
-                                api.moveTask(uid, cal.href)
-                                showMoveDialog = false
-                                onBack()
+                                try {
+                                    api.moveTask(uid, cal.href)
+                                    showMoveDialog = false
+                                    onBack()
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                }
                             }
                         }, modifier = Modifier.fillMaxWidth()) { Text(cal.name) }
                     }
@@ -187,8 +191,12 @@ fun TaskDetailScreen(
                         IconButton(
                             onClick = {
                                 scope.launch {
-                                    api.removeDependency(task!!.uid, blockerUid)
-                                    reload()
+                                    try {
+                                        api.removeDependency(task!!.uid, blockerUid)
+                                        reload()
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             },
                             modifier = Modifier.size(24.dp)
@@ -234,9 +242,13 @@ fun TaskDetailScreen(
                         IconButton(
                             onClick = {
                                 scope.launch {
-                                    // To unblock, remove this task.uid from the blocked task's dependencies
-                                    api.removeDependency(blockedUid, task!!.uid)
-                                    reload()
+                                    try {
+                                        // To unblock, remove this task.uid from the blocked task's dependencies
+                                        api.removeDependency(blockedUid, task!!.uid)
+                                        reload()
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             },
                             modifier = Modifier.size(24.dp)
@@ -282,8 +294,12 @@ fun TaskDetailScreen(
                         IconButton(
                             onClick = {
                                 scope.launch {
-                                    api.removeRelatedTo(task!!.uid, relatedUid)
-                                    reload()
+                                    try {
+                                        api.removeRelatedTo(task!!.uid, relatedUid)
+                                        reload()
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             },
                             modifier = Modifier.size(24.dp)
@@ -427,8 +443,16 @@ fun TaskDetailScreen(
                     IconButton(
                         onClick = {
                             scope.launch {
-                                api.deleteSession(uid, absoluteIdx.toUInt())
-                                reload()
+                                try {
+                                    api.deleteSession(uid, absoluteIdx.toUInt())
+                                    reload()
+                                } catch (e: Exception) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Error deleting session: ${e.message}",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
                             }
                         },
                         modifier = Modifier.size(24.dp)
@@ -482,8 +506,12 @@ fun TaskDetailScreen(
                         IconButton(
                             onClick = {
                                 scope.launch {
-                                    api.removeRelatedTo(relatedTask.uid, task!!.uid)
-                                    reload()
+                                    try {
+                                        api.removeRelatedTo(relatedTask.uid, task!!.uid)
+                                        reload()
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             },
                             modifier = Modifier.size(24.dp)
