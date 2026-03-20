@@ -379,7 +379,28 @@ fun SettingsScreen(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
-
+            items(allCalendars) { cal ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val newSet = disabledSet.toMutableSet()
+                            val enabled = disabledSet.contains(cal.href)
+                            if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
+                            disabledSet = newSet
+                            saveToDisk()
+                        }
+                ) {
+                    Checkbox(checked = !disabledSet.contains(cal.href), onCheckedChange = { enabled ->
+                        val newSet = disabledSet.toMutableSet()
+                        if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
+                        disabledSet = newSet
+                        saveToDisk()
+                    })
+                    Text(cal.name, modifier = Modifier.weight(1f))
+                }
+            }
 
             // 3. Appearance & Language
             item {
@@ -574,28 +595,6 @@ fun SettingsScreen(
                             )
                         }
                     }
-                }
-            }
-            items(allCalendars) { cal ->
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            val newSet = disabledSet.toMutableSet()
-                            val enabled = disabledSet.contains(cal.href)
-                            if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
-                            disabledSet = newSet
-                            saveToDisk()
-                        }
-                ) {
-                    Checkbox(checked = !disabledSet.contains(cal.href), onCheckedChange = { enabled ->
-                        val newSet = disabledSet.toMutableSet()
-                        if (enabled) newSet.remove(cal.href) else newSet.add(cal.href)
-                        disabledSet = newSet
-                        saveToDisk()
-                    })
-                    Text(cal.name, modifier = Modifier.weight(1f))
                 }
             }
 
