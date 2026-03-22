@@ -1,10 +1,44 @@
 # Changelog
 
+## [0.5.6] - 2026-03-22
+
+### 🚀 Features
+
+- *(android)* Font size scaling ( https://codeberg.org/trougnouf/cfait/issues/27 and https://codeberg.org/trougnouf/cfait/issues/35 )
+- *(android)* Add permanent timer/notification for ongoing tasks
+
+### 🐛 Bug Fixes
+
+- *(android)* Fix Android crash when deleting a session
+- *(android)* Fix Manage collections settings misplacement
+
+### 💼 Other
+
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 96.3% (365 of 379 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 96.3% (368 of 382 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+
+### ⚙️ Miscellaneous Tasks
+
+- *(android)* Move font size setting below manage collections
 ## [0.5.5] - 2026-03-17
 
 ### 🐛 Bug Fixes
 
 - Handle local v4->v5 migration and test version handling ( https://github.com/trougnouf/cfait/issues/15 )
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cfait version 0.5.5
 ## [0.5.4] - 2026-03-14
 
 ### 🚀 Features
@@ -73,6 +107,20 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
 
 ### 🚀 Features
 
+- Support i18n translations and add French
+- *(android)* Prune stale notifications (from done/canceled/snoozed/modified tasks)
+- Replace d with Delete key in TUI and GUI
+- *(gui)* Add network status to refresh icon (feature-parity with Android client)
+- *(gui)* Zoom in and out with ctrl++ ctrl+- (or ctrl+scroll), reset with ctrl+0 ( https://codeberg.org/trougnouf/cfait/issues/9 )
+- *(alarm)* Trim done/canceled notifications and refresh before firing them (GUI and TUI, feature parity with Android)
+- *(sort)* Put ongoing tasks in the ongoing bin even if they are blocked or have not started
+- *(cli)* Implement cli (non-interactive) add, list, search, toggle, start, pause, and delete commands
+- Yank copies task smart title and description, TUI description is selectable in edit screen
+- Time tracking management (list, add and delete sessions) in the UIs. Fix sessions synchronization and GUI unsynced state
+- Time tracking management (list, add and delete sessions) in the UIs. Fix sessions synchronization and GUI unsynced state
+- Create a new line (not blocking title/menus/status) for Android search, prepend completed calendar events with 🗹, opening a notification focuses on it, fix edit task/description string mismatch, fix Android compilation error
+- (all) show sessions with valid syntax, (android) use the same icons as in the GUI, ability to manually create sessions when none exist, reduce search input height
+- *(parser)* Parse days of the week and parse past time as the next day
 - *(Android)* Use task-bound hash for notifications s.t. newer alarms overwrite older ones
 - Clickable collection name (header) toggles show all collections (Android and GUI, https://codeberg.org/trougnouf/cfait/issues/24 )
 - Add a lock toggle for yanked tasks and create sub-tasks (GUI and Android clients, https://github.com/trougnouf/cfait/issues/13 )
@@ -92,103 +140,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
 
 ### 🐛 Bug Fixes
 
-- *(gui)* Fix an issue where another collection than the current active one(s) may be temporarily shown during synchronization
-- Fix calendar events' newline character
-- *(Android)* Fix error handling on addSession
-- *(sorting)* Prevent ghost alarms left by other clients from pinning future tasks to the top of the list
-- *(android)* Export local tasks dialog was shown when switching from Local to All/Custom
-- *(android)* Improve swipe collections navigation (14: restore interleaved sorting)
-- *(android)* Improve swipe collections navigation (16: fix half-swipes and panic back swipes after random)
-- *(android)* Improve swipe collections navigation (17: ensure checkboxes are still easily togglable, restore sorting (local last), unrelated/style: restore search icon color during search)
-- *(android)* Improve swipe collections navigation (17: create and jump to custom tab by selecting new write/viewable collection while focused on a different collection)
-- *(Windows)* Fix Windows compilation (notifications are fire-and-forget, not interactive)
-
-### 💼 Other
-
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 46.6% (173 of 371 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 55.2% (205 of 371 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (French)
-
-Currently translated at 98.6% (372 of 377 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 71.8% (271 of 377 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 75.5% (285 of 377 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Added translation using Weblate (French)
-- Translated using Weblate (French)
-
-Currently translated at 100.0% (1 of 1 strings)
-
-Translation: Cfait/Android fastlane short description
-Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-short-description/fr/
-- Update translation files
-
-Updated by "Cleanup translation files" add-on in Weblate.
-
-Translation: Cfait/Android fastlane short description
-Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-short-description/
-
-### 📚 Documentation
-
-- Add de, es, it translations and complete fr
-- Localize short_description.txt (de, es, it)
-- Update GUI and Android screenshots to v0.5.2
-
-### ⚡ Performance
-
-- *(android)* Improve swipe collections navigation (15: improve switching performance)
-
-### 🎨 Styling
-
-- *(android)* Show collections list in the bottom by default, reduce spacing between collections, restore collection+++ behavior for Custom and replace All header
-- *(android)* Add settings+help combined icon (superposition of GNOME icons with dimmer red)
-
-### ⚙️ Miscellaneous Tasks
-
-- *(android)* Reduce example task s.t. it fits in one line
-- Release cfait version 0.5.2
-## [rolling] - 2026-03-07
-
-### 🚀 Features
-
-- Support i18n translations and add French
-- *(android)* Prune stale notifications (from done/canceled/snoozed/modified tasks)
-- Replace d with Delete key in TUI and GUI
-- *(gui)* Add network status to refresh icon (feature-parity with Android client)
-- *(gui)* Zoom in and out with ctrl++ ctrl+- (or ctrl+scroll), reset with ctrl+0 ( https://codeberg.org/trougnouf/cfait/issues/9 )
-- *(alarm)* Trim done/canceled notifications and refresh before firing them (GUI and TUI, feature parity with Android)
-- *(sort)* Put ongoing tasks in the ongoing bin even if they are blocked or have not started
-- *(cli)* Implement cli (non-interactive) add, list, search, toggle, start, pause, and delete commands
-- Yank copies task smart title and description, TUI description is selectable in edit screen
-- Time tracking management (list, add and delete sessions) in the UIs. Fix sessions synchronization and GUI unsynced state
-- Time tracking management (list, add and delete sessions) in the UIs. Fix sessions synchronization and GUI unsynced state
-- Create a new line (not blocking title/menus/status) for Android search, prepend completed calendar events with 🗹, opening a notification focuses on it, fix edit task/description string mismatch, fix Android compilation error
-- (all) show sessions with valid syntax, (android) use the same icons as in the GUI, ability to manually create sessions when none exist, reduce search input height
-- *(parser)* Parse days of the week and parse past time as the next day
-
-### 🐛 Bug Fixes
-
 - Fix Android build
 - *(gui)* Fix loss of input focus after a refresh
 - *(help)* Fix some mismatching strings
@@ -201,6 +152,16 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 - *(ui)* Ensure that local Trash and Recovery collections are shown on the bottom and only when not empty
 - Fix github issue templates
 - *(android)* Restore search field s.t. bottom of text is not cut-off
+- *(gui)* Fix an issue where another collection than the current active one(s) may be temporarily shown during synchronization
+- Fix calendar events' newline character
+- *(Android)* Fix error handling on addSession
+- *(sorting)* Prevent ghost alarms left by other clients from pinning future tasks to the top of the list
+- *(android)* Export local tasks dialog was shown when switching from Local to All/Custom
+- *(android)* Improve swipe collections navigation (14: restore interleaved sorting)
+- *(android)* Improve swipe collections navigation (16: fix half-swipes and panic back swipes after random)
+- *(android)* Improve swipe collections navigation (17: ensure checkboxes are still easily togglable, restore sorting (local last), unrelated/style: restore search icon color during search)
+- *(android)* Improve swipe collections navigation (17: create and jump to custom tab by selecting new write/viewable collection while focused on a different collection)
+- *(Windows)* Fix Windows compilation (notifications are fire-and-forget, not interactive)
 
 ### 💼 Other
 
@@ -253,6 +214,49 @@ Currently translated at 40.9% (152 of 371 strings)
 
 Translation: Cfait/Cfait
 Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 46.6% (173 of 371 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 55.2% (205 of 371 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (French)
+
+Currently translated at 98.6% (372 of 377 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 71.8% (271 of 377 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 75.5% (285 of 377 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Added translation using Weblate (French)
+- Translated using Weblate (French)
+
+Currently translated at 100.0% (1 of 1 strings)
+
+Translation: Cfait/Android fastlane short description
+Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-short-description/fr/
+- Update translation files
+
+Updated by "Cleanup translation files" add-on in Weblate.
+
+Translation: Cfait/Android fastlane short description
+Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-short-description/
 
 ### 🚜 Refactor
 
@@ -275,6 +279,18 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
 - Add https://translate.codeberg.org/projects/cfait/ to README.md
 - Remove unused strings
 - Remove syntax strings which should not be translated from locales
+- Add de, es, it translations and complete fr
+- Localize short_description.txt (de, es, it)
+- Update GUI and Android screenshots to v0.5.2
+
+### ⚡ Performance
+
+- *(android)* Improve swipe collections navigation (15: improve switching performance)
+
+### 🎨 Styling
+
+- *(android)* Show collections list in the bottom by default, reduce spacing between collections, restore collection+++ behavior for Custom and replace All header
+- *(android)* Add settings+help combined icon (superposition of GNOME icons with dimmer red)
 
 ### 🧪 Testing
 
@@ -286,6 +302,8 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
 - Fix tests
 - Fix Android compilation issues
 - Update test
+- *(android)* Reduce example task s.t. it fits in one line
+- Release cfait version 0.5.2
 ## [0.5.1] - 2026-02-25
 
 ### 🚀 Features
@@ -953,13 +971,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
 
 ### ⚙️ Miscellaneous Tasks
 
-- Add Cargo.lock
-- *(android)* Rm i686-linux-android
-- *(fdroid)* Work on Reproducible Builds
-- *(fdroid)* Pin rust version for F-Droid build
-- *(fdroid)* Work on reproducible build (locked ndkVersion, RUSTFLAGS)
-- *(fdroid)* Strip dependenciesInfo
-- *(fdroid)* Set Android rust toolchain in rust_toolchain.toml
 - *(fdroid)* Simplify screenshot names
 - Prepare for release v0.3.3
 - Disable signed commit
@@ -980,6 +991,13 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
 - *(android)* Generate static Android version number for F-Droid release
 - Release cfait version 0.3.2
 - Auto-generate changelogs (fastlane and CHANGELOG.md), backfill previous ones
+- Add Cargo.lock
+- *(android)* Rm i686-linux-android
+- *(fdroid)* Work on Reproducible Builds
+- *(fdroid)* Pin rust version for F-Droid build
+- *(fdroid)* Work on reproducible build (locked ndkVersion, RUSTFLAGS)
+- *(fdroid)* Strip dependenciesInfo
+- *(fdroid)* Set Android rust toolchain in rust_toolchain.toml
 ## [0.3.1] - 2025-12-17
 
 ### 🐛 Bug Fixes

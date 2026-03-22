@@ -1,0 +1,30 @@
+## [0.5.6] - 2026-03-22
+
+### 🚀 Features
+
+- *(android)* Font size scaling ( https://codeberg.org/trougnouf/cfait/issues/27 and https://codeberg.org/trougnouf/cfait/issues/35 )
+- *(android)* Add permanent timer/notification for ongoing tasks
+
+### 🐛 Bug Fixes
+
+- *(android)* Fix Android crash when deleting a session
+- *(android)* Fix Manage collections settings misplacement
+
+### 💼 Other
+
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 96.3% (365 of 379 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 96.3% (368 of 382 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+
+### ⚙️ Miscellaneous Tasks
+
+- *(android)* Move font size setting below manage collections
