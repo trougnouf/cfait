@@ -619,7 +619,7 @@ impl RustyClient {
         };
         let mut miss_count = 0;
 
-        while miss_count < 3 {
+        while miss_count < 3 && session_idx < 1000 {
             let session_suffix = format!("-session-{}", session_idx);
             let event_filename = format!("{}{}.ics", base_uid, session_suffix);
             let event_path = format!("{}{}", strip_host(&cal_path), event_filename);

@@ -661,6 +661,13 @@ impl RustyClient {
 
         let server_task = self.fetch_remote_task(&local_task.href).await?;
 
+        // PREVENT INFINITE CONFLICT LOOPS
+        // If the server's ETag is exactly what we just tried and failed with,
+        // then retrying with the same ETag will loop infinitely.
+        if server_task.etag == local_task.etag {
+            return None;
+        }
+
         if let Some(merged) = three_way_merge(base_task, local_task, &server_task) {
             let msg = format!(
                 "Conflict (412) on '{}' resolved via 3-way merge.",

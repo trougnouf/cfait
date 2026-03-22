@@ -214,7 +214,12 @@ impl IcsAdapter {
             let escaped_cats: Vec<String> = task
                 .categories
                 .iter()
-                .map(|c: &String| c.replace(',', "\\,"))
+                .map(|c: &String| {
+                    c.replace('\\', "\\\\")
+                        .replace(',', "\\,")
+                        .replace('\n', "\\n")
+                        .replace('\r', "")
+                })
                 .collect();
             let cat_line = format!("CATEGORIES:{}", escaped_cats.join(","));
             if let Some(idx) = ics.rfind("END:VTODO") {
@@ -237,10 +242,19 @@ impl IcsAdapter {
 
             for alarm in &task.alarms {
                 buffer.push_str("BEGIN:VALARM\r\n");
-                buffer.push_str(&format!("UID:{}\r\n", alarm.uid));
-                buffer.push_str(&format!("ACTION:{}\r\n", alarm.action));
+
+                let safe_uid = alarm.uid.replace(['\n', '\r'], "");
+                buffer.push_str(&format!("UID:{}\r\n", safe_uid));
+
+                let safe_action = alarm.action.replace(['\n', '\r'], "");
+                buffer.push_str(&format!("ACTION:{}\r\n", safe_action));
+
                 if let Some(desc) = &alarm.description {
-                    buffer.push_str(&format!("DESCRIPTION:{}\r\n", desc));
+                    let safe_desc = desc
+                        .replace('\\', "\\\\")
+                        .replace('\n', "\\n")
+                        .replace('\r', "");
+                    buffer.push_str(&format!("DESCRIPTION:{}\r\n", safe_desc));
                 } else {
                     buffer.push_str("DESCRIPTION:Reminder\r\n");
                 }
@@ -264,10 +278,15 @@ impl IcsAdapter {
                 }
 
                 if let Some(rel) = &alarm.related_to_uid {
+                    let safe_rel = rel.replace(['\n', '\r'], "");
                     if let Some(rtype) = &alarm.relation_type {
-                        buffer.push_str(&format!("RELATED-TO;RELTYPE={}:{}\r\n", rtype, rel));
+                        let safe_rtype = rtype.replace(['\n', '\r'], "");
+                        buffer.push_str(&format!(
+                            "RELATED-TO;RELTYPE={}:{}\r\n",
+                            safe_rtype, safe_rel
+                        ));
                     } else {
-                        buffer.push_str(&format!("RELATED-TO:{}\r\n", rel));
+                        buffer.push_str(&format!("RELATED-TO:{}\r\n", safe_rel));
                     }
                 }
 
@@ -1098,10 +1117,7 @@ impl IcsAdapter {
             event_desc.push_str("\n\n");
         }
         // Keep symbols (emoji/check) in code, but localize the human-readable text.
-        event_desc.push_str(&format!(
-            "⚠️ {}\n",
-            rust_i18n::t!("ics_event_auto_created")
-        ));
+        event_desc.push_str(&format!("⚠️ {}\n", rust_i18n::t!("ics_event_auto_created")));
         if task.status == TaskStatus::Completed {
             event_desc.push_str(&format!(
                 "✓ {}\n",
