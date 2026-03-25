@@ -926,6 +926,11 @@ impl CfaitMobile {
                 if task.status.is_done() || task.status == crate::model::TaskStatus::InProcess {
                     continue;
                 }
+                if task.calendar_href == crate::storage::LOCAL_TRASH_HREF
+                    || task.calendar_href == "local://recovery"
+                {
+                    continue;
+                }
 
                 if let Some(ts) = task.next_trigger_timestamp() {
                     check_ts(ts, &mut global_earliest);
@@ -1019,6 +1024,11 @@ impl CfaitMobile {
             for task in tasks_map.values() {
                 // UPDATE: Skip InProcess here
                 if task.status.is_done() || task.status == crate::model::TaskStatus::InProcess {
+                    continue;
+                }
+                if task.calendar_href == crate::storage::LOCAL_TRASH_HREF
+                    || task.calendar_href == "local://recovery"
+                {
                     continue;
                 }
 
@@ -1708,7 +1718,10 @@ impl CfaitMobile {
         let mut earliest: Option<i64> = None;
         for map in store.calendars.values() {
             for task in map.values() {
-                if task.status.is_done() {
+                if task.status.is_done()
+                    || task.calendar_href == crate::storage::LOCAL_TRASH_HREF
+                    || task.calendar_href == "local://recovery"
+                {
                     continue;
                 }
                 if let Some(ts) = task.next_trigger_timestamp()
@@ -1806,7 +1819,10 @@ impl CfaitMobile {
             None => return false,
         };
 
-        if task.status.is_done() {
+        if task.status.is_done()
+            || task.calendar_href == crate::storage::LOCAL_TRASH_HREF
+            || task.calendar_href == "local://recovery"
+        {
             return false;
         }
 

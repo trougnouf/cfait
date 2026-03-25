@@ -264,7 +264,10 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
     // Prune ringing tasks that are no longer valid (done, canceled, or alarm acknowledged/snoozed/removed)
     app.ringing_tasks.retain(|(t, alarm)| {
         if let Some(store_task) = app.store.get_task_ref(&t.uid) {
-            if store_task.status.is_done() {
+            if store_task.status.is_done()
+                || store_task.calendar_href == crate::storage::LOCAL_TRASH_HREF
+                || store_task.calendar_href == "local://recovery"
+            {
                 return false;
             }
 

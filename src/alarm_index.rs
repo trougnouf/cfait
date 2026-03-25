@@ -137,6 +137,12 @@ impl AlarmIndex {
             .unwrap_or_else(|_| NaiveTime::from_hms_opt(9, 0, 0).unwrap());
 
         for (calendar_href, task_map) in tasks {
+            if calendar_href == crate::storage::LOCAL_TRASH_HREF
+                || calendar_href == "local://recovery"
+            {
+                continue;
+            }
+
             // CHANGED: Iterate values of the inner map
             for task in task_map.values() {
                 // Skip completed tasks (and tasks in progress — no need to remind)
