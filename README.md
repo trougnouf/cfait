@@ -103,7 +103,7 @@ cargo install cfait
 cargo install cfait --features gui --bin cfait-gui
 ```
 Replace `cfait` with `.` to build locally.
-Remove `--release` to build in debug mode. (Much faster compilation, much slower execution.)
+Add `--debug` to build in debug mode. (Much faster compilation, much slower execution.)
 
 #### Android
 Requires [Android NDK](https://developer.android.com/ndk/downloads) and [cargo-ndk](https://github.com/bbqsrc/cargo-ndk).

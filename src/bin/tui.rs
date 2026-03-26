@@ -81,18 +81,23 @@ fn resolve_uid(store: &TaskStore, partial: &str) -> Option<String> {
 
 // Best-effort sync helper that can be called without passing a pre-loaded config
 // Delegate to `sync_background` so the shared helper is used and keeps logic centralized.
-async fn maybe_sync(ctx: Arc<dyn AppContext>) {
+async fn maybe_sync(ctx: Arc<dyn AppContext>) -> Result<(), String> {
     if let Ok(config) = cfait::config::Config::load(ctx.as_ref()) {
         // Reuse the existing background sync helper which already implements a
         // timeout and client fallback. This ensures `sync_background` is referenced.
-        sync_background(ctx, config).await;
+        sync_background(ctx, config).await
+    } else {
+        Ok(())
     }
 }
 
 // Background sync trigger so the CLI stays incredibly fast (keeps old helper for callers that prefer to pass config)
-async fn sync_background(ctx: Arc<dyn AppContext>, config: cfait::config::Config) {
+async fn sync_background(
+    ctx: Arc<dyn AppContext>,
+    config: cfait::config::Config,
+) -> Result<(), String> {
     if config.url.is_empty() {
-        return;
+        return Ok(());
     }
 
     let ctx_clone = ctx.clone();
@@ -106,12 +111,18 @@ async fn sync_background(ctx: Arc<dyn AppContext>, config: cfait::config::Config
         )
         .await
         {
-            let _ = client.sync_journal().await;
+            if let Err(e) = client.sync_journal().await {
+                return Err(e);
+            }
         }
+        Ok(())
     };
 
     // Give it up to 3 seconds to sync, otherwise gracefully detach
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(3), sync_future).await;
+    match tokio::time::timeout(std::time::Duration::from_secs(3), sync_future).await {
+        Ok(res) => res,
+        Err(_) => Err("Sync timed out".to_string()),
+    }
 }
 
 #[tokio::main]
@@ -286,11 +297,23 @@ async fn main() -> Result<()> {
                 all_cals.extend(remotes);
             }
 
-            if let Some(found) = all_cals
-                .iter()
-                .find(|c| c.name == target_href || c.href == target_href)
-            {
+            let mut matched = false;
+            if let Some(found) = all_cals.iter().find(|c| {
+                c.name == target_href
+                    || c.href == target_href
+                    || c.href.ends_with(&format!("/{}/", target_href))
+                    || c.href.ends_with(&format!("/{}", target_href))
+            }) {
                 target_href = found.href.clone();
+                matched = true;
+            }
+
+            if !matched && !target_href.starts_with("local://") && !target_href.starts_with('/') {
+                eprintln!(
+                    "Warning: Calendar '{}' not found. Task will be saved to local recovery.",
+                    target_href
+                );
+                target_href = "local://recovery".to_string();
             }
 
             task.calendar_href = target_href;
@@ -309,7 +332,9 @@ async fn main() -> Result<()> {
             );
 
             // Best-effort background sync of the journal
-            maybe_sync(ctx.clone()).await;
+            if let Err(e) = maybe_sync(ctx.clone()).await {
+                eprintln!("Warning: Background sync failed: {}", e);
+            }
             return Ok(());
         }
         "list" | "search" => {
@@ -487,7 +512,9 @@ async fn main() -> Result<()> {
             }
 
             // Best-effort background sync
-            maybe_sync(ctx.clone()).await;
+            if let Err(e) = maybe_sync(ctx.clone()).await {
+                eprintln!("Warning: Background sync failed: {}", e);
+            }
             return Ok(());
         }
         "delete" | "rm" => {
@@ -514,7 +541,9 @@ async fn main() -> Result<()> {
             println!("Task {} deleted.", partial_uid);
 
             // Best-effort background sync
-            maybe_sync(ctx.clone()).await;
+            if let Err(e) = maybe_sync(ctx.clone()).await {
+                eprintln!("Warning: Background sync failed: {}", e);
+            }
             return Ok(());
         }
         "" => {

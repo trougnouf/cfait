@@ -100,7 +100,12 @@ impl RustyClient {
             }
             Err(e) => {
                 let msg = format!("{:?}", e);
-                if msg.contains("403") || msg.contains("400") || msg.contains("415") {
+                if msg.contains("403")
+                    || msg.contains("400")
+                    || msg.contains("415")
+                    || msg.contains("InvalidInput")
+                    || msg.contains("invalid uri character")
+                {
                     return Ok(StepResult::new(StepOutcome::RecoveryNeeded(msg)));
                 }
                 if msg.contains("413") {
@@ -213,7 +218,12 @@ impl RustyClient {
                             task.summary
                         )),
                     )
-                } else if msg.contains("403") || msg.contains("400") || msg.contains("415") {
+                } else if msg.contains("403")
+                    || msg.contains("400")
+                    || msg.contains("415")
+                    || msg.contains("InvalidInput")
+                    || msg.contains("invalid uri character")
+                {
                     Ok(StepResult::new(StepOutcome::RecoveryNeeded(msg)))
                 } else if msg.contains("413") {
                     Ok(StepResult::new(StepOutcome::Discard).with_warning(msg))
@@ -264,7 +274,12 @@ impl RustyClient {
             }
             Err(e) => {
                 let msg = format!("{:?}", e);
-                if msg.contains("403") || msg.contains("400") || msg.contains("415") {
+                if msg.contains("403")
+                    || msg.contains("400")
+                    || msg.contains("415")
+                    || msg.contains("InvalidInput")
+                    || msg.contains("invalid uri character")
+                {
                     // For delete, if we can't delete due to permissions, just discard from queue
                     // to prevent blocking. We can't easily recover a deleted task state.
                     Ok(StepResult::new(StepOutcome::Discard).with_warning(msg))
@@ -299,7 +314,12 @@ impl RustyClient {
                 }))
             }
             Err(e) => {
-                if e.contains("404") || e.contains("NotFound") || e.contains("403") {
+                if e.contains("404")
+                    || e.contains("NotFound")
+                    || e.contains("403")
+                    || e.contains("InvalidInput")
+                    || e.contains("invalid uri character")
+                {
                     Ok(StepResult::new(StepOutcome::Discard).with_warning(format!(
                         "Move source missing for '{}', assuming success.",
                         task.summary
