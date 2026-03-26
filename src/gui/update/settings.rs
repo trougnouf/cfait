@@ -97,7 +97,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if target_href.is_none() {
                 target_href = Some(LOCAL_CALENDAR_HREF.to_string());
             }
-            app.active_cal_href = target_href;
+            app.active_cal_href = target_href.clone();
+            app.ob_default_cal = target_href;
 
             refresh_filtered_tasks(app);
             app.state = AppState::Active;
@@ -169,7 +170,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.ob_url = cfg.url;
                 app.ob_user = cfg.username;
                 app.ob_pass = cfg.password;
-                app.ob_default_cal = cfg.default_calendar;
+
+                let mut target_href = cfg.default_calendar;
+                if let Some(ref def) = target_href {
+                    if let Some(found) = app
+                        .calendars
+                        .iter()
+                        .find(|c| c.name == *def || c.href == *def)
+                    {
+                        target_href = Some(found.href.clone());
+                    }
+                }
+                app.ob_default_cal = target_href;
                 app.hide_completed = cfg.hide_completed;
                 app.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
                 app.ob_insecure = cfg.allow_insecure_certs;

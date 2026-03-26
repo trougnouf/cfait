@@ -41,7 +41,7 @@ icalendar = "0.17"
 uuid = { version = "1.19", features = ["v4"] }
 tokio = { version = "1", features = ["full"] }
 camino = "1.0"
-libdav = "0.10"
+libdav = { git = "https://git.sr.ht/~trougnouf/libdav" }
 http = "1.4"
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "tokio"] }
 hyper-rustls = { version = "0.27", features = ["native-tokio"] }

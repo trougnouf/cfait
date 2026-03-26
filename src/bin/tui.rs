@@ -272,10 +272,28 @@ async fn main() -> Result<()> {
             }
 
             let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
-            task.calendar_href = config
+
+            let mut target_href = config
                 .default_calendar
                 .clone()
                 .unwrap_or_else(|| cfait::storage::LOCAL_CALENDAR_HREF.to_string());
+
+            let mut all_cals = Vec::new();
+            if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
+                all_cals.extend(locals);
+            }
+            if let Ok(remotes) = cfait::cache::Cache::load_calendars(ctx.as_ref()) {
+                all_cals.extend(remotes);
+            }
+
+            if let Some(found) = all_cals
+                .iter()
+                .find(|c| c.name == target_href || c.href == target_href)
+            {
+                target_href = found.href.clone();
+            }
+
+            task.calendar_href = target_href;
 
             let store = Arc::new(tokio::sync::Mutex::new(TaskStore::new(ctx.clone())));
             let client = Arc::new(tokio::sync::Mutex::new(None));

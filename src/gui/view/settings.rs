@@ -113,15 +113,40 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         .into();
     }
 
-    let cal_names: Vec<String> = app.calendars.iter().map(|c| c.name.clone()).collect();
-    let picker: Element<_> = if !cal_names.is_empty() && is_settings {
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct CalOption {
+        name: String,
+        href: String,
+    }
+    impl std::fmt::Display for CalOption {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.name)
+        }
+    }
+
+    let cal_options: Vec<CalOption> = app
+        .calendars
+        .iter()
+        .map(|c| CalOption {
+            name: c.name.clone(),
+            href: c.href.clone(),
+        })
+        .collect();
+
+    let current_cal_opt = cal_options
+        .iter()
+        .find(|o| {
+            Some(&o.href) == app.ob_default_cal.as_ref()
+                || Some(&o.name) == app.ob_default_cal.as_ref()
+        })
+        .cloned();
+
+    let picker: Element<_> = if !cal_options.is_empty() && is_settings {
         column![
             text(rust_i18n::t!("default_collection")),
-            iced::widget::pick_list(
-                cal_names,
-                app.ob_default_cal.clone(),
-                Message::ObDefaultCalChanged
-            )
+            iced::widget::pick_list(cal_options, current_cal_opt, |opt| {
+                Message::ObDefaultCalChanged(opt.href)
+            })
             .width(Length::Fill)
             .padding(10)
         ]
