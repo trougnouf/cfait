@@ -118,10 +118,10 @@ async fn sync_background(
         Ok(())
     };
 
-    // Give it up to 3 seconds to sync, otherwise gracefully detach
-    match tokio::time::timeout(std::time::Duration::from_secs(3), sync_future).await {
+    // Give it up to 10 seconds to sync, otherwise gracefully detach
+    match tokio::time::timeout(std::time::Duration::from_secs(10), sync_future).await {
         Ok(res) => res,
-        Err(_) => Err("Sync timed out".to_string()),
+        Err(_) => Err("Sync timed out (changes are safely queued for next sync)".to_string()),
     }
 }
 
