@@ -555,13 +555,15 @@ impl RustyClient {
             None => return false,
         };
 
-        let has_dates = task.due.is_some() || task.dtstart.is_some();
+        // --- FIX 2: Allow tasks with work sessions to generate calendar events ---
+        let has_calendar_data = task.due.is_some() || task.dtstart.is_some() || !task.sessions.is_empty();
         let keep_completed = !delete_on_completion && task.status.is_done();
 
         let should_delete = is_delete_intent
             || (delete_on_completion && task.status.is_done())
-            || (!has_dates && !keep_completed)
+            || (!has_calendar_data && !keep_completed)
             || !should_create_events;
+        // -----------------------------------------------------------------------
 
         let mut success = true;
 
@@ -833,6 +835,13 @@ impl RustyClient {
                 }
 
                 let res_href_stripped = strip_host(&resource.href);
+
+                // --- FIX 1: Ignore VEVENT companions during Task sync to stop Multiget spam ---
+                let filename = res_href_stripped.split('/').next_back().unwrap_or("");
+                if filename.starts_with("evt-") && filename.ends_with(".ics") && filename.len() >= 44 {
+                    continue;
+                }
+                // ------------------------------------------------------------------------------
 
                 let should_skip = if let Some(cached) = cache_map.get(&res_href_stripped) {
                     pending_deletions.contains(&cached.uid)

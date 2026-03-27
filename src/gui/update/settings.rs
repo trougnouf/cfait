@@ -172,15 +172,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.ob_pass = cfg.password;
 
                 let mut target_href = cfg.default_calendar;
-                if let Some(ref def) = target_href {
-                    if let Some(found) = app
+                if let Some(ref def) = target_href
+                    && let Some(found) = app
                         .calendars
                         .iter()
                         .find(|c| c.name == *def || c.href == *def)
                     {
                         target_href = Some(found.href.clone());
                     }
-                }
                 app.ob_default_cal = target_href;
                 app.hide_completed = cfg.hide_completed;
                 app.hide_fully_completed_tags = cfg.hide_fully_completed_tags;

@@ -132,8 +132,10 @@ pub async fn async_backfill_events_wrapper(
 ) -> Result<usize, String> {
     let rt = get_runtime();
     rt.spawn(async move {
-        // NEW CONCURRENT LOGIC
-        let futures = tasks.into_iter().map(|task| {
+        // --- FIX 4: Only backfill tasks that actually have calendar data ---
+        let futures = tasks.into_iter().filter(|task| {
+            task.due.is_some() || task.dtstart.is_some() || !task.sessions.is_empty()
+        }).map(|task| {
             let c = client.clone();
             async move {
                 match c.sync_task_companion_event(&task, global_enabled).await {

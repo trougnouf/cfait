@@ -111,9 +111,7 @@ async fn sync_background(
         )
         .await
         {
-            if let Err(e) = client.sync_journal().await {
-                return Err(e);
-            }
+            client.sync_journal().await?;
         }
         Ok(())
     };

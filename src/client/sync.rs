@@ -416,21 +416,19 @@ impl RustyClient {
                             match &next_action {
                                 Action::Move(t, new_cal) => {
                                     // Move companion event too
-                                    if events_enabled || t.create_event.is_some() {
-                                        // 1. Delete ALL variants from the OLD location by invoking
-                                        // sync_companion_event with is_delete_intent = true so it
-                                        // cleans up static and session variants.
-                                        let _ = self
-                                            .sync_companion_event(
-                                                t,
-                                                events_enabled,
-                                                delete_on_completion,
-                                                true, // is_delete_intent
-                                            )
-                                            .await;
+                                    // --- FIX 3: Always clean up old location to prevent orphans ---
+                                    let _ = self
+                                        .sync_companion_event(
+                                            t,
+                                            events_enabled,
+                                            delete_on_completion,
+                                            true, // is_delete_intent forces cleanup
+                                        )
+                                        .await;
 
-                                        // 2. Create updated variants in the NEW location
-                                        if let Some(new_h) = &href {
+                                    // 2. Create updated variants in the NEW location (conditionally)
+                                    if (events_enabled || t.create_event.is_some())
+                                        && let Some(new_h) = &href {
                                             let mut moved_task = t.clone();
                                             moved_task.calendar_href = new_cal.clone();
                                             moved_task.href = new_h.clone();
@@ -443,7 +441,6 @@ impl RustyClient {
                                                 )
                                                 .await;
                                         }
-                                    }
                                 }
                                 Action::Create(t) | Action::Update(t) => {
                                     self.sync_companion_event(

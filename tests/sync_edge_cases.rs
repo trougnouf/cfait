@@ -80,3 +80,72 @@ async fn test_sync_500_keeps_item_in_queue() {
     );
     assert_eq!(j.queue.len(), 1);
 }
+
+#[tokio::test]
+async fn test_sync_ignores_companion_events_to_prevent_multiget_spam() {
+    let ctx = Arc::new(TestContext::new());
+
+    let mut server = Server::new_async().await;
+    let url = server.url();
+    let cal_path = "/cal/";
+
+    // 1. Mock the PROPFIND listing returning ONE valid task and ONE companion event
+    let mock_list = server
+        .mock("PROPFIND", cal_path)
+        .match_header("depth", "1")
+        .with_status(207)
+        .with_body(r#"
+            <d:multistatus xmlns:d="DAV:">
+                <d:response>
+                    <d:href>/cal/valid-task.ics</d:href>
+                    <d:propstat><d:prop><d:getetag>"1"</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
+                </d:response>
+                <d:response>
+                    <d:href>/cal/evt-valid-task-start.ics</d:href>
+                    <d:propstat><d:prop><d:getetag>"2"</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>
+                </d:response>
+            </d:multistatus>
+        "#)
+        .create_async()
+        .await;
+
+    // 2. Mock the REPORT (MULTIGET) to fetch the actual task data
+    let valid_ics = "BEGIN:VCALENDAR\nVERSION:2.0\nBEGIN:VTODO\nUID:valid-task\nSUMMARY:Test\nSTATUS:NEEDS-ACTION\nEND:VTODO\nEND:VCALENDAR";
+    let mock_get = server
+        .mock("REPORT", cal_path)
+        .with_status(207)
+        .with_body(format!(
+            r#"
+            <d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+                <d:response>
+                    <d:href>/cal/valid-task.ics</d:href>
+                    <d:propstat>
+                        <d:prop>
+                            <cal:calendar-data>{}</cal:calendar-data>
+                            <d:getetag>"1"</d:getetag>
+                        </d:prop>
+                        <d:status>HTTP/1.1 200 OK</d:status>
+                    </d:propstat>
+                </d:response>
+            </d:multistatus>
+            "#,
+            valid_ics
+        ))
+        .create_async()
+        .await;
+
+    // 3. Run the sync
+    let client = RustyClient::new(ctx.clone(), &url, "user", "pass", true, None).unwrap();
+    let tasks = client.get_tasks(&format!("{}{}", url, cal_path)).await.unwrap();
+
+    // 4. Assertions
+    mock_list.assert();
+    mock_get.assert(); // If the client tried to request evt-valid-task-start.ics, mockito would panic
+
+    assert_eq!(
+        tasks.len(),
+        1,
+        "Client should have completely ignored the evt- file and only parsed the 1 valid task."
+    );
+    assert_eq!(tasks[0].uid, "valid-task");
+}

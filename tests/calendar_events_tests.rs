@@ -157,3 +157,31 @@ fn test_event_generation_completed_with_emoji() {
     let main_event = result.iter().find(|(s, _)| s.is_empty()).unwrap();
     assert!(main_event.1.contains("SUMMARY:🗹 Completed project"));
 }
+
+#[test]
+fn test_event_generation_with_exdates() {
+    let mut task = parse("Recurring meeting");
+
+    // Set a recurring weekly schedule
+    task.dtstart = Some(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2025, 1, 1).unwrap(),
+    ));
+    task.rrule = Some("FREQ=WEEKLY".to_string());
+
+    // Add an exception date (e.g., user canceled the 2nd week)
+    task.exdates.push(DateType::AllDay(
+        NaiveDate::from_ymd_opt(2025, 1, 8).unwrap(),
+    ));
+
+    let result = task.to_event_ics();
+    assert!(!result.is_empty(), "Recurring task should generate an event");
+
+    let main_event = result.iter().find(|(s, _)| s.is_empty()).unwrap();
+
+    // Verify both the RRULE and EXDATE are present in the generated VEVENT
+    assert!(main_event.1.contains("RRULE:FREQ=WEEKLY"), "VEVENT missing RRULE");
+    assert!(
+        main_event.1.contains("EXDATE;VALUE=DATE:20250108"),
+        "VEVENT missing EXDATE (Calendar apps will incorrectly show the canceled event!)"
+    );
+}

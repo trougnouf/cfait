@@ -1789,7 +1789,10 @@ impl CfaitMobile {
                 .ok_or(MobileError::from("Offline"))?
                 .clone()
         };
-        let futures = all_tasks.into_iter().map(|t| {
+        // --- FIX 5 (Mobile): Only backfill tasks that actually have calendar data ---
+        let futures = all_tasks.into_iter().filter(|t| {
+            t.due.is_some() || t.dtstart.is_some() || !t.sessions.is_empty()
+        }).map(|t| {
             let c = client.clone();
             async move {
                 if c.sync_task_companion_event(&t, true).await.unwrap_or(false) {

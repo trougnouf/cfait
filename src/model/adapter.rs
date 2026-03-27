@@ -1140,6 +1140,24 @@ impl IcsAdapter {
             // so they don't incorrectly repeat on the calendar view.
             if task.status != TaskStatus::Completed {
                 event.add_property("RRULE", rrule);
+
+                // --- FIX 6: Copy EXDATEs to the calendar event so skipped instances disappear ---
+                for ex in &task.exdates {
+                    match ex {
+                        DateType::AllDay(d) => {
+                            let mut p = icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
+                            p.add_parameter("VALUE", "DATE");
+                            event.append_multi_property(p);
+                        }
+                        DateType::Specific(dt) => {
+                            event.append_multi_property(icalendar::Property::new(
+                                "EXDATE",
+                                dt.format("%Y%m%dT%H%M%SZ").to_string(),
+                            ));
+                        }
+                    }
+                }
+                // --------------------------------------------------------------------------------
             }
         }
 
