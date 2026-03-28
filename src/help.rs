@@ -288,8 +288,8 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "Tab".to_string(),
-                    desc: rust_i18n::t!("toggle_matching_logic").to_string(), // best-effort mapping
-                    example: rust_i18n::t!("help_keyboard_switch_focus").to_string(),
+                    desc: rust_i18n::t!("help_keyboard_switch_focus").to_string(),
+                    example: "".to_string(),
                 },
                 HelpItem {
                     keys: "j / k".to_string(),

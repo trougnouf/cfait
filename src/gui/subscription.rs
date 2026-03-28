@@ -95,28 +95,40 @@ fn handle_hotkey(
         return Some(Message::ZoomReset);
     }
 
-    // Allow Escape to work even when input is captured — notify the app that Esc was pressed while captured.
+    // Allow certain keys to bypass capture (e.g. Escape to unfocus, Ctrl+S to save)
     if status == iced::event::Status::Captured {
-        if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = evt
-            && key == keyboard::Key::Named(Named::Escape)
-        {
-            return Some(Message::EscCaptured);
+        if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = &evt {
+            if *key == keyboard::Key::Named(Named::Escape) {
+                return Some(Message::EscCaptured);
+            }
+            let is_cmd = modifiers.control() || modifiers.command();
+            if is_cmd {
+                if let keyboard::Key::Character(s) = key.as_ref() {
+                    if s == "s" {
+                        return Some(Message::SubmitTask);
+                    }
+                }
+            }
         }
         return None;
     }
 
     if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = evt {
-        // Catch zoom shortcuts (Ctrl/Cmd + '+' / '-' / '0') BEFORE we ignore modifier combinations.
+        // Catch zoom shortcuts and other modifiers BEFORE we ignore modifier combinations.
         let is_cmd = modifiers.command() || modifiers.control();
 
-        if is_cmd && let keyboard::Key::Character(s) = key.as_ref() {
-            // Using .as_ref() bypasses the unstable str_as_str feature
-            match s {
-                "+" | "=" => return Some(Message::ZoomIn),
-                "-" => return Some(Message::ZoomOut),
-                "0" => return Some(Message::ZoomReset),
-                "d" => return Some(Message::KeyboardDuplicateTask),
-                _ => {}
+        if is_cmd {
+            if let keyboard::Key::Character(s) = key.as_ref() {
+                match s {
+                    "+" | "=" => return Some(Message::ZoomIn),
+                    "-" => return Some(Message::ZoomOut),
+                    "0" => return Some(Message::ZoomReset),
+                    "d" => return Some(Message::KeyboardDuplicateTask),
+                    "s" => return Some(Message::SubmitTask),
+                    _ => {}
+                }
+            } else if let keyboard::Key::Named(Named::Delete) = key.as_ref() {
+                return Some(Message::KeyboardDeleteTaskTree);
             }
         }
 
@@ -176,11 +188,8 @@ fn handle_hotkey(
             keyboard::Key::Named(Named::Space) => Some(Message::ToggleSelected),
             keyboard::Key::Named(Named::Escape) => Some(Message::EscapePressed),
             keyboard::Key::Named(Named::Delete) => {
-                if modifiers.control() {
-                    Some(Message::KeyboardDeleteTaskTree)
-                } else {
-                    Some(Message::DeleteSelected)
-                }
+                // Handled in is_cmd block for Ctrl+Delete, so here it's just Delete
+                Some(Message::DeleteSelected)
             }
 
             _ => None,
