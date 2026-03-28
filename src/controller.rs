@@ -454,6 +454,27 @@ impl TaskController {
         Ok(all_warnings)
     }
 
+    /// Delete a task and all its descendants recursively.
+    pub async fn delete_task_tree(&self, uid: &str) -> Result<Vec<String>, String> {
+        let descendants = {
+            let store = self.store.lock().await;
+            store.get_descendant_uids(uid)
+        };
+
+        let mut all_warnings = Vec::new();
+        // Delete descendants first (bottom-up is safer for some servers)
+        for d_uid in descendants {
+            if let Ok(w) = self.delete_task(&d_uid).await {
+                all_warnings.extend(w);
+            }
+        }
+        // Finally delete the root
+        if let Ok(w) = self.delete_task(uid).await {
+            all_warnings.extend(w);
+        }
+        Ok(all_warnings)
+    }
+
     /// Move a task between calendars.
     ///
     /// This returns the original task state so callers can persist a Move action

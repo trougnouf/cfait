@@ -175,8 +175,13 @@ fn handle_hotkey(
             keyboard::Key::Named(Named::PageUp) => Some(Message::SelectPrevPage),
             keyboard::Key::Named(Named::Space) => Some(Message::ToggleSelected),
             keyboard::Key::Named(Named::Escape) => Some(Message::EscapePressed),
-            // Use the Delete key (instead of the letter 'd') to delete the selected task
-            keyboard::Key::Named(Named::Delete) => Some(Message::DeleteSelected),
+            keyboard::Key::Named(Named::Delete) => {
+                if modifiers.control() {
+                    Some(Message::KeyboardDeleteTaskTree)
+                } else {
+                    Some(Message::DeleteSelected)
+                }
+            }
 
             _ => None,
         }

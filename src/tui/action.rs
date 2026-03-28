@@ -32,6 +32,7 @@ pub enum Action {
     ToggleCalendarVisibility(String),
     IsolateCalendar(String),
     DuplicateTask(String),
+    DeleteTaskTree(String),
 }
 
 #[derive(Debug)]

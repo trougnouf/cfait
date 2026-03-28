@@ -76,6 +76,7 @@ pub enum ControllerAction {
     Create(TodoTask),
     Update(TodoTask),
     Delete(String),
+    DeleteTree(String),
     Toggle(String),
     Move(String, String),
     DuplicateTree(String),
@@ -100,6 +101,9 @@ pub async fn async_controller_dispatch(
         }
         ControllerAction::Delete(uid) => {
             let _ = controller.delete_task(&uid).await?;
+        }
+        ControllerAction::DeleteTree(uid) => {
+            let _ = controller.delete_task_tree(&uid).await?;
         }
         ControllerAction::Toggle(uid) => {
             let _ = controller.toggle_task(&uid).await?;

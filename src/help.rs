@@ -343,6 +343,11 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                     example: "".to_string(),
                 },
                 HelpItem {
+                    keys: "Ctrl + Del".to_string(),
+                    desc: rust_i18n::t!("delete_task_tree").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
                     keys: "s".to_string(),
                     desc: rust_i18n::t!("start_task").to_string(),
                     example: "".to_string(),

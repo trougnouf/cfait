@@ -842,14 +842,17 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Delete => {
-                if let Some(view_task) = state.get_selected_task() {
-                    let uid = view_task.uid.clone();
-                    let is_trash = view_task.calendar_href == LOCAL_TRASH_HREF;
+                if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
+                    if key.modifiers.contains(KeyModifiers::CONTROL) {
+                        return Some(Action::DeleteTaskTree(uid));
+                    } else {
+                        let view_task = state.store.get_task_ref(&uid).unwrap();
+                        let is_trash = view_task.calendar_href == LOCAL_TRASH_HREF;
 
-                    // Load config to check retention
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+                        // Load config to check retention
+                        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
 
-                    if config.trash_retention_days > 0 && !is_trash {
+                        if config.trash_retention_days > 0 && !is_trash {
                         // --- SOFT DELETE ---
                         // 1. Ensure Registry
                         let _ =
@@ -925,6 +928,7 @@ pub async fn handle_key_event(
                             return Some(Action::DeleteTask(deleted.uid.clone()));
                         }
                     }
+                }
                 }
             }
             KeyCode::Char('c') => {

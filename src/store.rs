@@ -548,6 +548,33 @@ impl TaskStore {
 
     /// Deep-duplicate a task and all its descendants.
     /// Returns the list of cloned tasks (with new UIDs and remapped relations) for persistence.
+    /// Returns a list of all descendant UIDs for a given root.
+    pub fn get_descendant_uids(&self, root_uid: &str) -> Vec<String> {
+        let mut descendants = Vec::new();
+        let mut queue = vec![root_uid.to_string()];
+
+        let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+        for map in self.calendars.values() {
+            for t in map.values() {
+                if let Some(p) = &t.parent_uid {
+                    adjacency.entry(p.clone()).or_default().push(t.uid.clone());
+                }
+            }
+        }
+
+        let mut visited = HashSet::new();
+        while let Some(curr) = queue.pop() {
+            if !visited.insert(curr.clone()) { continue; }
+            if curr != root_uid {
+                descendants.push(curr.clone());
+            }
+            if let Some(children) = adjacency.get(&curr) {
+                queue.extend(children.clone());
+            }
+        }
+        descendants
+    }
+
     pub fn duplicate_task_tree(&mut self, root_uid: &str) -> Vec<Task> {
         let mut new_tasks = Vec::new();
         let mut uid_map = HashMap::new(); // old -> new

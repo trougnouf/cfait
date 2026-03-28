@@ -102,7 +102,9 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::KeyboardAddDependency
         | Message::KeyboardAddRelation
         | Message::KeyboardDuplicateTask
+        | Message::KeyboardDeleteTaskTree
         | Message::DuplicateTask(_)
+        | Message::DeleteTaskTree(_)
         | Message::ToggleActiveSelected
         | Message::StopSelected
         | Message::CancelSelected

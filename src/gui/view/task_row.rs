@@ -176,6 +176,15 @@ pub fn view_task_row<'a>(
         }
     };
 
+    let danger_highlight_style = |theme: &Theme, status: button::Status| -> button::Style {
+        let palette = theme.extended_palette();
+        let primary_btn = button::primary(theme, status);
+        button::Style {
+            text_color: palette.danger.base.color,
+            ..primary_btn
+        }
+    };
+
     let has_active_alarm = task.alarms.iter().any(|a| a.acknowledged.is_none());
 
     let date_and_alarm_section: Element<'a, Message> = {
@@ -446,19 +455,39 @@ pub fn view_task_row<'a>(
                 .delay(Duration::from_millis(700)),
             );
 
-            let duplicate_btn = button(icon::icon(icon::CLONE).size(14))
-                .style(button::primary)
-                .padding(4)
-                .on_press(Message::DuplicateTask(task.uid.clone()));
-            actions = actions.push(
-                tooltip(
-                    duplicate_btn,
-                    text(format!("{} (Ctrl+D)", rust_i18n::t!("duplicate_task"))).size(12),
-                    tooltip::Position::Top,
-                )
-                .style(tooltip_style)
-                .delay(Duration::from_millis(700)),
-            );
+            let has_subtasks = app.store.calendars.values().any(|map| {
+                map.values().any(|t| t.parent_uid.as_deref() == Some(task.uid.as_str()))
+            });
+
+            if has_subtasks {
+                let duplicate_btn = button(icon::icon(icon::CLONE).size(14))
+                    .style(button::primary)
+                    .padding(4)
+                    .on_press(Message::DuplicateTask(task.uid.clone()));
+                actions = actions.push(
+                    tooltip(
+                        duplicate_btn,
+                        text(format!("{} (Ctrl+D)", rust_i18n::t!("duplicate_task"))).size(12),
+                        tooltip::Position::Top,
+                    )
+                    .style(tooltip_style)
+                    .delay(Duration::from_millis(700)),
+                );
+
+                let delete_tree_btn = button(icon::icon(icon::TRASH).size(14))
+                    .style(danger_highlight_style)
+                    .padding(4)
+                    .on_press(Message::DeleteTaskTree(task.uid.clone()));
+                actions = actions.push(
+                    tooltip(
+                        delete_tree_btn,
+                        text(format!("{} (Ctrl+Del)", rust_i18n::t!("delete_task_tree"))).size(12),
+                        tooltip::Position::Top,
+                    )
+                    .style(tooltip_style)
+                    .delay(Duration::from_millis(700)),
+                );
+            }
 
             if task.parent_uid.is_some() {
                 let lift_btn = button(icon::icon(icon::ELEVATOR_UP).size(14))
