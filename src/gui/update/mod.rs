@@ -62,6 +62,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleAdvancedSettings(_)
         | Message::SetMaxDoneRoots(_)
         | Message::SetMaxDoneSubtasks(_)
+        | Message::SetShowPriorityNumbers(_)
         | Message::SetLanguage(_)
         | Message::SetStrikethroughCompleted(_) => settings::handle(app, message),
 
@@ -100,6 +101,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::KeyboardCreateChild
         | Message::KeyboardAddDependency
         | Message::KeyboardAddRelation
+        | Message::KeyboardDuplicateTask
+        | Message::DuplicateTask(_)
         | Message::ToggleActiveSelected
         | Message::StopSelected
         | Message::CancelSelected

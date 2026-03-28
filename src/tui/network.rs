@@ -402,6 +402,39 @@ pub async fn run_network_actor(
                 }
             }
 
+            Action::DuplicateTask(uid) => {
+                let client_container = Arc::new(Mutex::new(Some(client.clone())));
+                let controller = TaskController::new(store.clone(), client_container, ctx.clone());
+
+                let _ = event_tx
+                    .send(AppEvent::Status {
+                        key: "duplicating".to_string(),
+                        human: "Duplicating task tree...".to_string(),
+                    })
+                    .await;
+
+                match controller.duplicate_task_tree(&uid).await {
+                    Ok(_) => {
+                        let s = controller.store.lock().await;
+                        let mut results: Vec<(String, Vec<crate::model::Task>)> = Vec::new();
+                        for (href, map) in &s.calendars {
+                            results.push((href.clone(), map.values().cloned().collect()));
+                        }
+                        let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
+
+                        let _ = event_tx
+                            .send(AppEvent::Status {
+                                key: "status_duplicated".to_string(),
+                                human: "Task duplicated successfully.".to_string(),
+                            })
+                            .await;
+                    }
+                    Err(e) => {
+                        let _ = event_tx.send(AppEvent::Error(format!("Duplicate failed: {}", e))).await;
+                    }
+                }
+            }
+
             Action::MigrateLocal(source_href, target_href) => {
                 let _ = event_tx
                     .send(AppEvent::Status {

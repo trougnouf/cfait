@@ -546,6 +546,90 @@ impl TaskStore {
         None
     }
 
+    /// Deep-duplicate a task and all its descendants.
+    /// Returns the list of cloned tasks (with new UIDs and remapped relations) for persistence.
+    pub fn duplicate_task_tree(&mut self, root_uid: &str) -> Vec<Task> {
+        let mut new_tasks = Vec::new();
+        let mut uid_map = HashMap::new(); // old -> new
+        let mut queue = vec![root_uid.to_string()];
+        let mut descendants = Vec::new();
+
+        // Build adjacency to find descendants quickly
+        let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+        for map in self.calendars.values() {
+            for t in map.values() {
+                if let Some(p) = &t.parent_uid {
+                    adjacency.entry(p.clone()).or_default().push(t.uid.clone());
+                }
+            }
+        }
+
+        let mut visited = HashSet::new();
+        while let Some(curr) = queue.pop() {
+            if !visited.insert(curr.clone()) { continue; }
+            descendants.push(curr.clone());
+            if let Some(children) = adjacency.get(&curr) {
+                queue.extend(children.clone());
+            }
+        }
+
+        for old_uid in &descendants {
+            if let Some(t) = self.get_task_ref(old_uid) {
+                let mut clone = t.clone();
+                let new_uid = uuid::Uuid::new_v4().to_string();
+                uid_map.insert(old_uid.clone(), new_uid.clone());
+
+                clone.uid = new_uid;
+                clone.href = String::new();
+                clone.etag = String::new();
+                clone.status = crate::model::TaskStatus::NeedsAction;
+                clone.percent_complete = None;
+                clone.time_spent_seconds = 0;
+                clone.last_started_at = None;
+                clone.sessions.clear();
+                clone.unmapped_properties.retain(|p| p.key != "COMPLETED" && p.key != "CREATED");
+                clone.alarms.retain(|a| !a.is_snooze() && a.acknowledged.is_none());
+
+                // Visually differentiate the root clone
+                if old_uid == root_uid {
+                    clone.summary = format!("{} (Copy)", clone.summary);
+                }
+
+                new_tasks.push(clone);
+            }
+        }
+
+        // Second pass: remap intra-tree relations
+        for t in &mut new_tasks {
+            if let Some(p) = &t.parent_uid
+                && let Some(new_p) = uid_map.get(p) {
+                    t.parent_uid = Some(new_p.clone());
+                }
+            let old_deps = std::mem::take(&mut t.dependencies);
+            for d in old_deps {
+                if let Some(new_d) = uid_map.get(&d) {
+                    t.dependencies.push(new_d.clone());
+                } else {
+                    t.dependencies.push(d); // Maintain external blockers
+                }
+            }
+            let old_rels = std::mem::take(&mut t.related_to);
+            for r in old_rels {
+                if let Some(new_r) = uid_map.get(&r) {
+                    t.related_to.push(new_r.clone());
+                } else {
+                    t.related_to.push(r);
+                }
+            }
+        }
+
+        for t in &new_tasks {
+            self.update_or_add_task(t.clone());
+        }
+
+        new_tasks
+    }
+
     /// Set or unset a parent relationship for a task.
     pub fn set_parent(&mut self, child_uid: &str, parent_uid: Option<String>) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(child_uid) {

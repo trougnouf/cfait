@@ -83,6 +83,11 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
             }
         }
     }
+
+    // Load priority rendering toggle directly from config when events arrive
+    if let Ok(cfg) = Config::load(state.ctx.as_ref()) {
+        state.show_priority_numbers = cfg.show_priority_numbers;
+    }
 }
 
 // Helper to notify the alarm system of local changes immediately
@@ -969,6 +974,11 @@ pub async fn handle_key_event(
                     state.mode = InputMode::Creating;
                     state.creating_child_of = Some(uid);
                     state.message = format!("New Child of '{}'...", summary);
+                }
+            }
+            KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
+                    return Some(Action::DuplicateTask(uid));
                 }
             }
             KeyCode::Char('y') => {

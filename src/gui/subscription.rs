@@ -115,6 +115,7 @@ fn handle_hotkey(
                 "+" | "=" => return Some(Message::ZoomIn),
                 "-" => return Some(Message::ZoomOut),
                 "0" => return Some(Message::ZoomReset),
+                "d" => return Some(Message::KeyboardDuplicateTask),
                 _ => {}
             }
         }

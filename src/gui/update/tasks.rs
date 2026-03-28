@@ -210,6 +210,27 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::KeyboardDuplicateTask => {
+            if let Some(selected) = &app.selected_uid {
+                return handle(app, Message::DuplicateTask(selected.clone()));
+            }
+            Task::none()
+        }
+
+        Message::DuplicateTask(uid) => {
+            app.yanked_uid = None;
+            app.yank_lock_active = false;
+            Task::perform(
+                async_controller_dispatch(
+                    app.ctx.clone(),
+                    app.client.clone(),
+                    app.store.clone(),
+                    ControllerAction::DuplicateTree(uid),
+                ),
+                |res| Message::ControllerActionComplete(Box::new(res)),
+            )
+        }
+
         Message::ToggleActiveSelected => {
             if let Some(uid) = &app.selected_uid
                 && let Some(t) = app.tasks.iter().find(|t| t.uid == *uid)

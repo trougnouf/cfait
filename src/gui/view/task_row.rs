@@ -377,6 +377,8 @@ pub fn view_task_row<'a>(
 
     if let Some(yanked) = &app.yanked_uid {
         if *yanked != task.uid {
+            let yanked_summary = app.store.get_summary(yanked).unwrap_or_default();
+
             let block_btn = button(icon::icon(icon::BLOCKED).size(14))
                 .style(action_style)
                 .padding(4)
@@ -384,7 +386,7 @@ pub fn view_task_row<'a>(
             actions = actions.push(
                 tooltip(
                     block_btn,
-                    text(format!("{} (b)", rust_i18n::t!("block_depends_on"))).size(12),
+                    text(rust_i18n::t!("yank_tooltip_block", target = task.summary.clone(), yanked = yanked_summary.clone())).size(12),
                     tooltip::Position::Top,
                 )
                 .style(tooltip_style)
@@ -397,7 +399,7 @@ pub fn view_task_row<'a>(
             actions = actions.push(
                 tooltip(
                     child_btn,
-                    text(format!("{} (c)", rust_i18n::t!("make_child"))).size(12),
+                    text(rust_i18n::t!("yank_tooltip_child", target = task.summary.clone(), yanked = yanked_summary.clone())).size(12),
                     tooltip::Position::Top,
                 )
                 .style(tooltip_style)
@@ -438,6 +440,20 @@ pub fn view_task_row<'a>(
                 tooltip(
                     create_child_btn,
                     text(format!("{} (C)", rust_i18n::t!("create_subtask"))).size(12),
+                    tooltip::Position::Top,
+                )
+                .style(tooltip_style)
+                .delay(Duration::from_millis(700)),
+            );
+
+            let duplicate_btn = button(icon::icon(icon::CLONE).size(14))
+                .style(button::primary)
+                .padding(4)
+                .on_press(Message::DuplicateTask(task.uid.clone()));
+            actions = actions.push(
+                tooltip(
+                    duplicate_btn,
+                    text(format!("{} (Ctrl+D)", rust_i18n::t!("duplicate_task"))).size(12),
                     tooltip::Position::Top,
                 )
                 .style(tooltip_style)
@@ -736,6 +752,9 @@ pub fn view_task_row<'a>(
             if is_blocked {
                 tags_width += 65.0;
             }
+            if app.show_priority_numbers && task.priority > 0 {
+                tags_width += 25.0;
+            }
             for cat in &visible_tags {
                 tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
             }
@@ -782,6 +801,22 @@ pub fn view_task_row<'a>(
                         })
                         .padding(3),
                     );
+            }
+
+            if app.show_priority_numbers && task.priority > 0 {
+                let priority_text = text(format!("!{}", task.priority)).size(11).color(color);
+                tags_row = tags_row.push(
+                    container(priority_text)
+                        .padding([2, 4])
+                        .style(move |_| container::Style {
+                            border: iced::Border {
+                                radius: 4.0.into(),
+                                color: color.scale_alpha(0.5),
+                                width: 1.0,
+                            },
+                            ..Default::default()
+                        })
+                );
             }
 
             for cat in &visible_tags {

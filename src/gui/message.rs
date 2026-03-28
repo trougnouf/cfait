@@ -85,6 +85,8 @@ pub enum Message {
     ClearAllFilters,
     KeyboardAddDependency,
     KeyboardAddRelation,
+    KeyboardDuplicateTask,      // 'Ctrl+D' logic
+    DuplicateTask(String),      // Used by Yank bar button & hotkey
     ToggleActiveSelected,       // 's' logic
     StopSelected,               // 'S' logic
     CancelSelected,             // 'x' logic
@@ -197,6 +199,7 @@ pub enum Message {
     ToggleAdvancedSettings(bool),
     SetMaxDoneRoots(String),
     SetMaxDoneSubtasks(String),
+    SetShowPriorityNumbers(bool),
 
     SetCreateEventsForTasks(bool),
     SetDeleteEventsOnCompletion(bool),

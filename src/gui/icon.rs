@@ -56,6 +56,7 @@ pub const STOP: char = '\u{f04d}'; // 
 pub const LOCK: char = '\u{f023}'; // 
 pub const LINK: char = '\u{f0c1}'; // 
 pub const UNLINK: char = '\u{f127}'; // 
+pub const CLONE: char = '\u{f24d}'; // nf-fa-clone
 pub const SHIELD: char = '\u{f32a}'; // 
 pub const CHILD_ARROW: char = '\u{f149}'; // 
 pub const INFO: char = '\u{f129}'; // 

@@ -439,6 +439,21 @@ impl TaskController {
         Ok(all_warnings)
     }
 
+    /// Deep-duplicate a task and its descendants.
+    pub async fn duplicate_task_tree(&self, uid: &str) -> Result<Vec<String>, String> {
+        let mut store = self.store.lock().await;
+        let new_tasks = store.duplicate_task_tree(uid);
+        drop(store);
+
+        let mut all_warnings = Vec::new();
+        for task in new_tasks {
+            if let Ok(w) = self.persist_change(Action::Create(task)).await {
+                all_warnings.extend(w);
+            }
+        }
+        Ok(all_warnings)
+    }
+
     /// Move a task between calendars.
     ///
     /// This returns the original task state so callers can persist a Move action

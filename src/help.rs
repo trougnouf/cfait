@@ -322,6 +322,11 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                     example: "".to_string(),
                 },
                 HelpItem {
+                    keys: "Ctrl + d".to_string(),
+                    desc: rust_i18n::t!("duplicate_task").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
                     keys: "E".to_string(),
                     // Change this from edit_task_title to edit_description_title
                     desc: rust_i18n::t!("edit_description_title").to_string(),

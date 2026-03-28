@@ -31,6 +31,7 @@ pub enum Action {
     MigrateLocal(String, String), // (source_calendar_href, target_calendar_href)
     ToggleCalendarVisibility(String),
     IsolateCalendar(String),
+    DuplicateTask(String),
 }
 
 #[derive(Debug)]

@@ -196,6 +196,8 @@ pub struct GuiApp {
     pub ob_max_done_roots_input: String,
     pub ob_max_done_subtasks_input: String,
 
+    pub show_priority_numbers: bool,
+
     // Force Server-Side Decorations
     pub force_ssd: bool,
 
@@ -386,6 +388,7 @@ impl Default for GuiApp {
             show_advanced_settings: false,
             ob_max_done_roots_input: "20".to_string(),
             ob_max_done_subtasks_input: "5".to_string(),
+            show_priority_numbers: true,
 
             force_ssd: {
                 #[cfg(target_os = "windows")]

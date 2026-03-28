@@ -26,6 +26,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.tag_aliases = config.tag_aliases.clone();
             app.hide_completed = config.hide_completed;
             app.hide_fully_completed_tags = config.hide_fully_completed_tags;
+            app.show_priority_numbers = config.show_priority_numbers;
             app.current_theme = config.theme;
 
             app.ob_url = config.url.clone();
@@ -423,6 +424,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 save_config(app);
                 refresh_filtered_tasks(app);
             }
+            Task::none()
+        }
+        Message::SetShowPriorityNumbers(val) => {
+            app.show_priority_numbers = val;
+            save_config(app);
+            refresh_filtered_tasks(app);
             Task::none()
         }
 

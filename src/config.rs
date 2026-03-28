@@ -207,6 +207,8 @@ pub struct Config {
 
     #[serde(default = "default_true")]
     pub show_ongoing_notifications: bool,
+    #[serde(default = "default_true")]
+    pub show_priority_numbers: bool,
 
     // Maps are typically at the end in TOML
     #[serde(default)]
@@ -247,6 +249,7 @@ impl Default for Config {
             max_done_roots: 20,
             max_done_subtasks: 5,
             show_ongoing_notifications: true,
+            show_priority_numbers: true,
         }
     }
 }
@@ -426,6 +429,9 @@ impl Config {
             } else if trimmed.starts_with("show_ongoing_notifications =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Display ongoing timer notification for active tasks.");
+            } else if trimmed.starts_with("show_priority_numbers =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Render priority numbers (!X) visually next to tags.");
             } else if trimmed.starts_with("hidden_calendars =") {
                 out.push_str("# List of calendar HREFs currently toggled 'off' in the sidebar.\n");
                 out.push_str(line);

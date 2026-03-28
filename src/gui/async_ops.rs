@@ -78,6 +78,7 @@ pub enum ControllerAction {
     Delete(String),
     Toggle(String),
     Move(String, String),
+    DuplicateTree(String),
 }
 
 pub async fn async_controller_dispatch(
@@ -105,6 +106,9 @@ pub async fn async_controller_dispatch(
         }
         ControllerAction::Move(uid, href) => {
             let _ = controller.move_task(&uid, &href).await?;
+        }
+        ControllerAction::DuplicateTree(uid) => {
+            let _ = controller.duplicate_task_tree(&uid).await?;
         }
     }
 

@@ -494,6 +494,14 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 ));
             }
 
+            if state.show_priority_numbers && t.priority > 0 {
+                metadata_spans.push(Span::raw(" "));
+                metadata_spans.push(Span::styled(
+                    format!("!{}", t.priority),
+                    base_style.add_modifier(Modifier::BOLD),
+                ));
+            }
+
             if t.alarms
                 .iter()
                 .any(|a| a.acknowledged.is_none() && !a.is_snooze())
