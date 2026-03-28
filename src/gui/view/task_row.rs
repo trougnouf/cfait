@@ -421,7 +421,7 @@ pub fn view_task_row<'a>(
             actions = actions.push(
                 tooltip(
                     related_btn,
-                    text(format!("{} (l)", rust_i18n::t!("related_to"))).size(12),
+                    text(rust_i18n::t!("related_to_tooltip", target = task.summary.clone(), yanked = yanked_summary.clone())).size(12),
                     tooltip::Position::Top,
                 )
                 .style(tooltip_style)
