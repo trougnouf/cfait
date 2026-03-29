@@ -53,8 +53,11 @@ fn test_daily_recurrence() {
     // is now + 24h > now? Yes.
     // So expected is original + 2 days (i.e. Tomorrow relative to Now).
 
-    let expected_min = original_due + Duration::days(2); // (now - 1) + 2 = now + 1
-    let diff = new_due.signed_duration_since(expected_min);
+    let original_local = original_due.with_timezone(&chrono::Local).naive_local();
+    let new_local = new_due.with_timezone(&chrono::Local).naive_local();
+    let expected_local = original_local + Duration::days(2);
+
+    let diff = new_local - expected_local;
     assert!(diff.num_seconds().abs() < 5, "Expected around tomorrow");
 }
 
@@ -81,8 +84,11 @@ fn test_weekly_recurrence() {
     // Expected: now + 6 days.
     // original (-8) + 14 = +6.
 
-    let expected = original_due + Duration::days(14);
-    let diff = new_due.signed_duration_since(expected);
+    let original_local = original_due.with_timezone(&chrono::Local).naive_local();
+    let new_local = new_due.with_timezone(&chrono::Local).naive_local();
+    let expected_local = original_local + Duration::days(14);
+
+    let diff = new_local - expected_local;
     assert!(diff.num_seconds().abs() < 5);
 }
 
@@ -126,8 +132,11 @@ fn test_custom_interval() {
         _ => panic!(),
     };
 
-    let expected = original_due + Duration::days(6); // -4 + 6 = +2
-    let diff = new_due.signed_duration_since(expected);
+    let original_local = original_due.with_timezone(&chrono::Local).naive_local();
+    let new_local = new_due.with_timezone(&chrono::Local).naive_local();
+    let expected_local = original_local + Duration::days(6);
+
+    let diff = new_local - expected_local;
     assert!(diff.num_seconds().abs() < 5);
 }
 
@@ -161,8 +170,11 @@ fn test_recurrence_preserves_time() {
     // Check hour/minute match (allowing slight drift if rrule recalculates, but usually it preserves)
     // Actually rrule calculated from DTSTART preserves time.
     assert_eq!(
-        dt.format("%H:%M").to_string(),
-        new_due.format("%H:%M").to_string()
+        dt.with_timezone(&chrono::Local).format("%H:%M").to_string(),
+        new_due
+            .with_timezone(&chrono::Local)
+            .format("%H:%M")
+            .to_string()
     );
 }
 

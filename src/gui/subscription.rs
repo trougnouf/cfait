@@ -102,13 +102,11 @@ fn handle_hotkey(
                 return Some(Message::EscCaptured);
             }
             let is_cmd = modifiers.control() || modifiers.command();
-            if is_cmd {
-                if let keyboard::Key::Character(s) = key.as_ref() {
-                    if s == "s" {
+            if is_cmd
+                && let keyboard::Key::Character(s) = key.as_ref()
+                    && s == "s" {
                         return Some(Message::SubmitTask);
                     }
-                }
-            }
         }
         return None;
     }

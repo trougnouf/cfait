@@ -1,6 +1,6 @@
 // File: ./src/model/recurrence.rs
 use crate::model::item::{Alarm, AlarmTrigger, DateType, RawProperty, Task, TaskStatus};
-use chrono::{Local, Utc};
+use chrono::Local;
 use rrule::RRuleSet;
 use std::collections::HashSet; // Import HashSet for deduplication
 use std::str::FromStr;
@@ -15,37 +15,27 @@ impl RecurrenceEngine {
         let rule_str = task.rrule.as_ref()?;
         let seed_date_type = task.dtstart.as_ref().or(task.due.as_ref())?;
 
-        // Normalize seed to UTC DateTime for calculation
-        // For AllDay, prefer to preserve an available specific time component (if present
-        // elsewhere on the task) to avoid losing the user's intended time when computing
-        // recurrences. Fallback to UTC midnight for pure AllDay seeds.
-        let seed_dt_utc = match seed_date_type {
+        // 1. Establish the Local Naive seed for the recurrence engine.
+        // For AllDay tasks, we use midnight (or a specific time if one exists on the other date field).
+        let seed_local_naive = match seed_date_type {
             DateType::AllDay(d) => {
-                // Try to find a specific time on the task (prefer dtstart then due).
-                // If either field has a specific DateTime, use its time component with the AllDay date.
-                // We use UTC time components directly to ensure stability across timezones.
-                let specific_time_opt = match (task.dtstart.as_ref(), task.due.as_ref()) {
-                    (Some(DateType::Specific(dt)), _) => Some(dt.time()),
-                    (_, Some(DateType::Specific(dt))) => Some(dt.time()),
+                let local_time = match (task.dtstart.as_ref(), task.due.as_ref()) {
+                    (Some(DateType::Specific(dt)), _) => Some(dt.with_timezone(&Local).time()),
+                    (_, Some(DateType::Specific(dt))) => Some(dt.with_timezone(&Local).time()),
                     _ => None,
                 };
-
-                if let Some(time) = specific_time_opt {
-                    // Combine the AllDay date with the discovered UTC time component.
-                    d.and_time(time).and_utc()
+                if let Some(time) = local_time {
+                    d.and_time(time)
                 } else {
-                    // No specific time found: treat as pure AllDay at UTC midnight.
-                    d.and_hms_opt(0, 0, 0).unwrap().and_utc()
+                    d.and_hms_opt(0, 0, 0).unwrap()
                 }
             }
-            DateType::Specific(dt) => *dt,
+            DateType::Specific(dt) => dt.with_timezone(&Local).naive_local(),
         };
 
-        // Construct RRULE string using strict UTC format for calculation stability.
-        let dtstart_str = seed_dt_utc.format("%Y%m%dT%H%M%SZ").to_string();
+        // Construct RRULE string using Floating Time (No 'Z' suffix)
+        let dtstart_str = seed_local_naive.format("%Y%m%dT%H%M%S").to_string();
 
-        // FIX 1: Sanitize rule string.
-        // If the stored rule already starts with "RRULE:", strip it to avoid double prefixing.
         let clean_rule = rule_str.trim();
         let mut final_rule_part = if clean_rule.to_uppercase().starts_with("RRULE:") {
             clean_rule[6..].to_string()
@@ -53,41 +43,38 @@ impl RecurrenceEngine {
             clean_rule.to_string()
         };
 
-        // FIX 4 (CRITICAL): Normalize UNTIL to DateTime if DTSTART is DateTime.
-        // The rrule crate (and RFC 5545) requires UNTIL to match the type of DTSTART.
-        // Since we force DTSTART to be a UTC DateTime above, we MUST ensure UNTIL is also
-        // a UTC DateTime. If parser provided "UNTIL=20261231", we must convert it to
-        // "UNTIL=20261231T235959Z".
+        // Ensure UNTIL is also stripped of 'Z' so it matches the floating DTSTART
         if let Some(idx) = final_rule_part.find("UNTIL=") {
             let until_val_start = idx + 6;
-            // Find end of UNTIL value (semicolon or end of string)
             let until_val_end = final_rule_part[until_val_start..]
                 .find(';')
                 .map(|i| until_val_start + i)
                 .unwrap_or(final_rule_part.len());
 
-            let until_val = &final_rule_part[until_val_start..until_val_end];
+            let until_val = final_rule_part[until_val_start..until_val_end].to_string();
 
-            // If UNTIL is Date-only (8 chars, no 'T'), upgrade it to End-of-Day UTC
             if until_val.len() == 8 && !until_val.contains('T') {
-                let new_until = format!("{}T235959Z", until_val);
+                let new_until = format!("{}T235959", until_val); // NO 'Z'
                 final_rule_part.replace_range(until_val_start..until_val_end, &new_until);
+            } else if until_val.ends_with('Z') {
+                let new_until = &until_val[..until_val.len() - 1]; // Strip the 'Z'
+                final_rule_part.replace_range(until_val_start..until_val_end, new_until);
             }
         }
 
         let mut rrule_string = format!("DTSTART:{}\nRRULE:{}\n", dtstart_str, final_rule_part);
 
-        // FIX 2: Deduplicate EXDATEs.
-        // The user's file had multiple identical exdates. We use a HashSet to ensure uniqueness
-        // before feeding them into the RRuleSet parser.
+        // Deduplicate and localize EXDATEs
         if !task.exdates.is_empty() {
             let mut seen_exdates = HashSet::new();
             for ex in &task.exdates {
-                let ex_utc = match ex {
-                    DateType::AllDay(d) => d.and_hms_opt(0, 0, 0).unwrap().and_utc(),
-                    DateType::Specific(dt) => *dt,
+                let ex_local_naive = match ex {
+                    // Ensure AllDay EXDATEs match the exact time rrule uses to generate instances
+                    DateType::AllDay(d) => d.and_time(seed_local_naive.time()),
+                    DateType::Specific(dt) => dt.with_timezone(&Local).naive_local(),
                 };
-                let ex_str = ex_utc.format("%Y%m%dT%H%M%SZ").to_string();
+                let ex_str = ex_local_naive.format("%Y%m%dT%H%M%S").to_string(); // NO 'Z'
+
                 if seen_exdates.insert(ex_str.clone()) {
                     rrule_string.push_str(&format!("EXDATE:{}\n", ex_str));
                 }
@@ -95,36 +82,24 @@ impl RecurrenceEngine {
         }
 
         if let Ok(rrule_set) = RRuleSet::from_str(&rrule_string) {
-            // FIX: Determine "Now" based on the task type.
-            // For AllDay tasks, we must respect the user's Local date.
-            // If it is Jan 27 8PM Local, it is still Jan 27. Even if it is Jan 28 1AM UTC.
-            let comparison_now = match seed_date_type {
-                DateType::AllDay(_) => {
-                    // Get Local date, set to midnight, convert to UTC to match rrule domain
-                    Local::now()
-                        .date_naive()
-                        .and_hms_opt(0, 0, 0)
-                        .unwrap()
-                        .and_utc()
-                }
-                DateType::Specific(_) => Utc::now(),
+            let comparison_now_local = match seed_date_type {
+                DateType::AllDay(_) => Local::now().date_naive().and_hms_opt(0, 0, 0).unwrap(),
+                DateType::Specific(_) => Local::now().naive_local(),
             };
 
-            let search_floor = std::cmp::max(comparison_now, seed_dt_utc);
+            let search_floor_local = std::cmp::max(comparison_now_local, seed_local_naive);
 
-            let rrule_next = rrule_set
+            let rrule_next_naive = rrule_set
                 .into_iter()
-                .find(|d| d.to_utc() > search_floor)
-                .map(|d| d.to_utc());
+                .map(|d| d.naive_local())
+                .find(|d| *d > search_floor_local);
 
-            // FIX: Prevent 'rrule' from entirely skipping months lacking a 29th/30th/31st day
-            // by clamping to the end of the expected month for simple monthly/yearly intervals.
             let is_simple_monthly =
                 final_rule_part.contains("FREQ=MONTHLY") && !final_rule_part.contains("BY");
             let is_simple_yearly =
                 final_rule_part.contains("FREQ=YEARLY") && !final_rule_part.contains("BY");
 
-            let next_occurrence = if let Some(rn) = rrule_next {
+            let next_occurrence_naive = if let Some(rn) = rrule_next_naive {
                 if is_simple_monthly || is_simple_yearly {
                     let interval = if let Some(idx) = final_rule_part.find("INTERVAL=") {
                         let end = final_rule_part[idx..]
@@ -143,12 +118,9 @@ impl RecurrenceEngine {
                     };
 
                     if let Some(expected_date) =
-                        seed_dt_utc.checked_add_months(chrono::Months::new(expected_months))
+                        seed_local_naive.checked_add_months(chrono::Months::new(expected_months))
                     {
-                        // If standard rrule skipped forward entirely (e.g. over Feb), clamp to end of expected month
-                        // Only clamp when the expected_date itself is after our search_floor; otherwise
-                        // prefer the rrule result which may already be appropriately advanced.
-                        if rn > expected_date && expected_date > search_floor {
+                        if rn > expected_date && expected_date > search_floor_local {
                             Some(expected_date)
                         } else {
                             Some(rn)
@@ -163,7 +135,11 @@ impl RecurrenceEngine {
                 None
             };
 
-            if let Some(next_start) = next_occurrence {
+            if let Some(naive_next) = next_occurrence_naive {
+                // Convert back to Absolute UTC for safe storage
+                let next_start =
+                    crate::model::item::safe_local_to_utc(naive_next.date(), naive_next.time());
+
                 let mut next_task = task.clone();
                 next_task.uid = Uuid::new_v4().to_string();
                 next_task.href = String::new();
@@ -173,53 +149,64 @@ impl RecurrenceEngine {
                 next_task.dependencies.clear();
                 next_task.sequence = 0;
 
-                // Remove COMPLETED property from unmapped properties as this is a fresh occurrence
                 next_task
                     .unmapped_properties
                     .retain(|p| p.key != "COMPLETED");
 
-                // Clear Alarms if they are snooze/stateful (keep user defined ones)
                 next_task
                     .alarms
                     .retain(|a: &Alarm| !a.is_snooze() && a.acknowledged.is_none());
 
                 // Advance explicit absolute alarms along with the task
-                let time_shift = next_start - seed_dt_utc;
+                // By applying the delta in Local Naive time, we preserve the wall-clock hour
+                // perfectly across Daylight Saving Time boundaries!
+                let naive_delta = naive_next - seed_local_naive;
+
                 for alarm in &mut next_task.alarms {
                     if let AlarmTrigger::Absolute(ref mut dt) = alarm.trigger {
-                        *dt += time_shift;
+                        let alarm_local = dt.with_timezone(&Local).naive_local();
+                        let new_alarm_local = alarm_local + naive_delta;
+                        *dt = crate::model::item::safe_local_to_utc(
+                            new_alarm_local.date(),
+                            new_alarm_local.time(),
+                        );
                     }
                 }
 
-                // FIX 3: Ensure exdates in the *new* task are clean (deduplicated)
-                // We keep the exdates in the new task so history is preserved, but we might as well clean them up.
                 next_task.exdates.sort_by(|a, b| a.partial_cmp(b).unwrap());
                 next_task.exdates.dedup();
 
-                let duration = if let Some(old_due) = &task.due {
+                // Calculate duration gap in Naive time to prevent DST shifts from stretching the gap
+                let duration_naive = if let Some(old_due) = &task.due {
                     match old_due {
                         DateType::AllDay(d) => {
-                            let due_utc = d.and_hms_opt(0, 0, 0).unwrap().and_utc();
-                            due_utc - seed_dt_utc
+                            let due_naive = d.and_hms_opt(0, 0, 0).unwrap();
+                            due_naive - seed_local_naive
                         }
-                        DateType::Specific(dt) => *dt - seed_dt_utc,
+                        DateType::Specific(dt) => {
+                            let due_naive = dt.with_timezone(&Local).naive_local();
+                            due_naive - seed_local_naive
+                        }
                     }
                 } else {
                     chrono::Duration::zero()
                 };
 
-                // Apply next date maintaining DateType flavor
                 if let Some(old_start) = &task.dtstart {
                     next_task.dtstart = match old_start {
-                        DateType::AllDay(_) => Some(DateType::AllDay(next_start.date_naive())),
+                        DateType::AllDay(_) => Some(DateType::AllDay(naive_next.date())),
                         DateType::Specific(_) => Some(DateType::Specific(next_start)),
                     };
                 }
 
                 if let Some(old_due) = &task.due {
-                    let next_due_utc = next_start + duration;
+                    let next_due_naive = naive_next + duration_naive;
+                    let next_due_utc = crate::model::item::safe_local_to_utc(
+                        next_due_naive.date(),
+                        next_due_naive.time(),
+                    );
                     next_task.due = match old_due {
-                        DateType::AllDay(_) => Some(DateType::AllDay(next_due_utc.date_naive())),
+                        DateType::AllDay(_) => Some(DateType::AllDay(next_due_naive.date())),
                         DateType::Specific(_) => Some(DateType::Specific(next_due_utc)),
                     };
                 }

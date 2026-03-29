@@ -2252,10 +2252,11 @@ pub fn parse_session_input(input: &str) -> Option<crate::model::item::WorkSessio
 
     if let (Some(s), Some(e)) = (start_time, end_time) {
         let start_dt = crate::model::item::safe_local_to_utc(target_date, s);
-        let mut end_dt = crate::model::item::safe_local_to_utc(target_date, e);
-        if end_dt < start_dt {
-            end_dt += chrono::Duration::days(1);
+        let mut end_target_date = target_date;
+        if e < s {
+            end_target_date += chrono::Duration::days(1);
         }
+        let end_dt = crate::model::item::safe_local_to_utc(end_target_date, e);
         return Some(crate::model::item::WorkSession {
             start: start_dt.timestamp(),
             end: end_dt.timestamp(),
