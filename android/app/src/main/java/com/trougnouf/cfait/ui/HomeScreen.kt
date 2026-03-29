@@ -132,11 +132,22 @@ fun HomeScreen(
     var customWriteTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var localDefaultCalHref by remember(defaultCalHref) { mutableStateOf(defaultCalHref) }
 
+    var pendingTabId by remember { mutableStateOf<String?>(null) }
+
     var hasInitializedCustom by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(backendVisibleHrefs) {
-        if (!hasInitializedCustom && backendVisibleHrefs.size > 1 && backendVisibleHrefs.size < allHrefs.size) {
-            customHrefs = backendVisibleHrefs
+        if (!hasInitializedCustom && backendVisibleHrefs.size < allHrefs.size) {
+            if (backendVisibleHrefs.size > 1) {
+                customHrefs = backendVisibleHrefs
+            }
             hasInitializedCustom = true
+
+            // Ensure we jump to the correct tab on boot to preserve the saved configuration
+            if (backendVisibleHrefs.size > 1) {
+                pendingTabId = "CUSTOM"
+            } else if (backendVisibleHrefs.size == 1) {
+                pendingTabId = backendVisibleHrefs.first()
+            }
         }
     }
 
@@ -159,7 +170,6 @@ fun HomeScreen(
     }
 
     val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { tabs.size })
-    var pendingTabId by remember { mutableStateOf<String?>(null) }
 
     var isTabsTemporarilyVisible by remember { mutableStateOf(false) }
     LaunchedEffect(pagerState.isScrollInProgress) {
@@ -964,6 +974,17 @@ fun HomeScreen(
                                                 } else {
                                                     customHrefs = emptySet()
                                                 }
+
+                                                // Auto-switch tab to match the new visibility state
+                                                if (currentVisibleHrefs.size == allHrefs.size) {
+                                                    pendingTabId = "ALL"
+                                                } else if (currentVisibleHrefs.size > 1) {
+                                                    pendingTabId = "CUSTOM"
+                                                } else if (currentVisibleHrefs.size == 1) {
+                                                    pendingTabId = currentVisibleHrefs.first()
+                                                } else if (currentVisibleHrefs.isEmpty()) {
+                                                    pendingTabId = "ALL"
+                                                }
                                             }
                                             onDataChanged()
                                             updateTaskList()
@@ -1011,6 +1032,14 @@ fun HomeScreen(
                                                         customHrefs = currentVisible
                                                     } else {
                                                         customHrefs = emptySet()
+                                                    }
+
+                                                    if (currentVisible.size == allHrefs.size) {
+                                                        pendingTabId = "ALL"
+                                                    } else if (currentVisible.size > 1) {
+                                                        pendingTabId = "CUSTOM"
+                                                    } else if (currentVisible.size == 1) {
+                                                        pendingTabId = currentVisible.first()
                                                     }
                                                 }
                                                 if (customHrefs.isNotEmpty() && cal.href !in customHrefs) {
@@ -1574,8 +1603,8 @@ fun HomeScreen(
                         // Export button only visible if currently on the local tab
                         val targetTabForExport = tabs.getOrNull(pagerState.targetPage)
                         val activeIsLocal = targetTabForExport?.id?.startsWith("local://") == true &&
-                                            targetTabForExport.id != "local://trash" &&
-                                            targetTabForExport.id != "local://recovery"
+                                targetTabForExport.id != "local://trash" &&
+                                targetTabForExport.id != "local://recovery"
 
                         if (activeIsLocal && remoteCals.isNotEmpty()) {
                             FilledTonalButton(
