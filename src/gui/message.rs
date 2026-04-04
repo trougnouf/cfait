@@ -173,6 +173,7 @@ pub enum Message {
     CloseWindow,
     WindowResized(iced::Size),
     ResizeStart(ResizeDirection),
+    CursorMoved(iced::Point),
 
     // --- Settings Input Fields ---
     ObUrgentDaysChanged(String),
@@ -196,6 +197,11 @@ pub enum Message {
     SetSnoozeShort(String),
     SetSnoozeLong(String),
     SetAutoRefreshInterval(String), // Added
+
+    // --- Context Menu ---
+    OpenContextMenu(String, bool),
+    CloseContextMenu,
+    TogglePinnedAction(crate::config::TaskAction, bool),
 
     // --- Advanced Settings ---
     ToggleAdvancedSettings(bool),

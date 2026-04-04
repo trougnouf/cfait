@@ -11,6 +11,15 @@ use crate::system::{AlarmMessage, SystemEvent};
 use iced::Task;
 
 pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
+    // Automatically close the context menu on any interaction, unless it's the
+    // message explicitly keeping it open or safe background ticks.
+    if app.active_context_menu.is_some() {
+        match &message {
+            Message::OpenContextMenu(_, _) | Message::CloseContextMenu | Message::Tick | Message::WindowResized(_) | Message::CursorMoved(_) => {}
+            _ => { app.active_context_menu = None; }
+        }
+    }
+
     let task = match message {
         Message::FontLoaded(_) => Task::none(),
         Message::Tick => Task::none(), // Just forces a view redraw
@@ -181,7 +190,11 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::RefreshedAll(_)
         | Message::TasksRefreshed(_)
         | Message::ControllerActionComplete(_)
-        | Message::MigrationComplete(_) => network::handle(app, message),
+        | Message::MigrationComplete(_)
+        | Message::OpenContextMenu(..)
+        | Message::CloseContextMenu
+        | Message::TogglePinnedAction(_, _)
+        | Message::CursorMoved(_) => view::handle(app, message),
 
         Message::SnapToSelected { focus } => {
             if let Some(uid) = &app.selected_uid {

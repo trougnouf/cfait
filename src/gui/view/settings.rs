@@ -407,6 +407,47 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.6)),
                 Space::new().height(10),
+                text("Pinned Actions (Task Row)").size(16),
+                {
+                    let mut action_col = column![].spacing(2);
+                    for action in crate::config::TaskAction::ALL {
+                        let is_pinned = app.pinned_actions.contains(action);
+                        let action_val = *action; // Copy for closure
+
+                        let icon_char = match action_val {
+                            crate::config::TaskAction::ToggleTimer => icon::PLAY,
+                            crate::config::TaskAction::StopTimer => icon::DEBUG_STOP,
+                            crate::config::TaskAction::AddSession => icon::TIMER_PLUS,
+                            crate::config::TaskAction::IncreasePriority => icon::PLUS,
+                            crate::config::TaskAction::DecreasePriority => icon::MINUS,
+                            crate::config::TaskAction::Cancel => icon::CROSS,
+                            crate::config::TaskAction::Edit => icon::EDIT,
+                            crate::config::TaskAction::Delete | crate::config::TaskAction::DeleteTree => icon::TRASH,
+                            crate::config::TaskAction::Yank => icon::LINK,
+                            crate::config::TaskAction::CreateSubtask => icon::CREATE_CHILD,
+                            crate::config::TaskAction::DuplicateTree => icon::CLONE,
+                            crate::config::TaskAction::Promote => icon::ELEVATOR_UP,
+                        };
+
+                        let check_icon = if is_pinned { icon::CHECK_SQUARE } else { icon::SQUARE };
+
+                        let toggle_row = row![
+                            icon::icon(check_icon).size(16),
+                            icon::icon(icon_char).size(14).width(Length::Fixed(20.0)),
+                            text(action.label()).size(14)
+                        ].spacing(8).align_y(iced::Alignment::Center);
+
+                        let row_btn = button(toggle_row)
+                            .style(iced::widget::button::text)
+                            .padding(4)
+                            .width(Length::Fill)
+                            .on_press(Message::TogglePinnedAction(action_val, !is_pinned));
+
+                        action_col = action_col.push(row_btn);
+                    }
+                    action_col
+                },
+                Space::new().height(10),
                 text(rust_i18n::t!("data_management")).size(16),
                 row![
                     text(rust_i18n::t!("trash_retention_days_label")).width(Length::Fixed(200.0)),

@@ -98,6 +98,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let new_val = !app.hide_completed;
             handle(app, Message::ToggleHideCompleted(new_val))
         }
+        Message::OpenContextMenu(uid, is_full) => {
+            app.active_context_menu = Some((uid, is_full, app.cursor_position));
+            Task::none()
+        }
+        Message::CloseContextMenu => {
+            app.active_context_menu = None;
+            Task::none()
+        }
         Message::CategoryMatchModeToggle => {
             let new_val = !app.match_all_categories;
             handle(app, Message::CategoryMatchModeChanged(new_val))
@@ -433,6 +441,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::WindowResized(size) => {
             app.current_window_size = size;
+            Task::none()
+        }
+        Message::CursorMoved(position) => {
+            app.cursor_position = position;
             Task::none()
         }
         // Focus Handlers (No scrolling)

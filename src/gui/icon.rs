@@ -73,6 +73,7 @@ pub const CREATE_CHILD: char = '\u{f0014}'; // nf-md-account_plus
 pub const CLEAR_ALL: char = '\u{eabf}'; // nf-cod-clear_all
 pub const MAP_PIN: char = '\u{f276}'; // nf-fa-map_pin
 pub const ELEVATOR_UP: char = '\u{f12c1}'; // nf-md-elevator_up
+pub const ELLIPSIS: char = '\u{f0d32}'; // nf-md-selection_ellipse
 
 pub const SETTINGS_GEAR: char = '\u{e690}'; // nf-seti-settings
 pub const KEYBOARD: char = '\u{f0313}'; // nf-md-keyboard_variant

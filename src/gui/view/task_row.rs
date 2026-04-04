@@ -18,12 +18,6 @@ use iced::widget::{
 };
 use iced::{Border, Color, Element, Length, Theme};
 
-use iced::advanced::layout;
-use iced::advanced::renderer;
-use iced::advanced::widget::{self, Widget};
-use iced::advanced::{Clipboard, Layout, Shell, mouse};
-use iced::{Event, Rectangle, Size, Vector};
-
 pub fn view_task_row<'a>(
     app: &'a GuiApp,
     index: usize,
@@ -441,69 +435,6 @@ pub fn view_task_row<'a>(
                 .style(tooltip_style)
                 .delay(Duration::from_millis(700)),
             );
-            let create_child_btn = button(icon::icon(icon::CREATE_CHILD).size(14))
-                .style(button::primary)
-                .padding(4)
-                .on_press(Message::StartCreateChild(task.uid.clone()));
-            actions = actions.push(
-                tooltip(
-                    create_child_btn,
-                    text(format!("{} (C)", rust_i18n::t!("create_subtask"))).size(12),
-                    tooltip::Position::Top,
-                )
-                .style(tooltip_style)
-                .delay(Duration::from_millis(700)),
-            );
-
-            let has_subtasks = app.store.calendars.values().any(|map| {
-                map.values().any(|t| t.parent_uid.as_deref() == Some(task.uid.as_str()))
-            });
-
-            if has_subtasks {
-                let duplicate_btn = button(icon::icon(icon::CLONE).size(14))
-                    .style(button::primary)
-                    .padding(4)
-                    .on_press(Message::DuplicateTask(task.uid.clone()));
-                actions = actions.push(
-                    tooltip(
-                        duplicate_btn,
-                        text(format!("{} (Ctrl+D)", rust_i18n::t!("duplicate_task"))).size(12),
-                        tooltip::Position::Top,
-                    )
-                    .style(tooltip_style)
-                    .delay(Duration::from_millis(700)),
-                );
-
-                let delete_tree_btn = button(icon::icon(icon::TRASH).size(14))
-                    .style(danger_highlight_style)
-                    .padding(4)
-                    .on_press(Message::DeleteTaskTree(task.uid.clone()));
-                actions = actions.push(
-                    tooltip(
-                        delete_tree_btn,
-                        text(format!("{} (Ctrl+Del)", rust_i18n::t!("delete_task_tree"))).size(12),
-                        tooltip::Position::Top,
-                    )
-                    .style(tooltip_style)
-                    .delay(Duration::from_millis(700)),
-                );
-            }
-
-            if task.parent_uid.is_some() {
-                let lift_btn = button(icon::icon(icon::ELEVATOR_UP).size(14))
-                    .style(action_style)
-                    .padding(4)
-                    .on_press(Message::RemoveParent(task.uid.clone()));
-                actions = actions.push(
-                    tooltip(
-                        lift_btn,
-                        text(format!("{} (<)", rust_i18n::t!("promote_remove_parent"))).size(12),
-                        tooltip::Position::Top,
-                    )
-                    .style(tooltip_style)
-                    .delay(Duration::from_millis(700)),
-                );
-            }
         }
     } else {
         let link_btn = button(icon::icon(icon::LINK).size(14))
@@ -521,159 +452,80 @@ pub fn view_task_row<'a>(
         );
     }
 
-    if task.status != crate::model::TaskStatus::Completed
-        && task.status != crate::model::TaskStatus::Cancelled
-    {
-        let (action_icon, next_action_msg, tooltip_text) =
-            if task.status == crate::model::TaskStatus::InProcess {
-                (
-                    icon::PAUSE,
-                    Message::PauseTask(task.uid.clone()),
-                    format!("{} (s)", rust_i18n::t!("pause_task")),
-                )
-            } else if task.is_paused() {
-                (
-                    icon::PLAY,
-                    Message::StartTask(task.uid.clone()),
-                    format!("{} (s)", rust_i18n::t!("resume_task")),
-                )
-            } else {
-                (
-                    icon::PLAY,
-                    Message::StartTask(task.uid.clone()),
-                    format!("{} (s)", rust_i18n::t!("start_task")),
-                )
-            };
+    use crate::config::TaskAction;
+    let has_subtasks = app.store.calendars.values().any(|map| {
+        map.values().any(|t| t.parent_uid.as_deref() == Some(task.uid.as_str()))
+    });
 
-        if !has_time {
-            let time_btn = button(icon::icon(icon::TIMER_PLUS).size(14))
-                .style(if app.adding_session_uid.as_deref() == Some(&task.uid) {
-                    button::primary
+    for action in TaskAction::ALL {
+        if !app.pinned_actions.contains(action) {
+            continue;
+        }
+
+        let is_done_or_cancelled = task.status == crate::model::TaskStatus::Completed || task.status == crate::model::TaskStatus::Cancelled;
+
+        if *action == TaskAction::DeleteTree && !has_subtasks { continue; }
+        if *action == TaskAction::Promote && task.parent_uid.is_none() { continue; }
+        if *action == TaskAction::Yank && app.yanked_uid.is_some() { continue; }
+        if *action == TaskAction::StopTimer && !(task.status == crate::model::TaskStatus::InProcess || task.is_paused()) { continue; }
+        if (*action == TaskAction::ToggleTimer || *action == TaskAction::AddSession || *action == TaskAction::Cancel) && is_done_or_cancelled { continue; }
+
+        let mut label = action.label();
+        if *action == TaskAction::DuplicateTree && !has_subtasks {
+            label = "Duplicate task".to_string();
+        }
+
+        let (icon_char, msg, style_mode, tooltip_str) = match action {
+            TaskAction::ToggleTimer => {
+                if task.status == crate::model::TaskStatus::InProcess {
+                    (icon::PAUSE, Message::PauseTask(task.uid.clone()), 0, format!("{} (s)", rust_i18n::t!("pause_task")))
+                } else if task.is_paused() {
+                    (icon::PLAY, Message::StartTask(task.uid.clone()), 0, format!("{} (s)", rust_i18n::t!("resume_task")))
                 } else {
-                    action_style
-                })
-                .padding(4)
-                .on_press(Message::StartAddSession(task.uid.clone()));
+                    (icon::PLAY, Message::StartTask(task.uid.clone()), 0, format!("{} (s)", rust_i18n::t!("start_task")))
+                }
+            }
+            TaskAction::StopTimer => (icon::DEBUG_STOP, Message::StopTask(task.uid.clone()), 0, format!("{} (S)", rust_i18n::t!("stop_reset"))),
+            TaskAction::AddSession => {
+                let style = if app.adding_session_uid.as_deref() == Some(task.uid.as_str()) { 3 } else { 0 };
+                (icon::TIMER_PLUS, Message::StartAddSession(task.uid.clone()), style, format!("{} (t)", label))
+            }
+            TaskAction::IncreasePriority => (icon::PLUS, Message::ChangePriority(index, 1), 0, format!("{} (+)", label)),
+            TaskAction::DecreasePriority => (icon::MINUS, Message::ChangePriority(index, -1), 0, format!("{} (-)", label)),
+            TaskAction::Edit => (icon::EDIT, Message::EditTaskStart(index), 0, format!("{} (e)", label)),
+            TaskAction::Yank => (icon::LINK, Message::YankTask(task.uid.clone()), 0, format!("{} (y)", label)),
+            TaskAction::CreateSubtask => (icon::CREATE_CHILD, Message::StartCreateChild(task.uid.clone()), 0, format!("{} (C)", label)),
+            TaskAction::DuplicateTree => (icon::CLONE, Message::DuplicateTask(task.uid.clone()), 0, format!("{} (Ctrl+D)", label)),
+            TaskAction::Promote => (icon::ELEVATOR_UP, Message::RemoveParent(task.uid.clone()), 0, format!("{} (<)", label)),
+            TaskAction::Cancel => (icon::CROSS, Message::SetTaskStatus(index, crate::model::TaskStatus::Cancelled), 1, format!("{} (x)", label)),
+            TaskAction::Delete => (icon::TRASH, Message::DeleteTask(index), 1, format!("{} (Del)", label)),
+            TaskAction::DeleteTree => (icon::TRASH, Message::DeleteTaskTree(task.uid.clone()), 2, format!("{} (Ctrl+Del)", label)),
+        };
 
-            actions = actions.push(
-                tooltip(
-                    time_btn,
-                    text(format!("{} (t)", rust_i18n::t!("help_metadata_log_time"))).size(12),
-                    tooltip::Position::Top,
-                )
-                .style(tooltip_style)
-                .delay(Duration::from_millis(700)),
-            );
-        }
-        let status_toggle_btn = button(icon::icon(action_icon).size(14))
-            .style(action_style)
+        let btn = button(icon::icon(icon_char).size(14))
+            .style(move |theme: &Theme, status: iced::widget::button::Status| {
+                match style_mode {
+                    1 => danger_style(theme, status),
+                    2 => danger_highlight_style(theme, status),
+                    3 => iced::widget::button::primary(theme, status),
+                    _ => action_style(theme, status),
+                }
+            })
             .padding(4)
-            .on_press(next_action_msg);
+            .on_press(msg);
 
         actions = actions.push(
-            tooltip(
-                status_toggle_btn,
-                text(tooltip_text).size(12),
-                tooltip::Position::Top,
-            )
-            .style(tooltip_style)
-            .delay(Duration::from_millis(700)),
-        );
-
-        if task.status == crate::model::TaskStatus::InProcess || task.is_paused() {
-            let stop_btn = button(icon::icon(icon::DEBUG_STOP).size(14))
-                .style(action_style)
-                .padding(4)
-                .on_press(Message::StopTask(task.uid.clone()));
-
-            actions = actions.push(
-                tooltip(
-                    stop_btn,
-                    text(format!("{} (S)", rust_i18n::t!("stop_reset"))).size(12),
-                    tooltip::Position::Top,
-                )
-                .style(tooltip_style)
-                .delay(Duration::from_millis(700)),
-            );
-        }
-    }
-
-    let plus_btn = button(icon::icon(icon::PLUS).size(14))
-        .style(action_style)
-        .padding(4)
-        .on_press(Message::ChangePriority(index, 1));
-    actions = actions.push(
-        tooltip(
-            plus_btn,
-            text(format!("{} (+)", rust_i18n::t!("increase_priority"))).size(12),
-            tooltip::Position::Top,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700)),
-    );
-
-    let minus_btn = button(icon::icon(icon::MINUS).size(14))
-        .style(action_style)
-        .padding(4)
-        .on_press(Message::ChangePriority(index, -1));
-    actions = actions.push(
-        tooltip(
-            minus_btn,
-            text(format!("{} (-)", rust_i18n::t!("decrease_priority"))).size(12),
-            tooltip::Position::Top,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700)),
-    );
-
-    let edit_btn = button(icon::icon(icon::EDIT).size(14))
-        .style(action_style)
-        .padding(4)
-        .on_press(Message::EditTaskStart(index));
-    actions = actions.push(
-        tooltip(
-            edit_btn,
-            text(format!("{} (e)", rust_i18n::t!("edit"))).size(12),
-            tooltip::Position::Top,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700)),
-    );
-
-    let delete_btn = button(icon::icon(icon::TRASH).size(14))
-        .style(danger_style)
-        .padding(4)
-        .on_press(Message::DeleteTask(index));
-    actions = actions.push(
-        tooltip(
-            delete_btn,
-            text(format!("{} (Del)", rust_i18n::t!("delete"))).size(12),
-            tooltip::Position::Top,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700)),
-    );
-
-    if task.status != crate::model::TaskStatus::Completed
-        && task.status != crate::model::TaskStatus::Cancelled
-    {
-        let cancel_btn = button(icon::icon(icon::CROSS).size(14))
-            .style(danger_style)
-            .padding(4)
-            .on_press(Message::SetTaskStatus(
-                index,
-                crate::model::TaskStatus::Cancelled,
-            ));
-        actions = actions.push(
-            tooltip(
-                cancel_btn,
-                text(format!("{} (x)", rust_i18n::t!("cancel"))).size(12),
-                tooltip::Position::Top,
-            )
-            .style(tooltip_style)
-            .delay(Duration::from_millis(700)),
+            tooltip(btn, text(tooltip_str).size(12), tooltip::Position::Top)
+                .style(tooltip_style).delay(Duration::from_millis(700))
         );
     }
+
+    // -- ELLIPSIS MENU BUTTON (ALWAYS LAST) --
+    let ellipsis_btn = button(icon::icon(icon::ELLIPSIS).size(14))
+        .style(if app.active_context_menu.as_ref().map(|(u, _, _)| u) == Some(&task.uid) { button::primary } else { action_style })
+        .padding(4)
+        .on_press(Message::OpenContextMenu(task.uid.clone(), false));
+    actions = actions.push(ellipsis_btn);
 
     let (icon_char, bg_color, default_border_color) = if task.is_paused() {
         (
@@ -1196,35 +1048,77 @@ pub fn view_task_row<'a>(
             }
         });
 
-    let container_content: Element<'a, Message> = if has_content_to_show {
-        if is_expanded {
-            let mut details_col = column![].spacing(5);
-            if !task.description.is_empty() {
-                details_col = details_col.push(
-                    text(&task.description)
-                        .size(14)
-                        .color(Color::from_rgb(0.7, 0.7, 0.7)),
-                );
-            }
 
-            if has_valid_parent {
-                let p_uid = task.parent_uid.as_ref().unwrap();
-                let p_name = app
+    let mut details_col = column![].spacing(5);
+
+    if has_content_to_show && is_expanded {
+        if !task.description.is_empty() {
+            details_col = details_col.push(
+                text(&task.description)
+                    .size(14)
+                    .color(Color::from_rgb(0.7, 0.7, 0.7)),
+            );
+        }
+
+        if has_valid_parent {
+            let p_uid = task.parent_uid.as_ref().unwrap();
+            let p_name = app
+                .store
+                .get_summary(p_uid)
+                .unwrap_or_else(|| rust_i18n::t!("unknown_parent").to_string());
+            let remove_parent_btn = button(icon::icon(icon::CROSS).size(10))
+                .style(button::danger)
+                .padding(2)
+                .on_press(Message::RemoveParent(task.uid.clone()));
+            let row = row![
+                text(rust_i18n::t!("parent"))
+                    .size(12)
+                    .color(Color::from_rgb(0.4, 0.8, 0.4)),
+                text(p_name).size(12),
+                tooltip(
+                    remove_parent_btn,
+                    text(rust_i18n::t!("remove_parent")).size(12),
+                    tooltip::Position::Top
+                )
+                .style(tooltip_style)
+                .delay(Duration::from_millis(700))
+            ]
+            .spacing(5)
+            .align_y(iced::Alignment::Center);
+            details_col = details_col.push(row);
+        }
+
+        if !task.dependencies.is_empty() {
+            details_col = details_col.push(
+                text(rust_i18n::t!("blocked_by"))
+                    .size(12)
+                    .color(Color::from_rgb(0.8, 0.4, 0.4)),
+            );
+            for dep_uid in &task.dependencies {
+                let name = app
                     .store
-                    .get_summary(p_uid)
-                    .unwrap_or_else(|| rust_i18n::t!("unknown_parent").to_string());
-                let remove_parent_btn = button(icon::icon(icon::CROSS).size(10))
+                    .get_summary(dep_uid)
+                    .unwrap_or_else(|| rust_i18n::t!("unknown_task").to_string());
+                let is_done = app.store.is_task_done(dep_uid).unwrap_or(false);
+                let check = if is_done { "[x]" } else { "[ ]" };
+                let remove_dep_btn = button(icon::icon(icon::CROSS).size(10))
                     .style(button::danger)
                     .padding(2)
-                    .on_press(Message::RemoveParent(task.uid.clone()));
-                let row = row![
-                    text(rust_i18n::t!("parent"))
+                    .on_press(Message::RemoveDependency(task.uid.clone(), dep_uid.clone()));
+                let name_btn = button(
+                    text(format!("{} {}", check, name))
                         .size(12)
-                        .color(Color::from_rgb(0.4, 0.8, 0.4)),
-                    text(p_name).size(12),
+                        .color(Color::from_rgb(0.6, 0.6, 0.6)),
+                )
+                .style(button::text)
+                .padding(0)
+                .on_press(Message::JumpToTask(dep_uid.clone()));
+
+                let dep_row = row![
+                    name_btn,
                     tooltip(
-                        remove_parent_btn,
-                        text(rust_i18n::t!("remove_parent")).size(12),
+                        remove_dep_btn,
+                        text(rust_i18n::t!("remove_dependency")).size(12),
                         tooltip::Position::Top
                     )
                     .style(tooltip_style)
@@ -1232,327 +1126,286 @@ pub fn view_task_row<'a>(
                 ]
                 .spacing(5)
                 .align_y(iced::Alignment::Center);
-                details_col = details_col.push(row);
+                details_col = details_col.push(dep_row);
             }
+        }
 
-            if !task.dependencies.is_empty() {
-                details_col = details_col.push(
-                    text(rust_i18n::t!("blocked_by"))
-                        .size(12)
-                        .color(Color::from_rgb(0.8, 0.4, 0.4)),
-                );
-                for dep_uid in &task.dependencies {
-                    let name = app
-                        .store
-                        .get_summary(dep_uid)
-                        .unwrap_or_else(|| rust_i18n::t!("unknown_task").to_string());
-                    let is_done = app.store.is_task_done(dep_uid).unwrap_or(false);
-                    let check = if is_done { "[x]" } else { "[ ]" };
-                    let remove_dep_btn = button(icon::icon(icon::CROSS).size(10))
-                        .style(button::danger)
-                        .padding(2)
-                        .on_press(Message::RemoveDependency(task.uid.clone(), dep_uid.clone()));
-                    let name_btn = button(
-                        text(format!("{} {}", check, name))
-                            .size(12)
-                            .color(Color::from_rgb(0.6, 0.6, 0.6)),
-                    )
-                    .style(button::text)
-                    .padding(0)
-                    .on_press(Message::JumpToTask(dep_uid.clone()));
-
-                    let dep_row = row![
-                        name_btn,
-                        tooltip(
-                            remove_dep_btn,
-                            text(rust_i18n::t!("remove_dependency")).size(12),
-                            tooltip::Position::Top
-                        )
-                        .style(tooltip_style)
-                        .delay(Duration::from_millis(700))
-                    ]
-                    .spacing(5)
-                    .align_y(iced::Alignment::Center);
-                    details_col = details_col.push(dep_row);
-                }
-            }
-
-            if !task.related_to.is_empty() {
-                details_col = details_col.push(
-                    text(rust_i18n::t!("related_to_label"))
-                        .size(12)
-                        .color(Color::from_rgb(0.6, 0.6, 0.8)),
-                );
-                for related_uid in &task.related_to {
-                    let name = app
-                        .store
-                        .get_summary(related_uid)
-                        .unwrap_or_else(|| rust_i18n::t!("unknown_task").to_string());
-                    let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
-                        .style(button::danger)
-                        .padding(2)
-                        .on_press(Message::RemoveRelatedTo(
-                            task.uid.clone(),
-                            related_uid.clone(),
-                        ));
-                    let name_btn =
-                        button(text(name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
-                            .style(button::text)
-                            .padding(0)
-                            .on_press(Message::JumpToTask(related_uid.clone()));
-
-                    let related_row = row![
-                        icon::icon(random_related_icon(&task.uid, related_uid)).size(12),
-                        name_btn,
-                        tooltip(
-                            remove_related_btn,
-                            text(rust_i18n::t!("remove_relation")).size(12),
-                            tooltip::Position::Top
-                        )
-                        .style(tooltip_style)
-                        .delay(Duration::from_millis(700))
-                    ]
-                    .spacing(5)
-                    .align_y(iced::Alignment::Center);
-                    details_col = details_col.push(related_row);
-                }
-            }
-
-            let blocking_tasks = app.store.get_tasks_blocking(&task.uid);
-            if !blocking_tasks.is_empty() {
-                details_col = details_col.push(
-                    text(rust_i18n::t!("blocking_label"))
-                        .size(12)
-                        .color(Color::from_rgb(0.6, 0.4, 0.8)),
-                );
-                for (blocked_uid, blocked_name) in blocking_tasks {
-                    let remove_block_btn = button(icon::icon(icon::UNLINK).size(10))
-                        .style(button::danger)
-                        .padding(2)
-                        .on_press(Message::RemoveDependency(
-                            blocked_uid.clone(),
-                            task.uid.clone(),
-                        ));
-
-                    let name_btn = button(
-                        text(blocked_name)
-                            .size(12)
-                            .color(Color::from_rgb(0.7, 0.7, 0.7)),
-                    )
-                    .style(button::text)
-                    .padding(0)
-                    .on_press(Message::JumpToTask(blocked_uid.clone()));
-
-                    let blocking_row = row![
-                        icon::icon(icon::HAND_STOP)
-                            .size(12)
-                            .color(Color::from_rgb(0.5, 0.5, 0.5)),
-                        name_btn,
-                        tooltip(
-                            remove_block_btn,
-                            text(rust_i18n::t!("unblock_remove_dependency")).size(12),
-                            tooltip::Position::Top
-                        )
-                        .style(tooltip_style)
-                        .delay(Duration::from_millis(700))
-                    ]
-                    .spacing(5)
-                    .align_y(iced::Alignment::Center);
-
-                    details_col = details_col.push(blocking_row);
-                }
-            }
-
-            let incoming_related = app.store.get_tasks_related_to(&task.uid);
-            if !incoming_related.is_empty() {
-                details_col = details_col.push(
-                    text(rust_i18n::t!("related_from_label"))
-                        .size(12)
-                        .color(Color::from_rgb(0.8, 0.6, 0.8)),
-                );
-                for (related_uid, related_name) in incoming_related {
-                    let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
-                        .style(button::danger)
-                        .padding(2)
-                        .on_press(Message::RemoveRelatedTo(
-                            related_uid.clone(),
-                            task.uid.clone(),
-                        ));
-                    let name_btn = button(
-                        text(related_name)
-                            .size(12)
-                            .color(Color::from_rgb(0.7, 0.7, 0.7)),
-                    )
-                    .style(button::text)
-                    .padding(0)
-                    .on_press(Message::JumpToTask(related_uid.clone()));
-
-                    let related_row = row![
-                        icon::icon(random_related_icon(&task.uid, &related_uid)).size(12),
-                        name_btn,
-                        tooltip(
-                            remove_related_btn,
-                            text(rust_i18n::t!("remove_relation")).size(12),
-                            tooltip::Position::Top
-                        )
-                        .style(tooltip_style)
-                        .delay(Duration::from_millis(700))
-                    ]
-                    .spacing(5)
-                    .align_y(iced::Alignment::Center);
-                    details_col = details_col.push(related_row);
-                }
-            }
-
-            // --- Work Sessions Rendering ---
-            if !task.sessions.is_empty()
-                || app.adding_session_uid.as_ref() == Some(&task.uid)
-                || task.time_spent_seconds > 0
-            {
-                details_col = details_col.push(Space::new().height(5.0));
-
-                let now_ts = Utc::now().timestamp();
-                let current_session = task
-                    .last_started_at
-                    .map(|start| (now_ts - start).max(0) as u64)
-                    .unwrap_or(0);
-                let total_seconds = task.time_spent_seconds + current_session;
-                let total_mins = total_seconds / 60;
-
-                let mut session_header = row![
-                    text(t!(
-                        "time_tracked_duration",
-                        h = total_mins / 60,
-                        m = total_mins % 60
-                    ))
+        if !task.related_to.is_empty() {
+            details_col = details_col.push(
+                text(rust_i18n::t!("related_to_label"))
                     .size(12)
-                    .color(Color::from_rgb(0.6, 0.8, 0.6))
-                ]
-                .spacing(10)
-                .align_y(iced::Alignment::Center);
-
-                // Inline add button inside the expanded view for rapid logging
-                if app.adding_session_uid.as_ref() != Some(&task.uid) {
-                    session_header = session_header.push(
-                        button(icon::icon(icon::TIMER_PLUS).size(12))
-                            .style(action_style)
-                            .padding(2)
-                            .on_press(Message::StartAddSession(task.uid.clone())),
-                    );
-                }
-
-                details_col = details_col.push(session_header);
-
-                if app.adding_session_uid.as_ref() == Some(&task.uid) {
-                    let is_dark_theme = app.theme().extended_palette().is_dark;
-                    let input = text_editor(&app.session_input)
-                        .id(iced::widget::Id::from(format!(
-                            "session_input_{}",
-                            task.uid
-                        )))
-                        .placeholder(format!("{} 30m, yesterday 2h, 14:00-15:30", t!("eg")))
-                        .on_action(Message::SessionInputChanged)
-                        .height(Length::Fixed(32.0))
-                        .highlight_with::<crate::gui::view::syntax::SessionHighlighter>(
-                            is_dark_theme,
-                            |highlight, _theme| *highlight,
-                        )
-                        .padding(6);
-
-                    let input_row = row![
-                        input,
-                        button(icon::icon(icon::CHECK).size(12))
-                            .style(button::primary)
-                            .padding(5)
-                            .on_press(Message::SubmitSession),
-                        button(icon::icon(icon::CROSS).size(12))
-                            .style(button::danger)
-                            .padding(5)
-                            .on_press(Message::CancelAddSession)
-                    ]
-                    .spacing(5)
-                    .align_y(iced::Alignment::Center);
-                    details_col = details_col.push(input_row);
-                }
-
-                let show_all = app.show_all_sessions.contains(&task.uid);
-                let visible_count = if show_all {
-                    task.sessions.len()
-                } else {
-                    std::cmp::min(3, task.sessions.len())
-                };
-
-                for (idx, session) in task.sessions.iter().enumerate().rev().take(visible_count) {
-                    let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
-                        .unwrap_or_default()
-                        .with_timezone(&chrono::Local);
-                    let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
-                        .unwrap_or_default()
-                        .with_timezone(&chrono::Local);
-                    let dur = (session.end - session.start) / 60;
-
-                    let date_str = s_dt.format("%Y-%m-%d").to_string();
-                    let time_str = format!("{}-{}", s_dt.format("%H:%M"), e_dt.format("%H:%M"));
-
-                    let del_btn = button(
-                        icon::icon(icon::CROSS)
-                            .size(10)
-                            .color(Color::from_rgb(0.8, 0.2, 0.2)),
-                    )
-                    .style(button::text)
+                    .color(Color::from_rgb(0.6, 0.6, 0.8)),
+            );
+            for related_uid in &task.related_to {
+                let name = app
+                    .store
+                    .get_summary(related_uid)
+                    .unwrap_or_else(|| rust_i18n::t!("unknown_task").to_string());
+                let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
+                    .style(button::danger)
                     .padding(2)
-                    .on_press(Message::DeleteSession(task.uid.clone(), idx));
-
-                    details_col = details_col.push(
-                        row![
-                            text(format!("{} {}", date_str, time_str))
-                                .size(12)
-                                .color(Color::from_rgb(0.7, 0.7, 0.7)),
-                            Space::new().width(Length::Fixed(6.0)),
-                            text(format!("({}m)", dur))
-                                .size(12)
-                                .color(Color::from_rgb(0.5, 0.5, 0.5)),
-                            Space::new().width(Length::Fill),
-                            del_btn
-                        ]
-                        .spacing(0)
-                        .align_y(iced::Alignment::Center),
-                    );
-                }
-
-                if task.sessions.len() > 3 {
-                    let toggle_text = if show_all {
-                        t!("show_less").to_string()
-                    } else {
-                        t!("show_older_sessions", count = task.sessions.len() - 3).to_string()
-                    };
-                    details_col = details_col.push(
-                        button(
-                            text(toggle_text)
-                                .size(10)
-                                .color(Color::from_rgb(0.5, 0.5, 0.8)),
-                        )
+                    .on_press(Message::RemoveRelatedTo(
+                        task.uid.clone(),
+                        related_uid.clone(),
+                    ));
+                let name_btn =
+                    button(text(name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
                         .style(button::text)
                         .padding(0)
-                        .on_press(Message::ToggleShowAllSessions(task.uid.clone())),
-                    );
-                }
+                        .on_press(Message::JumpToTask(related_uid.clone()));
+
+                let related_row = row![
+                    icon::icon(random_related_icon(&task.uid, related_uid)).size(12),
+                    name_btn,
+                    tooltip(
+                        remove_related_btn,
+                        text(rust_i18n::t!("remove_relation")).size(12),
+                        tooltip::Position::Top
+                    )
+                    .style(tooltip_style)
+                    .delay(Duration::from_millis(700))
+                ]
+                .spacing(5)
+                .align_y(iced::Alignment::Center);
+                details_col = details_col.push(related_row);
+            }
+        }
+
+        let blocking_tasks = app.store.get_tasks_blocking(&task.uid);
+        if !blocking_tasks.is_empty() {
+            details_col = details_col.push(
+                text(rust_i18n::t!("blocking_label"))
+                    .size(12)
+                    .color(Color::from_rgb(0.6, 0.4, 0.8)),
+            );
+            for (blocked_uid, blocked_name) in blocking_tasks {
+                let remove_block_btn = button(icon::icon(icon::UNLINK).size(10))
+                    .style(button::danger)
+                    .padding(2)
+                    .on_press(Message::RemoveDependency(
+                        blocked_uid.clone(),
+                        task.uid.clone(),
+                    ));
+
+                let name_btn = button(
+                    text(blocked_name)
+                        .size(12)
+                        .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                )
+                .style(button::text)
+                .padding(0)
+                .on_press(Message::JumpToTask(blocked_uid.clone()));
+
+                let blocking_row = row![
+                    icon::icon(icon::HAND_STOP)
+                        .size(12)
+                        .color(Color::from_rgb(0.5, 0.5, 0.5)),
+                    name_btn,
+                    tooltip(
+                        remove_block_btn,
+                        text(rust_i18n::t!("unblock_remove_dependency")).size(12),
+                        tooltip::Position::Top
+                    )
+                    .style(tooltip_style)
+                    .delay(Duration::from_millis(700))
+                ]
+                .spacing(5)
+                .align_y(iced::Alignment::Center);
+
+                details_col = details_col.push(blocking_row);
+            }
+        }
+
+        let incoming_related = app.store.get_tasks_related_to(&task.uid);
+        if !incoming_related.is_empty() {
+            details_col = details_col.push(
+                text(rust_i18n::t!("related_from_label"))
+                    .size(12)
+                    .color(Color::from_rgb(0.8, 0.6, 0.8)),
+            );
+            for (related_uid, related_name) in incoming_related {
+                let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
+                    .style(button::danger)
+                    .padding(2)
+                    .on_press(Message::RemoveRelatedTo(
+                        related_uid.clone(),
+                        task.uid.clone(),
+                    ));
+                let name_btn = button(
+                    text(related_name)
+                        .size(12)
+                        .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                )
+                .style(button::text)
+                .padding(0)
+                .on_press(Message::JumpToTask(related_uid.clone()));
+
+                let related_row = row![
+                    icon::icon(random_related_icon(&task.uid, &related_uid)).size(12),
+                    name_btn,
+                    tooltip(
+                        remove_related_btn,
+                        text(rust_i18n::t!("remove_relation")).size(12),
+                        tooltip::Position::Top
+                    )
+                    .style(tooltip_style)
+                    .delay(Duration::from_millis(700))
+                ]
+                .spacing(5)
+                .align_y(iced::Alignment::Center);
+                details_col = details_col.push(related_row);
+            }
+        }
+
+        // --- Work Sessions Rendering ---
+        if !task.sessions.is_empty()
+            || app.adding_session_uid.as_ref() == Some(&task.uid)
+            || task.time_spent_seconds > 0
+        {
+            details_col = details_col.push(Space::new().height(5.0));
+
+            let now_ts = Utc::now().timestamp();
+            let current_session = task
+                .last_started_at
+                .map(|start| (now_ts - start).max(0) as u64)
+                .unwrap_or(0);
+            let total_seconds = task.time_spent_seconds + current_session;
+            let total_mins = total_seconds / 60;
+
+            let mut session_header = row![
+                text(t!(
+                    "time_tracked_duration",
+                    h = total_mins / 60,
+                    m = total_mins % 60
+                ))
+                .size(12)
+                .color(Color::from_rgb(0.6, 0.8, 0.6))
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center);
+
+            // Inline add button inside the expanded view for rapid logging
+            if app.adding_session_uid.as_ref() != Some(&task.uid) {
+                session_header = session_header.push(
+                    button(icon::icon(icon::TIMER_PLUS).size(12))
+                        .style(action_style)
+                        .padding(2)
+                        .on_press(Message::StartAddSession(task.uid.clone())),
+                );
             }
 
-            let desc_row = row![
-                Space::new().width(Length::Fixed(indent_size as f32 + 30.0)),
-                details_col
-            ];
-            column![task_button, desc_row].spacing(5).into()
-        } else {
-            column![task_button].into()
+            details_col = details_col.push(session_header);
+
+            if app.adding_session_uid.as_ref() == Some(&task.uid) {
+                let is_dark_theme = app.theme().extended_palette().is_dark;
+                let input = text_editor(&app.session_input)
+                    .id(iced::widget::Id::from(format!(
+                        "session_input_{}",
+                        task.uid
+                    )))
+                    .placeholder(format!("{} 30m, yesterday 2h, 14:00-15:30", t!("eg")))
+                    .on_action(Message::SessionInputChanged)
+                    .height(Length::Fixed(32.0))
+                    .highlight_with::<crate::gui::view::syntax::SessionHighlighter>(
+                        is_dark_theme,
+                        |highlight, _theme| *highlight,
+                    )
+                    .padding(6);
+
+                let input_row = row![
+                    input,
+                    button(icon::icon(icon::CHECK).size(12))
+                        .style(button::primary)
+                        .padding(5)
+                        .on_press(Message::SubmitSession),
+                    button(icon::icon(icon::CROSS).size(12))
+                        .style(button::danger)
+                        .padding(5)
+                        .on_press(Message::CancelAddSession)
+                ]
+                .spacing(5)
+                .align_y(iced::Alignment::Center);
+                details_col = details_col.push(input_row);
+            }
+
+            let show_all = app.show_all_sessions.contains(&task.uid);
+            let visible_count = if show_all {
+                task.sessions.len()
+            } else {
+                std::cmp::min(3, task.sessions.len())
+            };
+
+            for (idx, session) in task.sessions.iter().enumerate().rev().take(visible_count) {
+                let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
+                    .unwrap_or_default()
+                    .with_timezone(&chrono::Local);
+                let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
+                    .unwrap_or_default()
+                    .with_timezone(&chrono::Local);
+                let dur = (session.end - session.start) / 60;
+
+                let date_str = s_dt.format("%Y-%m-%d").to_string();
+                let time_str = format!("{}-{}", s_dt.format("%H:%M"), e_dt.format("%H:%M"));
+
+                let del_btn = button(
+                    icon::icon(icon::CROSS)
+                        .size(10)
+                        .color(Color::from_rgb(0.8, 0.2, 0.2)),
+                )
+                .style(button::text)
+                .padding(2)
+                .on_press(Message::DeleteSession(task.uid.clone(), idx));
+
+                details_col = details_col.push(
+                    row![
+                        text(format!("{} {}", date_str, time_str))
+                            .size(12)
+                            .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                        Space::new().width(Length::Fixed(6.0)),
+                        text(format!("({}m)", dur))
+                            .size(12)
+                            .color(Color::from_rgb(0.5, 0.5, 0.5)),
+                        Space::new().width(Length::Fill),
+                        del_btn
+                    ]
+                    .spacing(0)
+                    .align_y(iced::Alignment::Center),
+                );
+            }
+
+            if task.sessions.len() > 3 {
+                let toggle_text = if show_all {
+                    t!("show_less").to_string()
+                } else {
+                    t!("show_older_sessions", count = task.sessions.len() - 3).to_string()
+                };
+                details_col = details_col.push(
+                    button(
+                        text(toggle_text)
+                            .size(10)
+                            .color(Color::from_rgb(0.5, 0.5, 0.8)),
+                    )
+                    .style(button::text)
+                    .padding(0)
+                    .on_press(Message::ToggleShowAllSessions(task.uid.clone())),
+                );
+            }
         }
+    }
+
+    let col_content = if is_expanded && has_content_to_show {
+        let desc_row = row![
+            Space::new().width(Length::Fixed(indent_size as f32 + 30.0)),
+            details_col
+        ];
+        column![task_button, desc_row].spacing(5)
     } else {
-        NoPointer {
-            content: task_button.into(),
-        }
-        .into()
+        column![task_button]
     };
+
+    let container_content: Element<'a, Message> = iced::widget::MouseArea::new(col_content)
+        .on_right_press(Message::OpenContextMenu(task.uid.clone(), true))
+        .into();
 
     focusable(
         container(container_content).padding(if is_expanded && has_content_to_show {
@@ -1563,126 +1416,4 @@ pub fn view_task_row<'a>(
     )
     .id(row_id)
     .into()
-}
-
-struct NoPointer<'a, Message, Theme, Renderer> {
-    content: Element<'a, Message, Theme, Renderer>,
-}
-
-impl<'a, Message, Theme, Renderer> Widget<Message, Theme, Renderer>
-    for NoPointer<'a, Message, Theme, Renderer>
-where
-    Renderer: iced::advanced::Renderer,
-{
-    fn size(&self) -> Size<Length> {
-        self.content.as_widget().size()
-    }
-
-    fn layout(
-        &mut self,
-        tree: &mut widget::Tree,
-        renderer: &Renderer,
-        limits: &layout::Limits,
-    ) -> layout::Node {
-        self.content.as_widget_mut().layout(tree, renderer, limits)
-    }
-
-    fn draw(
-        &self,
-        tree: &widget::Tree,
-        renderer: &mut Renderer,
-        theme: &Theme,
-        style: &renderer::Style,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        viewport: &Rectangle,
-    ) {
-        self.content
-            .as_widget()
-            .draw(tree, renderer, theme, style, layout, cursor, viewport)
-    }
-
-    fn children(&self) -> Vec<widget::Tree> {
-        self.content.as_widget().children()
-    }
-
-    fn diff(&self, tree: &mut widget::Tree) {
-        self.content.as_widget().diff(tree)
-    }
-
-    fn operate(
-        &mut self,
-        tree: &mut widget::Tree,
-        layout: Layout<'_>,
-        renderer: &Renderer,
-        operation: &mut dyn widget::Operation,
-    ) {
-        self.content
-            .as_widget_mut()
-            .operate(tree, layout, renderer, operation)
-    }
-
-    fn update(
-        &mut self,
-        tree: &mut widget::Tree,
-        event: &Event,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        renderer: &Renderer,
-        clipboard: &mut dyn Clipboard,
-        shell: &mut Shell<'_, Message>,
-        viewport: &Rectangle,
-    ) {
-        self.content.as_widget_mut().update(
-            tree, event, layout, cursor, renderer, clipboard, shell, viewport,
-        )
-    }
-
-    fn mouse_interaction(
-        &self,
-        _tree: &widget::Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        _viewport: &Rectangle,
-        _renderer: &Renderer,
-    ) -> mouse::Interaction {
-        if cursor.is_over(layout.bounds()) {
-            mouse::Interaction::Idle
-        } else {
-            mouse::Interaction::None
-        }
-    }
-
-    fn overlay<'b>(
-        &'b mut self,
-        tree: &'b mut widget::Tree,
-        layout: Layout<'b>,
-        renderer: &Renderer,
-        viewport: &Rectangle,
-        translation: Vector,
-    ) -> Option<iced::advanced::overlay::Element<'b, Message, Theme, Renderer>> {
-        self.content
-            .as_widget_mut()
-            .overlay(tree, layout, renderer, viewport, translation)
-    }
-
-    fn tag(&self) -> widget::tree::Tag {
-        self.content.as_widget().tag()
-    }
-
-    fn state(&self) -> widget::tree::State {
-        self.content.as_widget().state()
-    }
-}
-
-impl<'a, Message, Theme, Renderer> From<NoPointer<'a, Message, Theme, Renderer>>
-    for Element<'a, Message, Theme, Renderer>
-where
-    Message: 'a,
-    Theme: 'a,
-    Renderer: iced::advanced::Renderer + 'a,
-{
-    fn from(widget: NoPointer<'a, Message, Theme, Renderer>) -> Self {
-        Element::new(widget)
-    }
 }

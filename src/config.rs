@@ -16,6 +16,71 @@ fn default_cutoff() -> Option<u32> {
     Some(2)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TaskAction {
+    ToggleTimer,
+    StopTimer,
+    AddSession,
+    IncreasePriority,
+    DecreasePriority,
+    Edit,
+    Yank,
+    CreateSubtask,
+    DuplicateTree,
+    Promote,
+    Cancel,
+    Delete,
+    DeleteTree,
+}
+
+impl TaskAction {
+    pub const ALL: &'static [TaskAction] = &[
+        TaskAction::ToggleTimer,
+        TaskAction::StopTimer,
+        TaskAction::AddSession,
+        TaskAction::IncreasePriority,
+        TaskAction::DecreasePriority,
+        TaskAction::Edit,
+        TaskAction::Yank,
+        TaskAction::CreateSubtask,
+        TaskAction::DuplicateTree,
+        TaskAction::Promote,
+        TaskAction::Cancel,
+        TaskAction::Delete,
+        TaskAction::DeleteTree,
+    ];
+
+    pub fn label(&self) -> String {
+        match self {
+            TaskAction::ToggleTimer => rust_i18n::t!("start_task").to_string(),
+            TaskAction::StopTimer => rust_i18n::t!("stop_reset").to_string(),
+            TaskAction::AddSession => rust_i18n::t!("help_metadata_log_time").to_string(),
+            TaskAction::IncreasePriority => rust_i18n::t!("increase_priority").to_string(),
+            TaskAction::DecreasePriority => rust_i18n::t!("decrease_priority").to_string(),
+            TaskAction::Edit => rust_i18n::t!("edit").to_string(),
+            TaskAction::Yank => rust_i18n::t!("yank_copy_id").to_string(),
+            TaskAction::CreateSubtask => rust_i18n::t!("create_subtask").to_string(),
+            TaskAction::DuplicateTree => rust_i18n::t!("duplicate_task").to_string(),
+            TaskAction::Promote => rust_i18n::t!("promote_remove_parent").to_string(),
+            TaskAction::Cancel => rust_i18n::t!("cancel").to_string(),
+            TaskAction::Delete => rust_i18n::t!("delete").to_string(),
+            TaskAction::DeleteTree => rust_i18n::t!("delete_task_tree").to_string(),
+        }
+    }
+}
+
+fn default_pinned_actions() -> Vec<TaskAction> {
+    vec![
+        TaskAction::ToggleTimer,
+        TaskAction::IncreasePriority,
+        TaskAction::DecreasePriority,
+        TaskAction::Cancel,
+        TaskAction::Edit,
+        TaskAction::Yank,
+        TaskAction::CreateSubtask,
+    ]
+}
+
 pub fn init_locale(ctx: &dyn crate::context::AppContext) {
     // Initialize locale using the persistent config if present, otherwise fall back
     // to the system locale (primary language subtag). Android will pass its locale
@@ -210,6 +275,9 @@ pub struct Config {
     #[serde(default = "default_true")]
     pub show_priority_numbers: bool,
 
+    #[serde(default = "default_pinned_actions")]
+    pub pinned_actions: Vec<TaskAction>,
+
     // Maps are typically at the end in TOML
     #[serde(default)]
     pub hidden_calendars: Vec<String>,
@@ -250,6 +318,7 @@ impl Default for Config {
             max_done_subtasks: 5,
             show_ongoing_notifications: true,
             show_priority_numbers: true,
+            pinned_actions: default_pinned_actions(),
         }
     }
 }

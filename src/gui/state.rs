@@ -151,6 +151,7 @@ pub struct GuiApp {
     // Window Resizing State
     pub resize_direction: Option<ResizeDirection>,
     pub current_window_size: iced::Size,
+    pub cursor_position: iced::Point,
     pub ob_urgent_days_input: String,
     pub ob_urgent_prio_input: String,
     pub ob_default_priority_input: String,
@@ -174,6 +175,9 @@ pub struct GuiApp {
 
     // Double click tracking
     pub last_click: Option<(std::time::Instant, String)>, // Added
+
+    pub pinned_actions: Vec<crate::config::TaskAction>,
+    pub active_context_menu: Option<(String, bool, iced::Point)>, // (UID, is_full_menu, pt)
 
     // Config cache (New fields)
     // Optional selected language for the GUI. `None` => use system default.
@@ -360,6 +364,7 @@ impl Default for GuiApp {
 
             resize_direction: None,
             current_window_size: iced::Size::new(800.0, 600.0),
+            cursor_position: iced::Point::default(),
             ob_urgent_days_input: "1".to_string(),
             ob_urgent_prio_input: "1".to_string(),
             ob_default_priority_input: "5".to_string(),
@@ -407,6 +412,9 @@ impl Default for GuiApp {
 
             // Default UI scale
             ui_scale: 1.0,
+
+            pinned_actions: crate::config::Config::default().pinned_actions,
+            active_context_menu: None,
 
             last_click: None,
 

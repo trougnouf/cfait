@@ -60,6 +60,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_max_done_roots_input = config.max_done_roots.to_string();
             app.ob_max_done_subtasks_input = config.max_done_subtasks.to_string();
 
+            app.pinned_actions = config.pinned_actions.clone();
+
             let mut cached_cals = Cache::load_calendars(app.ctx.as_ref()).unwrap_or_default();
 
             for loc in locals {
@@ -466,6 +468,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetStrikethroughCompleted(val) => {
             app.strikethrough_completed = val;
             save_config(app);
+            Task::none()
+        }
+        Message::TogglePinnedAction(action, enabled) => {
+            if enabled {
+                if !app.pinned_actions.contains(&action) {
+                    app.pinned_actions.push(action);
+                }
+            } else {
+                app.pinned_actions.retain(|a| *a != action);
+            }
+            crate::gui::update::common::save_config(app);
             Task::none()
         }
         Message::DeleteAllCalendarEvents => {
