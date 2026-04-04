@@ -22,7 +22,6 @@ use iced::widget::{
 };
 use iced::{Color, Element, Length, Theme, Vector};
 
-
 pub const COLOR_LOCATION: Color = Color::from_rgb(0.4, 0.4, 0.6);
 
 pub fn tooltip_style(theme: &Theme) -> container::Style {
@@ -264,187 +263,311 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
     // --- CONTEXT MENU OVERLAY ---
     if let Some((uid, is_full, pt)) = &app.active_context_menu
-        && let Some(task) = app.tasks.iter().find(|t| t.uid == *uid) {
-            use crate::config::TaskAction;
+        && let Some(task) = app.tasks.iter().find(|t| t.uid == *uid)
+    {
+        use crate::config::TaskAction;
 
-            let mut menu_actions = column![].spacing(2);
+        let mut menu_actions = column![].spacing(2);
 
-            let menu_btn_style = |theme: &Theme, status: button::Status| -> button::Style {
-                let palette = theme.extended_palette();
-                match status {
-                    button::Status::Hovered | button::Status::Pressed => button::Style {
-                        background: Some(palette.background.strong.color.into()),
-                        text_color: palette.background.strong.text,
-                        ..button::Style::default()
-                    },
-                    _ => button::Style {
-                        background: Some(Color::TRANSPARENT.into()),
-                        text_color: palette.background.base.text,
-                        ..button::Style::default()
+        let menu_btn_style = |theme: &Theme, status: button::Status| -> button::Style {
+            let palette = theme.extended_palette();
+            match status {
+                button::Status::Hovered | button::Status::Pressed => button::Style {
+                    background: Some(palette.background.strong.color.into()),
+                    text_color: palette.background.strong.text,
+                    ..button::Style::default()
+                },
+                _ => button::Style {
+                    background: Some(Color::TRANSPARENT.into()),
+                    text_color: palette.background.base.text,
+                    ..button::Style::default()
+                },
+            }
+        };
+
+        let danger_menu_style = |theme: &Theme, status: button::Status| -> button::Style {
+            let palette = theme.extended_palette();
+            match status {
+                button::Status::Hovered | button::Status::Pressed => button::Style {
+                    background: Some(palette.danger.base.color.into()),
+                    text_color: palette.danger.base.text,
+                    ..button::Style::default()
+                },
+                _ => button::Style {
+                    background: Some(Color::TRANSPARENT.into()),
+                    text_color: palette.danger.base.color,
+                    ..button::Style::default()
+                },
+            }
+        };
+
+        let has_subtasks = app.store.calendars.values().any(|map| {
+            map.values()
+                .any(|t| t.parent_uid.as_deref() == Some(task.uid.as_str()))
+        });
+
+        let has_info = !task.description.is_empty()
+            || !task.dependencies.is_empty()
+            || !app.store.get_tasks_blocking(&task.uid).is_empty();
+        let has_time = !task.sessions.is_empty() || task.time_spent_seconds > 0;
+
+        let build_btn = |action: &TaskAction| -> Option<Element<'_, Message>> {
+            let idx = app.tasks.iter().position(|t| t.uid == *uid).unwrap();
+            let is_done_or_cancelled = task.status == crate::model::TaskStatus::Completed
+                || task.status == crate::model::TaskStatus::Cancelled;
+
+            if *action == TaskAction::DeleteTree && !has_subtasks {
+                return None;
+            }
+            if *action == TaskAction::ToggleDetails && !(has_info || has_time) {
+                return None;
+            }
+            if *action == TaskAction::Promote && task.parent_uid.is_none() {
+                return None;
+            }
+            if *action == TaskAction::Yank && app.yanked_uid.is_some() {
+                return None;
+            }
+            if *action == TaskAction::StopTimer
+                && !(task.status == crate::model::TaskStatus::InProcess || task.is_paused())
+            {
+                return None;
+            }
+            if (*action == TaskAction::ToggleTimer
+                || *action == TaskAction::AddSession
+                || *action == TaskAction::Cancel)
+                && is_done_or_cancelled
+            {
+                return None;
+            }
+
+            let mut label = action.label();
+            if *action == TaskAction::DuplicateTree && !has_subtasks {
+                label = "Duplicate task".to_string();
+            }
+            if *action == TaskAction::ToggleTimer {
+                label = if task.status == crate::model::TaskStatus::InProcess {
+                    rust_i18n::t!("pause_task").to_string()
+                } else if task.is_paused() {
+                    rust_i18n::t!("resume_task").to_string()
+                } else {
+                    rust_i18n::t!("start_task").to_string()
+                };
+            }
+
+            let (icon_element, msg, is_danger): (Element<'_, Message>, Message, bool) = match action
+            {
+                TaskAction::ToggleDetails => {
+                    let mut icon_row = row![].spacing(2).align_y(iced::Alignment::Center);
+                    if has_info {
+                        icon_row = icon_row.push(icon::icon(icon::INFO).size(14).line_height(1.0));
+                    }
+                    if has_time {
+                        icon_row = icon_row
+                            .push(icon::icon(icon::TIMER_SETTINGS).size(14).line_height(1.0));
+                    }
+                    label = if has_info && has_time {
+                        format!(
+                            "{} / {}",
+                            rust_i18n::t!("show_details"),
+                            rust_i18n::t!("help_metadata_manage_sessions")
+                        )
+                    } else if has_time {
+                        rust_i18n::t!("help_metadata_manage_sessions").to_string()
+                    } else {
+                        rust_i18n::t!("show_details").to_string()
+                    };
+                    (
+                        icon_row.into(),
+                        Message::ToggleDetails(task.uid.clone()),
+                        false,
+                    )
+                }
+                TaskAction::ToggleTimer => {
+                    if task.status == crate::model::TaskStatus::InProcess {
+                        label = rust_i18n::t!("pause_task").to_string();
+                        (
+                            icon::icon(icon::PAUSE).size(14).into(),
+                            Message::PauseTask(task.uid.clone()),
+                            false,
+                        )
+                    } else if task.is_paused() {
+                        label = rust_i18n::t!("resume_task").to_string();
+                        (
+                            icon::icon(icon::PLAY).size(14).into(),
+                            Message::StartTask(task.uid.clone()),
+                            false,
+                        )
+                    } else {
+                        label = rust_i18n::t!("start_task").to_string();
+                        (
+                            icon::icon(icon::PLAY).size(14).into(),
+                            Message::StartTask(task.uid.clone()),
+                            false,
+                        )
                     }
                 }
+                TaskAction::StopTimer => (
+                    icon::icon(icon::DEBUG_STOP).size(14).into(),
+                    Message::StopTask(task.uid.clone()),
+                    false,
+                ),
+                TaskAction::AddSession => (
+                    icon::icon(icon::TIMER_PLUS).size(14).into(),
+                    Message::StartAddSession(task.uid.clone()),
+                    false,
+                ),
+                TaskAction::IncreasePriority => (
+                    icon::icon(icon::PLUS).size(14).into(),
+                    Message::ChangePriority(idx, 1),
+                    false,
+                ),
+                TaskAction::DecreasePriority => (
+                    icon::icon(icon::MINUS).size(14).into(),
+                    Message::ChangePriority(idx, -1),
+                    false,
+                ),
+                TaskAction::Edit => (
+                    icon::icon(icon::EDIT).size(14).into(),
+                    Message::EditTaskStart(idx),
+                    false,
+                ),
+                TaskAction::Yank => (
+                    icon::icon(icon::LINK).size(14).into(),
+                    Message::YankTask(uid.clone()),
+                    false,
+                ),
+                TaskAction::CreateSubtask => (
+                    icon::icon(icon::CREATE_CHILD).size(14).into(),
+                    Message::StartCreateChild(uid.clone()),
+                    false,
+                ),
+                TaskAction::DuplicateTree => (
+                    icon::icon(icon::CLONE).size(14).into(),
+                    Message::DuplicateTask(uid.clone()),
+                    false,
+                ),
+                TaskAction::Promote => (
+                    icon::icon(icon::ELEVATOR_UP).size(14).into(),
+                    Message::RemoveParent(uid.clone()),
+                    false,
+                ),
+                TaskAction::Cancel => (
+                    icon::icon(icon::CROSS).size(14).into(),
+                    Message::SetTaskStatus(idx, crate::model::TaskStatus::Cancelled),
+                    true,
+                ),
+                TaskAction::Delete => (
+                    icon::icon(icon::TRASH).size(14).into(),
+                    Message::DeleteTask(idx),
+                    true,
+                ),
+                TaskAction::DeleteTree => (
+                    icon::icon(icon::TRASH).size(14).into(),
+                    Message::DeleteTaskTree(uid.clone()),
+                    true,
+                ),
             };
 
-            let danger_menu_style = |theme: &Theme, status: button::Status| -> button::Style {
-                let palette = theme.extended_palette();
-                match status {
-                    button::Status::Hovered | button::Status::Pressed => button::Style {
-                        background: Some(palette.danger.base.color.into()),
-                        text_color: palette.danger.base.text,
-                        ..button::Style::default()
-                    },
-                    _ => button::Style {
-                        background: Some(Color::TRANSPARENT.into()),
-                        text_color: palette.danger.base.color,
-                        ..button::Style::default()
-                    }
+            let btn = button(
+                row![icon_element, text(label).size(14)]
+                    .spacing(8)
+                    .align_y(iced::Alignment::Center),
+            )
+            .width(Length::Fill)
+            .padding(8)
+            .style(if is_danger {
+                danger_menu_style
+            } else {
+                menu_btn_style
+            })
+            .on_press(msg);
+
+            Some(btn.into())
+        };
+
+        if *is_full {
+            for action in TaskAction::ALL {
+                if let Some(btn) = build_btn(action) {
+                    menu_actions = menu_actions.push(btn);
                 }
-            };
+            }
+        } else {
+            let mut added_unpinned = false;
+            for action in TaskAction::ALL {
+                if !app.pinned_actions.contains(action)
+                    && let Some(btn) = build_btn(action)
+                {
+                    menu_actions = menu_actions.push(btn);
+                    added_unpinned = true;
+                }
+            }
 
-            let has_subtasks = app.store.calendars.values().any(|map| {
-                map.values().any(|t| t.parent_uid.as_deref() == Some(task.uid.as_str()))
+            if !added_unpinned {
+                menu_actions = menu_actions.push(
+                    container(
+                        text("All actions pinned")
+                            .size(12)
+                            .color(Color::from_rgb(0.5, 0.5, 0.5)),
+                    )
+                    .padding(8),
+                );
+            }
+        }
+
+        let menu_container = container(menu_actions)
+            .width(Length::Fixed(180.0))
+            .padding(4)
+            .style(|theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(palette.background.weak.color.into()),
+                    border: iced::Border {
+                        color: palette.background.strong.color,
+                        width: 1.0,
+                        radius: 6.0.into(),
+                    },
+                    shadow: iced::Shadow {
+                        color: Color::BLACK.scale_alpha(0.5),
+                        offset: Vector::new(0.0, 4.0),
+                        blur_radius: 10.0,
+                    },
+                    ..Default::default()
+                }
             });
 
-            let build_btn = |action: &TaskAction| -> Option<Element<'_, Message>> {
-                let idx = app.tasks.iter().position(|t| t.uid == *uid).unwrap();
-                let is_done_or_cancelled = task.status == crate::model::TaskStatus::Completed || task.status == crate::model::TaskStatus::Cancelled;
+        // Position the menu exactly by the mouse
+        let menu_width = 180.0;
+        let menu_height = if *is_full { 350.0 } else { 150.0 };
 
-                if *action == TaskAction::DeleteTree && !has_subtasks { return None; }
-                if *action == TaskAction::Promote && task.parent_uid.is_none() { return None; }
-                if *action == TaskAction::Yank && app.yanked_uid.is_some() { return None; }
-                if *action == TaskAction::StopTimer && !(task.status == crate::model::TaskStatus::InProcess || task.is_paused()) { return None; }
-                if (*action == TaskAction::ToggleTimer || *action == TaskAction::AddSession || *action == TaskAction::Cancel) && is_done_or_cancelled { return None; }
+        let mut top_padding = pt.y;
+        let mut left_padding = pt.x;
 
-                let mut label = action.label();
-                if *action == TaskAction::DuplicateTree && !has_subtasks {
-                    label = "Duplicate task".to_string();
-                }
-                if *action == TaskAction::ToggleTimer {
-                    label = if task.status == crate::model::TaskStatus::InProcess {
-                        rust_i18n::t!("pause_task").to_string()
-                    } else if task.is_paused() {
-                        rust_i18n::t!("resume_task").to_string()
-                    } else {
-                        rust_i18n::t!("start_task").to_string()
-                    };
-                }
-
-                let (icon_char, msg, is_danger) = match action {
-                    TaskAction::ToggleTimer => {
-                        let (i, m) = if task.status == crate::model::TaskStatus::InProcess {
-                            (icon::PAUSE, Message::PauseTask(task.uid.clone()))
-                        } else {
-                            (icon::PLAY, Message::StartTask(task.uid.clone()))
-                        };
-                        (i, m, false)
-                    }
-                    TaskAction::StopTimer => (icon::DEBUG_STOP, Message::StopTask(task.uid.clone()), false),
-                    TaskAction::AddSession => (icon::TIMER_PLUS, Message::StartAddSession(task.uid.clone()), false),
-                    TaskAction::IncreasePriority => (icon::PLUS, Message::ChangePriority(idx, 1), false),
-                    TaskAction::DecreasePriority => (icon::MINUS, Message::ChangePriority(idx, -1), false),
-                    TaskAction::Edit => (icon::EDIT, Message::EditTaskStart(idx), false),
-                    TaskAction::Yank => (icon::LINK, Message::YankTask(uid.clone()), false),
-                    TaskAction::CreateSubtask => (icon::CREATE_CHILD, Message::StartCreateChild(uid.clone()), false),
-                    TaskAction::DuplicateTree => (icon::CLONE, Message::DuplicateTask(uid.clone()), false),
-                    TaskAction::Promote => (icon::ELEVATOR_UP, Message::RemoveParent(uid.clone()), false),
-                    TaskAction::Cancel => (icon::CROSS, Message::SetTaskStatus(idx, crate::model::TaskStatus::Cancelled), true),
-                    TaskAction::Delete => (icon::TRASH, Message::DeleteTask(idx), true),
-                    TaskAction::DeleteTree => (icon::TRASH, Message::DeleteTaskTree(uid.clone()), true),
-                };
-
-                let btn = button(
-                    row![icon::icon(icon_char).size(14), text(label).size(14)]
-                        .spacing(8).align_y(iced::Alignment::Center)
-                )
-                .width(Length::Fill)
-                .padding(8)
-                .style(if is_danger { danger_menu_style } else { menu_btn_style })
-                .on_press(msg);
-
-                Some(btn.into())
-            };
-
-            if *is_full {
-                for action in TaskAction::ALL {
-                    if let Some(btn) = build_btn(action) {
-                        menu_actions = menu_actions.push(btn);
-                    }
-                }
-            } else {
-                let mut added_unpinned = false;
-                for action in TaskAction::ALL {
-                    if !app.pinned_actions.contains(action)
-                        && let Some(btn) = build_btn(action) {
-                            menu_actions = menu_actions.push(btn);
-                            added_unpinned = true;
-                        }
-                }
-
-                if !added_unpinned {
-                    menu_actions = menu_actions.push(
-                        container(text("All actions pinned").size(12).color(Color::from_rgb(0.5, 0.5, 0.5)))
-                            .padding(8)
-                    );
-                }
-            }
-
-            let menu_container = container(menu_actions)
-                .width(Length::Fixed(180.0))
-                .padding(4)
-                .style(|theme: &Theme| {
-                    let palette = theme.extended_palette();
-                    container::Style {
-                        background: Some(palette.background.weak.color.into()),
-                        border: iced::Border {
-                            color: palette.background.strong.color,
-                            width: 1.0,
-                            radius: 6.0.into(),
-                        },
-                        shadow: iced::Shadow {
-                            color: Color::BLACK.scale_alpha(0.5),
-                            offset: Vector::new(0.0, 4.0),
-                            blur_radius: 10.0,
-                        },
-                        ..Default::default()
-                    }
-                });
-
-            // Position the menu exactly by the mouse
-            let menu_width = 180.0;
-            let menu_height = if *is_full { 350.0 } else { 150.0 };
-
-            let mut top_padding = pt.y;
-            let mut left_padding = pt.x;
-
-            if left_padding + menu_width > app.current_window_size.width {
-                left_padding = app.current_window_size.width - menu_width;
-            }
-            if top_padding + menu_height > app.current_window_size.height {
-                top_padding = app.current_window_size.height - menu_height;
-            }
-
-            let positioned_menu = container(menu_container)
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .padding(iced::Padding {
-                    top: top_padding.max(0.0),
-                    left: left_padding.max(0.0),
-                    ..Default::default()
-                });
-
-            // Backdrop captures clicks anywhere else to close the menu completely
-            let backdrop = iced::widget::opaque(
-                MouseArea::new(Space::new().width(Length::Fill).height(Length::Fill))
-                    .on_press(Message::CloseContextMenu)
-                    .on_right_press(Message::CloseContextMenu)
-            );
-
-            content_with_modals = stack![
-                content_with_modals,
-                backdrop,
-                positioned_menu
-            ].into();
+        if left_padding + menu_width > app.current_window_size.width {
+            left_padding = app.current_window_size.width - menu_width;
         }
+        if top_padding + menu_height > app.current_window_size.height {
+            top_padding = app.current_window_size.height - menu_height;
+        }
+
+        let positioned_menu = container(menu_container)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .padding(iced::Padding {
+                top: top_padding.max(0.0),
+                left: left_padding.max(0.0),
+                ..Default::default()
+            });
+
+        // Backdrop captures clicks anywhere else to close the menu completely
+        let backdrop = iced::widget::opaque(
+            MouseArea::new(Space::new().width(Length::Fill).height(Length::Fill))
+                .on_press(Message::CloseContextMenu)
+                .on_right_press(Message::CloseContextMenu),
+        );
+
+        content_with_modals = stack![content_with_modals, backdrop, positioned_menu].into();
+    }
 
     let final_content = if app.force_ssd {
         content_with_modals

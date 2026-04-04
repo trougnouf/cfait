@@ -41,7 +41,7 @@ icalendar = "0.17"
 uuid = { version = "1.19", features = ["v4"] }
 tokio = { version = "1", features = ["full"] }
 camino = "1.0"
-libdav = { git = "https://git.sr.ht/~trougnouf/libdav" }
+libdav = { git = "https://git.sr.ht/~whynothugo/libdav" }
 http = "1.4"
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "tokio"] }
 hyper-rustls = { version = "0.27", features = ["native-tokio"] }
@@ -149,7 +149,7 @@ codegen-units = 1   # Slower compile, but smaller binary.
 
 [package.metadata.deb]
 maintainer = "Benoit Brummer (Trougnouf) <trougnouf@disroot.org>"
-copyright = "2025, Benoit Brummer (Trougnouf)"
+copyright = "2026, Benoit Brummer (Trougnouf)"
 license-file = ["LICENSE", "4"]
 extended-description = """
 Cfait is a powerful yet simple tasks / TODO CalDAV client. (TUI and GUI)

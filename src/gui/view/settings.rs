@@ -415,6 +415,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                         let action_val = *action; // Copy for closure
 
                         let icon_char = match action_val {
+                            crate::config::TaskAction::ToggleDetails => icon::INFO,
                             crate::config::TaskAction::ToggleTimer => icon::PLAY,
                             crate::config::TaskAction::StopTimer => icon::DEBUG_STOP,
                             crate::config::TaskAction::AddSession => icon::TIMER_PLUS,
@@ -422,20 +423,27 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                             crate::config::TaskAction::DecreasePriority => icon::MINUS,
                             crate::config::TaskAction::Cancel => icon::CROSS,
                             crate::config::TaskAction::Edit => icon::EDIT,
-                            crate::config::TaskAction::Delete | crate::config::TaskAction::DeleteTree => icon::TRASH,
+                            crate::config::TaskAction::Delete
+                            | crate::config::TaskAction::DeleteTree => icon::TRASH,
                             crate::config::TaskAction::Yank => icon::LINK,
                             crate::config::TaskAction::CreateSubtask => icon::CREATE_CHILD,
                             crate::config::TaskAction::DuplicateTree => icon::CLONE,
                             crate::config::TaskAction::Promote => icon::ELEVATOR_UP,
                         };
 
-                        let check_icon = if is_pinned { icon::CHECK_SQUARE } else { icon::SQUARE };
+                        let check_icon = if is_pinned {
+                            icon::CHECK_SQUARE
+                        } else {
+                            icon::SQUARE
+                        };
 
                         let toggle_row = row![
                             icon::icon(check_icon).size(16),
                             icon::icon(icon_char).size(14).width(Length::Fixed(20.0)),
                             text(action.label()).size(14)
-                        ].spacing(8).align_y(iced::Alignment::Center);
+                        ]
+                        .spacing(8)
+                        .align_y(iced::Alignment::Center);
 
                         let row_btn = button(toggle_row)
                             .style(iced::widget::button::text)

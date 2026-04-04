@@ -3067,7 +3067,7 @@ checksum = "48f5d2a454e16a5ea0f4ced81bd44e4cfc7bd3a507b61887c99fd3538b28e4af"
 [[package]]
 name = "libdav"
 version = "0.10.3"
-source = "git+https://git.sr.ht/~trougnouf/libdav#b52fd04395446f2b23478b7d8fb423cbf17a7c04"
+source = "git+https://git.sr.ht/~whynothugo/libdav#c23d5839a04f78b8205286fc3a4d7726680c4942"
 dependencies = [
  "domain",
  "http",

@@ -272,6 +272,7 @@
   "migration_complete": "Migration complete",
   "migration_failed": "Migration failed",
   "min": "Min",
+  "more_actions": "More actions",
   "move_failed": "Move failed: %{error}",
   "move_label": "Move",
   "move_task_title": "Move task",

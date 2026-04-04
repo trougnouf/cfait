@@ -15,8 +15,14 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
     // message explicitly keeping it open or safe background ticks.
     if app.active_context_menu.is_some() {
         match &message {
-            Message::OpenContextMenu(_, _) | Message::CloseContextMenu | Message::Tick | Message::WindowResized(_) | Message::CursorMoved(_) => {}
-            _ => { app.active_context_menu = None; }
+            Message::OpenContextMenu(_, _)
+            | Message::CloseContextMenu
+            | Message::Tick
+            | Message::WindowResized(_)
+            | Message::CursorMoved(_) => {}
+            _ => {
+                app.active_context_menu = None;
+            }
         }
     }
 
@@ -73,7 +79,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetMaxDoneSubtasks(_)
         | Message::SetShowPriorityNumbers(_)
         | Message::SetLanguage(_)
-        | Message::SetStrikethroughCompleted(_) => settings::handle(app, message),
+        | Message::SetStrikethroughCompleted(_)
+        | Message::TogglePinnedAction(_, _) => settings::handle(app, message),
 
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)
@@ -193,7 +200,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::MigrationComplete(_)
         | Message::OpenContextMenu(..)
         | Message::CloseContextMenu
-        | Message::TogglePinnedAction(_, _)
         | Message::CursorMoved(_) => view::handle(app, message),
 
         Message::SnapToSelected { focus } => {

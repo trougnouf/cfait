@@ -18,6 +18,7 @@ fn default_cutoff() -> Option<u32> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskAction {
+    ToggleDetails,
     ToggleTimer,
     StopTimer,
     AddSession,
@@ -35,6 +36,7 @@ pub enum TaskAction {
 
 impl TaskAction {
     pub const ALL: &'static [TaskAction] = &[
+        TaskAction::ToggleDetails,
         TaskAction::ToggleTimer,
         TaskAction::StopTimer,
         TaskAction::AddSession,
@@ -52,6 +54,7 @@ impl TaskAction {
 
     pub fn label(&self) -> String {
         match self {
+            TaskAction::ToggleDetails => rust_i18n::t!("show_details").to_string(),
             TaskAction::ToggleTimer => rust_i18n::t!("start_task").to_string(),
             TaskAction::StopTimer => rust_i18n::t!("stop_reset").to_string(),
             TaskAction::AddSession => rust_i18n::t!("help_metadata_log_time").to_string(),
@@ -71,6 +74,7 @@ impl TaskAction {
 
 fn default_pinned_actions() -> Vec<TaskAction> {
     vec![
+        TaskAction::ToggleDetails,
         TaskAction::ToggleTimer,
         TaskAction::IncreasePriority,
         TaskAction::DecreasePriority,
