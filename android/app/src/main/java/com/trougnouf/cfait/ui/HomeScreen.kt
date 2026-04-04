@@ -135,19 +135,20 @@ fun HomeScreen(
     var pendingTabId by remember { mutableStateOf<String?>(null) }
 
     var hasInitializedCustom by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(backendVisibleHrefs) {
-        if (!hasInitializedCustom && backendVisibleHrefs.size < allHrefs.size) {
-            if (backendVisibleHrefs.size > 1) {
-                customHrefs = backendVisibleHrefs
+
+    // FIX 1: Trigger on allHrefs so it always finalizes initialization,
+    // even if all collections are visible.
+    LaunchedEffect(backendVisibleHrefs, allHrefs) {
+        if (!hasInitializedCustom && allHrefs.isNotEmpty()) {
+            if (backendVisibleHrefs.size < allHrefs.size) {
+                if (backendVisibleHrefs.size > 1) {
+                    customHrefs = backendVisibleHrefs
+                    pendingTabId = "CUSTOM"
+                } else if (backendVisibleHrefs.size == 1) {
+                    pendingTabId = backendVisibleHrefs.first()
+                }
             }
             hasInitializedCustom = true
-
-            // Ensure we jump to the correct tab on boot to preserve the saved configuration
-            if (backendVisibleHrefs.size > 1) {
-                pendingTabId = "CUSTOM"
-            } else if (backendVisibleHrefs.size == 1) {
-                pendingTabId = backendVisibleHrefs.first()
-            }
         }
     }
 
@@ -575,6 +576,11 @@ fun HomeScreen(
     // Eagerly update backend settings ONLY when the swipe settles.
     LaunchedEffect(pagerState.settledPage) {
         if (tabs.isEmpty() || pagerState.isScrollInProgress) return@LaunchedEffect
+
+        // FIX 2: Prevent the default initial UI state (page 0 / "All") from
+        // overwriting the user's saved backend configuration during app startup.
+        if (!hasInitializedCustom) return@LaunchedEffect
+
         val settledTab = tabs.getOrNull(pagerState.settledPage) ?: return@LaunchedEffect
 
         scope.launch(kotlinx.coroutines.Dispatchers.IO) {
