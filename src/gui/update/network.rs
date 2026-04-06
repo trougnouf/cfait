@@ -211,6 +211,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 Task::none()
             }
         },
+        Message::MigrationComplete(Ok(count)) => {
+            app.loading = false;
+            app.error_msg = Some(format!("Migration complete. Moved {} tasks.", count));
+            refresh_filtered_tasks(app);
+            Task::perform(async { Ok::<(), String>(()) }, |_| Message::Refresh)
+        }
+        Message::MigrationComplete(Err(e)) => {
+            app.loading = false;
+            app.error_msg = Some(format!("Migration failed: {}", e));
+            Task::none()
+        }
         _ => Task::none(),
     }
 }

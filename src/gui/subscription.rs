@@ -159,7 +159,7 @@ fn handle_hotkey(
                     ("a", false) => Some(Message::FocusInput),
                     ("h", true) => Some(Message::ToggleHideCompletedToggle),
                     ("m", false) => Some(Message::CategoryMatchModeToggle),
-                    ("m", true) => Some(Message::EditSelected), // 'M' for Move (parity)
+                    ("m", true) => Some(Message::MoveSelected),
                     ("q", false) => Some(Message::CloseWindow),
                     ("r", false) => Some(Message::Refresh),
                     ("r", true) => Some(Message::JumpToRandomTask),

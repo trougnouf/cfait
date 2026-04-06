@@ -571,6 +571,12 @@ pub fn view_task_row<'a>(
                 0,
                 format!("{} (<)", label),
             ),
+            TaskAction::Move => (
+                icon::icon(icon::MOVE).size(14).into(),
+                Message::StartMoveTask(task.uid.clone()),
+                0,
+                format!("{} (M)", label),
+            ),
             TaskAction::Cancel => (
                 icon::icon(icon::CROSS).size(14).into(),
                 Message::SetTaskStatus(index, crate::model::TaskStatus::Cancelled),

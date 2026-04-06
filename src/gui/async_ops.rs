@@ -40,9 +40,17 @@ pub async fn connect_and_fetch_wrapper(
     String,
 > {
     let rt = get_runtime();
-    rt.spawn(async { RustyClient::connect_with_fallback(ctx, config, Some("GUI")).await })
-        .await
-        .map_err(|e| e.to_string())?
+    rt.spawn(async {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(45),
+            RustyClient::connect_with_fallback(ctx, config, Some("GUI"))
+        ).await {
+            Ok(res) => res.map_err(|e| e.to_string()),
+            Err(_) => Err("Connection timed out. Check your network or server URL.".to_string()),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 pub async fn async_fetch_wrapper(
@@ -51,8 +59,13 @@ pub async fn async_fetch_wrapper(
 ) -> Result<(String, Vec<TodoTask>), String> {
     let rt = get_runtime();
     rt.spawn(async move {
-        let tasks = client.get_tasks(&href).await.map_err(|e: String| e)?;
-        Ok((href, tasks))
+        match tokio::time::timeout(std::time::Duration::from_secs(30), client.get_tasks(&href)).await {
+            Ok(res) => {
+                let tasks = res.map_err(|e: String| e)?;
+                Ok((href, tasks))
+            }
+            Err(_) => Err(format!("Fetch timed out for calendar {}", href)),
+        }
     })
     .await
     .map_err(|e| e.to_string())?
@@ -63,9 +76,14 @@ pub async fn async_fetch_all_wrapper(
     cals: Vec<CalendarListEntry>,
 ) -> Result<Vec<(String, Vec<TodoTask>)>, String> {
     let rt = get_runtime();
-    rt.spawn(async move { client.get_all_tasks(&cals).await })
-        .await
-        .map_err(|e| e.to_string())?
+    rt.spawn(async move {
+        match tokio::time::timeout(std::time::Duration::from_secs(60), client.get_all_tasks(&cals)).await {
+            Ok(res) => res.map_err(|e| e.to_string()),
+            Err(_) => Err("Fetch all timed out".to_string()),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 use crate::controller::TaskController;
@@ -92,29 +110,35 @@ pub async fn async_controller_dispatch(
     let client_arc = Arc::new(Mutex::new(client));
     let controller = TaskController::new(store_arc.clone(), client_arc, ctx);
 
-    match action {
-        ControllerAction::Create(t) => {
-            let _ = controller.create_task(t).await?;
+    let action_future = async move {
+        match action {
+            ControllerAction::Create(t) => {
+                let _ = controller.create_task(t).await;
+            }
+            ControllerAction::Update(t) => {
+                let _ = controller.update_task(t).await;
+            }
+            ControllerAction::Delete(uid) => {
+                let _ = controller.delete_task(&uid).await;
+            }
+            ControllerAction::DeleteTree(uid) => {
+                let _ = controller.delete_task_tree(&uid).await;
+            }
+            ControllerAction::Toggle(uid) => {
+                let _ = controller.toggle_task(&uid).await;
+            }
+            ControllerAction::Move(uid, href) => {
+                let _ = controller.move_task(&uid, &href).await;
+            }
+            ControllerAction::DuplicateTree(uid) => {
+                let _ = controller.duplicate_task_tree(&uid).await;
+            }
         }
-        ControllerAction::Update(t) => {
-            let _ = controller.update_task(t).await?;
-        }
-        ControllerAction::Delete(uid) => {
-            let _ = controller.delete_task(&uid).await?;
-        }
-        ControllerAction::DeleteTree(uid) => {
-            let _ = controller.delete_task_tree(&uid).await?;
-        }
-        ControllerAction::Toggle(uid) => {
-            let _ = controller.toggle_task(&uid).await?;
-        }
-        ControllerAction::Move(uid, href) => {
-            let _ = controller.move_task(&uid, &href).await?;
-        }
-        ControllerAction::DuplicateTree(uid) => {
-            let _ = controller.duplicate_task_tree(&uid).await?;
-        }
-    }
+    };
+
+    // Even if network sync times out, the local store memory modifications
+    // are synchronously committed prior to yielding.
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(10), action_future).await;
 
     let updated_store = store_arc.lock().await.clone();
     Ok(updated_store)
@@ -126,9 +150,14 @@ pub async fn async_migrate_wrapper(
     target: String,
 ) -> Result<usize, String> {
     let rt = get_runtime();
-    rt.spawn(async move { client.migrate_tasks(tasks, &target).await })
-        .await
-        .map_err(|e| e.to_string())?
+    rt.spawn(async move {
+        match tokio::time::timeout(std::time::Duration::from_secs(30), client.migrate_tasks(tasks, &target)).await {
+            Ok(res) => res.map_err(|e| e.to_string()),
+            Err(_) => Err("Migration timed out".to_string()),
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Backfill calendar events for all tasks when the global setting is enabled.
@@ -140,27 +169,18 @@ pub async fn async_backfill_events_wrapper(
 ) -> Result<usize, String> {
     let rt = get_runtime();
     rt.spawn(async move {
-        // --- FIX 4: Only backfill tasks that actually have calendar data ---
         let futures = tasks.into_iter().filter(|task| {
             task.due.is_some() || task.dtstart.is_some() || !task.sessions.is_empty()
         }).map(|task| {
             let c = client.clone();
             async move {
-                match c.sync_task_companion_event(&task, global_enabled).await {
-                    Ok(true) => 1,
-                    Ok(false) => 0,
-                    Err(e) => {
-                        eprintln!(
-                            "Warning: Failed to backfill event for task {}: {}",
-                            task.uid, e
-                        );
-                        0
-                    }
+                match tokio::time::timeout(std::time::Duration::from_secs(10), c.sync_task_companion_event(&task, global_enabled)).await {
+                    Ok(Ok(true)) => 1,
+                    _ => 0,
                 }
             }
         });
 
-        // Run 8 concurrent requests
         let count = stream::iter(futures)
             .buffer_unordered(8)
             .collect::<Vec<usize>>()
@@ -180,13 +200,18 @@ pub async fn async_delete_all_events_wrapper(
 ) -> Result<usize, String> {
     let rt = get_runtime();
     rt.spawn(async move {
-        let mut total = 0;
-        for cal_href in calendars {
-            if let Ok(count) = client.delete_all_companion_events(&cal_href).await {
-                total += count;
+        match tokio::time::timeout(std::time::Duration::from_secs(30), async {
+            let mut total = 0;
+            for cal_href in calendars {
+                if let Ok(count) = client.delete_all_companion_events(&cal_href).await {
+                    total += count;
+                }
             }
+            Ok::<usize, String>(total)
+        }).await {
+            Ok(res) => res,
+            Err(_) => Err("Deleting events timed out".to_string()),
         }
-        Ok(total)
     })
     .await
     .map_err(|e| e.to_string())?

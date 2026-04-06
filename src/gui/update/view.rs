@@ -110,6 +110,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let new_val = !app.match_all_categories;
             handle(app, Message::CategoryMatchModeChanged(new_val))
         }
+        Message::MoveSelected => {
+            if let Some(uid) = &app.selected_uid {
+                return crate::gui::update::tasks::handle(app, Message::StartMoveTask(uid.clone()));
+            }
+            Task::none()
+        }
 
         Message::TabPressed(shift_held) => {
             if shift_held {

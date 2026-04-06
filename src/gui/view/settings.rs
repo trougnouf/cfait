@@ -429,6 +429,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                             crate::config::TaskAction::CreateSubtask => icon::CREATE_CHILD,
                             crate::config::TaskAction::DuplicateTree => icon::CLONE,
                             crate::config::TaskAction::Promote => icon::ELEVATOR_UP,
+                            crate::config::TaskAction::Move => icon::MOVE,
                         };
 
                         let check_icon = if is_pinned {

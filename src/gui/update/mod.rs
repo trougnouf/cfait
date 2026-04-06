@@ -135,7 +135,9 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::DeleteSession(_, _)
         | Message::ToggleShowAllSessions(_)
         | Message::KeyboardAddSession
-        | Message::KeyboardToggleSessions => tasks::handle(app, message),
+        | Message::KeyboardToggleSessions
+        | Message::StartMoveTask(_)
+        | Message::CancelMoveTask => tasks::handle(app, message),
 
         Message::TabPressed(_)
         | Message::FocusInput
@@ -190,15 +192,17 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleYankLock
         | Message::ZoomIn
         | Message::ZoomOut
-        | Message::ZoomReset => view::handle(app, message),
+        | Message::ZoomReset
+        | Message::MoveSelected => view::handle(app, message),
 
         Message::Refresh
         | Message::Loaded(_)
         | Message::RefreshedAll(_)
         | Message::TasksRefreshed(_)
         | Message::ControllerActionComplete(_)
-        | Message::MigrationComplete(_)
-        | Message::OpenContextMenu(..)
+        | Message::MigrationComplete(_) => network::handle(app, message),
+
+        Message::OpenContextMenu(..)
         | Message::CloseContextMenu
         | Message::CursorMoved(_) => view::handle(app, message),
 

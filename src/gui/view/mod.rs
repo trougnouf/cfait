@@ -316,6 +316,14 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             let is_done_or_cancelled = task.status == crate::model::TaskStatus::Completed
                 || task.status == crate::model::TaskStatus::Cancelled;
 
+            let enabled_cal_count = app.calendars.iter().filter(|c| !app.disabled_calendars.contains(&c.href)).count();
+
+            // <--- ADD THIS BLOCK --->
+            if *action == TaskAction::Move && enabled_cal_count <= 1 {
+                return None;
+            }
+            // <--- END ADD BLOCK --->
+
             if *action == TaskAction::DeleteTree && !has_subtasks {
                 return None;
             }
@@ -450,6 +458,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 TaskAction::Promote => (
                     icon::icon(icon::ELEVATOR_UP).size(14).into(),
                     Message::RemoveParent(uid.clone()),
+                    false,
+                ),
+                TaskAction::Move => (
+                    icon::icon(icon::MOVE).size(14).into(),
+                    Message::StartMoveTask(uid.clone()),
                     false,
                 ),
                 TaskAction::Cancel => (
@@ -638,6 +651,116 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         )
         .on_press(Message::ResizeStart(ResizeDirection::SouthEast))
         .interaction(mouse::Interaction::ResizingDiagonallyDown);
+
+    // --- MOVE TASK MODAL OVERLAY ---
+    if let Some(uid) = &app.moving_task_uid
+        && let Some(task) = app.tasks.iter().find(|t| t.uid == *uid)
+    {
+        let targets: Vec<_> = app.calendars.iter().filter(|c| {
+            c.href != task.calendar_href && !app.disabled_calendars.contains(&c.href)
+        }).collect();
+
+        let icon_header = container(
+            icon::icon(icon::MOVE)
+                .size(30)
+                .color(Color::from_rgb(0.3, 0.7, 1.0)),
+        )
+        .padding(5)
+        .center_x(Length::Fill);
+
+        let title = text(rust_i18n::t!("move_task_title"))
+            .size(24)
+            .font(iced::Font {
+                weight: iced::font::Weight::Bold,
+                ..Default::default()
+            })
+            .width(Length::Fill)
+            .align_x(Horizontal::Center);
+
+        let mut cal_list = column![].spacing(5);
+        for cal in targets {
+            let cal_button = button(
+                row![
+                    icon::icon(icon::CALENDAR).size(14).color(Color::from_rgb(0.6, 0.6, 0.6)),
+                    text(&cal.name).size(14)
+                ].spacing(8).align_y(iced::Alignment::Center)
+            )
+            .style(iced::widget::button::secondary)
+            .width(Length::Fill)
+            .padding(10)
+            .on_press(Message::MoveTask(task.uid.clone(), cal.href.clone()));
+
+            cal_list = cal_list.push(cal_button);
+        }
+
+        let calendar_scroll = scrollable(cal_list)
+            .height(Length::Fixed(250.0))
+            .direction(Direction::Vertical(
+                Scrollbar::new().width(8).scroller_width(8),
+            ));
+
+        let cancel_btn = button(text(rust_i18n::t!("cancel")).size(14))
+            .style(iced::widget::button::secondary)
+            .padding([8, 16])
+            .on_press(Message::CancelMoveTask);
+
+        let modal_content = column![
+            icon_header,
+            title,
+            Space::new().height(Length::Fixed(10.0)),
+            text(rust_i18n::t!("move_to"))
+                .size(14)
+                .color(Color::from_rgb(0.7, 0.7, 0.7)),
+            Space::new().height(Length::Fixed(5.0)),
+            calendar_scroll,
+            Space::new().height(Length::Fixed(20.0)),
+            container(cancel_btn).width(Length::Fill).center_x(Length::Fill)
+        ]
+        .spacing(5)
+        .align_x(iced::Alignment::Center);
+
+        let modal_card = container(modal_content)
+            .padding(20)
+            .width(Length::Fixed(350.0))
+            .max_height(450.0)
+            .style(|theme: &Theme| {
+                let palette = theme.extended_palette();
+                container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.98,
+                            ..palette.background.weak.color
+                        }
+                        .into(),
+                    ),
+                    border: iced::Border {
+                        color: palette.background.strong.color,
+                        width: 1.0,
+                        radius: 12.0.into(),
+                    },
+                    shadow: iced::Shadow {
+                        color: Color::BLACK.scale_alpha(0.5),
+                        offset: Vector::new(0.0, 4.0),
+                        blur_radius: 10.0,
+                    },
+                    ..Default::default()
+                }
+            });
+
+        content_with_modals = stack![
+            content_with_modals,
+            container(modal_card)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .center_x(Length::Fill)
+                .center_y(Length::Fill)
+                .style(|_| container::Style {
+                    background: Some(Color::from_rgba(0.0, 0.0, 0.0, 0.6).into()),
+                    ..Default::default()
+                })
+        ]
+        .into();
+    }
 
         stack![
             content_with_modals,
@@ -1486,38 +1609,8 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         ]
         .align_y(iced::Alignment::Center)
         .spacing(10);
-        let mut move_element: Element<'_, Message> = row![].into();
 
-        if let Some(edit_uid) = &app.editing_uid
-            && let Some(task) = app.tasks.iter().find(|t| t.uid == *edit_uid)
-        {
-            let targets: Vec<_> = app
-                .calendars
-                .iter()
-                .filter(|c| {
-                    c.href != task.calendar_href && !app.disabled_calendars.contains(&c.href)
-                })
-                .collect();
-            if !targets.is_empty() {
-                let label = text(rust_i18n::t!("move_to"))
-                    .size(12)
-                    .color(Color::from_rgb(0.6, 0.6, 0.6));
-                let mut btn_row = row![].spacing(5);
-                for cal in targets {
-                    btn_row = btn_row.push(
-                        iced::widget::button(text(&cal.name).size(12))
-                            .style(iced::widget::button::secondary)
-                            .padding(5)
-                            .on_press(Message::MoveTask(task.uid.clone(), cal.href.clone())),
-                    );
-                }
-                move_element = row![label, scrollable(btn_row).height(30)]
-                    .spacing(10)
-                    .align_y(iced::Alignment::Center)
-                    .into();
-            }
-        }
-        column![top_bar, input_title, desc_container, move_element]
+        column![top_bar, input_title, desc_container]
             .spacing(10)
             .into()
     } else {

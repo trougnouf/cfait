@@ -438,7 +438,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let mut needs_refresh = false;
             let mut captured_action = false;
 
-            if app.editing_uid.is_some() || app.creating_child_of.is_some() {
+            if app.moving_task_uid.is_some() {
+                app.moving_task_uid = None;
+                captured_action = true;
+            } else if app.editing_uid.is_some() || app.creating_child_of.is_some() {
                 app.input_value = text_editor::Content::new();
                 app.description_value = text_editor::Content::new();
                 app.editing_uid = None;
@@ -600,8 +603,20 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::StartMoveTask(uid) => {
+            app.moving_task_uid = Some(uid);
+            app.active_context_menu = None; // Hide context menu if open
+            Task::none()
+        }
+
+        Message::CancelMoveTask => {
+            app.moving_task_uid = None;
+            Task::none()
+        }
+
         Message::MoveTask(task_uid, target_href) => {
             app.selected_uid = Some(task_uid.clone());
+            app.moving_task_uid = None; // Hide modal when applying move
             Task::perform(
                 async_controller_dispatch(
                     app.ctx.clone(),
