@@ -135,6 +135,16 @@ fun HomeScreen(
     var pendingTabId by remember { mutableStateOf<String?>(null) }
 
     var hasInitializedCustom by rememberSaveable { mutableStateOf(false) }
+    var hasInitWriteTarget by rememberSaveable { mutableStateOf(false) }
+
+    // FIX 1: Initialize the custom write target from the backend config on startup,
+    // so it isn't null and properly restores when swiping back from isolated tabs.
+    LaunchedEffect(defaultCalHref) {
+        if (!hasInitWriteTarget && defaultCalHref != null) {
+            customWriteTarget = defaultCalHref
+            hasInitWriteTarget = true
+        }
+    }
 
     // FIX: Trigger on allHrefs and ensure we cover ALL visibility states.
     LaunchedEffect(backendVisibleHrefs, allHrefs) {
@@ -154,7 +164,8 @@ fun HomeScreen(
     // Stable tabs list: All -> Custom -> Rest
     val tabs = remember(enabledCals.map { it.href }, customHrefs, customWriteTarget, allHrefs) {
         val list = mutableListOf<TabInfo>()
-        list.add(TabInfo("ALL", "All", allHrefs, null, null))
+        // FIX 2: Apply the global customWriteTarget to the "All" tab as well so it restores properly.
+        list.add(TabInfo("ALL", "All", allHrefs, null, customWriteTarget))
         if (customHrefs.isNotEmpty() && customHrefs.size < allHrefs.size) {
             list.add(TabInfo("CUSTOM", "Custom", customHrefs, null, customWriteTarget))
         }
