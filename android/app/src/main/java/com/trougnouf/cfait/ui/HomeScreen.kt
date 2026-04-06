@@ -136,17 +136,16 @@ fun HomeScreen(
 
     var hasInitializedCustom by rememberSaveable { mutableStateOf(false) }
 
-    // FIX 1: Trigger on allHrefs so it always finalizes initialization,
-    // even if all collections are visible.
+    // FIX: Trigger on allHrefs and ensure we cover ALL visibility states.
     LaunchedEffect(backendVisibleHrefs, allHrefs) {
         if (!hasInitializedCustom && allHrefs.isNotEmpty()) {
-            if (backendVisibleHrefs.size < allHrefs.size) {
-                if (backendVisibleHrefs.size > 1) {
-                    customHrefs = backendVisibleHrefs
-                    pendingTabId = "CUSTOM"
-                } else if (backendVisibleHrefs.size == 1) {
-                    pendingTabId = backendVisibleHrefs.first()
-                }
+            if (backendVisibleHrefs.size == allHrefs.size) {
+                pendingTabId = "ALL"
+            } else if (backendVisibleHrefs.size > 1) {
+                customHrefs = backendVisibleHrefs
+                pendingTabId = "CUSTOM"
+            } else if (backendVisibleHrefs.size == 1) {
+                pendingTabId = backendVisibleHrefs.first()
             }
             hasInitializedCustom = true
         }
@@ -566,10 +565,14 @@ fun HomeScreen(
     LaunchedEffect(pendingTabId, tabs) {
         if (pendingTabId != null) {
             val idx = tabs.indexOfFirst { it.id == pendingTabId }
-            if (idx >= 0 && pagerState.currentPage != idx) {
-                pagerState.scrollToPage(idx)
+            if (idx >= 0) {
+                // FIX: Only clear the pendingTabId if the tab ACTUALLY exists (idx >= 0).
+                // If it's -1, we leave pendingTabId alone so it retries when tabs re-render.
+                if (pagerState.currentPage != idx) {
+                    pagerState.scrollToPage(idx)
+                }
+                pendingTabId = null
             }
-            pendingTabId = null
         }
     }
 
