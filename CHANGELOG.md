@@ -1,5 +1,68 @@
 # Changelog
 
+## [rolling] - 2026-04-08
+
+### 🚀 Features
+
+- Implement task tree duplication, visual priority indicators, and explicit relationship UI (GUI, TUI, https://codeberg.org/trougnouf/cfait/issues/36 )
+- Delete tree (GUI, TUI, https://codeberg.org/trougnouf/cfait/issues/36 )
+- Make relations tooltip explicit (GUI, https://codeberg.org/trougnouf/cfait/issues/36 )
+- *(gui)* Add right click and customizable more actions menu ( https://codeberg.org/trougnouf/cfait/issues/9 )
+- *(gui)* Create dedicated move action (moved from task edit dialog), fix synchronization issue
+
+### 🐛 Bug Fixes
+
+- *(android)* Fix endless/stuck sync loop
+- Disable reminders for the Trash collection ( https://github.com/trougnouf/cfait/issues/18 )
+- Resolve default calendar to href instead of name for server compatibility
+- Report CLI sync errors and prevent queue poisoning from invalid URIs ( https://github.com/trougnouf/cfait/issues/20 )
+- Increase CLI timeout to 10 seconds and make the warning less doomy
+- *(calendar)* Fix sessions calendar integration in dateless events, perf improvements in calendar integration
+- *(gui)* Fix ctrl+... keyboard shortcuts
+- Fix drifting recursion time when crossing DST boundary ( https://github.com/trougnouf/cfait/issues/19 )
+- *(android)* Switch to custom view when deselecting one or more collection(s) ( https://github.com/trougnouf/cfait/issues/21 )
+- *(android)* Prevent initial UI state from overwriting custom visibility settings on startup (reported by  CycyX)
+- *(gui)* Improve custom actions
+- *(android)* Correctly restore previous tab on startup (reported by CycyX )
+- *(android)* Remember write collection even shortly after startup
+
+### 💼 Other
+
+- Added translation using Weblate (Dutch)
+- Added translation using Weblate (Dutch)
+- Added translation using Weblate (Dutch)
+- Update translation files
+
+Updated by "Cleanup translation files" add-on in Weblate.
+
+Translation: Cfait/Android fastlane short description
+Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-short-description/
+- Translated using Weblate (Dutch)
+
+Currently translated at 7.6% (30 of 390 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (391 of 391 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Added translation using Weblate (Spanish)
+- Update translation files
+
+Updated by "Cleanup translation files" add-on in Weblate.
+
+Translation: Cfait/Android fastlane long description
+Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-long-description/
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 100.0% (391 of 391 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
 ## [0.5.6] - 2026-03-22
 
 ### 🚀 Features
@@ -30,6 +93,7 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
 ### ⚙️ Miscellaneous Tasks
 
 - *(android)* Move font size setting below manage collections
+- Release cfait version 0.5.6
 ## [0.5.5] - 2026-03-17
 
 ### 🐛 Bug Fixes
