@@ -50,7 +50,7 @@ Implementation notes:
 */
 
 use crate::context::AppContext;
-use crate::model::{Task, TaskStatus};
+use crate::model::{DateType, Task, TaskStatus};
 use chrono::{DateTime, Utc};
 use fastrand;
 use std::collections::{HashMap, HashSet};
@@ -564,7 +564,9 @@ impl TaskStore {
 
         let mut visited = HashSet::new();
         while let Some(curr) = queue.pop() {
-            if !visited.insert(curr.clone()) { continue; }
+            if !visited.insert(curr.clone()) {
+                continue;
+            }
             if curr != root_uid {
                 descendants.push(curr.clone());
             }
@@ -593,7 +595,9 @@ impl TaskStore {
 
         let mut visited = HashSet::new();
         while let Some(curr) = queue.pop() {
-            if !visited.insert(curr.clone()) { continue; }
+            if !visited.insert(curr.clone()) {
+                continue;
+            }
             descendants.push(curr.clone());
             if let Some(children) = adjacency.get(&curr) {
                 queue.extend(children.clone());
@@ -614,8 +618,12 @@ impl TaskStore {
                 clone.time_spent_seconds = 0;
                 clone.last_started_at = None;
                 clone.sessions.clear();
-                clone.unmapped_properties.retain(|p| p.key != "COMPLETED" && p.key != "CREATED");
-                clone.alarms.retain(|a| !a.is_snooze() && a.acknowledged.is_none());
+                clone
+                    .unmapped_properties
+                    .retain(|p| p.key != "COMPLETED" && p.key != "CREATED");
+                clone
+                    .alarms
+                    .retain(|a| !a.is_snooze() && a.acknowledged.is_none());
 
                 // Visually differentiate the root clone
                 if old_uid == root_uid {
@@ -629,9 +637,10 @@ impl TaskStore {
         // Second pass: remap intra-tree relations
         for t in &mut new_tasks {
             if let Some(p) = &t.parent_uid
-                && let Some(new_p) = uid_map.get(p) {
-                    t.parent_uid = Some(new_p.clone());
-                }
+                && let Some(new_p) = uid_map.get(p)
+            {
+                t.parent_uid = Some(new_p.clone());
+            }
             let old_deps = std::mem::take(&mut t.dependencies);
             for d in old_deps {
                 if let Some(new_d) = uid_map.get(&d) {
@@ -1324,6 +1333,79 @@ impl TaskStore {
                 t
             })
             .collect();
+
+        // Dependency due-date propagation
+        // If task A depends on task B, B is the blocking task.
+        // B should inherit A's effective_due if it is sooner.
+        let mut blocking_to_blocked: HashMap<String, Vec<usize>> = HashMap::new();
+        for (i, t) in final_tasks_processed.iter().enumerate() {
+            for dep in &t.dependencies {
+                blocking_to_blocked.entry(dep.clone()).or_default().push(i);
+            }
+        }
+
+        let mut dep_cache: HashMap<usize, Option<DateType>> = HashMap::new();
+        let mut dep_visiting: HashSet<usize> = HashSet::new();
+
+        fn resolve_deps_due(
+            idx: usize,
+            tasks: &[Task],
+            blocking_to_blocked: &HashMap<String, Vec<usize>>,
+            cache: &mut HashMap<usize, Option<DateType>>,
+            visiting: &mut HashSet<usize>,
+        ) -> Option<DateType> {
+            if let Some(cached) = cache.get(&idx) {
+                return cached.clone();
+            }
+            if visiting.contains(&idx) {
+                return tasks[idx].effective_due.clone();
+            }
+
+            visiting.insert(idx);
+            let mut min_d = tasks[idx].effective_due.clone();
+
+            let uid = &tasks[idx].uid;
+            if let Some(blocked_indices) = blocking_to_blocked.get(uid) {
+                for &b_idx in blocked_indices {
+                    let d = resolve_deps_due(b_idx, tasks, blocking_to_blocked, cache, visiting);
+                    min_d = match (&min_d, &d) {
+                        (Some(da), Some(db)) => {
+                            if da.to_comparison_time() < db.to_comparison_time() {
+                                Some(da.clone())
+                            } else {
+                                Some(db.clone())
+                            }
+                        }
+                        (Some(da), None) => Some(da.clone()),
+                        (None, Some(db)) => Some(db.clone()),
+                        (None, None) => None,
+                    };
+                }
+            }
+
+            visiting.remove(&idx);
+            cache.insert(idx, min_d.clone());
+            min_d
+        }
+
+        for i in 0..final_tasks_processed.len() {
+            if !dep_cache.contains_key(&i) {
+                resolve_deps_due(
+                    i,
+                    &final_tasks_processed,
+                    &blocking_to_blocked,
+                    &mut dep_cache,
+                    &mut dep_visiting,
+                );
+            }
+        }
+
+        // Apply propagated dependency due dates back to tasks
+        for (i, t) in final_tasks_processed.iter_mut().enumerate() {
+            if let Some(min_due) = dep_cache.get(&i) {
+                t.effective_due = min_due.clone();
+            }
+        }
 
         // 6) Compute rank and sort order for the final tasks.
         for t in final_tasks_processed.iter_mut() {

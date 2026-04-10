@@ -554,7 +554,7 @@ impl Task {
         // De-prioritize future or blocked tasks, but ONLY if they are not already ongoing.
         if self.status != TaskStatus::InProcess {
             // Tasks that start significantly in the future are deferred in ranking.
-            if let Some(start) = &self.dtstart {
+            if let Some(start) = &self.effective_dtstart {
                 let start_time = start.to_start_comparison_time();
                 let grace_threshold = now + chrono::Duration::days(start_grace_period_days as i64);
                 if start_time > grace_threshold && !self.has_active_or_recent_alarm() {
@@ -569,10 +569,10 @@ impl Task {
         }
 
         // Urgency buckets based on explicit priority and near due date.
-        if self.priority > 0 && self.priority <= urgent_prio {
+        if self.effective_priority > 0 && self.effective_priority <= urgent_prio {
             return 1;
         }
-        if let Some(due) = &self.due
+        if let Some(due) = &self.effective_due
             && due.to_comparison_time() <= now + chrono::Duration::days(urgent_days as i64)
         {
             return 2;
@@ -581,7 +581,7 @@ impl Task {
             return 3;
         }
 
-        if let Some(due) = &self.due {
+        if let Some(due) = &self.effective_due {
             if let Some(limit) = cutoff {
                 if due.to_comparison_time() <= limit {
                     return 4;
