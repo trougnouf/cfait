@@ -39,7 +39,7 @@ modules:
       # Application source
       - type: git
         url: https://codeberg.org/trougnouf/cfait
-        commit: 648f857ebdb44c8129472ecd8f15da107812e515
+        commit: 070bc52f709921a0e91475552af8352bd44d708f
         x-checker-data:
           type: git
           url: https://codeberg.org/trougnouf/cfait

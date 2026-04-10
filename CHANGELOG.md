@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.8] - 2026-04-10
+
+### 🐛 Bug Fixes
+
+- *(gui)* Right click on a task no longer jumps to the top of the task list
+## [0.5.7] - 2026-04-09
+
+### ⚙️ Miscellaneous Tasks
+
+- Release cfait version 0.5.7
 ## [rolling] - 2026-04-08
 
 ### 🚀 Features

@@ -78,6 +78,14 @@
   </requires>
 
   <releases>
+    <release version="0.5.8" date="2026-04-11">
+      <description>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>(gui) Right click on a task no longer jumps to the top of the task list</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.7" date="2026-04-09">
       <description>
         <p>See CHANGELOG.md for details.</p>
