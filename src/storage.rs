@@ -23,7 +23,7 @@ pub const LOCAL_CALENDAR_HREF: &str = "local://default";
 pub const LOCAL_CALENDAR_NAME: &str = "Local";
 pub const LOCAL_TRASH_HREF: &str = "local://trash";
 pub const LOCAL_REGISTRY_FILENAME: &str = "local_calendars.json";
-const LOCAL_STORAGE_VERSION: u32 = 5;
+const LOCAL_STORAGE_VERSION: u32 = 6;
 
 #[derive(Serialize, Deserialize)]
 struct LocalStorageData {
@@ -418,7 +418,7 @@ impl LocalStorage {
         }
         let tasks = match old_version {
             0 | 1 => Self::migrate_v1_to_v2(json)?,
-            2..=4 => {
+            2..=5 => {
                 let data: LocalStorageData = serde_json::from_str(json)?;
                 data.tasks
             }
@@ -445,10 +445,14 @@ mod tests {
                 let err_msg = e.to_string();
                 assert!(
                     !err_msg.contains("Unknown version"),
-                    "Version {} is not handled by migrate_to_current! Please update the match statement.", v
+                    "Version {} is not handled by migrate_to_current! Please update the match statement.",
+                    v
                 );
             } else {
-                panic!("Expected a parse error for version {}, but migration somehow succeeded.", v);
+                panic!(
+                    "Expected a parse error for version {}, but migration somehow succeeded.",
+                    v
+                );
             }
         }
     }
