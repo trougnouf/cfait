@@ -164,6 +164,9 @@ You can also type url: (e.g. `url:https://trougnouf.com`), geo: (e.g. `geo:53.04
 ### Date & Time Formats
 You can use absolute ISO dates or natural language relative offsets.
 *   **Keywords:** `today`, `tomorrow`
+*   **Absolute Formats:** Supports full dates (`@2025-12-31`), unhyphenated basic format (`@20251231`), and **abbreviated months or years** (`@2026-06`, `@2026`).
+    *   **Sorting Logic:** Due dates (`@`) with a month or year level sort to the **end** of that period (e.g., June 30th). Start dates (`^`) sort to the **beginning** (e.g., June 1st).
+    *   **Calendar Integration:** If enabled, fuzzy dates create calendar events that span the **entire month or year**.
 *   **Offsets:** `1d` (days), `1w` (weeks), `1mo` (months), `1y` (years).
     *   `@2d` = Due in 2 days.
     *   `^1w` = Start in 1 week.

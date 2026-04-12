@@ -37,11 +37,13 @@ fn test_sorting_status_trumps_everything() {
     let mut active = task("Active Low Prio");
     active.priority = 9;
     active.status = TaskStatus::InProcess;
+    active.effective_priority = 9;
 
     // A waiting task with critical priority
     let mut critical = task("Critical Waiting");
     critical.priority = 1;
     critical.status = TaskStatus::NeedsAction;
+    critical.effective_priority = 1;
 
     // With the urgency logic, tasks that are urgent may beat started tasks.
     // Expect critical urgent task to sort before active started task here.

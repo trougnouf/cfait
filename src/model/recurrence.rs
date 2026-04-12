@@ -1,6 +1,6 @@
 // File: ./src/model/recurrence.rs
 use crate::model::item::{Alarm, AlarmTrigger, DateType, RawProperty, Task, TaskStatus};
-use chrono::Local;
+use chrono::{Datelike, Local, NaiveDate};
 use rrule::RRuleSet;
 use std::collections::HashSet; // Import HashSet for deduplication
 use std::str::FromStr;
@@ -31,6 +31,14 @@ impl RecurrenceEngine {
                 }
             }
             DateType::Specific(dt) => dt.with_timezone(&Local).naive_local(),
+            DateType::Month(y, m) => {
+                let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                d.and_hms_opt(0, 0, 0).unwrap()
+            }
+            DateType::Year(y) => {
+                let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                d.and_hms_opt(0, 0, 0).unwrap()
+            }
         };
 
         // Construct RRULE string using Floating Time (No 'Z' suffix)
@@ -72,6 +80,14 @@ impl RecurrenceEngine {
                     // Ensure AllDay EXDATEs match the exact time rrule uses to generate instances
                     DateType::AllDay(d) => d.and_time(seed_local_naive.time()),
                     DateType::Specific(dt) => dt.with_timezone(&Local).naive_local(),
+                    DateType::Month(y, m) => {
+                        let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                        d.and_time(seed_local_naive.time())
+                    }
+                    DateType::Year(y) => {
+                        let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                        d.and_time(seed_local_naive.time())
+                    }
                 };
                 let ex_str = ex_local_naive.format("%Y%m%dT%H%M%S").to_string(); // NO 'Z'
 
@@ -85,6 +101,8 @@ impl RecurrenceEngine {
             let comparison_now_local = match seed_date_type {
                 DateType::AllDay(_) => Local::now().date_naive().and_hms_opt(0, 0, 0).unwrap(),
                 DateType::Specific(_) => Local::now().naive_local(),
+                DateType::Month(_, _) => Local::now().date_naive().and_hms_opt(0, 0, 0).unwrap(),
+                DateType::Year(_) => Local::now().date_naive().and_hms_opt(0, 0, 0).unwrap(),
             };
 
             let search_floor_local = std::cmp::max(comparison_now_local, seed_local_naive);
@@ -187,6 +205,16 @@ impl RecurrenceEngine {
                             let due_naive = dt.with_timezone(&Local).naive_local();
                             due_naive - seed_local_naive
                         }
+                        DateType::Month(y, m) => {
+                            let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                            let due_naive = d.and_hms_opt(0, 0, 0).unwrap();
+                            due_naive - seed_local_naive
+                        }
+                        DateType::Year(y) => {
+                            let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                            let due_naive = d.and_hms_opt(0, 0, 0).unwrap();
+                            due_naive - seed_local_naive
+                        }
                     }
                 } else {
                     chrono::Duration::zero()
@@ -196,6 +224,10 @@ impl RecurrenceEngine {
                     next_task.dtstart = match old_start {
                         DateType::AllDay(_) => Some(DateType::AllDay(naive_next.date())),
                         DateType::Specific(_) => Some(DateType::Specific(next_start)),
+                        DateType::Month(_, _) => {
+                            Some(DateType::Month(naive_next.year(), naive_next.month()))
+                        }
+                        DateType::Year(_) => Some(DateType::Year(naive_next.year())),
                     };
                 }
 
@@ -208,6 +240,11 @@ impl RecurrenceEngine {
                     next_task.due = match old_due {
                         DateType::AllDay(_) => Some(DateType::AllDay(next_due_naive.date())),
                         DateType::Specific(_) => Some(DateType::Specific(next_due_utc)),
+                        DateType::Month(_, _) => Some(DateType::Month(
+                            next_due_naive.year(),
+                            next_due_naive.month(),
+                        )),
+                        DateType::Year(_) => Some(DateType::Year(next_due_naive.year())),
                     };
                 }
 

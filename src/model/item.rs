@@ -69,6 +69,8 @@ pub struct WorkSession {
 pub enum DateType {
     AllDay(NaiveDate),
     Specific(DateTime<Utc>),
+    Month(i32, u32), // Year, Month
+    Year(i32),       // Year
 }
 
 pub fn safe_local_to_utc(date: NaiveDate, time: NaiveTime) -> DateTime<Utc> {
@@ -98,28 +100,49 @@ impl DateType {
         match self {
             DateType::AllDay(d) => *d,
             DateType::Specific(dt) => dt.with_timezone(&Local).date_naive(),
+            DateType::Month(y, m) => NaiveDate::from_ymd_opt(*y, *m, 1).unwrap(),
+            DateType::Year(y) => NaiveDate::from_ymd_opt(*y, 1, 1).unwrap(),
         }
     }
 
-    /// For sorting/comparison we often need either the end-of-day sentinel for all-day
-    /// items, or the actual timestamp for specific datetimes.
+    /// For sorting/comparison: snap fuzzy dates to the LAST second of the period
     pub fn to_comparison_time(&self) -> DateTime<Utc> {
         match self {
             DateType::AllDay(d) => {
                 safe_local_to_utc(*d, chrono::NaiveTime::from_hms_opt(23, 59, 59).unwrap())
             }
             DateType::Specific(dt) => *dt,
+            DateType::Month(y, m) => {
+                let next_m = if *m == 12 { 1 } else { *m + 1 };
+                let next_y = if *m == 12 { *y + 1 } else { *y };
+                let d = NaiveDate::from_ymd_opt(next_y, next_m, 1)
+                    .unwrap()
+                    .pred_opt()
+                    .unwrap();
+                safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(23, 59, 59).unwrap())
+            }
+            DateType::Year(y) => {
+                let d = NaiveDate::from_ymd_opt(*y, 12, 31).unwrap();
+                safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(23, 59, 59).unwrap())
+            }
         }
     }
 
-    /// When computing "starts in the future" semantics we want the start-of-day for
-    /// all-day items and the exact dt for specific datetimes.
+    /// For start date logic: snap fuzzy dates to the FIRST second of the period
     pub fn to_start_comparison_time(&self) -> DateTime<Utc> {
         match self {
             DateType::AllDay(d) => {
                 safe_local_to_utc(*d, chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap())
             }
             DateType::Specific(dt) => *dt,
+            DateType::Month(y, m) => {
+                let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+            }
+            DateType::Year(y) => {
+                let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap())
+            }
         }
     }
 
@@ -129,13 +152,14 @@ impl DateType {
             DateType::AllDay(d) => d.format("%Y-%m-%d").to_string(),
             DateType::Specific(dt) => {
                 let local = dt.with_timezone(&Local);
-                // Only render time when it's not a pure-midnight all-day sentinel.
                 if local.hour() == 0 && local.minute() == 0 && local.second() == 0 {
                     local.format("%Y-%m-%d").to_string()
                 } else {
                     local.format("%Y-%m-%d %H:%M").to_string()
                 }
             }
+            DateType::Month(y, m) => format!("{:04}-{:02}", y, m),
+            DateType::Year(y) => format!("{:04}", y),
         }
     }
 
@@ -143,31 +167,26 @@ impl DateType {
         match self {
             DateType::Specific(dt) => *dt,
             DateType::AllDay(d) => safe_local_to_utc(*d, default_time),
+            DateType::Month(y, m) => {
+                safe_local_to_utc(NaiveDate::from_ymd_opt(*y, *m, 1).unwrap(), default_time)
+            }
+            DateType::Year(y) => {
+                safe_local_to_utc(NaiveDate::from_ymd_opt(*y, 1, 1).unwrap(), default_time)
+            }
         }
+    }
+}
+
+impl Ord for DateType {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Always compare based on the calculated comparison timestamps
+        self.to_comparison_time().cmp(&other.to_comparison_time())
     }
 }
 
 impl PartialOrd for DateType {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-impl Ord for DateType {
-    fn cmp(&self, other: &Self) -> Ordering {
-        let d1 = self.to_date_naive();
-        let d2 = other.to_date_naive();
-        match d1.cmp(&d2) {
-            Ordering::Equal => match (self, other) {
-                // If both are specific times, compare those times
-                (DateType::Specific(t1), DateType::Specific(t2)) => t1.cmp(t2),
-                // Prefer specific timestamps (they are "earlier" in ordering than an all-day)
-                (DateType::Specific(_), DateType::AllDay(_)) => Ordering::Less,
-                (DateType::AllDay(_), DateType::Specific(_)) => Ordering::Greater,
-                (DateType::AllDay(_), DateType::AllDay(_)) => Ordering::Equal,
-            },
-            ord => ord,
-        }
     }
 }
 

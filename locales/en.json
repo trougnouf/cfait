@@ -210,7 +210,7 @@
   "help_search_priority": "Filter by priority",
   "help_syntax": "Syntax",
   "help_syntax_short": "Use !1, @date, #tag, ~duration",
-  "help_timeline_due_date": "Due date. Deadline",
+  "help_timeline_due_date": "Due date. Supports YYYY-MM-DD, YYYY-MM, or YYYY.",
   "help_timeline_keywords": "Relative dates supported",
   "help_timeline_next_period": "Next week/month/year",
   "help_timeline_offsets": "Add time from today",

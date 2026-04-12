@@ -9,7 +9,7 @@ use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::model::{AlarmTrigger, DateType, Task};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
-use chrono::{DateTime, Local, NaiveTime, Utc};
+use chrono::{DateTime, Local, NaiveDate, NaiveTime, Utc};
 use futures::stream::{self, StreamExt};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -327,12 +327,16 @@ fn task_to_mobile(
     let (due_iso, due_allday) = match &t.due {
         Some(DateType::AllDay(d)) => (Some(d.format("%Y-%m-%d").to_string()), true),
         Some(DateType::Specific(dt)) => (Some(dt.to_rfc3339()), false),
+        Some(DateType::Month(y, m)) => (Some(format!("{:04}-{:02}", y, m)), true),
+        Some(DateType::Year(y)) => (Some(format!("{:04}", y)), true),
         None => (None, false),
     };
 
     let (start_iso, start_allday) = match &t.dtstart {
         Some(DateType::AllDay(d)) => (Some(d.format("%Y-%m-%d").to_string()), true),
         Some(DateType::Specific(dt)) => (Some(dt.to_rfc3339()), false),
+        Some(DateType::Month(y, m)) => (Some(format!("{:04}-{:02}", y, m)), true),
+        Some(DateType::Year(y)) => (Some(format!("{:04}", y)), true),
         None => (None, false),
     };
     // expose completion date to mobile clients
@@ -955,6 +959,20 @@ impl CfaitMobile {
                                 .and_local_timezone(Local)
                                 .unwrap()
                                 .with_timezone(&Utc),
+                            DateType::Month(y, m) => {
+                                let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                                d.and_time(default_time)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc)
+                            }
+                            DateType::Year(y) => {
+                                let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                                d.and_time(default_time)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc)
+                            }
                         };
                         check_implicit(dt);
                     }
@@ -966,6 +984,20 @@ impl CfaitMobile {
                                 .and_local_timezone(Local)
                                 .unwrap()
                                 .with_timezone(&Utc),
+                            DateType::Month(y, m) => {
+                                let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                                d.and_time(default_time)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc)
+                            }
+                            DateType::Year(y) => {
+                                let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                                d.and_time(default_time)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc)
+                            }
                         };
                         check_implicit(dt);
                     }
@@ -1084,6 +1116,20 @@ impl CfaitMobile {
                                 .and_local_timezone(Local)
                                 .unwrap()
                                 .with_timezone(&Utc),
+                            DateType::Month(y, m) => {
+                                let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                                d.and_time(default_time)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc)
+                            }
+                            DateType::Year(y) => {
+                                let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                                d.and_time(default_time)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc)
+                            }
                         };
                         // Use rust_i18n lookup for localized description (Single Source of Truth)
                         let alarm_due_now = rust_i18n::t!("alarm_due_now");
@@ -1097,6 +1143,20 @@ impl CfaitMobile {
                                 .and_local_timezone(Local)
                                 .unwrap()
                                 .with_timezone(&Utc),
+                            DateType::Month(y, m) => {
+                                let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                                d.and_time(default_time)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc)
+                            }
+                            DateType::Year(y) => {
+                                let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                                d.and_time(default_time)
+                                    .and_local_timezone(Local)
+                                    .unwrap()
+                                    .with_timezone(&Utc)
+                            }
                         };
                         // Use rust_i18n lookup for localized description (Single Source of Truth)
                         let alarm_task_starting = rust_i18n::t!("alarm_task_starting");
@@ -1790,18 +1850,19 @@ impl CfaitMobile {
                 .clone()
         };
         // --- FIX 5 (Mobile): Only backfill tasks that actually have calendar data ---
-        let futures = all_tasks.into_iter().filter(|t| {
-            t.due.is_some() || t.dtstart.is_some() || !t.sessions.is_empty()
-        }).map(|t| {
-            let c = client.clone();
-            async move {
-                if c.sync_task_companion_event(&t, true).await.unwrap_or(false) {
-                    1
-                } else {
-                    0
+        let futures = all_tasks
+            .into_iter()
+            .filter(|t| t.due.is_some() || t.dtstart.is_some() || !t.sessions.is_empty())
+            .map(|t| {
+                let c = client.clone();
+                async move {
+                    if c.sync_task_companion_event(&t, true).await.unwrap_or(false) {
+                        1
+                    } else {
+                        0
+                    }
                 }
-            }
-        });
+            });
         Ok(stream::iter(futures)
             .buffer_unordered(8)
             .collect::<Vec<u32>>()
@@ -1870,6 +1931,20 @@ impl CfaitMobile {
                                     .and_local_timezone(chrono::Local)
                                     .unwrap()
                                     .with_timezone(&chrono::Utc),
+                                crate::model::DateType::Month(y, m) => {
+                                    let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                                    d.and_time(default_time)
+                                        .and_local_timezone(chrono::Local)
+                                        .unwrap()
+                                        .with_timezone(&chrono::Utc)
+                                }
+                                crate::model::DateType::Year(y) => {
+                                    let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                                    d.and_time(default_time)
+                                        .and_local_timezone(chrono::Local)
+                                        .unwrap()
+                                        .with_timezone(&chrono::Utc)
+                                }
                             };
                             current_ts = Some(dt.to_rfc3339());
                         }
@@ -1883,6 +1958,20 @@ impl CfaitMobile {
                                 .and_local_timezone(chrono::Local)
                                 .unwrap()
                                 .with_timezone(&chrono::Utc),
+                            crate::model::DateType::Month(y, m) => {
+                                let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                                d.and_time(default_time)
+                                    .and_local_timezone(chrono::Local)
+                                    .unwrap()
+                                    .with_timezone(&chrono::Utc)
+                            }
+                            crate::model::DateType::Year(y) => {
+                                let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                                d.and_time(default_time)
+                                    .and_local_timezone(chrono::Local)
+                                    .unwrap()
+                                    .with_timezone(&chrono::Utc)
+                            }
                         };
                         current_ts = Some(dt.to_rfc3339());
                     }

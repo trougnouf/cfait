@@ -34,11 +34,15 @@ fn test_floating_time_weekly_recurrence() {
     let original_time = match t.dtstart.unwrap() {
         DateType::Specific(dt) => dt.with_timezone(&chrono::Local).time(),
         DateType::AllDay(_d) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Month(_, _) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Year(_) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
     };
 
     let next_time = match next_task.dtstart.unwrap() {
         DateType::Specific(dt) => dt.with_timezone(&chrono::Local).time(),
         DateType::AllDay(_d) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Month(_, _) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Year(_) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
     };
 
     assert_eq!(original_time, next_time);
@@ -68,11 +72,15 @@ fn test_floating_time_daily_recurrence() {
     let original_time = match t.dtstart.unwrap() {
         DateType::Specific(dt) => dt.time(),
         DateType::AllDay(_d) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Month(_, _) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Year(_) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
     };
 
     let next_time = match next_task.dtstart.unwrap() {
         DateType::Specific(dt) => dt.time(),
         DateType::AllDay(_d) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Month(_, _) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Year(_) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
     };
 
     assert_eq!(original_time, next_time);
@@ -102,11 +110,15 @@ fn test_floating_time_monthly_recurrence() {
     let original_time = match t.dtstart.unwrap() {
         DateType::Specific(dt) => dt.time(),
         DateType::AllDay(_d) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Month(_, _) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Year(_) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
     };
 
     let next_time = match next_task.dtstart.unwrap() {
         DateType::Specific(dt) => dt.time(),
         DateType::AllDay(_d) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Month(_, _) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Year(_) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
     };
 
     assert_eq!(original_time, next_time);
@@ -136,11 +148,15 @@ fn test_floating_time_yearly_recurrence() {
     let original_time = match t.dtstart.unwrap() {
         DateType::Specific(dt) => dt.time(),
         DateType::AllDay(_d) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Month(_, _) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Year(_) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
     };
 
     let next_time = match next_task.dtstart.unwrap() {
         DateType::Specific(dt) => dt.time(),
         DateType::AllDay(_d) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Month(_, _) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Year(_) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
     };
 
     assert_eq!(original_time, next_time);
@@ -170,11 +186,15 @@ fn test_floating_time_with_explicit_time() {
     let original_time = match t.dtstart.unwrap() {
         DateType::Specific(dt) => dt.time(),
         DateType::AllDay(_d) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Month(_, _) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Year(_) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
     };
 
     let next_time = match next_task.dtstart.unwrap() {
         DateType::Specific(dt) => dt.time(),
         DateType::AllDay(_d) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Month(_, _) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        DateType::Year(_) => NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
     };
 
     assert_eq!(original_time, next_time);

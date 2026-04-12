@@ -12,6 +12,7 @@ use crate::system::{AlarmMessage, SystemEvent};
 use crate::tui::action::AppEvent;
 use crate::tui::state::{AppState, InputMode};
 use crate::tui::view::draw;
+use chrono::NaiveDate;
 
 use anyhow::Result;
 use crossterm::{
@@ -391,6 +392,20 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                                         .and_local_timezone(chrono::Local)
                                         .unwrap()
                                         .with_timezone(&chrono::Utc),
+                                    crate::model::DateType::Month(y, m) => {
+                                        let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                                        d.and_time(default_time)
+                                            .and_local_timezone(chrono::Local)
+                                            .unwrap()
+                                            .with_timezone(&chrono::Utc)
+                                    }
+                                    crate::model::DateType::Year(y) => {
+                                        let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                                        d.and_time(default_time)
+                                            .and_local_timezone(chrono::Local)
+                                            .unwrap()
+                                            .with_timezone(&chrono::Utc)
+                                    }
                                 };
                                 current_ts = Some(dt.to_rfc3339());
                             }
@@ -404,6 +419,20 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                                     .and_local_timezone(chrono::Local)
                                     .unwrap()
                                     .with_timezone(&chrono::Utc),
+                                crate::model::DateType::Month(y, m) => {
+                                    let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                                    d.and_time(default_time)
+                                        .and_local_timezone(chrono::Local)
+                                        .unwrap()
+                                        .with_timezone(&chrono::Utc)
+                                }
+                                crate::model::DateType::Year(y) => {
+                                    let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                                    d.and_time(default_time)
+                                        .and_local_timezone(chrono::Local)
+                                        .unwrap()
+                                        .with_timezone(&chrono::Utc)
+                                }
                             };
                             current_ts = Some(dt.to_rfc3339());
                         }

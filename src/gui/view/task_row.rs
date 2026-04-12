@@ -258,6 +258,8 @@ pub fn view_task_row<'a>(
                             dt.with_timezone(&chrono::Local).format("%H:%M").to_string()
                         }
                         crate::model::DateType::AllDay(_) => due.format_smart(),
+                        crate::model::DateType::Month(_, _) => due.format_smart(),
+                        crate::model::DateType::Year(_) => due.format_smart(),
                     }
                 } else {
                     due.format_smart()

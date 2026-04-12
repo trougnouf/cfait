@@ -9,7 +9,7 @@ It primarily contains:
 */
 
 use crate::model::item::{Alarm, AlarmTrigger, DateType, RawProperty, Task, TaskStatus};
-use chrono::{NaiveDate, NaiveDateTime, TimeZone, Utc};
+use chrono::{Datelike, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use icalendar::{Calendar, CalendarComponent, Component, Event, Todo, TodoStatus};
 use uuid::Uuid;
 
@@ -43,6 +43,9 @@ const HANDLED_KEYS: &[&str] = &[
     "X-LAST-START",
     "X-CFAIT-SESSION",
     "EXDATE",
+    "X-CFAIT-ESTIMATED-DURATION-MAX",
+    "X-CFAIT-FUZZY-START",
+    "X-CFAIT-FUZZY-DUE",
 ];
 
 pub struct IcsAdapter;
@@ -89,6 +92,20 @@ impl IcsAdapter {
                 DateType::Specific(t) => {
                     todo.add_property("DTSTART", t.format("%Y%m%dT%H%M%SZ").to_string());
                 }
+                DateType::Month(y, m) => {
+                    let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                    let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
+                    p.add_parameter("VALUE", "DATE");
+                    todo.append_property(p);
+                    todo.add_property("X-CFAIT-FUZZY-START", format!("{:04}-{:02}", y, m));
+                }
+                DateType::Year(y) => {
+                    let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                    let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
+                    p.add_parameter("VALUE", "DATE");
+                    todo.append_property(p);
+                    todo.add_property("X-CFAIT-FUZZY-START", format!("{:04}", y));
+                }
             }
         }
 
@@ -101,6 +118,25 @@ impl IcsAdapter {
                 }
                 DateType::Specific(t) => {
                     todo.add_property("DUE", t.format("%Y%m%dT%H%M%SZ").to_string());
+                }
+                DateType::Month(y, m) => {
+                    let next_m = if *m == 12 { 1 } else { *m + 1 };
+                    let next_y = if *m == 12 { *y + 1 } else { *y };
+                    let d = NaiveDate::from_ymd_opt(next_y, next_m, 1)
+                        .unwrap()
+                        .pred_opt()
+                        .unwrap();
+                    let mut p = icalendar::Property::new("DUE", d.format("%Y%m%d").to_string());
+                    p.add_parameter("VALUE", "DATE");
+                    todo.append_property(p);
+                    todo.add_property("X-CFAIT-FUZZY-DUE", format!("{:04}-{:02}", y, m));
+                }
+                DateType::Year(y) => {
+                    let d = NaiveDate::from_ymd_opt(*y, 12, 31).unwrap();
+                    let mut p = icalendar::Property::new("DUE", d.format("%Y%m%d").to_string());
+                    p.add_parameter("VALUE", "DATE");
+                    todo.append_property(p);
+                    todo.add_property("X-CFAIT-FUZZY-DUE", format!("{:04}", y));
                 }
             }
         }
@@ -144,6 +180,18 @@ impl IcsAdapter {
                         "EXDATE",
                         dt.format("%Y%m%dT%H%M%SZ").to_string(),
                     ));
+                }
+                DateType::Month(y, m) => {
+                    let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                    let mut p = icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
+                    p.add_parameter("VALUE", "DATE");
+                    todo.append_multi_property(p);
+                }
+                DateType::Year(y) => {
+                    let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                    let mut p = icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
+                    p.add_parameter("VALUE", "DATE");
+                    todo.append_multi_property(p);
                 }
             }
         }
@@ -390,36 +438,64 @@ impl IcsAdapter {
                 _ => None,
             });
 
-        let parse_date_type = |prop: &icalendar::Property| -> Option<DateType> {
-            let val = prop.value();
-            let is_date = prop
-                .params()
-                .get("VALUE")
-                .map(|v| v.value() == "DATE")
-                .unwrap_or(false);
+        let fuzzy_due = get_prop("X-CFAIT-FUZZY-DUE");
+        let fuzzy_start = get_prop("X-CFAIT-FUZZY-START");
 
-            if is_date || val.len() == 8 {
-                NaiveDate::parse_from_str(val, "%Y%m%d")
-                    .ok()
-                    .map(DateType::AllDay)
-            } else if val.ends_with('Z') {
-                NaiveDateTime::parse_from_str(val, "%Y%m%dT%H%M%SZ")
-                    .ok()
-                    .map(|d| DateType::Specific(Utc.from_utc_datetime(&d)))
-            } else {
-                NaiveDateTime::parse_from_str(val, "%Y%m%dT%H%M%S")
-                    .ok()
-                    .map(|d| {
-                        DateType::Specific(crate::model::item::safe_local_to_utc(
-                            d.date(),
-                            d.time(),
-                        ))
-                    })
-            }
-        };
+        let parse_date_type =
+            |prop: &icalendar::Property, fuzzy: Option<String>| -> Option<DateType> {
+                let val = prop.value();
 
-        let due = todo.properties().get("DUE").and_then(parse_date_type);
-        let dtstart = todo.properties().get("DTSTART").and_then(parse_date_type);
+                // Check if it's a standard date first
+                let standard_date = if val.len() >= 8 {
+                    NaiveDate::parse_from_str(&val[0..8], "%Y%m%d").ok()
+                } else {
+                    None
+                };
+
+                // Stale Detection: Only use fuzzy metadata if it matches the actual property value
+                if let Some(f) = fuzzy
+                    && let Some(sd) = standard_date {
+                        if f.len() == 7 && f == sd.format("%Y-%m").to_string() {
+                            return Some(DateType::Month(sd.year(), sd.month()));
+                        } else if f.len() == 4 && f == sd.format("%Y").to_string() {
+                            return Some(DateType::Year(sd.year()));
+                        }
+                    }
+
+                // Fallback to standard parsing
+                let is_date_param = prop
+                    .params()
+                    .get("VALUE")
+                    .map(|v| v.value() == "DATE")
+                    .unwrap_or(false);
+                if is_date_param || val.len() == 8 {
+                    NaiveDate::parse_from_str(val, "%Y%m%d")
+                        .ok()
+                        .map(DateType::AllDay)
+                } else if val.ends_with('Z') {
+                    NaiveDateTime::parse_from_str(val, "%Y%m%dT%H%M%SZ")
+                        .ok()
+                        .map(|d| DateType::Specific(Utc.from_utc_datetime(&d)))
+                } else {
+                    NaiveDateTime::parse_from_str(val, "%Y%m%dT%H%M%S")
+                        .ok()
+                        .map(|d| {
+                            DateType::Specific(crate::model::item::safe_local_to_utc(
+                                d.date(),
+                                d.time(),
+                            ))
+                        })
+                }
+            };
+
+        let due = todo
+            .properties()
+            .get("DUE")
+            .and_then(|p| parse_date_type(p, fuzzy_due));
+        let dtstart = todo
+            .properties()
+            .get("DTSTART")
+            .and_then(|p| parse_date_type(p, fuzzy_start));
         let rrule = get_prop("RRULE");
 
         let mut exdates = Vec::new();
@@ -892,6 +968,8 @@ impl IcsAdapter {
                         };
                         DateType::Specific(*dt - chrono::Duration::minutes(duration_mins))
                     }
+                    DateType::Month(y, m) => DateType::Month(*y, *m),
+                    DateType::Year(y) => DateType::Year(*y),
                 };
                 let ics = Self::make_single_event_ics(task, "", start_dt, due.clone());
                 results.push(("".to_string(), ics));
@@ -906,6 +984,8 @@ impl IcsAdapter {
                         };
                         DateType::Specific(*dt + chrono::Duration::minutes(duration_mins))
                     }
+                    DateType::Month(y, m) => DateType::Month(*y, *m),
+                    DateType::Year(y) => DateType::Year(*y),
                 };
                 let ics = Self::make_single_event_ics(task, "", start.clone(), end_dt);
                 results.push(("".to_string(), ics));
@@ -959,6 +1039,30 @@ impl IcsAdapter {
                                     ),
                                 ));
                             }
+                            DateType::Month(y, m) => {
+                                let _date = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                                results.push((
+                                    "".to_string(),
+                                    Self::make_single_event_ics(
+                                        task,
+                                        "",
+                                        DateType::Month(*y, *m),
+                                        DateType::Month(*y, *m),
+                                    ),
+                                ));
+                            }
+                            DateType::Year(y) => {
+                                let _date = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                                results.push((
+                                    "".to_string(),
+                                    Self::make_single_event_ics(
+                                        task,
+                                        "",
+                                        DateType::Year(*y),
+                                        DateType::Year(*y),
+                                    ),
+                                ));
+                            }
                         }
                     } else {
                         // CASE B: Start + Due, NO Estimate
@@ -990,12 +1094,16 @@ impl IcsAdapter {
                                 DateType::Specific(dt) => {
                                     DateType::Specific(*dt + chrono::Duration::hours(1))
                                 }
+                                DateType::Month(y, m) => DateType::Month(*y, *m),
+                                DateType::Year(y) => DateType::Year(*y),
                             };
                             let due_event_start = match d {
                                 DateType::AllDay(date) => DateType::AllDay(*date),
                                 DateType::Specific(dt) => {
                                     DateType::Specific(*dt - chrono::Duration::hours(1))
                                 }
+                                DateType::Month(y, m) => DateType::Month(*y, *m),
+                                DateType::Year(y) => DateType::Year(*y),
                             };
 
                             results.push((
@@ -1046,6 +1154,28 @@ impl IcsAdapter {
                                 ),
                             ));
                         }
+                        DateType::Month(y, m) => {
+                            results.push((
+                                "".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "",
+                                    DateType::Month(*y, *m),
+                                    DateType::Month(*y, *m),
+                                ),
+                            ));
+                        }
+                        DateType::Year(y) => {
+                            results.push((
+                                "".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "",
+                                    DateType::Year(*y),
+                                    DateType::Year(*y),
+                                ),
+                            ));
+                        }
                     }
                 }
                 (None, Some(d)) => {
@@ -1072,6 +1202,28 @@ impl IcsAdapter {
                                         *dt - chrono::Duration::minutes(duration_mins),
                                     ),
                                     DateType::Specific(*dt),
+                                ),
+                            ));
+                        }
+                        DateType::Month(y, m) => {
+                            results.push((
+                                "".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "",
+                                    DateType::Month(*y, *m),
+                                    DateType::Month(*y, *m),
+                                ),
+                            ));
+                        }
+                        DateType::Year(y) => {
+                            results.push((
+                                "".to_string(),
+                                Self::make_single_event_ics(
+                                    task,
+                                    "",
+                                    DateType::Year(*y),
+                                    DateType::Year(*y),
                                 ),
                             ));
                         }
@@ -1145,7 +1297,8 @@ impl IcsAdapter {
                 for ex in &task.exdates {
                     match ex {
                         DateType::AllDay(d) => {
-                            let mut p = icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
+                            let mut p =
+                                icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
                             p.add_parameter("VALUE", "DATE");
                             event.append_multi_property(p);
                         }
@@ -1154,6 +1307,20 @@ impl IcsAdapter {
                                 "EXDATE",
                                 dt.format("%Y%m%dT%H%M%SZ").to_string(),
                             ));
+                        }
+                        DateType::Month(y, m) => {
+                            let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                            let mut p =
+                                icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
+                            p.add_parameter("VALUE", "DATE");
+                            event.append_multi_property(p);
+                        }
+                        DateType::Year(y) => {
+                            let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                            let mut p =
+                                icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
+                            p.add_parameter("VALUE", "DATE");
+                            event.append_multi_property(p);
                         }
                     }
                 }
@@ -1179,6 +1346,18 @@ impl IcsAdapter {
             DateType::Specific(t) => {
                 event.add_property("DTSTART", t.format("%Y%m%dT%H%M%SZ").to_string());
             }
+            DateType::Month(y, m) => {
+                let d = NaiveDate::from_ymd_opt(y, m, 1).unwrap();
+                let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
+                p.add_parameter("VALUE", "DATE");
+                event.append_property(p);
+            }
+            DateType::Year(y) => {
+                let d = NaiveDate::from_ymd_opt(y, 1, 1).unwrap();
+                let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
+                p.add_parameter("VALUE", "DATE");
+                event.append_property(p);
+            }
         }
 
         match end_dt {
@@ -1191,6 +1370,20 @@ impl IcsAdapter {
             }
             DateType::Specific(t) => {
                 event.add_property("DTEND", t.format("%Y%m%dT%H%M%SZ").to_string());
+            }
+            DateType::Month(y, m) => {
+                let next_m = if m == 12 { 1 } else { m + 1 };
+                let next_y = if m == 12 { y + 1 } else { y };
+                let d = NaiveDate::from_ymd_opt(next_y, next_m, 1).unwrap();
+                let mut p = icalendar::Property::new("DTEND", d.format("%Y%m%d").to_string());
+                p.add_parameter("VALUE", "DATE");
+                event.append_property(p);
+            }
+            DateType::Year(y) => {
+                let d = NaiveDate::from_ymd_opt(y + 1, 1, 1).unwrap();
+                let mut p = icalendar::Property::new("DTEND", d.format("%Y%m%d").to_string());
+                p.add_parameter("VALUE", "DATE");
+                event.append_property(p);
             }
         }
 

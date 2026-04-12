@@ -1120,29 +1120,51 @@ fn parse_recurrence(val: &str) -> Option<String> {
     }
 }
 
-fn parse_smart_date(val: &str) -> Option<NaiveDate> {
+fn parse_smart_date(val: &str) -> Option<DateType> {
+    // 1. Standard ISO YYYY-MM-DD
     if let Ok(date) = NaiveDate::parse_from_str(val, "%Y-%m-%d") {
-        return Some(date);
+        return Some(DateType::AllDay(date));
     }
+    // 2. Basic ISO YYYYMMDD
+    if val.len() == 8 && val.chars().all(|c| c.is_numeric())
+        && let Ok(date) = NaiveDate::parse_from_str(val, "%Y%m%d") {
+            return Some(DateType::AllDay(date));
+        }
+    // 3. Abbreviated YYYY-MM
+    if val.len() == 7 && val.chars().nth(4) == Some('-') {
+        let y = val[0..4].parse::<i32>().ok();
+        let m = val[5..7].parse::<u32>().ok();
+        if let (Some(year), Some(month)) = (y, m)
+            && (1..=12).contains(&month) {
+                return Some(DateType::Month(year, month));
+            }
+    }
+    // 4. Year only YYYY
+    if val.len() == 4 && val.chars().all(|c| c.is_numeric())
+        && let Ok(y) = val.parse::<i32>() {
+            return Some(DateType::Year(y));
+        }
+
+    // Existing natural language logic...
     let now = Local::now().date_naive();
     let lower = val.to_lowercase();
     if lower == "today" {
-        return Some(now);
+        return Some(DateType::AllDay(now));
     }
     if lower == "tomorrow" {
-        return Some(now + Duration::days(1));
+        return Some(DateType::AllDay(now + Duration::days(1)));
     }
     if let Some(n) = lower.strip_suffix('d').and_then(|s| s.parse::<i64>().ok()) {
-        return Some(now + Duration::days(n));
+        return Some(DateType::AllDay(now + Duration::days(n)));
     }
     if let Some(n) = lower.strip_suffix('w').and_then(|s| s.parse::<i64>().ok()) {
-        return Some(now + Duration::days(n * 7));
+        return Some(DateType::AllDay(now + Duration::days(n * 7)));
     }
     if let Some(n) = lower.strip_suffix("mo").and_then(|s| s.parse::<i64>().ok()) {
-        return Some(now + Duration::days(n * 30));
+        return Some(DateType::AllDay(now + Duration::days(n * 30)));
     }
     if let Some(n) = lower.strip_suffix('y').and_then(|s| s.parse::<i64>().ok()) {
-        return Some(now + Duration::days(n * 365));
+        return Some(DateType::AllDay(now + Duration::days(n * 365)));
     }
     None
 }
@@ -1354,19 +1376,26 @@ fn safe_local_to_utc(date: NaiveDate, time: NaiveTime) -> DateTime<Utc> {
 }
 
 fn finalize_date_token(
-    d: NaiveDate,
+    d: DateType,
     stream: &[String],
     next_idx: usize,
     consumed: &mut usize,
 ) -> DateType {
-    if next_idx < stream.len() {
-        let next_token = &stream[next_idx];
-        if let Some(t) = parse_time_string(next_token) {
-            *consumed += 1;
-            return DateType::Specific(safe_local_to_utc(d, t));
+    match d {
+        DateType::AllDay(nd) => {
+            // Only try to merge a time token if it's a specific day
+            if next_idx < stream.len() {
+                let next_token = &stream[next_idx];
+                if let Some(t) = parse_time_string(next_token) {
+                    *consumed += 1;
+                    return DateType::Specific(safe_local_to_utc(nd, t));
+                }
+            }
+            DateType::AllDay(nd)
         }
+        // Months and Years don't support specific times (14:00)
+        _ => d,
     }
-    DateType::AllDay(d)
 }
 
 pub fn escape_summary(summary: &str) -> String {
@@ -1559,7 +1588,13 @@ pub fn apply_smart_input(
                 if let Some(mut rr) = task.rrule.take() {
                     // Remove existing UNTIL if any
                     if !rr.contains("UNTIL=") {
-                        rr.push_str(&format!(";UNTIL={}", d.format("%Y%m%d")));
+                        let date_str = match d {
+                            DateType::AllDay(nd) => nd.format("%Y%m%d").to_string(),
+                            DateType::Specific(dt) => dt.format("%Y%m%d").to_string(),
+                            DateType::Month(y, m) => format!("{:04}{:02}01", y, m),
+                            DateType::Year(y) => format!("{:04}0101", y),
+                        };
+                        rr.push_str(&format!(";UNTIL={}", date_str));
                     }
                     task.rrule = Some(rr);
                 }
@@ -1604,7 +1639,18 @@ pub fn apply_smart_input(
                 // Case 2: Comma-separated list (must be simple AllDay/Weekday/Month)
                 for part in parts {
                     if let Some(d) = parse_smart_date(part) {
-                        task.exdates.push(DateType::AllDay(d)); // Comma lists are always AllDay
+                        // Convert fuzzy dates to AllDay for exdates
+                        let all_day_date = match d {
+                            DateType::AllDay(nd) => DateType::AllDay(nd),
+                            DateType::Specific(dt) => DateType::AllDay(dt.date_naive()),
+                            DateType::Month(y, m) => {
+                                DateType::AllDay(NaiveDate::from_ymd_opt(y, m, 1).unwrap())
+                            }
+                            DateType::Year(y) => {
+                                DateType::AllDay(NaiveDate::from_ymd_opt(y, 1, 1).unwrap())
+                            }
+                        };
+                        task.exdates.push(all_day_date); // Comma lists are always AllDay
                         matched_any = true;
                     } else if let Some(code) = parse_weekday_code(part) {
                         blocked_weekdays.insert(code.to_string());
@@ -1698,8 +1744,8 @@ pub fn apply_smart_input(
                     pending_alarms.push(PendingAlarm::TimeOnly(t));
                 }
                 // C. Date + Optional Time (rem:2025-12-27 12:30, rem:tomorrow 9am, rem:monday 9am)
-                else if let Some(d) =
-                    parse_smart_date(clean_val).or_else(|| parse_next_date(clean_val))
+                else if let Some(d) = parse_smart_date(clean_val)
+                    .or_else(|| parse_next_date(clean_val).map(DateType::AllDay))
                 {
                     // Look ahead for time
                     let mut time_part = None;
@@ -1717,7 +1763,16 @@ pub fn apply_smart_input(
                         .unwrap_or_else(|| NaiveTime::from_hms_opt(8, 0, 0).unwrap());
                     let t = time_part.unwrap_or(fallback);
 
-                    let dt = safe_local_to_utc(d, t);
+                    let dt = match d {
+                        DateType::AllDay(nd) => safe_local_to_utc(nd, t),
+                        DateType::Specific(dt) => dt,
+                        DateType::Month(y, m) => {
+                            safe_local_to_utc(NaiveDate::from_ymd_opt(y, m, 1).unwrap(), t)
+                        }
+                        DateType::Year(y) => {
+                            safe_local_to_utc(NaiveDate::from_ymd_opt(y, 1, 1).unwrap(), t)
+                        }
+                    };
                     pending_alarms.push(PendingAlarm::Absolute(dt));
                 } else {
                     summary_words.push(unescape(token));
@@ -1755,6 +1810,14 @@ pub fn apply_smart_input(
                     let utc_dt = match dt {
                         DateType::Specific(t) => t,
                         DateType::AllDay(d) => {
+                            safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap())
+                        }
+                        DateType::Month(y, m) => {
+                            let d = NaiveDate::from_ymd_opt(y, m, 1).unwrap();
+                            safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap())
+                        }
+                        DateType::Year(y) => {
+                            let d = NaiveDate::from_ymd_opt(y, 1, 1).unwrap();
                             safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap())
                         }
                     };
@@ -1880,7 +1943,12 @@ pub fn apply_smart_input(
                 let next_str = &stream[i + 1];
                 if let Some(d) = parse_next_date(next_str) {
                     let mut temp_consumed = 2; // "next" + unit
-                    let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
+                    let dt = finalize_date_token(
+                        DateType::AllDay(d),
+                        &stream,
+                        i + temp_consumed,
+                        &mut temp_consumed,
+                    );
                     if set_start {
                         task.dtstart = Some(dt.clone());
                     }
@@ -1904,7 +1972,12 @@ pub fn apply_smart_input(
                     && let Some(d) = parse_in_date(amount, &unit)
                 {
                     let mut temp_consumed = 1 + 1 + extra;
-                    let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
+                    let dt = finalize_date_token(
+                        DateType::AllDay(d),
+                        &stream,
+                        i + temp_consumed,
+                        &mut temp_consumed,
+                    );
                     if set_start {
                         task.dtstart = Some(dt.clone());
                     }
@@ -1943,7 +2016,12 @@ pub fn apply_smart_input(
                     }
                 } else if let Some(d) = parse_weekday_date(clean) {
                     let mut temp_consumed = 1;
-                    let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
+                    let dt = finalize_date_token(
+                        DateType::AllDay(d),
+                        &stream,
+                        i + temp_consumed,
+                        &mut temp_consumed,
+                    );
                     if set_start {
                         task.dtstart = Some(dt.clone());
                     }
@@ -2062,7 +2140,12 @@ pub fn apply_smart_input(
                 }
             } else if let Some(d) = parse_weekday_date(val) {
                 let mut temp_consumed = 1;
-                let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
+                let dt = finalize_date_token(
+                    DateType::AllDay(d),
+                    &stream,
+                    i + temp_consumed,
+                    &mut temp_consumed,
+                );
                 if set_start {
                     task.dtstart = Some(dt.clone());
                 }
@@ -2109,7 +2192,12 @@ pub fn apply_smart_input(
                 consumed = temp_consumed;
             } else if let Some(d) = parse_weekday_date(clean_val) {
                 let mut temp_consumed = 1;
-                let dt = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
+                let dt = finalize_date_token(
+                    DateType::AllDay(d),
+                    &stream,
+                    i + temp_consumed,
+                    &mut temp_consumed,
+                );
                 task.dtstart = Some(dt);
                 consumed = temp_consumed;
             } else {

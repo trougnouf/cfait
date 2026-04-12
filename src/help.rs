@@ -93,7 +93,7 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "@date".to_string(),
                     desc: rust_i18n::t!("help_timeline_due_date").to_string(),
-                    example: "@tomorrow, @2025-12-31".to_string(),
+                    example: "@tomorrow, @2026-06, @2026, @20251231".to_string(),
                 },
                 HelpItem {
                     keys: "^date".to_string(),
