@@ -180,9 +180,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         .calendars
                         .iter()
                         .find(|c| c.name == *def || c.href == *def)
-                    {
-                        target_href = Some(found.href.clone());
-                    }
+                {
+                    target_href = Some(found.href.clone());
+                }
                 app.ob_default_cal = target_href;
                 app.hide_completed = cfg.hide_completed;
                 app.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
@@ -236,12 +236,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::AddAlias => {
             if !app.alias_input_key.is_empty() && !app.alias_input_values.is_empty() {
-                let tags: Vec<String> = app
-                    .alias_input_values
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect();
+                let tags = crate::model::parser::parse_alias_values(&app.alias_input_values);
 
                 if !tags.is_empty() {
                     let raw_key = app.alias_input_key.trim();

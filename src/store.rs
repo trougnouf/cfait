@@ -1296,7 +1296,7 @@ impl TaskStore {
             .collect();
 
         if uncat_any {
-            categories.push(("Uncategorized".to_string(), uncat_active_count));
+            categories.push((UNCATEGORIZED_ID.to_string(), uncat_active_count));
         }
 
         categories.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));

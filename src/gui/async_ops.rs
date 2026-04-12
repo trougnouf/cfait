@@ -43,8 +43,10 @@ pub async fn connect_and_fetch_wrapper(
     rt.spawn(async {
         match tokio::time::timeout(
             std::time::Duration::from_secs(45),
-            RustyClient::connect_with_fallback(ctx, config, Some("GUI"))
-        ).await {
+            RustyClient::connect_with_fallback(ctx, config, Some("GUI")),
+        )
+        .await
+        {
             Ok(res) => res.map_err(|e| e.to_string()),
             Err(_) => Err("Connection timed out. Check your network or server URL.".to_string()),
         }
@@ -59,7 +61,9 @@ pub async fn async_fetch_wrapper(
 ) -> Result<(String, Vec<TodoTask>), String> {
     let rt = get_runtime();
     rt.spawn(async move {
-        match tokio::time::timeout(std::time::Duration::from_secs(30), client.get_tasks(&href)).await {
+        match tokio::time::timeout(std::time::Duration::from_secs(30), client.get_tasks(&href))
+            .await
+        {
             Ok(res) => {
                 let tasks = res.map_err(|e: String| e)?;
                 Ok((href, tasks))
@@ -77,7 +81,12 @@ pub async fn async_fetch_all_wrapper(
 ) -> Result<Vec<(String, Vec<TodoTask>)>, String> {
     let rt = get_runtime();
     rt.spawn(async move {
-        match tokio::time::timeout(std::time::Duration::from_secs(60), client.get_all_tasks(&cals)).await {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(180),
+            client.get_all_tasks(&cals),
+        )
+        .await
+        {
             Ok(res) => res.map_err(|e| e.to_string()),
             Err(_) => Err("Fetch all timed out".to_string()),
         }
@@ -151,7 +160,12 @@ pub async fn async_migrate_wrapper(
 ) -> Result<usize, String> {
     let rt = get_runtime();
     rt.spawn(async move {
-        match tokio::time::timeout(std::time::Duration::from_secs(30), client.migrate_tasks(tasks, &target)).await {
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(45),
+            client.migrate_tasks(tasks, &target),
+        )
+        .await
+        {
             Ok(res) => res.map_err(|e| e.to_string()),
             Err(_) => Err("Migration timed out".to_string()),
         }
@@ -169,17 +183,25 @@ pub async fn async_backfill_events_wrapper(
 ) -> Result<usize, String> {
     let rt = get_runtime();
     rt.spawn(async move {
-        let futures = tasks.into_iter().filter(|task| {
-            task.due.is_some() || task.dtstart.is_some() || !task.sessions.is_empty()
-        }).map(|task| {
-            let c = client.clone();
-            async move {
-                match tokio::time::timeout(std::time::Duration::from_secs(10), c.sync_task_companion_event(&task, global_enabled)).await {
-                    Ok(Ok(true)) => 1,
-                    _ => 0,
+        let futures = tasks
+            .into_iter()
+            .filter(|task| {
+                task.due.is_some() || task.dtstart.is_some() || !task.sessions.is_empty()
+            })
+            .map(|task| {
+                let c = client.clone();
+                async move {
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(30),
+                        c.sync_task_companion_event(&task, global_enabled),
+                    )
+                    .await
+                    {
+                        Ok(Ok(true)) => 1,
+                        _ => 0,
+                    }
                 }
-            }
-        });
+            });
 
         let count = stream::iter(futures)
             .buffer_unordered(8)
@@ -208,7 +230,9 @@ pub async fn async_delete_all_events_wrapper(
                 }
             }
             Ok::<usize, String>(total)
-        }).await {
+        })
+        .await
+        {
             Ok(res) => res,
             Err(_) => Err("Deleting events timed out".to_string()),
         }

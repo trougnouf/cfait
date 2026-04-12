@@ -38,6 +38,43 @@ pub struct SyntaxToken {
     pub end: usize,
 }
 
+pub fn parse_alias_values(input: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut in_quote = false;
+    let mut escaped = false;
+    let mut in_geo = false;
+
+    for c in input.chars() {
+        if escaped {
+            current.push(c);
+            escaped = false;
+        } else if c == '\\' {
+            escaped = true;
+            current.push(c);
+        } else if c == '"' {
+            in_quote = !in_quote;
+            current.push(c);
+        } else if c == ',' && !in_quote {
+            let trimmed = current.trim_start();
+            if trimmed.starts_with("geo:") && !in_geo {
+                in_geo = true;
+                current.push(c);
+            } else {
+                parts.push(current.trim().to_string());
+                current.clear();
+                in_geo = false;
+            }
+        } else {
+            current.push(c);
+        }
+    }
+    if !current.trim().is_empty() {
+        parts.push(current.trim().to_string());
+    }
+    parts.into_iter().filter(|s| !s.is_empty()).collect()
+}
+
 pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<String>>) {
     let parts = split_input_respecting_quotes(input);
     let mut cleaned_words = Vec::new();
@@ -72,11 +109,7 @@ pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<Strin
             }
 
             if is_valid {
-                let tags: Vec<String> = right
-                    .split(',')
-                    .map(|t| t.trim().to_string())
-                    .filter(|t| !t.is_empty())
-                    .collect();
+                let tags = parse_alias_values(right);
 
                 if !tags.is_empty() {
                     new_aliases.insert(key, tags);
@@ -1126,24 +1159,29 @@ fn parse_smart_date(val: &str) -> Option<DateType> {
         return Some(DateType::AllDay(date));
     }
     // 2. Basic ISO YYYYMMDD
-    if val.len() == 8 && val.chars().all(|c| c.is_numeric())
-        && let Ok(date) = NaiveDate::parse_from_str(val, "%Y%m%d") {
-            return Some(DateType::AllDay(date));
-        }
+    if val.len() == 8
+        && val.chars().all(|c| c.is_numeric())
+        && let Ok(date) = NaiveDate::parse_from_str(val, "%Y%m%d")
+    {
+        return Some(DateType::AllDay(date));
+    }
     // 3. Abbreviated YYYY-MM
     if val.len() == 7 && val.chars().nth(4) == Some('-') {
         let y = val[0..4].parse::<i32>().ok();
         let m = val[5..7].parse::<u32>().ok();
         if let (Some(year), Some(month)) = (y, m)
-            && (1..=12).contains(&month) {
-                return Some(DateType::Month(year, month));
-            }
+            && (1..=12).contains(&month)
+        {
+            return Some(DateType::Month(year, month));
+        }
     }
     // 4. Year only YYYY
-    if val.len() == 4 && val.chars().all(|c| c.is_numeric())
-        && let Ok(y) = val.parse::<i32>() {
-            return Some(DateType::Year(y));
-        }
+    if val.len() == 4
+        && val.chars().all(|c| c.is_numeric())
+        && let Ok(y) = val.parse::<i32>()
+    {
+        return Some(DateType::Year(y));
+    }
 
     // Existing natural language logic...
     let now = Local::now().date_naive();

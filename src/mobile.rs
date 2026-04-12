@@ -1174,12 +1174,14 @@ impl CfaitMobile {
 impl CfaitMobile {
     pub async fn add_alias(&self, key: String, tags: Vec<String>) -> Result<(), MobileError> {
         let mut c = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        crate::model::validate_alias_integrity(&key, &tags, &c.tag_aliases)
+        let tags_str = tags.join(",");
+        let proper_tags = crate::model::parser::parse_alias_values(&tags_str);
+        crate::model::validate_alias_integrity(&key, &proper_tags, &c.tag_aliases)
             .map_err(MobileError::from)?;
-        c.tag_aliases.insert(key.clone(), tags.clone());
+        c.tag_aliases.insert(key.clone(), proper_tags.clone());
         c.save(self.ctx.as_ref()).map_err(MobileError::from)?;
         let mut store = self.controller.store.lock().await;
-        let modified = store.apply_alias_retroactively(&key, &tags);
+        let modified = store.apply_alias_retroactively(&key, &proper_tags);
         drop(store);
         if !modified.is_empty() {
             for t in modified {
