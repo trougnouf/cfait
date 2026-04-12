@@ -70,32 +70,7 @@ impl RecurrenceEngine {
             }
         }
 
-        let mut rrule_string = format!("DTSTART:{}\nRRULE:{}\n", dtstart_str, final_rule_part);
-
-        // Deduplicate and localize EXDATEs
-        if !task.exdates.is_empty() {
-            let mut seen_exdates = HashSet::new();
-            for ex in &task.exdates {
-                let ex_local_naive = match ex {
-                    // Ensure AllDay EXDATEs match the exact time rrule uses to generate instances
-                    DateType::AllDay(d) => d.and_time(seed_local_naive.time()),
-                    DateType::Specific(dt) => dt.with_timezone(&Local).naive_local(),
-                    DateType::Month(y, m) => {
-                        let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                        d.and_time(seed_local_naive.time())
-                    }
-                    DateType::Year(y) => {
-                        let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                        d.and_time(seed_local_naive.time())
-                    }
-                };
-                let ex_str = ex_local_naive.format("%Y%m%dT%H%M%S").to_string(); // NO 'Z'
-
-                if seen_exdates.insert(ex_str.clone()) {
-                    rrule_string.push_str(&format!("EXDATE:{}\n", ex_str));
-                }
-            }
-        }
+        let rrule_string = format!("DTSTART:{}\nRRULE:{}\n", dtstart_str, final_rule_part);
 
         if let Ok(rrule_set) = RRuleSet::from_str(&rrule_string) {
             let comparison_now_local = match seed_date_type {
@@ -107,10 +82,26 @@ impl RecurrenceEngine {
 
             let search_floor_local = std::cmp::max(comparison_now_local, seed_local_naive);
 
+            // Deduplicate and localize EXDATEs for manual filtering to completely
+            // bypass the rrule crate's notoriously strict validation which crashes on
+            // timezone/DST mismatches or past exceptions.
+            let mut exclusion_dates = HashSet::new();
+            if !task.exdates.is_empty() {
+                for ex in &task.exdates {
+                    let ex_date = match ex {
+                        DateType::AllDay(d) => *d,
+                        DateType::Specific(dt) => dt.with_timezone(&Local).naive_local().date(),
+                        DateType::Month(y, m) => NaiveDate::from_ymd_opt(*y, *m, 1).unwrap(),
+                        DateType::Year(y) => NaiveDate::from_ymd_opt(*y, 1, 1).unwrap(),
+                    };
+                    exclusion_dates.insert(ex_date);
+                }
+            }
+
             let rrule_next_naive = rrule_set
                 .into_iter()
                 .map(|d| d.naive_local())
-                .find(|d| *d > search_floor_local);
+                .find(|d| *d > search_floor_local && !exclusion_dates.contains(&d.date()));
 
             let is_simple_monthly =
                 final_rule_part.contains("FREQ=MONTHLY") && !final_rule_part.contains("BY");
@@ -193,6 +184,9 @@ impl RecurrenceEngine {
 
                 next_task.exdates.sort_by(|a, b| a.partial_cmp(b).unwrap());
                 next_task.exdates.dedup();
+
+                // Keep all EXDATEs to preserve cancellation history for calendar event synchronization
+                // This allows other clients to see which instances were cancelled
 
                 // Calculate duration gap in Naive time to prevent DST shifts from stretching the gap
                 let duration_naive = if let Some(old_due) = &task.due {

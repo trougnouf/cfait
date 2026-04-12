@@ -182,72 +182,74 @@ impl TaskController {
         };
 
         if is_recurring_completion {
+            // Revert the task status to its previous state so `recycle` knows it's a forward transition,
+            // not an "undo" of a previously completed/cancelled task.
+            let target_status = task.status;
+            let existing = store.get_task_ref(&task.uid).unwrap();
+            task.status = existing.status;
+
             // Recycle produces a history snapshot and optionally a next-instance.
-            let (history, next_opt) = task.recycle(task.status);
+            let (history, next_opt) = task.recycle(target_status);
+
+            if next_opt.is_none() {
+                // Recurrence failed to advance (e.g. reached UNTIL).
+                // `history` is actually the updated original task. We treat it as a standard update.
+                store.update_or_add_task(history.clone());
+                drop(store);
+                return self.persist_change(Action::Update(history)).await;
+            }
 
             // 1. Optimistic UI: insert history (new UID) and update next/main item.
             store.add_task(history.clone());
 
-            if let Some(next) = &next_opt {
-                store.update_or_add_task(next.clone());
-            } else {
-                // Fallback: update the task in place if no next-instance produced.
-                store.update_or_add_task(task.clone());
-            }
+            let next = next_opt.unwrap();
+            store.update_or_add_task(next.clone());
 
             let mut reset_children: Vec<Task> = Vec::new();
-            if next_opt.is_some() {
-                let mut adjacency: std::collections::HashMap<String, Vec<String>> =
-                    std::collections::HashMap::new();
-                for map in store.calendars.values() {
-                    for t in map.values() {
-                        if let Some(p) = &t.parent_uid {
-                            adjacency.entry(p.clone()).or_default().push(t.uid.clone());
+            let mut adjacency: std::collections::HashMap<String, Vec<String>> =
+                std::collections::HashMap::new();
+            for map in store.calendars.values() {
+                for t in map.values() {
+                    if let Some(p) = &t.parent_uid {
+                        adjacency.entry(p.clone()).or_default().push(t.uid.clone());
+                    }
+                }
+            }
+
+            let mut queue = vec![task.uid.clone()];
+            let mut descendants = std::collections::HashSet::new();
+
+            while let Some(parent) = queue.pop() {
+                if let Some(children) = adjacency.get(&parent) {
+                    for child_uid in children {
+                        if descendants.insert(child_uid.clone()) {
+                            queue.push(child_uid.clone());
                         }
                     }
                 }
+            }
 
-                let mut queue = vec![task.uid.clone()];
-                let mut descendants = std::collections::HashSet::new();
+            for child_uid in descendants {
+                if let Some((child, _)) = store.get_task_mut(&child_uid)
+                    && child.status.is_done()
+                {
+                    child.status = crate::model::TaskStatus::NeedsAction;
+                    child.percent_complete = None;
+                    child
+                        .unmapped_properties
+                        .retain(|p| p.key.to_uppercase() != "COMPLETED");
 
-                while let Some(parent) = queue.pop() {
-                    if let Some(children) = adjacency.get(&parent) {
-                        for child_uid in children {
-                            if descendants.insert(child_uid.clone()) {
-                                queue.push(child_uid.clone());
-                            }
-                        }
-                    }
-                }
-
-                for child_uid in descendants {
-                    if let Some((child, _)) = store.get_task_mut(&child_uid)
-                        && child.status.is_done()
-                    {
-                        child.status = crate::model::TaskStatus::NeedsAction;
-                        child.percent_complete = None;
-                        child
-                            .unmapped_properties
-                            .retain(|p| p.key.to_uppercase() != "COMPLETED");
-
-                        reset_children.push(child.clone());
-                    }
+                    reset_children.push(child.clone());
                 }
             }
 
             // Drop the lock before performing network/disk operations.
             drop(store);
 
-            // 2. Persist changes: history create and next update (if present).
+            // 2. Persist changes: history create and next update
             let mut logs = self.persist_change(Action::Create(history)).await?;
-
-            if let Some(next) = next_opt {
-                let next_logs = self.persist_change(Action::Update(next)).await?;
-                logs.extend(next_logs);
-            } else {
-                let next_logs = self.persist_change(Action::Update(task)).await?;
-                logs.extend(next_logs);
-            }
+            let next_logs = self.persist_change(Action::Update(next)).await?;
+            logs.extend(next_logs);
 
             for child in reset_children {
                 if let Ok(w) = self.persist_change(Action::Update(child)).await {

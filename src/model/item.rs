@@ -1230,20 +1230,23 @@ impl Task {
             // 2. Advance the main recurring item to the next occurrence and reset timing.
             let mut next_task = base_task.clone();
 
+            // Add EXDATE for the current instance if this is a cancellation
+            // This prevents the cancelled instance from reappearing in the future
+            if target_status == TaskStatus::Cancelled {
+                // We MUST exclude the exact seed date used by the recurrence engine
+                // to prevent the generator from yielding it again.
+                if let Some(date_to_exclude) = next_task.dtstart.as_ref().or(next_task.due.as_ref())
+                {
+                    next_task.exdates.push(date_to_exclude.clone());
+                }
+                // Sort and deduplicate EXDATEs
+                next_task.exdates.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                next_task.exdates.dedup();
+            }
+
             // Reset time-tracking for next occurrence.
             next_task.time_spent_seconds = 0;
             next_task.last_started_at = None;
-
-            if target_status == TaskStatus::Cancelled
-                && let Some(current_date) = next_task
-                    .dtstart
-                    .as_ref()
-                    .or(next_task.due.as_ref())
-                    .cloned()
-            {
-                // If cancelling, add the current instance date to EXDATEs so the instance is skipped.
-                next_task.exdates.push(current_date);
-            }
 
             let advanced = crate::model::RecurrenceEngine::advance(&mut next_task);
 
