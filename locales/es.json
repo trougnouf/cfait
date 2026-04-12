@@ -208,7 +208,7 @@
     "help_search_priority": "Filtrar por prioridad",
     "help_syntax": "Sintaxis",
     "help_syntax_short": "Usa !1, @fecha, #tag, ~duración",
-    "help_timeline_due_date": "Fecha de vencimiento. Límite",
+    "help_timeline_due_date": "Fecha de vencimiento. Admite los formatos AAAA-MM-DD, AAAA-MM o AAAA.",
     "help_timeline_keywords": "Soporta fechas relativas",
     "help_timeline_next_period": "Próxima semana/mes/año",
     "help_timeline_offsets": "Añadir tiempo desde hoy",
