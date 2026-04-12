@@ -178,7 +178,7 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "geo:".to_string(),
                     desc: rust_i18n::t!("help_metadata_coordinates").to_string(),
-                    example: "geo:53.04,-121.10".to_string(),
+                    example: "geo:53.04,-121.10 or geo:50.13° N, 4.50° E".to_string(),
                 },
                 HelpItem {
                     keys: "desc:".to_string(),

@@ -157,7 +157,7 @@ The clients are self-documenting; the most up-to-date documentation should be pr
 | **Reminder** | `rem:` | Set an notification. (e.g. `rem:10m`, `rem:8am`, `rem:tomorrow 9:00`). |
 | **Calendar Event** | `+cal` / `-cal` | Override calendar event creation (per-task). `+cal` forces event creation, `-cal` prevents it. |
 
-You can also type url: (e.g. `url:https://trougnouf.com`), geo: (e.g. `geo:53.046070, -121.105264`), and desc: (e.g. `desc:"a description"` or `desc:{une description}`)
+You can also type url: (e.g. `url:https://trougnouf.com`), geo: (e.g. `geo:53.046070,-121.105264` or `geo:50.13139° N, 4.50080° E`), and desc: (e.g. `desc:"a description"` or `desc:{une description}`)
 
 **Escaping:** If you need to use special characters literally in your task summary (like `#`, `@`, `!`), prefix them with a backslash: `\#not-a-tag \@not-a-date`.
 
