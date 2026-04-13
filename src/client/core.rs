@@ -556,7 +556,8 @@ impl RustyClient {
         };
 
         // --- FIX 2: Allow tasks with work sessions to generate calendar events ---
-        let has_calendar_data = task.due.is_some() || task.dtstart.is_some() || !task.sessions.is_empty();
+        let has_calendar_data =
+            task.due.is_some() || task.dtstart.is_some() || !task.sessions.is_empty();
         let keep_completed = !delete_on_completion && task.status.is_done();
 
         let should_delete = is_delete_intent
@@ -581,14 +582,19 @@ impl RustyClient {
             let event_filename = format!("{}{}.ics", base_uid, suffix);
             let event_path = format!("{}{}", strip_host(&cal_path), event_filename);
 
-            let create_req =
-                PutResource::new(&event_path).create(ics_body.clone(), "text/calendar");
+            let create_req = PutResource::new(&event_path).create(
+                ics_body.clone(),
+                "text/calendar; charset=utf-8; component=VEVENT",
+            );
             match client.request(create_req).await {
                 Ok(_) => {}
                 Err(WebDavError::BadStatusCode(http::StatusCode::PRECONDITION_FAILED))
                 | Err(WebDavError::PreconditionFailed(_)) => {
-                    let update_req =
-                        PutResource::new(&event_path).update(ics_body.clone(), "text/calendar", "");
+                    let update_req = PutResource::new(&event_path).update(
+                        ics_body.clone(),
+                        "text/calendar; charset=utf-8; component=VEVENT",
+                        "",
+                    );
                     if client.request(update_req).await.is_err() {
                         success = false;
                     }
@@ -838,7 +844,10 @@ impl RustyClient {
 
                 // --- FIX 1: Ignore VEVENT companions during Task sync to stop Multiget spam ---
                 let filename = res_href_stripped.split('/').next_back().unwrap_or("");
-                if filename.starts_with("evt-") && filename.ends_with(".ics") && filename.len() >= 44 {
+                if filename.starts_with("evt-")
+                    && filename.ends_with(".ics")
+                    && filename.len() >= 44
+                {
                     continue;
                 }
                 // ------------------------------------------------------------------------------

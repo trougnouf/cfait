@@ -7,6 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.WorkerParameters
 import com.trougnouf.cfait.CfaitApplication
+import kotlinx.coroutines.CancellationException
 
 class CalendarMigrationWorker(
     context: Context,
@@ -41,6 +42,7 @@ class CalendarMigrationWorker(
 
             Result.success(output)
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("CfaitMigrate", "Migration failed", e)
             val output = Data.Builder()
                 .putString(OUTPUT_MESSAGE, "Migration error: ${e.message}")

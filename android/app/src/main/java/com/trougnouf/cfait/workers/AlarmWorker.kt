@@ -18,6 +18,7 @@ import com.trougnouf.cfait.MainActivity
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.receivers.NotificationActionReceiver
 import com.trougnouf.cfait.util.AlarmScheduler
+import kotlinx.coroutines.CancellationException
 
 class AlarmWorker(
     private val context: Context,
@@ -50,6 +51,7 @@ class AlarmWorker(
             AlarmScheduler.scheduleNextAlarm(context, api)
             Result.success()
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("CfaitAlarmWorker", "Error", e)
             Result.retry()
         }

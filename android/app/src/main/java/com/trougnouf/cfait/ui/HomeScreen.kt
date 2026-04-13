@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.*
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 data class TabInfo(
@@ -323,7 +324,8 @@ fun HomeScreen(
                     expandedGroups.toList(), matchAllCategories
                 )
                 onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, api.getConfig().tagAliases)
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
             }
         }
     }
@@ -332,7 +334,8 @@ fun HomeScreen(
         scope.launch {
             try {
                 localHasUnsynced = api.hasUnsyncedChanges()
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
             }
         }
     }
@@ -382,7 +385,8 @@ fun HomeScreen(
                 checkSyncStatus()
                 onDataChanged()
                 lastSyncFailed = false
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 lastSyncFailed = true
                 updateTaskList()
                 checkSyncStatus()
@@ -430,7 +434,8 @@ fun HomeScreen(
                     lastSyncFailed = false
                     updateTaskList()
                     scrollTrigger++
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     lastSyncFailed = true
                 } finally {
                     checkSyncStatus()
@@ -596,7 +601,8 @@ fun HomeScreen(
                 updateTaskList()
                 onDataChanged()
                 lastSyncFailed = false
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 lastSyncFailed = true
                 updateTaskList()
             } finally {
@@ -615,6 +621,7 @@ fun HomeScreen(
                 onDataChanged()
                 updateTaskList()
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 lastSyncFailed = true
                 Toast.makeText(context, context.getString(R.string.sync_error, e.message ?: ""), Toast.LENGTH_SHORT)
                     .show()
@@ -840,6 +847,7 @@ fun HomeScreen(
                                         updateTaskList()
                                         onDataChanged()
                                     } catch (e: Exception) {
+                                        if (e is CancellationException) throw e
                                         Toast.makeText(
                                             context,
                                             context.getString(R.string.move_failed, e.message ?: ""),

@@ -7,6 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.Data
 import androidx.work.WorkerParameters
 import com.trougnouf.cfait.CfaitApplication
+import kotlinx.coroutines.CancellationException
 
 class CalendarSyncWorker(
     context: Context,
@@ -50,6 +51,7 @@ class CalendarSyncWorker(
 
             Result.success(output)
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("CfaitCalSync", "Failed to sync calendar events", e)
             val output = Data.Builder()
                 .putString(OUTPUT_MESSAGE, "Error: ${e.message}")

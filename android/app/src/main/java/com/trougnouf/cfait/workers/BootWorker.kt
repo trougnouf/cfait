@@ -8,6 +8,7 @@ import androidx.work.WorkerParameters
 import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.util.AlarmScheduler
 import com.trougnouf.cfait.util.NotificationHelper
+import kotlinx.coroutines.CancellationException
 
 class BootWorker(
     private val context: Context,
@@ -26,6 +27,7 @@ class BootWorker(
             NotificationHelper.updateOngoingNotifications(context, api)
             Result.success()
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("CfaitBootWorker", "Error", e)
             Result.retry()
         }

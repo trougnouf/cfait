@@ -36,6 +36,7 @@ import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
 import com.trougnouf.cfait.core.MobileTask
 import com.trougnouf.cfait.core.MobileRelatedTask
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -184,6 +185,7 @@ fun TaskDetailScreen(
                                     showMoveDialog = false
                                     onBack()
                                 } catch (e: Exception) {
+                                    if (e is kotlinx.coroutines.CancellationException) throw e
                                     android.widget.Toast.makeText(
                                         context,
                                         "Error: ${e.message}",
@@ -287,6 +289,7 @@ fun TaskDetailScreen(
                                         api.removeDependency(task!!.uid, blockerUid)
                                         reload()
                                     } catch (e: Exception) {
+                                        if (e is kotlinx.coroutines.CancellationException) throw e
                                         android.widget.Toast.makeText(
                                             context,
                                             "Error: ${e.message}",
@@ -343,6 +346,7 @@ fun TaskDetailScreen(
                                         api.removeDependency(blockedUid, task!!.uid)
                                         reload()
                                     } catch (e: Exception) {
+                                        if (e is kotlinx.coroutines.CancellationException) throw e
                                         android.widget.Toast.makeText(
                                             context,
                                             "Error: ${e.message}",
@@ -398,6 +402,7 @@ fun TaskDetailScreen(
                                         api.removeRelatedTo(task!!.uid, relatedUid)
                                         reload()
                                     } catch (e: Exception) {
+                                        if (e is kotlinx.coroutines.CancellationException) throw e
                                         android.widget.Toast.makeText(
                                             context,
                                             "Error: ${e.message}",
@@ -479,6 +484,7 @@ fun TaskDetailScreen(
                                         showAddSession = false
                                         reload()
                                     } catch (e: Exception) {
+                                        if (e is kotlinx.coroutines.CancellationException) throw e
                                         val msg = e.message ?: ""
                                         if (msg.contains("Invalid time format") || msg.contains("Task not found")) {
                                             android.widget.Toast.makeText(
@@ -551,6 +557,7 @@ fun TaskDetailScreen(
                                     api.deleteSession(uid, absoluteIdx.toUInt())
                                     reload()
                                 } catch (e: Exception) {
+                                    if (e is kotlinx.coroutines.CancellationException) throw e
                                     android.widget.Toast.makeText(
                                         context,
                                         "Error deleting session: ${e.message}",
@@ -614,6 +621,7 @@ fun TaskDetailScreen(
                                         api.removeRelatedTo(relatedTask.uid, task!!.uid)
                                         reload()
                                     } catch (e: Exception) {
+                                        if (e is kotlinx.coroutines.CancellationException) throw e
                                         android.widget.Toast.makeText(
                                             context,
                                             "Error: ${e.message}",

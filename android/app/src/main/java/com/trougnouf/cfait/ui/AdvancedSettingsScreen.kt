@@ -20,6 +20,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.FileProvider
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.R
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -268,6 +269,7 @@ fun AdvancedSettingsScreen(
                             debugIsError = false
                             debugStatus = exportReady
                         } catch (e: Exception) {
+                            if (e is kotlinx.coroutines.CancellationException) throw e
                             debugIsError = true
                             debugStatus = try {
                                 String.format(exportFailedTemplate, e.message ?: e.toString())

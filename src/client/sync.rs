@@ -74,7 +74,10 @@ impl RustyClient {
         let ics_string = IcsAdapter::to_ics(task);
 
         match client
-            .request(PutResource::new(&path).create(ics_string, "text/calendar"))
+            .request(
+                PutResource::new(&path)
+                    .create(ics_string, "text/calendar; charset=utf-8; component=VTODO"),
+            )
             .await
         {
             Ok(resp) => {
@@ -428,19 +431,20 @@ impl RustyClient {
 
                                     // 2. Create updated variants in the NEW location (conditionally)
                                     if (events_enabled || t.create_event.is_some())
-                                        && let Some(new_h) = &href {
-                                            let mut moved_task = t.clone();
-                                            moved_task.calendar_href = new_cal.clone();
-                                            moved_task.href = new_h.clone();
-                                            let _ = self
-                                                .sync_companion_event(
-                                                    &moved_task,
-                                                    events_enabled,
-                                                    delete_on_completion,
-                                                    false,
-                                                )
-                                                .await;
-                                        }
+                                        && let Some(new_h) = &href
+                                    {
+                                        let mut moved_task = t.clone();
+                                        moved_task.calendar_href = new_cal.clone();
+                                        moved_task.href = new_h.clone();
+                                        let _ = self
+                                            .sync_companion_event(
+                                                &moved_task,
+                                                events_enabled,
+                                                delete_on_completion,
+                                                false,
+                                            )
+                                            .await;
+                                    }
                                 }
                                 Action::Create(t) | Action::Update(t) => {
                                     self.sync_companion_event(

@@ -38,6 +38,7 @@ import androidx.core.content.FileProvider
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -226,6 +227,7 @@ fun SettingsScreen(
                         status = context.getString(R.string.error_could_not_read_file)
                     }
                 } catch (e: Exception) {
+                    if (e is kotlinx.coroutines.CancellationException) throw e
                     status = context.getString(R.string.import_error, e.message ?: "")
                 }
             }
@@ -271,6 +273,7 @@ fun SettingsScreen(
                 status = api.connect(url, user, pass, insecure)
                 reload()
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 status = context.getString(R.string.connection_failed, e.message ?: "")
             }
         }
@@ -775,6 +778,7 @@ fun SettingsScreen(
                                 api.updateLocalCalendar(cal.href, name, color)
                                 reload()
                             } catch (e: Exception) {
+                                if (e is kotlinx.coroutines.CancellationException) throw e
                                 status = "Error: ${e.message}"
                             }
                         }
@@ -785,6 +789,7 @@ fun SettingsScreen(
                                 api.deleteLocalCalendar(cal.href)
                                 reload()
                             } catch (e: Exception) {
+                                if (e is kotlinx.coroutines.CancellationException) throw e
                                 status = "Error: ${e.message}"
                             }
                         }
@@ -826,6 +831,7 @@ fun SettingsScreen(
                                 api.createLocalCalendar("New Calendar", null)
                                 reload()
                             } catch (e: Exception) {
+                                if (e is kotlinx.coroutines.CancellationException) throw e
                                 status = "Error: ${e.message}"
                             }
                         }
@@ -897,6 +903,7 @@ fun SettingsScreen(
                                     reload()
                                     if (status.startsWith("Error")) status = ""
                                 } catch (e: Exception) {
+                                    if (e is kotlinx.coroutines.CancellationException) throw e
                                     status = context.getString(R.string.error_adding_alias, e.message ?: "")
                                 }
                             }

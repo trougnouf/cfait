@@ -15,6 +15,7 @@ import com.trougnouf.cfait.MainActivity
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.receivers.NotificationActionReceiver
 import com.trougnouf.cfait.util.AlarmScheduler
+import kotlinx.coroutines.CancellationException
 
 class NotificationActionWorker(
     private val context: Context,
@@ -128,6 +129,7 @@ class NotificationActionWorker(
 
             Result.success()
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("CfaitNotificationAction", "Error", e)
             Result.retry()
         }

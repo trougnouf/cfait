@@ -8,6 +8,7 @@ import androidx.work.WorkerParameters
 import com.trougnouf.cfait.CfaitApplication
 import com.trougnouf.cfait.util.AlarmScheduler
 import com.trougnouf.cfait.util.NotificationHelper
+import kotlinx.coroutines.CancellationException
 
 /**
  * Periodic background worker that performs a full sync and refreshes alarms/UI.
@@ -43,6 +44,7 @@ class PeriodicSyncWorker(
 
             Result.success()
         } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
             Log.e("CfaitPeriodicSync", "Sync failed", e)
             Result.retry()
         }
