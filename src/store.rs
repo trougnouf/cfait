@@ -1239,6 +1239,7 @@ impl TaskStore {
                     uncat_active_count += 1;
                 }
             } else {
+                let mut seen_for_task = HashSet::new();
                 for cat in &t.categories {
                     let parts: Vec<&str> = cat.split(':').collect();
                     let mut current_hierarchy = String::with_capacity(cat.len());
@@ -1250,6 +1251,10 @@ impl TaskStore {
                         current_hierarchy.push_str(part);
 
                         let lower_key = current_hierarchy.to_lowercase();
+                        if !seen_for_task.insert(lower_key.clone()) {
+                            continue;
+                        }
+
                         cat_present_lower.insert(lower_key.clone());
                         cat_display_names
                             .entry(lower_key.clone())
