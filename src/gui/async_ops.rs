@@ -42,7 +42,7 @@ pub async fn connect_and_fetch_wrapper(
     let rt = get_runtime();
     rt.spawn(async {
         match tokio::time::timeout(
-            std::time::Duration::from_secs(45),
+            std::time::Duration::from_secs(60),
             RustyClient::connect_with_fallback(ctx, config, Some("GUI")),
         )
         .await

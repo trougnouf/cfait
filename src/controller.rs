@@ -124,6 +124,10 @@ impl TaskController {
                 }
                 Ok(warns)
             } else {
+                #[cfg(target_os = "android")]
+                log::error!("sync_journal failed in persist_change");
+                #[cfg(not(target_os = "android"))]
+                eprintln!("sync_journal failed in persist_change");
                 Ok(vec![
                     "Network error: Changes queued for next sync.".to_string(),
                 ])

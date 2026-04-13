@@ -9,6 +9,7 @@
  * hidden globals here.
  */
 
+use crate::client::core::strip_host;
 use crate::context::AppContext;
 use crate::model::Task;
 use crate::storage::LocalStorage;
@@ -147,16 +148,21 @@ impl Journal {
     pub fn apply_to_tasks(ctx: &dyn AppContext, tasks: &mut Vec<Task>, calendar_href: &str) {
         let journal = Self::load(ctx);
 
+        // Helper for robust matching of URLs and paths (ignoring trailing slashes and host differences)
+        let urls_match = |a: &str, b: &str| -> bool {
+            strip_host(a).trim_end_matches('/') == strip_host(b).trim_end_matches('/')
+        };
+
         let mut pending_uids = HashSet::new();
         for action in &journal.queue {
             match action {
                 Action::Create(t) | Action::Update(t) => {
-                    if t.calendar_href == calendar_href {
+                    if urls_match(&t.calendar_href, calendar_href) {
                         pending_uids.insert(t.uid.clone());
                     }
                 }
                 Action::Move(t, target) => {
-                    if target == calendar_href {
+                    if urls_match(target, calendar_href) {
                         pending_uids.insert(t.uid.clone());
                     }
                 }
@@ -179,24 +185,24 @@ impl Journal {
         for action in journal.queue {
             match action {
                 Action::Create(t) => {
-                    if t.calendar_href == calendar_href {
+                    if urls_match(&t.calendar_href, calendar_href) {
                         task_map.insert(t.uid.clone(), t);
                     }
                 }
                 Action::Update(t) => {
-                    if t.calendar_href == calendar_href {
+                    if urls_match(&t.calendar_href, calendar_href) {
                         task_map.insert(t.uid.clone(), t);
                     }
                 }
                 Action::Delete(t) => {
-                    if t.calendar_href == calendar_href {
+                    if urls_match(&t.calendar_href, calendar_href) {
                         task_map.remove(&t.uid);
                     }
                 }
                 Action::Move(t, new_href) => {
-                    if t.calendar_href == calendar_href {
+                    if urls_match(&t.calendar_href, calendar_href) {
                         task_map.remove(&t.uid);
-                    } else if new_href == calendar_href {
+                    } else if urls_match(&new_href, calendar_href) {
                         let mut moved_task = t;
                         moved_task.calendar_href = new_href;
                         task_map.insert(moved_task.uid.clone(), moved_task);

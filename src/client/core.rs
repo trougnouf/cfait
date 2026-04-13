@@ -582,17 +582,15 @@ impl RustyClient {
             let event_filename = format!("{}{}.ics", base_uid, suffix);
             let event_path = format!("{}{}", strip_host(&cal_path), event_filename);
 
-            let create_req = PutResource::new(&event_path).create(
-                ics_body.clone(),
-                "text/calendar; charset=utf-8; component=VEVENT",
-            );
+            let create_req = PutResource::new(&event_path)
+                .create(ics_body.clone(), "text/calendar; charset=utf-8");
             match client.request(create_req).await {
                 Ok(_) => {}
                 Err(WebDavError::BadStatusCode(http::StatusCode::PRECONDITION_FAILED))
                 | Err(WebDavError::PreconditionFailed(_)) => {
                     let update_req = PutResource::new(&event_path).update(
                         ics_body.clone(),
-                        "text/calendar; charset=utf-8; component=VEVENT",
+                        "text/calendar; charset=utf-8",
                         "",
                     );
                     if client.request(update_req).await.is_err() {

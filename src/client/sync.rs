@@ -74,10 +74,7 @@ impl RustyClient {
         let ics_string = IcsAdapter::to_ics(task);
 
         match client
-            .request(
-                PutResource::new(&path)
-                    .create(ics_string, "text/calendar; charset=utf-8; component=VTODO"),
-            )
+            .request(PutResource::new(&path).create(ics_string, "text/calendar; charset=utf-8"))
             .await
         {
             Ok(resp) => {
@@ -148,7 +145,7 @@ impl RustyClient {
         match client
             .request(PutResource::new(&path).update(
                 ics_string,
-                "text/calendar; charset=utf-8; component=VTODO",
+                "text/calendar; charset=utf-8",
                 etag_val,
             ))
             .await
@@ -655,6 +652,11 @@ impl RustyClient {
                     }
                 }
                 Err(msg) => {
+                    #[cfg(target_os = "android")]
+                    log::error!("sync_journal step failed: {}", msg);
+                    #[cfg(not(target_os = "android"))]
+                    eprintln!("sync_journal step failed: {}", msg);
+
                     // Check for fatal errors that might have slipped through without a test hook
                     // (Though the new logic catches them inside handle_*)
                     // If we are here, it's a real hard network error or retryable failure.
