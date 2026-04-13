@@ -1,8 +1,12 @@
 package com.trougnouf.cfait.ui
 
+import android.Manifest
 import android.content.ClipData
+import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -60,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.*
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.launch
 
 data class TabInfo(
@@ -432,6 +437,84 @@ fun HomeScreen(
                     activeOpCount--
                 }
             }
+        }
+    }
+
+    // --- Geolocation State ---
+    var pendingGeoTask by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions.entries.any { it.value }
+        scope.launch {
+            val text = pendingGeoTask ?: return@launch
+            pendingGeoTask = null
+
+            if (granted) {
+                val loc = fetchCurrentLocation(context)
+                if (loc != null) {
+                    addTask(
+                        text.replace(
+                            Regex("geo:here", RegexOption.IGNORE_CASE),
+                            "geo:${loc.latitude},${loc.longitude}"
+                        )
+                    )
+                } else {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.could_not_determine_location),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    addTask(text)
+                }
+            } else {
+                addTask(text)
+            }
+        }
+    }
+
+    fun handleAddTaskWithGeo(text: String) {
+        if (text.contains("geo:here", ignoreCase = true)) {
+            val hasFine = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+            val hasCoarse = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (hasFine || hasCoarse) {
+                scope.launch {
+                    val loc = fetchCurrentLocation(context)
+                    if (loc != null) {
+                        addTask(
+                            text.replace(
+                                Regex("geo:here", RegexOption.IGNORE_CASE),
+                                "geo:${loc.latitude},${loc.longitude}"
+                            )
+                        )
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.could_not_determine_location),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        addTask(text)
+                    }
+                }
+            } else {
+                pendingGeoTask = text
+                locationPermissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    )
+                )
+            }
+        } else {
+            addTask(text)
         }
     }
 
@@ -1558,7 +1641,7 @@ fun HomeScreen(
                                     visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
                                     keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
                                     keyboardActions = KeyboardActions(onSend = {
-                                        if (newTaskText.isNotBlank()) addTask(
+                                        if (newTaskText.isNotBlank()) handleAddTaskWithGeo(
                                             newTaskText
                                         )
                                     }),

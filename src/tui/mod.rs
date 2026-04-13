@@ -66,7 +66,9 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
         println!("    #alias:=#tags     Define tag alias inline (retroactive)");
         println!("    @@alias:=#tags    Define location alias (@@aldi:=#groceries,#shopping)");
         println!("    url:              Attach URL");
-        println!("    geo:              Add coordinates (e.g. geo:50.13° N, 4.50° E)");
+        println!(
+            "    geo:              Add coordinates (e.g. geo:50.13° N, 4.50° E. Android: geo:here)"
+        );
         println!("    desc:             Add description");
         println!("    rem:10m           Relative reminder (before due date, adjusts)");
         println!("    rem:in 5m         Relative from now (becomes absolute)");

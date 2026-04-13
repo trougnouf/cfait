@@ -2,6 +2,12 @@
 // File: ./android/app/src/main/java/com/trougnouf/cfait/ui/Shared.kt
 package com.trougnouf.cfait.ui
 
+import android.content.Context
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
+import android.os.Bundle
+import android.os.Looper
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,12 +25,73 @@ import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileSyntaxType
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
 import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.coroutines.resume
 
 val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
+
+suspend fun fetchCurrentLocation(context: Context): Location? {
+    val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    var bestLocation: Location? = null
+    try {
+        for (provider in locationManager.getProviders(true)) {
+            val l = locationManager.getLastKnownLocation(provider) ?: continue
+            if (bestLocation == null || l.accuracy < bestLocation.accuracy) {
+                bestLocation = l
+            }
+        }
+    } catch (e: SecurityException) {
+        // Ignore permission exceptions from disabled providers
+    }
+
+    // Return the cached location if it is less than 10 minutes old
+    if (bestLocation != null && (System.currentTimeMillis() - bestLocation.time) < 10 * 60 * 1000) {
+        return bestLocation
+    }
+
+    // Otherwise, attempt to fetch a fresh coordinate with a timeout
+    return withTimeoutOrNull(5000) {
+        suspendCancellableCoroutine<Location?> { cont ->
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    locationManager.getCurrentLocation(
+                        LocationManager.NETWORK_PROVIDER,
+                        null,
+                        context.mainExecutor
+                    ) { loc ->
+                        if (cont.isActive) cont.resume(loc)
+                    }
+                } else {
+                    val listener = object : LocationListener {
+                        override fun onLocationChanged(loc: Location) {
+                            if (cont.isActive) {
+                                locationManager.removeUpdates(this)
+                                cont.resume(loc)
+                            }
+                        }
+
+                        override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) {}
+                        override fun onProviderEnabled(provider: String) {}
+                        override fun onProviderDisabled(provider: String) {}
+                    }
+                    locationManager.requestSingleUpdate(
+                        LocationManager.NETWORK_PROVIDER,
+                        listener,
+                        Looper.getMainLooper()
+                    )
+                    cont.invokeOnCancellation { locationManager.removeUpdates(listener) }
+                }
+            } catch (e: Exception) {
+                if (cont.isActive) cont.resume(bestLocation)
+            }
+        }
+    } ?: bestLocation
+}
 
 object NfIcons {
     fun get(code: Int): String = String(Character.toChars(code))

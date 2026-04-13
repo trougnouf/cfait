@@ -3,6 +3,12 @@
 package com.trougnouf.cfait.ui
 
 import androidx.activity.compose.BackHandler
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
@@ -24,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
@@ -50,6 +57,42 @@ fun TaskDetailScreen(
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
 
+    // --- Geolocation State ---
+    var pendingGeoInput by remember { mutableStateOf<String?>(null) }
+    var pendingGeoDesc by remember { mutableStateOf<String?>(null) }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions.entries.any { it.value }
+        scope.launch {
+            val input = pendingGeoInput ?: return@launch
+            val desc = pendingGeoDesc ?: ""
+            pendingGeoInput = null
+            pendingGeoDesc = null
+
+            if (granted) {
+                val loc = fetchCurrentLocation(context)
+                if (loc != null) {
+                    val resolved = input.replace(
+                        Regex("geo:here", RegexOption.IGNORE_CASE),
+                        "geo:${loc.latitude},${loc.longitude}"
+                    )
+                    onSave(resolved, desc)
+                } else {
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.could_not_determine_location),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                    onSave(input, desc)
+                }
+            } else {
+                onSave(input, desc)
+            }
+        }
+    }
+
     val enabledCalendarCount =
         remember(calendars) {
             calendars.count { !it.isDisabled }
@@ -71,6 +114,51 @@ fun TaskDetailScreen(
 
     BackHandler {
         onBack()
+    }
+
+    fun handleSaveWithGeo(input: String, desc: String) {
+        if (input.contains("geo:here", ignoreCase = true)) {
+            val hasFine = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+            val hasCoarse = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (hasFine || hasCoarse) {
+                scope.launch {
+                    val loc = fetchCurrentLocation(context)
+                    if (loc != null) {
+                        onSave(
+                            input.replace(
+                                Regex("geo:here", RegexOption.IGNORE_CASE),
+                                "geo:${loc.latitude},${loc.longitude}"
+                            ), desc
+                        )
+                    } else {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.could_not_determine_location),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        onSave(input, desc)
+                    }
+                }
+            } else {
+                pendingGeoInput = input
+                pendingGeoDesc = desc
+                locationPermissionLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    )
+                )
+            }
+        } else {
+            onSave(input, desc)
+        }
     }
 
     if (task == null) {
@@ -96,7 +184,11 @@ fun TaskDetailScreen(
                                     showMoveDialog = false
                                     onBack()
                                 } catch (e: Exception) {
-                                    android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Error: ${e.message}",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
                                 }
                             }
                         }, modifier = Modifier.fillMaxWidth()) { Text(cal.name) }
@@ -137,7 +229,7 @@ fun TaskDetailScreen(
                             // Optimistic Save:
                             // We delegate the actual async work to the parent (MainActivity)
                             // so we can leave this screen immediately without killing the save process.
-                            onSave(smartInput, description)
+                            handleSaveWithGeo(smartInput, description)
                         },
                     ) { Text(stringResource(R.string.save)) }
                 },
@@ -162,7 +254,7 @@ fun TaskDetailScreen(
                 maxLines = 5,
                 keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = {
-                    onSave(smartInput, description)
+                    handleSaveWithGeo(smartInput, description)
                 }),
             )
             Text(
@@ -195,7 +287,11 @@ fun TaskDetailScreen(
                                         api.removeDependency(task!!.uid, blockerUid)
                                         reload()
                                     } catch (e: Exception) {
-                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Error: ${e.message}",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 }
                             },
@@ -247,7 +343,11 @@ fun TaskDetailScreen(
                                         api.removeDependency(blockedUid, task!!.uid)
                                         reload()
                                     } catch (e: Exception) {
-                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Error: ${e.message}",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 }
                             },
@@ -298,7 +398,11 @@ fun TaskDetailScreen(
                                         api.removeRelatedTo(task!!.uid, relatedUid)
                                         reload()
                                     } catch (e: Exception) {
-                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Error: ${e.message}",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 }
                             },
@@ -510,7 +614,11 @@ fun TaskDetailScreen(
                                         api.removeRelatedTo(relatedTask.uid, task!!.uid)
                                         reload()
                                     } catch (e: Exception) {
-                                        android.widget.Toast.makeText(context, "Error: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Error: ${e.message}",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 }
                             },
