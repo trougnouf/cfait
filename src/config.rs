@@ -88,16 +88,30 @@ fn default_pinned_actions() -> Vec<TaskAction> {
     ]
 }
 
+pub fn set_locale_with_fallback(locale: &str) {
+    let available = rust_i18n::available_locales!();
+    if available.contains(&locale) {
+        rust_i18n::set_locale(locale);
+    } else if let Some(primary) = locale.split(&['_', '-'][..]).next() {
+        if available.contains(&primary) {
+            rust_i18n::set_locale(primary);
+        } else {
+            rust_i18n::set_locale(locale);
+        }
+    } else {
+        rust_i18n::set_locale(locale);
+    }
+}
+
 pub fn init_locale(ctx: &dyn crate::context::AppContext) {
     // Initialize locale using the persistent config if present, otherwise fall back
     // to the system locale (primary language subtag). Android will pass its locale
     // at startup via UniFFI so this will pick that up if it's saved in the Config.
     let config = Config::load(ctx).unwrap_or_default();
     if let Some(lang) = config.language {
-        rust_i18n::set_locale(&lang);
+        set_locale_with_fallback(&lang);
     } else if let Some(sys_lang) = sys_locale::get_locale() {
-        // sys_lang is typically like "en-US" or "fr-FR"; use primary subtag.
-        rust_i18n::set_locale(sys_lang.split('-').next().unwrap_or("en"));
+        set_locale_with_fallback(&sys_lang);
     }
 }
 

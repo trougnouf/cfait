@@ -511,7 +511,7 @@ impl CfaitMobile {
 
     // Expose locale switching to Kotlin
     pub fn set_locale(&self, locale: String) {
-        rust_i18n::set_locale(&locale);
+        crate::config::set_locale_with_fallback(&locale);
     }
 
     pub fn has_unsynced_changes(&self) -> bool {

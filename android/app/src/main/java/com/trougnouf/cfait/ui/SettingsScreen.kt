@@ -544,7 +544,9 @@ fun SettingsScreen(
                                             languageExpanded = false
 
                                             // Update Rust backend
-                                            api.setLocale(code ?: java.util.Locale.getDefault().language)
+                                            val sysLocale =
+                                                java.util.Locale.getDefault().toLanguageTag().replace("-", "_")
+                                            api.setLocale(code ?: sysLocale)
 
                                             // Update Android UI (Native API 33+ or AppCompat API < 33)
                                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
