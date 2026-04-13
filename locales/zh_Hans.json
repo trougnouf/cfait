@@ -208,7 +208,7 @@
     "help_search_priority": "按优先级筛选",
     "help_syntax": "语法",
     "help_syntax_short": "使用 !1、@日期、#标签、~时长",
-    "help_timeline_due_date": "到期日期。最后期限",
+    "help_timeline_due_date": "到期日期。支持格式：YYYY-MM-DD（年-月-日）、YYYY-MM（年-月）或 YYYY（年）。",
     "help_timeline_keywords": "支持相对日期",
     "help_timeline_next_period": "下周/下个月/下一年",
     "help_timeline_offsets": "从今天起添加时间",
