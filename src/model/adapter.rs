@@ -167,10 +167,15 @@ impl IcsAdapter {
         }
 
         if let Some(mins) = task.estimated_duration {
-            if emit_dtstart.is_some() && emit_due.is_none() {
-                todo.add_property("DURATION", format!("PT{}M", mins));
-            } else {
+            let is_all_day_start = emit_dtstart
+                .as_ref()
+                .map(|dt| matches!(dt, DateType::AllDay(_)))
+                .unwrap_or(false);
+
+            if emit_due.is_some() || is_all_day_start {
                 todo.add_property("X-ESTIMATED-DURATION", format!("PT{}M", mins));
+            } else {
+                todo.add_property("DURATION", format!("PT{}M", mins));
             }
 
             if let Some(max) = task.estimated_duration_max {
