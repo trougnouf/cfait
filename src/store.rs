@@ -1167,20 +1167,20 @@ impl TaskStore {
                 for t in &visible_refs {
                     if let Some(p) = &t.parent_uid {
                         children_map
-                            .entry(p.clone())
+                            .entry((p.clone(), t.calendar_href.clone()))
                             .or_insert_with(Vec::new)
-                            .push(t.uid.clone());
+                            .push((t.uid.clone(), t.calendar_href.clone()));
                     }
                 }
 
-                let mut matched_uids = HashSet::new();
+                let mut matched_keys = HashSet::new();
                 let mut queue = Vec::new();
 
                 for t in &visible_refs {
                     if t.matches_search_term(options.search_term)
-                        && matched_uids.insert(t.uid.clone())
+                        && matched_keys.insert((t.uid.clone(), t.calendar_href.clone()))
                     {
-                        queue.push(t.uid.clone());
+                        queue.push((t.uid.clone(), t.calendar_href.clone()));
                     }
                 }
 
@@ -1190,7 +1190,7 @@ impl TaskStore {
                     idx += 1;
                     if let Some(children) = children_map.get(&curr) {
                         for child in children {
-                            if matched_uids.insert(child.clone()) {
+                            if matched_keys.insert(child.clone()) {
                                 queue.push(child.clone());
                             }
                         }
@@ -1199,7 +1199,7 @@ impl TaskStore {
 
                 visible_refs
                     .into_iter()
-                    .filter(|t| matched_uids.contains(&t.uid))
+                    .filter(|t| matched_keys.contains(&(t.uid.clone(), t.calendar_href.clone())))
                     .collect()
             }
         };

@@ -405,9 +405,9 @@ pub fn compare_sortkeys(a: &SortKey, b: &SortKey, default_prio: u8) -> Ordering 
 // Bundles the children map, result vector and other parameters so recursive helpers
 // have a concise signature.
 struct HierarchyContext<'a> {
-    children_map: &'a HashMap<String, Vec<Task>>,
+    children_map: &'a HashMap<(String, String), Vec<Task>>,
     result: &'a mut Vec<Task>,
-    visited_uids: &'a mut HashSet<String>,
+    visited_keys: &'a mut HashSet<(String, String)>,
     expanded_groups: &'a HashSet<String>,
     max_done_subtasks: usize,
 }
@@ -730,8 +730,11 @@ impl Task {
         max_done_roots: usize,
         max_done_subtasks: usize,
     ) -> Vec<Task> {
-        let present_uids: HashSet<String> = tasks.iter().map(|t| t.uid.clone()).collect();
-        let mut children_map: HashMap<String, Vec<Task>> = HashMap::new();
+        let present_keys: HashSet<(String, String)> = tasks
+            .iter()
+            .map(|t| (t.uid.clone(), t.calendar_href.clone()))
+            .collect();
+        let mut children_map: HashMap<(String, String), Vec<Task>> = HashMap::new();
         let mut roots: Vec<Task> = Vec::new();
 
         // Sort by the canonical comparator before building hierarchy
@@ -739,7 +742,7 @@ impl Task {
 
         for mut task in tasks {
             let is_orphan = match &task.parent_uid {
-                Some(p_uid) => !present_uids.contains(p_uid),
+                Some(p_uid) => !present_keys.contains(&(p_uid.clone(), task.calendar_href.clone())),
                 None => true,
             };
 
@@ -750,12 +753,15 @@ impl Task {
                 roots.push(task);
             } else {
                 let p_uid = task.parent_uid.as_ref().unwrap().clone();
-                children_map.entry(p_uid).or_default().push(task);
+                children_map
+                    .entry((p_uid, task.calendar_href.clone()))
+                    .or_default()
+                    .push(task);
             }
         }
 
         let mut result = Vec::new();
-        let mut visited_uids = HashSet::new();
+        let mut visited_keys = HashSet::new();
 
         fn process_group(
             raw_group: Vec<Task>,
@@ -825,7 +831,7 @@ impl Task {
         let mut context = HierarchyContext {
             children_map: &children_map,
             result: &mut result,
-            visited_uids: &mut visited_uids,
+            visited_keys: &mut visited_keys,
             expanded_groups,
             max_done_subtasks,
         };
@@ -839,16 +845,17 @@ impl Task {
     /// respects expansion state for child groups and injects virtual expand/collapse
     /// placeholders when needed.
     fn append_task_and_children(task: &Task, context: &mut HierarchyContext, depth: usize) {
-        if context.visited_uids.contains(&task.uid) {
+        let visit_key = (task.uid.clone(), task.calendar_href.clone());
+        if context.visited_keys.contains(&visit_key) {
             return;
         }
-        context.visited_uids.insert(task.uid.clone());
+        context.visited_keys.insert(visit_key.clone());
 
         let mut t = task.clone();
         t.depth = depth;
         context.result.push(t);
 
-        if let Some(children) = context.children_map.get(&task.uid) {
+        if let Some(children) = context.children_map.get(&visit_key) {
             let (active, done): (Vec<Task>, Vec<Task>) =
                 children.iter().cloned().partition(|t| !t.status.is_done());
 
