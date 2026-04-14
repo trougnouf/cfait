@@ -124,6 +124,28 @@ pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<Strin
     (cleaned_words.join(" "), new_aliases)
 }
 
+pub fn is_valid_geo(val: &str) -> bool {
+    let stripped = strip_quotes(val);
+    let s = stripped.trim();
+    if s.eq_ignore_ascii_case("here") {
+        return true;
+    }
+
+    let parts: Vec<&str> = s.split(',').collect();
+    if parts.len() != 2 {
+        return false;
+    }
+
+    let valid_part = |p: &str| -> bool {
+        let p = p.trim();
+        !p.is_empty()
+            && p.chars()
+                .all(|c| c.is_ascii_digit() || " .-°NSEWnsew".contains(c))
+    };
+
+    valid_part(parts[0]) && valid_part(parts[1])
+}
+
 pub fn validate_alias_integrity(
     new_key: &str,
     new_values: &[String],
@@ -578,8 +600,8 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
             } else if word == "+cal" || word == "-cal" {
                 matched_kind = Some(SyntaxType::Calendar);
             } else if word_lower.starts_with("geo:") {
-                matched_kind = Some(SyntaxType::Geo);
                 let mut temp_consumed = 1;
+                let mut raw_val = word[4..].to_string();
                 let is_geo_word = |w: &str| -> bool {
                     let upper = w.to_uppercase();
                     if matches!(
@@ -588,31 +610,28 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
                     ) {
                         return true;
                     }
-                    if !w.contains(|c: char| c.is_numeric()) {
+                    if !w.chars().any(|c| c.is_ascii_digit()) {
                         return false;
                     }
-                    w.chars().all(|c| {
-                        c.is_numeric()
-                            || c == '.'
-                            || c == ','
-                            || c == '-'
-                            || c == '°'
-                            || "NSEW".contains(c.to_ascii_uppercase())
-                    })
+                    w.chars()
+                        .all(|c| c.is_ascii_digit() || " .,-°NSEWnsew".contains(c))
                 };
+
                 while i + temp_consumed < words.len() {
                     let next_word = &words[i + temp_consumed].2;
                     if is_geo_word(next_word) {
+                        raw_val.push(' ');
+                        raw_val.push_str(next_word);
                         temp_consumed += 1;
-                        let upper = next_word.to_uppercase();
-                        if upper.ends_with('E') || upper.ends_with('W') {
-                            break;
-                        }
                     } else {
                         break;
                     }
                 }
-                words_consumed = temp_consumed;
+
+                if is_valid_geo(&raw_val) {
+                    matched_kind = Some(SyntaxType::Geo);
+                    words_consumed = temp_consumed;
+                }
             } else if word_lower.starts_with("desc:") {
                 matched_kind = Some(SyntaxType::Description);
             } else if word.starts_with('!') && word.len() > 1 && word[1..].parse::<u8>().is_ok() {
@@ -1467,6 +1486,9 @@ fn finalize_date_token(
 }
 
 pub fn normalize_geo(val: String) -> String {
+    if val.eq_ignore_ascii_case("here") {
+        return val;
+    }
     if !val.contains('°')
         && !val.contains('N')
         && !val.contains('S')
@@ -1963,6 +1985,7 @@ pub fn apply_smart_input(
             task.create_event = Some(false);
         } else if token_lower.starts_with("geo:") {
             let mut raw_val = token[4..].to_string();
+            let mut temp_consumed = 1;
             let is_geo_word = |w: &str| -> bool {
                 let upper = w.to_uppercase();
                 if matches!(
@@ -1971,33 +1994,30 @@ pub fn apply_smart_input(
                 ) {
                     return true;
                 }
-                if !w.contains(|c: char| c.is_numeric()) {
+                if !w.chars().any(|c| c.is_ascii_digit()) {
                     return false;
                 }
-                w.chars().all(|c| {
-                    c.is_numeric()
-                        || c == '.'
-                        || c == ','
-                        || c == '-'
-                        || c == '°'
-                        || "NSEW".contains(c.to_ascii_uppercase())
-                })
+                w.chars()
+                    .all(|c| c.is_ascii_digit() || " .,-°NSEWnsew".contains(c))
             };
-            while i + consumed < stream.len() {
-                let next_token = &stream[i + consumed];
+
+            while i + temp_consumed < stream.len() {
+                let next_token = &stream[i + temp_consumed];
                 if is_geo_word(next_token) {
                     raw_val.push(' ');
                     raw_val.push_str(next_token);
-                    consumed += 1;
-                    let upper = next_token.to_uppercase();
-                    if upper.ends_with('E') || upper.ends_with('W') {
-                        break;
-                    }
+                    temp_consumed += 1;
                 } else {
                     break;
                 }
             }
-            task.geo = Some(normalize_geo(strip_quotes(&raw_val)));
+
+            if is_valid_geo(&raw_val) {
+                task.geo = Some(normalize_geo(strip_quotes(&raw_val)));
+                consumed = temp_consumed;
+            } else {
+                summary_words.push(unescape(token));
+            }
         } else if token_lower.starts_with("desc:") {
             let desc_val = strip_quotes(&token[5..]);
             if task.description.is_empty() {
