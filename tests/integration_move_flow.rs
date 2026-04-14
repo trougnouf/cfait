@@ -55,8 +55,8 @@ impl FakeClient {
 
 #[test]
 fn fake_client_move_with_mutated_task_creates_duplicate() {
-    let old_href = "cal://old";
-    let new_href = "cal://new";
+    let old_href = "http://example.com/cal/old/";
+    let new_href = "http://example.com/cal/new/";
     let mut original = Task::new("Test Task", &HashMap::new(), None);
     original.uid = "task-1".to_string();
     original.calendar_href = old_href.to_string();
@@ -79,8 +79,8 @@ fn fake_client_move_with_mutated_task_creates_duplicate() {
 
 #[test]
 fn fake_client_move_with_original_task_moves_cleanly() {
-    let old_href = "cal://old";
-    let new_href = "cal://new";
+    let old_href = "http://example.com/cal/old/";
+    let new_href = "http://example.com/cal/new/";
     let mut original = Task::new("Test Task", &HashMap::new(), None);
     original.uid = "task-2".to_string();
     original.calendar_href = old_href.to_string();
@@ -101,8 +101,8 @@ fn fake_client_move_with_original_task_moves_cleanly() {
 #[test]
 fn journal_apply_move_removes_from_source_and_adds_to_target() {
     let ctx = TestContext::new();
-    let old_href = "cal://old_journal";
-    let new_href = "cal://new_journal";
+    let old_href = "http://example.com/cal/old_journal/";
+    let new_href = "http://example.com/cal/new_journal/";
 
     let mut task = Task::new("Journal Move Task", &HashMap::new(), None);
     task.uid = "journal-task-1".to_string();

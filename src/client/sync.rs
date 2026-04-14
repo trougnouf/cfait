@@ -363,9 +363,9 @@ impl RustyClient {
                     || e.contains("403")
                     || e.contains("InvalidInput")
                     || e.contains("invalid uri character")
+                    || e.contains("400")
+                    || e.contains("415")
                 {
-                    Ok(StepResult::new(StepOutcome::RecoveryNeeded(e)))
-                } else if e.contains("400") || e.contains("415") {
                     Ok(StepResult::new(StepOutcome::RecoveryNeeded(e)))
                 } else {
                     Err(e)

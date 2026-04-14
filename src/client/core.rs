@@ -97,13 +97,20 @@ pub use test_hooks::{
 // -----------------------------
 
 pub(crate) fn strip_host(href: &str) -> String {
+    if href.starts_with("local://") {
+        return href.to_string();
+    }
     if let Ok(uri) = href.parse::<Uri>()
         && (uri.scheme().is_some() || uri.authority().is_some())
     {
+        let path = uri.path();
+        if path.is_empty() {
+            return href.to_string();
+        }
         return uri
             .path_and_query()
             .map(|pq| pq.as_str().to_string())
-            .unwrap_or_else(|| uri.path().to_string());
+            .unwrap_or_else(|| path.to_string());
     }
     href.to_string()
 }
