@@ -316,20 +316,6 @@ impl RustyClient {
             }
         };
 
-        // If discovery produced a corrected root URL, persist it asynchronously.
-        if let Some(corrected_url) = corrected_url_opt {
-            config_for_saving.url = corrected_url;
-            let ctx_clone = client.ctx.clone();
-            tokio::spawn(async move {
-                if let Err(e) = config_for_saving.save(ctx_clone.as_ref()) {
-                    #[cfg(not(target_os = "android"))]
-                    eprintln!("[Warning] Failed to auto-save corrected URL: {}", e);
-                    #[cfg(target_os = "android")]
-                    log::warn!("Failed to auto-save corrected URL: {}", e);
-                }
-            });
-        }
-
         // Determine active/default calendar href (if configured)
         let mut active_href: Option<String> = None;
         if let Some(def_cal) = &config.default_calendar
@@ -340,11 +326,33 @@ impl RustyClient {
             active_href = Some(found.href.clone());
         }
 
+        let mut needs_config_save = false;
+
         if active_href.is_none()
             && warning.is_none()
             && let Ok(href) = client.discover_calendar().await
         {
-            active_href = Some(href);
+            active_href = Some(href.clone());
+            config_for_saving.default_calendar = Some(href);
+            needs_config_save = true;
+        }
+
+        // If discovery produced a corrected root URL, persist it asynchronously.
+        if let Some(corrected_url) = corrected_url_opt {
+            config_for_saving.url = corrected_url;
+            needs_config_save = true;
+        }
+
+        if needs_config_save {
+            let ctx_clone = client.ctx.clone();
+            tokio::spawn(async move {
+                if let Err(e) = config_for_saving.save(ctx_clone.as_ref()) {
+                    #[cfg(not(target_os = "android"))]
+                    eprintln!("[Warning] Failed to auto-save config corrections: {}", e);
+                    #[cfg(target_os = "android")]
+                    log::warn!("Failed to auto-save config corrections: {}", e);
+                }
+            });
         }
 
         // If no warning, fetch tasks for the active calendar (best-effort)
@@ -776,24 +784,32 @@ impl RustyClient {
         if let Some(client) = &self.client {
             let path_href = strip_host(calendar_href);
 
-            // Build a pending-deletions set from the in-disk journal (if requested)
-            let pending_deletions = if apply_journal {
+            // Build pending sets from the in-disk journal (if requested)
+            let (pending_deletions, pending_active) = if apply_journal {
                 let journal = Journal::load(self.ctx.as_ref());
                 let mut dels = HashSet::new();
+                let mut active = HashSet::new();
                 for action in journal.queue {
                     match action {
-                        Action::Delete(t) if t.calendar_href == calendar_href => {
-                            dels.insert(t.uid);
+                        Action::Delete(t) => {
+                            if t.calendar_href == calendar_href {
+                                dels.insert(t.uid);
+                            }
                         }
-                        Action::Move(t, _) if t.calendar_href == calendar_href => {
-                            dels.insert(t.uid);
+                        Action::Move(t, _) => {
+                            if t.calendar_href == calendar_href {
+                                dels.insert(t.uid.clone());
+                            }
+                            active.insert(t.uid);
                         }
-                        _ => {}
+                        Action::Create(t) | Action::Update(t) => {
+                            active.insert(t.uid);
+                        }
                     }
                 }
-                dels
+                (dels, active)
             } else {
-                HashSet::new()
+                (HashSet::new(), HashSet::new())
             };
 
             // Fetch remote sync token
@@ -889,6 +905,9 @@ impl RustyClient {
             for (_href, task) in cache_map {
                 let is_unsynced = task.etag.is_empty() || task.href.is_empty();
                 if is_unsynced {
+                    if apply_journal && !pending_active.contains(&task.uid) {
+                        continue;
+                    }
                     final_tasks.push(task);
                 }
             }
@@ -996,20 +1015,59 @@ impl RustyClient {
         tasks: Vec<Task>,
         target_calendar_href: &str,
     ) -> Result<usize, String> {
-        // Durable enqueue all Move actions into the journal, then attempt a sync.
-        // This keeps the client layer simple (no direct MOVE logic here) and
-        // leverages the sync engine to perform the network operations.
+        let mut count = 0;
         for task in tasks.into_iter() {
-            Journal::push(
-                self.ctx.as_ref(),
-                Action::Move(task, target_calendar_href.to_string()),
-            )
-            .map_err(|e| e.to_string())?;
+            let is_source_local = task.calendar_href.starts_with("local://");
+            let is_target_local = target_calendar_href.starts_with("local://");
+
+            if is_source_local && !is_target_local {
+                let _ =
+                    LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
+                        all.retain(|t| t.uid != task.uid);
+                    });
+                let mut new_task = task.clone();
+                new_task.calendar_href = target_calendar_href.to_string();
+                new_task.href = String::new();
+                new_task.etag = String::new();
+                Journal::push(self.ctx.as_ref(), Action::Create(new_task))
+                    .map_err(|e| e.to_string())?;
+                count += 1;
+            } else if !is_source_local && is_target_local {
+                Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()))
+                    .map_err(|e| e.to_string())?;
+                let mut new_task = task.clone();
+                new_task.calendar_href = target_calendar_href.to_string();
+                new_task.href = String::new();
+                new_task.etag = String::new();
+                let _ =
+                    LocalStorage::modify_for_href(self.ctx.as_ref(), target_calendar_href, |all| {
+                        all.push(new_task);
+                    });
+                count += 1;
+            } else if is_source_local && is_target_local {
+                let _ =
+                    LocalStorage::modify_for_href(self.ctx.as_ref(), &task.calendar_href, |all| {
+                        all.retain(|t| t.uid != task.uid);
+                    });
+                let mut new_task = task.clone();
+                new_task.calendar_href = target_calendar_href.to_string();
+                let _ =
+                    LocalStorage::modify_for_href(self.ctx.as_ref(), target_calendar_href, |all| {
+                        all.push(new_task);
+                    });
+                count += 1;
+            } else {
+                Journal::push(
+                    self.ctx.as_ref(),
+                    Action::Move(task, target_calendar_href.to_string()),
+                )
+                .map_err(|e| e.to_string())?;
+                count += 1;
+            }
         }
 
-        // Attempt to sync the journal now and return the number of tasks that were synced.
         match self.sync_journal().await {
-            Ok((_warns, synced)) => Ok(synced.len()),
+            Ok((_warns, _synced)) => Ok(count),
             Err(e) => Err(e),
         }
     }

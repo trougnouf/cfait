@@ -82,7 +82,32 @@ impl IcsAdapter {
             todo.percent_complete(pc);
         }
 
-        if let Some(dt) = &task.dtstart {
+        // --- STRICT RFC 5545 COMPLIANCE FOR DATES ---
+        let mut emit_dtstart = task.dtstart.clone();
+        let mut emit_due = task.due.clone();
+
+        if let (Some(start), Some(due)) = (&emit_dtstart, &emit_due) {
+            let start_is_time = matches!(start, DateType::Specific(_));
+            let due_is_time = matches!(due, DateType::Specific(_));
+
+            if start_is_time != due_is_time {
+                let midnight = chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+                if !start_is_time {
+                    emit_dtstart =
+                        Some(DateType::Specific(start.to_utc_with_default_time(midnight)));
+                }
+                if !due_is_time {
+                    emit_due = Some(DateType::Specific(due.to_utc_with_default_time(midnight)));
+                }
+            }
+        }
+
+        let dtstart_is_time = emit_dtstart
+            .as_ref()
+            .map(|d| matches!(d, DateType::Specific(_)))
+            .unwrap_or(false);
+
+        if let Some(dt) = &emit_dtstart {
             match dt {
                 DateType::AllDay(d) => {
                     let mut p = icalendar::Property::new("DTSTART", d.format("%Y%m%d").to_string());
@@ -109,7 +134,7 @@ impl IcsAdapter {
             }
         }
 
-        if let Some(dt) = &task.due {
+        if let Some(dt) = &emit_due {
             match dt {
                 DateType::AllDay(d) => {
                     let mut p = icalendar::Property::new("DUE", d.format("%Y%m%d").to_string());
@@ -142,16 +167,10 @@ impl IcsAdapter {
         }
 
         if let Some(mins) = task.estimated_duration {
-            let is_all_day_start = task
-                .dtstart
-                .as_ref()
-                .map(|dt| matches!(dt, DateType::AllDay(_)))
-                .unwrap_or(false);
-
-            if task.due.is_some() || is_all_day_start {
-                todo.add_property("X-ESTIMATED-DURATION", format!("PT{}M", mins));
-            } else {
+            if emit_dtstart.is_some() && emit_due.is_none() {
                 todo.add_property("DURATION", format!("PT{}M", mins));
+            } else {
+                todo.add_property("X-ESTIMATED-DURATION", format!("PT{}M", mins));
             }
 
             if let Some(max) = task.estimated_duration_max {
@@ -169,29 +188,49 @@ impl IcsAdapter {
         }
 
         for ex in &task.exdates {
-            match ex {
-                DateType::AllDay(d) => {
-                    let mut p = icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
-                    p.add_parameter("VALUE", "DATE");
-                    todo.append_multi_property(p);
-                }
-                DateType::Specific(dt) => {
-                    todo.append_multi_property(icalendar::Property::new(
-                        "EXDATE",
-                        dt.format("%Y%m%dT%H%M%SZ").to_string(),
-                    ));
-                }
-                DateType::Month(y, m) => {
-                    let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                    let mut p = icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
-                    p.add_parameter("VALUE", "DATE");
-                    todo.append_multi_property(p);
-                }
-                DateType::Year(y) => {
-                    let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                    let mut p = icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
-                    p.add_parameter("VALUE", "DATE");
-                    todo.append_multi_property(p);
+            let is_time = matches!(ex, DateType::Specific(_));
+            if dtstart_is_time && !is_time {
+                let midnight = chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap();
+                let dt = ex.to_utc_with_default_time(midnight);
+                todo.append_multi_property(icalendar::Property::new(
+                    "EXDATE",
+                    dt.format("%Y%m%dT%H%M%SZ").to_string(),
+                ));
+            } else if !dtstart_is_time && is_time {
+                let mut p = icalendar::Property::new(
+                    "EXDATE",
+                    ex.to_date_naive().format("%Y%m%d").to_string(),
+                );
+                p.add_parameter("VALUE", "DATE");
+                todo.append_multi_property(p);
+            } else {
+                match ex {
+                    DateType::AllDay(d) => {
+                        let mut p =
+                            icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
+                        p.add_parameter("VALUE", "DATE");
+                        todo.append_multi_property(p);
+                    }
+                    DateType::Specific(dt) => {
+                        todo.append_multi_property(icalendar::Property::new(
+                            "EXDATE",
+                            dt.format("%Y%m%dT%H%M%SZ").to_string(),
+                        ));
+                    }
+                    DateType::Month(y, m) => {
+                        let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                        let mut p =
+                            icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
+                        p.add_parameter("VALUE", "DATE");
+                        todo.append_multi_property(p);
+                    }
+                    DateType::Year(y) => {
+                        let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                        let mut p =
+                            icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
+                        p.add_parameter("VALUE", "DATE");
+                        todo.append_multi_property(p);
+                    }
                 }
             }
         }
@@ -454,13 +493,14 @@ impl IcsAdapter {
 
                 // Stale Detection: Only use fuzzy metadata if it matches the actual property value
                 if let Some(f) = fuzzy
-                    && let Some(sd) = standard_date {
-                        if f.len() == 7 && f == sd.format("%Y-%m").to_string() {
-                            return Some(DateType::Month(sd.year(), sd.month()));
-                        } else if f.len() == 4 && f == sd.format("%Y").to_string() {
-                            return Some(DateType::Year(sd.year()));
-                        }
+                    && let Some(sd) = standard_date
+                {
+                    if f.len() == 7 && f == sd.format("%Y-%m").to_string() {
+                        return Some(DateType::Month(sd.year(), sd.month()));
+                    } else if f.len() == 4 && f == sd.format("%Y").to_string() {
+                        return Some(DateType::Year(sd.year()));
                     }
+                }
 
                 // Fallback to standard parsing
                 let is_date_param = prop
