@@ -89,12 +89,10 @@ where
 
             if auth_str.to_lowercase().starts_with("digest") {
                 let uri = req_clone.uri().path().to_string();
-
                 let method = HttpMethod::from(req_clone.method().as_str());
 
                 // Pass None for body (auth-int is rare for CalDAV)
                 let body_bytes: Option<&[u8]> = None;
-
                 let context = AuthContext::new_with_method(&user, &pass, &uri, body_bytes, method);
 
                 if let Ok(mut prompt) = digest_auth::parse(auth_str)

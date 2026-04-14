@@ -58,19 +58,61 @@ fn actions_match_identity(a: &Action, b: &Action) -> bool {
 }
 
 // --- Sync Logic as RustyClient methods ---
+/// Normalizes paths from the server. Fixes paths stripped by proxies and encodes spaces,
+/// but crucially leaves '@' unencoded for Nextcloud compatibility.
+fn fix_and_encode_path(
+    client: &CalDavClient<HttpsClient>,
+    raw_href: &str,
+    filename: Option<&str>,
+) -> String {
+    let mut path = strip_host(raw_href);
+    if let Some(idx) = path.find('?') {
+        path.truncate(idx);
+    }
+
+    let base_path = client.base_url().path();
+
+    // Proxy fixup: Reconstruct missing base paths (the Android bug fix)
+    if !path.starts_with(base_path) && base_path != "/" {
+        let mut fixed = base_path.to_string();
+        if !fixed.ends_with('/') {
+            fixed.push('/');
+        }
+        if !path.starts_with("/calendars/")
+            && !path.starts_with("calendars/")
+            && !fixed.ends_with("calendars/")
+            && !fixed.contains("/calendars/")
+        {
+            fixed.push_str("calendars/");
+        }
+        fixed.push_str(path.trim_start_matches('/'));
+        path = fixed;
+    }
+
+    if let Some(fname) = filename {
+        if !path.ends_with('/') {
+            path.push('/');
+        }
+        path.push_str(fname);
+    }
+
+    // Encode spaces and brackets, but leave '@' as-is.
+    path.replace(" ", "%20")
+        .replace("(", "%28")
+        .replace(")", "%29")
+}
+
 impl RustyClient {
     async fn handle_create(
         &self,
         client: &CalDavClient<HttpsClient>,
         task: &Task,
     ) -> Result<StepResult, String> {
-        let filename = format!("{}.ics", task.uid);
-        let full_href = if task.calendar_href.ends_with('/') {
-            format!("{}{}", task.calendar_href, filename)
-        } else {
-            format!("{}/{}", task.calendar_href, filename)
-        };
-        let path = strip_host(&full_href);
+        let path = fix_and_encode_path(
+            client,
+            &task.calendar_href,
+            Some(&format!("{}.ics", task.uid)),
+        );
         let ics_string = IcsAdapter::to_ics(task);
 
         match client
@@ -78,16 +120,21 @@ impl RustyClient {
             .await
         {
             Ok(resp) => {
+                let href = if task.calendar_href.ends_with('/') {
+                    format!("{}{}.ics", task.calendar_href, task.uid)
+                } else {
+                    format!("{}/{}.ics", task.calendar_href, task.uid)
+                };
+
                 let outcome = StepOutcome::Success {
                     etag: resp.etag,
-                    href: Some(full_href),
+                    href: Some(href),
                     refresh_path: Some(path),
                 };
                 Ok(StepResult::new(outcome))
             }
             Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
             | Err(WebDavError::PreconditionFailed(_)) => {
-                // Conflict: already exists. Mark successful to remove from queue.
                 Ok(StepResult::new(StepOutcome::Success {
                     etag: None,
                     href: None,
@@ -103,6 +150,10 @@ impl RustyClient {
                 if msg.contains("403")
                     || msg.contains("400")
                     || msg.contains("415")
+                    || msg.contains("404")
+                    || msg.contains("NotFound")
+                    || msg.contains("409")
+                    || msg.contains("Conflict")
                     || msg.contains("InvalidInput")
                     || msg.contains("invalid uri character")
                 {
@@ -121,18 +172,14 @@ impl RustyClient {
         client: &CalDavClient<HttpsClient>,
         task: &Task,
     ) -> Result<StepResult, String> {
-        // Handle "Ghost Update" where href is missing.
-        // Reconstruct the correct path from the calendar_href and UID.
         let path = if task.href.is_empty() {
-            let filename = format!("{}.ics", task.uid);
-            let cal_path = strip_host(&task.calendar_href);
-            if cal_path.ends_with('/') {
-                format!("{}{}", cal_path, filename)
-            } else {
-                format!("{}/{}", cal_path, filename)
-            }
+            fix_and_encode_path(
+                client,
+                &task.calendar_href,
+                Some(&format!("{}.ics", task.uid)),
+            )
         } else {
-            strip_host(&task.href)
+            fix_and_encode_path(client, &task.href, None)
         };
 
         let ics_string = IcsAdapter::to_ics(task);
@@ -151,14 +198,11 @@ impl RustyClient {
             .await
         {
             Ok(resp) => {
-                // If we reconstructed the path, we must ensure we update the HREF in the success outcome
-                // so subsequent actions use the correct path.
                 let new_href = if task.href.is_empty() {
-                    let filename = format!("{}.ics", task.uid);
                     if task.calendar_href.ends_with('/') {
-                        Some(format!("{}{}", task.calendar_href, filename))
+                        Some(format!("{}{}.ics", task.calendar_href, task.uid))
                     } else {
-                        Some(format!("{}/{}", task.calendar_href, filename))
+                        Some(format!("{}/{}.ics", task.calendar_href, task.uid))
                     }
                 } else {
                     None
@@ -178,7 +222,6 @@ impl RustyClient {
                             .with_warning(msg),
                     )
                 } else {
-                    // Force copy logic
                     let mut conflict_copy = task.clone();
                     conflict_copy.uid = uuid::Uuid::new_v4().to_string();
                     conflict_copy.summary = format!("{} (Conflict Copy)", task.summary);
@@ -195,12 +238,9 @@ impl RustyClient {
                     )
                 }
             }
-            Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
-                // Resurrect if missing
-                Ok(StepResult::new(StepOutcome::RetryWith(Box::new(
-                    Action::Create(task.clone()),
-                ))))
-            }
+            Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => Ok(StepResult::new(
+                StepOutcome::RetryWith(Box::new(Action::Create(task.clone()))),
+            )),
             Err(e) => {
                 let msg = format!("{:?}", e);
                 if msg.contains("412") || msg.contains("PreconditionFailed") {
@@ -221,6 +261,8 @@ impl RustyClient {
                 } else if msg.contains("403")
                     || msg.contains("400")
                     || msg.contains("415")
+                    || msg.contains("409")
+                    || msg.contains("Conflict")
                     || msg.contains("InvalidInput")
                     || msg.contains("invalid uri character")
                 {
@@ -242,7 +284,7 @@ impl RustyClient {
         if task.href.is_empty() {
             return Ok(StepResult::new(StepOutcome::Discard));
         }
-        let path = strip_host(&task.href);
+        let path = fix_and_encode_path(client, &task.href, None);
 
         let resp = if !task.etag.is_empty() && task.etag != "pending_refresh" {
             client
@@ -277,11 +319,11 @@ impl RustyClient {
                 if msg.contains("403")
                     || msg.contains("400")
                     || msg.contains("415")
+                    || msg.contains("409")
+                    || msg.contains("Conflict")
                     || msg.contains("InvalidInput")
                     || msg.contains("invalid uri character")
                 {
-                    // For delete, if we can't delete due to permissions, just discard from queue
-                    // to prevent blocking. We can't easily recover a deleted task state.
                     Ok(StepResult::new(StepOutcome::Discard).with_warning(msg))
                 } else {
                     Err(msg)
@@ -316,14 +358,13 @@ impl RustyClient {
             Err(e) => {
                 if e.contains("404")
                     || e.contains("NotFound")
+                    || e.contains("409")
+                    || e.contains("Conflict")
                     || e.contains("403")
                     || e.contains("InvalidInput")
                     || e.contains("invalid uri character")
                 {
-                    Ok(StepResult::new(StepOutcome::Discard).with_warning(format!(
-                        "Move source missing for '{}', assuming success.",
-                        task.summary
-                    )))
+                    Ok(StepResult::new(StepOutcome::RecoveryNeeded(e)))
                 } else if e.contains("400") || e.contains("415") {
                     Ok(StepResult::new(StepOutcome::RecoveryNeeded(e)))
                 } else {
@@ -334,7 +375,6 @@ impl RustyClient {
     }
 
     pub async fn sync_journal(&self) -> Result<(Vec<String>, Vec<Task>), String> {
-        // Load and compact journal once at the start
         let mut journal = Journal::load(self.ctx.as_ref());
         let mut tmp_j = Journal {
             queue: mem::take(&mut journal.queue),
@@ -346,16 +386,12 @@ impl RustyClient {
         let mut warnings = Vec::new();
         let mut synced_tasks: Vec<Task> = Vec::new();
 
-        // Load config for the create_events_for_tasks flag
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
         let events_enabled = config.create_events_for_tasks;
         let delete_on_completion = config.delete_events_on_completion;
 
-        // ADD THIS FLAG:
-        // Ensures we only check/create the recovery calendar once per sync cycle.
         let mut recovery_cal_created_this_cycle = false;
 
-        // Process actions in-memory
         while !journal.queue.is_empty() {
             let next_action = journal.queue[0].clone();
             let mut conflict_resolved_action: Option<Action> = None;
@@ -363,9 +399,6 @@ impl RustyClient {
             let mut new_href_to_propagate: Option<(String, String)> = None;
             let mut path_for_refresh: Option<String> = None;
 
-            // Allow tests to force a sync error for this action without performing network requests.
-            // If the test hook returns Some(error_string) we skip the normal network path and
-            // treat the action as having failed with that message.
             let test_forced_err: Option<String> = {
                 #[cfg(any(test, feature = "test_hooks"))]
                 {
@@ -412,21 +445,17 @@ impl RustyClient {
                             href,
                             refresh_path,
                         } => {
-                            // Sync companion event if successful
                             match &next_action {
                                 Action::Move(t, new_cal) => {
-                                    // Move companion event too
-                                    // --- FIX 3: Always clean up old location to prevent orphans ---
                                     let _ = self
                                         .sync_companion_event(
                                             t,
                                             events_enabled,
                                             delete_on_completion,
-                                            true, // is_delete_intent forces cleanup
+                                            true,
                                         )
                                         .await;
 
-                                    // 2. Create updated variants in the NEW location (conditionally)
                                     if (events_enabled || t.create_event.is_some())
                                         && let Some(new_h) = &href
                                     {
@@ -467,9 +496,8 @@ impl RustyClient {
                             path_for_refresh = refresh_path;
                             if let Some(h) = href {
                                 let old = match &next_action {
-                                    Action::Create(t) => t.href.clone(), // Doesn't matter for create
+                                    Action::Create(t) => t.href.clone(),
                                     Action::Move(t, _) => t.href.clone(),
-                                    // For Update, propagate if we fixed a missing href
                                     Action::Update(t) => t.href.clone(),
                                     _ => String::new(),
                                 };
@@ -477,9 +505,7 @@ impl RustyClient {
                             }
                         }
                         StepOutcome::RetryWith(act) => {
-                            // Dereference the box to get the action
                             conflict_resolved_action = Some(*act);
-                            // If we resolved a conflict or are creating a copy, try to sync event for the new state
                             if let Action::Create(t) | Action::Update(t) =
                                 &conflict_resolved_action.as_ref().unwrap()
                             {
@@ -493,7 +519,6 @@ impl RustyClient {
                             }
                         }
                         StepOutcome::Discard => {
-                            // Sync event anyway (e.g. ensure delete on 404)
                             if let Action::Delete(t) = &next_action {
                                 self.sync_companion_event(
                                     t,
@@ -505,7 +530,6 @@ impl RustyClient {
                             }
                         }
                         StepOutcome::RecoveryNeeded(msg) => {
-                            // Move to recovery calendar
                             let recovered_task = match &next_action {
                                 Action::Create(t) => Some(t.clone()),
                                 Action::Update(t) => Some(t.clone()),
@@ -533,6 +557,8 @@ impl RustyClient {
                                 }
 
                                 task.calendar_href = recovery_href.to_string();
+                                task.href = String::new();
+                                task.etag = String::new();
                                 task.description
                                     .push_str(&format!("\n\n[Sync Error]: {}", msg));
 
@@ -549,11 +575,9 @@ impl RustyClient {
                                         .to_string(),
                                 );
                             }
-                            // Fall through to remove action from queue
                         }
                     }
 
-                    // --- Propagate & Cleanup ---
                     if new_etag_to_propagate.is_none()
                         && let Some(path) = path_for_refresh
                         && let Some(fetched) = self.fetch_etag(&path).await
@@ -561,7 +585,6 @@ impl RustyClient {
                         new_etag_to_propagate = Some(fetched);
                     }
 
-                    // Collect the synced task with updated metadata
                     let mut synced_task = match &next_action {
                         Action::Create(t) | Action::Update(t) | Action::Move(t, _) => {
                             Some(t.clone())
@@ -579,7 +602,6 @@ impl RustyClient {
                         synced_tasks.push(t.clone());
                     }
 
-                    // Update in-memory queue instead of writing to disk each time
                     let should_remove = if let Some(head) = journal.queue.first() {
                         actions_match_identity(head, &next_action)
                     } else {
@@ -631,7 +653,6 @@ impl RustyClient {
                         for item in journal.queue.iter_mut() {
                             match item {
                                 Action::Update(t) | Action::Delete(t) => {
-                                    // Match by UID or old HREF
                                     if t.uid == target_uid
                                         || (!old_href.is_empty() && t.href == old_href)
                                     {
@@ -657,9 +678,6 @@ impl RustyClient {
                     #[cfg(not(target_os = "android"))]
                     eprintln!("sync_journal step failed: {}", msg);
 
-                    // Check for fatal errors that might have slipped through without a test hook
-                    // (Though the new logic catches them inside handle_*)
-                    // If we are here, it's a real hard network error or retryable failure.
                     let _ = Journal::modify(self.ctx.as_ref(), |queue| {
                         *queue = journal.queue.clone();
                     });
@@ -668,7 +686,6 @@ impl RustyClient {
             }
         }
 
-        // Write final state to disk once at the end
         Journal::modify(self.ctx.as_ref(), |queue| {
             *queue = journal.queue;
         })
@@ -684,9 +701,6 @@ impl RustyClient {
 
         let server_task = self.fetch_remote_task(&local_task.href).await?;
 
-        // PREVENT INFINITE CONFLICT LOOPS
-        // If the server's ETag is exactly what we just tried and failed with,
-        // then retrying with the same ETag will loop infinitely.
         if server_task.etag == local_task.etag {
             return None;
         }
@@ -709,21 +723,23 @@ impl RustyClient {
         overwrite: bool,
     ) -> Result<(), String> {
         let client = self.client.as_ref().ok_or("Offline")?;
-        let destination = if new_calendar_href.ends_with('/') {
-            format!("{}{}.ics", new_calendar_href, task.uid)
-        } else {
-            format!("{}/{}.ics", new_calendar_href, task.uid)
-        };
-        let source_path = strip_host(&task.href);
+
+        let source_path = fix_and_encode_path(client, &task.href, None);
         let source_uri = client
             .webdav_client
             .relative_uri(&source_path)
             .map_err(|e| format!("Invalid source URI: {}", e))?;
 
+        let dest_path = fix_and_encode_path(
+            client,
+            new_calendar_href,
+            Some(&format!("{}.ics", task.uid)),
+        );
+
         let base = client.webdav_client.base_url();
         let scheme = base.scheme_str().unwrap_or("https");
         let authority = base.authority().map(|a| a.as_str()).unwrap_or("");
-        let dest_path = strip_host(&destination);
+
         let clean_dest_path = if dest_path.starts_with('/') {
             dest_path
         } else {
@@ -738,11 +754,13 @@ impl RustyClient {
             .header("Overwrite", if overwrite { "T" } else { "F" })
             .body(String::new())
             .map_err(|e| e.to_string())?;
+
         let (parts, _) = client
             .webdav_client
             .request_raw(req)
             .await
             .map_err(|e| format!("{:?}", e))?;
+
         if parts.status.is_success() {
             Ok(())
         } else {

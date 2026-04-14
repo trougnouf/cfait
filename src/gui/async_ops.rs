@@ -147,7 +147,7 @@ pub async fn async_controller_dispatch(
 
     // Even if network sync times out, the local store memory modifications
     // are synchronously committed prior to yielding.
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(10), action_future).await;
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(60), action_future).await;
 
     let updated_store = store_arc.lock().await.clone();
     Ok(updated_store)
