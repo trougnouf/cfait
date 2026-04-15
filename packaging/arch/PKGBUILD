@@ -14,6 +14,8 @@ depends=(
     'libxrandr'
     'libxkbcommon'
     'wayland'
+    'vulkan-icd-loader'
+    'vulkan-driver'
 )
 makedepends=('cargo' 'pkgconf')
 options=('!lto' '!strip' '!debug')
