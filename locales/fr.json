@@ -96,6 +96,7 @@
     "connecting": "Connexion en cours…",
     "connection_failed": "Échec de la connexion : %{error}",
     "copied_to_clipboard": "Copié dans le presse-papiers",
+    "could_not_determine_location": "",
     "could_not_open_url": "Impossible d'ouvrir l'URL",
     "create_calendar_events_for_tasks_with_dates": "Créer des événements pour les tâches avec dates",
     "create_calendar_events_note": "Les événements seront créés rétroactivement. Utilisez +cal/-cal par tâche pour outrepasser ce réglage.",
