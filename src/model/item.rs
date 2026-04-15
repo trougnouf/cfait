@@ -405,7 +405,7 @@ pub fn compare_sortkeys(a: &SortKey, b: &SortKey, default_prio: u8) -> Ordering 
 // Bundles the children map, result vector and other parameters so recursive helpers
 // have a concise signature.
 struct HierarchyContext<'a> {
-    children_map: &'a HashMap<(String, String), Vec<Task>>,
+    children_map: &'a HashMap<String, Vec<Task>>,
     result: &'a mut Vec<Task>,
     visited_keys: &'a mut HashSet<(String, String)>,
     expanded_groups: &'a HashSet<String>,
@@ -730,11 +730,8 @@ impl Task {
         max_done_roots: usize,
         max_done_subtasks: usize,
     ) -> Vec<Task> {
-        let present_keys: HashSet<(String, String)> = tasks
-            .iter()
-            .map(|t| (t.uid.clone(), t.calendar_href.clone()))
-            .collect();
-        let mut children_map: HashMap<(String, String), Vec<Task>> = HashMap::new();
+        let present_uids: HashSet<String> = tasks.iter().map(|t| t.uid.clone()).collect();
+        let mut children_map: HashMap<String, Vec<Task>> = HashMap::new();
         let mut roots: Vec<Task> = Vec::new();
 
         // Sort by the canonical comparator before building hierarchy
@@ -742,7 +739,7 @@ impl Task {
 
         for mut task in tasks {
             let is_orphan = match &task.parent_uid {
-                Some(p_uid) => !present_keys.contains(&(p_uid.clone(), task.calendar_href.clone())),
+                Some(p_uid) => !present_uids.contains(p_uid),
                 None => true,
             };
 
@@ -753,10 +750,7 @@ impl Task {
                 roots.push(task);
             } else {
                 let p_uid = task.parent_uid.as_ref().unwrap().clone();
-                children_map
-                    .entry((p_uid, task.calendar_href.clone()))
-                    .or_default()
-                    .push(task);
+                children_map.entry(p_uid).or_default().push(task);
             }
         }
 
@@ -855,7 +849,7 @@ impl Task {
         t.depth = depth;
         context.result.push(t);
 
-        if let Some(children) = context.children_map.get(&visit_key) {
+        if let Some(children) = context.children_map.get(&task.uid) {
             let (active, done): (Vec<Task>, Vec<Task>) =
                 children.iter().cloned().partition(|t| !t.status.is_done());
 

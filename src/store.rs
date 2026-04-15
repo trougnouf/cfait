@@ -1163,43 +1163,68 @@ impl TaskStore {
             if options.search_term.is_empty() {
                 visible_refs
             } else {
-                let mut children_map = HashMap::new();
-                for t in &visible_refs {
+                let mut children_map: HashMap<String, Vec<String>> = HashMap::new();
+                let mut parent_map: HashMap<String, String> = HashMap::new();
+
+                for t in &all_allowed_refs {
+                    let key = t.uid.clone();
                     if let Some(p) = &t.parent_uid {
                         children_map
-                            .entry((p.clone(), t.calendar_href.clone()))
-                            .or_insert_with(Vec::new)
-                            .push((t.uid.clone(), t.calendar_href.clone()));
+                            .entry(p.clone())
+                            .or_default()
+                            .push(key.clone());
+                        parent_map.insert(key.clone(), p.clone());
                     }
                 }
 
-                let mut matched_keys = HashSet::new();
-                let mut queue = Vec::new();
+                let mut matched_uids = HashSet::new();
+                let mut queue_down = Vec::new();
+                let mut queue_up = Vec::new();
 
+                // Initial matches based on search term from tasks passing initial filters
                 for t in &visible_refs {
-                    if t.matches_search_term(options.search_term)
-                        && matched_keys.insert((t.uid.clone(), t.calendar_href.clone()))
-                    {
-                        queue.push((t.uid.clone(), t.calendar_href.clone()));
+                    if t.matches_search_term(options.search_term) {
+                        let key = t.uid.clone();
+                        if matched_uids.insert(key.clone()) {
+                            queue_down.push(key.clone());
+                            queue_up.push(key);
+                        }
                     }
                 }
+
+                // Expand Down: Include all descendants of matches
+                let visible_uids: HashSet<String> =
+                    visible_refs.iter().map(|t| t.uid.clone()).collect();
 
                 let mut idx = 0;
-                while idx < queue.len() {
-                    let curr = queue[idx].clone();
+                while idx < queue_down.len() {
+                    let curr = queue_down[idx].clone();
                     idx += 1;
                     if let Some(children) = children_map.get(&curr) {
                         for child in children {
-                            if matched_keys.insert(child.clone()) {
-                                queue.push(child.clone());
+                            if visible_uids.contains(child) && matched_uids.insert(child.clone()) {
+                                queue_down.push(child.clone());
                             }
                         }
                     }
                 }
 
-                visible_refs
-                    .into_iter()
-                    .filter(|t| matched_keys.contains(&(t.uid.clone(), t.calendar_href.clone())))
+                // Expand Up: Include all ancestors of matches (shows the path to the subtask)
+                let mut idx = 0;
+                while idx < queue_up.len() {
+                    let curr = queue_up[idx].clone();
+                    idx += 1;
+                    if let Some(parent) = parent_map.get(&curr)
+                        && matched_uids.insert(parent.clone()) {
+                            queue_up.push(parent.clone());
+                        }
+                }
+
+                // Return everything in all_allowed_refs that is part of the expanded matched set
+                all_allowed_refs
+                    .iter()
+                    .copied()
+                    .filter(|t| matched_uids.contains(&t.uid))
                     .collect()
             }
         };
