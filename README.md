@@ -95,6 +95,9 @@ Self-documenting config file. See also: https://codeberg.org/trougnouf/cfait/wik
 
 #### Desktop (TUI/GUI)
 Requires Rust (latest stable version recommended).
+
+To build and run the GUI, you should have the following system libraries: `pkgconf`, `fontconfig`, `libx11`, `libxcursor`, `libxkbcommon`, `libxi`, `libxrandr`, `wayland`. For the file picker to work on Linux, ensure you have an `xdg-desktop-portal` implementation installed (e.g., `xdg-desktop-portal-gtk`, `-kde`, or `-wlr`).
+
 ```bash
 # Install TUI only
 cargo install cfait
