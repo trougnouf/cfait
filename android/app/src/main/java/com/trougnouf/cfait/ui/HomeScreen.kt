@@ -238,6 +238,8 @@ fun HomeScreen(
     var scrollTrigger by remember { mutableLongStateOf(0L) }
 
     var newTaskText by rememberSaveable { mutableStateOf("") }
+    var newDescriptionText by rememberSaveable { mutableStateOf("") }
+    var isCreateExpanded by rememberSaveable { mutableStateOf(false) }
     var showExportSourceDialog by remember { mutableStateOf(false) }
     var showExportDestDialog by remember { mutableStateOf(false) }
     var exportSourceHref by remember { mutableStateOf<String?>(null) }
@@ -396,7 +398,7 @@ fun HomeScreen(
         }
     }
 
-    fun addTask(txt: String) {
+    fun addTask(txt: String, desc: String) {
         val text = txt.trim()
         val isAliasDef = text.contains(":=")
 
@@ -414,6 +416,8 @@ fun HomeScreen(
             updateTaskList()
         } else {
             newTaskText = ""
+            newDescriptionText = ""
+            isCreateExpanded = false
             scope.launch {
                 activeOpCount++
                 try {
@@ -424,7 +428,8 @@ fun HomeScreen(
                         api.setDefaultCalendar(activeTab.isWriteTarget)
                     }
 
-                    val newUid = api.addTaskSmart(text)
+                    // *** CALL THE NEW DESCRIPTION API ***
+                    val newUid = api.addTaskWithDescription(text, desc)
                     if (creatingChildUid != null) {
                         api.setParent(newUid, creatingChildUid!!)
                         if (!childLockActive) creatingChildUid = null
@@ -447,6 +452,7 @@ fun HomeScreen(
 
     // --- Geolocation State ---
     var pendingGeoTask by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingGeoDesc by rememberSaveable { mutableStateOf<String?>(null) } // <-- ADD THIS LINE
 
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -454,7 +460,9 @@ fun HomeScreen(
         val granted = permissions.entries.any { it.value }
         scope.launch {
             val text = pendingGeoTask ?: return@launch
+            val desc = pendingGeoDesc ?: ""
             pendingGeoTask = null
+            pendingGeoDesc = null
 
             if (granted) {
                 val loc = fetchCurrentLocation(context)
@@ -463,7 +471,7 @@ fun HomeScreen(
                         text.replace(
                             Regex("geo:here", RegexOption.IGNORE_CASE),
                             "geo:${loc.latitude},${loc.longitude}"
-                        )
+                        ), desc
                     )
                 } else {
                     Toast.makeText(
@@ -471,15 +479,15 @@ fun HomeScreen(
                         context.getString(R.string.could_not_determine_location),
                         Toast.LENGTH_SHORT
                     ).show()
-                    addTask(text)
+                    addTask(text, desc)
                 }
             } else {
-                addTask(text)
+                addTask(text, desc)
             }
         }
     }
 
-    fun handleAddTaskWithGeo(text: String) {
+    fun handleAddTaskWithGeo(text: String, desc: String) {
         if (text.contains("geo:here", ignoreCase = true)) {
             val hasFine = ContextCompat.checkSelfPermission(
                 context,
@@ -498,7 +506,7 @@ fun HomeScreen(
                             text.replace(
                                 Regex("geo:here", RegexOption.IGNORE_CASE),
                                 "geo:${loc.latitude},${loc.longitude}"
-                            )
+                            ), desc
                         )
                     } else {
                         Toast.makeText(
@@ -506,11 +514,12 @@ fun HomeScreen(
                             context.getString(R.string.could_not_determine_location),
                             Toast.LENGTH_SHORT
                         ).show()
-                        addTask(text)
+                        addTask(text, desc)
                     }
                 }
             } else {
                 pendingGeoTask = text
+                pendingGeoDesc = desc
                 locationPermissionLauncher.launch(
                     arrayOf(
                         Manifest.permission.ACCESS_FINE_LOCATION,
@@ -519,7 +528,7 @@ fun HomeScreen(
                 )
             }
         } else {
-            addTask(text)
+            addTask(text, desc)
         }
     }
 
@@ -1638,22 +1647,51 @@ fun HomeScreen(
                             }
                         }
                         Surface(tonalElevation = 3.dp) {
-                            Row(
-                                Modifier.padding(16.dp).navigationBarsPadding().imePadding(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                OutlinedTextField(
-                                    value = newTaskText, onValueChange = { newTaskText = it },
-                                    placeholder = { Text("${stringResource(R.string.example_buy_cat_food)} !1 @tomorrow #groceries") },
-                                    modifier = Modifier.fillMaxWidth(), singleLine = true,
-                                    visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
-                                    keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
-                                    keyboardActions = KeyboardActions(onSend = {
-                                        if (newTaskText.isNotBlank()) handleAddTaskWithGeo(
-                                            newTaskText
+                            Column(Modifier.padding(16.dp).navigationBarsPadding().imePadding()) {
+
+                                AnimatedVisibility(visible = isCreateExpanded) {
+                                    Column {
+                                        OutlinedTextField(
+                                            value = newDescriptionText,
+                                            onValueChange = { newDescriptionText = it },
+                                            placeholder = {
+                                                Text(
+                                                    "Write notes here, or create subtasks:\n- [ ] Subtask 1 @tomorrow\n- [x] Completed task done:today\n\nUse numbers for dependencies:\n1. [ ] First step\n2. [ ] Second step (blocked by 1)",
+                                                    fontSize = 14.sp
+                                                )
+                                            },
+                                            modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 250.dp),
+                                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
                                         )
-                                    }),
-                                )
+                                        Spacer(Modifier.height(8.dp))
+                                    }
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    OutlinedTextField(
+                                        value = newTaskText, onValueChange = { newTaskText = it },
+                                        placeholder = { Text("${stringResource(R.string.example_buy_cat_food)} !1 @tomorrow") },
+                                        modifier = Modifier.weight(1f), singleLine = true,
+                                        visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
+                                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
+                                        keyboardActions = KeyboardActions(onSend = {
+                                            if (newTaskText.isNotBlank()) handleAddTaskWithGeo(
+                                                newTaskText, newDescriptionText
+                                            )
+                                        }),
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    IconButton(
+                                        onClick = { isCreateExpanded = !isCreateExpanded },
+                                        modifier = Modifier.size(48.dp)
+                                    ) {
+                                        NfIcon(
+                                            if (isCreateExpanded) NfIcons.ARROW_DOWN else NfIcons.CHILD_ARROW,
+                                            20.sp,
+                                            MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

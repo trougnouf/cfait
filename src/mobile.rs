@@ -1502,6 +1502,108 @@ impl CfaitMobile {
         Ok(uid)
     }
 
+    pub async fn add_task_with_description(
+        &self,
+        input: String,
+        description: String,
+    ) -> Result<String, MobileError> {
+        #[cfg(target_os = "android")]
+        log::debug!("add_task_with_description: '{}'", input);
+
+        let mut config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let (clean_input, new_aliases) = crate::model::extract_inline_aliases(&input);
+
+        // Handle inline aliases retroactively (same as add_task_smart)
+        if !new_aliases.is_empty() {
+            for (k, v) in &new_aliases {
+                crate::model::validate_alias_integrity(k, v, &config.tag_aliases)
+                    .map_err(MobileError::from)?;
+            }
+            config.tag_aliases.extend(new_aliases.clone());
+            config.save(self.ctx.as_ref()).map_err(MobileError::from)?;
+
+            let mut store = self.controller.store.lock().await;
+            let all_modified: Vec<_> = new_aliases
+                .iter()
+                .flat_map(|(key, tags)| store.apply_alias_retroactively(key, tags))
+                .collect();
+            drop(store);
+
+            if !all_modified.is_empty() {
+                for t in all_modified {
+                    self.controller
+                        .update_task(t)
+                        .await
+                        .map_err(MobileError::from)?;
+                }
+            }
+
+            let trimmed = clean_input.trim();
+            if trimmed.is_empty()
+                || (!trimmed.contains(' ')
+                    && (trimmed.starts_with('#')
+                        || trimmed.starts_with("@@")
+                        || trimmed.to_lowercase().starts_with("loc:")))
+            {
+                return Ok("ALIAS_UPDATED".to_string());
+            }
+        }
+
+        if clean_input.trim().is_empty() {
+            return Ok("".to_string());
+        }
+
+        let def_time =
+            chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
+        // Run the extractor engine!
+        let (cleaned_desc, extracted_subtasks) =
+            crate::model::extractor::extract_markdown_tasks(&description);
+
+        let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
+        task.description = cleaned_desc;
+        task.calendar_href = config
+            .default_calendar
+            .clone()
+            .unwrap_or(crate::storage::LOCAL_CALENDAR_HREF.to_string());
+
+        let parent_uid = self
+            .controller
+            .create_task(task)
+            .await
+            .map_err(MobileError::from)?;
+
+        // Create extracted subtasks
+        for ext in extracted_subtasks {
+            let mut sub = Task::new(&ext.raw_text, &config.tag_aliases, def_time);
+            sub.uid = ext.uid.clone();
+            sub.description = ext.description;
+            if ext.is_completed {
+                sub.status = crate::model::TaskStatus::Completed;
+                sub.set_completion_date(Some(chrono::Utc::now()));
+            }
+            sub.parent_uid = Some(ext.parent_uid.unwrap_or(parent_uid.clone()));
+            sub.dependencies = ext.dependencies;
+            sub.calendar_href = config
+                .default_calendar
+                .clone()
+                .unwrap_or(crate::storage::LOCAL_CALENDAR_HREF.to_string());
+
+            self.controller
+                .create_task(sub)
+                .await
+                .map_err(MobileError::from)?;
+        }
+
+        #[cfg(target_os = "android")]
+        log::debug!("Rebuilding alarm index after adding {}", parent_uid);
+
+        let store_for_rebuild = self.controller.store.lock().await;
+        self.rebuild_alarm_index(&store_for_rebuild).await;
+
+        Ok(parent_uid)
+    }
+
     pub async fn change_priority(&self, uid: String, delta: i8) -> Result<(), MobileError> {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         self.apply_store_mutation(&uid, |store, id| {

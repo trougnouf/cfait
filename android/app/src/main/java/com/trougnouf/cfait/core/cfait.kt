@@ -761,6 +761,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_add_task_smart(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_add_task_with_description(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_change_priority(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_connect(): Short
@@ -930,6 +932,12 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_add_task_smart(
         `ptr`: Long,
         `input`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_add_task_with_description(
+        `ptr`: Long,
+        `input`: RustBuffer.ByValue,
+        `description`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_change_priority(
@@ -1486,6 +1494,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_task_smart() != 4490.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_add_task_with_description() != 58374.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_change_priority() != 42738.toShort()) {
@@ -2193,6 +2204,11 @@ public interface CfaitMobileInterface {
 
     suspend fun `addTaskSmart`(`input`: kotlin.String): kotlin.String
 
+    suspend fun `addTaskWithDescription`(
+        `input`: kotlin.String,
+        `description`: kotlin.String,
+    ): kotlin.String
+
     suspend fun `changePriority`(
         `uid`: kotlin.String,
         `delta`: kotlin.Byte,
@@ -2605,6 +2621,29 @@ open class CfaitMobile :
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_add_task_smart(
                     uniffiHandle,
                     FfiConverterString.lower(`input`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `addTaskWithDescription`(
+        `input`: kotlin.String,
+        `description`: kotlin.String,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_add_task_with_description(
+                    uniffiHandle,
+                    FfiConverterString.lower(`input`),
+                    FfiConverterString.lower(`description`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
