@@ -156,16 +156,14 @@ impl Journal {
         let mut pending_uids = HashSet::new();
         for action in &journal.queue {
             match action {
-                Action::Create(t) | Action::Update(t) => {
-                    if urls_match(&t.calendar_href, calendar_href) {
+                Action::Create(t) | Action::Update(t)
+                    if urls_match(&t.calendar_href, calendar_href) => {
                         pending_uids.insert(t.uid.clone());
                     }
-                }
-                Action::Move(t, target) => {
-                    if urls_match(target, calendar_href) {
+                Action::Move(t, target)
+                    if urls_match(target, calendar_href) => {
                         pending_uids.insert(t.uid.clone());
                     }
-                }
                 _ => {}
             }
         }

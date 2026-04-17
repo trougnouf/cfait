@@ -241,6 +241,16 @@ pub async fn handle_key_event(
 
     match state.mode {
         InputMode::Creating => match key.code {
+            // NEW: Enter description mode during creation (Ctrl+E)
+            KeyCode::Char('e') | KeyCode::Char('E') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                state.new_task_title = state.input_buffer.clone();
+                state.input_buffer.clear();
+                state.cursor_position = 0;
+                state.mode = InputMode::EditingDescription;
+                state.creating_with_desc = true;
+                state.message = "Write notes or subtasks (- [ ]). Ctrl+S to save.".to_string();
+                return None;
+            }
             KeyCode::Enter if !state.input_buffer.is_empty() => {
                 let (clean_input, new_aliases): (String, HashMap<String, Vec<String>>) =
                     extract_inline_aliases(&state.input_buffer);
@@ -413,27 +423,105 @@ pub async fn handle_key_event(
             }
             // Save: Ctrl+S
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let target_uid: Option<String> = state
-                    .editing_index
-                    .and_then(|idx| state.tasks.get(idx).map(|t| t.uid.clone()));
+                // Determine if Edit vs Create
+                if state.creating_with_desc {
+                    let desc_text = state.input_buffer.clone();
+                    let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(&desc_text);
 
-                if let Some(uid) = target_uid
-                    && let Some((t, _)) = state.store.get_task_mut(&uid)
-                {
-                    t.description = state.input_buffer.clone();
-                    let clone = t.clone();
+                    let (clean_input, new_aliases) = crate::model::parser::extract_inline_aliases(&state.new_task_title);
+
+                    // Optional: handle alias creation if any (abbreviated for length, similar to handle_submit)
+                    if !new_aliases.is_empty() {
+                        for (k, v) in &new_aliases {
+                            state.tag_aliases.insert(k.clone(), v.clone());
+                        }
+                    }
+
+                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+                    let def_time = chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
+                    let mut parent = Task::new(&clean_input, &state.tag_aliases, def_time);
+                    parent.description = clean_desc;
+                    parent.parent_uid = state.creating_child_of.clone();
+
+                    let target_href = state.active_cal_href.clone().unwrap_or_else(|| "local://default".to_string());
+                    parent.calendar_href = target_href.clone();
+
+                    let parent_uid = parent.uid.clone();
+                    state.store.add_task(parent.clone());
+
+                    // Fire off background creation
+                    tokio::spawn({
+                        let tx = action_tx.clone();
+                        async move { let _ = tx.send(Action::CreateTask(parent)).await; }
+                    });
+
+                    // Fire off Subtasks
+                    for ext in extracted {
+                        let mut sub = Task::new(&ext.raw_text, &state.tag_aliases, def_time);
+                        sub.uid = ext.uid;
+                        sub.description = ext.description;
+                        if ext.is_completed {
+                            sub.status = crate::model::TaskStatus::Completed;
+                            sub.set_completion_date(Some(chrono::Utc::now()));
+                        }
+                        sub.parent_uid = Some(ext.parent_uid.unwrap_or(parent_uid.clone()));
+                        sub.dependencies = ext.dependencies;
+                        sub.calendar_href = target_href.clone();
+
+                        state.store.add_task(sub.clone());
+                        tokio::spawn({
+                            let tx = action_tx.clone();
+                            async move { let _ = tx.send(Action::CreateTask(sub)).await; }
+                        });
+                    }
+
                     state.refresh_filtered_view();
+
+                    // --- ADD THESE 3 LINES ---
+                    update_alarms(state);
+                    if let Some(idx) = state.tasks.iter().position(|t| t.uid == parent_uid) {
+                        state.list_state.select(Some(idx));
+                    }
+                    // -------------------------
+
+                    state.creating_with_desc = false;
+                    state.new_task_title.clear();
                     state.mode = InputMode::Normal;
                     state.reset_input();
-                    return Some(Action::UpdateTask(clone));
+                    state.creating_child_of = None;
+                    return None;
+
+                } else {
+                    // Standard Edit
+                    let target_uid: Option<String> = state
+                        .editing_index
+                        .and_then(|idx| state.tasks.get(idx).map(|t| t.uid.clone()));
+
+                    if let Some(uid) = target_uid
+                        && let Some((t, _)) = state.store.get_task_mut(&uid)
+                    {
+                        t.description = state.input_buffer.clone();
+                        let clone = t.clone();
+                        state.refresh_filtered_view();
+                        state.mode = InputMode::Normal;
+                        state.reset_input();
+                        return Some(Action::UpdateTask(clone));
+                    }
+                    state.mode = InputMode::Normal;
+                    state.reset_input();
                 }
-                state.mode = InputMode::Normal;
-                state.reset_input();
             }
             // Cancel: Esc
             KeyCode::Esc => {
                 state.mode = InputMode::Normal;
                 state.reset_input();
+
+                // --- ADD THESE 2 LINES ---
+                state.creating_with_desc = false;
+                state.new_task_title.clear();
+                // -------------------------
+
                 state.message = "Editing cancelled.".to_string();
             }
             // Editing & Navigation
@@ -1181,8 +1269,8 @@ pub async fn handle_key_event(
                     }
                 }
             }
-            KeyCode::Char('*') => {
-                if state.active_focus == Focus::Sidebar {
+            KeyCode::Char('*')
+                if state.active_focus == Focus::Sidebar => {
                     match state.sidebar_mode {
                         SidebarMode::Calendars => {
                             let are_all_visible = state
@@ -1217,7 +1305,6 @@ pub async fn handle_key_event(
                         }
                     }
                 }
-            }
             KeyCode::Right => {
                 if state.active_focus == Focus::Sidebar {
                     match state.sidebar_mode {

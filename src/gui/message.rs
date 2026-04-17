@@ -40,6 +40,7 @@ pub enum Message {
 
     // --- Input & Editing ---
     InputChanged(text_editor::Action),
+    StartCreateWithDescription, // <-- NEW
     DescriptionChanged(text_editor::Action),
     SearchChanged(text_editor::Action),
     ClearSearch,

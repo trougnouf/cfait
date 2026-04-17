@@ -104,10 +104,14 @@ fn handle_hotkey(
             }
             let is_cmd = modifiers.control() || modifiers.command();
             if is_cmd
-                && let keyboard::Key::Character(s) = key.as_ref()
-                    && s == "s" {
+                && let keyboard::Key::Character(s) = key.as_ref() {
+                    if s == "s" {
                         return Some(Message::SubmitTask);
+                    } else if s == "e" {
+                        // Catch Ctrl+E while typing in the main input bar to expand!
+                        return Some(Message::StartCreateWithDescription);
                     }
+                }
         }
         return None;
     }
@@ -124,6 +128,7 @@ fn handle_hotkey(
                     "0" => return Some(Message::ZoomReset),
                     "d" => return Some(Message::KeyboardDuplicateTask),
                     "s" => return Some(Message::SubmitTask),
+                    "e" => return Some(Message::StartCreateWithDescription), // Fallback if not focused
                     _ => {}
                 }
             } else if let keyboard::Key::Named(Named::Delete) = key.as_ref() {

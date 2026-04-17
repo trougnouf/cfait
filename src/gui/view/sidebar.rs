@@ -29,12 +29,11 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     let toggler_style = |theme: &Theme, status: toggler::Status| -> toggler::Style {
         let mut style = toggler::default(theme, status);
         match status {
-            toggler::Status::Active { is_toggled } | toggler::Status::Hovered { is_toggled } => {
-                if is_toggled {
+            toggler::Status::Active { is_toggled } | toggler::Status::Hovered { is_toggled }
+                if is_toggled => {
                     style.background = Color::from_rgb(1.0, 0.6, 0.0).into();
                     style.foreground = theme.extended_palette().background.base.text.into();
                 }
-            }
             _ => {}
         }
         style

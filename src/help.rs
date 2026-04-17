@@ -41,6 +41,16 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
             title: rust_i18n::t!("organization").to_string(),
             items: vec![
                 HelpItem {
+                    keys: "- [ ] / [x]".to_string(),
+                    desc: rust_i18n::t!("help_org_subtask").to_string(),
+                    example: "- [ ] Subtask @tomorrow".to_string(),
+                },
+                HelpItem {
+                    keys: "1. [ ]".to_string(),
+                    desc: rust_i18n::t!("help_org_subtask_dep").to_string(),
+                    example: "2. [ ] Depends on 1".to_string(),
+                },
+                HelpItem {
                     keys: "!1..9".to_string(),
                     desc: rust_i18n::t!("help_org_priority").to_string(),
                     example: "!1, !5, !9".to_string(),
@@ -214,6 +224,31 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
             ],
         },
         HelpSection {
+            title: rust_i18n::t!("help_subtasks_title").to_string(),
+            items: vec![
+                HelpItem {
+                    keys: "- [ ] task".to_string(),
+                    desc: rust_i18n::t!("help_subtask_create").to_string(),
+                    example: "- [ ] Buy milk @tomorrow !1".to_string(),
+                },
+                HelpItem {
+                    keys: "- [x] task".to_string(),
+                    desc: rust_i18n::t!("help_subtask_done").to_string(),
+                    example: "- [x] Read the brief".to_string(),
+                },
+                HelpItem {
+                    keys: "1. [ ] task".to_string(),
+                    desc: rust_i18n::t!("help_subtask_dep").to_string(),
+                    example: "2. [ ] Phase 2 (blocked by 1)".to_string(),
+                },
+                HelpItem {
+                    keys: "  (indent)".to_string(),
+                    desc: rust_i18n::t!("help_subtask_indent").to_string(),
+                    example: "  Notes for the task above".to_string(),
+                },
+            ],
+        },
+        HelpSection {
             title: rust_i18n::t!("search_and_filtering").to_string(),
             items: vec![
                 HelpItem {
@@ -315,6 +350,11 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "a".to_string(),
                     desc: rust_i18n::t!("add").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Ctrl + e".to_string(),
+                    desc: rust_i18n::t!("help_keyboard_create_desc").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {

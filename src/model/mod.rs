@@ -3,6 +3,7 @@
 
 pub mod adapter;
 pub mod display;
+pub mod extractor;
 pub mod item;
 pub mod matcher;
 pub mod merge;
@@ -16,6 +17,9 @@ pub use item::{
 
 // Re-export specific parser helpers used across the codebase.
 pub use parser::{extract_inline_aliases, validate_alias_integrity};
+
+// Re-export extractor for markdown task extraction
+pub use extractor::{extract_markdown_tasks, ExtractedTask};
 
 // Re-export adapter/display/recurrence helpers for external use.
 pub use adapter::IcsAdapter;

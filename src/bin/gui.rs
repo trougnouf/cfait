@@ -39,25 +39,23 @@ fn main() -> iced::Result {
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
-            "--root" | "-r" => {
-                if i + 1 < args.len() {
+            "--root" | "-r"
+                if i + 1 < args.len() => {
                     override_root = Some(args[i + 1].clone().into());
                     i += 1; // Also consumed the value
                 }
-            }
             "--force-ssd" => {
                 force_ssd = true;
             }
             "--force-csd" => {
                 force_ssd = false;
             }
-            arg if !arg.starts_with('-') => {
+            arg if !arg.starts_with('-')
                 // If it's not a flag, assume it's the ICS file path.
                 // Only take the first one.
-                if ics_file_path.is_none() {
+                && ics_file_path.is_none() => {
                     ics_file_path = Some(arg.to_string());
                 }
-            }
             _ => { /* Ignore unknown flags */ }
         }
         i += 1;

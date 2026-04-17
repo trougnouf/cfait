@@ -1575,6 +1575,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
 fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
     let is_dark_mode = app.theme().extended_palette().is_dark;
+
     let input_title = text_editor(&app.input_value)
         .id("main_input")
         .placeholder(&app.current_placeholder)
@@ -1587,16 +1588,40 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .height(Length::Fixed(45.0))
         .font(iced::Font::DEFAULT);
 
-    let inner_content: Element<'_, Message> = if app.editing_uid.is_some() {
-        let max_desc_height = (app.current_window_size.height - 250.0).max(100.0);
+    let expand_btn = iced::widget::button(icon::icon(icon::CHILD_ARROW).size(16))
+        .style(iced::widget::button::text)
+        .padding(12)
+        .on_press(Message::StartCreateWithDescription);
+
+    let expand_tooltip = tooltip(
+        expand_btn,
+        text("Add Description & Subtasks (Ctrl+E)").size(12),
+        tooltip::Position::Top,
+    ).style(tooltip_style);
+
+    let title_row = row![
+        container(input_title).width(Length::Fill),
+        expand_tooltip
+    ].align_y(iced::Alignment::Center);
+
+    let is_expanded = app.editing_uid.is_some() || app.creating_with_desc;
+
+    let inner_content: Element<'_, Message> = if is_expanded {
+        let max_desc_height = (app.current_window_size.height - 250.0).max(160.0);
+
+        let placeholder = if app.creating_with_desc {
+            "Write notes here, or create subtasks:\n- [ ] Subtask 1 @tomorrow\n- [x] Completed task done:today\n\nUse numbers for dependencies:\n1. [ ] First step\n2. [ ] Second step (blocked by 1)"
+        } else {
+            &app.notes_placeholder
+        };
 
         let input_desc = text_editor(&app.description_value)
             .id("description_input")
-            .placeholder(&app.notes_placeholder)
+            .placeholder(placeholder)
             .on_action(Message::DescriptionChanged)
             .padding(10)
             .height(Length::Shrink)
-            .min_height(100.0);
+            .min_height(160.0);
 
         let scrollable_desc =
             scrollable(input_desc)
@@ -1613,8 +1638,15 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         let save_btn = iced::widget::button(text(rust_i18n::t!("save")).size(16))
             .style(iced::widget::button::primary)
             .on_press(Message::SubmitTask);
+
+        let header_label = if app.creating_with_desc {
+            rust_i18n::t!("mode_create")
+        } else {
+            rust_i18n::t!("editing")
+        };
+
         let top_bar = row![
-            text(rust_i18n::t!("editing"))
+            text(header_label)
                 .size(14)
                 .color(Color::from_rgb(0.7, 0.7, 1.0)),
             Space::new().width(Length::Fill),
@@ -1624,11 +1656,11 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .align_y(iced::Alignment::Center)
         .spacing(10);
 
-        column![top_bar, input_title, desc_container]
+        column![top_bar, title_row, desc_container]
             .spacing(10)
             .into()
     } else {
-        column![input_title].spacing(5).into()
+        column![title_row].spacing(5).into()
     };
 
     container(inner_content)

@@ -620,16 +620,14 @@ impl IcsAdapter {
                     let n = num_buf.parse::<u32>().unwrap_or(0);
                     match c {
                         'D' => minutes += n * 24 * 60,
-                        'H' => {
-                            if in_time {
+                        'H'
+                            if in_time => {
                                 minutes += n * 60
                             }
-                        }
-                        'M' => {
-                            if in_time {
+                        'M'
+                            if in_time => {
                                 minutes += n
                             }
-                        }
                         'W' => minutes += n * 7 * 24 * 60,
                         _ => {}
                     }

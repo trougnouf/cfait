@@ -91,6 +91,8 @@ pub struct AppState {
 
     pub yanked_uid: Option<String>,
     pub creating_child_of: Option<String>,
+    pub creating_with_desc: bool,     // <-- NEW
+    pub new_task_title: String,       // <-- NEW
     pub tag_aliases: HashMap<String, Vec<String>>,
 
     // Relationship browsing state
@@ -179,6 +181,8 @@ impl AppState {
             move_targets: Vec::new(),
             yanked_uid: None,
             creating_child_of: None,
+            creating_with_desc: false,
+            new_task_title: String::new(),
 
             tag_aliases: HashMap::new(),
             export_source_selection_state: ListState::default(),

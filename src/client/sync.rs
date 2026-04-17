@@ -627,16 +627,14 @@ impl RustyClient {
                         if !target_uid.is_empty() {
                             for item in journal.queue.iter_mut() {
                                 match item {
-                                    Action::Update(t) | Action::Delete(t) => {
-                                        if t.uid == target_uid {
+                                    Action::Update(t) | Action::Delete(t)
+                                        if t.uid == target_uid => {
                                             t.etag = etag.clone();
                                         }
-                                    }
-                                    Action::Move(t, _) => {
-                                        if t.uid == target_uid {
+                                    Action::Move(t, _)
+                                        if t.uid == target_uid => {
                                             t.etag = etag.clone();
                                         }
-                                    }
                                     _ => {}
                                 }
                             }
@@ -652,21 +650,19 @@ impl RustyClient {
                         };
                         for item in journal.queue.iter_mut() {
                             match item {
-                                Action::Update(t) | Action::Delete(t) => {
-                                    if t.uid == target_uid
-                                        || (!old_href.is_empty() && t.href == old_href)
-                                    {
+                                Action::Update(t) | Action::Delete(t)
+                                    if (t.uid == target_uid
+                                        || (!old_href.is_empty() && t.href == old_href))
+                                    => {
                                         t.href = new_href.clone();
                                         if let Some(last_slash) = new_href.rfind('/') {
                                             t.calendar_href = new_href[..=last_slash].to_string();
                                         }
                                     }
-                                }
-                                Action::Move(t, _) => {
-                                    if t.uid == target_uid {
+                                Action::Move(t, _)
+                                    if t.uid == target_uid => {
                                         t.href = new_href.clone();
                                     }
-                                }
                                 _ => {}
                             }
                         }

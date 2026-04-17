@@ -1304,11 +1304,11 @@ impl TaskStore {
             categories.push((UNCATEGORIZED_ID.to_string(), uncat_active_count));
         }
 
-        categories.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+        categories.sort_by_key(|a| a.0.to_lowercase());
 
         // Convert locations into sorted vector
         let mut locations: Vec<(String, usize)> = loc_active_counts.into_iter().collect();
-        locations.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+        locations.sort_by_key(|a| a.0.to_lowercase());
 
         // duplicate aggregates removed (handled above)
 

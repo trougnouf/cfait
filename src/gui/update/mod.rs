@@ -84,6 +84,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)
+        | Message::StartCreateWithDescription
         | Message::StartCreateChild(_)
         | Message::SubmitTask
         | Message::ToggleTask(_, _)
