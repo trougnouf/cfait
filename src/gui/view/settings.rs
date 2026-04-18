@@ -1,5 +1,6 @@
 // Renders the settings and onboarding screens.
 // File: ./src/gui/view/settings.rs
+use crate::config::AppTheme;
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
@@ -11,6 +12,7 @@ use iced::widget::{
 use iced::{Color, Element, Length, Theme};
 #[cfg(feature = "gui")]
 use iced_aw::color_picker;
+use strum::IntoEnumIterator;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct LangOption {
@@ -209,6 +211,28 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             ))
         ]
         .spacing(5)
+        .into()
+    } else {
+        Space::new().width(0).into()
+    };
+
+    // Theme selection UI
+    let theme_picker: Element<_> = if is_settings {
+        container(
+            column![
+                row![
+                    text(rust_i18n::t!("app_theme")),
+                    iced::widget::pick_list(
+                        AppTheme::iter().collect::<Vec<_>>(),
+                        Some(app.current_theme),
+                        Message::ThemeChanged
+                    )
+                ]
+                .spacing(10)
+                .align_y(iced::Alignment::Center),
+            ]
+            .spacing(10),
+        )
         .into()
     } else {
         Space::new().width(0).into()
@@ -755,6 +779,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         }),
         // 2. Preferences
         lang_picker, // <-- language picker added to the form layout
+        theme_picker, // <-- theme picker added to the form layout
         picker,
         cal_mgmt_ui,
         local_cal_ui,
