@@ -144,6 +144,11 @@ async fn main() -> Result<()> {
 
     let command = args.get(1).map(|s| s.as_str()).unwrap_or("");
 
+    // If command is empty, we are launching the interactive TUI.
+    // It is ONLY safe to use stderr if we are NOT in the interactive TUI.
+    let is_interactive_tui = command.is_empty();
+    cfait::system::init_logging(ctx.as_ref(), !is_interactive_tui);
+
     if command.starts_with('-') || command == "help" {
         cfait::cli::print_help(&binary_name);
         return Ok(());

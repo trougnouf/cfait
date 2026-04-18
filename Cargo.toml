@@ -75,6 +75,10 @@ uniffi = { version = "0.31", features = ["tokio", "build", "cli"], optional = tr
 uniffi_bindgen = { version = "0.31",  optional = true }
 uniffi_meta = "0.31"
 
+# --- LOGGING ---
+log = "0.4"
+simplelog = "0.12"
+
 
 # --- TUI ONLY (Optional) ---
 ratatui = { version = "0.30", optional = true }

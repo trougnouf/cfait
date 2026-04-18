@@ -1,11 +1,13 @@
 // File: ./src/system.rs
 // Background system actor for handling alarms and notifications.
 use crate::config::Config; // Import Config
-use crate::context::StandardContext; // Import StandardContext, remove unused AppContext trait
+use crate::context::{AppContext, StandardContext}; // Import AppContext trait
 use crate::model::{Alarm, AlarmTrigger, DateType, Task}; // Import DateType
 use chrono::{NaiveTime, Utc}; // Import Time helpers
 use notify_rust::Notification;
+use simplelog::*;
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
 use tokio::sync::mpsc;
 use tokio::time::{Duration, Instant, sleep_until};
 
@@ -20,6 +22,43 @@ pub enum AlarmMessage {
 pub enum SystemEvent {
     UpdateTasks(Vec<Task>),
     EnableAlarms,
+}
+
+/// Initializes logging for the application.
+///
+/// Args:
+///   ctx: Application context for determining cache directory
+///   enable_stderr: Whether to enable stderr logging (safe for CLI/GUI, unsafe for interactive TUI)
+pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool) {
+    let log_path = ctx
+        .get_cache_dir()
+        .unwrap_or_else(|_| std::env::temp_dir())
+        .join("cfait.log");
+
+    // File logger: always enabled, truncates (overwrites) on every launch
+    let file_logger = WriteLogger::new(
+        LevelFilter::Info,
+        simplelog::Config::default(),
+        File::create(&log_path).expect("Failed to create log file"),
+    );
+
+    let mut loggers: Vec<Box<dyn SharedLogger>> = vec![file_logger];
+
+    // Terminal logger: only enabled when safe to do so
+    if enable_stderr {
+        let term_logger = TermLogger::new(
+            LevelFilter::Warn, // Or Info/Debug depending on verbosity preference
+            simplelog::Config::default(),
+            TerminalMode::Stderr,
+            ColorChoice::Auto,
+        );
+        loggers.push(term_logger);
+    }
+
+    // Initialize the combined logger (ignore errors if it's already initialized)
+    let _ = CombinedLogger::init(loggers);
+
+    log::info!("Cfait logging initialized. Log file at: {:?}", log_path);
 }
 
 /// Spawns the background alarm manager.
