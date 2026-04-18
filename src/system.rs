@@ -30,35 +30,88 @@ pub enum SystemEvent {
 ///   ctx: Application context for determining cache directory
 ///   enable_stderr: Whether to enable stderr logging (safe for CLI/GUI, unsafe for interactive TUI)
 pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool) {
-    let log_path = ctx
-        .get_cache_dir()
-        .unwrap_or_else(|_| std::env::temp_dir())
-        .join("cfait.log");
+    let cache_dir = ctx.get_cache_dir().unwrap_or_else(|_| std::env::temp_dir());
+    let log_path = cache_dir.join("cfait.log");
+    let old_log_path = cache_dir.join("cfait.old.log");
 
-    // File logger: always enabled, truncates (overwrites) on every launch
+    // ROTATE LOGS: Preserve the previous session's log in case of a crash
+    if log_path.exists() {
+        let _ = std::fs::rename(&log_path, &old_log_path);
+    }
+
+    // File logger: creates a fresh cfait.log for this session
     let file_logger = WriteLogger::new(
-        LevelFilter::Info,
+        LevelFilter::Info, // Change to Debug if you want verbose file logs
         simplelog::Config::default(),
         File::create(&log_path).expect("Failed to create log file"),
     );
 
-    let mut loggers: Vec<Box<dyn SharedLogger>> = vec![file_logger];
-
-    // Terminal logger: only enabled when safe to do so
-    if enable_stderr {
-        let term_logger = TermLogger::new(
-            LevelFilter::Warn, // Or Info/Debug depending on verbosity preference
-            simplelog::Config::default(),
-            TerminalMode::Stderr,
-            ColorChoice::Auto,
+    #[cfg(target_os = "android")]
+    {
+        // On Android, we create a custom logger that splits output between
+        // the log file and Android's native Logcat.
+        let android_logger = android_logger::AndroidLogger::new(
+            android_logger::Config::default()
+                .with_max_level(log::LevelFilter::Debug)
+                .with_tag("CfaitRust"),
         );
-        loggers.push(term_logger);
+
+        struct DualLogger {
+            file: Box<dyn log::Log>,
+            android: android_logger::AndroidLogger,
+        }
+
+        impl log::Log for DualLogger {
+            fn enabled(&self, metadata: &log::Metadata) -> bool {
+                self.file.enabled(metadata) || self.android.enabled(metadata)
+            }
+
+            fn log(&self, record: &log::Record) {
+                if self.file.enabled(record.metadata()) {
+                    self.file.log(record);
+                }
+                if self.android.enabled(record.metadata()) {
+                    self.android.log(record);
+                }
+            }
+
+            fn flush(&self) {
+                self.file.flush();
+                self.android.flush();
+            }
+        }
+
+        let logger = DualLogger {
+            file: file_logger,
+            android: android_logger,
+        };
+
+        let _ = log::set_boxed_logger(Box::new(logger));
+        log::set_max_level(log::LevelFilter::Debug);
+        log::info!(
+            "Cfait logging initialized on Android. Log file at: {:?}",
+            log_path
+        );
     }
 
-    // Initialize the combined logger (ignore errors if it's already initialized)
-    let _ = CombinedLogger::init(loggers);
+    #[cfg(not(target_os = "android"))]
+    {
+        let mut loggers: Vec<Box<dyn SharedLogger>> = vec![file_logger];
 
-    log::info!("Cfait logging initialized. Log file at: {:?}", log_path);
+        // Terminal logger: only enabled when safe to do so (GUI / CLI)
+        if enable_stderr {
+            let term_logger = TermLogger::new(
+                LevelFilter::Warn,
+                simplelog::Config::default(),
+                TerminalMode::Stderr,
+                ColorChoice::Auto,
+            );
+            loggers.push(term_logger);
+        }
+
+        let _ = CombinedLogger::init(loggers);
+        log::info!("Cfait logging initialized. Log file at: {:?}", log_path);
+    }
 }
 
 /// Spawns the background alarm manager.

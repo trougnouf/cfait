@@ -295,6 +295,16 @@ impl CfaitMobile {
             .map(|s| s.to_string())
             .collect()
     }
+
+    pub fn log_message(&self, level: String, tag: String, message: String) {
+        match level.to_uppercase().as_str() {
+            "ERROR" => log::error!("[{}] {}", tag, message),
+            "WARN" => log::warn!("[{}] {}", tag, message),
+            "INFO" => log::info!("[{}] {}", tag, message),
+            "DEBUG" => log::debug!("[{}] {}", tag, message),
+            _ => log::trace!("[{}] {}", tag, message),
+        }
+    }
 }
 
 fn task_to_mobile(
@@ -472,14 +482,11 @@ async fn apply_store_mutation_multi_boxed(
 impl CfaitMobile {
     #[uniffi::constructor]
     pub fn new(android_files_dir: String) -> Self {
-        #[cfg(target_os = "android")]
-        android_logger::init_once(
-            android_logger::Config::default()
-                .with_max_level(log::LevelFilter::Debug)
-                .with_tag("CfaitRust"),
-        );
         let ctx: Arc<dyn AppContext> =
             Arc::new(StandardContext::new(Some(PathBuf::from(android_files_dir))));
+
+        // Initialize dual file + logcat logging for Android
+        crate::system::init_logging(ctx.as_ref(), false);
 
         let store = Arc::new(Mutex::new(TaskStore::new(ctx.clone())));
         let client = Arc::new(Mutex::new(None));
@@ -2219,6 +2226,9 @@ impl CfaitMobile {
     fn create_debug_export_internal(&self) -> Result<String, MobileError> {
         #[cfg(target_os = "android")]
         {
+            // ADD THIS LINE to ensure all logs are written to disk before zipping
+            log::logger().flush();
+
             let data_dir = self
                 .ctx
                 .get_data_dir()
