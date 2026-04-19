@@ -47,7 +47,7 @@ jobs:
           # Linux Binary Tarball
           mkdir "cfait-linux-${CLEAN_VERSION}"
           cp target/release/cfait "cfait-linux-${CLEAN_VERSION}/"
-          cp target/release/gui "cfait-linux-${CLEAN_VERSION}/cfait-gui"
+          cp target/release/cfait-gui "cfait-linux-${CLEAN_VERSION}/cfait-gui"
           cp README.md LICENSE "cfait-linux-${CLEAN_VERSION}/"
           cp assets/cfait.desktop "cfait-linux-${CLEAN_VERSION}/"
           cp assets/cfait.svg "cfait-linux-${CLEAN_VERSION}/"
@@ -172,7 +172,7 @@ jobs:
           fi
           mkdir -p windows-staging
           cp target/x86_64-pc-windows-gnu/release/cfait.exe windows-staging/
-          cp target/x86_64-pc-windows-gnu/release/gui.exe windows-staging/cfait-gui.exe
+          cp target/x86_64-pc-windows-gnu/release/cfait-gui.exe windows-staging/cfait-gui.exe
           cp README.md LICENSE windows-staging/
           (cd windows-staging && zip -r "../dist/cfait-windows-$RAW_VERSION.zip" .)
 

@@ -25,10 +25,10 @@ modules:
       # Build the TUI binary
       - cargo --offline build --release --verbose --features tui
       # Build the GUI binary
-      - cargo --offline build --release --verbose --features gui --bin gui
+      - cargo --offline build --release --verbose --features gui --bin cfait-gui
       # Install binaries to /app/bin
       - install -Dm755 target/release/cfait -t /app/bin/
-      - install -Dm755 target/release/gui /app/bin/cfait-gui
+      - install -Dm755 target/release/cfait-gui /app/bin/cfait-gui
       # Install desktop file and icons (fix Icon name to match app-id)
       - desktop-file-edit --set-icon=com.trougnouf.Cfait assets/cfait.desktop
       - install -Dm644 assets/cfait.desktop /app/share/applications/com.trougnouf.Cfait.desktop

@@ -54,7 +54,7 @@ package() {
   cd "$_pkgname"
 
   install -Dm755 "target/release/cfait" "$pkgdir/usr/bin/cfait"
-  install -Dm755 "target/release/gui" "$pkgdir/usr/bin/cfait-gui"
+  install -Dm755 "target/release/cfait-gui" "$pkgdir/usr/bin/cfait-gui"
 
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"

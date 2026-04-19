@@ -131,7 +131,7 @@ path = "src/bin/tui.rs"
 required-features = ["tui"]
 
 [[bin]]
-name = "gui"
+name = "cfait-gui"
 path = "src/bin/gui.rs"
 required-features = ["gui"]
 
@@ -163,7 +163,7 @@ section = "utils"
 priority = "optional"
 assets = [
     ["target/release/cfait", "usr/bin/", "755"],
-    ["target/release/gui", "usr/bin/cfait-gui", "755"],
+    ["target/release/cfait-gui", "usr/bin/cfait-gui", "755"],
     ["assets/cfait.desktop", "usr/share/applications/", "644"],
     ["assets/cfait.svg", "usr/share/icons/hicolor/scalable/apps/cfait.svg", "644"],
 ]
