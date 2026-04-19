@@ -1589,21 +1589,25 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .height(Length::Fixed(45.0))
         .font(iced::Font::DEFAULT);
 
-    let expand_btn = iced::widget::button(icon::icon(icon::CHILD_ARROW).size(16))
+    let is_input_empty = app.input_value.text().is_empty();
+    let expand_btn = iced::widget::button(icon::icon(icon::DETAILED_TRIANGLE).size(16))
         .style(iced::widget::button::text)
         .padding(12)
-        .on_press(Message::StartCreateWithDescription);
+        .on_press_maybe(if is_input_empty {
+            None
+        } else {
+            Some(Message::StartCreateWithDescription)
+        });
 
     let expand_tooltip = tooltip(
         expand_btn,
         text("Add Description & Subtasks (Ctrl+E)").size(12),
         tooltip::Position::Top,
-    ).style(tooltip_style);
+    )
+    .style(tooltip_style);
 
-    let title_row = row![
-        container(input_title).width(Length::Fill),
-        expand_tooltip
-    ].align_y(iced::Alignment::Center);
+    let title_row = row![container(input_title).width(Length::Fill), expand_tooltip]
+        .align_y(iced::Alignment::Center);
 
     let is_expanded = app.editing_uid.is_some() || app.creating_with_desc;
 

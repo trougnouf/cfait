@@ -120,6 +120,7 @@ object NfIcons {
     val CHECK = get(0xf00c)
     val CROSS = get(0xf00d)
     val CHILD_ARROW = get(0xf149) // <-- ADD THIS LINE
+    val DETAILED_TRIANGLE = get(0xf01c6)
     val PLUS_LOCK = get(0xf1a5d)
     val LINK_LOCK = get(0xf10ba)
     val PLAY = get(0xeb2c)

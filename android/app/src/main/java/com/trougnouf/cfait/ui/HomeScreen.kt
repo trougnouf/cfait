@@ -1673,7 +1673,12 @@ fun HomeScreen(
                                         value = newTaskText, onValueChange = { newTaskText = it },
                                         placeholder = { Text("${stringResource(R.string.example_buy_cat_food)} !1 @tomorrow") },
                                         modifier = Modifier.weight(1f), singleLine = true,
-                                        visualTransformation = remember(isDark) { SmartSyntaxTransformation(api, isDark) },
+                                        visualTransformation = remember(isDark) {
+                                            SmartSyntaxTransformation(
+                                                api,
+                                                isDark
+                                            )
+                                        },
                                         keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Send),
                                         keyboardActions = KeyboardActions(onSend = {
                                             if (newTaskText.isNotBlank()) handleAddTaskWithGeo(
@@ -1687,7 +1692,7 @@ fun HomeScreen(
                                         modifier = Modifier.size(48.dp)
                                     ) {
                                         NfIcon(
-                                            if (isCreateExpanded) NfIcons.ARROW_DOWN else NfIcons.CHILD_ARROW,
+                                            if (isCreateExpanded) NfIcons.ARROW_DOWN else NfIcons.DETAILED_TRIANGLE,
                                             20.sp,
                                             MaterialTheme.colorScheme.primary
                                         )

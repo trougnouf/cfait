@@ -10,7 +10,7 @@ on:
   pull_request:
 
 jobs:
-  # --- JOB 1: TESTS ---
+  # --- JOB 1: VALIDATION ---
   test:
     runs-on: self-hosted-arch
     container:
@@ -21,13 +21,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run unit tests
-        run: cargo test --all-features --verbose
-
       - name: Run linter (clippy)
         run: cargo clippy --all-features -- -D warnings
 
-  # --- JOB 2: ROLLING ANDROID ---
+      - name: Run unit tests
+        run: cargo test --all-features --verbose
+
+  # --- JOB 2: ROLLING ANDROID (Only on PUSH) ---
   rolling-android:
     needs: test
     if: github.event_name == 'push'
@@ -81,7 +81,7 @@ jobs:
           path: dist-android/*
           retention-days: 1
 
-  # --- JOB 3: ROLLING WINDOWS ---
+  # --- JOB 3: ROLLING WINDOWS (Only on PUSH) ---
   rolling-windows:
     needs: test
     if: github.event_name == 'push'
@@ -115,14 +115,14 @@ jobs:
           path: dist-windows/*
           retention-days: 1
 
-  # --- JOB 4: ROLLING FLATPAK ---
+  # --- JOB 4: ROLLING FLATPAK (Only on PUSH) ---
   rolling-flatpak:
     needs: test
     if: github.event_name == 'push'
     runs-on: self-hosted-arch
     container:
       image: local/arch-builder
-      options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined
+      options: --privileged
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -138,7 +138,6 @@ jobs:
           import yaml
           with open('com.trougnouf.Cfait.yml', 'r') as f:
               data = yaml.safe_load(f)
-          # Replace the first source (the git repo) with a local directory reference
           data['modules'][0]['sources'][0] = {'type': 'dir', 'path': '.'}
           with open('com.trougnouf.Cfait.yml', 'w') as f:
               yaml.dump(data, f)
@@ -146,7 +145,6 @@ jobs:
 
       - name: Build Flatpak Bundle
         run: |
-          # Ensure builder user owns the workspace for Flatpak-builder
           chown -R builder:builder .
           su builder -c "flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo"
           su builder -c "flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --repo=repo build-dir com.trougnouf.Cfait.yml"
@@ -164,7 +162,7 @@ jobs:
           path: dist-flatpak/*
           retention-days: 1
 
-  # --- JOB 5: PUBLISH ROLLING RELEASE ---
+  # --- JOB 5: PUBLISH ROLLING (Only on Push to MASTER) ---
   publish-rolling:
     needs: [rolling-android, rolling-windows, rolling-flatpak]
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
@@ -172,9 +170,6 @@ jobs:
     container:
       image: local/ubuntu-builder
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
@@ -188,11 +183,18 @@ jobs:
           REPO="${{ github.repository }}"
           TAG_NAME="rolling"
 
+          # 1. Flatten the directory structure
+          # GitHub artifacts are downloaded into dist/artifact-name/file.
+          # We move them to dist/ so tea uploads them correctly.
+          cd dist
+          find . -mindepth 2 -type f -exec mv -t . {} +
+          cd ..
+
           git config --global user.name "Cfait Release Bot"
           git config --global user.email "bot@trougnouf.com"
           git tag -f "$TAG_NAME"
           git push origin "$TAG_NAME" -f
-          sleep 3
+          sleep 5
 
           tea release delete --repo "$REPO" --confirm "$TAG_NAME" 2>/dev/null || true
           tea release create \
@@ -203,4 +205,10 @@ jobs:
             "$TAG_NAME"
 
           echo "Uploading assets..."
-          find dist -type f -exec echo "Uploading {}..." \; -exec tea release assets create --repo "$REPO" "$TAG_NAME" {} \;
+          cd dist
+          for file in *; do
+            if [ -f "$file" ]; then
+              echo "Uploading $file..."
+              tea release assets create --repo "$REPO" "$TAG_NAME" "$file"
+            fi
+          done

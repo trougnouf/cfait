@@ -60,6 +60,7 @@ pub const UNLINK: char = '\u{f127}'; // 
 pub const CLONE: char = '\u{f24d}'; // nf-fa-clone
 pub const SHIELD: char = '\u{f32a}'; // 
 pub const CHILD_ARROW: char = '\u{f149}'; // 
+pub const DETAILED_TRIANGLE: char = '\u{f01c6}'; // nf-md-details
 pub const INFO: char = '\u{f129}'; // 
 pub const REPEAT: char = '\u{f0b6}'; // 
 pub const ARROW_RIGHT: char = '\u{f061}'; // 
