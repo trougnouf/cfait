@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Android Application class initializing the Rust backend.
 package com.trougnouf.cfait
 

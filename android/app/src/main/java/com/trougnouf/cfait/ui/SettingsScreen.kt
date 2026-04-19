@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./android/app/src/main/java/com/trougnouf/cfait/ui/SettingsScreen.kt
 /*
  * Settings screen for the Android client (Compose).

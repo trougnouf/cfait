@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/view/task_row.rs
 use crate::color_utils;
 use crate::gui::icon;

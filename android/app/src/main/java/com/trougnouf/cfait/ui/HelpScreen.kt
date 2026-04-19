@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Compose UI screen for help documentation.
 package com.trougnouf.cfait.ui
 

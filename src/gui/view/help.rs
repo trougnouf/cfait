@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
 use crate::help::HelpTab;

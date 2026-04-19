@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/model/display.rs
 use crate::model::item::{Task, TaskStatus};
 use chrono::Utc; // Import Utc for live calculation

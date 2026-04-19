@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/tui/mod.rs
 // Entry point and main loop for the TUI application.
 pub mod action;

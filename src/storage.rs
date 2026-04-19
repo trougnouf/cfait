@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /* File: cfait/src/storage.rs
  *
  * Manages local file storage for tasks and calendars.

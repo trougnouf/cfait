@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./android/app/src/main/java/com/trougnouf/cfait/MainActivity.kt
 package com.trougnouf.cfait
 

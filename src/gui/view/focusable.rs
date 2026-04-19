@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/view/focusable.rs
 
 use iced::advanced::layout;

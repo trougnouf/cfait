@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/journal.rs
 /*
  * cfait/src/journal.rs

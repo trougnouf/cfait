@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/tui/state.rs
 // Manages the application state for the TUI.
 use crate::context::AppContext;

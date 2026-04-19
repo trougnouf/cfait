@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/cli.rs
 //! Shared command-line interface logic, like printing help.
 

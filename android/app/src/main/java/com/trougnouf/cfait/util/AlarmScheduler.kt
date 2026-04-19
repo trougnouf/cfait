@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Utility for scheduling Android AlarmManager events.
 package com.trougnouf.cfait.util
 

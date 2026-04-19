@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Handles event subscriptions (keyboard, window) for the GUI.
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp, SidebarMode};

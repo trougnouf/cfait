@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/config.rs
 // Handles configuration loading, saving, and defaults.
 use crate::context::AppContext;

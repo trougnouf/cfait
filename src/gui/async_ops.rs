@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/async_ops.rs
 // Asynchronous operations wrapper bridging sync GUI and async client.
 use crate::client::RustyClient;

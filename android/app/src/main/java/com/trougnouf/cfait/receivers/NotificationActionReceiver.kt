@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Android Receiver for handling notification actions (Snooze/Dismiss).
 package com.trougnouf.cfait.receivers
 

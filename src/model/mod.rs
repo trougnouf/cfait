@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/model/mod.rs
 // Central model module re-exports to make types available as `crate::model::*`.
 

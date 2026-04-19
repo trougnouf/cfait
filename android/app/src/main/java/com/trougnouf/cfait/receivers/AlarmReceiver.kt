@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Android BroadcastReceiver for handling system alarm events.
 package com.trougnouf.cfait.receivers
 

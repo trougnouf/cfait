@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: src/model/item.rs
 /*
 This file contains the core Task data model used across clients (TUI, GUI, Mobile).

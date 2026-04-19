@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/client/mod.rs
 // Module declaration exporting the CalDAV client components.
 pub mod auth;

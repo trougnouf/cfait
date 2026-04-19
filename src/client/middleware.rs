@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/client/middleware.rs
 //! Tower middleware for adding a User-Agent header.
 use http::Request;

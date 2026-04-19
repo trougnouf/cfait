@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Worker handling background notification interactions.
 package com.trougnouf.cfait.workers
 

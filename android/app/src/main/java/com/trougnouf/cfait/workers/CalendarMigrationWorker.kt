@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Worker for migrating local calendars.
 package com.trougnouf.cfait.workers
 

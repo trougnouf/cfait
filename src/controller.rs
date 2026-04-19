@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/controller.rs
 //! Central logic controller for Task operations.
 //! This is the single source of truth for all business logic (create, update, delete, etc.).

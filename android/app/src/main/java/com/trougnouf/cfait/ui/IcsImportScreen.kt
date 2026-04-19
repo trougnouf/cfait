@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Screen for selecting which calendar to import ICS file into.
 package com.trougnouf.cfait.ui
 

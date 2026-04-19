@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 //cfait/src/color_utils.rs
 
 // Utilities for generating deterministic colors from strings.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 /*
 File: src/tui/handlers.rs
 Handles keyboard input and system events for the TUI.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/view/mod.rs
 use std::time::Duration;
 pub mod focusable;

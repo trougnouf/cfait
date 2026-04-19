@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/mod.rs
 /*
 Entry point and setup for the GUI application.

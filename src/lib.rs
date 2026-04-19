@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Crate root library declaration and module exports.
 
 // Make rust_i18n symbols available to the rest of the crate by expanding the

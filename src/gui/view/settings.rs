@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Renders the settings and onboarding screens.
 // File: ./src/gui/view/settings.rs
 use crate::config::AppTheme;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/model/recurrence.rs
 use crate::model::item::{Alarm, AlarmTrigger, DateType, RawProperty, Task, TaskStatus};
 use chrono::{Datelike, Local, NaiveDate};

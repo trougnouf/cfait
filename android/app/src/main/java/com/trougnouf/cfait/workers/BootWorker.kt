@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Background worker for rescheduling alarms on boot.
 package com.trougnouf.cfait.workers
 

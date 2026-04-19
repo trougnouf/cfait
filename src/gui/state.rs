@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/state.rs
 // Manages the application state for the GUI (Iced).
 use crate::client::RustyClient;

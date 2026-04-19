@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/alarm_index.rs
 // Manages an optimized index for fast alarm lookups.
 //

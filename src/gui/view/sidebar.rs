@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/view/sidebar.rs
 // Renders the sidebar (calendars, tags, locations) for the GUI.
 use super::tooltip_style;

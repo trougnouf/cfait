@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./android/app/src/main/java/com/trougnouf/cfait/ui/TaskRow.kt
 // Compose UI component for rendering a single task row.
 package com.trougnouf.cfait.ui

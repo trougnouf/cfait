@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/view/syntax.rs
 // Implements syntax highlighting for the smart input editor.
 use crate::color_utils;

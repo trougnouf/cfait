@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 package com.trougnouf.cfait.ui
 
 import androidx.compose.foundation.clickable

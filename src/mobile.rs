@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: src/mobile.rs
 use crate::alarm_index::AlarmIndex;
 use crate::cache::Cache;

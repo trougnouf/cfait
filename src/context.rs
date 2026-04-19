@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/context.rs
 /*! Application context abstraction for filesystem paths.
 

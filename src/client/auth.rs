@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Implements HTTP authentication logic (Basic/Digest) for the client.
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;

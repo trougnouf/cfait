@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/model/extractor.rs
 use std::collections::HashMap;
 use uuid::Uuid;

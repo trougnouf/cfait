@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/model/parser.rs
 // File: ./src/model/parser.rs
 /*

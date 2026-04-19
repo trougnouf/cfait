@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/client/sync.rs
 //! Journal synchronization logic for the CalDAV client.
 //! This module contains the implementation for processing the offline action queue.

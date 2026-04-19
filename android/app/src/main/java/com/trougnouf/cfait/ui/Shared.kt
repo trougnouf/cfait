@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Shared Compose UI components and syntax highlighting logic.
 // File: ./android/app/src/main/java/com/trougnouf/cfait/ui/Shared.kt
 package com.trougnouf.cfait.ui

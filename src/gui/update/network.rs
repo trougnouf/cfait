@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/update/network.rs
 use crate::cache::Cache;
 use crate::config::Config;

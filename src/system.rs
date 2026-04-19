@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/system.rs
 // Background system actor for handling alarms and notifications.
 use crate::config::Config; // Import Config

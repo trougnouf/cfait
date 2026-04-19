@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Worker for bulk calendar event operations.
 package com.trougnouf.cfait.workers
 

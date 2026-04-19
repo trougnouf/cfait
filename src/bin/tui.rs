@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Binary entry point for the TUI application (supports non-interactive CLI subcommands).
 //
 // This file implements a small CLI dispatcher on top of the existing TUI entry

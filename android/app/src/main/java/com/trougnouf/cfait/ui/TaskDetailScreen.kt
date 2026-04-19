@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./android/app/src/main/java/com/trougnouf/cfait/ui/TaskDetailScreen.kt
 // Compose UI screen for editing task details.
 package com.trougnouf.cfait.ui

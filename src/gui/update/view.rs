@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Handles view/navigation-related messages in the GUI.
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;

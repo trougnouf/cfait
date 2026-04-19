@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Android Receiver for rescheduling alarms after device boot.
 package com.trougnouf.cfait.receivers
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Logic for checking if tasks match search queries.
 //
 // This file implements a lexer and recursive-descent parser to support boolean

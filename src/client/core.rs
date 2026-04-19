@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/client/core.rs
 /*
 File: ./src/client/core.rs

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
 use crate::context::AppContext;
 use crate::model::{CalendarListEntry, Task};
 use crate::storage::LocalStorage;
