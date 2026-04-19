@@ -115,62 +115,53 @@ jobs:
           path: dist-windows/*
           retention-days: 1
 
-    # --- JOB 4: ROLLING FLATPAK ---
-    rolling-flatpak:
-      needs: test
-      if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-      runs-on: self-hosted-arch
-      container:
-        image: local/arch-builder
-      steps:
-        - name: Checkout
-          uses: actions/checkout@v4
+  # --- JOB 4: ROLLING FLATPAK ---
+  rolling-flatpak:
+    needs: test
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    runs-on: self-hosted-arch
+    container:
+      image: local/arch-builder
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-        - name: Generate cargo-sources.yml
-          run: |
-            wget https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
-            python3 flatpak-cargo-generator.py Cargo.lock -o cargo-sources.yml
+      - name: Generate cargo-sources.yml
+        run: |
+          wget https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
+          python3 flatpak-cargo-generator.py Cargo.lock -o cargo-sources.yml
 
-        - name: Prepare Manifest for Rolling
-          run: |
-            # Use python to safely swap the 'git' source for a 'dir' source
-            # This ensures we build the code exactly as it exists in the CI workspace
-            python3 -c "
-            import yaml
-            with open('com.trougnouf.Cfait.yml', 'r') as f:
-                data = yaml.safe_load(f)
-            # Replace the first source (the git repo) with a local directory reference
-            data['modules'][0]['sources'][0] = {'type': 'dir', 'path': '.'}
-            with open('com.trougnouf.Cfait.yml', 'w') as f:
-                yaml.dump(data, f)
-            "
+      - name: Prepare Manifest for Rolling
+        run: |
+          python3 -c "
+          import yaml
+          with open('com.trougnouf.Cfait.yml', 'r') as f:
+              data = yaml.safe_load(f)
+          # Replace the first source (the git repo) with a local directory reference
+          data['modules'][0]['sources'][0] = {'type': 'dir', 'path': '.'}
+          with open('com.trougnouf.Cfait.yml', 'w') as f:
+              yaml.dump(data, f)
+          "
 
-        - name: Build Flatpak Bundle
-          run: |
-            # Ensure builder user owns the workspace
-            chown -R builder:builder .
+      - name: Build Flatpak Bundle
+        run: |
+          # Ensure builder user owns the workspace for Flatpak-builder
+          chown -R builder:builder .
+          su builder -c "flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo"
+          su builder -c "flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --repo=repo build-dir com.trougnouf.Cfait.yml"
+          su builder -c "flatpak build-bundle repo cfait-rolling.flatpak com.trougnouf.Cfait"
 
-            # Initialize user-level flatpak environment
-            su builder -c "flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo"
+      - name: Prepare Artifact
+        run: |
+          mkdir -p dist-flatpak
+          mv cfait-rolling.flatpak dist-flatpak/
 
-            # Build. We use --share=network because the Rust SDK extension might need to
-            # initialize itself, but the actual cargo build is --offline via manifest.
-            su builder -c "flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --repo=repo build-dir com.trougnouf.Cfait.yml"
-
-            # Create the installable .flatpak file
-            su builder -c "flatpak build-bundle repo cfait-rolling.flatpak com.trougnouf.Cfait"
-
-        - name: Prepare Artifact
-          run: |
-            mkdir -p dist-flatpak
-            mv cfait-rolling.flatpak dist-flatpak/
-
-        - name: Upload Flatpak Artifact
-          uses: actions/upload-artifact@v3
-          with:
-            name: rolling-flatpak
-            path: dist-flatpak/*
-            retention-days: 1
+      - name: Upload Flatpak Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: rolling-flatpak
+          path: dist-flatpak/*
+          retention-days: 1
 
   # --- JOB 5: PUBLISH ROLLING RELEASE ---
   publish-rolling:
@@ -206,7 +197,6 @@ jobs:
           TEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           tea login add --name codeberg --url ${{ github.server_url }} --token ${{ secrets.RELEASE_TOKEN }}
-
           REPO="${{ github.repository }}"
           TAG_NAME="rolling"
 
@@ -216,18 +206,14 @@ jobs:
           git push origin "$TAG_NAME" -f
           sleep 3
 
-          # Delete old release if it exists
           tea release delete --repo "$REPO" --confirm "$TAG_NAME" 2>/dev/null || true
-
-          # Re-create the release
           tea release create \
             --repo "$REPO" \
             --title "Rolling Development Build" \
-            --note "Automated development build (Commit: ${{ github.sha }}). This contains the latest unreleased features but may be unstable." \
+            --note "Automated development build (Commit: ${{ github.sha }})." \
             --prerelease \
             "$TAG_NAME"
 
-          # Upload all downloaded artifacts (APK, EXE zip, Flatpak)
           echo "Uploading assets..."
           cd dist
           for file in *; do
@@ -236,5 +222,3 @@ jobs:
               tea release assets create --repo "$REPO" "$TAG_NAME" "$file"
             fi
           done
-
-          echo "✅ Rolling release updated with Android, Windows, and Flatpak builds!"
