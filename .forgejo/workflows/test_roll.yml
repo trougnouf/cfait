@@ -30,7 +30,7 @@ jobs:
   # --- JOB 2: ROLLING ANDROID ---
   rolling-android:
     needs: test
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    if: github.event_name == 'push'
     runs-on: self-hosted-ubuntu
     container:
       image: local/ubuntu-builder
@@ -84,7 +84,7 @@ jobs:
   # --- JOB 3: ROLLING WINDOWS ---
   rolling-windows:
     needs: test
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    if: github.event_name == 'push'
     runs-on: self-hosted-arch
     container:
       image: local/arch-builder
@@ -118,10 +118,11 @@ jobs:
   # --- JOB 4: ROLLING FLATPAK ---
   rolling-flatpak:
     needs: test
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    if: github.event_name == 'push'
     runs-on: self-hosted-arch
     container:
       image: local/arch-builder
+      options: --security-opt seccomp=unconfined --security-opt apparmor=unconfined
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -174,22 +175,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download Android Artifact
+      - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
-          name: rolling-android
-          path: dist
-
-      - name: Download Windows Artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: rolling-windows
-          path: dist
-
-      - name: Download Flatpak Artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: rolling-flatpak
           path: dist
 
       - name: Update Rolling Release on Codeberg
@@ -215,10 +203,4 @@ jobs:
             "$TAG_NAME"
 
           echo "Uploading assets..."
-          cd dist
-          for file in *; do
-            if [ -f "$file" ]; then
-              echo "Uploading $file..."
-              tea release assets create --repo "$REPO" "$TAG_NAME" "$file"
-            fi
-          done
+          find dist -type f -exec echo "Uploading {}..." \; -exec tea release assets create --repo "$REPO" "$TAG_NAME" {} \;
