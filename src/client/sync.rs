@@ -11,10 +11,13 @@ use http::{Request, StatusCode};
 use libdav::caldav::CalDavClient;
 use libdav::dav::WebDavError;
 use libdav::dav::{Delete, PutResource};
-use std::mem;
+use std::sync::OnceLock;
+use tokio::sync::Mutex as AsyncMutex;
 
 #[cfg(any(test, feature = "test_hooks"))]
 use crate::client::core::test_hooks::TEST_FORCE_SYNC_ERROR;
+
+static SYNC_LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
 
 // --- Internal Sync Outcome Types ---
 enum StepOutcome {
@@ -375,12 +378,9 @@ impl RustyClient {
     }
 
     pub async fn sync_journal(&self) -> Result<(Vec<String>, Vec<Task>), String> {
-        let mut journal = Journal::load(self.ctx.as_ref());
-        let mut tmp_j = Journal {
-            queue: mem::take(&mut journal.queue),
-        };
-        tmp_j.compact();
-        journal.queue = tmp_j.queue;
+        // 1. Serialize sync loops process-wide to protect the physical journal file
+        let lock = SYNC_LOCK.get_or_init(|| AsyncMutex::new(()));
+        let _guard = lock.lock().await;
 
         let client = self.client.as_ref().ok_or("Offline")?;
         let mut warnings = Vec::new();
@@ -392,8 +392,28 @@ impl RustyClient {
 
         let mut recovery_cal_created_this_cycle = false;
 
-        while !journal.queue.is_empty() {
-            let next_action = journal.queue[0].clone();
+        // 2. Transactional processing loop
+        loop {
+            let mut next_action_opt = None;
+
+            // Peek the front of the queue
+            Journal::modify(self.ctx.as_ref(), |queue| {
+                let mut tmp_j = Journal {
+                    queue: std::mem::take(queue),
+                };
+                tmp_j.compact();
+                *queue = tmp_j.queue.clone();
+                if !queue.is_empty() {
+                    next_action_opt = Some(queue[0].clone());
+                }
+            })
+            .map_err(|e| e.to_string())?;
+
+            let next_action = match next_action_opt {
+                Some(a) => a,
+                None => break, // Queue is empty, we are done!
+            };
+
             let mut conflict_resolved_action: Option<Action> = None;
             let mut new_etag_to_propagate: Option<String> = None;
             let mut new_href_to_propagate: Option<(String, String)> = None;
@@ -602,90 +622,87 @@ impl RustyClient {
                         synced_tasks.push(t.clone());
                     }
 
-                    let should_remove = if let Some(head) = journal.queue.first() {
-                        actions_match_identity(head, &next_action)
-                    } else {
-                        false
-                    };
-
-                    if !should_remove {
-                        continue;
-                    }
-
-                    journal.queue.remove(0);
-
-                    if let Some(act) = conflict_resolved_action {
-                        journal.queue.insert(0, act);
-                    }
-
-                    if let Some(etag) = new_etag_to_propagate {
-                        let target_uid = match &next_action {
-                            Action::Create(t) | Action::Update(t) => t.uid.clone(),
-                            Action::Move(t, _) => t.uid.clone(),
-                            _ => String::new(),
+                    // 3. Pop the item from the disk queue and propagate metadata
+                    Journal::modify(self.ctx.as_ref(), |queue| {
+                        let should_remove = if let Some(head) = queue.first() {
+                            actions_match_identity(head, &next_action)
+                        } else {
+                            false
                         };
-                        if !target_uid.is_empty() {
-                            for item in journal.queue.iter_mut() {
-                                match item {
-                                    Action::Update(t) | Action::Delete(t)
-                                        if t.uid == target_uid => {
-                                            t.etag = etag.clone();
+
+                        if should_remove {
+                            queue.remove(0);
+
+                            if let Some(act) = conflict_resolved_action {
+                                queue.insert(0, act);
+                            }
+
+                            if let Some(etag) = new_etag_to_propagate {
+                                let target_uid = match &next_action {
+                                    Action::Create(t) | Action::Update(t) => t.uid.clone(),
+                                    Action::Move(t, _) => t.uid.clone(),
+                                    _ => String::new(),
+                                };
+                                if !target_uid.is_empty() {
+                                    for item in queue.iter_mut() {
+                                        match item {
+                                            Action::Update(t) | Action::Delete(t)
+                                                if t.uid == target_uid =>
+                                            {
+                                                t.etag = etag.clone();
+                                            }
+                                            Action::Move(t, _) if t.uid == target_uid => {
+                                                t.etag = etag.clone();
+                                            }
+                                            _ => {}
                                         }
-                                    Action::Move(t, _)
-                                        if t.uid == target_uid => {
-                                            t.etag = etag.clone();
+                                    }
+                                }
+                            }
+
+                            if let Some((old_href, new_href)) = new_href_to_propagate {
+                                let target_uid = match &next_action {
+                                    Action::Move(t, _) => t.uid.clone(),
+                                    Action::Create(t) => t.uid.clone(),
+                                    Action::Update(t) => t.uid.clone(),
+                                    _ => String::new(),
+                                };
+                                for item in queue.iter_mut() {
+                                    match item {
+                                        Action::Update(t) | Action::Delete(t)
+                                            if (t.uid == target_uid
+                                                || (!old_href.is_empty()
+                                                    && t.href == old_href)) =>
+                                        {
+                                            t.href = new_href.clone();
+                                            if let Some(last_slash) = new_href.rfind('/') {
+                                                t.calendar_href =
+                                                    new_href[..=last_slash].to_string();
+                                            }
                                         }
-                                    _ => {}
+                                        Action::Move(t, _) if t.uid == target_uid => {
+                                            t.href = new_href.clone();
+                                        }
+                                        _ => {}
+                                    }
                                 }
                             }
                         }
-                    }
-
-                    if let Some((old_href, new_href)) = new_href_to_propagate {
-                        let target_uid = match &next_action {
-                            Action::Move(t, _) => t.uid.clone(),
-                            Action::Create(t) => t.uid.clone(),
-                            Action::Update(t) => t.uid.clone(),
-                            _ => String::new(),
-                        };
-                        for item in journal.queue.iter_mut() {
-                            match item {
-                                Action::Update(t) | Action::Delete(t)
-                                    if (t.uid == target_uid
-                                        || (!old_href.is_empty() && t.href == old_href))
-                                    => {
-                                        t.href = new_href.clone();
-                                        if let Some(last_slash) = new_href.rfind('/') {
-                                            t.calendar_href = new_href[..=last_slash].to_string();
-                                        }
-                                    }
-                                Action::Move(t, _)
-                                    if t.uid == target_uid => {
-                                        t.href = new_href.clone();
-                                    }
-                                _ => {}
-                            }
-                        }
-                    }
+                    })
+                    .map_err(|e| e.to_string())?;
                 }
                 Err(msg) => {
+                    // Stop processing on network error.
+                    // The action safely remains at the front of the disk queue.
                     #[cfg(target_os = "android")]
                     log::error!("sync_journal step failed: {}", msg);
                     #[cfg(not(target_os = "android"))]
                     eprintln!("sync_journal step failed: {}", msg);
 
-                    let _ = Journal::modify(self.ctx.as_ref(), |queue| {
-                        *queue = journal.queue.clone();
-                    });
                     return Err(msg);
                 }
             }
         }
-
-        Journal::modify(self.ctx.as_ref(), |queue| {
-            *queue = journal.queue;
-        })
-        .map_err(|e| e.to_string())?;
 
         Ok((warnings, synced_tasks))
     }

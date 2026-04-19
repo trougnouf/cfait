@@ -262,10 +262,10 @@ impl RustyClient {
         )
         .map_err(|e| e.to_string())?;
 
-        // Ensure any queued actions are attempted as we connect.
-        // The sync implementation lives in src/client/sync.rs as `impl RustyClient`.
-        // Call it if available; ignore errors here so connect remains resilient.
-        let _ = client.sync_journal().await;
+        // Limit timeout to ensure a clean fallback in problematic scenarios.
+        // If the queue is massive, we don't want to block the initial load forever.
+        let _ =
+            tokio::time::timeout(std::time::Duration::from_secs(10), client.sync_journal()).await;
 
         // Attempt to fetch calendars and optionally auto-correct URL/prefixes
         let ((calendars, corrected_url_opt), warning) = match client.get_calendars().await {
