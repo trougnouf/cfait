@@ -147,7 +147,7 @@ jobs:
         run: |
           chown -R builder:builder .
           su builder -c "flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo"
-          su builder -c "flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --repo=repo build-dir com.trougnouf.Cfait.yml"
+          su builder -c "flatpak-builder --user --disable-sandbox --disable-rofiles-fuse --install-deps-from=flathub --force-clean --repo=repo build-dir com.trougnouf.Cfait.yml"
           su builder -c "flatpak build-bundle repo cfait-rolling.flatpak com.trougnouf.Cfait"
 
       - name: Prepare Artifact
