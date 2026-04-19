@@ -278,15 +278,15 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     app_state.snooze_long_mins = snooze_long_mins;
 
     // --- START ALARM ACTOR ---
-    let (gui_alarm_tx, mut gui_alarm_rx) = tokio::sync::mpsc::channel(10);
+    let (gui_alarm_tx, mut gui_alarm_rx) = tokio::sync::mpsc::channel(100);
     // Spawn the alarm system, giving it a channel to talk back to us
     let alarm_actor_tx = crate::system::spawn_alarm_actor(Some(gui_alarm_tx));
     // Store the handle so we can send task updates to it
     app_state.alarm_actor_tx = Some(alarm_actor_tx.clone());
     // -------------------------
 
-    let (action_tx, action_rx) = mpsc::channel(10);
-    let (event_tx, mut event_rx) = mpsc::channel(10);
+    let (action_tx, action_rx) = mpsc::channel(100);
+    let (event_tx, mut event_rx) = mpsc::channel(100);
 
     let mut prev_mode = app_state.mode;
 

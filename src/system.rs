@@ -39,10 +39,21 @@ pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool) {
         let _ = std::fs::rename(&log_path, &old_log_path);
     }
 
+    // Silence noisy third-party crates (like iced logging raw icon pixels)
+    // Mute the noisy UI crates, but DO NOT mute rustls (needed for TLS debugging)
+    let log_config = simplelog::ConfigBuilder::new()
+        .add_filter_ignore_str("iced")
+        .add_filter_ignore_str("winit")
+        .add_filter_ignore_str("iced_winit")
+        .add_filter_ignore_str("iced_wgpu")
+        .add_filter_ignore_str("wgpu_core")
+        .add_filter_ignore_str("wgpu_hal")
+        .build();
+
     // File logger: creates a fresh cfait.log for this session
     let file_logger = WriteLogger::new(
         LevelFilter::Info, // Change to Debug if you want verbose file logs
-        simplelog::Config::default(),
+        log_config.clone(),
         File::create(&log_path).expect("Failed to create log file"),
     );
 
@@ -102,7 +113,7 @@ pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool) {
         if enable_stderr {
             let term_logger = TermLogger::new(
                 LevelFilter::Warn,
-                simplelog::Config::default(),
+                log_config.clone(),
                 TerminalMode::Stderr,
                 ColorChoice::Auto,
             );
@@ -119,7 +130,7 @@ pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool) {
 pub fn spawn_alarm_actor(
     ui_sender: Option<mpsc::Sender<AlarmMessage>>,
 ) -> mpsc::Sender<SystemEvent> {
-    let (tx, mut rx) = mpsc::channel(10);
+    let (tx, mut rx) = mpsc::channel(100);
 
     // Load config once at startup using a fresh standard context (no global state)
     let ctx = StandardContext::new(None);

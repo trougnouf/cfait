@@ -147,6 +147,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
         }
         Message::Loaded(Err(e)) => {
+            log::error!("Connection Failed: {}", e);
             app.error_msg = Some(format!("Connection Failed: {}", e));
             app.last_sync_failed = true;
 
@@ -172,6 +173,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             scroll_to_selected(app, false)
         }
         Message::RefreshedAll(Err(e)) => {
+            log::error!("Sync warning (RefreshedAll): {}", e);
             app.error_msg = Some(format!("Sync warning: {}", e));
             app.last_sync_failed = true;
             app.loading = false;
@@ -192,6 +194,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::TasksRefreshed(Err(e)) => {
+            log::error!("Fetch failed (TasksRefreshed): {}", e);
             app.error_msg = Some(format!("Fetch: {}", e));
             app.last_sync_failed = true;
             app.loading = false;
@@ -206,6 +209,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 Task::none()
             }
             Err(e) => {
+                log::error!("Controller Action Error: {}", e);
                 app.error_msg = Some(format!("Action Error: {}", e));
                 app.last_sync_failed = true;
                 Task::none()
@@ -218,6 +222,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::perform(async { Ok::<(), String>(()) }, |_| Message::Refresh)
         }
         Message::MigrationComplete(Err(e)) => {
+            log::error!("Migration failed: {}", e);
             app.loading = false;
             app.error_msg = Some(format!("Migration failed: {}", e));
             Task::none()

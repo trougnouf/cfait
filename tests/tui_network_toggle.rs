@@ -43,8 +43,8 @@ async fn test_tui_toggle_task_does_not_revert_status() {
     task.etag = "etag".to_string();
 
     // 4. Run the Network Actor
-    let (action_tx, action_rx) = mpsc::channel(10);
-    let (event_tx, mut event_rx) = mpsc::channel(10);
+    let (action_tx, action_rx) = mpsc::channel(100);
+    let (event_tx, mut event_rx) = mpsc::channel(100);
 
     // --- FIX: Wrap connection details in NetworkActorConfig ---
     let config = NetworkActorConfig {
