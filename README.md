@@ -96,7 +96,7 @@ Self-documenting config file. See also: https://codeberg.org/trougnouf/cfait/wik
 #### Desktop (TUI/GUI)
 Requires Rust (latest stable version recommended).
 
-To build and run the GUI, you should have the following system libraries: `pkgconf`, `fontconfig`, `libx11`, `libxcursor`, `libxkbcommon`, `libxi`, `libxrandr`, `wayland`, and a `vulkan` driver. For the file picker to work on Linux, ensure you have an `xdg-desktop-portal` implementation installed (e.g., `xdg-desktop-portal-gtk`, `-kde`, or `-wlr`).
+Cfait should compile and pull dependencies automatically on most systems as long as rust is installed. Vulkan is recommended for hardware acceleration. `xdg-desktop-portal` (optional) is needed by the file picker (to import/export a local collection) on Linux. For a precise list of dependencies, refer to [packaging/arch/PKGBUILD](packaging/arch/PKGBUILD).
 
 ```bash
 # Install TUI only

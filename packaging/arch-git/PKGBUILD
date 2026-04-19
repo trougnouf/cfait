@@ -6,19 +6,22 @@ pkgrel=1
 pkgdesc="Powerful, fast and elegant task / TODO manager. (GUI & TUI, CalDAV & local, git version)"
 arch=('x86_64')
 url="https://codeberg.org/trougnouf/cfait"
-license=('GPL3')
-depends=(
-    'fontconfig'
-    'libx11'
-    'libxcursor'
-    'libxi'
-    'libxrandr'
-    'libxkbcommon'
-    'wayland'
-    'vulkan-icd-loader'
-    'vulkan-driver'
+license=('GPL-3.0-or-later')
+depends=('gcc-libs' 'glibc')
+makedepends=('cargo' 'pkgconf' 'git')
+# Optional dependencies for the GUI and specific features
+optdepends=(
+    'vulkan-icd-loader: Required by the GUI to load Vulkan drivers for rendering'
+    'vulkan-driver: Required by the GUI for hardware-accelerated rendering'
+    'fontconfig: Required by the GUI for system font discovery'
+    'wayland: Required by the GUI for Wayland session support'
+    'libxkbcommon: Required by the GUI for keyboard handling (especially on Wayland)'
+    'libx11: Required by the GUI for X11 session support'
+    'libxcursor: Required by the GUI for X11 cursor support'
+    'libxi: Required by the GUI for X11 input devices'
+    'libxrandr: Required by the GUI for X11 monitor layout support'
+    'xdg-desktop-portal: Required by the GUI for the file picker (export/import)'
 )
-makedepends=('cargo' 'git')
 conflicts=("$_pkgname")
 source=("$_pkgname::git+$url.git")
 sha256sums=('SKIP')
