@@ -182,6 +182,7 @@ jobs:
       - name: Update Rolling Release on Codeberg
         env:
           TEA_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        shell: bash
         run: |
           tea login add --name codeberg --url ${{ github.server_url }} --token ${{ secrets.RELEASE_TOKEN }}
           REPO="${{ github.repository }}"
@@ -198,8 +199,7 @@ jobs:
           tea release delete --repo "$REPO" --confirm "$TAG_NAME" 2>/dev/null || true
 
           # 3. Flatten the directory structure
-          # GitHub artifacts are downloaded into dist/artifact-name/file.
-          # We move them to dist/ so tea can find them easily.
+          # Moves files from subfolders (like dist/rolling-android/cfait.apk) to dist/
           cd dist
           find . -mindepth 2 -type f -exec mv -t . {} +
 
