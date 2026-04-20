@@ -26,7 +26,36 @@ pub struct NetworkActorConfig {
     pub user: String,
     pub pass: String,
     pub allow_insecure: bool,
+    pub enable_local_mode: bool,
     pub default_cal: Option<String>,
+}
+
+fn apply_local_mode_filter(
+    calendars: &mut Vec<crate::model::CalendarListEntry>,
+    enable_local_mode: bool,
+) {
+    if !enable_local_mode {
+        calendars.retain(|c| !c.href.starts_with("local://"));
+    }
+}
+
+async fn merge_results_into_store(
+    store: &Arc<Mutex<TaskStore>>,
+    results: &[(String, Vec<crate::model::Task>)],
+) {
+    let mut s = store.lock().await;
+    for (href, tasks) in results {
+        s.insert(href.clone(), tasks.clone());
+    }
+}
+
+async fn snapshot_store(store: &Arc<Mutex<TaskStore>>) -> Vec<(String, Vec<crate::model::Task>)> {
+    let s = store.lock().await;
+    let mut results = Vec::new();
+    for (href, map) in &s.calendars {
+        results.push((href.clone(), map.values().cloned().collect()));
+    }
+    results
 }
 
 pub async fn run_network_actor(
@@ -40,6 +69,7 @@ pub async fn run_network_actor(
         user,
         pass,
         allow_insecure,
+        enable_local_mode,
         default_cal: _default_cal,
     } = config;
 
@@ -63,13 +93,14 @@ pub async fn run_network_actor(
     // ------------------------------------------------------------------
     if let Ok(mut cached_cals) = Cache::load_calendars(ctx.as_ref()) {
         // Load local registry and merge
-        if let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
+        if enable_local_mode && let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
             for loc in locals {
                 if !cached_cals.iter().any(|c| c.href == loc.href) {
                     cached_cals.push(loc);
                 }
             }
         }
+        apply_local_mode_filter(&mut cached_cals, enable_local_mode);
 
         let _ = event_tx
             .send(AppEvent::CalendarsLoaded(cached_cals.clone()))
@@ -88,6 +119,7 @@ pub async fn run_network_actor(
         }
 
         if !cached_tasks.is_empty() {
+            merge_results_into_store(&store, &cached_tasks).await;
             let _ = event_tx.send(AppEvent::TasksLoaded(cached_tasks)).await;
         }
     }
@@ -142,15 +174,17 @@ pub async fn run_network_actor(
             }
         }
     };
+    apply_local_mode_filter(&mut calendars, enable_local_mode);
 
     // Merge locals again after network discovery
-    if let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
+    if enable_local_mode && let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
         for loc in locals {
             if !calendars.iter().any(|c| c.href == loc.href) {
                 calendars.push(loc);
             }
         }
     }
+    apply_local_mode_filter(&mut calendars, enable_local_mode);
 
     let _ = event_tx
         .send(AppEvent::CalendarsLoaded(calendars.clone()))
@@ -175,11 +209,13 @@ pub async fn run_network_actor(
         }
     }
     if !cached_results.is_empty() {
+        merge_results_into_store(&store, &cached_results).await;
         let _ = event_tx.send(AppEvent::TasksLoaded(cached_results)).await;
     }
 
     match client.get_all_tasks(&calendars).await {
         Ok(results) => {
+            merge_results_into_store(&store, &results).await;
             let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
             let _ = event_tx
                 .send(AppEvent::Status {
@@ -207,6 +243,7 @@ pub async fn run_network_actor(
 
             Action::SwitchCalendar(href) => match client.get_tasks(&href).await {
                 Ok(t) => {
+                    merge_results_into_store(&store, &[(href.clone(), t.clone())]).await;
                     let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
                 }
                 Err(e) => {
@@ -216,6 +253,7 @@ pub async fn run_network_actor(
 
             Action::IsolateCalendar(href) => match client.get_tasks(&href).await {
                 Ok(t) => {
+                    merge_results_into_store(&store, &[(href.clone(), t.clone())]).await;
                     let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
                 }
                 Err(e) => {
@@ -225,6 +263,7 @@ pub async fn run_network_actor(
 
             Action::ToggleCalendarVisibility(href) => match client.get_tasks(&href).await {
                 Ok(t) => {
+                    merge_results_into_store(&store, &[(href.clone(), t.clone())]).await;
                     let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
                 }
                 Err(e) => {
@@ -244,11 +283,7 @@ pub async fn run_network_actor(
                 match controller.create_task(new_task).await {
                     Ok(_uid) => {
                         // Re-read the controller store and emit a TasksLoaded event so UI refreshes.
-                        let s = controller.store.lock().await;
-                        let mut results: Vec<(String, Vec<crate::model::Task>)> = Vec::new();
-                        for (href, map) in &s.calendars {
-                            results.push((href.clone(), map.values().cloned().collect()));
-                        }
+                        let results = snapshot_store(&controller.store).await;
                         let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
 
                         let _ = event_tx
@@ -272,11 +307,7 @@ pub async fn run_network_actor(
                 match controller.update_task(task.clone()).await {
                     Ok(_warnings) => {
                         // Re-read the controller store and emit TasksLoaded so UI refreshes.
-                        let s = controller.store.lock().await;
-                        let mut results: Vec<(String, Vec<crate::model::Task>)> = Vec::new();
-                        for (href, map) in &s.calendars {
-                            results.push((href.clone(), map.values().cloned().collect()));
-                        }
+                        let results = snapshot_store(&controller.store).await;
                         let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
 
                         let _ = event_tx
@@ -306,11 +337,7 @@ pub async fn run_network_actor(
                 match controller.delete_task(&uid).await {
                     Ok(_warnings) => {
                         // Re-read store and emit TasksLoaded for updated UI.
-                        let s = controller.store.lock().await;
-                        let mut results: Vec<(String, Vec<crate::model::Task>)> = Vec::new();
-                        for (href, map) in &s.calendars {
-                            results.push((href.clone(), map.values().cloned().collect()));
-                        }
+                        let results = snapshot_store(&controller.store).await;
                         let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
 
                         let _ = event_tx
@@ -343,15 +370,17 @@ pub async fn run_network_actor(
                         vec![]
                     }
                 };
+                apply_local_mode_filter(&mut calendars, enable_local_mode);
 
                 // Merge local calendars from registry
-                if let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
+                if enable_local_mode && let Ok(locals) = LocalCalendarRegistry::load(ctx.as_ref()) {
                     for loc in locals {
                         if !calendars.iter().any(|c| c.href == loc.href) {
                             calendars.push(loc);
                         }
                     }
                 }
+                apply_local_mode_filter(&mut calendars, enable_local_mode);
 
                 let _ = event_tx
                     .send(AppEvent::CalendarsLoaded(calendars.clone()))
@@ -359,6 +388,7 @@ pub async fn run_network_actor(
 
                 match client.get_all_tasks(&calendars).await {
                     Ok(results) => {
+                        merge_results_into_store(&store, &results).await;
                         let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
                         let _ = event_tx
                             .send(AppEvent::Status {
@@ -381,11 +411,7 @@ pub async fn run_network_actor(
                 match controller.move_task(&uid, &new_href).await {
                     Ok(_warnings) => {
                         // Re-read the controller store and emit TasksLoaded so the UI reflects both calendars.
-                        let s = controller.store.lock().await;
-                        let mut results: Vec<(String, Vec<crate::model::Task>)> = Vec::new();
-                        for (href, map) in &s.calendars {
-                            results.push((href.clone(), map.values().cloned().collect()));
-                        }
+                        let results = snapshot_store(&controller.store).await;
                         let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
 
                         let _ = event_tx
@@ -431,7 +457,9 @@ pub async fn run_network_actor(
                             .await;
                     }
                     Err(e) => {
-                        let _ = event_tx.send(AppEvent::Error(format!("Duplicate failed: {}", e))).await;
+                        let _ = event_tx
+                            .send(AppEvent::Error(format!("Duplicate failed: {}", e)))
+                            .await;
                     }
                 }
             }
@@ -457,7 +485,9 @@ pub async fn run_network_actor(
                         let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
                     }
                     Err(e) => {
-                        let _ = event_tx.send(AppEvent::Error(format!("Delete tree failed: {}", e))).await;
+                        let _ = event_tx
+                            .send(AppEvent::Error(format!("Delete tree failed: {}", e)))
+                            .await;
                     }
                 }
             }

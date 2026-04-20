@@ -34,6 +34,9 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
             state.loading = false;
         }
         AppEvent::CalendarsLoaded(mut cals) => {
+            if !state.local_mode_enabled {
+                cals.retain(|c| !c.href.starts_with("local://"));
+            }
             cals.sort_by_key(|c| {
                 if c.href == "local://recovery" {
                     1
@@ -58,12 +61,26 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
             }
 
             if state.active_cal_href.is_none() {
-                state.active_cal_href = Some(LOCAL_CALENDAR_HREF.to_string());
+                state.active_cal_href = state
+                    .calendars
+                    .iter()
+                    .find(|c| !state.disabled_calendars.contains(&c.href))
+                    .map(|c| c.href.clone())
+                    .or_else(|| {
+                        if state.local_mode_enabled {
+                            Some(LOCAL_CALENDAR_HREF.to_string())
+                        } else {
+                            None
+                        }
+                    });
             }
             state.refresh_filtered_view();
         }
         AppEvent::TasksLoaded(results) => {
             for (href, tasks) in results {
+                if !state.local_mode_enabled && href.starts_with("local://") {
+                    continue;
+                }
                 state.store.insert(href, tasks);
             }
             state.refresh_filtered_view();
@@ -243,7 +260,9 @@ pub async fn handle_key_event(
     match state.mode {
         InputMode::Creating => match key.code {
             // NEW: Enter description mode during creation (Ctrl+E)
-            KeyCode::Char('e') | KeyCode::Char('E') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('e') | KeyCode::Char('E')
+                if key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
                 state.new_task_title = state.input_buffer.clone();
                 state.input_buffer.clear();
                 state.cursor_position = 0;
@@ -255,6 +274,7 @@ pub async fn handle_key_event(
             KeyCode::Enter if !state.input_buffer.is_empty() => {
                 let (clean_input, new_aliases): (String, HashMap<String, Vec<String>>) =
                     extract_inline_aliases(&state.input_buffer);
+                let was_alias_def = state.input_buffer.contains(":=");
 
                 if !new_aliases.is_empty() {
                     for (key, tags) in new_aliases {
@@ -276,56 +296,23 @@ pub async fn handle_key_event(
                     }
                 }
 
-                if clean_input.starts_with('#')
-                    && !clean_input.trim().contains(' ')
-                    && state.creating_child_of.is_none()
-                {
-                    let was_alias_def = state.input_buffer.contains(":=");
-
-                    if !was_alias_def {
-                        let tag = clean_input.trim().trim_start_matches('#').to_string();
-                        if !tag.is_empty() {
-                            state.sidebar_mode = SidebarMode::Categories;
-                            state.selected_categories.clear();
-                            state.selected_categories.insert(tag);
-                            state.mode = InputMode::Normal;
-                            state.reset_input();
-                            state.refresh_filtered_view();
-                            return None;
-                        }
-                    } else {
-                        state.mode = InputMode::Normal;
-                        state.reset_input();
-                        state.message = "Alias updated.".to_string();
-                        return None;
-                    }
-                }
-
-                let is_loc = clean_input.starts_with("@@") || clean_input.starts_with("loc:");
-                if is_loc && !clean_input.trim().contains(' ') && state.creating_child_of.is_none()
-                {
-                    let raw = if clean_input.starts_with("@@") {
-                        clean_input.trim_start_matches("@@")
-                    } else {
-                        clean_input.trim_start_matches("loc:")
-                    };
-                    let loc = crate::model::parser::strip_quotes(raw);
-
-                    if !loc.is_empty() {
-                        state.sidebar_mode = SidebarMode::Locations;
-                        state.selected_locations.clear();
-                        state.selected_locations.insert(loc);
-                        state.mode = InputMode::Normal;
-                        state.reset_input();
-                        state.refresh_filtered_view();
-                        return None;
-                    }
+                if was_alias_def {
+                    state.mode = InputMode::Normal;
+                    state.reset_input();
+                    state.message = "Alias updated.".to_string();
+                    return None;
                 }
 
                 let target_href = state
                     .active_cal_href
                     .clone()
-                    .or_else(|| state.calendars.first().map(|c| c.href.clone()));
+                    .filter(|href| state.local_mode_enabled || !href.starts_with("local://"))
+                    .or_else(|| {
+                        state
+                            .get_filtered_calendars()
+                            .first()
+                            .map(|c| c.href.clone())
+                    });
 
                 if let Some(href) = target_href {
                     // Load config to get time
@@ -351,6 +338,12 @@ pub async fn handle_key_event(
                     state.creating_child_of = None;
                     return Some(Action::CreateTask(task));
                 }
+                state.message = if state.local_mode_enabled {
+                    "No calendar available.".to_string()
+                } else {
+                    "No remote calendar available. Enable local mode or configure a remote calendar."
+                        .to_string()
+                };
                 state.mode = InputMode::Normal;
                 state.reset_input();
             }
@@ -427,9 +420,11 @@ pub async fn handle_key_event(
                 // Determine if Edit vs Create
                 if state.creating_with_desc {
                     let desc_text = state.input_buffer.clone();
-                    let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(&desc_text);
+                    let (clean_desc, extracted) =
+                        crate::model::extractor::extract_markdown_tasks(&desc_text);
 
-                    let (clean_input, new_aliases) = crate::model::parser::extract_inline_aliases(&state.new_task_title);
+                    let (clean_input, new_aliases) =
+                        crate::model::parser::extract_inline_aliases(&state.new_task_title);
 
                     // Optional: handle alias creation if any (abbreviated for length, similar to handle_submit)
                     if !new_aliases.is_empty() {
@@ -439,13 +434,38 @@ pub async fn handle_key_event(
                     }
 
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                    let def_time = chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+                    let def_time =
+                        chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
+                            .ok();
 
                     let mut parent = Task::new(&clean_input, &state.tag_aliases, def_time);
                     parent.description = clean_desc;
                     parent.parent_uid = state.creating_child_of.clone();
 
-                    let target_href = state.active_cal_href.clone().unwrap_or_else(|| "local://default".to_string());
+                    let Some(target_href) = state
+                        .active_cal_href
+                        .clone()
+                        .filter(|href| state.local_mode_enabled || !href.starts_with("local://"))
+                        .or_else(|| {
+                            state
+                                .get_filtered_calendars()
+                                .first()
+                                .map(|c| c.href.clone())
+                        })
+                    else {
+                        state.message = if state.local_mode_enabled {
+                            "No calendar available.".to_string()
+                        } else {
+                            "No remote calendar available. Enable local mode or configure a remote calendar."
+                                .to_string()
+                        };
+                        state.creating_with_desc = false;
+                        state.new_task_title.clear();
+                        state.mode = InputMode::Normal;
+                        state.reset_input();
+                        state.creating_child_of = None;
+                        return None;
+                    };
                     parent.calendar_href = target_href.clone();
 
                     let parent_uid = parent.uid.clone();
@@ -454,7 +474,9 @@ pub async fn handle_key_event(
                     // Fire off background creation
                     tokio::spawn({
                         let tx = action_tx.clone();
-                        async move { let _ = tx.send(Action::CreateTask(parent)).await; }
+                        async move {
+                            let _ = tx.send(Action::CreateTask(parent)).await;
+                        }
                     });
 
                     // Fire off Subtasks
@@ -473,7 +495,9 @@ pub async fn handle_key_event(
                         state.store.add_task(sub.clone());
                         tokio::spawn({
                             let tx = action_tx.clone();
-                            async move { let _ = tx.send(Action::CreateTask(sub)).await; }
+                            async move {
+                                let _ = tx.send(Action::CreateTask(sub)).await;
+                            }
                         });
                     }
 
@@ -492,7 +516,6 @@ pub async fn handle_key_event(
                     state.reset_input();
                     state.creating_child_of = None;
                     return None;
-
                 } else {
                     // Standard Edit
                     let target_uid: Option<String> = state
@@ -942,82 +965,84 @@ pub async fn handle_key_event(
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
 
                         if config.trash_retention_days > 0 && !is_trash {
-                        // --- SOFT DELETE ---
-                        // 1. Ensure Registry
-                        let _ =
-                            LocalCalendarRegistry::ensure_trash_calendar_exists(state.ctx.as_ref());
-                        // Update UI calendar list if needed
-                        if !state.calendars.iter().any(|c| c.href == LOCAL_TRASH_HREF)
-                            && let Ok(cals) = LocalCalendarRegistry::load(state.ctx.as_ref())
-                        {
-                            // Merge intelligently
-                            for c in cals {
-                                if !state
-                                    .calendars
-                                    .iter()
-                                    .any(|existing| existing.href == c.href)
-                                {
-                                    state.calendars.push(c);
+                            // --- SOFT DELETE ---
+                            // 1. Ensure Registry
+                            let _ = LocalCalendarRegistry::ensure_trash_calendar_exists(
+                                state.ctx.as_ref(),
+                            );
+                            // Update UI calendar list if needed
+                            if !state.calendars.iter().any(|c| c.href == LOCAL_TRASH_HREF)
+                                && let Ok(cals) = LocalCalendarRegistry::load(state.ctx.as_ref())
+                            {
+                                // Merge intelligently
+                                for c in cals {
+                                    if !state
+                                        .calendars
+                                        .iter()
+                                        .any(|existing| existing.href == c.href)
+                                    {
+                                        state.calendars.push(c);
+                                    }
                                 }
                             }
-                        }
 
-                        // 2. Ensure Store Map
-                        state
-                            .store
-                            .calendars
-                            .entry(LOCAL_TRASH_HREF.to_string())
-                            .or_default();
+                            // 2. Ensure Store Map
+                            state
+                                .store
+                                .calendars
+                                .entry(LOCAL_TRASH_HREF.to_string())
+                                .or_default();
 
-                        // 3. Move in Store
-                        if let Some((original, mut updated)) =
-                            state.store.move_task(&uid, LOCAL_TRASH_HREF.to_string())
-                        {
-                            // 4. Stamp Date
-                            let now_str = chrono::Utc::now().to_rfc3339();
-                            updated
-                                .unmapped_properties
-                                .retain(|p| p.key != "X-TRASHED-DATE");
-                            updated.unmapped_properties.push(crate::model::RawProperty {
-                                key: "X-TRASHED-DATE".to_string(),
-                                value: now_str,
-                                params: vec![],
-                            });
+                            // 3. Move in Store
+                            if let Some((original, mut updated)) =
+                                state.store.move_task(&uid, LOCAL_TRASH_HREF.to_string())
+                            {
+                                // 4. Stamp Date
+                                let now_str = chrono::Utc::now().to_rfc3339();
+                                updated
+                                    .unmapped_properties
+                                    .retain(|p| p.key != "X-TRASHED-DATE");
+                                updated.unmapped_properties.push(crate::model::RawProperty {
+                                    key: "X-TRASHED-DATE".to_string(),
+                                    value: now_str,
+                                    params: vec![],
+                                });
 
-                            // 5. Save Trash Copy
-                            state.store.update_or_add_task(updated.clone());
+                                // 5. Save Trash Copy
+                                state.store.update_or_add_task(updated.clone());
 
-                            // Must persist the trashed item to disk
-                            let _ = LocalStorage::modify_for_href(
-                                state.ctx.as_ref(),
-                                LOCAL_TRASH_HREF,
-                                |all| {
-                                    if let Some(idx) = all.iter().position(|t| t.uid == updated.uid)
-                                    {
-                                        all[idx] = updated.clone();
-                                    } else {
-                                        all.push(updated.clone());
-                                    }
-                                },
-                            );
+                                // Must persist the trashed item to disk
+                                let _ = LocalStorage::modify_for_href(
+                                    state.ctx.as_ref(),
+                                    LOCAL_TRASH_HREF,
+                                    |all| {
+                                        if let Some(idx) =
+                                            all.iter().position(|t| t.uid == updated.uid)
+                                        {
+                                            all[idx] = updated.clone();
+                                        } else {
+                                            all.push(updated.clone());
+                                        }
+                                    },
+                                );
 
-                            state.refresh_filtered_view();
-                            update_alarms(state);
+                                state.refresh_filtered_view();
+                                update_alarms(state);
 
-                            // 6. Delete Original
-                            // We emit DeleteTask for the original. The network actor will see it as a delete
-                            // and remove it from the server. The local trash copy is safe.
-                            return Some(Action::DeleteTask(original.uid.clone()));
-                        }
-                    } else {
-                        // --- HARD DELETE ---
-                        if let Some((deleted, _)) = state.store.delete_task(&uid) {
-                            state.refresh_filtered_view();
-                            update_alarms(state);
-                            return Some(Action::DeleteTask(deleted.uid.clone()));
+                                // 6. Delete Original
+                                // We emit DeleteTask for the original. The network actor will see it as a delete
+                                // and remove it from the server. The local trash copy is safe.
+                                return Some(Action::DeleteTask(original.uid.clone()));
+                            }
+                        } else {
+                            // --- HARD DELETE ---
+                            if let Some((deleted, _)) = state.store.delete_task(&uid) {
+                                state.refresh_filtered_view();
+                                update_alarms(state);
+                                return Some(Action::DeleteTask(deleted.uid.clone()));
+                            }
                         }
                     }
-                }
                 }
             }
             KeyCode::Char('c') => {
@@ -1270,42 +1295,41 @@ pub async fn handle_key_event(
                     }
                 }
             }
-            KeyCode::Char('*')
-                if state.active_focus == Focus::Sidebar => {
-                    match state.sidebar_mode {
-                        SidebarMode::Calendars => {
-                            let are_all_visible = state
-                                .get_filtered_calendars()
-                                .iter()
-                                .filter(|c| {
-                                    c.href != crate::storage::LOCAL_TRASH_HREF
-                                        && c.href != "local://recovery"
-                                })
-                                .all(|c| !state.hidden_calendars.contains(&c.href));
+            KeyCode::Char('*') if state.active_focus == Focus::Sidebar => {
+                match state.sidebar_mode {
+                    SidebarMode::Calendars => {
+                        let are_all_visible = state
+                            .get_filtered_calendars()
+                            .iter()
+                            .filter(|c| {
+                                c.href != crate::storage::LOCAL_TRASH_HREF
+                                    && c.href != "local://recovery"
+                            })
+                            .all(|c| !state.hidden_calendars.contains(&c.href));
 
-                            if are_all_visible {
-                                for cal in &state.calendars {
-                                    if state.active_cal_href.as_ref() != Some(&cal.href) {
-                                        state.hidden_calendars.insert(cal.href.clone());
-                                    }
+                        if are_all_visible {
+                            for cal in &state.calendars {
+                                if state.active_cal_href.as_ref() != Some(&cal.href) {
+                                    state.hidden_calendars.insert(cal.href.clone());
                                 }
-                            } else {
-                                state.hidden_calendars.clear();
-                                // Re-hide trash if not active
-                                if state.active_cal_href.as_deref() != Some("local://trash") {
-                                    state.hidden_calendars.insert("local://trash".to_string());
-                                }
-                                let _ = action_tx.send(Action::Refresh).await;
                             }
-                        }
-                        SidebarMode::Categories => {
-                            state.selected_categories.clear();
-                        }
-                        SidebarMode::Locations => {
-                            state.selected_locations.clear();
+                        } else {
+                            state.hidden_calendars.clear();
+                            // Re-hide trash if not active
+                            if state.active_cal_href.as_deref() != Some("local://trash") {
+                                state.hidden_calendars.insert("local://trash".to_string());
+                            }
+                            let _ = action_tx.send(Action::Refresh).await;
                         }
                     }
+                    SidebarMode::Categories => {
+                        state.selected_categories.clear();
+                    }
+                    SidebarMode::Locations => {
+                        state.selected_locations.clear();
+                    }
                 }
+            }
             KeyCode::Right => {
                 if state.active_focus == Focus::Sidebar {
                     match state.sidebar_mode {

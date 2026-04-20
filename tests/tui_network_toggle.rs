@@ -52,6 +52,7 @@ async fn test_tui_toggle_task_does_not_revert_status() {
         user: "user".into(),
         pass: "pass".into(),
         allow_insecure: true,
+        enable_local_mode: true,
         default_cal: None,
     };
 

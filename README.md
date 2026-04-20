@@ -458,6 +458,12 @@ If you are using the Terminal interface (or the GUI), here are the essentials (*
 
 **Note:** The sidebar shows hierarchical tags and locations. For example, if you have tasks with `#work:project:urgent` and `#work:meeting`, they'll be organized under the `#work` parent in the sidebar.
 
+**TUI Local Mode:** The TUI shows local/offline calendars by default. To hide them and only allow creating tasks in remote calendars, add this to `~/.config/cfait/config.toml`:
+
+```toml
+enable_local_mode = false
+```
+
 The GUI also supports `/` for search and `a` for adding tasks.
 
 <a name="support"></a>
