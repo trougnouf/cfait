@@ -171,6 +171,12 @@ jobs:
     container:
       image: local/ubuntu-builder
     steps:
+      # THE MISSING STEP!
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download Artifacts
         uses: actions/download-artifact@v3
         with:
