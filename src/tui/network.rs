@@ -184,7 +184,6 @@ pub async fn run_network_actor(
             }
         }
     }
-    apply_local_mode_filter(&mut calendars, enable_local_mode);
 
     let _ = event_tx
         .send(AppEvent::CalendarsLoaded(calendars.clone()))
@@ -380,7 +379,6 @@ pub async fn run_network_actor(
                         }
                     }
                 }
-                apply_local_mode_filter(&mut calendars, enable_local_mode);
 
                 let _ = event_tx
                     .send(AppEvent::CalendarsLoaded(calendars.clone()))

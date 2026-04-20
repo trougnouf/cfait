@@ -62,7 +62,7 @@ async fn test_tui_creating_task_and_alias_simultaneously() {
     });
     state.active_cal_href = Some(cal_href);
     state.mode = InputMode::Creating;
-    
+
     // Hybrid input: task title + alias definition
     state.input_buffer = "Test buy groceries @@aldi:=#groceries,geo:50.19531,4.53557".to_string();
     state.cursor_position = state.input_buffer.chars().count();
@@ -89,7 +89,10 @@ async fn test_tui_creating_task_and_alias_simultaneously() {
     // 2. Verify the alias was actually saved in the state
     assert!(state.tag_aliases.contains_key("@@aldi"));
     let expected_alias_values = vec!["#groceries".to_string(), "geo:50.19531,4.53557".to_string()];
-    assert_eq!(state.tag_aliases.get("@@aldi").unwrap(), &expected_alias_values);
+    assert_eq!(
+        state.tag_aliases.get("@@aldi").unwrap(),
+        &expected_alias_values
+    );
 
     // 3. Verify UI returned to Normal mode
     assert!(matches!(state.mode, InputMode::Normal));

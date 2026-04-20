@@ -274,7 +274,6 @@ pub async fn handle_key_event(
             KeyCode::Enter if !state.input_buffer.is_empty() => {
                 let (clean_input, new_aliases): (String, HashMap<String, Vec<String>>) =
                     extract_inline_aliases(&state.input_buffer);
-                let was_alias_def = state.input_buffer.contains(":=");
 
                 if !new_aliases.is_empty() {
                     for (key, tags) in new_aliases {
@@ -294,13 +293,19 @@ pub async fn handle_key_event(
                         cfg.tag_aliases = state.tag_aliases.clone();
                         let _ = cfg.save(state.ctx.as_ref());
                     }
-                }
+                    let trimmed = clean_input.trim();
+                    let is_alias_only = trimmed.is_empty()
+                        || (!trimmed.contains(' ')
+                            && (trimmed.starts_with('#')
+                                || trimmed.starts_with("@@")
+                                || trimmed.to_lowercase().starts_with("loc:")));
 
-                if was_alias_def {
-                    state.mode = InputMode::Normal;
-                    state.reset_input();
-                    state.message = "Alias updated.".to_string();
-                    return None;
+                    if is_alias_only {
+                        state.mode = InputMode::Normal;
+                        state.reset_input();
+                        state.message = "Alias updated.".to_string();
+                        return None;
+                    }
                 }
 
                 let target_href = state
