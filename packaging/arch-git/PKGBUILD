@@ -7,15 +7,18 @@ pkgdesc="Powerful, fast and elegant task / TODO manager. (GUI & TUI, CalDAV & lo
 arch=('x86_64')
 url="https://codeberg.org/trougnouf/cfait"
 license=('GPL-3.0-or-later')
-depends=('gcc-libs' 'glibc')
-makedepends=('cargo' 'pkgconf' 'git')
+depends=(
+    'gcc-libs'
+    'glibc'
+    'fontconfig'        # Required by the GUI for system font discovery
+    'libxkbcommon'      # Required by the GUI for keyboard handling (especially on Wayland)
+    'vulkan-icd-loader' # Required by the GUI to load Vulkan drivers for rendering
+)
+makedepends=('cargo' 'pkgconf' 'git')  # git is needed as long as libdav > 0.10.3 is not released
 # Optional dependencies for the GUI and specific features
 optdepends=(
-    'vulkan-icd-loader: Required by the GUI to load Vulkan drivers for rendering'
     'vulkan-driver: Required by the GUI for hardware-accelerated rendering'
-    'fontconfig: Required by the GUI for system font discovery'
     'wayland: Required by the GUI for Wayland session support'
-    'libxkbcommon: Required by the GUI for keyboard handling (especially on Wayland)'
     'libx11: Required by the GUI for X11 session support'
     'libxcursor: Required by the GUI for X11 cursor support'
     'libxi: Required by the GUI for X11 input devices'
