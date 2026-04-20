@@ -115,7 +115,7 @@ jobs:
           path: dist-windows/*
           retention-days: 1
 
-  # --- JOB 4: ROLLING FLATPAK (Only on PUSH) ---
+  # --- JOB 4: ROLLING FLATPAK ---
   rolling-flatpak:
     needs: test
     if: github.event_name == 'push'
@@ -138,6 +138,7 @@ jobs:
           import yaml
           with open('com.trougnouf.Cfait.yml', 'r') as f:
               data = yaml.safe_load(f)
+          # Replace the first source (the git repo) with a local directory reference
           data['modules'][0]['sources'][0] = {'type': 'dir', 'path': '.'}
           with open('com.trougnouf.Cfait.yml', 'w') as f:
               yaml.dump(data, f)
@@ -147,7 +148,7 @@ jobs:
         run: |
           chown -R builder:builder .
           su builder -c "flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo"
-          su builder -c "flatpak-builder --user --disable-sandbox --disable-rofiles-fuse --install-deps-from=flathub --force-clean --repo=repo build-dir com.trougnouf.Cfait.yml"
+          su builder -c "flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --repo=repo build-dir com.trougnouf.Cfait.yml"
           su builder -c "flatpak build-bundle repo cfait-rolling.flatpak com.trougnouf.Cfait"
 
       - name: Prepare Artifact
