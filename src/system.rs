@@ -62,6 +62,7 @@ pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool) {
     {
         // On Android, we create a custom logger that splits output between
         // the log file and Android's native Logcat.
+        let _enable_stderr = enable_stderr;
         let android_logger = android_logger::AndroidLogger::new(
             android_logger::Config::default()
                 .with_max_level(log::LevelFilter::Debug)

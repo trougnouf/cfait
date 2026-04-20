@@ -15,7 +15,9 @@ use strum::IntoEnumIterator;
 use tokio::sync::mpsc;
 
 #[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(Default)]
 pub enum AppState {
+    #[default]
     Loading,
     Onboarding,
     Active,
@@ -23,11 +25,6 @@ pub enum AppState {
     Help(crate::help::HelpTab, u8),
 }
 
-impl Default for AppState {
-    fn default() -> Self {
-        AppState::Loading
-    }
-}
 
 #[derive(Default, PartialEq, Clone, Copy, Debug)]
 pub enum SidebarMode {
