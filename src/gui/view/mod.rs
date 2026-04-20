@@ -54,7 +54,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             .center_y(Length::Fill)
             .into(),
         AppState::Onboarding | AppState::Settings => view_settings(app),
-        AppState::Help(tab) => view_help(tab, app),
+        AppState::Help(tab, _) => view_help(tab, app),
         AppState::Active => {
             let content_height = match app.sidebar_mode {
                 SidebarMode::Calendars => app.get_filtered_calendars().len() as f32 * 44.0,

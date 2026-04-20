@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 use crate::gui::message::Message;
-use crate::gui::state::GuiApp;
+use crate::gui::state::{AppState, GuiApp};
 use crate::help::HelpTab;
-use fastrand;
 use iced::widget::{
     MouseArea, Space, button, column, container, row, scrollable, svg, text, text_input,
 };
@@ -13,8 +12,12 @@ const COL_ACCENT: Color = Color::from_rgb(0.4, 0.7, 1.0); // Soft Blue (Dark Mod
 const COL_SYNTAX: Color = Color::from_rgb(1.0, 0.85, 0.4); // Gold/Yellow (Dark Mode)
 const COL_MUTED: Color = Color::from_rgb(0.6, 0.6, 0.6); // Grey
 
-pub fn view_help<'a>(tab: HelpTab, _app: &'a GuiApp) -> Element<'a, Message> {
-    let icon_choice = fastrand::u8(0..3);
+pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
+    // Extract the icon choice from the app state
+    let icon_choice = match app.state {
+        AppState::Help(_, choice) => choice,
+        _ => 0, // Fallback, shouldn't happen
+    };
 
     let help_icon = match icon_choice {
         0 => crate::gui::icon::HELP_ICON_QUESTION,

@@ -14,14 +14,19 @@ use std::sync::Arc;
 use strum::IntoEnumIterator;
 use tokio::sync::mpsc;
 
-#[derive(Default, PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 pub enum AppState {
-    #[default]
     Loading,
     Onboarding,
     Active,
     Settings,
-    Help(crate::help::HelpTab),
+    Help(crate::help::HelpTab, u8),
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        AppState::Loading
+    }
 }
 
 #[derive(Default, PartialEq, Clone, Copy, Debug)]

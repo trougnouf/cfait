@@ -8,6 +8,7 @@ use crate::gui::update::common::{
 };
 use crate::gui::update::tasks;
 use crate::store::select_weighted_random_index;
+use fastrand;
 use iced::widget::operation;
 use iced::{Task, window};
 
@@ -399,7 +400,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::OpenHelp(tab) => {
-            app.state = AppState::Help(tab);
+            let icon_choice = fastrand::u8(0..3);
+            app.state = AppState::Help(tab, icon_choice);
             Task::none()
         }
         Message::CloseHelp => {
