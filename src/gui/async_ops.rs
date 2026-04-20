@@ -41,7 +41,9 @@ pub async fn connect_and_fetch_wrapper(
     String,
 > {
     let rt = get_runtime();
-    rt.spawn(async {
+    rt.spawn(async move {
+        let ctx_clone = ctx.clone();
+        let config_clone = config.clone();
         match tokio::time::timeout(
             std::time::Duration::from_secs(60),
             RustyClient::connect_with_fallback(ctx, config, Some("GUI")),
@@ -49,7 +51,39 @@ pub async fn connect_and_fetch_wrapper(
         .await
         {
             Ok(res) => res.map_err(|e| e.to_string()),
-            Err(_) => Err("Connection timed out. Check your network or server URL.".to_string()),
+            Err(_) => {
+                // Timeout occurred. Return offline fallback to avoid kicking user out.
+                let client = RustyClient::new(
+                    ctx_clone.clone(),
+                    &config_clone.url,
+                    &config_clone.username,
+                    &config_clone.password,
+                    config_clone.allow_insecure_certs,
+                    Some("GUI"),
+                )
+                .unwrap_or_else(|_| RustyClient {
+                    client: None,
+                    ctx: ctx_clone.clone(),
+                });
+
+                let cals = crate::cache::Cache::load_calendars(ctx_clone.as_ref()).unwrap_or_default();
+                let active_href = config_clone.default_calendar.clone();
+                let tasks = if let Some(ref h) = active_href {
+                    let (mut t, _) = crate::cache::Cache::load(ctx_clone.as_ref(), h).unwrap_or((vec![], None));
+                    crate::journal::Journal::apply_to_tasks(ctx_clone.as_ref(), &mut t, h);
+                    t
+                } else {
+                    vec![]
+                };
+
+                Ok((
+                    client,
+                    cals,
+                    tasks,
+                    active_href,
+                    Some("Connection timed out. Check your network or server URL.".to_string()),
+                ))
+            }
         }
     })
     .await

@@ -156,7 +156,34 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let _ = tx.try_send(SystemEvent::EnableAlarms);
             }
 
-            app.state = AppState::Onboarding;
+            if app.state != AppState::Active && app.state != AppState::Settings {
+                if let Ok(cfg) = Config::load(app.ctx.as_ref()) {
+                    if !cfg.url.is_empty() {
+                        app.state = AppState::Active;
+                        let cals = Cache::load_calendars(app.ctx.as_ref()).unwrap_or_default();
+                        app.calendars = cals;
+                        app.sort_calendars();
+                        app.store.clear();
+                        for cal in &app.calendars {
+                            if cal.href.starts_with("local://") {
+                                if let Ok(mut tasks) = crate::storage::LocalStorage::load_for_href(app.ctx.as_ref(), &cal.href) {
+                                    crate::journal::Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &cal.href);
+                                    app.store.insert(cal.href.clone(), tasks);
+                                }
+                            } else if let Ok((mut tasks, _)) = Cache::load(app.ctx.as_ref(), &cal.href) {
+                                crate::journal::Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &cal.href);
+                                app.store.insert(cal.href.clone(), tasks);
+                            }
+                        }
+                        refresh_filtered_tasks(app);
+                    } else {
+                        app.state = AppState::Onboarding;
+                    }
+                } else {
+                    app.state = AppState::Onboarding;
+                }
+            }
+
             app.loading = false;
             Task::none()
         }
