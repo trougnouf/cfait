@@ -163,7 +163,7 @@ jobs:
           path: dist-flatpak/*
           retention-days: 1
 
-  # --- JOB 5: PUBLISH ROLLING (Only on Push to MASTER) ---
+  # --- JOB 5: PUBLISH ROLLING RELEASE ---
   publish-rolling:
     needs: [rolling-android, rolling-windows, rolling-flatpak]
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
@@ -171,11 +171,8 @@ jobs:
     container:
       image: local/ubuntu-builder
     steps:
-      # THE MISSING STEP!
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Download Artifacts
         uses: actions/download-artifact@v3
@@ -190,32 +187,38 @@ jobs:
           REPO="${{ github.repository }}"
           TAG_NAME="rolling"
 
-          # 1. Flatten the directory structure
-          # GitHub artifacts are downloaded into dist/artifact-name/file.
-          # We move them to dist/ so tea uploads them correctly.
-          cd dist
-          find . -mindepth 2 -type f -exec mv -t . {} +
-          cd ..
-
+          # 1. Tag the release
           git config --global user.name "Cfait Release Bot"
           git config --global user.email "bot@trougnouf.com"
           git tag -f "$TAG_NAME"
           git push origin "$TAG_NAME" -f
           sleep 5
 
+          # 2. Delete old release if it exists
           tea release delete --repo "$REPO" --confirm "$TAG_NAME" 2>/dev/null || true
+
+          # 3. Flatten the directory structure
+          # GitHub artifacts are downloaded into dist/artifact-name/file.
+          # We move them to dist/ so tea can find them easily.
+          cd dist
+          find . -mindepth 2 -type f -exec mv -t . {} +
+
+          # 4. Build the asset arguments array
+          ASSETS=()
+          for file in *; do
+            if [ -f "$file" ]; then
+              ASSETS+=("--asset" "$file")
+              echo "Queued for upload: $file"
+            fi
+          done
+
+          # 5. Re-create the release with ALL assets attached in one command
           tea release create \
             --repo "$REPO" \
             --title "Rolling Development Build" \
             --note "Automated development build (Commit: ${{ github.sha }})." \
             --prerelease \
+            "${ASSETS[@]}" \
             "$TAG_NAME"
 
-          echo "Uploading assets..."
-          cd dist
-          for file in *; do
-            if [ -f "$file" ]; then
-              echo "Uploading $file..."
-              tea release assets create --repo "$REPO" "$TAG_NAME" "$file"
-            fi
-          done
+          echo "✅ Rolling release updated successfully with all assets!"
