@@ -900,31 +900,19 @@ pub fn view_task_row<'a>(
                 || task.last_started_at.is_some()
                 || show_pc
             {
-                let fmt_dur = |m: u32| -> String {
-                    if m >= 525600 {
-                        format!("{}y", m / 525600)
-                    } else if m >= 43200 {
-                        format!("{}mo", m / 43200)
-                    } else if m >= 10080 {
-                        format!("{}w", m / 10080)
-                    } else if m >= 1440 {
-                        format!("{}d", m / 1440)
-                    } else if m >= 60 {
-                        format!("{}h", m / 60)
-                    } else {
-                        format!("{}m", m)
-                    }
-                };
-
                 let est_label = if let Some(min) = task.estimated_duration {
                     if let Some(max) = task.estimated_duration_max {
                         if max > min {
-                            format!("~{}-{}", fmt_dur(min), fmt_dur(max))
+                            format!(
+                                "~{}-{}",
+                                crate::model::parser::format_duration_compact(min),
+                                crate::model::parser::format_duration_compact(max)
+                            )
                         } else {
-                            format!("~{}", fmt_dur(min))
+                            format!("~{}", crate::model::parser::format_duration_compact(min))
                         }
                     } else {
-                        format!("~{}", fmt_dur(min))
+                        format!("~{}", crate::model::parser::format_duration_compact(min))
                     }
                 } else {
                     String::new()
@@ -932,9 +920,13 @@ pub fn view_task_row<'a>(
 
                 let time_label = if total_mins > 0 || task.last_started_at.is_some() {
                     if !est_label.is_empty() {
-                        format!("{} / {}", fmt_dur(total_mins), est_label)
+                        format!(
+                            "{} / {}",
+                            crate::model::parser::format_duration_compact(total_mins),
+                            est_label
+                        )
                     } else {
-                        fmt_dur(total_mins)
+                        crate::model::parser::format_duration_compact(total_mins)
                     }
                 } else {
                     est_label

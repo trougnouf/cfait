@@ -1458,17 +1458,6 @@ fn calculate_first_occurrence(rrule: &str, today: NaiveDate) -> NaiveDate {
     today
 }
 
-// Helper to look ahead for a time string and merge it
-fn safe_local_to_utc(date: NaiveDate, time: NaiveTime) -> DateTime<Utc> {
-    match date.and_time(time).and_local_timezone(Local) {
-        chrono::LocalResult::Single(dt) => dt.with_timezone(&Utc),
-        chrono::LocalResult::Ambiguous(dt1, _) => dt1.with_timezone(&Utc),
-        chrono::LocalResult::None => {
-            chrono::TimeZone::from_utc_datetime(&Utc, &date.and_time(time))
-        }
-    }
-}
-
 fn finalize_date_token(
     d: DateType,
     stream: &[String],
@@ -1482,7 +1471,7 @@ fn finalize_date_token(
                 let next_token = &stream[next_idx];
                 if let Some(t) = parse_time_string(next_token) {
                     *consumed += 1;
-                    return DateType::Specific(safe_local_to_utc(nd, t));
+                    return DateType::Specific(crate::model::item::safe_local_to_utc(nd, t));
                 }
             }
             DateType::AllDay(nd)
@@ -1670,7 +1659,7 @@ pub fn apply_smart_input(
                         let today = Local::now().date_naive();
                         let first_date = calculate_first_occurrence(&rrule_str, today);
 
-                        let dt_specific = safe_local_to_utc(first_date, t);
+                        let dt_specific = crate::model::item::safe_local_to_utc(first_date, t);
 
                         let date_val = DateType::Specific(dt_specific);
                         task.due = Some(date_val.clone());
@@ -1701,7 +1690,7 @@ pub fn apply_smart_input(
                 if let Some(t) = parse_time_string(potential_time) {
                     let today = Local::now().date_naive();
                     let first_date = calculate_first_occurrence(&rrule, today);
-                    let dt_specific = safe_local_to_utc(first_date, t);
+                    let dt_specific = crate::model::item::safe_local_to_utc(first_date, t);
                     let date_val = DateType::Specific(dt_specific);
                     task.due = Some(date_val.clone());
                     task.dtstart = Some(date_val);
@@ -1858,7 +1847,7 @@ pub fn apply_smart_input(
                         consumed += 1;
                     }
 
-                    let local_dt = safe_local_to_utc(target_date, time);
+                    let local_dt = crate::model::item::safe_local_to_utc(target_date, time);
 
                     pending_alarms.push(PendingAlarm::Absolute(local_dt));
                 } else {
@@ -1894,14 +1883,16 @@ pub fn apply_smart_input(
                     let t = time_part.unwrap_or(fallback);
 
                     let dt = match d {
-                        DateType::AllDay(nd) => safe_local_to_utc(nd, t),
+                        DateType::AllDay(nd) => crate::model::item::safe_local_to_utc(nd, t),
                         DateType::Specific(dt) => dt,
-                        DateType::Month(y, m) => {
-                            safe_local_to_utc(NaiveDate::from_ymd_opt(y, m, 1).unwrap(), t)
-                        }
-                        DateType::Year(y) => {
-                            safe_local_to_utc(NaiveDate::from_ymd_opt(y, 1, 1).unwrap(), t)
-                        }
+                        DateType::Month(y, m) => crate::model::item::safe_local_to_utc(
+                            NaiveDate::from_ymd_opt(y, m, 1).unwrap(),
+                            t,
+                        ),
+                        DateType::Year(y) => crate::model::item::safe_local_to_utc(
+                            NaiveDate::from_ymd_opt(y, 1, 1).unwrap(),
+                            t,
+                        ),
                     };
                     pending_alarms.push(PendingAlarm::Absolute(dt));
                 } else {
@@ -1929,7 +1920,7 @@ pub fn apply_smart_input(
                 else if let Ok(ndt) =
                     chrono::NaiveDateTime::parse_from_str(clean_val, "%Y-%m-%d %H:%M")
                 {
-                    let utc_dt = safe_local_to_utc(ndt.date(), ndt.time());
+                    let utc_dt = crate::model::item::safe_local_to_utc(ndt.date(), ndt.time());
                     task.set_completion_date(Some(utc_dt));
                     consumed = 1;
                     matched = true;
@@ -1939,16 +1930,23 @@ pub fn apply_smart_input(
 
                     let utc_dt = match dt {
                         DateType::Specific(t) => t,
-                        DateType::AllDay(d) => {
-                            safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap())
-                        }
+                        DateType::AllDay(d) => crate::model::item::safe_local_to_utc(
+                            d,
+                            chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+                        ),
                         DateType::Month(y, m) => {
                             let d = NaiveDate::from_ymd_opt(y, m, 1).unwrap();
-                            safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap())
+                            crate::model::item::safe_local_to_utc(
+                                d,
+                                chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+                            )
                         }
                         DateType::Year(y) => {
                             let d = NaiveDate::from_ymd_opt(y, 1, 1).unwrap();
-                            safe_local_to_utc(d, chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap())
+                            crate::model::item::safe_local_to_utc(
+                                d,
+                                chrono::NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+                            )
                         }
                     };
 
@@ -2157,7 +2155,7 @@ pub fn apply_smart_input(
                     if t <= now_local.time() {
                         target_date += Duration::days(1);
                     }
-                    let dt = safe_local_to_utc(target_date, t);
+                    let dt = crate::model::item::safe_local_to_utc(target_date, t);
                     let dt_type = DateType::Specific(dt);
                     if set_start {
                         task.dtstart = Some(dt_type.clone());
@@ -2214,7 +2212,7 @@ pub fn apply_smart_input(
                         let today = Local::now().date_naive();
                         let first_date = calculate_first_occurrence(&rrule, today);
 
-                        let dt_specific = safe_local_to_utc(first_date, t);
+                        let dt_specific = crate::model::item::safe_local_to_utc(first_date, t);
 
                         let date_val = DateType::Specific(dt_specific);
                         if set_start {
@@ -2248,7 +2246,8 @@ pub fn apply_smart_input(
                                 let today = Local::now().date_naive();
                                 let first_date = calculate_first_occurrence(&rrule_str, today);
 
-                                let dt_specific = safe_local_to_utc(first_date, t);
+                                let dt_specific =
+                                    crate::model::item::safe_local_to_utc(first_date, t);
 
                                 let date_val = DateType::Specific(dt_specific);
                                 task.due = Some(date_val.clone());
@@ -2281,7 +2280,7 @@ pub fn apply_smart_input(
                 if t <= now_local.time() {
                     target_date += Duration::days(1);
                 }
-                let dt = safe_local_to_utc(target_date, t);
+                let dt = crate::model::item::safe_local_to_utc(target_date, t);
                 let dt_type = DateType::Specific(dt);
                 if set_start {
                     task.dtstart = Some(dt_type.clone());
@@ -2437,7 +2436,7 @@ pub fn apply_smart_input(
                     .or(task.dtstart.as_ref())
                     .map(|d| d.to_date_naive());
                 if let Some(target_date) = anchor_date {
-                    let dt = safe_local_to_utc(target_date, t);
+                    let dt = crate::model::item::safe_local_to_utc(target_date, t);
                     task.alarms.push(Alarm::new_absolute(dt));
                 } else {
                     let now_local = Local::now();
@@ -2445,7 +2444,7 @@ pub fn apply_smart_input(
                     if t <= now_local.time() {
                         target_date += Duration::days(1);
                     }
-                    let dt = safe_local_to_utc(target_date, t);
+                    let dt = crate::model::item::safe_local_to_utc(target_date, t);
                     task.alarms.push(Alarm::new_absolute(dt));
                 }
             }

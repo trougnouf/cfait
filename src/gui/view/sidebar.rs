@@ -31,10 +31,11 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
         let mut style = toggler::default(theme, status);
         match status {
             toggler::Status::Active { is_toggled } | toggler::Status::Hovered { is_toggled }
-                if is_toggled => {
-                    style.background = Color::from_rgb(1.0, 0.6, 0.0).into();
-                    style.foreground = theme.extended_palette().background.base.text.into();
-                }
+                if is_toggled =>
+            {
+                style.background = Color::from_rgb(1.0, 0.6, 0.0).into();
+                style.foreground = theme.extended_palette().background.base.text.into();
+            }
             _ => {}
         }
         style
@@ -238,22 +239,6 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
             write!(f, "{}", self.1)
         }
     }
-    fn format_mins(m: u32) -> String {
-        if m >= 525600 {
-            format!("{}y", m / 525600)
-        } else if m >= 43200 {
-            format!("{}mo", m / 43200)
-        } else if m >= 10080 {
-            format!("{}w", m / 10080)
-        } else if m >= 1440 {
-            format!("{}d", m / 1440)
-        } else if m >= 60 {
-            format!("{}h", m / 60)
-        } else {
-            format!("{}m", m)
-        }
-    }
-
     let mut dur_set = std::collections::HashSet::new();
     for map in app.store.calendars.values() {
         for t in map.values() {
@@ -266,7 +251,10 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     sorted_durs.sort();
     let mut opts = vec![DurationOpt(None, "Any".to_string())];
     for d in sorted_durs {
-        opts.push(DurationOpt(Some(d), format_mins(d)));
+        opts.push(DurationOpt(
+            Some(d),
+            crate::model::parser::format_duration_compact(d),
+        ));
     }
     let current_min = opts
         .iter()

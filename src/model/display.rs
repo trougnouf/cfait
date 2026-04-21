@@ -57,22 +57,6 @@ impl TaskDisplay for Task {
     }
 
     fn format_duration_short(&self) -> String {
-        fn fmt_min(m: u32) -> String {
-            if m >= 525600 {
-                format!("{}y", m / 525600)
-            } else if m >= 43200 {
-                format!("{}mo", m / 43200)
-            } else if m >= 10080 {
-                format!("{}w", m / 10080)
-            } else if m >= 1440 {
-                format!("{}d", m / 1440)
-            } else if m >= 60 {
-                format!("{}h", m / 60)
-            } else {
-                format!("{}m", m)
-            }
-        }
-
         // Calculate actual spent time (stored + current session)
         let now_ts = Utc::now().timestamp();
         let current_session = self
@@ -86,9 +70,13 @@ impl TaskDisplay for Task {
             if let Some(max) = self.estimated_duration_max
                 && max > min
             {
-                format!("~{}-{}", fmt_min(min), fmt_min(max))
+                format!(
+                    "~{}-{}",
+                    crate::model::parser::format_duration_compact(min),
+                    crate::model::parser::format_duration_compact(max)
+                )
             } else {
-                format!("~{}", fmt_min(min))
+                format!("~{}", crate::model::parser::format_duration_compact(min))
             }
         } else {
             String::new()
@@ -96,9 +84,13 @@ impl TaskDisplay for Task {
 
         let time_str = if total_mins > 0 || self.last_started_at.is_some() {
             if !est_str.is_empty() {
-                format!("{} / {}", fmt_min(total_mins), est_str)
+                format!(
+                    "{} / {}",
+                    crate::model::parser::format_duration_compact(total_mins),
+                    est_str
+                )
             } else {
-                fmt_min(total_mins).to_string()
+                crate::model::parser::format_duration_compact(total_mins).to_string()
             }
         } else if !est_str.is_empty() {
             est_str.to_string()
@@ -243,10 +235,11 @@ impl TaskDisplay for Task {
             let local = comp.with_timezone(&chrono::Local);
             s.push_str(&format!(" done:{}", local.format("%Y-%m-%d %H:%M")));
         } else if let Some(pc) = self.percent_complete
-            && pc > 0 {
-                // New partial completion syntax
-                s.push_str(&format!(" done:{}%", pc));
-            }
+            && pc > 0
+        {
+            // New partial completion syntax
+            s.push_str(&format!(" done:{}%", pc));
+        }
 
         s
     }

@@ -275,7 +275,13 @@ impl LocalStorage {
     pub fn atomic_write<P: AsRef<Path>, C: AsRef<[u8]>>(path: P, contents: C) -> Result<()> {
         let path = path.as_ref();
         let tmp_path = path.with_extension("tmp");
-        fs::write(&tmp_path, contents)?;
+
+        // Safely write and flush to physical disk before renaming
+        let mut file = fs::File::create(&tmp_path)?;
+        use std::io::Write;
+        file.write_all(contents.as_ref())?;
+        file.sync_all()?;
+
         fs::rename(tmp_path, path)?;
         Ok(())
     }
