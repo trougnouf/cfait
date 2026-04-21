@@ -160,6 +160,8 @@ pub fn spawn_background_worker(
                                             remote_actions.push(Action::Delete(t.clone()));
                                             let mut moved = t.clone();
                                             moved.calendar_href = target.clone();
+                                            moved.href = String::new();
+                                            moved.etag = String::new();
                                             local_actions.push(Action::Create(moved));
                                         } else {
                                             remote_actions.push(Action::Move(t, target));

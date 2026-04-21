@@ -574,16 +574,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::MakeChild(target_uid) => {
             if let Some(parent_uid) = app.yanked_uid.clone()
                 && let Some(_orig) = app.store.get_task_ref(&target_uid)
-                && let Some(updated) = app.store.set_parent(&target_uid, Some(parent_uid)) {
-                    app.selected_uid = Some(target_uid.clone());
-                    if !app.yank_lock_active {
-                        app.yanked_uid = None;
-                    }
-                    refresh_filtered_tasks(app);
-                    if let Some(tx) = &app.bg_tx {
-                        let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
-                    }
+                && let Some(updated) = app.store.set_parent(&target_uid, Some(parent_uid))
+            {
+                app.selected_uid = Some(target_uid.clone());
+                if !app.yank_lock_active {
+                    app.yanked_uid = None;
                 }
+                refresh_filtered_tasks(app);
+                if let Some(tx) = &app.bg_tx {
+                    let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
+                }
+            }
             Task::none()
         }
 
@@ -886,9 +887,10 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             app.input_value = text_editor::Content::new();
             refresh_filtered_tasks(app);
             if !retroactive_sync_batch.is_empty()
-                && let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(retroactive_sync_batch));
-                }
+                && let Some(tx) = &app.bg_tx
+            {
+                let _ = tx.try_send(WorkerCommand::Batch(retroactive_sync_batch));
+            }
             return Task::none();
         }
     }
@@ -906,9 +908,10 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             app.input_value = text_editor::Content::new();
             refresh_filtered_tasks(app);
             if !retroactive_sync_batch.is_empty()
-                && let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(retroactive_sync_batch));
-                }
+                && let Some(tx) = &app.bg_tx
+            {
+                let _ = tx.try_send(WorkerCommand::Batch(retroactive_sync_batch));
+            }
             return Task::none();
         }
     }
@@ -1002,7 +1005,9 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         }
     }
 
-    if let Some(tx) = &app.bg_tx {
+    if !retroactive_sync_batch.is_empty()
+        && let Some(tx) = &app.bg_tx
+    {
         let _ = tx.try_send(WorkerCommand::Batch(retroactive_sync_batch));
     }
     Task::none()
