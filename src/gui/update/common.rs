@@ -291,12 +291,43 @@ pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
         }
 
         if let Some(idx) = idx_opt {
-            // Index-only centering as a last resort.
-            let avg_item_h: f32 = 34.0;
-            let total_items = app.tasks.len() as f32;
-            let content_h = (avg_item_h * total_items).max(1.0);
+            // Index-only centering as a last resort, using dynamic height estimation.
+            let mut content_h = 0.0;
+            let mut item_center = 0.0;
+
+            for (i, t) in app.tasks.iter().enumerate() {
+                let mut h = 36.0; // Base row height
+
+                // Add height for wrapped summary (approx 60 chars per line)
+                h += (t.summary.len().saturating_sub(60) as f32 / 60.0).floor() * 20.0;
+
+                // Add height for expanded details
+                if app.expanded_tasks.contains(&t.uid) {
+                    h += 15.0; // Margin
+                    if !t.description.is_empty() {
+                        // Since text doesn't wrap, 1 line in string = 1 visual line.
+                        // We use a constant 18.0px per line.
+                        h += t.description.lines().count() as f32 * 18.0;
+                    }
+                    h += t.dependencies.len() as f32 * 24.0;
+                    h += t.related_to.len() as f32 * 24.0;
+                    h += app.store.get_tasks_blocking(&t.uid).len() as f32 * 24.0;
+                    h += app.store.get_tasks_related_to(&t.uid).len() as f32 * 24.0;
+                    if !t.sessions.is_empty() || app.adding_session_uid.as_ref() == Some(&t.uid) {
+                        h += 30.0 + (t.sessions.len().min(3) as f32 * 20.0);
+                    }
+                }
+
+                if i < idx {
+                    item_center += h;
+                } else if i == idx {
+                    item_center += h / 2.0;
+                }
+                content_h += h;
+            }
+
+            content_h = content_h.max(1.0);
             let viewport_h = (app.current_window_size.height - 180.0).max(100.0);
-            let item_center = (idx as f32 + 0.5) * avg_item_h;
             let max_scroll = (content_h - viewport_h).max(0.0);
             let desired_offset_px = (item_center - viewport_h / 2.0).clamp(0.0, max_scroll);
 
