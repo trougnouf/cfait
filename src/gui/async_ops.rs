@@ -6,24 +6,7 @@ use crate::config::Config;
 use crate::context::AppContext;
 use crate::model::{CalendarListEntry, Task as TodoTask};
 use futures::stream::{self, StreamExt};
-use std::sync::{Arc, OnceLock};
-use tokio::runtime::Runtime;
-
-// Global runtime instance for bridging Iced (sync) and Client (async)
-static TOKIO_RUNTIME: OnceLock<Runtime> = OnceLock::new();
-
-pub fn init_runtime() {
-    if TOKIO_RUNTIME.get().is_none() {
-        let runtime = Runtime::new().expect("Failed to create Tokio runtime");
-        TOKIO_RUNTIME
-            .set(runtime)
-            .expect("Failed to set global runtime");
-    }
-}
-
-pub fn get_runtime() -> &'static Runtime {
-    TOKIO_RUNTIME.get().expect("Runtime not initialized")
-}
+use std::sync::Arc;
 
 // --- WRAPPERS ---
 
@@ -40,94 +23,78 @@ pub async fn connect_and_fetch_wrapper(
     ),
     String,
 > {
-    let rt = get_runtime();
-    rt.spawn(async move {
-        let ctx_clone = ctx.clone();
-        let config_clone = config.clone();
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(60),
-            RustyClient::connect_with_fallback(ctx, config, Some("GUI")),
-        )
-        .await
-        {
-            Ok(res) => res.map_err(|e| e.to_string()),
-            Err(_) => {
-                // Timeout occurred. Return offline fallback to avoid kicking user out.
-                let client = RustyClient::new(
-                    ctx_clone.clone(),
-                    &config_clone.url,
-                    &config_clone.username,
-                    &config_clone.password,
-                    config_clone.allow_insecure_certs,
-                    Some("GUI"),
-                )
-                .unwrap_or_else(|_| RustyClient {
-                    client: None,
-                    ctx: ctx_clone.clone(),
-                });
-
-                let cals = crate::cache::Cache::load_calendars(ctx_clone.as_ref()).unwrap_or_default();
-                let active_href = config_clone.default_calendar.clone();
-                let tasks = if let Some(ref h) = active_href {
-                    let (mut t, _) = crate::cache::Cache::load(ctx_clone.as_ref(), h).unwrap_or((vec![], None));
-                    crate::journal::Journal::apply_to_tasks(ctx_clone.as_ref(), &mut t, h);
-                    t
-                } else {
-                    vec![]
-                };
-
-                Ok((
-                    client,
-                    cals,
-                    tasks,
-                    active_href,
-                    Some("Connection timed out. Check your network or server URL.".to_string()),
-                ))
-            }
-        }
-    })
+    let ctx_clone = ctx.clone();
+    let config_clone = config.clone();
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(60),
+        RustyClient::connect_with_fallback(ctx, config, Some("GUI")),
+    )
     .await
-    .map_err(|e| e.to_string())?
+    {
+        Ok(res) => res.map_err(|e| e.to_string()),
+        Err(_) => {
+            // Timeout occurred. Return offline fallback to avoid kicking user out.
+            let client = RustyClient::new(
+                ctx_clone.clone(),
+                &config_clone.url,
+                &config_clone.username,
+                &config_clone.password,
+                config_clone.allow_insecure_certs,
+                Some("GUI"),
+            )
+            .unwrap_or_else(|_| RustyClient {
+                client: None,
+                ctx: ctx_clone.clone(),
+            });
+
+            let cals = crate::cache::Cache::load_calendars(ctx_clone.as_ref()).unwrap_or_default();
+            let active_href = config_clone.default_calendar.clone();
+            let tasks = if let Some(ref h) = active_href {
+                let (mut t, _) =
+                    crate::cache::Cache::load(ctx_clone.as_ref(), h).unwrap_or((vec![], None));
+                crate::journal::Journal::apply_to_tasks(ctx_clone.as_ref(), &mut t, h);
+                t
+            } else {
+                vec![]
+            };
+
+            Ok((
+                client,
+                cals,
+                tasks,
+                active_href,
+                Some("Connection timed out. Check your network or server URL.".to_string()),
+            ))
+        }
+    }
 }
 
 pub async fn async_fetch_wrapper(
     client: RustyClient,
     href: String,
 ) -> Result<(String, Vec<TodoTask>), String> {
-    let rt = get_runtime();
-    rt.spawn(async move {
-        match tokio::time::timeout(std::time::Duration::from_secs(30), client.get_tasks(&href))
-            .await
-        {
-            Ok(res) => {
-                let tasks = res.map_err(|e: String| e)?;
-                Ok((href, tasks))
-            }
-            Err(_) => Err(format!("Fetch timed out for calendar {}", href)),
+    match tokio::time::timeout(std::time::Duration::from_secs(30), client.get_tasks(&href)).await {
+        Ok(res) => {
+            let tasks = res.map_err(|e: String| e)?;
+            Ok((href, tasks))
         }
-    })
-    .await
-    .map_err(|e| e.to_string())?
+        Err(_) => Err(format!("Fetch timed out for calendar {}", href)),
+    }
 }
 
 pub async fn async_fetch_all_wrapper(
     client: RustyClient,
     cals: Vec<CalendarListEntry>,
 ) -> Result<Vec<(String, Vec<TodoTask>)>, String> {
-    let rt = get_runtime();
-    rt.spawn(async move {
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(180),
-            client.get_all_tasks(&cals),
-        )
-        .await
-        {
-            Ok(res) => res.map_err(|e| e.to_string()),
-            Err(_) => Err("Fetch all timed out".to_string()),
-        }
-    })
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(180),
+        client.get_all_tasks(&cals),
+    )
     .await
-    .map_err(|e| e.to_string())?
+    {
+        Ok(res) => res.map_err(|e| e.to_string()),
+        Err(_) => Err("Fetch all timed out".to_string()),
+    }
 }
 
 use crate::controller::TaskController;
@@ -193,20 +160,15 @@ pub async fn async_migrate_wrapper(
     tasks: Vec<TodoTask>,
     target: String,
 ) -> Result<usize, String> {
-    let rt = get_runtime();
-    rt.spawn(async move {
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(45),
-            client.migrate_tasks(tasks, &target),
-        )
-        .await
-        {
-            Ok(res) => res.map_err(|e| e.to_string()),
-            Err(_) => Err("Migration timed out".to_string()),
-        }
-    })
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(45),
+        client.migrate_tasks(tasks, &target),
+    )
     .await
-    .map_err(|e| e.to_string())?
+    {
+        Ok(res) => res.map_err(|e| e.to_string()),
+        Err(_) => Err("Migration timed out".to_string()),
+    }
 }
 
 /// Backfill calendar events for all tasks when the global setting is enabled.
@@ -216,62 +178,50 @@ pub async fn async_backfill_events_wrapper(
     tasks: Vec<TodoTask>,
     global_enabled: bool,
 ) -> Result<usize, String> {
-    let rt = get_runtime();
-    rt.spawn(async move {
-        let futures = tasks
-            .into_iter()
-            .filter(|task| {
-                task.due.is_some() || task.dtstart.is_some() || !task.sessions.is_empty()
-            })
-            .map(|task| {
-                let c = client.clone();
-                async move {
-                    match tokio::time::timeout(
-                        std::time::Duration::from_secs(30),
-                        c.sync_task_companion_event(&task, global_enabled),
-                    )
-                    .await
-                    {
-                        Ok(Ok(true)) => 1,
-                        _ => 0,
-                    }
+    let futures = tasks
+        .into_iter()
+        .filter(|task| task.due.is_some() || task.dtstart.is_some() || !task.sessions.is_empty())
+        .map(|task| {
+            let c = client.clone();
+            async move {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(30),
+                    c.sync_task_companion_event(&task, global_enabled),
+                )
+                .await
+                {
+                    Ok(Ok(true)) => 1,
+                    _ => 0,
                 }
-            });
+            }
+        });
 
-        let count = stream::iter(futures)
-            .buffer_unordered(8)
-            .collect::<Vec<usize>>()
-            .await
-            .iter()
-            .sum();
+    let count = stream::iter(futures)
+        .buffer_unordered(8)
+        .collect::<Vec<usize>>()
+        .await
+        .iter()
+        .sum();
 
-        Ok(count)
-    })
-    .await
-    .map_err(|e| e.to_string())?
+    Ok(count)
 }
 
 pub async fn async_delete_all_events_wrapper(
     client: RustyClient,
     calendars: Vec<String>,
 ) -> Result<usize, String> {
-    let rt = get_runtime();
-    rt.spawn(async move {
-        match tokio::time::timeout(std::time::Duration::from_secs(30), async {
-            let mut total = 0;
-            for cal_href in calendars {
-                if let Ok(count) = client.delete_all_companion_events(&cal_href).await {
-                    total += count;
-                }
+    match tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        let mut total = 0;
+        for cal_href in calendars {
+            if let Ok(count) = client.delete_all_companion_events(&cal_href).await {
+                total += count;
             }
-            Ok::<usize, String>(total)
-        })
-        .await
-        {
-            Ok(res) => res,
-            Err(_) => Err("Deleting events timed out".to_string()),
         }
+        Ok::<usize, String>(total)
     })
     .await
-    .map_err(|e| e.to_string())?
+    {
+        Ok(res) => res,
+        Err(_) => Err("Deleting events timed out".to_string()),
+    }
 }

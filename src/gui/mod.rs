@@ -34,8 +34,6 @@ pub fn run_with_ics_file(
     override_root: Option<PathBuf>,
     force_ssd: bool,
 ) -> iced::Result {
-    async_ops::init_runtime();
-
     let window_icon =
         window_icon::from_file_data(include_bytes!("../../assets/autogen/cfait.png"), None).ok();
 

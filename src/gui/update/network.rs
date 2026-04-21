@@ -65,8 +65,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             for cal in &app.calendars {
                 if cal.href.starts_with("local://")
-                    && let Ok(mut local_t) = crate::gui::async_ops::get_runtime()
-                        .block_on(async { client.get_tasks(&cal.href).await })
+                    && let Ok(mut local_t) =
+                        crate::storage::LocalStorage::load_for_href(app.ctx.as_ref(), &cal.href)
                 {
                     Journal::apply_to_tasks(app.ctx.as_ref(), &mut local_t, &cal.href);
                     app.store.insert(cal.href.clone(), local_t);
@@ -166,12 +166,25 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.clear();
                         for cal in &app.calendars {
                             if cal.href.starts_with("local://") {
-                                if let Ok(mut tasks) = crate::storage::LocalStorage::load_for_href(app.ctx.as_ref(), &cal.href) {
-                                    crate::journal::Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &cal.href);
+                                if let Ok(mut tasks) = crate::storage::LocalStorage::load_for_href(
+                                    app.ctx.as_ref(),
+                                    &cal.href,
+                                ) {
+                                    crate::journal::Journal::apply_to_tasks(
+                                        app.ctx.as_ref(),
+                                        &mut tasks,
+                                        &cal.href,
+                                    );
                                     app.store.insert(cal.href.clone(), tasks);
                                 }
-                            } else if let Ok((mut tasks, _)) = Cache::load(app.ctx.as_ref(), &cal.href) {
-                                crate::journal::Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &cal.href);
+                            } else if let Ok((mut tasks, _)) =
+                                Cache::load(app.ctx.as_ref(), &cal.href)
+                            {
+                                crate::journal::Journal::apply_to_tasks(
+                                    app.ctx.as_ref(),
+                                    &mut tasks,
+                                    &cal.href,
+                                );
                                 app.store.insert(cal.href.clone(), tasks);
                             }
                         }
