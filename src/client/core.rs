@@ -34,6 +34,7 @@ use libdav::dav::{WebDavClient, WebDavError};
 use libdav::{CalDavClient, PropertyName, names};
 use roxmltree::Document;
 
+use anyhow;
 use futures::stream::{self, StreamExt};
 use http::Uri;
 use hyper_rustls::HttpsConnectorBuilder;
@@ -81,7 +82,8 @@ pub mod test_hooks {
     use std::sync::{Mutex, OnceLock};
 
     pub type FetchRemoteHook = Box<dyn Fn(&str) -> Option<Task> + Send + Sync + 'static>;
-    pub type ForceSyncErrorHook = Box<dyn Fn(&Action) -> Option<String> + Send + Sync + 'static>;
+    pub type ForceSyncErrorHook =
+        Box<dyn Fn(&Action) -> Option<anyhow::Error> + Send + Sync + 'static>;
 
     /// Test hook to simulate fetch_remote_task responses in unit tests.
     pub static TEST_FETCH_REMOTE_HOOK: OnceLock<Mutex<Option<FetchRemoteHook>>> = OnceLock::new();
@@ -135,7 +137,7 @@ impl RustyClient {
         pass: &str,
         insecure: bool,
         client_type: Option<&str>,
-    ) -> Result<Self, String> {
+    ) -> anyhow::Result<Self> {
         if url.is_empty() {
             return Ok(Self {
                 client: None,
@@ -145,7 +147,7 @@ impl RustyClient {
 
         let uri: Uri = url
             .parse()
-            .map_err(|e: http::uri::InvalidUri| e.to_string())?;
+            .map_err(|e: http::uri::InvalidUri| anyhow::anyhow!("Invalid URI: {}", e))?;
 
         let tls_config_builder = rustls::ClientConfig::builder();
         let tls_config = if insecure {
@@ -160,7 +162,7 @@ impl RustyClient {
                 let result = rustls_native_certs::load_native_certs();
                 root_store.add_parsable_certificates(result.certs);
                 if root_store.is_empty() {
-                    return Err("No valid system certificates found.".to_string());
+                    return Err(anyhow::anyhow!("No valid system certificates found."));
                 }
                 tls_config_builder
                     .with_root_certificates(root_store)
@@ -209,7 +211,7 @@ impl RustyClient {
 
     /// Attempts to automatically discover the primary calendar for the user.
     /// Returns a path string on success.
-    pub async fn discover_calendar(&self) -> Result<String, String> {
+    pub async fn discover_calendar(&self) -> anyhow::Result<String> {
         if let Some(client) = &self.client {
             let base_path = client.base_url().path().to_string();
             // Fast heuristic: if any resource in base path ends with .ics treat it as calendar root
@@ -229,7 +231,7 @@ impl RustyClient {
             }
             Ok(base_path)
         } else {
-            Err("Offline".to_string())
+            Err(anyhow::anyhow!("Offline"))
         }
     }
 
@@ -240,16 +242,13 @@ impl RustyClient {
         ctx: Arc<dyn AppContext>,
         config: Config,
         client_type: Option<&str>,
-    ) -> Result<
-        (
-            Self,
-            Vec<CalendarListEntry>,
-            Vec<Task>,
-            Option<String>,
-            Option<String>,
-        ),
-        String,
-    > {
+    ) -> anyhow::Result<(
+        Self,
+        Vec<CalendarListEntry>,
+        Vec<Task>,
+        Option<String>,
+        Option<String>,
+    )> {
         // Clone config so we can update/save if we detect an auto-corrected root.
         let mut config_for_saving = config.clone();
 
@@ -260,8 +259,7 @@ impl RustyClient {
             &config.password,
             config.allow_insecure_certs,
             client_type,
-        )
-        .map_err(|e| e.to_string())?;
+        )?;
 
         // Limit timeout to ensure a clean fallback in problematic scenarios.
         // If the queue is massive, we don't want to block the initial load forever.
@@ -285,7 +283,7 @@ impl RustyClient {
                 let error_msg = e.to_string();
                 let mut specific_warning = None;
                 if error_msg.contains("InvalidCertificate") {
-                    return Err(format!(
+                    return Err(anyhow::anyhow!(
                         "Connection failed: Invalid TLS Certificate. {}",
                         error_msg
                     ));
@@ -379,31 +377,25 @@ impl RustyClient {
     async fn perform_calendar_discovery(
         &self,
         _discovery_path: &str,
-    ) -> Result<Vec<CalendarListEntry>, String> {
-        let client = self.client.as_ref().ok_or("Offline")?;
+    ) -> anyhow::Result<Vec<CalendarListEntry>> {
+        let client = self
+            .client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Offline"))?;
 
-        let principal_res = client
-            .find_current_user_principal()
-            .await
-            .map_err(|e| format!("{:?}", e))?;
+        let principal_res = client.find_current_user_principal().await?;
         let Some(principal) = principal_res else {
-            return Err("No current user principal found.".to_string());
+            return Err(anyhow::anyhow!("No current user principal found."));
         };
 
-        let home_set_resp = client
-            .request(FindCalendarHomeSet::new(&principal))
-            .await
-            .map_err(|e| format!("{:?}", e))?;
+        let home_set_resp = client.request(FindCalendarHomeSet::new(&principal)).await?;
 
         let home_url = home_set_resp
             .home_sets
             .first()
-            .ok_or("No calendar home set found.")?;
+            .ok_or_else(|| anyhow::anyhow!("No calendar home set found."))?;
 
-        let cals_resp = client
-            .request(FindCalendars::new(home_url))
-            .await
-            .map_err(|e| format!("{:?}", e))?;
+        let cals_resp = client.request(FindCalendars::new(home_url)).await?;
 
         let mut calendars = Vec::new();
         for col in cals_resp.calendars {
@@ -437,7 +429,7 @@ impl RustyClient {
     }
 
     /// Get calendars (remote + local), with optional auto-corrected URL returned.
-    pub async fn get_calendars(&self) -> Result<(Vec<CalendarListEntry>, Option<String>), String> {
+    pub async fn get_calendars(&self) -> anyhow::Result<(Vec<CalendarListEntry>, Option<String>)> {
         if let Some(_client) = &self.client {
             // attempt discovery at configured path
             let user_configured_path = self.client.as_ref().unwrap().base_url().path();
@@ -445,8 +437,7 @@ impl RustyClient {
 
             let mut calendars = self
                 .perform_calendar_discovery(user_configured_path)
-                .await
-                .map_err(|e| format!("{:?}", e))?;
+                .await?;
 
             // Fallback: if nothing found, try server root and offer corrected root URL
             if calendars.is_empty()
@@ -509,20 +500,14 @@ impl RustyClient {
     pub async fn get_supported_components(
         &self,
         calendar_href: &str,
-    ) -> Result<Vec<String>, String> {
+    ) -> anyhow::Result<Vec<String>> {
         if let Some(_client) = &self.client {
             let req = Propfind::new(calendar_href)
                 .with_properties(&[&names::SUPPORTED_CALENDAR_COMPONENT_SET])
                 .with_depth(libdav::Depth::Zero);
-            let response = self
-                .client
-                .as_ref()
-                .unwrap()
-                .request(req)
-                .await
-                .map_err(|e| e.to_string())?;
-            let xml_str = std::str::from_utf8(&response.body).map_err(|e| e.to_string())?;
-            let doc = Document::parse(xml_str).map_err(|e| e.to_string())?;
+            let response = self.client.as_ref().unwrap().request(req).await?;
+            let xml_str = std::str::from_utf8(&response.body)?;
+            let doc = Document::parse(xml_str)?;
             let mut components = Vec::new();
             for node in doc.descendants() {
                 if node.tag_name().name().eq_ignore_ascii_case("comp")
@@ -533,7 +518,7 @@ impl RustyClient {
             }
             Ok(components)
         } else {
-            Err("Offline".to_string())
+            Err(anyhow::anyhow!("Offline"))
         }
     }
 
@@ -669,7 +654,7 @@ impl RustyClient {
         &self,
         task: &Task,
         config_enabled: bool,
-    ) -> Result<bool, String> {
+    ) -> anyhow::Result<bool> {
         let cfg = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let delete_on_completion = cfg.delete_events_on_completion;
         let res = self
@@ -680,20 +665,23 @@ impl RustyClient {
 
     /// Fast-path for bulk deleting all companion events in a calendar.
     /// Uses a single PROPFIND to locate existing events instead of guessing filenames per-task.
-    pub async fn delete_all_companion_events(&self, calendar_href: &str) -> Result<usize, String> {
+    pub async fn delete_all_companion_events(&self, calendar_href: &str) -> anyhow::Result<usize> {
         // Local calendars don't have remote events
         if calendar_href.starts_with("local://") {
             return Ok(0);
         }
 
-        let client = self.client.as_ref().ok_or("Offline")?;
+        let client = self
+            .client
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("Offline"))?;
         let path = strip_host(calendar_href);
 
         // 1. Ask the server for all files in the calendar directory
         let list_resp = client
             .request(ListResources::new(&path))
             .await
-            .map_err(|e| format!("PROPFIND failed: {:?}", e))?;
+            .map_err(|e| anyhow::anyhow!("PROPFIND failed: {:?}", e))?;
 
         // 2. Filter for files that were generated by Cfait.
         // We look for "evt-" followed by a 36-character UUID + ".ics".
@@ -767,11 +755,10 @@ impl RustyClient {
         &self,
         calendar_href: &str,
         apply_journal: bool,
-    ) -> Result<Vec<Task>, String> {
+    ) -> anyhow::Result<Vec<Task>> {
         // Local calendar short-circuit
         if calendar_href.starts_with("local://") {
-            let mut tasks = LocalStorage::load_for_href(self.ctx.as_ref(), calendar_href)
-                .map_err(|e| e.to_string())?;
+            let mut tasks = LocalStorage::load_for_href(self.ctx.as_ref(), calendar_href)?;
             if apply_journal {
                 Journal::apply_to_tasks(self.ctx.as_ref(), &mut tasks, calendar_href);
             }
@@ -846,7 +833,7 @@ impl RustyClient {
             let list_resp = client
                 .request(ListResources::new(&path_href))
                 .await
-                .map_err(|e| format!("PROPFIND: {:?}", e))?;
+                .map_err(|e| anyhow::anyhow!("PROPFIND: {:?}", e))?;
 
             let mut cache_map: HashMap<String, Task> = HashMap::new();
             for t in cached_tasks {
@@ -931,7 +918,7 @@ impl RustyClient {
                 let mut stream = stream::iter(futures).buffer_unordered(4);
 
                 while let Some(res) = stream.next().await {
-                    let fetched_resp = res.map_err(|e| format!("MULTIGET: {:?}", e))?;
+                    let fetched_resp = res.map_err(|e| anyhow::anyhow!("MULTIGET: {:?}", e))?;
 
                     for item in fetched_resp.resources {
                         if let Ok(content) = item.content
@@ -971,7 +958,7 @@ impl RustyClient {
     // happen at the Store/Controller layer (higher up) — these functions perform the
     // persistence/journaling/network steps.
 
-    pub async fn get_tasks(&self, calendar_href: &str) -> Result<Vec<Task>, String> {
+    pub async fn get_tasks(&self, calendar_href: &str) -> anyhow::Result<Vec<Task>> {
         // Best-effort: ensure pending journal processed first
         let _ = self.sync_journal().await;
         self.fetch_calendar_tasks_internal(calendar_href, true)
@@ -981,7 +968,7 @@ impl RustyClient {
     pub async fn get_all_tasks(
         &self,
         calendars: &[CalendarListEntry],
-    ) -> Result<Vec<(String, Vec<Task>)>, String> {
+    ) -> anyhow::Result<Vec<(String, Vec<Task>)>> {
         let _ = self.sync_journal().await;
         let hrefs: Vec<String> = calendars.iter().map(|c| c.href.clone()).collect();
         let futures = hrefs.into_iter().map(|href| {
@@ -1030,7 +1017,7 @@ impl RustyClient {
         &self,
         tasks: Vec<Task>,
         target_calendar_href: &str,
-    ) -> Result<usize, String> {
+    ) -> anyhow::Result<usize> {
         let mut count = 0;
         for task in tasks.into_iter() {
             let is_source_local = task.calendar_href.starts_with("local://");
@@ -1045,12 +1032,10 @@ impl RustyClient {
                 new_task.calendar_href = target_calendar_href.to_string();
                 new_task.href = String::new();
                 new_task.etag = String::new();
-                Journal::push(self.ctx.as_ref(), Action::Create(new_task))
-                    .map_err(|e| e.to_string())?;
+                Journal::push(self.ctx.as_ref(), Action::Create(new_task))?;
                 count += 1;
             } else if !is_source_local && is_target_local {
-                Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()))
-                    .map_err(|e| e.to_string())?;
+                Journal::push(self.ctx.as_ref(), Action::Delete(task.clone()))?;
                 let mut new_task = task.clone();
                 new_task.calendar_href = target_calendar_href.to_string();
                 new_task.href = String::new();
@@ -1076,15 +1061,14 @@ impl RustyClient {
                 Journal::push(
                     self.ctx.as_ref(),
                     Action::Move(task, target_calendar_href.to_string()),
-                )
-                .map_err(|e| e.to_string())?;
+                )?;
                 count += 1;
             }
         }
 
         match self.sync_journal().await {
             Ok((_warns, _synced)) => Ok(count),
-            Err(e) => Err(e),
+            Err(e) => Err(anyhow::anyhow!(e)),
         }
     }
 

@@ -131,7 +131,7 @@ pub async fn run_network_actor(
         match RustyClient::new(ctx.clone(), &url, &user, &pass, allow_insecure, Some("TUI")) {
             Ok(c) => c,
             Err(e) => {
-                let _ = event_tx.send(AppEvent::Error(e)).await;
+                let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
                 return;
             }
         };
@@ -246,7 +246,7 @@ pub async fn run_network_actor(
                     let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
                 }
                 Err(e) => {
-                    let _ = event_tx.send(AppEvent::Error(e)).await;
+                    let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
                 }
             },
 
@@ -256,7 +256,7 @@ pub async fn run_network_actor(
                     let _ = event_tx.send(AppEvent::TasksLoaded(vec![(href, t)])).await;
                 }
                 Err(e) => {
-                    let _ = event_tx.send(AppEvent::Error(e)).await;
+                    let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
                 }
             },
 
@@ -365,7 +365,7 @@ pub async fn run_network_actor(
                 let mut calendars = match client.get_calendars().await {
                     Ok((c, _)) => c,
                     Err(e) => {
-                        let _ = event_tx.send(AppEvent::Error(e)).await;
+                        let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
                         vec![]
                     }
                 };
@@ -396,7 +396,7 @@ pub async fn run_network_actor(
                             .await;
                     }
                     Err(e) => {
-                        let _ = event_tx.send(AppEvent::Error(e)).await;
+                        let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
                     }
                 }
             }
@@ -519,7 +519,7 @@ pub async fn run_network_actor(
                             // (Existing refresh logic usually follows here or user presses 'r')
                         }
                         Err(e) => {
-                            let _ = event_tx.send(AppEvent::Error(e)).await;
+                            let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
                         }
                     }
                 } else {

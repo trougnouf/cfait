@@ -37,9 +37,8 @@ async fn test_discover_calendar_fast_heuristic_success() {
     let result = client.discover_calendar().await;
 
     // The client should return its base path because it found an .ics file within it.
-    assert_eq!(
-        result,
-        Ok(base_path.to_string()),
+    assert!(
+        result.is_ok() && result.as_ref().unwrap() == &base_path.to_string(),
         "Should return base_path on fast heuristic success"
     );
 
@@ -157,9 +156,8 @@ async fn test_discover_calendar_full_fallback_success() {
     let result = client.discover_calendar().await;
 
     // The client should return the path of the first calendar it found in the home-set.
-    assert_eq!(
-        result,
-        Ok(primary_calendar_path.to_string()),
+    assert!(
+        result.is_ok() && result.as_ref().unwrap() == &primary_calendar_path.to_string(),
         "Should return the discovered calendar path on fallback success"
     );
 

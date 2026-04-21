@@ -179,7 +179,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
 
                         match client.get_calendars().await {
                             Ok((cals, _)) => Ok(cals.len()),
-                            Err(e) => Err(e),
+                            Err(e) => Err(e.to_string()),
                         }
                     }
                     .await;

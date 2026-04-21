@@ -420,7 +420,7 @@ impl RustyClient {
             let mut new_href_to_propagate: Option<(String, String)> = None;
             let mut path_for_refresh: Option<String> = None;
 
-            let test_forced_err: Option<String> = {
+            let test_forced_err: Option<anyhow::Error> = {
                 #[cfg(any(test, feature = "test_hooks"))]
                 {
                     if let Some(h) = TEST_FORCE_SYNC_ERROR.get() {
@@ -439,7 +439,8 @@ impl RustyClient {
                 }
             };
 
-            let step_result = if let Some(err_msg) = test_forced_err {
+            let step_result = if let Some(err) = test_forced_err {
+                let err_msg = err.to_string();
                 if err_msg.contains("400") || err_msg.contains("403") || err_msg.contains("415") {
                     Ok(StepResult::new(StepOutcome::RecoveryNeeded(err_msg)))
                 } else if err_msg.contains("413") {

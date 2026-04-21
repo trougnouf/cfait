@@ -75,7 +75,7 @@ pub async fn async_fetch_wrapper(
 ) -> Result<(String, Vec<TodoTask>), String> {
     match tokio::time::timeout(std::time::Duration::from_secs(30), client.get_tasks(&href)).await {
         Ok(res) => {
-            let tasks = res.map_err(|e: String| e)?;
+            let tasks = res.map_err(|e| e.to_string())?;
             Ok((href, tasks))
         }
         Err(_) => Err(format!("Fetch timed out for calendar {}", href)),

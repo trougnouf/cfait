@@ -39,14 +39,14 @@ async fn test_sync_journal_moves_failed_task_to_recovery() {
     // Install test force hook to cause sync_journal to treat this action as a 403 error
     // Add explicit type annotations in the initializer so the compiler can infer the OnceLock inner type.
     let hook = TEST_FORCE_SYNC_ERROR.get_or_init(|| {
-        Mutex::new(None::<Box<dyn Fn(&Action) -> Option<String> + Send + Sync + 'static>>)
+        Mutex::new(None::<Box<dyn Fn(&Action) -> Option<anyhow::Error> + Send + Sync + 'static>>)
     });
     {
         let mut g = hook.lock().unwrap();
         *g = Some(Box::new(move |action: &Action| match action {
-            Action::Create(t) if t.uid == "sync-err-1" => Some("403 Forbidden".to_string()),
-            Action::Update(t) if t.uid == "sync-err-1" => Some("403 Forbidden".to_string()),
-            Action::Move(t, _) if t.uid == "sync-err-1" => Some("403 Forbidden".to_string()),
+            Action::Create(t) if t.uid == "sync-err-1" => Some(anyhow::anyhow!("403 Forbidden")),
+            Action::Update(t) if t.uid == "sync-err-1" => Some(anyhow::anyhow!("403 Forbidden")),
+            Action::Move(t, _) if t.uid == "sync-err-1" => Some(anyhow::anyhow!("403 Forbidden")),
             _ => None,
         }));
     }
