@@ -374,6 +374,10 @@ fun HomeScreen(
     }
 
     fun toggleTask(task: MobileTask) {
+        // TRIGGER HAPTIC FEEDBACK
+        // HapticFeedbackType.LongPress provides a satisfying "click" feel on Android
+        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+
         val newIsDone = !task.isDone
         val newStatus = if (newIsDone) "Completed" else "NeedsAction"
         val updatedList = tasks.map {
@@ -547,6 +551,11 @@ fun HomeScreen(
             task.location?.let { loc -> sb.append("@@${quote(loc)} ") }
             newTaskText = sb.toString()
             return
+        }
+
+        // A double-impact or distinct feel for deletion
+        if (action == "delete" || action == "delete_tree") {
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
         }
 
         val updatedList = tasks.map { t ->
