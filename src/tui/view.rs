@@ -12,7 +12,7 @@
 
 use crate::color_utils;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
-use crate::store::UNCATEGORIZED_ID;
+use crate::store::{TaskListItem, UNCATEGORIZED_ID};
 use crate::tui::action::SidebarMode;
 use crate::tui::state::{AppState, Focus, InputMode};
 
@@ -285,350 +285,356 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .tasks
         .iter()
         .enumerate()
-        .map(|(idx, t)| {
-            // First: if this is a virtual row, render it as a special cyan arrow line
-            match &t.virtual_state {
-                crate::model::VirtualState::Expand(_) => {
-                    // Indent according to depth
-                    let indent = "  ".repeat(t.depth);
+        .map(|(idx, task_item)| {
+            // Handle expand/collapse control items
+            match task_item {
+                TaskListItem::ExpandGroup(_) => {
+                    // Indent according to depth (expand/collapse items don't have depth, but we can use 0)
+                    let indent = "  ".repeat(0);
                     // Use Nerd Font arrow expand down glyph (fallback to a simple 'v' if font missing)
                     let content = format!("{}  \u{f0796}", indent);
-                    return ListItem::new(Line::from(Span::styled(
+                    ListItem::new(Line::from(Span::styled(
                         content,
                         Style::default().fg(Color::Cyan),
-                    )));
+                    )))
                 }
-                crate::model::VirtualState::Collapse(_) => {
-                    let indent = "  ".repeat(t.depth);
+                TaskListItem::CollapseGroup(_) => {
+                    let indent = "  ".repeat(0);
                     let content = format!("{}  \u{f0799}", indent);
-                    return ListItem::new(Line::from(Span::styled(
+                    ListItem::new(Line::from(Span::styled(
                         content,
                         Style::default().fg(Color::Cyan),
-                    )));
+                    )))
                 }
-                _ => {}
-            }
-
-            // Parent attributes (for resolving visible tags/location)
-            let (parent_tags, parent_location) = if state.active_cal_href.is_some()
-                && let Some(p_uid) = &t.parent_uid
-            {
-                let mut p_tags = HashSet::new();
-                let mut p_loc = None;
-                if let Some(p) = state.store.get_task_ref(p_uid) {
-                    p_tags = p.categories.iter().cloned().collect();
-                    p_loc = p.location.clone();
-                }
-                (p_tags, p_loc)
-            } else {
-                (HashSet::new(), None)
-            };
-
-            // Let task resolve visual attributes (shared logic)
-            let (visible_tags, visible_location) =
-                t.resolve_visual_attributes(&parent_tags, &parent_location, &state.tag_aliases);
-
-            // Styling
-            let is_blocked = t.is_blocked;
-
-            // Compute a base color (as Color) based on priority / blocked state.
-            // We'll build the style from this color so we can dim it for done/cancelled tasks.
-            let mut base_color = if is_blocked {
-                Color::DarkGray
-            } else {
-                match t.priority {
-                    1 => Color::Red,
-                    2 => Color::Rgb(255, 69, 0),
-                    3 => Color::Rgb(255, 140, 0),
-                    4 => Color::Rgb(255, 190, 0),
-                    5 => Color::Yellow,
-                    6 => Color::Rgb(238, 232, 170),
-                    7 => Color::Rgb(176, 196, 222),
-                    8 => Color::Rgb(112, 128, 144),
-                    9 => Color::Rgb(47, 79, 79),
-                    _ => Color::White,
-                }
-            };
-
-            // If task is done or cancelled, dim the color by blending toward the background (black).
-            // A 25% transparency effect (i.e. 75% opacity) is approximated by scaling RGB by 0.75.
-            let is_done_or_cancelled =
-                t.status.is_done() || t.status == crate::model::TaskStatus::Cancelled;
-            if is_done_or_cancelled {
-                base_color = match base_color {
-                    Color::Rgb(r, g, b) => Color::Rgb(
-                        ((r as f32) * 0.75) as u8,
-                        ((g as f32) * 0.75) as u8,
-                        ((b as f32) * 0.75) as u8,
-                    ),
-                    // For named/constant colors, approximate by scaling their RGB equivalents.
-                    Color::Red => Color::Rgb((255.0 * 0.75) as u8, 0, 0),
-                    Color::Yellow => Color::Rgb((255.0 * 0.75) as u8, (255.0 * 0.75) as u8, 0),
-                    Color::DarkGray => Color::Rgb(
-                        (105.0 * 0.75) as u8,
-                        (105.0 * 0.75) as u8,
-                        (105.0 * 0.75) as u8,
-                    ),
-                    Color::White => Color::Rgb(
-                        (255.0 * 0.75) as u8,
-                        (255.0 * 0.75) as u8,
-                        (255.0 * 0.75) as u8,
-                    ),
-                    // Fallback: leave as-is if we don't recognize the variant.
-                    other => other,
-                };
-            }
-
-            let mut base_style = Style::default().fg(base_color);
-
-            let is_trash = t.calendar_href == "local://trash";
-
-            if (t.status.is_done() && state.strikethrough_completed) || is_trash {
-                base_style = base_style.add_modifier(Modifier::CROSSED_OUT);
-            }
-
-            let bracket_style = Style::default();
-            let full_symbol = t.checkbox_symbol();
-            let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
-
-            // Date / duration / recurrence
-            let now = Utc::now();
-            let is_future_start = t
-                .dtstart
-                .as_ref()
-                .map(|s| s.to_start_comparison_time() > now)
-                .unwrap_or(false);
-
-            let (date_display_str, date_style) = if t.status.is_done() {
-                // NEW TUI LOGIC for completion date
-                if let Some(done_dt) = t.completion_date() {
-                    let local_done = done_dt.with_timezone(&chrono::Local);
-                    let color = Color::DarkGray;
-                    (
-                        format!(" 🗓️ {}", local_done.format("%Y-%m-%d %H:%M")),
-                        Style::default().fg(color),
-                    )
-                } else {
-                    (String::new(), Style::default())
-                }
-            } else if is_future_start {
-                let start_ref = t.dtstart.as_ref().unwrap();
-                let start_str = start_ref.format_smart();
-
-                if let Some(due) = &t.due {
-                    let is_same_day = start_ref.to_date_naive() == due.to_date_naive();
-                    let due_str = if is_same_day {
-                        match due {
-                            crate::model::DateType::Specific(dt) => {
-                                dt.with_timezone(&chrono::Local).format("%H:%M").to_string()
-                            }
-                            crate::model::DateType::AllDay(_) => due.format_smart(),
-                            crate::model::DateType::Month(_, _) => due.format_smart(),
-                            crate::model::DateType::Year(_) => due.format_smart(),
+                TaskListItem::Task(t) => {
+                    // Parent attributes (for resolving visible tags/location)
+                    let (parent_tags, parent_location) = if state.active_cal_href.is_some()
+                        && let Some(p_uid) = &t.parent_uid
+                    {
+                        let mut p_tags = HashSet::new();
+                        let mut p_loc = None;
+                        if let Some(p) = state.store.get_task_ref(p_uid) {
+                            p_tags = p.categories.iter().cloned().collect();
+                            p_loc = p.location.clone();
                         }
+                        (p_tags, p_loc)
                     } else {
-                        due.format_smart()
+                        (HashSet::new(), None)
                     };
 
-                    if start_str == due.format_smart() {
-                        (
-                            format!(" ►{}⌛", start_str),
-                            Style::default().fg(Color::DarkGray),
-                        )
+                    // Let task resolve visual attributes (shared logic)
+                    let (visible_tags, visible_location) = t.resolve_visual_attributes(
+                        &parent_tags,
+                        &parent_location,
+                        &state.tag_aliases,
+                    );
+
+                    // Styling
+                    let is_blocked = t.is_blocked;
+
+                    // Compute a base color (as Color) based on priority / blocked state.
+                    // We'll build the style from this color so we can dim it for done/cancelled tasks.
+                    let mut base_color = if is_blocked {
+                        Color::DarkGray
                     } else {
-                        (
-                            format!(" ►{}-{}⌛", start_str, due_str),
-                            Style::default().fg(Color::DarkGray),
-                        )
-                    }
-                } else {
-                    (
-                        format!(" ►{}", start_str),
-                        Style::default().fg(Color::DarkGray),
-                    )
-                }
-            } else if let Some(d) = &t.due {
-                // --- CHANGED START ---
-                let is_overdue = !t.status.is_done() && d.to_comparison_time() < now;
-                let style = if is_overdue {
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(Color::Blue)
-                };
-
-                (format!(" @{}⌛", d.format_smart()), style)
-                // --- CHANGED END ---
-            } else {
-                (String::new(), Style::default())
-            };
-
-            let dur_str = t.format_duration_short();
-            let recur_str = if t.rrule.is_some() { " (R)" } else { "" };
-
-            // Prefix indentation + checkbox
-            let prefix_indent = Span::raw(if state.active_cal_href.is_some() {
-                "  ".repeat(t.depth)
-            } else {
-                "".to_string()
-            });
-            let prefix_bracket_l = Span::styled("[", bracket_style);
-            let prefix_inner = Span::styled(inner_char, base_style);
-            let prefix_bracket_r = Span::styled("]", bracket_style);
-            let prefix_blocked = Span::raw(if is_blocked { " [B] " } else { " " });
-
-            let prefix_width = if state.active_cal_href.is_some() {
-                t.depth * 2 + 6
-            } else {
-                6
-            };
-
-            // Build metadata spans
-            let mut metadata_spans = Vec::new();
-            if !dur_str.is_empty() {
-                metadata_spans.push(Span::styled(
-                    format!(" {}", dur_str),
-                    Style::default().fg(Color::DarkGray),
-                ));
-            }
-            if !recur_str.is_empty() {
-                metadata_spans.push(Span::styled(
-                    recur_str.to_string(),
-                    Style::default().fg(Color::Magenta),
-                ));
-            }
-
-            if state.show_priority_numbers && t.priority > 0 {
-                metadata_spans.push(Span::raw(" "));
-                metadata_spans.push(Span::styled(
-                    format!("!{}", t.priority),
-                    base_style.add_modifier(Modifier::BOLD),
-                ));
-            }
-
-            if t.alarms
-                .iter()
-                .any(|a| a.acknowledged.is_none() && !a.is_snooze())
-            {
-                metadata_spans.push(Span::raw(" "));
-                metadata_spans.push(Span::styled(
-                    "🔔",
-                    Style::default()
-                        .fg(Color::LightRed)
-                        .add_modifier(Modifier::BOLD),
-                ));
-            }
-
-            if !date_display_str.is_empty() {
-                if !metadata_spans
-                    .last()
-                    .map(|s| s.content.ends_with(' '))
-                    .unwrap_or(true)
-                {
-                    metadata_spans.push(Span::raw(" "));
-                }
-                metadata_spans.push(Span::styled(date_display_str, date_style));
-            }
-
-            if t.geo.is_some() {
-                metadata_spans.push(Span::raw(" "));
-                metadata_spans.push(Span::styled(
-                    "\u{ee69}",
-                    Style::default().fg(Color::LightBlue),
-                ));
-            }
-            if t.url.is_some() {
-                metadata_spans.push(Span::raw(" "));
-                metadata_spans.push(Span::styled(
-                    "\u{f0789}",
-                    Style::default().fg(Color::LightBlue),
-                ));
-            }
-
-            // Right side (location + visible tags)
-            let mut right_spans = Vec::new();
-            if let Some(loc) = &visible_location {
-                right_spans.push(Span::styled("@@", Style::default().fg(Color::Yellow)));
-                right_spans.push(Span::styled(
-                    loc.clone(),
-                    Style::default().fg(Color::Yellow),
-                ));
-            }
-
-            for cat in &visible_tags {
-                let (r, g, b) = color_utils::generate_color(cat);
-                if !right_spans.is_empty() {
-                    right_spans.push(Span::raw(" "));
-                }
-                right_spans.push(Span::styled(
-                    format!("#{}", cat),
-                    Style::default().fg(Color::Rgb(
-                        (r * 255.0) as u8,
-                        (g * 255.0) as u8,
-                        (b * 255.0) as u8,
-                    )),
-                ));
-            }
-
-            let metadata_width: usize = metadata_spans.iter().map(|s| s.content.width()).sum();
-            let right_width: usize = right_spans.iter().map(|s| s.content.width()).sum();
-
-            let reserved_width = prefix_width + metadata_width + right_width;
-            let available_for_title = if reserved_width + 10 < list_inner_width {
-                list_inner_width
-                    .saturating_sub(reserved_width)
-                    .saturating_sub(1)
-            } else {
-                30
-            };
-
-            let (display_title, is_truncated) = {
-                let title_width = t.summary.width();
-                if title_width > available_for_title {
-                    let mut truncated = String::new();
-                    let mut acc = 0usize;
-                    let trunc_target = available_for_title.saturating_sub(3);
-                    for c in t.summary.chars() {
-                        let cw = UnicodeWidthChar::width(c).unwrap_or(0);
-                        if acc + cw > trunc_target {
-                            break;
+                        match t.priority {
+                            1 => Color::Red,
+                            2 => Color::Rgb(255, 69, 0),
+                            3 => Color::Rgb(255, 140, 0),
+                            4 => Color::Rgb(255, 190, 0),
+                            5 => Color::Yellow,
+                            6 => Color::Rgb(238, 232, 170),
+                            7 => Color::Rgb(176, 196, 222),
+                            8 => Color::Rgb(112, 128, 144),
+                            9 => Color::Rgb(47, 79, 79),
+                            _ => Color::White,
                         }
-                        truncated.push(c);
-                        acc += cw;
+                    };
+
+                    // If task is done or cancelled, dim the color by blending toward the background (black).
+                    // A 25% transparency effect (i.e. 75% opacity) is approximated by scaling RGB by 0.75.
+                    let is_done_or_cancelled =
+                        t.status.is_done() || t.status == crate::model::TaskStatus::Cancelled;
+                    if is_done_or_cancelled {
+                        base_color = match base_color {
+                            Color::Rgb(r, g, b) => Color::Rgb(
+                                ((r as f32) * 0.75) as u8,
+                                ((g as f32) * 0.75) as u8,
+                                ((b as f32) * 0.75) as u8,
+                            ),
+                            // For named/constant colors, approximate by scaling their RGB equivalents.
+                            Color::Red => Color::Rgb((255.0 * 0.75) as u8, 0, 0),
+                            Color::Yellow => {
+                                Color::Rgb((255.0 * 0.75) as u8, (255.0 * 0.75) as u8, 0)
+                            }
+                            Color::DarkGray => Color::Rgb(
+                                (105.0 * 0.75) as u8,
+                                (105.0 * 0.75) as u8,
+                                (105.0 * 0.75) as u8,
+                            ),
+                            Color::White => Color::Rgb(
+                                (255.0 * 0.75) as u8,
+                                (255.0 * 0.75) as u8,
+                                (255.0 * 0.75) as u8,
+                            ),
+                            // Fallback: leave as-is if we don't recognize the variant.
+                            other => other,
+                        };
                     }
-                    truncated.push_str("...");
-                    (truncated, true)
-                } else {
-                    (t.summary.clone(), false)
+
+                    let mut base_style = Style::default().fg(base_color);
+
+                    let is_trash = t.calendar_href == "local://trash";
+
+                    if (t.status.is_done() && state.strikethrough_completed) || is_trash {
+                        base_style = base_style.add_modifier(Modifier::CROSSED_OUT);
+                    }
+
+                    let bracket_style = Style::default();
+                    let full_symbol = t.checkbox_symbol();
+                    let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
+
+                    // Date / duration / recurrence
+                    let now = Utc::now();
+                    let is_future_start = t
+                        .dtstart
+                        .as_ref()
+                        .map(|s| s.to_start_comparison_time() > now)
+                        .unwrap_or(false);
+
+                    let (date_display_str, date_style) = if t.status.is_done() {
+                        // NEW TUI LOGIC for completion date
+                        if let Some(done_dt) = t.completion_date() {
+                            let local_done = done_dt.with_timezone(&chrono::Local);
+                            let color = Color::DarkGray;
+                            (
+                                format!(" 🗓️ {}", local_done.format("%Y-%m-%d %H:%M")),
+                                Style::default().fg(color),
+                            )
+                        } else {
+                            (String::new(), Style::default())
+                        }
+                    } else if is_future_start {
+                        let start_ref = t.dtstart.as_ref().unwrap();
+                        let start_str = start_ref.format_smart();
+
+                        if let Some(due) = &t.due {
+                            let is_same_day = start_ref.to_date_naive() == due.to_date_naive();
+                            let due_str = if is_same_day {
+                                match due {
+                                    crate::model::DateType::Specific(dt) => {
+                                        dt.with_timezone(&chrono::Local).format("%H:%M").to_string()
+                                    }
+                                    crate::model::DateType::AllDay(_) => due.format_smart(),
+                                    crate::model::DateType::Month(_, _) => due.format_smart(),
+                                    crate::model::DateType::Year(_) => due.format_smart(),
+                                }
+                            } else {
+                                due.format_smart()
+                            };
+
+                            if start_str == due.format_smart() {
+                                (
+                                    format!(" ►{}⌛", start_str),
+                                    Style::default().fg(Color::DarkGray),
+                                )
+                            } else {
+                                (
+                                    format!(" ►{}-{}⌛", start_str, due_str),
+                                    Style::default().fg(Color::DarkGray),
+                                )
+                            }
+                        } else {
+                            (
+                                format!(" ►{}", start_str),
+                                Style::default().fg(Color::DarkGray),
+                            )
+                        }
+                    } else if let Some(d) = &t.due {
+                        // --- CHANGED START ---
+                        let is_overdue = !t.status.is_done() && d.to_comparison_time() < now;
+                        let style = if is_overdue {
+                            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(Color::Blue)
+                        };
+
+                        (format!(" @{}⌛", d.format_smart()), style)
+                        // --- CHANGED END ---
+                    } else {
+                        (String::new(), Style::default())
+                    };
+
+                    let dur_str = t.format_duration_short();
+                    let recur_str = if t.rrule.is_some() { " (R)" } else { "" };
+
+                    // Prefix indentation + checkbox
+                    let prefix_indent = Span::raw(if state.active_cal_href.is_some() {
+                        "  ".repeat(t.depth)
+                    } else {
+                        "".to_string()
+                    });
+                    let prefix_bracket_l = Span::styled("[", bracket_style);
+                    let prefix_inner = Span::styled(inner_char, base_style);
+                    let prefix_bracket_r = Span::styled("]", bracket_style);
+                    let prefix_blocked = Span::raw(if is_blocked { " [B] " } else { " " });
+
+                    let prefix_width = if state.active_cal_href.is_some() {
+                        t.depth * 2 + 6
+                    } else {
+                        6
+                    };
+
+                    // Build metadata spans
+                    let mut metadata_spans = Vec::new();
+                    if !dur_str.is_empty() {
+                        metadata_spans.push(Span::styled(
+                            format!(" {}", dur_str),
+                            Style::default().fg(Color::DarkGray),
+                        ));
+                    }
+                    if !recur_str.is_empty() {
+                        metadata_spans.push(Span::styled(
+                            recur_str.to_string(),
+                            Style::default().fg(Color::Magenta),
+                        ));
+                    }
+
+                    if state.show_priority_numbers && t.priority > 0 {
+                        metadata_spans.push(Span::raw(" "));
+                        metadata_spans.push(Span::styled(
+                            format!("!{}", t.priority),
+                            base_style.add_modifier(Modifier::BOLD),
+                        ));
+                    }
+
+                    if t.alarms
+                        .iter()
+                        .any(|a| a.acknowledged.is_none() && !a.is_snooze())
+                    {
+                        metadata_spans.push(Span::raw(" "));
+                        metadata_spans.push(Span::styled(
+                            "🔔",
+                            Style::default()
+                                .fg(Color::LightRed)
+                                .add_modifier(Modifier::BOLD),
+                        ));
+                    }
+
+                    if !date_display_str.is_empty() {
+                        if !metadata_spans
+                            .last()
+                            .map(|s| s.content.ends_with(' '))
+                            .unwrap_or(true)
+                        {
+                            metadata_spans.push(Span::raw(" "));
+                        }
+                        metadata_spans.push(Span::styled(date_display_str, date_style));
+                    }
+
+                    if t.geo.is_some() {
+                        metadata_spans.push(Span::raw(" "));
+                        metadata_spans.push(Span::styled(
+                            "\u{ee69}",
+                            Style::default().fg(Color::LightBlue),
+                        ));
+                    }
+                    if t.url.is_some() {
+                        metadata_spans.push(Span::raw(" "));
+                        metadata_spans.push(Span::styled(
+                            "\u{f0789}",
+                            Style::default().fg(Color::LightBlue),
+                        ));
+                    }
+
+                    // Right side (location + visible tags)
+                    let mut right_spans = Vec::new();
+                    if let Some(loc) = &visible_location {
+                        right_spans.push(Span::styled("@@", Style::default().fg(Color::Yellow)));
+                        right_spans.push(Span::styled(
+                            loc.clone(),
+                            Style::default().fg(Color::Yellow),
+                        ));
+                    }
+
+                    for cat in &visible_tags {
+                        let (r, g, b) = color_utils::generate_color(cat);
+                        if !right_spans.is_empty() {
+                            right_spans.push(Span::raw(" "));
+                        }
+                        right_spans.push(Span::styled(
+                            format!("#{}", cat),
+                            Style::default().fg(Color::Rgb(
+                                (r * 255.0) as u8,
+                                (g * 255.0) as u8,
+                                (b * 255.0) as u8,
+                            )),
+                        ));
+                    }
+
+                    let metadata_width: usize =
+                        metadata_spans.iter().map(|s| s.content.width()).sum();
+                    let right_width: usize = right_spans.iter().map(|s| s.content.width()).sum();
+
+                    let reserved_width = prefix_width + metadata_width + right_width;
+                    let available_for_title = if reserved_width + 10 < list_inner_width {
+                        list_inner_width
+                            .saturating_sub(reserved_width)
+                            .saturating_sub(1)
+                    } else {
+                        30
+                    };
+
+                    let (display_title, is_truncated) = {
+                        let title_width = t.summary.width();
+                        if title_width > available_for_title {
+                            let mut truncated = String::new();
+                            let mut acc = 0usize;
+                            let trunc_target = available_for_title.saturating_sub(3);
+                            for c in t.summary.chars() {
+                                let cw = UnicodeWidthChar::width(c).unwrap_or(0);
+                                if acc + cw > trunc_target {
+                                    break;
+                                }
+                                truncated.push(c);
+                                acc += cw;
+                            }
+                            truncated.push_str("...");
+                            (truncated, true)
+                        } else {
+                            (t.summary.clone(), false)
+                        }
+                    };
+
+                    if is_truncated && Some(idx) == state.list_state.selected() {
+                        selected_task_was_truncated = true;
+                    }
+
+                    let mut spans = vec![
+                        prefix_indent,
+                        prefix_bracket_l,
+                        prefix_inner,
+                        prefix_bracket_r,
+                        prefix_blocked,
+                        Span::styled(display_title, base_style),
+                    ];
+                    spans.extend(metadata_spans);
+
+                    if !right_spans.is_empty() {
+                        let left_width: usize = spans.iter().map(|s| s.content.width()).sum();
+                        let total_content = left_width + right_width;
+                        if total_content < list_inner_width {
+                            let padding = list_inner_width - total_content;
+                            spans.push(Span::raw(" ".repeat(padding)));
+                        } else {
+                            spans.push(Span::raw(" "));
+                        }
+                        spans.extend(right_spans);
+                    }
+
+                    ListItem::new(Line::from(spans))
                 }
-            };
-
-            if is_truncated && Some(idx) == state.list_state.selected() {
-                selected_task_was_truncated = true;
             }
-
-            let mut spans = vec![
-                prefix_indent,
-                prefix_bracket_l,
-                prefix_inner,
-                prefix_bracket_r,
-                prefix_blocked,
-                Span::styled(display_title, base_style),
-            ];
-            spans.extend(metadata_spans);
-
-            if !right_spans.is_empty() {
-                let left_width: usize = spans.iter().map(|s| s.content.width()).sum();
-                let total_content = left_width + right_width;
-                if total_content < list_inner_width {
-                    let padding = list_inner_width - total_content;
-                    spans.push(Span::raw(" ".repeat(padding)));
-                } else {
-                    spans.push(Span::raw(" "));
-                }
-                spans.extend(right_spans);
-            }
-
-            ListItem::new(Line::from(spans))
         })
         .collect();
 
@@ -756,7 +762,18 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         details_md = "_No details_".to_string();
     }
 
-    let active_count = state.tasks.iter().filter(|t| !t.status.is_done()).count();
+    let active_count = state
+        .tasks
+        .iter()
+        .filter_map(|item| {
+            if let TaskListItem::Task(task) = item {
+                Some(task.as_ref())
+            } else {
+                None
+            }
+        })
+        .filter(|t| !t.status.is_done())
+        .count();
 
     // Calculate details height dynamically
     let details_width = h_chunks[1].width.saturating_sub(2);

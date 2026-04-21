@@ -14,8 +14,7 @@ use std::sync::Arc;
 use strum::IntoEnumIterator;
 use tokio::sync::mpsc;
 
-#[derive(PartialEq, Clone, Copy, Debug)]
-#[derive(Default)]
+#[derive(PartialEq, Clone, Copy, Debug, Default)]
 pub enum AppState {
     #[default]
     Loading,
@@ -24,7 +23,6 @@ pub enum AppState {
     Settings,
     Help(crate::help::HelpTab, u8),
 }
-
 
 #[derive(Default, PartialEq, Clone, Copy, Debug)]
 pub enum SidebarMode {
@@ -50,7 +48,7 @@ pub struct GuiApp {
     pub state: AppState,
     pub ctx: Arc<dyn AppContext>,
     pub store: TaskStore,
-    pub tasks: Vec<TodoTask>,
+    pub tasks: Vec<crate::store::TaskListItem>,
     pub calendars: Vec<CalendarListEntry>,
     pub client: Option<RustyClient>,
     pub tag_aliases: HashMap<String, Vec<String>>,
@@ -246,6 +244,23 @@ impl GuiApp {
                 }
             })
             .collect()
+    }
+
+    pub fn get_task_at_index(&self, idx: usize) -> Option<&TodoTask> {
+        match self.tasks.get(idx) {
+            Some(crate::store::TaskListItem::Task(t)) => Some(t),
+            _ => None,
+        }
+    }
+
+    pub fn find_task_index_by_uid(&self, uid: &str) -> Option<usize> {
+        self.tasks.iter().position(|item| {
+            if let crate::store::TaskListItem::Task(t) = item {
+                t.uid == uid
+            } else {
+                false
+            }
+        })
     }
 }
 

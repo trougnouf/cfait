@@ -69,14 +69,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SubmitTask => handle_submit(app),
 
         Message::EditTaskStart(index) => {
-            if let Some(task) = app.tasks.get(index) {
-                app.input_value = text_editor::Content::with_text(&task.to_smart_string());
+            if let Some(task) = app.get_task_at_index(index) {
+                let task_uid = task.uid.clone();
+                let task_summary = task.to_smart_string();
+                let task_description = task.description.clone();
+
+                app.input_value = text_editor::Content::with_text(&task_summary);
                 app.input_value
                     .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
 
-                app.description_value = text_editor::Content::with_text(&task.description);
-                app.editing_uid = Some(task.uid.clone());
-                app.selected_uid = Some(task.uid.clone());
+                app.description_value = text_editor::Content::with_text(&task_description);
+                app.editing_uid = Some(task_uid.clone());
+                app.selected_uid = Some(task_uid);
 
                 return iced::widget::operation::focus(iced::widget::Id::new("main_input"));
             }
@@ -94,14 +98,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::ToggleTask(index, _) => {
-            if let Some(view_task) = app.tasks.get(index) {
-                app.selected_uid = Some(view_task.uid.clone());
+            if let Some(view_task) = app.get_task_at_index(index) {
+                let task_uid = view_task.uid.clone();
+                app.selected_uid = Some(task_uid.clone());
                 return Task::perform(
                     async_controller_dispatch(
                         app.ctx.clone(),
                         app.client.clone(),
                         app.store.clone(),
-                        ControllerAction::Toggle(view_task.uid.clone()),
+                        ControllerAction::Toggle(task_uid),
                     ),
                     |res| Message::ControllerActionComplete(Box::new(res)),
                 );
@@ -120,7 +125,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::DeleteTask(index) => {
-            if let Some(view_task) = app.tasks.get(index) {
+            if let Some(view_task) = app.get_task_at_index(index) {
                 let uid = view_task.uid.clone();
                 app.selected_uid = Some(uid.clone());
                 return Task::perform(
@@ -138,7 +143,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::EditSelectedDescription => {
             if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+                && let Some(idx) = app.find_task_index_by_uid(uid)
             {
                 return Task::batch(vec![
                     handle(app, Message::EditTaskStart(idx)),
@@ -157,10 +162,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::DemoteSelected => {
             if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+                && let Some(idx) = app.find_task_index_by_uid(uid)
                 && idx > 0
             {
-                let parent_candidate_uid = app.tasks[idx - 1].uid.clone();
+                let parent_candidate_uid = app.get_task_at_index(idx - 1).unwrap().uid.clone();
                 if parent_candidate_uid != *uid {
                     app.yanked_uid = Some(parent_candidate_uid);
                     return handle(app, Message::MakeChild(uid.clone()));
@@ -173,7 +178,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(uid) = &app.selected_uid {
                 app.yanked_uid = Some(uid.clone());
                 let mut tasks = vec![scroll_to_selected(app, false)];
-                if let Some(t) = app.tasks.iter().find(|task| task.uid == *uid) {
+                if let Some(idx) = app.find_task_index_by_uid(uid)
+                    && let Some(t) = app.get_task_at_index(idx)
+                {
                     let text = if t.description.is_empty() {
                         t.to_smart_string()
                     } else {
@@ -265,7 +272,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::ToggleActiveSelected => {
             if let Some(uid) = &app.selected_uid
-                && let Some(t) = app.tasks.iter().find(|t| t.uid == *uid)
+                && let Some(idx) = app.find_task_index_by_uid(uid)
+                && let Some(t) = app.get_task_at_index(idx)
             {
                 if t.status == crate::model::TaskStatus::InProcess {
                     return handle(app, Message::PauseTask(uid.clone()));
@@ -285,7 +293,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::CancelSelected => {
             if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+                && let Some(idx) = app.find_task_index_by_uid(uid)
             {
                 return handle(
                     app,
@@ -297,7 +305,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::ChangePrioritySelected(delta) => {
             if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+                && let Some(idx) = app.find_task_index_by_uid(uid)
             {
                 return handle(app, Message::ChangePriority(idx, delta));
             }
@@ -305,11 +313,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::ChangePriority(index, delta) => {
-            if let Some(view_task) = app.tasks.get(index) {
-                app.selected_uid = Some(view_task.uid.clone());
+            if let Some(view_task) = app.get_task_at_index(index) {
+                let task_uid = view_task.uid.clone();
+                app.selected_uid = Some(task_uid.clone());
                 if let Some(updated) =
                     app.store
-                        .change_priority(&view_task.uid, delta, app.default_priority)
+                        .change_priority(&task_uid, delta, app.default_priority)
                 {
                     refresh_filtered_tasks(app);
                     return Task::perform(
@@ -327,10 +336,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::SetTaskStatus(index, new_status) => {
-            if let Some(view_task) = app.tasks.get(index) {
-                app.selected_uid = Some(view_task.uid.clone());
+            if let Some(view_task) = app.get_task_at_index(index) {
+                let task_uid = view_task.uid.clone();
                 let mut updated = view_task.clone();
                 updated.status = new_status;
+                app.selected_uid = Some(task_uid.clone());
                 // Delegate to controller for persistence/recurrence handling.
                 return Task::perform(
                     async_controller_dispatch(
@@ -415,7 +425,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.yanked_uid = Some(uid.clone());
             app.selected_uid = Some(uid.clone());
             let mut tasks = vec![scroll_to_selected(app, false)];
-            if let Some(t) = app.tasks.iter().find(|task| task.uid == uid) {
+            if let Some(idx) = app.find_task_index_by_uid(&uid)
+                && let Some(t) = app.get_task_at_index(idx)
+            {
                 let text = if t.description.is_empty() {
                     t.to_smart_string()
                 } else {
@@ -686,8 +698,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ringing_tasks
                 .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
 
-            if let Some(idx) = app.tasks.iter().position(|t| t.uid == t_uid)
-                && !app.tasks[idx].status.is_done()
+            if let Some(idx) = app.find_task_index_by_uid(&t_uid)
+                && let Some(task) = app.get_task_at_index(idx)
+                && !task.status.is_done()
             {
                 return handle(app, Message::ToggleTask(idx, true));
             }
@@ -698,7 +711,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ringing_tasks
                 .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
 
-            if let Some(idx) = app.tasks.iter().position(|t| t.uid == t_uid) {
+            if let Some(idx) = app.find_task_index_by_uid(&t_uid) {
                 return handle(
                     app,
                     Message::SetTaskStatus(idx, crate::model::TaskStatus::Cancelled),
@@ -852,7 +865,10 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
     }
 
     // Logic for Tag/Loc isolated jumps ... (kept identical to your existing file)
-    if clean_input.starts_with('#') && !clean_input.trim().contains(' ') && app.editing_uid.is_none() {
+    if clean_input.starts_with('#')
+        && !clean_input.trim().contains(' ')
+        && app.editing_uid.is_none()
+    {
         let tag = clean_input.trim().trim_start_matches('#').to_string();
         if !tag.is_empty() && !text_to_submit.contains(":=") {
             app.sidebar_mode = SidebarMode::Categories;
@@ -860,20 +876,28 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             app.selected_categories.insert(tag);
             app.input_value = text_editor::Content::new();
             refresh_filtered_tasks(app);
-            if !retroactive_sync_batch.is_empty() { return Task::batch(retroactive_sync_batch); }
+            if !retroactive_sync_batch.is_empty() {
+                return Task::batch(retroactive_sync_batch);
+            }
             return Task::none();
         }
     }
     let is_loc_jump = clean_input.starts_with("@@") || clean_input.starts_with("loc:");
     if is_loc_jump && !clean_input.trim().contains(' ') && app.editing_uid.is_none() {
-        let loc = crate::model::parser::strip_quotes(clean_input.trim_start_matches("@@").trim_start_matches("loc:"));
+        let loc = crate::model::parser::strip_quotes(
+            clean_input
+                .trim_start_matches("@@")
+                .trim_start_matches("loc:"),
+        );
         if !loc.is_empty() {
             app.sidebar_mode = SidebarMode::Locations;
             app.selected_locations.clear();
             app.selected_locations.insert(loc);
             app.input_value = text_editor::Content::new();
             refresh_filtered_tasks(app);
-            if !retroactive_sync_batch.is_empty() { return Task::batch(retroactive_sync_batch); }
+            if !retroactive_sync_batch.is_empty() {
+                return Task::batch(retroactive_sync_batch);
+            }
             return Task::none();
         }
     }
@@ -882,7 +906,8 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
     // EXTRACT SUBTASKS
     let desc_text = app.description_value.text();
-    let (cleaned_desc, extracted_subtasks) = crate::model::extractor::extract_markdown_tasks(&desc_text);
+    let (cleaned_desc, extracted_subtasks) =
+        crate::model::extractor::extract_markdown_tasks(&desc_text);
 
     if let Some(edit_uid) = &app.editing_uid {
         // ONLY EDIT EXISTING - Do not extract to avoid duplication!
@@ -899,7 +924,12 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             refresh_filtered_tasks(app);
 
             let save_cmd = Task::perform(
-                async_controller_dispatch(app.ctx.clone(), app.client.clone(), app.store.clone(), ControllerAction::Update(task_copy)),
+                async_controller_dispatch(
+                    app.ctx.clone(),
+                    app.client.clone(),
+                    app.store.clone(),
+                    ControllerAction::Update(task_copy),
+                ),
                 |res| Message::ControllerActionComplete(Box::new(res)),
             );
             retroactive_sync_batch.push(save_cmd);
@@ -928,7 +958,9 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             let parent_uid = new_task.uid.clone();
 
             app.store.add_task(new_task.clone());
-            app.task_ids.entry(new_task.uid.clone()).or_insert_with(iced::widget::Id::unique);
+            app.task_ids
+                .entry(new_task.uid.clone())
+                .or_insert_with(iced::widget::Id::unique);
 
             // Create Subtasks resulting from Markdown Extraction
             for ext in extracted_subtasks {
@@ -948,7 +980,12 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 app.store.add_task(sub.clone());
 
                 retroactive_sync_batch.push(Task::perform(
-                    async_controller_dispatch(app.ctx.clone(), app.client.clone(), app.store.clone(), ControllerAction::Create(sub)),
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        app.store.clone(),
+                        ControllerAction::Create(sub),
+                    ),
                     |res| Message::ControllerActionComplete(Box::new(res)),
                 ));
             }
@@ -963,7 +1000,12 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             let scroll_cmd = crate::gui::update::common::scroll_to_selected_delayed(app, false);
 
             let create_cmd = Task::perform(
-                async_controller_dispatch(app.ctx.clone(), app.client.clone(), app.store.clone(), ControllerAction::Create(new_task)),
+                async_controller_dispatch(
+                    app.ctx.clone(),
+                    app.client.clone(),
+                    app.store.clone(),
+                    ControllerAction::Create(new_task),
+                ),
                 |res| Message::ControllerActionComplete(Box::new(res)),
             );
 

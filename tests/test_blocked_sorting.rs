@@ -53,11 +53,29 @@ fn test_blocked_tasks_skip_urgent_rank() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
-    let urgent_pos = filtered.iter().position(|t| t.uid == "urgent");
-    let blocked_pos = filtered.iter().position(|t| t.uid == "blocked_urgent");
-    let normal_pos = filtered.iter().position(|t| t.uid == "normal");
+    let urgent_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "urgent"
+        } else {
+            false
+        }
+    });
+    let blocked_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "blocked_urgent"
+        } else {
+            false
+        }
+    });
+    let normal_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "normal"
+        } else {
+            false
+        }
+    });
 
     assert!(urgent_pos.unwrap() < normal_pos.unwrap());
     assert!(blocked_pos.unwrap() > urgent_pos.unwrap());
@@ -112,11 +130,29 @@ fn test_blocked_tasks_skip_due_soon_rank() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
-    let due_soon_pos = filtered.iter().position(|t| t.uid == "due_soon");
-    let blocked_pos = filtered.iter().position(|t| t.uid == "blocked_due_soon");
-    let due_later_pos = filtered.iter().position(|t| t.uid == "due_later");
+    let due_soon_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "due_soon"
+        } else {
+            false
+        }
+    });
+    let blocked_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "blocked_due_soon"
+        } else {
+            false
+        }
+    });
+    let due_later_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "due_later"
+        } else {
+            false
+        }
+    });
 
     assert!(due_soon_pos.unwrap() < due_later_pos.unwrap());
     assert!(blocked_pos.unwrap() > due_soon_pos.unwrap());
@@ -169,11 +205,29 @@ fn test_blocked_tasks_skip_started_rank() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
-    let started_pos = filtered.iter().position(|t| t.uid == "started");
-    let blocked_pos = filtered.iter().position(|t| t.uid == "blocked_started");
-    let normal_pos = filtered.iter().position(|t| t.uid == "normal");
+    let started_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "started"
+        } else {
+            false
+        }
+    });
+    let blocked_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "blocked_started"
+        } else {
+            false
+        }
+    });
+    let normal_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "normal"
+        } else {
+            false
+        }
+    });
 
     assert!(started_pos.unwrap() < normal_pos.unwrap());
     assert!(blocked_pos.unwrap() > started_pos.unwrap());
@@ -227,10 +281,22 @@ fn test_dependency_blocked_tasks_also_skip_ranks() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
-    let urgent_pos = filtered.iter().position(|t| t.uid == "urgent");
-    let blocked_pos = filtered.iter().position(|t| t.uid == "blocked_by_dep");
+    let urgent_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "urgent"
+        } else {
+            false
+        }
+    });
+    let blocked_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "blocked_by_dep"
+        } else {
+            false
+        }
+    });
 
     assert!(urgent_pos.unwrap() < blocked_pos.unwrap());
     assert!(store.is_blocked(&blocked_by_dep));
@@ -296,14 +362,22 @@ fn test_is_ready_filters_manually_blocked_tasks() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
-    assert!(!filtered.iter().any(|t| t.summary.contains("Blocked Task")));
-    assert!(
-        filtered
-            .iter()
-            .any(|t| t.summary.contains("Unblocked Task"))
-    );
+    assert!(!filtered.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Blocked Task")
+        } else {
+            false
+        }
+    }));
+    assert!(filtered.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Unblocked Task")
+        } else {
+            false
+        }
+    }));
 }
 
 #[test]
@@ -355,26 +429,34 @@ fn test_is_blocked_filter_shows_only_blocked() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
-    assert!(
-        filtered
-            .iter()
-            .any(|t| t.summary.contains("Blocked by Dependency"))
-    );
-    assert!(
-        filtered
-            .iter()
-            .any(|t| t.summary.contains("Manually Blocked"))
-    );
-    assert!(
-        !filtered
-            .iter()
-            .any(|t| t.summary.contains("Unblocked Task"))
-    );
-    assert!(
-        !filtered
-            .iter()
-            .any(|t| t.summary.contains("Dependency Task"))
-    );
+    assert!(filtered.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Blocked by Dependency")
+        } else {
+            false
+        }
+    }));
+    assert!(filtered.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Manually Blocked")
+        } else {
+            false
+        }
+    }));
+    assert!(!filtered.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Unblocked Task")
+        } else {
+            false
+        }
+    }));
+    assert!(!filtered.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Dependency Task")
+        } else {
+            false
+        }
+    }));
 }

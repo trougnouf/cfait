@@ -59,11 +59,186 @@ use std::sync::Arc;
 
 pub const UNCATEGORIZED_ID: &str = ":::uncategorized:::";
 
+/// Enum representing items in the task list - either real tasks or UI control elements
+#[derive(Debug, Clone)]
+pub enum TaskListItem {
+    Task(Box<crate::model::Task>),
+    ExpandGroup(String),   // parent_uid
+    CollapseGroup(String), // parent_uid
+}
+
 /// Result container returned by the `filter` pipeline.
 pub struct FilterResult {
-    pub tasks: Vec<Task>,
+    pub items: Vec<TaskListItem>,
     pub categories: Vec<(String, usize)>,
     pub locations: Vec<(String, usize)>,
+}
+
+/// Context structure used during hierarchy organization
+struct HierarchyContext<'a> {
+    children_map: &'a HashMap<String, Vec<Task>>,
+    result: &'a mut Vec<TaskListItem>,
+    visited_keys: &'a mut HashSet<(String, String)>,
+    expanded_groups: &'a HashSet<String>,
+    max_done_subtasks: usize,
+}
+
+/// Organize tasks into a hierarchy with proper parent/child relationships and inject
+/// expand/collapse control items for large groups of completed tasks.
+/// This function handles:
+/// - Building parent->children mapping
+/// - Sorting tasks by canonical comparator
+/// - Managing indentation depth
+/// - Injecting ExpandGroup/CollapseGroup items for truncated completed task groups
+pub fn organize_hierarchy(
+    mut tasks: Vec<Task>,
+    default_priority: u8,
+    expanded_groups: &HashSet<String>,
+    max_done_roots: usize,
+    max_done_subtasks: usize,
+) -> Vec<TaskListItem> {
+    let present_uids: HashSet<String> = tasks.iter().map(|t| t.uid.clone()).collect();
+    let mut children_map: HashMap<String, Vec<Task>> = HashMap::new();
+    let mut roots: Vec<Task> = Vec::new();
+
+    // Sort by the canonical comparator before building hierarchy
+    tasks.sort_by(|a, b| a.compare_for_sort(b, default_priority));
+
+    for mut task in tasks {
+        let is_orphan = match &task.parent_uid {
+            Some(p_uid) => !present_uids.contains(p_uid),
+            None => true,
+        };
+
+        if is_orphan {
+            if task.parent_uid.is_some() {
+                task.depth = 0; // orphaned child promoted to root
+            }
+            roots.push(task);
+        } else {
+            let p_uid = task.parent_uid.as_ref().unwrap().clone();
+            children_map.entry(p_uid).or_default().push(task);
+        }
+    }
+
+    let mut result = Vec::new();
+    let mut visited_keys = HashSet::new();
+
+    let mut context = HierarchyContext {
+        children_map: &children_map,
+        result: &mut result,
+        visited_keys: &mut visited_keys,
+        expanded_groups,
+        max_done_subtasks,
+    };
+
+    /// Process a group of tasks (either root level or children of a parent)
+    /// and handle truncation of completed tasks with expand/collapse controls
+    fn process_group(
+        raw_group: Vec<Task>,
+        parent_uid: String,
+        limit: usize,
+        is_root: bool,
+        context: &mut HierarchyContext,
+        depth: usize,
+    ) {
+        // Partition into active and done to allow truncation of the done-group
+        let (active, done): (Vec<Task>, Vec<Task>) =
+            raw_group.into_iter().partition(|t| !t.status.is_done());
+
+        // Append active tasks always
+        for task in active {
+            append_task_and_children(&task, context, depth);
+        }
+
+        if done.is_empty() {
+            return;
+        }
+
+        let effective_key = if is_root {
+            "".to_string()
+        } else {
+            parent_uid.clone()
+        };
+        let is_expanded = context.expanded_groups.contains(&effective_key);
+
+        if is_expanded {
+            for task in done {
+                append_task_and_children(&task, context, depth);
+            }
+            context
+                .result
+                .push(TaskListItem::CollapseGroup(effective_key));
+        } else if done.len() > limit {
+            let count_to_show = limit.saturating_sub(1);
+            let mut iter = done.into_iter();
+
+            for _ in 0..count_to_show {
+                if let Some(task) = iter.next() {
+                    append_task_and_children(&task, context, depth);
+                }
+            }
+            context
+                .result
+                .push(TaskListItem::ExpandGroup(effective_key));
+        } else {
+            for task in done {
+                append_task_and_children(&task, context, depth);
+            }
+        }
+    }
+
+    /// Recursively append a task and its children, handling depth and visited tracking
+    fn append_task_and_children(task: &Task, context: &mut HierarchyContext, depth: usize) {
+        let visit_key = (task.uid.clone(), task.calendar_href.clone());
+        if context.visited_keys.contains(&visit_key) {
+            return;
+        }
+        context.visited_keys.insert(visit_key.clone());
+
+        let mut t = task.clone();
+        t.depth = depth;
+        context.result.push(TaskListItem::Task(Box::new(t)));
+
+        if let Some(children) = context.children_map.get(&task.uid) {
+            let (active, done): (Vec<Task>, Vec<Task>) =
+                children.iter().cloned().partition(|t| !t.status.is_done());
+
+            for child in active {
+                append_task_and_children(&child, context, depth + 1);
+            }
+
+            if !done.is_empty() {
+                let is_expanded = context.expanded_groups.contains(&task.uid);
+                if is_expanded {
+                    for child in done {
+                        append_task_and_children(&child, context, depth + 1);
+                    }
+                    context
+                        .result
+                        .push(TaskListItem::CollapseGroup(task.uid.clone()));
+                } else if done.len() > context.max_done_subtasks {
+                    let show = context.max_done_subtasks.saturating_sub(1);
+                    let mut iter = done.into_iter();
+                    for _ in 0..show {
+                        if let Some(c) = iter.next() {
+                            append_task_and_children(&c, context, depth + 1);
+                        }
+                    }
+                    context
+                        .result
+                        .push(TaskListItem::ExpandGroup(task.uid.clone()));
+                } else {
+                    for child in done {
+                        append_task_and_children(&child, context, depth + 1);
+                    }
+                }
+            }
+        }
+    }
+
+    process_group(roots, "".to_string(), max_done_roots, true, &mut context, 0);
+    result
 }
 
 /// Select an index from `tasks` at random weighted by priority.
@@ -1513,10 +1688,10 @@ impl TaskStore {
             }
         }
 
-        // Delegate to the model's hierarchy organizer which handles parent/child relationships,
-        // indentation depth, and injecting virtual expand/collapse rows for completed groups.
+        // Delegate to the hierarchy organizer which handles parent/child relationships,
+        // indentation depth, and injecting expand/collapse control items for completed groups.
         // Note: organize_hierarchy applies `compare_for_sort` internally before building the tree.
-        let organized_tasks = Task::organize_hierarchy(
+        let organized_items = organize_hierarchy(
             final_tasks_processed,
             options.default_priority,
             options.expanded_done_groups,
@@ -1525,7 +1700,7 @@ impl TaskStore {
         );
 
         FilterResult {
-            tasks: organized_tasks,
+            items: organized_items,
             categories,
             locations,
         }

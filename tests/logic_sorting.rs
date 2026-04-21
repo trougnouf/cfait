@@ -1,5 +1,6 @@
 // Tests for task sorting logic.
 use cfait::model::{DateType, Task, TaskStatus};
+use cfait::store::organize_hierarchy;
 use chrono::{Duration, Utc};
 use std::collections::{HashMap, HashSet};
 
@@ -110,10 +111,18 @@ fn test_hierarchy_organization() {
 
     // This function rebuilds the visual list (flattened tree)
     // Updated signature includes expanded_done_groups, max_done_roots, max_done_subtasks.
-    let organized = Task::organize_hierarchy(tasks, 5, &HashSet::new(), usize::MAX, usize::MAX);
+    let organized = organize_hierarchy(tasks, 5, &HashSet::new(), usize::MAX, usize::MAX);
 
     assert_eq!(organized.len(), 2);
-    assert_eq!(organized[0].summary, "Parent");
-    assert_eq!(organized[1].summary, "Child");
-    assert_eq!(organized[1].depth, 1);
+    if let cfait::store::TaskListItem::Task(task0) = &organized[0] {
+        assert_eq!(task0.summary, "Parent");
+    } else {
+        panic!("Expected Task variant");
+    }
+    if let cfait::store::TaskListItem::Task(task1) = &organized[1] {
+        assert_eq!(task1.summary, "Child");
+        assert_eq!(task1.depth, 1);
+    } else {
+        panic!("Expected Task variant");
+    }
 }

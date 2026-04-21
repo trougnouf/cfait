@@ -621,14 +621,8 @@ impl IcsAdapter {
                     let n = num_buf.parse::<u32>().unwrap_or(0);
                     match c {
                         'D' => minutes += n * 24 * 60,
-                        'H'
-                            if in_time => {
-                                minutes += n * 60
-                            }
-                        'M'
-                            if in_time => {
-                                minutes += n
-                            }
+                        'H' if in_time => minutes += n * 60,
+                        'M' if in_time => minutes += n,
                         'W' => minutes += n * 7 * 24 * 60,
                         _ => {}
                     }
@@ -924,7 +918,6 @@ impl IcsAdapter {
             effective_priority: 0,
             effective_due: None,
             effective_dtstart: None,
-            virtual_state: crate::model::VirtualState::None,
         })
     }
 

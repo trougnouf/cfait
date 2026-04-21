@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use tokio::sync::mpsc::Sender;
 
 // Weighted-random helper from the shared store
-use crate::store::select_weighted_random_index;
+use crate::store::{TaskListItem, select_weighted_random_index};
 use rust_i18n::t;
 
 pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Option<String>) {
@@ -334,7 +334,7 @@ pub async fn handle_key_event(
                     state.refresh_filtered_view();
                     update_alarms(state);
 
-                    if let Some(idx) = state.tasks.iter().position(|t| t.uid == new_uid) {
+                    if let Some(idx) = state.find_task_index_by_uid(&new_uid) {
                         state.list_state.select(Some(idx));
                     }
 
@@ -387,7 +387,7 @@ pub async fn handle_key_event(
 
                 let target_uid: Option<String> = state
                     .editing_index
-                    .and_then(|idx| state.tasks.get(idx).map(|t| t.uid.clone()));
+                    .and_then(|idx| state.get_task_at_index(idx).map(|t| t.uid.clone()));
 
                 if let Some(uid) = target_uid
                     && let Some((t, _)) = state.store.get_task_mut(&uid)
@@ -510,7 +510,7 @@ pub async fn handle_key_event(
 
                     // --- ADD THESE 3 LINES ---
                     update_alarms(state);
-                    if let Some(idx) = state.tasks.iter().position(|t| t.uid == parent_uid) {
+                    if let Some(idx) = state.find_task_index_by_uid(&parent_uid) {
                         state.list_state.select(Some(idx));
                     }
                     // -------------------------
@@ -525,7 +525,7 @@ pub async fn handle_key_event(
                     // Standard Edit
                     let target_uid: Option<String> = state
                         .editing_index
-                        .and_then(|idx| state.tasks.get(idx).map(|t| t.uid.clone()));
+                        .and_then(|idx| state.get_task_at_index(idx).map(|t| t.uid.clone()));
 
                     if let Some(uid) = target_uid
                         && let Some((t, _)) = state.store.get_task_mut(&uid)
@@ -782,8 +782,18 @@ pub async fn handle_key_event(
             KeyCode::Char('r') => return Some(Action::Refresh),
             KeyCode::Char('R') => {
                 // Weighted-random jump to a task (uppercase R)
-                if let Some(idx) =
-                    select_weighted_random_index(&state.tasks, state.default_priority)
+                let real_tasks: Vec<Task> = state
+                    .tasks
+                    .iter()
+                    .filter_map(|item| {
+                        if let TaskListItem::Task(task) = item {
+                            Some((**task).clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                if let Some(idx) = select_weighted_random_index(&real_tasks, state.default_priority)
                 {
                     state.list_state.select(Some(idx));
                     state.message = "Jumped to random task".to_string();
@@ -1175,9 +1185,13 @@ pub async fn handle_key_event(
                     && let Some(idx) = state.list_state.selected()
                     && idx > 0
                     && idx < state.tasks.len()
+                    && let (Some(parent_task), Some(current_task)) = (
+                        state.get_task_at_index(idx - 1),
+                        state.get_task_at_index(idx),
+                    )
                 {
-                    let parent_uid = state.tasks[idx - 1].uid.clone();
-                    let current_uid = state.tasks[idx].uid.clone();
+                    let parent_uid = parent_task.uid.clone();
+                    let current_uid = current_task.uid.clone();
                     if let Some(updated) = state.store.set_parent(&current_uid, Some(parent_uid)) {
                         state.refresh_filtered_view();
                         return Some(Action::UpdateTask(updated));
@@ -1388,21 +1402,19 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Enter => {
-                // If the main list has focus, handle virtual expand/collapse rows first.
+                // If the main list has focus, handle expand/collapse control items first.
                 if state.active_focus == Focus::Main {
-                    // Clone the virtual state to drop the immutable borrow of `state`
-                    let virtual_state_opt =
-                        state.get_selected_task().map(|t| t.virtual_state.clone());
-
-                    if let Some(virtual_state) = virtual_state_opt {
-                        match virtual_state {
-                            crate::model::VirtualState::Expand(key) => {
-                                state.expanded_done_groups.insert(key);
+                    if let Some(idx) = state.list_state.selected()
+                        && let Some(task_item) = state.tasks.get(idx)
+                    {
+                        match task_item {
+                            TaskListItem::ExpandGroup(key) => {
+                                state.expanded_done_groups.insert(key.clone());
                                 state.refresh_filtered_view();
                                 return None;
                             }
-                            crate::model::VirtualState::Collapse(key) => {
-                                state.expanded_done_groups.remove(&key);
+                            TaskListItem::CollapseGroup(key) => {
+                                state.expanded_done_groups.remove(key);
                                 state.refresh_filtered_view();
                                 return None;
                             }
@@ -1710,8 +1722,7 @@ pub async fn handle_key_event(
                         state.refresh_filtered_view();
 
                         // Find and select the target task in the list
-                        if let Some(task_idx) = state.tasks.iter().position(|t| t.uid == target_uid)
-                        {
+                        if let Some(task_idx) = state.find_task_index_by_uid(&target_uid) {
                             state.list_state.select(Some(task_idx));
                         }
 

@@ -62,10 +62,28 @@ fn parent_inherits_child_priority_and_sorts_before_sibling() {
         max_done_subtasks: usize::MAX,
     };
 
-    let result = store.filter(opts).tasks;
+    let result = store.filter(opts).items;
 
-    let p_idx = result.iter().position(|t| t.uid == "p1").unwrap();
-    let s_idx = result.iter().position(|t| t.uid == "s1").unwrap();
+    let p_idx = result
+        .iter()
+        .position(|t| {
+            if let cfait::store::TaskListItem::Task(task) = t {
+                task.uid == "p1"
+            } else {
+                false
+            }
+        })
+        .unwrap();
+    let s_idx = result
+        .iter()
+        .position(|t| {
+            if let cfait::store::TaskListItem::Task(task) = t {
+                task.uid == "s1"
+            } else {
+                false
+            }
+        })
+        .unwrap();
 
     assert!(p_idx < s_idx);
 }
@@ -129,10 +147,28 @@ fn compare_two_parents_inherited_priorities_determine_order() {
         max_done_subtasks: usize::MAX,
     };
 
-    let result = store.filter(opts).tasks;
+    let result = store.filter(opts).items;
 
-    let pa_idx = result.iter().position(|t| t.uid == "pa").unwrap();
-    let pb_idx = result.iter().position(|t| t.uid == "pb").unwrap();
+    let pa_idx = result
+        .iter()
+        .position(|t| {
+            if let cfait::store::TaskListItem::Task(task) = t {
+                task.uid == "pa"
+            } else {
+                false
+            }
+        })
+        .unwrap();
+    let pb_idx = result
+        .iter()
+        .position(|t| {
+            if let cfait::store::TaskListItem::Task(task) = t {
+                task.uid == "pb"
+            } else {
+                false
+            }
+        })
+        .unwrap();
 
     assert!(pa_idx < pb_idx);
 }
@@ -191,10 +227,28 @@ fn parent_inherits_started_child_over_unset_sibling() {
         max_done_subtasks: usize::MAX,
     };
 
-    let result = store.filter(opts).tasks;
+    let result = store.filter(opts).items;
 
-    let p_idx = result.iter().position(|t| t.uid == "p_started").unwrap();
-    let s_idx = result.iter().position(|t| t.uid == "s_unset").unwrap();
+    let p_idx = result
+        .iter()
+        .position(|t| {
+            if let cfait::store::TaskListItem::Task(task) = t {
+                task.uid == "p_started"
+            } else {
+                false
+            }
+        })
+        .unwrap();
+    let s_idx = result
+        .iter()
+        .position(|t| {
+            if let cfait::store::TaskListItem::Task(task) = t {
+                task.uid == "s_unset"
+            } else {
+                false
+            }
+        })
+        .unwrap();
 
     assert!(p_idx < s_idx);
 }

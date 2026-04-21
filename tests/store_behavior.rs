@@ -49,10 +49,14 @@ fn test_filter_by_tag() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
     });
-    let results = filter_res.tasks;
+    let results = filter_res.items;
 
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].summary, "Work Task");
+    if let cfait::store::TaskListItem::Task(task) = &results[0] {
+        assert_eq!(task.summary, "Work Task");
+    } else {
+        panic!("Expected Task variant");
+    }
 }
 
 #[test]
@@ -89,10 +93,14 @@ fn test_filter_hierarchical_tags() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
     });
-    let results = filter_res.tasks;
+    let results = filter_res.items;
 
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].summary, "Backend");
+    if let cfait::store::TaskListItem::Task(task) = &results[0] {
+        assert_eq!(task.summary, "Backend");
+    } else {
+        panic!("Expected Task variant");
+    }
 }
 
 #[test]
@@ -135,10 +143,14 @@ fn test_hide_hidden_calendars() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
     });
-    let results = filter_res.tasks;
+    let results = filter_res.items;
 
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].summary, "Cal 1 Task");
+    if let cfait::store::TaskListItem::Task(task) = &results[0] {
+        assert_eq!(task.summary, "Cal 1 Task");
+    } else {
+        panic!("Expected Task variant");
+    }
 }
 
 #[test]

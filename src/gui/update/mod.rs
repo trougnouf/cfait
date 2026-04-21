@@ -204,13 +204,13 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ControllerActionComplete(_)
         | Message::MigrationComplete(_) => network::handle(app, message),
 
-        Message::OpenContextMenu(..)
-        | Message::CloseContextMenu
-        | Message::CursorMoved(_) => view::handle(app, message),
+        Message::OpenContextMenu(..) | Message::CloseContextMenu | Message::CursorMoved(_) => {
+            view::handle(app, message)
+        }
 
         Message::SnapToSelected { focus } => {
             if let Some(uid) = &app.selected_uid {
-                let present_in_list = app.tasks.iter().any(|t| t.uid == *uid);
+                let present_in_list = app.find_task_index_by_uid(uid).is_some();
                 let has_cached_id = app.task_ids.contains_key(uid);
 
                 if present_in_list || has_cached_id {

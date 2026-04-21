@@ -55,16 +55,30 @@ fn test_start_grace_period_keeps_tasks_in_active_section() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
     // Find positions of tasks
-    let within_pos = filtered
-        .iter()
-        .position(|t| t.summary.contains("starting soon"));
-    let beyond_pos = filtered
-        .iter()
-        .position(|t| t.summary.contains("starting later"));
-    let normal_pos = filtered.iter().position(|t| t.summary.contains("Normal"));
+    let within_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("starting soon")
+        } else {
+            false
+        }
+    });
+    let beyond_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("starting later")
+        } else {
+            false
+        }
+    });
+    let normal_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Normal")
+        } else {
+            false
+        }
+    });
 
     assert!(within_pos.is_some(), "Task within grace should be present");
     assert!(beyond_pos.is_some(), "Task beyond grace should be present");
@@ -121,10 +135,22 @@ fn test_grace_period_zero_pushes_all_future_starts() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
-    let soon_pos = filtered.iter().position(|t| t.summary.contains("1 hour"));
-    let normal_pos = filtered.iter().position(|t| t.summary.contains("Normal"));
+    let soon_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("1 hour")
+        } else {
+            false
+        }
+    });
+    let normal_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Normal")
+        } else {
+            false
+        }
+    });
 
     assert!(soon_pos.is_some());
     assert!(normal_pos.is_some());
@@ -191,15 +217,29 @@ fn test_acknowledged_alarm_keeps_task_in_active_section() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
-    let with_alarm_pos = filtered
-        .iter()
-        .position(|t| t.summary.contains("dismissed reminder"));
-    let without_alarm_pos = filtered
-        .iter()
-        .position(|t| t.summary.contains("without reminder"));
-    let normal_pos = filtered.iter().position(|t| t.summary.contains("Normal"));
+    let with_alarm_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("dismissed reminder")
+        } else {
+            false
+        }
+    });
+    let without_alarm_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("without reminder")
+        } else {
+            false
+        }
+    });
+    let normal_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Normal")
+        } else {
+            false
+        }
+    });
 
     assert!(with_alarm_pos.is_some());
     assert!(without_alarm_pos.is_some());
@@ -268,15 +308,29 @@ fn test_any_acknowledged_alarm_keeps_task_active() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
-    let with_alarm_pos = filtered
-        .iter()
-        .position(|t| t.summary.contains("dismissed alarm"));
-    let without_alarm_pos = filtered
-        .iter()
-        .position(|t| t.summary.contains("without alarm"));
-    let normal_pos = filtered.iter().position(|t| t.summary.contains("Normal"));
+    let with_alarm_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("dismissed alarm")
+        } else {
+            false
+        }
+    });
+    let without_alarm_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("without alarm")
+        } else {
+            false
+        }
+    });
+    let normal_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Normal")
+        } else {
+            false
+        }
+    });
 
     assert!(with_alarm_pos.is_some());
     assert!(without_alarm_pos.is_some());
@@ -335,12 +389,22 @@ fn test_recurring_task_with_fresh_dates_goes_to_future() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
-    let recurring_pos = filtered
-        .iter()
-        .position(|t| t.summary.contains("Recurring"));
-    let normal_pos = filtered.iter().position(|t| t.summary.contains("Normal"));
+    let recurring_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Recurring")
+        } else {
+            false
+        }
+    });
+    let normal_pos = filtered.iter().position(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Normal")
+        } else {
+            false
+        }
+    });
 
     assert!(recurring_pos.is_some());
     assert!(normal_pos.is_some());

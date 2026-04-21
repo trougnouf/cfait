@@ -33,7 +33,9 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
     // Track window metrics (Size and Cursor Position)
     subs.push(event::listen_with(|evt, _status, _window_id| match evt {
         iced::Event::Window(window::Event::Resized(size)) => Some(Message::WindowResized(size)),
-        iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => Some(Message::CursorMoved(position)),
+        iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+            Some(Message::CursorMoved(position))
+        }
         _ => None,
     }));
 
@@ -51,7 +53,13 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
     }
 
     // Tick every minute if there is an active task running, so the timer updates visually
-    let has_running_tasks = app.tasks.iter().any(|t| t.last_started_at.is_some());
+    let has_running_tasks = app.tasks.iter().any(|item| {
+        if let crate::store::TaskListItem::Task(t) = item {
+            t.last_started_at.is_some()
+        } else {
+            false
+        }
+    });
     if has_running_tasks {
         subs.push(iced::time::every(std::time::Duration::from_secs(60)).map(|_| Message::Tick));
     }
@@ -104,15 +112,14 @@ fn handle_hotkey(
                 return Some(Message::EscCaptured);
             }
             let is_cmd = modifiers.control() || modifiers.command();
-            if is_cmd
-                && let keyboard::Key::Character(s) = key.as_ref() {
-                    if s == "s" {
-                        return Some(Message::SubmitTask);
-                    } else if s == "e" {
-                        // Catch Ctrl+E while typing in the main input bar to expand!
-                        return Some(Message::StartCreateWithDescription);
-                    }
+            if is_cmd && let keyboard::Key::Character(s) = key.as_ref() {
+                if s == "s" {
+                    return Some(Message::SubmitTask);
+                } else if s == "e" {
+                    // Catch Ctrl+E while typing in the main input bar to expand!
+                    return Some(Message::StartCreateWithDescription);
                 }
+            }
         }
         return None;
     }

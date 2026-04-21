@@ -82,7 +82,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         max_done_subtasks: config.max_done_subtasks,
     });
 
-    app.tasks = filter_res.tasks;
+    app.tasks = filter_res.items;
     app.cached_categories = filter_res.categories;
     app.cached_locations = filter_res.locations;
 
@@ -100,19 +100,21 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         }
     }
 
-    for task in &app.tasks {
-        app.task_ids
-            .entry(task.uid.clone())
-            .or_insert_with(iced::widget::Id::unique);
+    for item in &app.tasks {
+        if let crate::store::TaskListItem::Task(task) = item {
+            app.task_ids
+                .entry(task.uid.clone())
+                .or_insert_with(iced::widget::Id::unique);
 
-        if let Some(p_uid) = &task.parent_uid
-            && let Some(parent) = quick_lookup.get(p_uid)
-        {
-            let p_tags: std::collections::HashSet<String> =
-                parent.categories.iter().cloned().collect();
-            let p_loc = parent.location.clone();
-            app.parent_attributes_cache
-                .insert(p_uid.clone(), (p_tags, p_loc));
+            if let Some(p_uid) = &task.parent_uid
+                && let Some(parent) = quick_lookup.get(p_uid)
+            {
+                let p_tags: std::collections::HashSet<String> =
+                    parent.categories.iter().cloned().collect();
+                let p_loc = parent.location.clone();
+                app.parent_attributes_cache
+                    .insert(p_uid.clone(), (p_tags, p_loc));
+            }
         }
     }
 
@@ -218,7 +220,7 @@ pub fn apply_alias_retroactively(
 pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
     if let Some(uid) = &app.selected_uid {
         let id_opt = app.task_ids.get(uid).cloned();
-        let idx_opt = app.tasks.iter().position(|t| t.uid == *uid);
+        let idx_opt = app.find_task_index_by_uid(uid);
 
         if let (Some(id), Some(idx)) = (id_opt.clone(), idx_opt) {
             if let Some(rect) = get_focus_bounds(&id) {
@@ -295,27 +297,30 @@ pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
             let mut content_h = 0.0;
             let mut item_center = 0.0;
 
-            for (i, t) in app.tasks.iter().enumerate() {
+            for (i, item) in app.tasks.iter().enumerate() {
                 let mut h = 36.0; // Base row height
 
-                // Add height for wrapped summary (approx 60 chars per line)
-                h += (t.summary.len().saturating_sub(60) as f32 / 60.0).floor() * 20.0;
+                if let crate::store::TaskListItem::Task(t) = item {
+                    // Add height for wrapped summary (approx 60 chars per line)
+                    h += (t.summary.len().saturating_sub(60) as f32 / 60.0).floor() * 20.0;
 
-                // Add height for expanded details
-                if app.expanded_tasks.contains(&t.uid) {
-                    h += 15.0; // Margin
-                    if !t.description.is_empty() {
-                        // Since text doesn't wrap, 1 line in string = 1 visual line.
-                        // We use a constant 18.0px per line.
-                        h += t.description.lines().count() as f32 * 18.0;
+                    // Add height for expanded details
+                    if app.expanded_tasks.contains(&t.uid) {
+                        h += 15.0; // Margin
+                        if !t.description.is_empty() {
+                            h += t.description.lines().count() as f32 * 18.0;
+                        }
+                        h += t.dependencies.len() as f32 * 24.0;
+                        h += t.related_to.len() as f32 * 24.0;
+                        h += app.store.get_tasks_blocking(&t.uid).len() as f32 * 24.0;
+                        h += app.store.get_tasks_related_to(&t.uid).len() as f32 * 24.0;
+                        if !t.sessions.is_empty() || app.adding_session_uid.as_ref() == Some(&t.uid)
+                        {
+                            h += 30.0 + (t.sessions.len().min(3) as f32 * 20.0);
+                        }
                     }
-                    h += t.dependencies.len() as f32 * 24.0;
-                    h += t.related_to.len() as f32 * 24.0;
-                    h += app.store.get_tasks_blocking(&t.uid).len() as f32 * 24.0;
-                    h += app.store.get_tasks_related_to(&t.uid).len() as f32 * 24.0;
-                    if !t.sessions.is_empty() || app.adding_session_uid.as_ref() == Some(&t.uid) {
-                        h += 30.0 + (t.sessions.len().min(3) as f32 * 20.0);
-                    }
+                } else {
+                    h = 28.0; // Expand/Collapse virtual row height
                 }
 
                 if i < idx {

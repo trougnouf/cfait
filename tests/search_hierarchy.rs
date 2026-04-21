@@ -44,10 +44,22 @@ fn test_search_includes_non_matching_children() {
         max_done_subtasks: usize::MAX,
     });
 
-    let results = filter_res.tasks;
+    let results = filter_res.items;
     assert_eq!(results.len(), 2);
-    assert!(results.iter().any(|t| t.uid == "parent"));
-    assert!(results.iter().any(|t| t.uid == "child"));
+    assert!(results.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "parent"
+        } else {
+            false
+        }
+    }));
+    assert!(results.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "child"
+        } else {
+            false
+        }
+    }));
 }
 
 #[test]
@@ -96,7 +108,7 @@ fn test_search_includes_deep_hierarchy() {
         max_done_subtasks: usize::MAX,
     });
 
-    let results = filter_res.tasks;
+    let results = filter_res.items;
     assert_eq!(results.len(), 3);
 }
 
@@ -140,9 +152,13 @@ fn test_child_match_does_not_force_parent_if_parent_does_not_match() {
         max_done_subtasks: usize::MAX,
     });
 
-    let results = filter_res.tasks;
+    let results = filter_res.items;
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].uid, "child");
+    if let cfait::store::TaskListItem::Task(task) = &results[0] {
+        assert_eq!(task.uid, "child");
+    } else {
+        panic!("Expected Task variant");
+    }
 }
 
 #[test]
@@ -196,10 +212,22 @@ fn test_multiple_parents_with_children() {
         max_done_subtasks: usize::MAX,
     });
 
-    let results = filter_res.tasks;
+    let results = filter_res.items;
     assert_eq!(results.len(), 2);
-    assert!(results.iter().any(|t| t.uid == "p1"));
-    assert!(results.iter().any(|t| t.uid == "c1"));
+    assert!(results.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "p1"
+        } else {
+            false
+        }
+    }));
+    assert!(results.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "c1"
+        } else {
+            false
+        }
+    }));
 }
 
 #[test]
@@ -248,9 +276,13 @@ fn test_sibling_match_only_includes_matching_sibling() {
         max_done_subtasks: usize::MAX,
     });
 
-    let results = filter_res.tasks;
+    let results = filter_res.items;
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].uid, "c1");
+    if let cfait::store::TaskListItem::Task(task) = &results[0] {
+        assert_eq!(task.uid, "c1");
+    } else {
+        panic!("Expected Task variant");
+    }
 }
 
 #[test]
@@ -293,7 +325,7 @@ fn test_empty_search_shows_all_tasks() {
         max_done_subtasks: usize::MAX,
     });
 
-    let results = filter_res.tasks;
+    let results = filter_res.items;
     assert_eq!(results.len(), 2);
 }
 
@@ -338,7 +370,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         max_done_subtasks: usize::MAX,
     });
 
-    let results = filter_res.tasks;
+    let results = filter_res.items;
     assert_eq!(results.len(), 2);
 
     let filter_res_hidden = store.filter(FilterOptions {
@@ -363,7 +395,11 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         max_done_subtasks: usize::MAX,
     });
 
-    let results_hidden = filter_res_hidden.tasks;
+    let results_hidden = filter_res_hidden.items;
     assert_eq!(results_hidden.len(), 1);
-    assert_eq!(results_hidden[0].uid, "parent");
+    if let cfait::store::TaskListItem::Task(task) = &results_hidden[0] {
+        assert_eq!(task.uid, "parent");
+    } else {
+        panic!("Expected Task variant");
+    }
 }

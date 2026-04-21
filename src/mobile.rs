@@ -380,11 +380,8 @@ fn task_to_mobile(
         t.resolve_visual_attributes(&parent_tags, &parent_loc, aliases);
 
     // Map the internal virtual state to simple strings for mobile clients
-    let (v_type, v_payload) = match &t.virtual_state {
-        crate::model::VirtualState::None => ("none".to_string(), "".to_string()),
-        crate::model::VirtualState::Expand(k) => ("expand".to_string(), k.clone()),
-        crate::model::VirtualState::Collapse(k) => ("collapse".to_string(), k.clone()),
-    };
+    // Note: virtual_state has been removed from Task model, so we default to None
+    let (v_type, v_payload) = ("none".to_string(), "".to_string());
 
     MobileTask {
         uid: t.uid.clone(),
@@ -1368,8 +1365,15 @@ impl CfaitMobile {
         });
 
         let tasks = filtered
-            .tasks
+            .items
             .into_iter()
+            .filter_map(|item| {
+                if let crate::store::TaskListItem::Task(t) = item {
+                    Some(t)
+                } else {
+                    None
+                }
+            })
             .map(|t| task_to_mobile(&t, &store, &config.tag_aliases))
             .collect();
 
@@ -1433,7 +1437,17 @@ impl CfaitMobile {
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
         });
-        let filtered = filter_res.tasks;
+        let filtered: Vec<crate::model::Task> = filter_res
+            .items
+            .iter()
+            .filter_map(|item| {
+                if let crate::store::TaskListItem::Task(t) = item {
+                    Some((**t).clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
         let idx = crate::store::select_weighted_random_index(&filtered, config.default_priority)?;
         filtered.get(idx).map(|t| t.uid.clone())
     }

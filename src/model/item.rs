@@ -3,15 +3,12 @@
 /*
 This file contains the core Task data model used across clients (TUI, GUI, Mobile).
 It defines the in-memory representation of a Task and related helper types (Alarm,
-DateType, VirtualState, etc.).
+DateType, etc.).
 
 Notes / rationale:
 - The Task struct is intentionally a compact, serde-friendly representation that maps
   closely to VTODO/ICS fields. Additional transient fields (sorting flags, derived
   attributes) are marked `#[serde(skip)]` because they are runtime-only.
-- A small "virtual" task concept (VirtualState) is used by the UI layers to inject
-  expand/collapse placeholder rows when truncating completed-subtask groups. These
-  virtual tasks are not persisted and are only used for rendering.
 - Time-tracking fields (time_spent_seconds, last_started_at, sessions) track
   lightweight local work sessions. The recycle/advance logic commits running time
   before creating history snapshots for recurring tasks.
@@ -268,15 +265,6 @@ where
 }
 
 /// Virtual state used to represent placeholder/virtual rows in flattened lists.
-/// These are not persisted and exist solely for UI presentation (expand/collapse).
-#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
-pub enum VirtualState {
-    #[default]
-    None,
-    Expand(String),
-    Collapse(String),
-}
-
 /// Primary in-memory Task model. Fields map closely to VTODO/ICS semantics.
 /// Transient/display fields (is_blocked, sort_rank...) are skipped during serialization.
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
@@ -350,8 +338,6 @@ pub struct Task {
     pub effective_due: Option<DateType>,
     #[serde(skip)]
     pub effective_dtstart: Option<DateType>,
-    #[serde(skip)]
-    pub virtual_state: VirtualState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -404,15 +390,6 @@ pub fn compare_sortkeys(a: &SortKey, b: &SortKey, default_prio: u8) -> Ordering 
 
 // Helper context used by hierarchy organization routines.
 // Bundles the children map, result vector and other parameters so recursive helpers
-// have a concise signature.
-struct HierarchyContext<'a> {
-    children_map: &'a HashMap<String, Vec<Task>>,
-    result: &'a mut Vec<Task>,
-    visited_keys: &'a mut HashSet<(String, String)>,
-    expanded_groups: &'a HashSet<String>,
-    max_done_subtasks: usize,
-}
-
 impl Task {
     /// Return the explicit COMPLETED date parsed from unmapped properties, if present.
     pub fn completion_date(&self) -> Option<DateTime<Utc>> {
@@ -529,7 +506,6 @@ impl Task {
             effective_priority: 0,
             effective_due: None,
             effective_dtstart: None,
-            virtual_state: VirtualState::None,
         };
         task.apply_smart_input(input, aliases, default_reminder_time);
         task
@@ -723,179 +699,10 @@ impl Task {
     /// and injects "virtual" expand/collapse rows when completed-subtask groups are truncated.
     /// This function keeps complexity manageable by:
     ///  - Sorting first using stable compare_for_sort
-    ///  - Partitioning roots vs children and then performing a deterministic traversal
-    pub fn organize_hierarchy(
-        mut tasks: Vec<Task>,
-        default_priority: u8,
-        expanded_groups: &HashSet<String>,
-        max_done_roots: usize,
-        max_done_subtasks: usize,
-    ) -> Vec<Task> {
-        let present_uids: HashSet<String> = tasks.iter().map(|t| t.uid.clone()).collect();
-        let mut children_map: HashMap<String, Vec<Task>> = HashMap::new();
-        let mut roots: Vec<Task> = Vec::new();
-
-        // Sort by the canonical comparator before building hierarchy
-        tasks.sort_by(|a, b| a.compare_for_sort(b, default_priority));
-
-        for mut task in tasks {
-            let is_orphan = match &task.parent_uid {
-                Some(p_uid) => !present_uids.contains(p_uid),
-                None => true,
-            };
-
-            if is_orphan {
-                if task.parent_uid.is_some() {
-                    task.depth = 0; // orphaned child promoted to root
-                }
-                roots.push(task);
-            } else {
-                let p_uid = task.parent_uid.as_ref().unwrap().clone();
-                children_map.entry(p_uid).or_default().push(task);
-            }
-        }
-
-        let mut result = Vec::new();
-        let mut visited_keys = HashSet::new();
-
-        fn process_group(
-            raw_group: Vec<Task>,
-            parent_uid: String,
-            limit: usize,
-            is_root: bool,
-            context: &mut HierarchyContext,
-            depth: usize,
-        ) {
-            // Partition into active and done to allow truncation of the done-group
-            let (active, done): (Vec<Task>, Vec<Task>) =
-                raw_group.into_iter().partition(|t| !t.status.is_done());
-
-            // Append active tasks always
-            for task in active {
-                Task::append_task_and_children(&task, context, depth);
-            }
-
-            if done.is_empty() {
-                return;
-            }
-
-            // Effective key used to index expansion state: "" for roots
-            let effective_key = if is_root {
-                "".to_string()
-            } else {
-                parent_uid.clone()
-            };
-            let is_expanded = context.expanded_groups.contains(&effective_key);
-
-            if is_expanded {
-                // Show all done tasks followed by a Collapse virtual row
-                for task in done {
-                    Task::append_task_and_children(&task, context, depth);
-                }
-                let mut collapse = Task::new("Collapse", &HashMap::new(), None);
-                collapse.uid = format!("virtual-collapse-{}", effective_key);
-                collapse.virtual_state = VirtualState::Collapse(effective_key);
-                collapse.depth = depth;
-                collapse.parent_uid = if is_root { None } else { Some(parent_uid) };
-                context.result.push(collapse);
-            } else if done.len() > limit {
-                // Show a small sample and then an Expand row
-                let count_to_show = limit.saturating_sub(1);
-                let mut iter = done.into_iter();
-
-                for _ in 0..count_to_show {
-                    if let Some(task) = iter.next() {
-                        Task::append_task_and_children(&task, context, depth);
-                    }
-                }
-
-                let mut expand = Task::new("Expand", &HashMap::new(), None);
-                expand.uid = format!("virtual-expand-{}", effective_key);
-                expand.virtual_state = VirtualState::Expand(effective_key);
-                expand.depth = depth;
-                expand.parent_uid = if is_root { None } else { Some(parent_uid) };
-                context.result.push(expand);
-            } else {
-                // Under the limit: show all done tasks
-                for task in done {
-                    Task::append_task_and_children(&task, context, depth);
-                }
-            }
-        }
-
-        let mut context = HierarchyContext {
-            children_map: &children_map,
-            result: &mut result,
-            visited_keys: &mut visited_keys,
-            expanded_groups,
-            max_done_subtasks,
-        };
-
-        process_group(roots, "".to_string(), max_done_roots, true, &mut context, 0);
-
-        result
-    }
-
-    /// Append `task` and recursively its children to `context.result`. This helper
-    /// respects expansion state for child groups and injects virtual expand/collapse
-    /// placeholders when needed.
-    fn append_task_and_children(task: &Task, context: &mut HierarchyContext, depth: usize) {
-        let visit_key = (task.uid.clone(), task.calendar_href.clone());
-        if context.visited_keys.contains(&visit_key) {
-            return;
-        }
-        context.visited_keys.insert(visit_key.clone());
-
-        let mut t = task.clone();
-        t.depth = depth;
-        context.result.push(t);
-
-        if let Some(children) = context.children_map.get(&task.uid) {
-            let (active, done): (Vec<Task>, Vec<Task>) =
-                children.iter().cloned().partition(|t| !t.status.is_done());
-
-            for child in active {
-                Self::append_task_and_children(&child, context, depth + 1);
-            }
-
-            if !done.is_empty() {
-                let is_expanded = context.expanded_groups.contains(&task.uid);
-                if is_expanded {
-                    for child in done {
-                        Self::append_task_and_children(&child, context, depth + 1);
-                    }
-                    let mut collapse = Task::new("Collapse", &HashMap::new(), None);
-                    collapse.uid = format!("virtual-collapse-{}", task.uid);
-                    collapse.virtual_state = VirtualState::Collapse(task.uid.clone());
-                    collapse.depth = depth + 1;
-                    collapse.parent_uid = Some(task.uid.clone());
-                    context.result.push(collapse);
-                } else if done.len() > context.max_done_subtasks {
-                    let show = context.max_done_subtasks.saturating_sub(1);
-                    let mut iter = done.into_iter();
-                    for _ in 0..show {
-                        if let Some(c) = iter.next() {
-                            Self::append_task_and_children(&c, context, depth + 1);
-                        }
-                    }
-                    let mut expand = Task::new("Expand", &HashMap::new(), None);
-                    expand.uid = format!("virtual-expand-{}", task.uid);
-                    expand.virtual_state = VirtualState::Expand(task.uid.clone());
-                    expand.depth = depth + 1;
-                    expand.parent_uid = Some(task.uid.clone());
-                    context.result.push(expand);
-                } else {
-                    for child in done {
-                        Self::append_task_and_children(&child, context, depth + 1);
-                    }
-                }
-            }
-        }
-    }
-
+    ///
     /// Dismiss an alarm by uid. Supports both explicit and implicit alarm ids.
-    /// implicit alarms use the form "implicit|<rfc3339>" so we can dismiss/snooze them
-    /// without needing a stored Alarm object.
+    ///    implicit alarms use the form "implicit|<rfc3339>" so we can dismiss/snooze them
+    ///    without needing a stored Alarm object.
     pub fn handle_dismiss(&mut self, alarm_uid: &str) -> bool {
         if alarm_uid.starts_with("implicit_") {
             let parts: Vec<&str> = alarm_uid.split('|').collect();

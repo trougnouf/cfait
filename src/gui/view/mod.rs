@@ -263,7 +263,8 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
     // --- CONTEXT MENU OVERLAY ---
     if let Some((uid, is_full, pt)) = &app.active_context_menu
-        && let Some(task) = app.tasks.iter().find(|t| t.uid == *uid)
+        && let Some(idx) = app.find_task_index_by_uid(uid)
+        && let Some(task) = app.get_task_at_index(idx)
     {
         use crate::config::TaskAction;
 
@@ -312,7 +313,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         let has_time = !task.sessions.is_empty() || task.time_spent_seconds > 0;
 
         let build_btn = |action: &TaskAction| -> Option<Element<'_, Message>> {
-            let idx = app.tasks.iter().position(|t| t.uid == *uid).unwrap();
+            let idx = app.find_task_index_by_uid(uid).unwrap();
             let is_done_or_cancelled = task.status == crate::model::TaskStatus::Completed
                 || task.status == crate::model::TaskStatus::Cancelled;
 
@@ -589,7 +590,8 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
     // --- MOVE TASK MODAL OVERLAY ---
     if let Some(uid) = &app.moving_task_uid
-        && let Some(task) = app.tasks.iter().find(|t| t.uid == *uid)
+        && let Some(idx) = app.find_task_index_by_uid(uid)
+        && let Some(task) = app.get_task_at_index(idx)
     {
         let targets: Vec<_> = app
             .calendars
@@ -1052,7 +1054,17 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         }
     };
 
-    let active_count = app.tasks.iter().filter(|t| !t.status.is_done()).count();
+    let active_count = app
+        .tasks
+        .iter()
+        .filter(|item| {
+            if let crate::store::TaskListItem::Task(t) = item {
+                !t.status.is_done()
+            } else {
+                false
+            }
+        })
+        .count();
     let mut subtitle = if active_count == 1 {
         rust_i18n::t!("tasks_count.one").to_string()
     } else {
@@ -1543,13 +1555,16 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         app.tasks
             .iter()
             .enumerate()
-            .map(|(real_index, task)| {
-                let row_id = app
-                    .task_ids
-                    .get(&task.uid)
-                    .cloned()
-                    .unwrap_or_else(iced::widget::Id::unique);
-                view_task_row(app, real_index, task, row_id)
+            .map(|(real_index, item)| {
+                let row_id = match item {
+                    crate::store::TaskListItem::Task(t) => app
+                        .task_ids
+                        .get(&t.uid)
+                        .cloned()
+                        .unwrap_or_else(iced::widget::Id::unique),
+                    _ => iced::widget::Id::unique(),
+                };
+                view_task_row(app, real_index, item, row_id)
             })
             .collect::<Vec<_>>(),
     )

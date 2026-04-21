@@ -3,7 +3,7 @@
 // Manages the application state for the TUI.
 use crate::context::AppContext;
 use crate::model::{CalendarListEntry, Task};
-use crate::store::{FilterOptions, TaskStore};
+use crate::store::{FilterOptions, TaskListItem, TaskStore};
 use crate::system::SystemEvent;
 use crate::tui::action::SidebarMode;
 use ratatui::widgets::ListState;
@@ -38,7 +38,7 @@ pub struct AppState {
     // Data
     pub ctx: Arc<dyn AppContext>,
     pub store: TaskStore,
-    pub tasks: Vec<Task>,
+    pub tasks: Vec<TaskListItem>,
     pub calendars: Vec<CalendarListEntry>,
 
     // UI State
@@ -278,7 +278,7 @@ impl AppState {
             max_done_subtasks: config.max_done_subtasks,
         });
 
-        self.tasks = filter_res.tasks;
+        self.tasks = filter_res.items;
         self.cached_categories = filter_res.categories;
         self.cached_locations = filter_res.locations;
 
@@ -297,10 +297,46 @@ impl AppState {
 
     pub fn get_selected_task(&self) -> Option<&Task> {
         if let Some(idx) = self.list_state.selected() {
-            self.tasks.get(idx)
+            match &self.tasks.get(idx) {
+                Some(TaskListItem::Task(task)) => Some(task),
+                _ => None,
+            }
         } else {
             None
         }
+    }
+
+    /// Get the task at a specific index, returning None for control items
+    pub fn get_task_at_index(&self, idx: usize) -> Option<&Task> {
+        match &self.tasks.get(idx) {
+            Some(TaskListItem::Task(task)) => Some(task),
+            _ => None,
+        }
+    }
+
+    /// Find the index of a task by UID, ignoring control items
+    pub fn find_task_index_by_uid(&self, uid: &str) -> Option<usize> {
+        self.tasks.iter().position(|item| {
+            if let TaskListItem::Task(task) = item {
+                task.uid == uid
+            } else {
+                false
+            }
+        })
+    }
+
+    /// Get all real tasks (excluding control items)
+    pub fn get_all_real_tasks(&self) -> Vec<&Task> {
+        self.tasks
+            .iter()
+            .filter_map(|item| {
+                if let TaskListItem::Task(task) = item {
+                    Some(task.as_ref())
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     // --- INPUT HELPERS ---
@@ -581,7 +617,11 @@ mod tests {
     fn test_navigation_next_wraps() {
         let mut state = AppState::new();
         // Add 3 dummy tasks
-        state.tasks = vec![dummy_task(), dummy_task(), dummy_task()];
+        state.tasks = vec![
+            TaskListItem::Task(Box::new(dummy_task())),
+            TaskListItem::Task(Box::new(dummy_task())),
+            TaskListItem::Task(Box::new(dummy_task())),
+        ];
 
         // Start at 0
         state.list_state.select(Some(0));
@@ -599,7 +639,11 @@ mod tests {
     #[test]
     fn test_navigation_previous_wraps() {
         let mut state = AppState::new();
-        state.tasks = vec![dummy_task(), dummy_task(), dummy_task()];
+        state.tasks = vec![
+            TaskListItem::Task(Box::new(dummy_task())),
+            TaskListItem::Task(Box::new(dummy_task())),
+            TaskListItem::Task(Box::new(dummy_task())),
+        ];
 
         state.list_state.select(Some(0));
 

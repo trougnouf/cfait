@@ -57,12 +57,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let current_idx = app
                 .selected_uid
                 .as_ref()
-                .and_then(|uid| app.tasks.iter().position(|t| t.uid == *uid))
+                .and_then(|uid| app.find_task_index_by_uid(uid))
                 .unwrap_or(0);
 
             let next_idx = (current_idx + 10).min(app.tasks.len() - 1);
 
-            if let Some(task) = app.tasks.get(next_idx) {
+            if let Some(task) = app.get_task_at_index(next_idx) {
                 app.selected_uid = Some(task.uid.clone());
                 return scroll_to_selected(app, true);
             }
@@ -75,12 +75,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let current_idx = app
                 .selected_uid
                 .as_ref()
-                .and_then(|uid| app.tasks.iter().position(|t| t.uid == *uid))
+                .and_then(|uid| app.find_task_index_by_uid(uid))
                 .unwrap_or(0);
 
             let prev_idx = current_idx.saturating_sub(10);
 
-            if let Some(task) = app.tasks.get(prev_idx) {
+            if let Some(task) = app.get_task_at_index(prev_idx) {
                 app.selected_uid = Some(task.uid.clone());
                 return scroll_to_selected(app, true);
             }
@@ -137,7 +137,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let current_idx = app
                 .selected_uid
                 .as_ref()
-                .and_then(|uid| app.tasks.iter().position(|t| t.uid == *uid))
+                .and_then(|uid| app.find_task_index_by_uid(uid))
                 .unwrap_or(0);
 
             // Calculate next index (wrapping or clamping)
@@ -146,7 +146,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             } else {
                 current_idx + 1
             };
-            if let Some(task) = app.tasks.get(next_idx) {
+            if let Some(task) = app.get_task_at_index(next_idx) {
                 app.selected_uid = Some(task.uid.clone());
                 return scroll_to_selected(app, true);
             }
@@ -159,14 +159,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let current_idx = app
                 .selected_uid
                 .as_ref()
-                .and_then(|uid| app.tasks.iter().position(|t| t.uid == *uid))
+                .and_then(|uid| app.find_task_index_by_uid(uid))
                 .unwrap_or(0);
             let prev_idx = if current_idx == 0 {
                 app.tasks.len() - 1
             } else {
                 current_idx - 1
             };
-            if let Some(task) = app.tasks.get(prev_idx) {
+            if let Some(task) = app.get_task_at_index(prev_idx) {
                 app.selected_uid = Some(task.uid.clone());
                 return scroll_to_selected(app, true);
             }
@@ -174,7 +174,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::DeleteSelected => {
             if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+                && let Some(idx) = app.find_task_index_by_uid(uid)
             {
                 return crate::gui::update::tasks::handle(app, Message::DeleteTask(idx));
             }
@@ -182,9 +182,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::ToggleSelected => {
             if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+                && let Some(idx) = app.find_task_index_by_uid(uid)
             {
-                let task = &app.tasks[idx];
+                let task = app.get_task_at_index(idx).unwrap();
                 return crate::gui::update::tasks::handle(
                     app,
                     Message::ToggleTask(idx, !task.status.is_done()),
@@ -194,7 +194,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::EditSelected => {
             if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.tasks.iter().position(|t| t.uid == *uid)
+                && let Some(idx) = app.find_task_index_by_uid(uid)
             {
                 return crate::gui::update::tasks::handle(app, Message::EditTaskStart(idx));
             }
@@ -601,9 +601,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let icons = crate::gui::icon::RANDOM_ICONS;
             app.random_icon = icons[rng.usize(..icons.len())];
 
+            // Extract real tasks for the random weighted selector
+            let real_tasks: Vec<crate::model::Task> = app
+                .tasks
+                .iter()
+                .filter_map(|item| {
+                    if let crate::store::TaskListItem::Task(t) = item {
+                        Some((**t).clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
             // 2. Select Weighted Random Task
-            if let Some(idx) = select_weighted_random_index(&app.tasks, app.default_priority)
-                && let Some(task) = app.tasks.get(idx)
+            if let Some(idx) = select_weighted_random_index(&real_tasks, app.default_priority)
+                && let Some(task) = real_tasks.get(idx)
             {
                 app.selected_uid = Some(task.uid.clone());
                 // 3. Scroll to it

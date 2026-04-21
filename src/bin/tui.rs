@@ -406,34 +406,30 @@ async fn main() -> Result<()> {
                 max_done_subtasks: usize::MAX,
             });
 
-            if res.tasks.is_empty() {
+            if res.items.is_empty() {
                 println!("No tasks found.");
                 return Ok(());
             }
 
-            for t in res.tasks {
-                if matches!(
-                    t.virtual_state,
-                    cfait::model::VirtualState::Expand(_) | cfait::model::VirtualState::Collapse(_)
-                ) {
-                    continue; // Skip virtual rows in CLI
-                }
-                let symbol = t.checkbox_symbol();
-                let indent = "  ".repeat(t.depth);
-                let smart = t.to_smart_string();
-                let summary_escaped = cfait::model::parser::escape_summary(&t.summary);
-                let metadata = smart.replacen(&summary_escaped, "", 1).trim().to_string();
-                let uid_short = &t.uid[..std::cmp::min(8, t.uid.len())];
+            for item in res.items {
+                if let cfait::store::TaskListItem::Task(t) = item {
+                    let symbol = t.checkbox_symbol();
+                    let indent = "  ".repeat(t.depth);
+                    let smart = t.to_smart_string();
+                    let summary_escaped = cfait::model::parser::escape_summary(&t.summary);
+                    let metadata = smart.replacen(&summary_escaped, "", 1).trim().to_string();
+                    let uid_short = &t.uid[..std::cmp::min(8, t.uid.len())];
 
-                let meta_str = if metadata.is_empty() {
-                    String::new()
-                } else {
-                    format!(" {}", metadata)
-                };
-                println!(
-                    "{}{} {}{} [{}]",
-                    indent, symbol, t.summary, meta_str, uid_short
-                );
+                    let meta_str = if metadata.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {}", metadata)
+                    };
+                    println!(
+                        "{}{} {}{} [{}]",
+                        indent, symbol, t.summary, meta_str, uid_short
+                    );
+                }
             }
             return Ok(());
         }

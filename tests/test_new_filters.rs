@@ -173,14 +173,32 @@ fn test_is_ready_filters_future_start_dates() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
     // Future task should be filtered out
-    assert!(!filtered.iter().any(|t| t.summary.contains("Future")));
+    assert!(!filtered.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Future")
+        } else {
+            false
+        }
+    }));
 
     // Past task and no start task should be included
-    assert!(filtered.iter().any(|t| t.summary.contains("Past")));
-    assert!(filtered.iter().any(|t| t.summary.contains("No Start")));
+    assert!(filtered.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Past")
+        } else {
+            false
+        }
+    }));
+    assert!(filtered.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("No Start")
+        } else {
+            false
+        }
+    }));
 }
 
 #[test]
@@ -231,14 +249,32 @@ fn test_is_ready_filters_blocked_tasks() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
     // Blocked task should be filtered out
-    assert!(!filtered.iter().any(|t| t.summary.contains("Blocked")));
+    assert!(!filtered.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Blocked")
+        } else {
+            false
+        }
+    }));
 
     // Unblocked and dependency tasks should be included
-    assert!(filtered.iter().any(|t| t.summary.contains("Unblocked")));
-    assert!(filtered.iter().any(|t| t.summary.contains("Dependency")));
+    assert!(filtered.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Unblocked")
+        } else {
+            false
+        }
+    }));
+    assert!(filtered.iter().any(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.summary.contains("Dependency")
+        } else {
+            false
+        }
+    }));
 }
 
 #[test]
@@ -295,11 +331,15 @@ fn test_is_ready_combines_with_other_filters() {
         max_done_subtasks: usize::MAX,
     };
 
-    let filtered = store.filter(options).tasks;
+    let filtered = store.filter(options).items;
 
     // Only the ready work task should be included
     assert!(filtered.len() == 1);
-    assert!(filtered[0].summary.contains("Work Task"));
-    assert!(!filtered[0].summary.contains("Future"));
-    assert!(!filtered[0].summary.contains("Personal"));
+    if let cfait::store::TaskListItem::Task(task) = &filtered[0] {
+        assert!(task.summary.contains("Work Task"));
+        assert!(!task.summary.contains("Future"));
+        assert!(!task.summary.contains("Personal"));
+    } else {
+        panic!("Expected Task variant");
+    }
 }

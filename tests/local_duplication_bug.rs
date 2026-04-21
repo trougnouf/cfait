@@ -71,9 +71,15 @@ fn test_reproduce_android_local_revert_bug() {
     });
 
     let visible_task = filter_res
-        .tasks
+        .items
         .iter()
-        .find(|t| t.uid == uid)
+        .find(|t| {
+            if let cfait::store::TaskListItem::Task(task) = t {
+                task.uid == uid
+            } else {
+                false
+            }
+        })
         .expect("Task should exist");
 
     // VERIFICATION:
@@ -82,12 +88,20 @@ fn test_reproduce_android_local_revert_bug() {
     // The UI shows "Stale Duplicate" and Status::NeedsAction.
     // The user's change ("Updated via Bridge") is effectively hidden/reverted.
 
-    assert_eq!(
-        visible_task.summary, "Updated via Bridge",
-        "BUG: Task summary was reverted to the stale duplicate!"
-    );
-    assert!(
-        visible_task.status == TaskStatus::Completed,
-        "BUG: Task status was reverted to the stale duplicate!"
-    );
+    if let cfait::store::TaskListItem::Task(task) = visible_task {
+        assert_eq!(
+            task.summary, "Updated via Bridge",
+            "BUG: Task summary was reverted to the stale duplicate!"
+        );
+    } else {
+        panic!("Expected Task variant");
+    }
+    if let cfait::store::TaskListItem::Task(task) = visible_task {
+        assert!(
+            task.status == TaskStatus::Completed,
+            "BUG: Task status was reverted to the stale duplicate!"
+        );
+    } else {
+        panic!("Expected Task variant");
+    }
 }
