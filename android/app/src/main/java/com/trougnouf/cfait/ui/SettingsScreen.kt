@@ -299,7 +299,13 @@ fun SettingsScreen(
                 navigationIcon = {
                     IconButton(onClick = { handleBack() }) { NfIcon(NfIcons.BACK, 20.sp) }
                 },
-                actions = { IconButton(onClick = onHelp) { NfIcon(NfIcons.HELP, 24.sp) } }
+                actions = {
+                    TextButton(onClick = onHelp) {
+                        NfIcon(NfIcons.HELP, 18.sp, MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.help), fontWeight = FontWeight.Bold)
+                    }
+                }
             )
         }
     ) { p ->
