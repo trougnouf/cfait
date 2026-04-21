@@ -288,18 +288,16 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .map(|(idx, task_item)| {
             // Handle expand/collapse control items
             match task_item {
-                TaskListItem::ExpandGroup(_) => {
-                    // Indent according to depth (expand/collapse items don't have depth, but we can use 0)
-                    let indent = "  ".repeat(0);
-                    // Use Nerd Font arrow expand down glyph (fallback to a simple 'v' if font missing)
+                TaskListItem::ExpandGroup(_, depth) => {
+                    let indent = "  ".repeat(*depth);
                     let content = format!("{}  \u{f0796}", indent);
                     ListItem::new(Line::from(Span::styled(
                         content,
                         Style::default().fg(Color::Cyan),
                     )))
                 }
-                TaskListItem::CollapseGroup(_) => {
-                    let indent = "  ".repeat(0);
+                TaskListItem::CollapseGroup(_, depth) => {
+                    let indent = "  ".repeat(*depth);
                     let content = format!("{}  \u{f0799}", indent);
                     ListItem::new(Line::from(Span::styled(
                         content,

@@ -63,8 +63,8 @@ pub const UNCATEGORIZED_ID: &str = ":::uncategorized:::";
 #[derive(Debug, Clone)]
 pub enum TaskListItem {
     Task(Box<crate::model::Task>),
-    ExpandGroup(String),   // parent_uid
-    CollapseGroup(String), // parent_uid
+    ExpandGroup(String, usize),   // parent_uid, depth
+    CollapseGroup(String, usize), // parent_uid, depth
 }
 
 /// Result container returned by the `filter` pipeline.
@@ -168,7 +168,7 @@ pub fn organize_hierarchy(
             }
             context
                 .result
-                .push(TaskListItem::CollapseGroup(effective_key));
+                .push(TaskListItem::CollapseGroup(effective_key, depth));
         } else if done.len() > limit {
             let count_to_show = limit.saturating_sub(1);
             let mut iter = done.into_iter();
@@ -180,7 +180,7 @@ pub fn organize_hierarchy(
             }
             context
                 .result
-                .push(TaskListItem::ExpandGroup(effective_key));
+                .push(TaskListItem::ExpandGroup(effective_key, depth));
         } else {
             for task in done {
                 append_task_and_children(&task, context, depth);
@@ -216,7 +216,7 @@ pub fn organize_hierarchy(
                     }
                     context
                         .result
-                        .push(TaskListItem::CollapseGroup(task.uid.clone()));
+                        .push(TaskListItem::CollapseGroup(task.uid.clone(), depth + 1));
                 } else if done.len() > context.max_done_subtasks {
                     let show = context.max_done_subtasks.saturating_sub(1);
                     let mut iter = done.into_iter();
@@ -227,7 +227,7 @@ pub fn organize_hierarchy(
                     }
                     context
                         .result
-                        .push(TaskListItem::ExpandGroup(task.uid.clone()));
+                        .push(TaskListItem::ExpandGroup(task.uid.clone(), depth + 1));
                 } else {
                     for child in done {
                         append_task_and_children(&child, context, depth + 1);
@@ -404,12 +404,37 @@ impl TaskStore {
     /// Replace or insert an entire calendar's tasks.
     /// This sets up the internal uid index and rebuilds relation indices for correctness.
     pub fn insert(&mut self, calendar_href: String, tasks: Vec<Task>) {
-        let mut map = HashMap::new();
+        let mut new_map = HashMap::new();
+        let mut uids_to_add = Vec::new();
+
         for task in tasks {
-            self.index.insert(task.uid.clone(), calendar_href.clone());
-            map.insert(task.uid.clone(), task);
+            uids_to_add.push(task.uid.clone());
+            new_map.insert(task.uid.clone(), task);
         }
-        self.calendars.insert(calendar_href, map);
+
+        // Cleanup old calendars if tasks moved
+        for uid in &uids_to_add {
+            if let Some(old_href) = self.index.get(uid)
+                && old_href != &calendar_href {
+                    let old_href_clone = old_href.clone();
+                    if let Some(old_map) = self.calendars.get_mut(&old_href_clone) {
+                        old_map.remove(uid);
+                    }
+                }
+            self.index.insert(uid.clone(), calendar_href.clone());
+        }
+
+        // Cleanup index for tasks that were in this calendar but are now gone
+        if let Some(old_map) = self.calendars.get(&calendar_href) {
+            for uid in old_map.keys() {
+                if !new_map.contains_key(uid)
+                    && self.index.get(uid) == Some(&calendar_href) {
+                        self.index.remove(uid);
+                    }
+            }
+        }
+
+        self.calendars.insert(calendar_href, new_map);
         self.rebuild_relation_index();
     }
 
@@ -450,10 +475,12 @@ impl TaskStore {
                 }
             } else {
                 // Task was moved between calendars: remove from old map and insert in new
-                if let Some(map) = self.calendars.get_mut(existing_href)
-                    && let Some(old) = map.remove(&uid) {
-                        self.remove_task_from_indices(&old);
-                    }
+                let existing_href_clone = existing_href.clone();
+                if let Some(map) = self.calendars.get_mut(&existing_href_clone)
+                    && let Some(old) = map.remove(&uid)
+                {
+                    self.remove_task_from_indices(&old);
+                }
                 self.index.insert(uid.clone(), href.clone());
                 self.calendars
                     .entry(href.clone())

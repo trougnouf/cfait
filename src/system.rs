@@ -49,6 +49,7 @@ pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool) {
         .add_filter_ignore_str("iced_wgpu")
         .add_filter_ignore_str("wgpu_core")
         .add_filter_ignore_str("wgpu_hal")
+        .add_filter_ignore_str("calloop")
         .build();
 
     // File logger: creates a fresh cfait.log for this session

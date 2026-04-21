@@ -1408,12 +1408,12 @@ pub async fn handle_key_event(
                         && let Some(task_item) = state.tasks.get(idx)
                     {
                         match task_item {
-                            TaskListItem::ExpandGroup(key) => {
+                            TaskListItem::ExpandGroup(key, _) => {
                                 state.expanded_done_groups.insert(key.clone());
                                 state.refresh_filtered_view();
                                 return None;
                             }
-                            TaskListItem::CollapseGroup(key) => {
+                            TaskListItem::CollapseGroup(key, _) => {
                                 state.expanded_done_groups.remove(key);
                                 state.refresh_filtered_view();
                                 return None;

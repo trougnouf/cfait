@@ -26,8 +26,13 @@ pub fn view_task_row<'a>(
     row_id: iced::widget::Id,
 ) -> Element<'a, Message> {
     match item {
-        crate::store::TaskListItem::ExpandGroup(key) => {
-            let indent = Space::new().width(Length::Fixed(0.0));
+        crate::store::TaskListItem::ExpandGroup(key, depth) => {
+            let indent_size = if app.active_cal_href.is_some() {
+                *depth * 12
+            } else {
+                0
+            };
+            let indent = Space::new().width(Length::Fixed(indent_size as f32));
             let btn = button(
                 icon::icon(icon::ARROW_EXPAND_DOWN)
                     .size(16)
@@ -36,10 +41,16 @@ pub fn view_task_row<'a>(
             .style(iced::widget::button::text)
             .width(Length::Fill)
             .on_press(Message::ToggleDoneGroup(key.clone()));
-            row![indent, btn].into()
+            // FIX: Wrap in `focusable` to ensure uniform state trees across the keyed_column
+            focusable(row![indent, btn]).id(row_id).into()
         }
-        crate::store::TaskListItem::CollapseGroup(key) => {
-            let indent = Space::new().width(Length::Fixed(0.0));
+        crate::store::TaskListItem::CollapseGroup(key, depth) => {
+            let indent_size = if app.active_cal_href.is_some() {
+                *depth * 12
+            } else {
+                0
+            };
+            let indent = Space::new().width(Length::Fixed(indent_size as f32));
             let btn = button(
                 icon::icon(icon::ARROW_EXPAND_UP)
                     .size(16)
@@ -48,8 +59,8 @@ pub fn view_task_row<'a>(
             .style(iced::widget::button::text)
             .width(Length::Fill)
             .on_press(Message::ToggleDoneGroup(key.clone()));
-
-            row![indent, btn].into()
+            // FIX: Wrap in `focusable` to ensure uniform state trees across the keyed_column
+            focusable(row![indent, btn]).id(row_id).into()
         }
         crate::store::TaskListItem::Task(task) => {
             let is_blocked = task.is_blocked;

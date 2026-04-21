@@ -212,6 +212,12 @@ pub fn scroll_to_selected(app: &GuiApp, focus: bool) -> Task<Message> {
         let id_opt = app.task_ids.get(uid).cloned();
         let idx_opt = app.find_task_index_by_uid(uid);
 
+        // If the task was completely filtered out (e.g. search didn't match), do NOT try to scroll to it.
+        // Doing so would query a floating `Id` that is not attached to the layout tree!
+        if idx_opt.is_none() {
+            return Task::none();
+        }
+
         if let (Some(id), Some(idx)) = (id_opt.clone(), idx_opt) {
             if let Some(rect) = get_focus_bounds(&id) {
                 // When available, use the union of all registered bounds to compute

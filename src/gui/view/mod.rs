@@ -1552,7 +1552,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     }
 
     // We use a hasher to create a stable, `Copy`-able u64 key for the keyed_column
-    use std::collections::hash_map::DefaultHasher;
+
     use std::hash::{Hash, Hasher};
 
     let tasks_view =
@@ -1566,20 +1566,25 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
                 _ => iced::widget::Id::unique(),
             };
 
-            // Generate a unique, stable u64 key for each row
-            let mut hasher = DefaultHasher::new();
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
             match item {
                 crate::store::TaskListItem::Task(t) => {
+                    // STABLE KEY: Use only the UID.
+                    // This allows the task to move without losing focus/state.
                     0u8.hash(&mut hasher);
                     t.uid.hash(&mut hasher);
                 }
-                crate::store::TaskListItem::ExpandGroup(k) => {
+                crate::store::TaskListItem::ExpandGroup(k, _) => {
+                    // POSITION KEY: Use index.
+                    // Virtual rows don't have unique UIDs, so we pin them to position.
                     1u8.hash(&mut hasher);
                     k.hash(&mut hasher);
+                    real_index.hash(&mut hasher);
                 }
-                crate::store::TaskListItem::CollapseGroup(k) => {
+                crate::store::TaskListItem::CollapseGroup(k, _) => {
                     2u8.hash(&mut hasher);
                     k.hash(&mut hasher);
+                    real_index.hash(&mut hasher);
                 }
             };
             let key = hasher.finish();
