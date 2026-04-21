@@ -364,7 +364,25 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::SearchChanged(action) => {
             app.search_value.perform(action);
-            refresh_filtered_tasks(app);
+
+            // Increment the debounce version
+            app.search_debounce_version = app.search_debounce_version.wrapping_add(1);
+            let version = app.search_debounce_version;
+
+            // Wait 250ms before applying the filter
+            Task::perform(
+                async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+                    version
+                },
+                Message::ApplySearch,
+            )
+        }
+        Message::ApplySearch(version) => {
+            // Only refresh if the user hasn't typed anything else
+            if version == app.search_debounce_version {
+                refresh_filtered_tasks(app);
+            }
             Task::none()
         }
         Message::ClearSearch => {

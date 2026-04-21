@@ -163,6 +163,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SelectCalendar(_)
         | Message::ToggleCalendarDisabled(_, _)
         | Message::SearchChanged(_)
+        | Message::ApplySearch(_)
         | Message::ClearSearch
         | Message::SetMinDuration(_)
         | Message::SetMaxDuration(_)

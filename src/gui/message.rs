@@ -44,6 +44,7 @@ pub enum Message {
     StartCreateWithDescription, // <-- NEW
     DescriptionChanged(text_editor::Action),
     SearchChanged(text_editor::Action),
+    ApplySearch(usize),
     ClearSearch,
     SubmitTask,
     ToggleTask(usize, bool),

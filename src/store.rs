@@ -365,6 +365,42 @@ impl TaskStore {
         !self.index.is_empty()
     }
 
+    // --- INCREMENTAL INDEX HELPERS ---
+    fn remove_task_from_indices(&mut self, task: &Task) {
+        for r in &task.related_to {
+            if let Some(sources) = self.related_from_index.get_mut(r) {
+                sources.retain(|u| u != &task.uid);
+                if sources.is_empty() {
+                    self.related_from_index.remove(r);
+                }
+            }
+        }
+        for dep in &task.dependencies {
+            if let Some(list) = self.blocking_index.get_mut(dep) {
+                list.retain(|u| u != &task.uid);
+                if list.is_empty() {
+                    self.blocking_index.remove(dep);
+                }
+            }
+        }
+    }
+
+    fn add_task_to_indices(&mut self, task: &Task) {
+        for r in &task.related_to {
+            self.related_from_index
+                .entry(r.clone())
+                .or_default()
+                .push(task.uid.clone());
+        }
+        for dep in &task.dependencies {
+            self.blocking_index
+                .entry(dep.clone())
+                .or_default()
+                .push(task.uid.clone());
+        }
+    }
+    // --------------------------------
+
     /// Replace or insert an entire calendar's tasks.
     /// This sets up the internal uid index and rebuilds relation indices for correctness.
     pub fn insert(&mut self, calendar_href: String, tasks: Vec<Task>) {
@@ -382,11 +418,17 @@ impl TaskStore {
     pub fn add_task(&mut self, task: Task) {
         let href = task.calendar_href.clone();
         self.index.insert(task.uid.clone(), href.clone());
-        self.calendars
+
+        if let Some(old) = self
+            .calendars
             .entry(href)
             .or_default()
-            .insert(task.uid.clone(), task);
-        self.rebuild_relation_index();
+            .insert(task.uid.clone(), task.clone())
+        {
+            self.remove_task_from_indices(&old);
+        }
+
+        self.add_task_to_indices(&task);
     }
 
     /// Update an existing task or insert it if missing. This method attempts to handle
@@ -397,23 +439,26 @@ impl TaskStore {
         if let Some(existing_href) = self.index.get(&uid) {
             if existing_href == &href {
                 if let Some(map) = self.calendars.get_mut(&href) {
-                    map.insert(uid.clone(), task);
+                    if let Some(old) = map.insert(uid.clone(), task.clone()) {
+                        self.remove_task_from_indices(&old);
+                    }
                 } else {
                     self.calendars
                         .entry(href.clone())
                         .or_default()
-                        .insert(uid.clone(), task);
+                        .insert(uid.clone(), task.clone());
                 }
             } else {
                 // Task was moved between calendars: remove from old map and insert in new
-                if let Some(map) = self.calendars.get_mut(existing_href) {
-                    map.remove(&uid);
-                }
+                if let Some(map) = self.calendars.get_mut(existing_href)
+                    && let Some(old) = map.remove(&uid) {
+                        self.remove_task_from_indices(&old);
+                    }
                 self.index.insert(uid.clone(), href.clone());
                 self.calendars
                     .entry(href.clone())
                     .or_default()
-                    .insert(uid.clone(), task);
+                    .insert(uid.clone(), task.clone());
             }
         } else {
             // New task
@@ -421,9 +466,9 @@ impl TaskStore {
             self.calendars
                 .entry(href.clone())
                 .or_default()
-                .insert(uid.clone(), task);
+                .insert(uid.clone(), task.clone());
         }
-        self.rebuild_relation_index();
+        self.add_task_to_indices(&task);
     }
 
     /// Remove all tasks and indices from the store.
@@ -472,7 +517,7 @@ impl TaskStore {
             && let Some(task) = map.remove(uid)
         {
             self.index.remove(uid);
-            self.rebuild_relation_index();
+            self.remove_task_from_indices(&task);
             return Some((task, href));
         }
         None

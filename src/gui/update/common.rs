@@ -171,7 +171,14 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.max_done_roots = app.ob_max_done_roots_input.parse().unwrap_or(20);
     cfg.max_done_subtasks = app.ob_max_done_subtasks_input.parse().unwrap_or(5);
 
-    let _ = cfg.save(app.ctx.as_ref());
+    // --- ASYNC SAVE FIX ---
+    let ctx_clone = app.ctx.clone();
+    let cfg_clone = cfg.clone();
+    std::thread::spawn(move || {
+        let _ = cfg_clone.save(ctx_clone.as_ref());
+    });
+    // ----------------------
+
     cfg
 }
 
