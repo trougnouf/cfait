@@ -914,24 +914,39 @@ impl RustyClient {
             }
 
             if !to_fetch.is_empty() {
-                let fetched_resp = client
-                    .request(GetCalendarResources::new(&path_href).with_hrefs(to_fetch))
-                    .await
-                    .map_err(|e| format!("MULTIGET: {:?}", e))?;
+                // Chunk requests to prevent exceeding server body size limits (e.g. Nginx 8k/16k buffer)
+                // 150 tasks per chunk translates to ~10-15KB of XML.
+                let chunks: Vec<Vec<String>> = to_fetch.chunks(150).map(|c| c.to_vec()).collect();
 
-                for item in fetched_resp.resources {
-                    if let Ok(content) = item.content
-                        && let Ok(task) = IcsAdapter::from_ics(
-                            &content.data,
-                            content.etag,
-                            item.href,
-                            calendar_href.to_string(),
-                        )
-                    {
-                        if apply_journal && pending_deletions.contains(&task.uid) {
-                            continue;
+                let futures = chunks.into_iter().map(|chunk| {
+                    let c = client.clone();
+                    let p = path_href.clone();
+                    async move {
+                        c.request(GetCalendarResources::new(&p).with_hrefs(chunk))
+                            .await
+                    }
+                });
+
+                // Fetch up to 4 chunks concurrently to saturate bandwidth safely
+                let mut stream = stream::iter(futures).buffer_unordered(4);
+
+                while let Some(res) = stream.next().await {
+                    let fetched_resp = res.map_err(|e| format!("MULTIGET: {:?}", e))?;
+
+                    for item in fetched_resp.resources {
+                        if let Ok(content) = item.content
+                            && let Ok(task) = IcsAdapter::from_ics(
+                                &content.data,
+                                content.etag,
+                                item.href,
+                                calendar_href.to_string(),
+                            )
+                        {
+                            if apply_journal && pending_deletions.contains(&task.uid) {
+                                continue;
+                            }
+                            final_tasks.push(task);
                         }
-                        final_tasks.push(task);
                     }
                 }
             }
