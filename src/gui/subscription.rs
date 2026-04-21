@@ -13,6 +13,9 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
 
     let mut subs = Vec::new();
 
+    // Start background syncing worker
+    subs.push(crate::gui::async_ops::worker_subscription(app.ctx.clone()));
+
     if matches!(app.state, AppState::Onboarding | AppState::Settings) {
         subs.push(keyboard::listen().filter_map(|event| {
             if let keyboard::Event::KeyPressed { key, modifiers, .. } = event

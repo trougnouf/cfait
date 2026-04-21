@@ -52,6 +52,7 @@ pub struct GuiApp {
     pub calendars: Vec<CalendarListEntry>,
     pub client: Option<RustyClient>,
     pub tag_aliases: HashMap<String, Vec<String>>,
+    pub bg_tx: Option<tokio::sync::mpsc::Sender<crate::gui::async_ops::WorkerCommand>>,
 
     // Cached Sidebar Data (computed once, not in view())
     pub cached_categories: Vec<(String, usize)>,
@@ -310,6 +311,7 @@ impl Default for GuiApp {
             calendars: vec![],
             client: None,
             tag_aliases: HashMap::new(),
+            bg_tx: None,
 
             cached_categories: Vec::new(),
             cached_locations: Vec::new(),

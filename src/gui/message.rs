@@ -24,9 +24,6 @@ pub type LoadedResult = Result<
     String,
 >;
 
-/// Result type for controller actions containing updated tasks and deleted UIDs
-pub type ControllerActionResult = Result<(Vec<TodoTask>, Vec<String>), String>;
-
 #[derive(Debug, Clone)]
 pub enum Message {
     // --- Settings & Onboarding ---
@@ -166,8 +163,6 @@ pub enum Message {
     ObSortMonthsChanged(String),
     ThemeChanged(AppTheme),
     Loaded(LoadedResult),
-    // Replaces the old store-wrapping signature:
-    ControllerActionComplete(Box<ControllerActionResult>),
     TasksRefreshed(Result<(String, Vec<TodoTask>), String>),
     RefreshedAll(Result<Vec<(String, Vec<TodoTask>)>, String>),
     MigrationComplete(Result<usize, String>),
@@ -175,6 +170,9 @@ pub enum Message {
     DismissError,
     ToggleAllCalendars(bool),
     Tick,
+    InitBackgroundWorker(mpsc::Sender<crate::gui::async_ops::WorkerCommand>),
+    BackgroundSyncComplete(Vec<TodoTask>),
+    BackgroundSyncFailed,
 
     // --- Window Management ---
     WindowDragged,

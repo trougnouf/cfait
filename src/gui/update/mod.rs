@@ -30,6 +30,9 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
     let task = match message {
         Message::FontLoaded(_) => Task::none(),
         Message::Tick => Task::none(), // Just forces a view redraw
+        Message::InitBackgroundWorker(_)
+        | Message::BackgroundSyncComplete(_)
+        | Message::BackgroundSyncFailed => network::handle(app, message),
 
         Message::ConfigLoaded(_)
         | Message::ObUrlChanged(_)
@@ -201,7 +204,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::Loaded(_)
         | Message::RefreshedAll(_)
         | Message::TasksRefreshed(_)
-        | Message::ControllerActionComplete(_)
         | Message::MigrationComplete(_) => network::handle(app, message),
 
         Message::OpenContextMenu(..) | Message::CloseContextMenu | Message::CursorMoved(_) => {

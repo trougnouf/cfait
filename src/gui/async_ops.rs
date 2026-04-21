@@ -4,9 +4,17 @@
 use crate::client::RustyClient;
 use crate::config::Config;
 use crate::context::AppContext;
+use crate::journal::{Action, Journal};
 use crate::model::{CalendarListEntry, Task as TodoTask};
+use crate::storage::LocalStorage;
 use futures::stream::{self, StreamExt};
+use iced::futures::SinkExt;
+use iced::futures::channel::mpsc::Sender as IcedSender;
+use iced::stream as iced_stream;
+
 use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio::time::{Duration, sleep};
 
 // --- WRAPPERS ---
 
@@ -94,101 +102,182 @@ pub async fn async_fetch_all_wrapper(
     }
 }
 
-use crate::controller::TaskController;
-use crate::store::TaskStore;
-use tokio::sync::Mutex;
-
-pub enum ControllerAction {
-    Create(TodoTask),
-    Update(TodoTask),
-    Delete(String),
-    DeleteTree(String),
-    Toggle(String),
-    Move(String, String),
-    DuplicateTree(String),
+#[derive(Debug, Clone)]
+pub enum WorkerCommand {
+    UpdateClient(Option<RustyClient>),
+    Batch(Vec<Action>),
+    SyncNow,
 }
 
-pub async fn async_controller_dispatch(
+pub fn spawn_background_worker(
+    ui_tx: mpsc::Sender<crate::gui::message::Message>,
     ctx: Arc<dyn AppContext>,
-    client: Option<RustyClient>,
-    store: TaskStore,
-    action: ControllerAction,
-) -> anyhow::Result<(Vec<TodoTask>, Vec<String>)> {
-    let store_arc = Arc::new(Mutex::new(store.clone()));
-    let client_arc = Arc::new(Mutex::new(client));
-    let controller = TaskController::new(store_arc.clone(), client_arc, ctx);
+) -> mpsc::Sender<WorkerCommand> {
+    let (tx, mut rx) = mpsc::channel::<WorkerCommand>(100);
 
-    // Record UIDs present before the action executes to detect deletions
-    let mut before_uids = std::collections::HashSet::new();
-    for map in store.calendars.values() {
-        for uid in map.keys() {
-            before_uids.insert(uid.clone());
-        }
-    }
+    tokio::spawn(async move {
+        let mut client: Option<RustyClient> = None;
+        let mut sync_pending = false;
 
-    let action_future = async move {
-        match action {
-            ControllerAction::Create(t) => {
-                let _ = controller.create_task(t).await;
-            }
-            ControllerAction::Update(t) => {
-                let _ = controller.update_task(t).await;
-            }
-            ControllerAction::Delete(uid) => {
-                let _ = controller.delete_task(&uid).await;
-            }
-            ControllerAction::DeleteTree(uid) => {
-                let _ = controller.delete_task_tree(&uid).await;
-            }
-            ControllerAction::Toggle(uid) => {
-                let _ = controller.toggle_task(&uid).await;
-            }
-            ControllerAction::Move(uid, href) => {
-                let _ = controller.move_task(&uid, &href).await;
-            }
-            ControllerAction::DuplicateTree(uid) => {
-                let _ = controller.duplicate_task_tree(&uid).await;
-            }
-        }
-    };
+        loop {
+            tokio::select! {
+                cmd = rx.recv() => {
+                    match cmd {
+                        Some(WorkerCommand::UpdateClient(c)) => {
+                            client = c;
+                        }
+                        Some(WorkerCommand::Batch(actions)) => {
+                            let mut local_actions = Vec::new();
+                            let mut remote_actions = Vec::new();
 
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(60), action_future).await;
+                            for action in actions {
+                                match action {
+                                    Action::Create(t) | Action::Update(t) => {
+                                        if t.calendar_href.starts_with("local://") {
+                                            local_actions.push(Action::Create(t));
+                                        } else {
+                                            remote_actions.push(Action::Update(t));
+                                        }
+                                    }
+                                    Action::Delete(t) => {
+                                        if t.calendar_href.starts_with("local://") {
+                                            local_actions.push(Action::Delete(t));
+                                        } else {
+                                            remote_actions.push(Action::Delete(t));
+                                        }
+                                    }
+                                    Action::Move(t, target) => {
+                                        if t.calendar_href.starts_with("local://") && target.starts_with("local://") {
+                                            local_actions.push(Action::Move(t, target));
+                                        } else if t.calendar_href.starts_with("local://") && !target.starts_with("local://") {
+                                            local_actions.push(Action::Delete(t.clone()));
+                                            let mut moved = t.clone();
+                                            moved.calendar_href = target.clone();
+                                            moved.href = String::new();
+                                            moved.etag = String::new();
+                                            remote_actions.push(Action::Create(moved));
+                                        } else if !t.calendar_href.starts_with("local://") && target.starts_with("local://") {
+                                            remote_actions.push(Action::Delete(t.clone()));
+                                            let mut moved = t.clone();
+                                            moved.calendar_href = target.clone();
+                                            local_actions.push(Action::Create(moved));
+                                        } else {
+                                            remote_actions.push(Action::Move(t, target));
+                                        }
+                                    }
+                                }
+                            }
 
-    let updated_store = store_arc.lock().await;
+                            // Process local actions immediately
+                            for action in local_actions {
+                                match action {
+                                    Action::Create(t) | Action::Update(t) => {
+                                        let _ = LocalStorage::modify_for_href(ctx.as_ref(), &t.calendar_href, |all| {
+                                            if let Some(idx) = all.iter().position(|item| item.uid == t.uid) {
+                                                all[idx] = t.clone();
+                                            } else {
+                                                all.push(t.clone());
+                                            }
+                                        });
+                                    }
+                                    Action::Delete(t) => {
+                                        let _ = LocalStorage::modify_for_href(ctx.as_ref(), &t.calendar_href, |all| {
+                                            all.retain(|item| item.uid != t.uid);
+                                        });
+                                    }
+                                    Action::Move(t, target) => {
+                                        let _ = LocalStorage::modify_for_href(ctx.as_ref(), &t.calendar_href, |all| {
+                                            all.retain(|item| item.uid != t.uid);
+                                        });
+                                        let mut moved = t.clone();
+                                        moved.calendar_href = target.clone();
+                                        let _ = LocalStorage::modify_for_href(ctx.as_ref(), &target, |all| {
+                                            all.push(moved);
+                                        });
+                                    }
+                                }
+                            }
 
-    let mut updated_tasks = Vec::new();
-    let mut after_uids = std::collections::HashSet::new();
-
-    // Only return tasks that have been mutated (e.g. given an ETag by the server)
-    for map in updated_store.calendars.values() {
-        for (uid, task) in map {
-            after_uids.insert(uid.clone());
-
-            let mut changed = false;
-            if !before_uids.contains(uid) {
-                changed = true; // Task is entirely new
-            } else if let Some(old_task) = store.get_task_ref(uid)
-                && (old_task.etag != task.etag
-                    || old_task.href != task.href
-                    || old_task.calendar_href != task.calendar_href)
-                {
-                    changed = true; // Metadata changed over the network
+                            // Process remote actions via Journal with automatic compaction
+                            if !remote_actions.is_empty() {
+                                let _ = Journal::modify(ctx.as_ref(), |queue| {
+                                    queue.extend(remote_actions);
+                                    let mut tmp_j = Journal { queue: std::mem::take(queue) };
+                                    tmp_j.compact();
+                                    *queue = tmp_j.queue;
+                                });
+                                sync_pending = true;
+                            }
+                        }
+                        Some(WorkerCommand::SyncNow) => {
+                            sync_pending = true;
+                        }
+                        None => break,
+                    }
                 }
-
-            if changed {
-                updated_tasks.push(task.clone());
+                // Debounce network synchronization by 500ms
+                _ = sleep(Duration::from_millis(500)), if sync_pending => {
+                    sync_pending = false;
+                    if let Some(c) = &client {
+                        if let Ok((_warns, synced_tasks)) = c.sync_journal().await {
+                            if !synced_tasks.is_empty() {
+                                let _ = ui_tx.send(crate::gui::message::Message::BackgroundSyncComplete(synced_tasks)).await;
+                            }
+                        } else {
+                            let _ = ui_tx.send(crate::gui::message::Message::BackgroundSyncFailed).await;
+                        }
+                    }
+                }
             }
         }
-    }
+    });
 
-    let mut deleted_uids = Vec::new();
-    for uid in before_uids {
-        if !after_uids.contains(&uid) {
-            deleted_uids.push(uid);
-        }
-    }
+    tx
+}
 
-    Ok((updated_tasks, deleted_uids))
+#[derive(Clone)]
+struct WorkerData(Arc<dyn AppContext>);
+
+impl std::hash::Hash for WorkerData {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::any::TypeId::of::<Self>().hash(state);
+    }
+}
+
+impl PartialEq for WorkerData {
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+impl Eq for WorkerData {}
+
+pub fn worker_subscription(
+    ctx: Arc<dyn AppContext>,
+) -> iced::Subscription<crate::gui::message::Message> {
+    iced::Subscription::run_with(WorkerData(ctx), |data| {
+        let ctx = data.0.clone();
+        iced_stream::channel(
+            100,
+            move |mut output: IcedSender<crate::gui::message::Message>| {
+                let ctx = ctx.clone();
+                async move {
+                    let (gui_tx, mut gui_rx) = tokio::sync::mpsc::channel(100);
+                    let worker_tx = spawn_background_worker(gui_tx, ctx);
+
+                    let _ = output
+                        .send(crate::gui::message::Message::InitBackgroundWorker(
+                            worker_tx,
+                        ))
+                        .await;
+
+                    while let Some(msg) = gui_rx.recv().await {
+                        let _ = output.send(msg).await;
+                    }
+                    std::future::pending::<()>().await;
+                }
+            },
+        )
+    })
 }
 
 pub async fn async_migrate_wrapper(

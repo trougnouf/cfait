@@ -21,10 +21,10 @@
 */
 
 use crate::config::Config;
-use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
 use crate::gui::view::focusable::{clear_focus_bounds, get_all_focus_bounds, get_focus_bounds};
+use crate::journal::Action;
 use crate::store::FilterOptions;
 use crate::system::SystemEvent;
 
@@ -183,32 +183,15 @@ pub fn apply_alias_retroactively(
     app: &mut GuiApp,
     alias_key: &str,
     target_tags: &[String],
-) -> Option<Task<Message>> {
+) -> Vec<Action> {
     let modified_tasks = app.store.apply_alias_retroactively(alias_key, target_tags);
 
     if modified_tasks.is_empty() {
-        return None;
+        return Vec::new();
     }
 
     refresh_filtered_tasks(app);
-
-    if let Some(_client) = &app.client {
-        let mut commands = Vec::new();
-        for t in modified_tasks {
-            commands.push(Task::perform(
-                async_controller_dispatch(
-                    app.ctx.clone(),
-                    app.client.clone(),
-                    app.store.clone(),
-                    ControllerAction::Update(t),
-                ),
-                |res| Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string()))),
-            ));
-        }
-        return Some(Task::batch(commands));
-    }
-
-    None
+    modified_tasks.into_iter().map(Action::Update).collect()
 }
 
 /// Scroll the main list to the selected task.

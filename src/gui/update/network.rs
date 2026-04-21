@@ -27,8 +27,40 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::InitBackgroundWorker(tx) => {
+            app.bg_tx = Some(tx.clone());
+            if let Some(client) = &app.client {
+                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::UpdateClient(Some(
+                    client.clone(),
+                )));
+            }
+            Task::none()
+        }
+        Message::BackgroundSyncComplete(synced_tasks) => {
+            for task in synced_tasks {
+                if let Some((existing, _)) = app.store.get_task_mut(&task.uid) {
+                    existing.etag = task.etag;
+                    existing.href = task.href;
+                }
+            }
+            app.last_sync_failed = false;
+            app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
+            // Zero UI refresh required!
+            Task::none()
+        }
+        Message::BackgroundSyncFailed => {
+            app.last_sync_failed = true;
+            app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
+            Task::none()
+        }
         Message::Loaded(Ok((client, mut cals, mut tasks, active, warning))) => {
             app.client = Some(client.clone());
+
+            if let Some(tx) = &app.bg_tx {
+                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::UpdateClient(Some(
+                    client.clone(),
+                )));
+            }
 
             if let Some(w) = warning {
                 app.error_msg = Some(w);
@@ -242,35 +274,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.loading = false;
             Task::none()
         }
-        Message::ControllerActionComplete(boxed_res) => match *boxed_res {
-            Ok((updated_tasks, deleted_uids)) => {
-                for task in updated_tasks {
-                    if let Some((existing, _)) = app.store.get_task_mut(&task.uid) {
-                        // Crucial: Only inject remote server attributes to prevent
-                        // overwriting local edits that occurred while network was resolving
-                        existing.etag = task.etag;
-                        existing.href = task.href;
-                    }
-                    // The dangerous `else` block was removed. If a task is missing here,
-                    // it means the user deleted it locally while the network was syncing.
-                }
-
-                for uid in deleted_uids {
-                    app.store.delete_task(&uid);
-                }
-
-                app.last_sync_failed = false;
-                app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
-                refresh_filtered_tasks(app);
-                Task::none()
-            }
-            Err(e) => {
-                log::error!("Controller Action Error: {}", e);
-                app.error_msg = Some(format!("Action Error: {}", e));
-                app.last_sync_failed = true;
-                Task::none()
-            }
-        },
         Message::MigrationComplete(Ok(count)) => {
             app.loading = false;
             app.error_msg = Some(format!("Migration complete. Moved {} tasks.", count));

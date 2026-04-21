@@ -256,9 +256,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             app.error_msg = None;
                             save_config(app);
 
-                            if let Some(task) = apply_alias_retroactively(app, &key, &tags) {
-                                return task;
-                            }
+                            let actions = apply_alias_retroactively(app, &key, &tags);
+                            if !actions.is_empty()
+                                && let Some(tx) = &app.bg_tx {
+                                    let _ = tx.try_send(
+                                        crate::gui::async_ops::WorkerCommand::Batch(actions),
+                                    );
+                                }
                         }
                         Err(e) => {
                             app.error_msg = Some(format!("Cannot add alias: {}", e));
