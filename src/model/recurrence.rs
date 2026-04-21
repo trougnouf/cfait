@@ -52,24 +52,25 @@ impl RecurrenceEngine {
             clean_rule.to_string()
         };
 
-        // Ensure UNTIL is also stripped of 'Z' so it matches the floating DTSTART
-        if let Some(idx) = final_rule_part.find("UNTIL=") {
-            let until_val_start = idx + 6;
-            let until_val_end = final_rule_part[until_val_start..]
-                .find(';')
-                .map(|i| until_val_start + i)
-                .unwrap_or(final_rule_part.len());
+        // Ensure UNTIL is strictly floating time (No 'Z') to match our local-naive DTSTART.
+        // Rebuild the RRULE string cleanly to avoid leaving dangling TZID parameters.
+        let parts: Vec<&str> = final_rule_part.split(';').collect();
+        let mut new_parts = Vec::new();
 
-            let until_val = final_rule_part[until_val_start..until_val_end].to_string();
-
-            if until_val.len() == 8 && !until_val.contains('T') {
-                let new_until = format!("{}T235959", until_val); // NO 'Z'
-                final_rule_part.replace_range(until_val_start..until_val_end, &new_until);
-            } else if until_val.ends_with('Z') {
-                let new_until = &until_val[..until_val.len() - 1]; // Strip the 'Z'
-                final_rule_part.replace_range(until_val_start..until_val_end, new_until);
+        for part in parts {
+            if let Some(until_val) = part.strip_prefix("UNTIL=") {
+                if until_val.len() == 8 && !until_val.contains('T') {
+                    new_parts.push(format!("UNTIL={}T235959", until_val));
+                } else if let Some(stripped) = until_val.strip_suffix('Z') {
+                    new_parts.push(format!("UNTIL={}", stripped));
+                } else {
+                    new_parts.push(part.to_string());
+                }
+            } else {
+                new_parts.push(part.to_string());
             }
         }
+        final_rule_part = new_parts.join(";");
 
         let rrule_string = format!("DTSTART:{}\nRRULE:{}\n", dtstart_str, final_rule_part);
 
