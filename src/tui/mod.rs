@@ -227,6 +227,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
         tag_aliases,
         sort_cutoff,
         allow_insecure,
+        enable_local_mode,
         hidden_calendars,
         disabled_calendars,
         urgent_days,
@@ -245,6 +246,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
         cfg.tag_aliases,
         cfg.sort_cutoff_months,
         cfg.allow_insecure_certs,
+        cfg.enable_local_mode,
         cfg.hidden_calendars,
         cfg.disabled_calendars,
         cfg.urgent_days_horizon,
@@ -271,6 +273,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     app_state.tag_aliases = tag_aliases;
     app_state.hidden_calendars = hidden_calendars.into_iter().collect();
     app_state.disabled_calendars = disabled_calendars.into_iter().collect();
+    app_state.local_mode_enabled = enable_local_mode;
     app_state.urgent_days = urgent_days;
     app_state.urgent_prio = urgent_prio;
     app_state.default_priority = default_priority;
@@ -297,6 +300,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
         user,
         pass,
         allow_insecure,
+        enable_local_mode,
         default_cal: default_cal.clone(),
     };
     tokio::spawn(network::run_network_actor(

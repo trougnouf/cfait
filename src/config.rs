@@ -123,6 +123,10 @@ fn default_urgent_prio() -> u8 {
     1
 }
 
+fn default_enable_local_mode() -> bool {
+    true
+}
+
 fn default_start_grace_period() -> u32 {
     1
 }
@@ -239,6 +243,8 @@ pub struct Config {
     pub disabled_calendars: Vec<String>,
 
     pub default_calendar: Option<String>,
+    #[serde(default = "default_enable_local_mode")]
+    pub enable_local_mode: bool,
     #[serde(default)]
     pub hide_completed: bool,
     #[serde(default)]
@@ -314,6 +320,7 @@ impl Default for Config {
             username: String::new(),
             password: String::new(),
             default_calendar: None,
+            enable_local_mode: true,
             allow_insecure_certs: false,
             hidden_calendars: Vec::new(),
             disabled_calendars: Vec::new(),
@@ -448,7 +455,14 @@ impl Config {
                 out.push_str(line);
             } else if trimmed.starts_with("default_calendar =") {
                 out.push_str(line);
-                out.push_str(" # String: Target for new tasks. HREF or 'local://default'.");
+                out.push_str(
+                    " # String: Target for new tasks. HREF or 'local://default' when local mode is enabled.",
+                );
+            } else if trimmed.starts_with("enable_local_mode =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Boolean: If false, TUI local/offline calendars are hidden and new tasks target remote calendars only.",
+                );
             } else if trimmed.starts_with("hide_completed =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: If true, Completed/Cancelled tasks are hidden globally.");

@@ -54,6 +54,7 @@ pub struct AppState {
     pub active_cal_href: Option<String>,
     pub hidden_calendars: HashSet<String>,
     pub disabled_calendars: HashSet<String>,
+    pub local_mode_enabled: bool,
     pub selected_categories: HashSet<String>,
     pub selected_locations: HashSet<String>, // NEW
     pub match_all_categories: bool,
@@ -92,8 +93,8 @@ pub struct AppState {
 
     pub yanked_uid: Option<String>,
     pub creating_child_of: Option<String>,
-    pub creating_with_desc: bool,     // <-- NEW
-    pub new_task_title: String,       // <-- NEW
+    pub creating_with_desc: bool, // <-- NEW
+    pub new_task_title: String,   // <-- NEW
     pub tag_aliases: HashMap<String, Vec<String>>,
 
     // Relationship browsing state
@@ -153,6 +154,7 @@ impl AppState {
             active_cal_href: None,
             hidden_calendars: HashSet::new(),
             disabled_calendars: HashSet::new(),
+            local_mode_enabled: true,
             selected_categories: HashSet::new(),
             selected_locations: HashSet::new(), // Init
             match_all_categories: true,
@@ -208,6 +210,7 @@ impl AppState {
     pub fn get_filtered_calendars(&self) -> Vec<&CalendarListEntry> {
         self.calendars
             .iter()
+            .filter(|c| self.local_mode_enabled || !c.href.starts_with("local://"))
             .filter(|c| !self.disabled_calendars.contains(&c.href))
             .filter(|c| {
                 if c.href == crate::storage::LOCAL_TRASH_HREF || c.href == "local://recovery" {
@@ -239,6 +242,13 @@ impl AppState {
 
         let mut effective_hidden = self.hidden_calendars.clone();
         effective_hidden.extend(self.disabled_calendars.clone());
+        if !self.local_mode_enabled {
+            for href in self.store.calendars.keys() {
+                if href.starts_with("local://") {
+                    effective_hidden.insert(href.clone());
+                }
+            }
+        }
 
         // Load config to get limits
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
