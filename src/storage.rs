@@ -294,6 +294,14 @@ impl LocalStorage {
                 (Self::migrate_v1_to_v2(&json)?, true)
             };
 
+        // Safely catch corrupted UIDs (e.g. from manual user edits to local.json)
+        for t in tasks.iter_mut() {
+            if t.uid.trim().is_empty() {
+                t.uid = uuid::Uuid::new_v4().to_string();
+                needs_save = true;
+            }
+        }
+
         // DEDUPLICATION FIX
         let len_before = tasks.len();
         let mut uid_to_index = HashMap::new();
