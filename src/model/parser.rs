@@ -770,7 +770,13 @@ fn collect_alias_expansions(
     token: &str,
     aliases: &HashMap<String, Vec<String>>,
     visited: &mut HashSet<String>,
+    depth: usize,
 ) -> Vec<String> {
+    // Hard limit to prevent stack overflows from manually corrupted config files
+    if depth > 10 {
+        return Vec::new();
+    }
+
     let mut results = Vec::new();
     let mut search_key: Option<String> = None;
 
@@ -821,7 +827,7 @@ fn collect_alias_expansions(
             }
             visited.insert(matched_key);
             for val in values {
-                let child_expansions = collect_alias_expansions(val, aliases, visited);
+                let child_expansions = collect_alias_expansions(val, aliases, visited, depth + 1);
                 results.extend(child_expansions);
                 results.push(val.clone());
             }
@@ -1601,7 +1607,7 @@ pub fn apply_smart_input(
     let mut visited = HashSet::new();
 
     for token in &user_tokens {
-        let expanded = collect_alias_expansions(token, aliases, &mut visited);
+        let expanded = collect_alias_expansions(token, aliases, &mut visited, 0);
         background_tokens.extend(expanded);
     }
 
