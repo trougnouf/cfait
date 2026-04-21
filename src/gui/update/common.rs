@@ -202,7 +202,7 @@ pub fn apply_alias_retroactively(
                     app.store.clone(),
                     ControllerAction::Update(t),
                 ),
-                |res| Message::ControllerActionComplete(Box::new(res)),
+                |res| Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string()))),
             ));
         }
         return Some(Task::batch(commands));

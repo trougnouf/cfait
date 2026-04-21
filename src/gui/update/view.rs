@@ -243,10 +243,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if !app.store.calendars.contains_key(&href) {
                     app.loading = true;
                 }
-                return Task::perform(
-                    async_fetch_wrapper(client.clone(), href),
-                    Message::TasksRefreshed,
-                );
+                return Task::perform(async_fetch_wrapper(client.clone(), href), |res| {
+                    Message::TasksRefreshed(res.map_err(|e| e.to_string()))
+                });
             }
             Task::none()
         }
@@ -331,10 +330,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if !app.store.calendars.contains_key(&href) {
                     app.loading = true;
                 }
-                return Task::perform(
-                    async_fetch_wrapper(client.clone(), href),
-                    Message::TasksRefreshed,
-                );
+                return Task::perform(async_fetch_wrapper(client.clone(), href), |res| {
+                    Message::TasksRefreshed(res.map_err(|e| e.to_string()))
+                });
             }
             Task::none()
         }

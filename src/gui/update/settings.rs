@@ -107,10 +107,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             app.state = AppState::Active;
             app.loading = true;
-            Task::perform(
-                connect_and_fetch_wrapper(app.ctx.clone(), config),
-                Message::Loaded,
-            )
+            Task::perform(connect_and_fetch_wrapper(app.ctx.clone(), config), |res| {
+                Message::Loaded(res.map_err(|e| e.to_string()))
+            })
         }
         Message::ConfigLoaded(Err(e)) => {
             app.state = AppState::Onboarding;
@@ -166,7 +165,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             Task::perform(
                 connect_and_fetch_wrapper(app.ctx.clone(), config_to_save),
-                Message::Loaded,
+                |res| Message::Loaded(res.map_err(|e| e.to_string())),
             )
         }
         Message::OpenSettings => {
@@ -224,7 +223,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.state = AppState::Loading;
             Task::perform(
                 connect_and_fetch_wrapper(app.ctx.clone(), config_to_save),
-                Message::Loaded,
+                |res| Message::Loaded(res.map_err(|e| e.to_string())),
             )
         }
         Message::AliasKeyInput(v) => {
@@ -491,10 +490,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 // Grab all known calendar hrefs
                 let cals: Vec<String> = app.store.calendars.keys().cloned().collect();
 
-                return Task::perform(
-                    async_delete_all_events_wrapper(client, cals),
-                    Message::BackfillEventsComplete,
-                );
+                return Task::perform(async_delete_all_events_wrapper(client, cals), |res| {
+                    Message::BackfillEventsComplete(res.map_err(|e| e.to_string()))
+                });
             }
             Task::none()
         }
@@ -626,7 +624,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.loading = true;
                 return Task::perform(
                     async_fetch_all_wrapper(client.clone(), app.calendars.clone()),
-                    Message::RefreshedAll,
+                    |res| Message::RefreshedAll(res.map_err(|e| e.to_string())),
                 );
             }
             Task::none()

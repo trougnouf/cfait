@@ -108,7 +108,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.clone(),
                         ControllerAction::Toggle(task_uid),
                     ),
-                    |res| Message::ControllerActionComplete(Box::new(res)),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
                 );
             }
             Task::none()
@@ -135,7 +137,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.clone(),
                         ControllerAction::Delete(uid),
                     ),
-                    |res| Message::ControllerActionComplete(Box::new(res)),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
                 );
             }
             Task::none()
@@ -245,7 +249,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     app.store.clone(),
                     ControllerAction::DuplicateTree(uid),
                 ),
-                |res| Message::ControllerActionComplete(Box::new(res)),
+                |res| Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string()))),
             )
         }
 
@@ -266,7 +270,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     app.store.clone(),
                     ControllerAction::DeleteTree(uid),
                 ),
-                |res| Message::ControllerActionComplete(Box::new(res)),
+                |res| Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string()))),
             )
         }
 
@@ -328,7 +332,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             app.store.clone(),
                             ControllerAction::Update(updated),
                         ),
-                        |res| Message::ControllerActionComplete(Box::new(res)),
+                        |res| {
+                            Message::ControllerActionComplete(Box::new(
+                                res.map_err(|e| e.to_string()),
+                            ))
+                        },
                     );
                 }
             }
@@ -349,7 +357,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.clone(),
                         ControllerAction::Update(updated),
                     ),
-                    |res| Message::ControllerActionComplete(Box::new(res)),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
                 );
             }
             Task::none()
@@ -369,7 +379,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             app.store.clone(),
                             ControllerAction::Update(t),
                         ),
-                        |res| Message::ControllerActionComplete(Box::new(res)),
+                        |res| {
+                            Message::ControllerActionComplete(Box::new(
+                                res.map_err(|e| e.to_string()),
+                            ))
+                        },
                     ));
                 }
                 return Task::batch(commands);
@@ -391,7 +405,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             app.store.clone(),
                             ControllerAction::Update(t),
                         ),
-                        |res| Message::ControllerActionComplete(Box::new(res)),
+                        |res| {
+                            Message::ControllerActionComplete(Box::new(
+                                res.map_err(|e| e.to_string()),
+                            ))
+                        },
                     ));
                 }
                 return Task::batch(commands);
@@ -413,7 +431,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             app.store.clone(),
                             ControllerAction::Update(t),
                         ),
-                        |res| Message::ControllerActionComplete(Box::new(res)),
+                        |res| {
+                            Message::ControllerActionComplete(Box::new(
+                                res.map_err(|e| e.to_string()),
+                            ))
+                        },
                     ));
                 }
                 return Task::batch(commands);
@@ -521,7 +543,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.clone(),
                         ControllerAction::Update(updated),
                     ),
-                    |res| Message::ControllerActionComplete(Box::new(res)),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
                 );
             }
             Task::none()
@@ -538,7 +562,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.clone(),
                         ControllerAction::Update(updated),
                     ),
-                    |res| Message::ControllerActionComplete(Box::new(res)),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
                 );
             }
             Task::none()
@@ -555,7 +581,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.clone(),
                         ControllerAction::Update(updated),
                     ),
-                    |res| Message::ControllerActionComplete(Box::new(res)),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
                 );
             }
             Task::none()
@@ -572,7 +600,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.clone(),
                         ControllerAction::Update(updated),
                     ),
-                    |res| Message::ControllerActionComplete(Box::new(res)),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
                 );
             }
             Task::none()
@@ -596,7 +626,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.clone(),
                         ControllerAction::Update(updated),
                     ),
-                    |res| Message::ControllerActionComplete(Box::new(res)),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
                 );
             }
             Task::none()
@@ -620,7 +652,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.clone(),
                         ControllerAction::Update(updated),
                     ),
-                    |res| Message::ControllerActionComplete(Box::new(res)),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
                 );
             }
             Task::none()
@@ -647,7 +681,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     app.store.clone(),
                     ControllerAction::Move(task_uid, target_href),
                 ),
-                |res| Message::ControllerActionComplete(Box::new(res)),
+                |res| Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string()))),
             )
         }
 
@@ -665,7 +699,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if let Some(client) = &app.client {
                     return Task::perform(
                         async_migrate_wrapper(client.clone(), tasks_to_move, target_href),
-                        Message::MigrationComplete,
+                        |res| Message::MigrationComplete(res.map_err(|e| e.to_string())),
                     );
                 } else {
                     app.error_msg = Some("Cannot export while offline/connecting.".to_string());
@@ -733,7 +767,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.clone(),
                         ControllerAction::Update(t_clone),
                     ),
-                    |res| Message::ControllerActionComplete(Box::new(res)),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
                 );
             }
             Task::none()
@@ -752,7 +788,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         app.store.clone(),
                         ControllerAction::Update(t_clone),
                     ),
-                    |res| Message::ControllerActionComplete(Box::new(res)),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
                 );
             }
             Task::none()
@@ -804,7 +842,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             app.store.clone(),
                             crate::gui::async_ops::ControllerAction::Update(cloned),
                         ),
-                        |res| Message::ControllerActionComplete(Box::new(res)),
+                        |res| {
+                            Message::ControllerActionComplete(Box::new(
+                                res.map_err(|e| e.to_string()),
+                            ))
+                        },
                     );
                 }
             }
@@ -930,7 +972,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                     app.store.clone(),
                     ControllerAction::Update(task_copy),
                 ),
-                |res| Message::ControllerActionComplete(Box::new(res)),
+                |res| Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string()))),
             );
             retroactive_sync_batch.push(save_cmd);
             return Task::batch(retroactive_sync_batch);
@@ -986,7 +1028,9 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                         app.store.clone(),
                         ControllerAction::Create(sub),
                     ),
-                    |res| Message::ControllerActionComplete(Box::new(res)),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
                 ));
             }
 
@@ -1006,7 +1050,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                     app.store.clone(),
                     ControllerAction::Create(new_task),
                 ),
-                |res| Message::ControllerActionComplete(Box::new(res)),
+                |res| Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string()))),
             );
 
             let focus_cmd = iced::widget::operation::focus(iced::widget::Id::new("main_input"));

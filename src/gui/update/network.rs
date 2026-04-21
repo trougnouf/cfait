@@ -21,10 +21,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.client.is_some()
                 && let Ok(cfg) = Config::load(app.ctx.as_ref())
             {
-                return Task::perform(
-                    connect_and_fetch_wrapper(app.ctx.clone(), cfg),
-                    Message::Loaded,
-                );
+                return Task::perform(connect_and_fetch_wrapper(app.ctx.clone(), cfg), |res| {
+                    Message::Loaded(res.map_err(|e| e.to_string()))
+                });
             }
             Task::none()
         }
@@ -140,7 +139,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.error_msg.is_none() {
                 app.loading = true;
                 Task::batch(vec![
-                    Task::perform(async_fetch_all_wrapper(client, cals), Message::RefreshedAll),
+                    Task::perform(async_fetch_all_wrapper(client, cals), |res| {
+                        Message::RefreshedAll(res.map_err(|e| e.to_string()))
+                    }),
                     scroll_cmd,
                 ])
             } else {

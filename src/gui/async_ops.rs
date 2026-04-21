@@ -13,16 +13,13 @@ use std::sync::Arc;
 pub async fn connect_and_fetch_wrapper(
     ctx: Arc<dyn AppContext>,
     config: Config,
-) -> Result<
-    (
-        RustyClient,
-        Vec<CalendarListEntry>,
-        Vec<TodoTask>,
-        Option<String>,
-        Option<String>,
-    ),
-    String,
-> {
+) -> anyhow::Result<(
+    RustyClient,
+    Vec<CalendarListEntry>,
+    Vec<TodoTask>,
+    Option<String>,
+    Option<String>,
+)> {
     let ctx_clone = ctx.clone();
     let config_clone = config.clone();
     match tokio::time::timeout(
@@ -31,7 +28,7 @@ pub async fn connect_and_fetch_wrapper(
     )
     .await
     {
-        Ok(res) => res.map_err(|e| e.to_string()),
+        Ok(res) => res,
         Err(_) => {
             // Timeout occurred. Return offline fallback to avoid kicking user out.
             let client = RustyClient::new(
@@ -72,28 +69,28 @@ pub async fn connect_and_fetch_wrapper(
 pub async fn async_fetch_wrapper(
     client: RustyClient,
     href: String,
-) -> Result<(String, Vec<TodoTask>), String> {
+) -> anyhow::Result<(String, Vec<TodoTask>)> {
     match tokio::time::timeout(std::time::Duration::from_secs(30), client.get_tasks(&href)).await {
         Ok(res) => {
-            let tasks = res.map_err(|e| e.to_string())?;
+            let tasks = res?;
             Ok((href, tasks))
         }
-        Err(_) => Err(format!("Fetch timed out for calendar {}", href)),
+        Err(_) => Err(anyhow::anyhow!("Fetch timed out for calendar {}", href)),
     }
 }
 
 pub async fn async_fetch_all_wrapper(
     client: RustyClient,
     cals: Vec<CalendarListEntry>,
-) -> Result<Vec<(String, Vec<TodoTask>)>, String> {
+) -> anyhow::Result<Vec<(String, Vec<TodoTask>)>> {
     match tokio::time::timeout(
         std::time::Duration::from_secs(180),
         client.get_all_tasks(&cals),
     )
     .await
     {
-        Ok(res) => res.map_err(|e| e.to_string()),
-        Err(_) => Err("Fetch all timed out".to_string()),
+        Ok(res) => res,
+        Err(_) => Err(anyhow::anyhow!("Fetch all timed out")),
     }
 }
 
@@ -116,7 +113,7 @@ pub async fn async_controller_dispatch(
     client: Option<RustyClient>,
     store: TaskStore,
     action: ControllerAction,
-) -> Result<TaskStore, String> {
+) -> anyhow::Result<TaskStore> {
     let store_arc = Arc::new(Mutex::new(store));
     let client_arc = Arc::new(Mutex::new(client));
     let controller = TaskController::new(store_arc.clone(), client_arc, ctx);
@@ -159,15 +156,15 @@ pub async fn async_migrate_wrapper(
     client: RustyClient,
     tasks: Vec<TodoTask>,
     target: String,
-) -> Result<usize, String> {
+) -> anyhow::Result<usize> {
     match tokio::time::timeout(
         std::time::Duration::from_secs(45),
         client.migrate_tasks(tasks, &target),
     )
     .await
     {
-        Ok(res) => res.map_err(|e| e.to_string()),
-        Err(_) => Err("Migration timed out".to_string()),
+        Ok(res) => res,
+        Err(_) => Err(anyhow::anyhow!("Migration timed out")),
     }
 }
 
@@ -209,7 +206,7 @@ pub async fn async_backfill_events_wrapper(
 pub async fn async_delete_all_events_wrapper(
     client: RustyClient,
     calendars: Vec<String>,
-) -> Result<usize, String> {
+) -> anyhow::Result<usize> {
     match tokio::time::timeout(std::time::Duration::from_secs(30), async {
         let mut total = 0;
         for cal_href in calendars {
@@ -217,11 +214,11 @@ pub async fn async_delete_all_events_wrapper(
                 total += count;
             }
         }
-        Ok::<usize, String>(total)
+        Ok::<usize, anyhow::Error>(total)
     })
     .await
     {
         Ok(res) => res,
-        Err(_) => Err("Deleting events timed out".to_string()),
+        Err(_) => Err(anyhow::anyhow!("Deleting events timed out")),
     }
 }
