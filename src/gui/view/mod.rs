@@ -1551,24 +1551,42 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         );
     }
 
-    let tasks_view = column(
-        app.tasks
-            .iter()
-            .enumerate()
-            .map(|(real_index, item)| {
-                let row_id = match item {
-                    crate::store::TaskListItem::Task(t) => app
-                        .task_ids
-                        .get(&t.uid)
-                        .cloned()
-                        .unwrap_or_else(iced::widget::Id::unique),
-                    _ => iced::widget::Id::unique(),
-                };
-                view_task_row(app, real_index, item, row_id)
-            })
-            .collect::<Vec<_>>(),
-    )
-    .spacing(1);
+    // We use a hasher to create a stable, `Copy`-able u64 key for the keyed_column
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let tasks_view =
+        iced::widget::keyed_column(app.tasks.iter().enumerate().map(|(real_index, item)| {
+            let row_id = match item {
+                crate::store::TaskListItem::Task(t) => app
+                    .task_ids
+                    .get(&t.uid)
+                    .cloned()
+                    .unwrap_or_else(iced::widget::Id::unique),
+                _ => iced::widget::Id::unique(),
+            };
+
+            // Generate a unique, stable u64 key for each row
+            let mut hasher = DefaultHasher::new();
+            match item {
+                crate::store::TaskListItem::Task(t) => {
+                    0u8.hash(&mut hasher);
+                    t.uid.hash(&mut hasher);
+                }
+                crate::store::TaskListItem::ExpandGroup(k) => {
+                    1u8.hash(&mut hasher);
+                    k.hash(&mut hasher);
+                }
+                crate::store::TaskListItem::CollapseGroup(k) => {
+                    2u8.hash(&mut hasher);
+                    k.hash(&mut hasher);
+                }
+            };
+            let key = hasher.finish();
+
+            (key, view_task_row(app, real_index, item, row_id))
+        }))
+        .spacing(1);
 
     main_col = main_col.push(
         scrollable(tasks_view)
