@@ -1508,6 +1508,7 @@ pub fn view_task_row<'a>(
             Space::new().width(Length::Fixed(indent_size as f32 + 30.0)),
             details_col
         ];
+
         column![task_button, desc_row].spacing(5)
     } else {
         column![task_button]
