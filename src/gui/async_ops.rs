@@ -23,7 +23,7 @@ pub async fn connect_and_fetch_wrapper(
     let ctx_clone = ctx.clone();
     let config_clone = config.clone();
     match tokio::time::timeout(
-        std::time::Duration::from_secs(60),
+        std::time::Duration::from_secs(120),
         RustyClient::connect_with_fallback(ctx, config, Some("GUI")),
     )
     .await
@@ -113,10 +113,18 @@ pub async fn async_controller_dispatch(
     client: Option<RustyClient>,
     store: TaskStore,
     action: ControllerAction,
-) -> anyhow::Result<TaskStore> {
-    let store_arc = Arc::new(Mutex::new(store));
+) -> anyhow::Result<(Vec<TodoTask>, Vec<String>)> {
+    let store_arc = Arc::new(Mutex::new(store.clone()));
     let client_arc = Arc::new(Mutex::new(client));
     let controller = TaskController::new(store_arc.clone(), client_arc, ctx);
+
+    // Record UIDs present before the action executes to detect deletions
+    let mut before_uids = std::collections::HashSet::new();
+    for map in store.calendars.values() {
+        for uid in map.keys() {
+            before_uids.insert(uid.clone());
+        }
+    }
 
     let action_future = async move {
         match action {
@@ -144,12 +152,43 @@ pub async fn async_controller_dispatch(
         }
     };
 
-    // Even if network sync times out, the local store memory modifications
-    // are synchronously committed prior to yielding.
     let _ = tokio::time::timeout(std::time::Duration::from_secs(60), action_future).await;
 
-    let updated_store = store_arc.lock().await.clone();
-    Ok(updated_store)
+    let updated_store = store_arc.lock().await;
+
+    let mut updated_tasks = Vec::new();
+    let mut after_uids = std::collections::HashSet::new();
+
+    // Only return tasks that have been mutated (e.g. given an ETag by the server)
+    for map in updated_store.calendars.values() {
+        for (uid, task) in map {
+            after_uids.insert(uid.clone());
+
+            let mut changed = false;
+            if !before_uids.contains(uid) {
+                changed = true; // Task is entirely new
+            } else if let Some(old_task) = store.get_task_ref(uid)
+                && (old_task.etag != task.etag
+                    || old_task.href != task.href
+                    || old_task.calendar_href != task.calendar_href)
+                {
+                    changed = true; // Metadata changed over the network
+                }
+
+            if changed {
+                updated_tasks.push(task.clone());
+            }
+        }
+    }
+
+    let mut deleted_uids = Vec::new();
+    for uid in before_uids {
+        if !after_uids.contains(&uid) {
+            deleted_uids.push(uid);
+        }
+    }
+
+    Ok((updated_tasks, deleted_uids))
 }
 
 pub async fn async_migrate_wrapper(

@@ -101,17 +101,74 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(view_task) = app.get_task_at_index(index) {
                 let task_uid = view_task.uid.clone();
                 app.selected_uid = Some(task_uid.clone());
-                return Task::perform(
-                    async_controller_dispatch(
-                        app.ctx.clone(),
-                        app.client.clone(),
-                        app.store.clone(),
-                        ControllerAction::Toggle(task_uid),
-                    ),
-                    |res| {
-                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
-                    },
-                );
+
+                let store_clone = app.store.clone(); // Snapshot store pre-mutation
+
+                if let Some((primary, secondary, children)) = app.store.toggle_task(&task_uid) {
+                    refresh_filtered_tasks(app); // Instant UI refresh
+
+                    let mut commands = Vec::new();
+
+                    if let Some(sec) = secondary {
+                        commands.push(Task::perform(
+                            async_controller_dispatch(
+                                app.ctx.clone(),
+                                app.client.clone(),
+                                store_clone.clone(),
+                                ControllerAction::Create(primary),
+                            ),
+                            |res| {
+                                Message::ControllerActionComplete(Box::new(
+                                    res.map_err(|e| e.to_string()),
+                                ))
+                            },
+                        ));
+                        commands.push(Task::perform(
+                            async_controller_dispatch(
+                                app.ctx.clone(),
+                                app.client.clone(),
+                                store_clone.clone(),
+                                ControllerAction::Update(sec),
+                            ),
+                            |res| {
+                                Message::ControllerActionComplete(Box::new(
+                                    res.map_err(|e| e.to_string()),
+                                ))
+                            },
+                        ));
+                    } else {
+                        commands.push(Task::perform(
+                            async_controller_dispatch(
+                                app.ctx.clone(),
+                                app.client.clone(),
+                                store_clone.clone(),
+                                ControllerAction::Update(primary),
+                            ),
+                            |res| {
+                                Message::ControllerActionComplete(Box::new(
+                                    res.map_err(|e| e.to_string()),
+                                ))
+                            },
+                        ));
+                    }
+
+                    for child in children {
+                        commands.push(Task::perform(
+                            async_controller_dispatch(
+                                app.ctx.clone(),
+                                app.client.clone(),
+                                store_clone.clone(),
+                                ControllerAction::Update(child),
+                            ),
+                            |res| {
+                                Message::ControllerActionComplete(Box::new(
+                                    res.map_err(|e| e.to_string()),
+                                ))
+                            },
+                        ));
+                    }
+                    return Task::batch(commands);
+                }
             }
             Task::none()
         }
@@ -129,18 +186,66 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::DeleteTask(index) => {
             if let Some(view_task) = app.get_task_at_index(index) {
                 let uid = view_task.uid.clone();
+                let is_already_trash = view_task.calendar_href == crate::storage::LOCAL_TRASH_HREF;
                 app.selected_uid = Some(uid.clone());
-                return Task::perform(
-                    async_controller_dispatch(
-                        app.ctx.clone(),
-                        app.client.clone(),
-                        app.store.clone(),
-                        ControllerAction::Delete(uid),
-                    ),
-                    |res| {
-                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
-                    },
-                );
+
+                let store_clone = app.store.clone();
+                let config = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
+
+                // Process instantly
+                if config.trash_retention_days == 0 || is_already_trash {
+                    if let Some((_deleted, _)) = app.store.delete_task(&uid) {
+                        refresh_filtered_tasks(app);
+                        return Task::perform(
+                            async_controller_dispatch(
+                                app.ctx.clone(),
+                                app.client.clone(),
+                                store_clone,
+                                ControllerAction::Delete(uid),
+                            ),
+                            |res| {
+                                Message::ControllerActionComplete(Box::new(
+                                    res.map_err(|e| e.to_string()),
+                                ))
+                            },
+                        );
+                    }
+                } else {
+                    app.store
+                        .calendars
+                        .entry(crate::storage::LOCAL_TRASH_HREF.to_string())
+                        .or_default();
+                    if let Some((_orig, mut updated)) = app
+                        .store
+                        .move_task(&uid, crate::storage::LOCAL_TRASH_HREF.to_string())
+                    {
+                        let now_str = chrono::Utc::now().to_rfc3339();
+                        updated
+                            .unmapped_properties
+                            .retain(|p| p.key != "X-TRASHED-DATE");
+                        updated.unmapped_properties.push(crate::model::RawProperty {
+                            key: "X-TRASHED-DATE".to_string(),
+                            value: now_str,
+                            params: vec![],
+                        });
+                        app.store.update_or_add_task(updated.clone());
+                        refresh_filtered_tasks(app);
+
+                        return Task::perform(
+                            async_controller_dispatch(
+                                app.ctx.clone(),
+                                app.client.clone(),
+                                store_clone,
+                                ControllerAction::Delete(uid),
+                            ),
+                            |res| {
+                                Message::ControllerActionComplete(Box::new(
+                                    res.map_err(|e| e.to_string()),
+                                ))
+                            },
+                        );
+                    }
+                }
             }
             Task::none()
         }
@@ -242,15 +347,26 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::DuplicateTask(uid) => {
             app.yanked_uid = None;
             app.yank_lock_active = false;
-            Task::perform(
-                async_controller_dispatch(
-                    app.ctx.clone(),
-                    app.client.clone(),
-                    app.store.clone(),
-                    ControllerAction::DuplicateTree(uid),
-                ),
-                |res| Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string()))),
-            )
+            let store_clone = app.store.clone();
+
+            let new_tasks = app.store.duplicate_task_tree(&uid);
+            refresh_filtered_tasks(app);
+
+            let mut commands = Vec::new();
+            for task in new_tasks {
+                commands.push(Task::perform(
+                    async_controller_dispatch(
+                        app.ctx.clone(),
+                        app.client.clone(),
+                        store_clone.clone(),
+                        ControllerAction::Create(task),
+                    ),
+                    |res| {
+                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
+                    },
+                ));
+            }
+            Task::batch(commands)
         }
 
         Message::KeyboardDeleteTaskTree => {
@@ -263,11 +379,51 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::DeleteTaskTree(uid) => {
             app.yanked_uid = None;
             app.yank_lock_active = false;
+            let store_clone = app.store.clone();
+            let config = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
+
+            let mut uids_to_delete = app.store.get_descendant_uids(&uid);
+            uids_to_delete.push(uid.clone());
+
+            // Process Soft-Delete for the entire tree
+            for d_uid in uids_to_delete {
+                let is_already_trash = app
+                    .store
+                    .get_task_ref(&d_uid)
+                    .map(|t| t.calendar_href == crate::storage::LOCAL_TRASH_HREF)
+                    .unwrap_or(false);
+
+                if config.trash_retention_days == 0 || is_already_trash {
+                    app.store.delete_task(&d_uid);
+                } else {
+                    app.store
+                        .calendars
+                        .entry(crate::storage::LOCAL_TRASH_HREF.to_string())
+                        .or_default();
+                    if let Some((_orig, mut updated)) = app
+                        .store
+                        .move_task(&d_uid, crate::storage::LOCAL_TRASH_HREF.to_string())
+                    {
+                        let now_str = chrono::Utc::now().to_rfc3339();
+                        updated
+                            .unmapped_properties
+                            .retain(|p| p.key != "X-TRASHED-DATE");
+                        updated.unmapped_properties.push(crate::model::RawProperty {
+                            key: "X-TRASHED-DATE".to_string(),
+                            value: now_str,
+                            params: vec![],
+                        });
+                        app.store.update_or_add_task(updated);
+                    }
+                }
+            }
+            refresh_filtered_tasks(app);
+
             Task::perform(
                 async_controller_dispatch(
                     app.ctx.clone(),
                     app.client.clone(),
-                    app.store.clone(),
+                    store_clone,
                     ControllerAction::DeleteTree(uid),
                 ),
                 |res| Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string()))),
@@ -320,6 +476,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(view_task) = app.get_task_at_index(index) {
                 let task_uid = view_task.uid.clone();
                 app.selected_uid = Some(task_uid.clone());
+
+                let store_clone = app.store.clone();
                 if let Some(updated) =
                     app.store
                         .change_priority(&task_uid, delta, app.default_priority)
@@ -328,8 +486,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     return Task::perform(
                         async_controller_dispatch(
                             app.ctx.clone(),
-                            app.client.clone(), // pass Option<RustyClient> directly
-                            app.store.clone(),
+                            app.client.clone(),
+                            store_clone,
                             ControllerAction::Update(updated),
                         ),
                         |res| {
@@ -346,27 +504,82 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetTaskStatus(index, new_status) => {
             if let Some(view_task) = app.get_task_at_index(index) {
                 let task_uid = view_task.uid.clone();
-                let mut updated = view_task.clone();
-                updated.status = new_status;
                 app.selected_uid = Some(task_uid.clone());
-                // Delegate to controller for persistence/recurrence handling.
-                return Task::perform(
-                    async_controller_dispatch(
-                        app.ctx.clone(),
-                        app.client.clone(),
-                        app.store.clone(),
-                        ControllerAction::Update(updated),
-                    ),
-                    |res| {
-                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
-                    },
-                );
+
+                let store_clone = app.store.clone();
+                if let Some((primary, secondary, children)) =
+                    app.store.set_status(&task_uid, new_status)
+                {
+                    refresh_filtered_tasks(app);
+
+                    let mut commands = Vec::new();
+                    if let Some(sec) = secondary {
+                        commands.push(Task::perform(
+                            async_controller_dispatch(
+                                app.ctx.clone(),
+                                app.client.clone(),
+                                store_clone.clone(),
+                                ControllerAction::Create(primary),
+                            ),
+                            |res| {
+                                Message::ControllerActionComplete(Box::new(
+                                    res.map_err(|e| e.to_string()),
+                                ))
+                            },
+                        ));
+                        commands.push(Task::perform(
+                            async_controller_dispatch(
+                                app.ctx.clone(),
+                                app.client.clone(),
+                                store_clone.clone(),
+                                ControllerAction::Update(sec),
+                            ),
+                            |res| {
+                                Message::ControllerActionComplete(Box::new(
+                                    res.map_err(|e| e.to_string()),
+                                ))
+                            },
+                        ));
+                    } else {
+                        commands.push(Task::perform(
+                            async_controller_dispatch(
+                                app.ctx.clone(),
+                                app.client.clone(),
+                                store_clone.clone(),
+                                ControllerAction::Update(primary),
+                            ),
+                            |res| {
+                                Message::ControllerActionComplete(Box::new(
+                                    res.map_err(|e| e.to_string()),
+                                ))
+                            },
+                        ));
+                    }
+                    for child in children {
+                        commands.push(Task::perform(
+                            async_controller_dispatch(
+                                app.ctx.clone(),
+                                app.client.clone(),
+                                store_clone.clone(),
+                                ControllerAction::Update(child),
+                            ),
+                            |res| {
+                                Message::ControllerActionComplete(Box::new(
+                                    res.map_err(|e| e.to_string()),
+                                ))
+                            },
+                        ));
+                    }
+                    return Task::batch(commands);
+                }
             }
             Task::none()
         }
 
         Message::StartTask(uid) => {
+            let store_clone = app.store.clone();
             let updated_tasks = app.store.set_status_in_process(&uid);
+
             if !updated_tasks.is_empty() {
                 app.selected_uid = Some(uid.clone());
                 refresh_filtered_tasks(app);
@@ -376,7 +589,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         async_controller_dispatch(
                             app.ctx.clone(),
                             app.client.clone(),
-                            app.store.clone(),
+                            store_clone.clone(),
                             ControllerAction::Update(t),
                         ),
                         |res| {
@@ -392,7 +605,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::PauseTask(uid) => {
+            let store_clone = app.store.clone();
             let updated_tasks = app.store.pause_task(&uid);
+
             if !updated_tasks.is_empty() {
                 app.selected_uid = Some(uid.clone());
                 refresh_filtered_tasks(app);
@@ -402,7 +617,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         async_controller_dispatch(
                             app.ctx.clone(),
                             app.client.clone(),
-                            app.store.clone(),
+                            store_clone.clone(),
                             ControllerAction::Update(t),
                         ),
                         |res| {
@@ -418,7 +633,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::StopTask(uid) => {
+            let store_clone = app.store.clone();
             let updated_tasks = app.store.stop_task(&uid);
+
             if !updated_tasks.is_empty() {
                 app.selected_uid = Some(uid.clone());
                 refresh_filtered_tasks(app);
@@ -428,7 +645,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         async_controller_dispatch(
                             app.ctx.clone(),
                             app.client.clone(),
-                            app.store.clone(),
+                            store_clone.clone(),
                             ControllerAction::Update(t),
                         ),
                         |res| {
@@ -527,39 +744,45 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::MakeChild(target_uid) => {
             if let Some(parent_uid) = app.yanked_uid.clone()
-                && let Some(orig) = app.store.get_task_ref(&target_uid)
+                && let Some(_orig) = app.store.get_task_ref(&target_uid)
             {
-                let mut updated = orig.clone();
-                updated.parent_uid = Some(parent_uid.clone());
-                app.selected_uid = Some(target_uid.clone());
-                if !app.yank_lock_active {
-                    app.yanked_uid = None;
+                let store_clone = app.store.clone();
+                if let Some(updated) = app.store.set_parent(&target_uid, Some(parent_uid)) {
+                    app.selected_uid = Some(target_uid.clone());
+                    if !app.yank_lock_active {
+                        app.yanked_uid = None;
+                    }
+                    refresh_filtered_tasks(app);
+
+                    return Task::perform(
+                        async_controller_dispatch(
+                            app.ctx.clone(),
+                            app.client.clone(),
+                            store_clone,
+                            ControllerAction::Update(updated),
+                        ),
+                        |res| {
+                            Message::ControllerActionComplete(Box::new(
+                                res.map_err(|e| e.to_string()),
+                            ))
+                        },
+                    );
                 }
-                refresh_filtered_tasks(app);
-                return Task::perform(
-                    async_controller_dispatch(
-                        app.ctx.clone(),
-                        app.client.clone(),
-                        app.store.clone(),
-                        ControllerAction::Update(updated),
-                    ),
-                    |res| {
-                        Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string())))
-                    },
-                );
             }
             Task::none()
         }
 
         Message::RemoveParent(child_uid) => {
+            let store_clone = app.store.clone();
             if let Some(updated) = app.store.set_parent(&child_uid, None) {
                 app.selected_uid = Some(child_uid);
                 refresh_filtered_tasks(app);
+
                 return Task::perform(
                     async_controller_dispatch(
                         app.ctx.clone(),
                         app.client.clone(),
-                        app.store.clone(),
+                        store_clone,
                         ControllerAction::Update(updated),
                     ),
                     |res| {
@@ -571,14 +794,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::RemoveDependency(task_uid, dep_uid) => {
+            let store_clone = app.store.clone();
             if let Some(updated) = app.store.remove_dependency(&task_uid, &dep_uid) {
                 app.selected_uid = Some(task_uid);
                 refresh_filtered_tasks(app);
+
                 return Task::perform(
                     async_controller_dispatch(
                         app.ctx.clone(),
                         app.client.clone(),
-                        app.store.clone(),
+                        store_clone,
                         ControllerAction::Update(updated),
                     ),
                     |res| {
@@ -590,14 +815,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::RemoveRelatedTo(task_uid, related_uid) => {
+            let store_clone = app.store.clone();
             if let Some(updated) = app.store.remove_related_to(&task_uid, &related_uid) {
                 app.selected_uid = Some(task_uid);
                 refresh_filtered_tasks(app);
+
                 return Task::perform(
                     async_controller_dispatch(
                         app.ctx.clone(),
                         app.client.clone(),
-                        app.store.clone(),
+                        store_clone,
                         ControllerAction::Update(updated),
                     ),
                     |res| {
@@ -614,16 +841,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(blocker_uid) = blocker_opt
                 && let Some(updated) = app.store.add_dependency(&target_uid, blocker_uid.clone())
             {
+                let store_clone = app.store.clone();
                 app.selected_uid = Some(target_uid);
                 if !app.yank_lock_active {
                     app.yanked_uid = None;
                 }
                 refresh_filtered_tasks(app);
+
                 return Task::perform(
                     async_controller_dispatch(
                         app.ctx.clone(),
                         app.client.clone(),
-                        app.store.clone(),
+                        store_clone,
                         ControllerAction::Update(updated),
                     ),
                     |res| {
@@ -640,16 +869,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(related_uid) = related_opt
                 && let Some(updated) = app.store.add_related_to(&target_uid, related_uid.clone())
             {
+                let store_clone = app.store.clone();
                 app.selected_uid = Some(target_uid);
                 if !app.yank_lock_active {
                     app.yanked_uid = None;
                 }
                 refresh_filtered_tasks(app);
+
                 return Task::perform(
                     async_controller_dispatch(
                         app.ctx.clone(),
                         app.client.clone(),
-                        app.store.clone(),
+                        store_clone,
                         ControllerAction::Update(updated),
                     ),
                     |res| {
@@ -673,12 +904,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::MoveTask(task_uid, target_href) => {
             app.selected_uid = Some(task_uid.clone());
-            app.moving_task_uid = None; // Hide modal when applying move
+            app.moving_task_uid = None;
+
+            let store_clone = app.store.clone();
+            app.store.move_task(&task_uid, target_href.clone());
+            refresh_filtered_tasks(app);
+
             Task::perform(
                 async_controller_dispatch(
                     app.ctx.clone(),
                     app.client.clone(),
-                    app.store.clone(),
+                    store_clone,
                     ControllerAction::Move(task_uid, target_href),
                 ),
                 |res| Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string()))),
@@ -826,6 +1062,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SubmitSession => {
             if let Some(uid) = &app.adding_session_uid {
                 let input_text = app.session_input.text();
+                let store_clone = app.store.clone();
+
                 if let Some(session) = crate::model::parser::parse_session_input(&input_text)
                     && let Some((t_mut, _)) = app.store.get_task_mut(uid)
                 {
@@ -839,7 +1077,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         crate::gui::async_ops::async_controller_dispatch(
                             app.ctx.clone(),
                             app.client.clone(),
-                            app.store.clone(),
+                            store_clone,
                             crate::gui::async_ops::ControllerAction::Update(cloned),
                         ),
                         |res| {
@@ -965,11 +1203,12 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
             refresh_filtered_tasks(app);
 
+            let store_clone = app.store.clone();
             let save_cmd = Task::perform(
                 async_controller_dispatch(
                     app.ctx.clone(),
                     app.client.clone(),
-                    app.store.clone(),
+                    store_clone,
                     ControllerAction::Update(task_copy),
                 ),
                 |res| Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string()))),
@@ -1004,6 +1243,8 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 .entry(new_task.uid.clone())
                 .or_insert_with(iced::widget::Id::unique);
 
+            let store_clone = app.store.clone();
+
             // Create Subtasks resulting from Markdown Extraction
             for ext in extracted_subtasks {
                 let mut sub = TodoTask::new(&ext.raw_text, &app.tag_aliases, config_time);
@@ -1025,7 +1266,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                     async_controller_dispatch(
                         app.ctx.clone(),
                         app.client.clone(),
-                        app.store.clone(),
+                        store_clone.clone(),
                         ControllerAction::Create(sub),
                     ),
                     |res| {
@@ -1047,7 +1288,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 async_controller_dispatch(
                     app.ctx.clone(),
                     app.client.clone(),
-                    app.store.clone(),
+                    store_clone.clone(),
                     ControllerAction::Create(new_task),
                 ),
                 |res| Message::ControllerActionComplete(Box::new(res.map_err(|e| e.to_string()))),

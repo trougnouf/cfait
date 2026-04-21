@@ -24,6 +24,9 @@ pub type LoadedResult = Result<
     String,
 >;
 
+/// Result type for controller actions containing updated tasks and deleted UIDs
+pub type ControllerActionResult = Result<(Vec<TodoTask>, Vec<String>), String>;
+
 #[derive(Debug, Clone)]
 pub enum Message {
     // --- Settings & Onboarding ---
@@ -87,9 +90,9 @@ pub enum Message {
     ClearAllFilters,
     KeyboardAddDependency,
     KeyboardAddRelation,
-    KeyboardDuplicateTask,      // 'Ctrl+D' logic
-    KeyboardDeleteTaskTree,     // 'Ctrl+Delete' logic
-    DuplicateTask(String),      // Used by Yank bar button & hotkey
+    KeyboardDuplicateTask,  // 'Ctrl+D' logic
+    KeyboardDeleteTaskTree, // 'Ctrl+Delete' logic
+    DuplicateTask(String),  // Used by Yank bar button & hotkey
     DeleteTaskTree(String),
     ToggleActiveSelected,       // 's' logic
     StopSelected,               // 'S' logic
@@ -163,7 +166,8 @@ pub enum Message {
     ObSortMonthsChanged(String),
     ThemeChanged(AppTheme),
     Loaded(LoadedResult),
-    ControllerActionComplete(Box<Result<crate::store::TaskStore, String>>),
+    // Replaces the old store-wrapping signature:
+    ControllerActionComplete(Box<ControllerActionResult>),
     TasksRefreshed(Result<(String, Vec<TodoTask>), String>),
     RefreshedAll(Result<Vec<(String, Vec<TodoTask>)>, String>),
     MigrationComplete(Result<usize, String>),

@@ -243,8 +243,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ControllerActionComplete(boxed_res) => match *boxed_res {
-            Ok(new_store) => {
-                app.store = new_store;
+            Ok((updated_tasks, deleted_uids)) => {
+                for task in updated_tasks {
+                    if let Some((existing, _)) = app.store.get_task_mut(&task.uid) {
+                        // Crucial: Only inject remote server attributes to prevent
+                        // overwriting local edits that occurred while network was resolving
+                        existing.etag = task.etag;
+                        existing.href = task.href;
+                    }
+                    // The dangerous `else` block was removed. If a task is missing here,
+                    // it means the user deleted it locally while the network was syncing.
+                }
+
+                for uid in deleted_uids {
+                    app.store.delete_task(&uid);
+                }
+
                 app.last_sync_failed = false;
                 app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
                 refresh_filtered_tasks(app);
