@@ -552,7 +552,7 @@ fun HomeScreen(
         val updatedList = tasks.map { t ->
             if (t.uid == task.uid) {
                 when (action) {
-                    "delete" -> null
+                    "delete", "delete_tree" -> null
                     "cancel" -> t.copy(statusString = "Cancelled", isDone = true)
                     "playpause" -> if (t.statusString == "InProcess") t.copy(
                         statusString = "NeedsAction",
@@ -584,6 +584,9 @@ fun HomeScreen(
             try {
                 when (action) {
                     "delete" -> api.deleteTask(task.uid)
+                    "delete_tree" -> api.deleteTaskTree(task.uid)
+                    "duplicate" -> api.duplicateTaskTree(task.uid)
+                    "promote" -> api.setParent(task.uid, null)
                     "cancel" -> api.setStatusCancelled(task.uid)
                     "playpause" -> if (task.statusString == "InProcess") api.pauseTask(task.uid) else api.startTask(task.uid)
                     "stop" -> api.stopTask(task.uid)

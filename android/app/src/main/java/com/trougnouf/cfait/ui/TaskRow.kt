@@ -492,6 +492,33 @@ fun TaskRow(
                         leadingIcon = { NfIcon(NfIcons.CHILD, 16.sp) }
                     )
 
+                    if (task.parentUid != null) {
+                        DropdownMenuItem(
+                            text = { Text(androidx.compose.ui.res.stringResource(R.string.promote_remove_parent)) },
+                            onClick = {
+                                expanded = false
+                                onAction("promote")
+                            },
+                            leadingIcon = { NfIcon(NfIcons.ELEVATOR_UP, 16.sp) }
+                        )
+                    }
+
+                    // --- DUPLICATE LOGIC ---
+                    val duplicateLabel = if (task.hasSubtasks) {
+                        androidx.compose.ui.res.stringResource(R.string.duplicate_task_tree)
+                    } else {
+                        androidx.compose.ui.res.stringResource(R.string.duplicate_task)
+                    }
+
+                    DropdownMenuItem(
+                        text = { Text(duplicateLabel) },
+                        onClick = {
+                            expanded = false
+                            onAction("duplicate")
+                        },
+                        leadingIcon = { NfIcon(NfIcons.CLONE, 16.sp) }
+                    )
+
                     if (enabledCalendarCount > 1) {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_move)) },
@@ -531,6 +558,8 @@ fun TaskRow(
                             leadingIcon = { NfIcon(NfIcons.WEB_CHECK, 16.sp) })
                     }
 
+                    // --- DELETE LOGIC ---
+                    // Standard Delete
                     DropdownMenuItem(text = {
                         Text(
                             androidx.compose.ui.res.stringResource(R.string.delete),
@@ -540,6 +569,19 @@ fun TaskRow(
                         expanded = false
                         onAction("delete")
                     }, leadingIcon = { NfIcon(NfIcons.DELETE, 16.sp, MaterialTheme.colorScheme.error) })
+
+                    // Show Delete Tree only if it has children
+                    if (task.hasSubtasks) {
+                        DropdownMenuItem(text = {
+                            Text(
+                                androidx.compose.ui.res.stringResource(R.string.delete_task_tree),
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }, onClick = {
+                            expanded = false
+                            onAction("delete_tree")
+                        }, leadingIcon = { NfIcon(NfIcons.DELETE, 16.sp, MaterialTheme.colorScheme.error) })
+                    }
                 }
             }
         }

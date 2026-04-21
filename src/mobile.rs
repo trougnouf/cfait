@@ -164,6 +164,7 @@ pub struct MobileTask {
     pub related_to_uids: Vec<String>,
     pub related_to_names: Vec<String>,
     pub is_paused: bool,
+    pub has_subtasks: bool, // <--- ADD THIS
     pub location: Option<String>,
     pub url: Option<String>,
     pub geo: Option<String>,
@@ -379,6 +380,12 @@ fn task_to_mobile(
     let (visible_categories, visible_location) =
         t.resolve_visual_attributes(&parent_tags, &parent_loc, aliases);
 
+    // Check if this task has any children in the store
+    let has_subtasks = store.calendars.values().any(|map| {
+        map.values()
+            .any(|t_inner| t_inner.parent_uid.as_deref() == Some(&t.uid))
+    });
+
     // Map the internal virtual state to simple strings for mobile clients
     // Note: virtual_state has been removed from Task model, so we default to None
     let (v_type, v_payload) = ("none".to_string(), "".to_string());
@@ -416,6 +423,7 @@ fn task_to_mobile(
         related_to_uids: t.related_to.clone(),
         related_to_names,
         is_paused: t.is_paused(),
+        has_subtasks, // <--- ADD THIS
         location: t.location.clone(),
         url: t.url.clone(),
         geo: t.geo.clone(),
@@ -1755,6 +1763,26 @@ impl CfaitMobile {
     pub async fn delete_task(&self, uid: String) -> Result<(), MobileError> {
         self.controller
             .delete_task(&uid)
+            .await
+            .map_err(MobileError::from)?;
+        let store = self.controller.store.lock().await;
+        self.rebuild_alarm_index(&store).await;
+        Ok(())
+    }
+
+    pub async fn duplicate_task_tree(&self, uid: String) -> Result<(), MobileError> {
+        self.controller
+            .duplicate_task_tree(&uid)
+            .await
+            .map_err(MobileError::from)?;
+        let store = self.controller.store.lock().await;
+        self.rebuild_alarm_index(&store).await;
+        Ok(())
+    }
+
+    pub async fn delete_task_tree(&self, uid: String) -> Result<(), MobileError> {
+        self.controller
+            .delete_task_tree(&uid)
             .await
             .map_err(MobileError::from)?;
         let store = self.controller.store.lock().await;

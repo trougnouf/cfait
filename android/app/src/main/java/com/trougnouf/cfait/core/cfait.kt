@@ -781,7 +781,11 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_task(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_delete_task_tree(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm(): Short
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_duplicate_task_tree(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_export_local_ics(): Short
 
@@ -987,10 +991,20 @@ internal object UniffiLib {
         `uid`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_delete_task_tree(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+    ): Long
+
     external fun uniffi_cfait_fn_method_cfaitmobile_dismiss_alarm(
         `ptr`: Long,
         `taskUid`: RustBuffer.ByValue,
         `alarmUid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_duplicate_task_tree(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_export_local_ics(
@@ -1536,7 +1550,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_task() != 39654.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_task_tree() != 54165.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm() != 49985.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_duplicate_task_tree() != 29876.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_export_local_ics() != 13372.toShort()) {
@@ -2254,10 +2274,14 @@ public interface CfaitMobileInterface {
 
     suspend fun `deleteTask`(`uid`: kotlin.String)
 
+    suspend fun `deleteTaskTree`(`uid`: kotlin.String)
+
     suspend fun `dismissAlarm`(
         `taskUid`: kotlin.String,
         `alarmUid`: kotlin.String,
     )
+
+    suspend fun `duplicateTaskTree`(`uid`: kotlin.String)
 
     fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String
 
@@ -2857,6 +2881,25 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `deleteTaskTree`(`uid`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_delete_task_tree(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `dismissAlarm`(
         `taskUid`: kotlin.String,
         `alarmUid`: kotlin.String,
@@ -2876,6 +2919,25 @@ open class CfaitMobile :
         // Error FFI converter
         MobileException.ErrorHandler,
     )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `duplicateTaskTree`(`uid`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_duplicate_task_tree(
+                    uniffiHandle,
+                    FfiConverterString.lower(`uid`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
 
     @Throws(MobileException::class)
     override fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String =
@@ -4182,6 +4244,7 @@ data class MobileTask(
     var `relatedToUids`: List<kotlin.String>,
     var `relatedToNames`: List<kotlin.String>,
     var `isPaused`: kotlin.Boolean,
+    var `hasSubtasks`: kotlin.Boolean,
     var `location`: kotlin.String?,
     var `url`: kotlin.String?,
     var `geo`: kotlin.String?,
@@ -4232,6 +4295,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
@@ -4276,6 +4340,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterSequenceString.allocationSize(value.`relatedToUids`) +
                 FfiConverterSequenceString.allocationSize(value.`relatedToNames`) +
                 FfiConverterBoolean.allocationSize(value.`isPaused`) +
+                FfiConverterBoolean.allocationSize(value.`hasSubtasks`) +
                 FfiConverterOptionalString.allocationSize(value.`location`) +
                 FfiConverterOptionalString.allocationSize(value.`url`) +
                 FfiConverterOptionalString.allocationSize(value.`geo`) +
@@ -4322,6 +4387,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterSequenceString.write(value.`relatedToUids`, buf)
         FfiConverterSequenceString.write(value.`relatedToNames`, buf)
         FfiConverterBoolean.write(value.`isPaused`, buf)
+        FfiConverterBoolean.write(value.`hasSubtasks`, buf)
         FfiConverterOptionalString.write(value.`location`, buf)
         FfiConverterOptionalString.write(value.`url`, buf)
         FfiConverterOptionalString.write(value.`geo`, buf)
