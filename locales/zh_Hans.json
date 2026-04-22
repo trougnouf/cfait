@@ -120,6 +120,7 @@
     "donation_address_label": "捐赠地址",
     "done": "完成",
     "due_within_days": "到期日期（天数）：",
+    "duplicate_single_task": "复制任务",
     "duplicate_task": "复制任务树",
     "edit": "编辑",
     "edit_description_title": "编辑描述（支持 Markdown）",
