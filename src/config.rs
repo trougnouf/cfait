@@ -34,10 +34,14 @@ pub enum TaskAction {
     Cancel,
     Delete,
     DeleteTree,
+    OpenLocations,
+    OpenCoordinates,
 }
 
 impl TaskAction {
     pub const ALL: &'static [TaskAction] = &[
+        TaskAction::OpenCoordinates, // First - single coordinates
+        TaskAction::OpenLocations,   // Second - multiple coordinates (GPX)
         TaskAction::ToggleDetails,
         TaskAction::ToggleTimer,
         TaskAction::StopTimer,
@@ -72,12 +76,15 @@ impl TaskAction {
             TaskAction::Cancel => rust_i18n::t!("cancel").to_string(),
             TaskAction::Delete => rust_i18n::t!("delete").to_string(),
             TaskAction::DeleteTree => rust_i18n::t!("delete_task_tree").to_string(),
+            TaskAction::OpenLocations => rust_i18n::t!("action_open_locations").to_string(),
+            TaskAction::OpenCoordinates => rust_i18n::t!("open_coordinates").to_string(),
         }
     }
 }
 
 fn default_pinned_actions() -> Vec<TaskAction> {
     vec![
+        TaskAction::OpenCoordinates, // First action - open single coordinates
         TaskAction::ToggleDetails,
         TaskAction::ToggleTimer,
         TaskAction::IncreasePriority,

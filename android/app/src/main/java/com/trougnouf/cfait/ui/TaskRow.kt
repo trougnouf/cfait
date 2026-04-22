@@ -548,6 +548,17 @@ fun TaskRow(
                             leadingIcon = { NfIcon(NfIcons.MAP_LOCATION_DOT, 16.sp) })
                     }
 
+                    // Multiple Locations (Tree)
+                    if (task.treeLocationCount.toInt() > 1) {
+                        DropdownMenuItem(
+                            text = { Text(androidx.compose.ui.res.stringResource(R.string.action_open_locations)) },
+                            onClick = {
+                                expanded = false
+                                onAction("open_locations_gpx")
+                            },
+                            leadingIcon = { NfIcon(NfIcons.MAP_MARKER_MULTIPLE, 16.sp) })
+                    }
+
                     if (task.url != null) {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.menu_open_link)) },

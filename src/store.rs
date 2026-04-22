@@ -416,14 +416,16 @@ impl TaskStore {
         let mut fixes = Vec::new();
         for task in new_map.values() {
             // History snapshots are always completed and lack an RRULE
-            if task.status.is_done() && task.rrule.is_none()
+            if task.status.is_done()
+                && task.rrule.is_none()
                 && let Some(p_uid) = &task.parent_uid
-                    && let Some(parent) = new_map.get(p_uid) {
-                        // If it matches the parent's summary, it's definitely a history snapshot
-                        if parent.rrule.is_some() && parent.summary == task.summary {
-                            fixes.push(task.uid.clone());
-                        }
-                    }
+                && let Some(parent) = new_map.get(p_uid)
+            {
+                // If it matches the parent's summary, it's definitely a history snapshot
+                if parent.rrule.is_some() && parent.summary == task.summary {
+                    fixes.push(task.uid.clone());
+                }
+            }
         }
 
         for uid in fixes {
@@ -1800,5 +1802,27 @@ impl TaskStore {
             categories,
             locations,
         }
+    }
+
+    /// Returns list of (Summary, GeoString) for the root and all descendants
+    pub fn get_tree_waypoints(&self, root_uid: &str) -> Vec<(String, String)> {
+        let mut uids = self.get_descendant_uids(root_uid);
+        uids.push(root_uid.to_string());
+
+        uids.iter()
+            .filter_map(|id| self.get_task_ref(id))
+            .filter_map(|t| t.geo.as_ref().map(|g| (t.summary.clone(), g.clone())))
+            .collect()
+    }
+
+    /// Returns the total number of locations in a task tree without allocating strings
+    pub fn count_tree_locations(&self, root_uid: &str) -> usize {
+        let mut uids = self.get_descendant_uids(root_uid);
+        uids.push(root_uid.to_string());
+
+        uids.iter()
+            .filter_map(|id| self.get_task_ref(id))
+            .filter(|t| t.geo.is_some())
+            .count()
     }
 }

@@ -455,6 +455,8 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                             crate::config::TaskAction::DuplicateTree => icon::CLONE,
                             crate::config::TaskAction::Promote => icon::ELEVATOR_UP,
                             crate::config::TaskAction::Move => icon::MOVE,
+                            crate::config::TaskAction::OpenCoordinates => icon::MAP_LOCATION_DOT,
+                            crate::config::TaskAction::OpenLocations => icon::MAP_MARKER_MULTIPLE,
                         };
 
                         let check_icon = if is_pinned {
@@ -779,7 +781,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             ..Default::default()
         }),
         // 2. Preferences
-        lang_picker, // <-- language picker added to the form layout
+        lang_picker,  // <-- language picker added to the form layout
         theme_picker, // <-- theme picker added to the form layout
         picker,
         cal_mgmt_ui,

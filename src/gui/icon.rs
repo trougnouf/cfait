@@ -74,6 +74,7 @@ pub const CHILD: char = '\u{f0a89}'; // nf-md-account_child
 pub const CREATE_CHILD: char = '\u{f0014}'; // nf-md-account_plus
 pub const CLEAR_ALL: char = '\u{eabf}'; // nf-cod-clear_all
 pub const MAP_PIN: char = '\u{f276}'; // nf-fa-map_pin
+pub const MAP_MARKER_MULTIPLE: char = '\u{f1277}'; // nf-md-map_marker_multiple_outline
 pub const ELEVATOR_UP: char = '\u{f12c1}'; // nf-md-elevator_up
 pub const ELLIPSIS: char = '\u{f0d32}'; // nf-md-selection_ellipse
 pub const MOVE: char = '\u{ef0c}';

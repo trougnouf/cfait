@@ -332,6 +332,14 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             if *action == TaskAction::DeleteTree && !has_subtasks {
                 return None;
             }
+            if *action == TaskAction::OpenCoordinates && task.geo.is_none() {
+                return None;
+            }
+            if *action == TaskAction::OpenLocations
+                && app.store.count_tree_locations(&task.uid) <= 1
+            {
+                return None;
+            }
             if *action == TaskAction::ToggleDetails && !(has_info || has_time) {
                 return None;
             }
@@ -485,6 +493,16 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     Message::DeleteTaskTree(uid.clone()),
                     true,
                 ),
+                TaskAction::OpenCoordinates => (
+                    icon::icon(icon::MAP_LOCATION_DOT).size(14).into(),
+                    Message::OpenCoordinates(uid.clone()),
+                    false,
+                ),
+                TaskAction::OpenLocations => (
+                    icon::icon(icon::MAP_MARKER_MULTIPLE).size(14).into(),
+                    Message::OpenLocations(uid.clone()),
+                    false,
+                ),
             };
 
             let btn = button(
@@ -504,33 +522,76 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             Some(btn.into())
         };
 
-        if *is_full {
-            for action in TaskAction::ALL {
-                if let Some(btn) = build_btn(action) {
-                    menu_actions = menu_actions.push(btn);
+        // Custom ordering for context menu - put location actions at top
+        let context_menu_order = if *is_full {
+            vec![
+                TaskAction::OpenCoordinates, // Single coordinates first
+                TaskAction::OpenLocations,   // GPX export second
+                TaskAction::ToggleDetails,
+                TaskAction::ToggleTimer,
+                TaskAction::StopTimer,
+                TaskAction::AddSession,
+                TaskAction::IncreasePriority,
+                TaskAction::DecreasePriority,
+                TaskAction::Edit,
+                TaskAction::Yank,
+                TaskAction::CreateSubtask,
+                TaskAction::DuplicateTree,
+                TaskAction::Promote,
+                TaskAction::Move,
+                TaskAction::Cancel,
+                TaskAction::Delete,
+                TaskAction::DeleteTree,
+            ]
+        } else {
+            // For non-full menu, put OpenLocations at top of unpinned actions
+            let mut unpinned_actions: Vec<TaskAction> = TaskAction::ALL
+                .iter()
+                .filter(|a| !app.pinned_actions.contains(a))
+                .cloned()
+                .collect();
+            // Move location actions to front if present (OpenCoordinates first, then OpenLocations)
+            if let Some(pos) = unpinned_actions
+                .iter()
+                .position(|&a| a == TaskAction::OpenCoordinates)
+            {
+                unpinned_actions.remove(pos);
+                unpinned_actions.insert(0, TaskAction::OpenCoordinates);
+            }
+            if let Some(pos) = unpinned_actions
+                .iter()
+                .position(|&a| a == TaskAction::OpenLocations)
+            {
+                unpinned_actions.remove(pos);
+                // Insert after OpenCoordinates if present, otherwise at front
+                if unpinned_actions.first() == Some(&TaskAction::OpenCoordinates) {
+                    unpinned_actions.insert(1, TaskAction::OpenLocations);
+                } else {
+                    unpinned_actions.insert(0, TaskAction::OpenLocations);
                 }
             }
-        } else {
-            let mut added_unpinned = false;
-            for action in TaskAction::ALL {
-                if !app.pinned_actions.contains(action)
-                    && let Some(btn) = build_btn(action)
-                {
-                    menu_actions = menu_actions.push(btn);
+            unpinned_actions
+        };
+
+        let mut added_unpinned = false;
+        for action in context_menu_order {
+            if let Some(btn) = build_btn(&action) {
+                menu_actions = menu_actions.push(btn);
+                if !*is_full && !app.pinned_actions.contains(&action) {
                     added_unpinned = true;
                 }
             }
+        }
 
-            if !added_unpinned {
-                menu_actions = menu_actions.push(
-                    container(
-                        text("All actions pinned")
-                            .size(12)
-                            .color(Color::from_rgb(0.5, 0.5, 0.5)),
-                    )
-                    .padding(8),
-                );
-            }
+        if !added_unpinned {
+            menu_actions = menu_actions.push(
+                container(
+                    text("All actions pinned")
+                        .size(12)
+                        .color(Color::from_rgb(0.5, 0.5, 0.5)),
+                )
+                .padding(8),
+            );
         }
 
         let menu_container = container(menu_actions)

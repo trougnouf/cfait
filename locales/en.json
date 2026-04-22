@@ -301,6 +301,7 @@
   "delete_task_tree": "Delete task tree",
   "yank_tooltip_delete_tree": "Delete '%{target}' and all its subtasks (Ctrl+Del)",
   "open_coordinates": "Open coordinates",
+  "action_open_locations": "Open locations (GPX)",
   "open_url": "Open URL",
   "organization": "Organization",
   "parent": "Parent:",

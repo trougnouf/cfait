@@ -419,6 +419,20 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                     desc: rust_i18n::t!("yank_link").to_string(),
                     example: "".to_string(),
                 },
+                HelpItem {
+                    keys: "g".to_string(),
+                    desc: format!(
+                        "{}/ {}",
+                        rust_i18n::t!("open_coordinates"),
+                        rust_i18n::t!("action_open_locations")
+                    ),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "o".to_string(),
+                    desc: rust_i18n::t!("open_url").to_string(),
+                    example: "".to_string(),
+                },
             ],
         },
         HelpSection {

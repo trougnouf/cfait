@@ -789,6 +789,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_export_local_ics(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_export_locations_gpx(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_locations(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_tags(): Short
@@ -1010,6 +1012,12 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_export_local_ics(
         `ptr`: Long,
         `calendarHref`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_export_locations_gpx(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -1560,6 +1568,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_export_local_ics() != 13372.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_export_locations_gpx() != 44122.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_all_locations() != 55689.toShort()) {
@@ -2285,6 +2296,8 @@ public interface CfaitMobileInterface {
 
     fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String
 
+    fun `exportLocationsGpx`(`uid`: kotlin.String): kotlin.String
+
     suspend fun `getAllLocations`(): List<MobileLocation>
 
     suspend fun `getAllTags`(): List<MobileTag>
@@ -2947,6 +2960,20 @@ open class CfaitMobile :
                     UniffiLib.uniffi_cfait_fn_method_cfaitmobile_export_local_ics(
                         it,
                         FfiConverterString.lower(`calendarHref`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    @Throws(MobileException::class)
+    override fun `exportLocationsGpx`(`uid`: kotlin.String): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCallWithError(MobileException) { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_export_locations_gpx(
+                        it,
+                        FfiConverterString.lower(`uid`),
                         _status,
                     )
                 }
@@ -4245,6 +4272,7 @@ data class MobileTask(
     var `relatedToNames`: List<kotlin.String>,
     var `isPaused`: kotlin.Boolean,
     var `hasSubtasks`: kotlin.Boolean,
+    var `treeLocationCount`: kotlin.UInt,
     var `location`: kotlin.String?,
     var `url`: kotlin.String?,
     var `geo`: kotlin.String?,
@@ -4296,6 +4324,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterSequenceString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterUInt.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
@@ -4341,6 +4370,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterSequenceString.allocationSize(value.`relatedToNames`) +
                 FfiConverterBoolean.allocationSize(value.`isPaused`) +
                 FfiConverterBoolean.allocationSize(value.`hasSubtasks`) +
+                FfiConverterUInt.allocationSize(value.`treeLocationCount`) +
                 FfiConverterOptionalString.allocationSize(value.`location`) +
                 FfiConverterOptionalString.allocationSize(value.`url`) +
                 FfiConverterOptionalString.allocationSize(value.`geo`) +
@@ -4388,6 +4418,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterSequenceString.write(value.`relatedToNames`, buf)
         FfiConverterBoolean.write(value.`isPaused`, buf)
         FfiConverterBoolean.write(value.`hasSubtasks`, buf)
+        FfiConverterUInt.write(value.`treeLocationCount`, buf)
         FfiConverterOptionalString.write(value.`location`, buf)
         FfiConverterOptionalString.write(value.`url`, buf)
         FfiConverterOptionalString.write(value.`geo`, buf)

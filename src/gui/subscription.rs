@@ -172,6 +172,8 @@ fn handle_hotkey(
                     ("t", true) => Some(Message::KeyboardToggleSessions),
                     ("b", false) => Some(Message::KeyboardAddDependency),
                     ("l", false) => Some(Message::KeyboardAddRelation),
+                    ("g", false) => Some(Message::KeyboardOpenLocations),
+                    ("o", false) => Some(Message::KeyboardOpenUrl),
                     ("a", false) => Some(Message::FocusInput),
                     ("h", true) => Some(Message::ToggleHideCompletedToggle),
                     ("m", false) => Some(Message::CategoryMatchModeToggle),

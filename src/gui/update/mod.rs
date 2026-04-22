@@ -124,6 +124,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::KeyboardAddRelation
         | Message::KeyboardDuplicateTask
         | Message::KeyboardDeleteTaskTree
+        | Message::KeyboardOpenLocations
+        | Message::KeyboardOpenUrl
         | Message::DuplicateTask(_)
         | Message::DeleteTaskTree(_)
         | Message::ToggleActiveSelected
@@ -188,6 +190,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::JumpToTask(_)
         | Message::JumpToRandomTask
         | Message::OpenUrl(_)
+        | Message::OpenCoordinates(_)
+        | Message::OpenLocations(_)
         | Message::FocusTag(_)
         | Message::TagHovered(_)
         | Message::TaskClick(_, _)

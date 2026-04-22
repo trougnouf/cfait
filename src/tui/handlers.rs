@@ -1140,6 +1140,107 @@ pub async fn handle_key_event(
                     state.message = format!("Yanked & Copied: {}", summary);
                 }
             }
+            KeyCode::Char('g') => {
+                if let Some(task) = state.get_selected_task() {
+                    let uid = task.uid.clone();
+                    let count = state.store.count_tree_locations(&uid);
+
+                    if count > 1 {
+                        let waypoints = state.store.get_tree_waypoints(&uid);
+                        let mut gpx_string = String::from(
+                            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gpx version=\"1.1\" creator=\"Cfait\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n",
+                        );
+                        for (name, geo) in waypoints {
+                            let parts: Vec<&str> = geo.split(',').collect();
+                            if parts.len() >= 2 {
+                                let escaped_name = name
+                                    .replace('&', "&amp;")
+                                    .replace('<', "&lt;")
+                                    .replace('>', "&gt;");
+                                gpx_string.push_str(&format!(
+                                    "  <wpt lat=\"{}\" lon=\"{}\"><name>{}</name></wpt>\n",
+                                    parts[0].trim(),
+                                    parts[1].trim(),
+                                    escaped_name
+                                ));
+                            }
+                        }
+                        gpx_string.push_str("</gpx>");
+
+                        if let Ok(cache_dir) = state.ctx.get_cache_dir() {
+                            let path =
+                                cache_dir.join(format!("locations_{}.gpx", uuid::Uuid::new_v4()));
+                            if std::fs::write(&path, gpx_string).is_ok() {
+                                #[cfg(not(target_os = "android"))]
+                                {
+                                    let target = path.to_string_lossy().to_string();
+                                    std::thread::spawn(move || {
+                                        #[cfg(target_os = "linux")]
+                                        let _ = std::process::Command::new("xdg-open")
+                                            .arg(target)
+                                            .spawn();
+                                        #[cfg(target_os = "windows")]
+                                        let _ = std::process::Command::new("explorer")
+                                            .arg(target)
+                                            .spawn();
+                                        #[cfg(target_os = "macos")]
+                                        let _ =
+                                            std::process::Command::new("open").arg(target).spawn();
+                                    });
+                                }
+                                state.message = rust_i18n::t!("action_open_locations").to_string();
+                            } else {
+                                state.message = "Failed to write GPX file.".to_string();
+                            }
+                        }
+                    } else if let Some(_geo) = &task.geo {
+                        #[cfg(not(target_os = "android"))]
+                        {
+                            let target_url = format!("geo:{}", _geo);
+                            std::thread::spawn(move || {
+                                #[cfg(target_os = "linux")]
+                                let _ = std::process::Command::new("xdg-open")
+                                    .arg(target_url)
+                                    .spawn();
+                                #[cfg(target_os = "windows")]
+                                let _ = std::process::Command::new("explorer")
+                                    .arg(target_url)
+                                    .spawn();
+                                #[cfg(target_os = "macos")]
+                                let _ = std::process::Command::new("open").arg(target_url).spawn();
+                            });
+                        }
+                        state.message = rust_i18n::t!("open_coordinates").to_string();
+                    } else {
+                        state.message = "No location associated with this task.".to_string();
+                    }
+                }
+            }
+            KeyCode::Char('o') => {
+                if let Some(task) = state.get_selected_task() {
+                    if let Some(_url) = &task.url {
+                        #[cfg(not(target_os = "android"))]
+                        {
+                            let target_url = _url.clone();
+                            std::thread::spawn(move || {
+                                #[cfg(target_os = "linux")]
+                                let _ = std::process::Command::new("xdg-open")
+                                    .arg(target_url)
+                                    .spawn();
+                                #[cfg(target_os = "windows")]
+                                let _ = std::process::Command::new("explorer")
+                                    .arg(target_url)
+                                    .spawn();
+                                #[cfg(target_os = "macos")]
+                                let _ = std::process::Command::new("open").arg(target_url).spawn();
+                            });
+                        }
+                        state.message = rust_i18n::t!("open_url").to_string();
+                    } else {
+                        state.message = "No URL associated with this task.".to_string();
+                    }
+                }
+            }
             KeyCode::Char('b') => {
                 let data = if let Some(yanked) = &state.yanked_uid {
                     state

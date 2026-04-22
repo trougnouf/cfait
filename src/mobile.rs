@@ -164,7 +164,8 @@ pub struct MobileTask {
     pub related_to_uids: Vec<String>,
     pub related_to_names: Vec<String>,
     pub is_paused: bool,
-    pub has_subtasks: bool, // <--- ADD THIS
+    pub has_subtasks: bool,       // <--- ADD THIS
+    pub tree_location_count: u32, // ADD THIS
     pub location: Option<String>,
     pub url: Option<String>,
     pub geo: Option<String>,
@@ -307,6 +308,40 @@ impl CfaitMobile {
             _ => log::trace!("[{}] {}", tag, message),
         }
     }
+
+    pub fn export_locations_gpx(&self, uid: String) -> Result<String, MobileError> {
+        let store = self.controller.store.blocking_lock();
+        let waypoints = store.get_tree_waypoints(&uid);
+
+        if waypoints.is_empty() {
+            return Err(MobileError::from("No locations found"));
+        }
+
+        let mut gpx = String::from(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gpx version=\"1.1\" creator=\"Cfait\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n",
+        );
+        for (name, geo) in waypoints {
+            let parts: Vec<&str> = geo.split(',').collect();
+            if parts.len() >= 2 {
+                let escaped_name = name
+                    .replace('&', "&amp;")
+                    .replace('<', "&lt;")
+                    .replace('>', "&gt;");
+                gpx.push_str(&format!(
+                    "  <wpt lat=\"{}\" lon=\"{}\"><name>{}</name></wpt>\n",
+                    parts[0].trim(),
+                    parts[1].trim(),
+                    escaped_name
+                ));
+            }
+        }
+        gpx.push_str("</gpx>");
+
+        let cache_dir = self.ctx.get_cache_dir()?;
+        let path = cache_dir.join(format!("locations_{}.gpx", uuid::Uuid::new_v4()));
+        std::fs::write(&path, gpx).map_err(|e| MobileError::from(e.to_string()))?;
+        Ok(path.to_string_lossy().to_string())
+    }
 }
 
 fn task_to_mobile(
@@ -386,6 +421,9 @@ fn task_to_mobile(
             .any(|t_inner| t_inner.parent_uid.as_deref() == Some(&t.uid))
     });
 
+    // Count waypoints in the tree for GPX export
+    let tree_location_count = store.count_tree_locations(&t.uid) as u32;
+
     // Map the internal virtual state to simple strings for mobile clients
     // Note: virtual_state has been removed from Task model, so we default to None
     let (v_type, v_payload) = ("none".to_string(), "".to_string());
@@ -424,6 +462,7 @@ fn task_to_mobile(
         related_to_names,
         is_paused: t.is_paused(),
         has_subtasks, // <--- ADD THIS
+        tree_location_count,
         location: t.location.clone(),
         url: t.url.clone(),
         geo: t.geo.clone(),

@@ -429,6 +429,14 @@ pub fn view_task_row<'a>(
                 if *action == TaskAction::DeleteTree && !has_subtasks {
                     continue;
                 }
+                if *action == TaskAction::OpenCoordinates && task.geo.is_none() {
+                    continue;
+                }
+                if *action == TaskAction::OpenLocations
+                    && app.store.count_tree_locations(&task.uid) <= 1
+                {
+                    continue;
+                }
                 if *action == TaskAction::Promote && task.parent_uid.is_none() {
                     continue;
                 }
@@ -597,6 +605,18 @@ pub fn view_task_row<'a>(
                         Message::DeleteTaskTree(task.uid.clone()),
                         2,
                         format!("{} (Ctrl+Del)", label),
+                    ),
+                    TaskAction::OpenCoordinates => (
+                        icon::icon(icon::MAP_LOCATION_DOT).size(14).into(),
+                        Message::OpenCoordinates(task.uid.clone()),
+                        0,
+                        rust_i18n::t!("open_coordinates").to_string(),
+                    ),
+                    TaskAction::OpenLocations => (
+                        icon::icon(icon::MAP_MARKER_MULTIPLE).size(14).into(),
+                        Message::OpenLocations(task.uid.clone()),
+                        0,
+                        rust_i18n::t!("action_open_locations").to_string(),
                     ),
                 };
 
@@ -984,23 +1004,6 @@ pub fn view_task_row<'a>(
                             .size(14)
                             .color(Color::from_rgb(0.5, 0.5, 0.5));
                         tags_row = tags_row.push(container(recurrence_icon).padding(0));
-                    }
-
-                    if let Some(geo) = &task.geo {
-                        let geo_target = format!("geo:{}", geo);
-                        let geo_btn = button(icon::icon(icon::MAP_LOCATION_DOT).size(14))
-                            .style(button::text)
-                            .padding(0)
-                            .on_press(Message::OpenUrl(geo_target));
-
-                        tags_row = tags_row.push(
-                            tooltip(
-                                geo_btn,
-                                text(rust_i18n::t!("open_coordinates")).size(12),
-                                tooltip::Position::Top,
-                            )
-                            .style(tooltip_style),
-                        );
                     }
 
                     if let Some(u) = &task.url {

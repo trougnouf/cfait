@@ -90,6 +90,8 @@ pub enum Message {
     KeyboardAddRelation,
     KeyboardDuplicateTask,  // 'Ctrl+D' logic
     KeyboardDeleteTaskTree, // 'Ctrl+Delete' logic
+    KeyboardOpenLocations,  // 'g' logic
+    KeyboardOpenUrl,        // 'o' logic
     DuplicateTask(String),  // Used by Yank bar button & hotkey
     DeleteTaskTree(String),
     ToggleActiveSelected,       // 's' logic
@@ -157,6 +159,8 @@ pub enum Message {
     FocusTag(String),
     FocusLocation(String),
     OpenUrl(String),
+    OpenCoordinates(String),
+    OpenLocations(String),
     TaskClick(usize, String), // Added
 
     // --- System & Network Events ---

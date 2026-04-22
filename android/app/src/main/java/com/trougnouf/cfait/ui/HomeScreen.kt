@@ -538,6 +538,29 @@ fun HomeScreen(
     }
 
     fun onTaskAction(action: String, task: MobileTask) {
+        if (action == "open_locations_gpx") {
+            scope.launch {
+                try {
+                    val path = api.exportLocationsGpx(task.uid)
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        context, "${context.packageName}.fileprovider", java.io.File(path)
+                    )
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                        setDataAndType(uri, "application/gpx+xml")
+                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(
+                        android.content.Intent.createChooser(
+                            intent,
+                            context.getString(R.string.action_open_locations)
+                        )
+                    )
+                } catch (e: Exception) {
+                    Toast.makeText(context, e.message, Toast.LENGTH_SHORT).show()
+                }
+            }
+            return
+        }
         if (action == "move") {
             taskToMove = task; return
         }
@@ -1025,7 +1048,7 @@ fun HomeScreen(
                         HorizontalDivider()
                     } else if (sidebarTab == 2) {
                         val isAllLocsSelected = filterLocations.isEmpty()
-                        val iconStr = if (isAllLocsSelected) NfIcons.MAP else NfIcons.MAP_O
+                        val iconStr = if (isAllLocsSelected) NfIcons.MAP else NfIcons.MAP_MARKER_MULTIPLE
 
                         CompactTagRow(
                             name = stringResource(R.string.locations), count = null,

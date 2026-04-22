@@ -102,7 +102,7 @@ object NfIcons {
     val LOCATION = get(0xef4b)
     val MAP_PIN = get(0xf276)
     val MAP = get(0xf279) // nf-fa-map (Filled)
-    val MAP_O = get(0xf278) // nf-fa-map_o (Outline)
+    val MAP_MARKER_MULTIPLE = get(0xf1277) // nf-md-map_marker_multiple_outline
     val URL = get(0xf0c1)
     val GEO = get(0xf041)
     val CALENDAR = get(0xf073)

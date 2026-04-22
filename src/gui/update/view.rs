@@ -611,6 +611,69 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             });
             Task::none()
         }
+        Message::OpenCoordinates(uid) => {
+            if let Some(task) = app.store.get_task_ref(&uid)
+                && let Some(geo) = &task.geo {
+                    let geo_target = format!("geo:{}", geo);
+                    let target_url = geo_target.clone();
+                    #[cfg(not(target_os = "android"))]
+                    std::thread::spawn(move || {
+                        #[cfg(target_os = "linux")]
+                        let _ = std::process::Command::new("xdg-open")
+                            .arg(target_url)
+                            .spawn();
+                        #[cfg(target_os = "windows")]
+                        let _ = std::process::Command::new("explorer")
+                            .arg(target_url)
+                            .spawn();
+                        #[cfg(target_os = "macos")]
+                        let _ = std::process::Command::new("open").arg(target_url).spawn();
+                    });
+                }
+            Task::none()
+        }
+        Message::OpenLocations(uid) => {
+            let waypoints = app.store.get_tree_waypoints(&uid);
+            if !waypoints.is_empty() {
+                // Generate GPX content
+                let mut gpx_string = String::from(
+                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gpx version=\"1.1\" creator=\"Cfait\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n",
+                );
+                for (name, geo) in waypoints {
+                    let parts: Vec<&str> = geo.split(',').collect();
+                    if parts.len() >= 2 {
+                        let escaped_name = name
+                            .replace('&', "&amp;")
+                            .replace('<', "&lt;")
+                            .replace('>', "&gt;");
+                        gpx_string.push_str(&format!(
+                            "  <wpt lat=\"{}\" lon=\"{}\"><name>{}</name></wpt>\n",
+                            parts[0].trim(),
+                            parts[1].trim(),
+                            escaped_name
+                        ));
+                    }
+                }
+                gpx_string.push_str("</gpx>");
+
+                if let Ok(cache_dir) = app.ctx.get_cache_dir() {
+                    let path = cache_dir.join(format!("locations_{}.gpx", uuid::Uuid::new_v4()));
+                    if std::fs::write(&path, gpx_string).is_ok() {
+                        let target = path.to_string_lossy().to_string();
+                        #[cfg(not(target_os = "android"))]
+                        std::thread::spawn(move || {
+                            #[cfg(target_os = "linux")]
+                            let _ = std::process::Command::new("xdg-open").arg(target).spawn();
+                            #[cfg(target_os = "windows")]
+                            let _ = std::process::Command::new("explorer").arg(target).spawn();
+                            #[cfg(target_os = "macos")]
+                            let _ = std::process::Command::new("open").arg(target).spawn();
+                        });
+                    }
+                }
+            }
+            Task::none()
+        }
         Message::JumpToRandomTask => {
             // 1. Randomize icon for next time
             let mut rng = fastrand::Rng::new();
