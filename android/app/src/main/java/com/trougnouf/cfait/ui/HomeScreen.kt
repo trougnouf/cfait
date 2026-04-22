@@ -541,9 +541,11 @@ fun HomeScreen(
         if (action == "open_locations_gpx") {
             scope.launch {
                 try {
-                    val path = api.exportLocationsGpx(task.uid)
+                    val gpxContent = api.exportLocationsGpx(task.uid)
+                    val file = java.io.File(context.cacheDir, "locations_${task.uid}.gpx")
+                    file.writeText(gpxContent)
                     val uri = androidx.core.content.FileProvider.getUriForFile(
-                        context, "${context.packageName}.fileprovider", java.io.File(path)
+                        context, "${context.packageName}.fileprovider", file
                     )
                     val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
                         setDataAndType(uri, "application/gpx+xml")

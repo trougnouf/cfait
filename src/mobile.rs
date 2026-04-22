@@ -337,10 +337,7 @@ impl CfaitMobile {
         }
         gpx.push_str("</gpx>");
 
-        let cache_dir = self.ctx.get_cache_dir()?;
-        let path = cache_dir.join(format!("locations_{}.gpx", uuid::Uuid::new_v4()));
-        std::fs::write(&path, gpx).map_err(|e| MobileError::from(e.to_string()))?;
-        Ok(path.to_string_lossy().to_string())
+        Ok(gpx)
     }
 }
 
