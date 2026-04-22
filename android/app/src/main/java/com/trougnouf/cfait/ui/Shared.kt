@@ -156,6 +156,7 @@ object NfIcons {
     val HELP = get(0xf0625)
     val BLOCKED = get(0xf479)
     val CHILD = get(0xf0a89)
+    val CLONE = get(0xf24d)
     val HEART_HAND = get(0xed9b)
     val CREDIT_CARD = get(0xf09d)
     val BANK = get(0xf0a27)

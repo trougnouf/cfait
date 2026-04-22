@@ -505,9 +505,9 @@ fun TaskRow(
 
                     // --- DUPLICATE LOGIC ---
                     val duplicateLabel = if (task.hasSubtasks) {
-                        androidx.compose.ui.res.stringResource(R.string.duplicate_task_tree)
-                    } else {
                         androidx.compose.ui.res.stringResource(R.string.duplicate_task)
+                    } else {
+                        androidx.compose.ui.res.stringResource(R.string.duplicate_single_task)
                     }
 
                     DropdownMenuItem(

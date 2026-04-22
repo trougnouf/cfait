@@ -297,6 +297,7 @@
   "show_ongoing_notifications_explain": "Display a notification with a timer when a task is in progress.",
   "show_priority_numbers": "Show priority numbers (!X)",
   "duplicate_task": "Duplicate task tree",
+  "duplicate_single_task": "Duplicate task",
   "delete_task_tree": "Delete task tree",
   "yank_tooltip_delete_tree": "Delete '%{target}' and all its subtasks (Ctrl+Del)",
   "open_coordinates": "Open coordinates",
