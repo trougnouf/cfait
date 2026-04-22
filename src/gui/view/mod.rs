@@ -1688,15 +1688,10 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         .height(Length::Fixed(45.0))
         .font(iced::Font::DEFAULT);
 
-    let is_input_empty = app.input_value.text().is_empty();
     let expand_btn = iced::widget::button(icon::icon(icon::DETAILED_TRIANGLE).size(16))
         .style(iced::widget::button::text)
         .padding(12)
-        .on_press_maybe(if is_input_empty {
-            None
-        } else {
-            Some(Message::StartCreateWithDescription)
-        });
+        .on_press(Message::StartCreateWithDescription);
 
     let expand_tooltip = tooltip(
         expand_btn,

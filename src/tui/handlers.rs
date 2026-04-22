@@ -272,6 +272,15 @@ pub async fn handle_key_event(
                 return None;
             }
             KeyCode::Enter if !state.input_buffer.is_empty() => {
+                if state.creating_with_desc {
+                    state.new_task_title = state.input_buffer.clone();
+                    state.input_buffer.clear();
+                    state.cursor_position = 0;
+                    state.mode = InputMode::EditingDescription;
+                    state.message = "Write notes or subtasks (- [ ]). Ctrl+S to save.".to_string();
+                    return None;
+                }
+
                 let (clean_input, new_aliases): (String, HashMap<String, Vec<String>>) =
                     extract_inline_aliases(&state.input_buffer);
 
@@ -355,6 +364,8 @@ pub async fn handle_key_event(
             KeyCode::Esc => {
                 state.mode = InputMode::Normal;
                 state.reset_input();
+                state.creating_with_desc = false;
+                state.new_task_title.clear();
             }
             KeyCode::Char(c) => state.enter_char(c),
             KeyCode::Backspace => state.delete_char(),
@@ -758,6 +769,15 @@ pub async fn handle_key_event(
             _ => {}
         },
         InputMode::Normal => match key.code {
+            KeyCode::Char('e') | KeyCode::Char('E')
+                if key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                state.mode = InputMode::Creating;
+                state.creating_with_desc = true;
+                state.reset_input();
+                state.new_task_title.clear();
+                state.message = "Task Title (Press Enter to add Description):".to_string();
+            }
             KeyCode::Esc => {
                 let mut needs_refresh = false;
                 if state.yanked_uid.is_some() {
@@ -1105,6 +1125,8 @@ pub async fn handle_key_event(
                     state.cursor_position = state.input_buffer.chars().count();
 
                     state.mode = InputMode::Creating;
+                    state.creating_with_desc = false;
+                    state.new_task_title.clear();
                     state.creating_child_of = Some(uid);
                     state.message = format!("New Child of '{}'...", summary);
                 }
@@ -1581,6 +1603,8 @@ pub async fn handle_key_event(
             KeyCode::Char('a') => {
                 state.mode = InputMode::Creating;
                 state.reset_input();
+                state.creating_with_desc = false;
+                state.new_task_title.clear();
                 state.message = "New Task...".to_string();
             }
             KeyCode::Char('e') => {

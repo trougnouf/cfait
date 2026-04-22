@@ -1054,7 +1054,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             summary
                         )
                     } else {
-                        "?:Help q:Quit Tab:Side a:Add Ctrl+e:Desc e:Edit E:Details Spc:Done d:Del y:Yank /:Find"
+                        "?:Help q:Quit Tab:Side a:Add e:Edit E:Details Spc:Done Del:Del y:Yank /:Find"
                             .to_string()
                     }
                 }

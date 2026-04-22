@@ -38,6 +38,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::StartCreateChild(parent_uid) => {
             app.creating_child_of = Some(parent_uid.clone());
             app.selected_uid = Some(parent_uid.clone());
+            app.creating_with_desc = false;
 
             let mut initial_input = String::new();
             if let Some(parent) = app.store.get_task_ref(&parent_uid) {
@@ -59,12 +60,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::StartCreateWithDescription => {
-            if !app.input_value.text().trim().is_empty() {
-                app.creating_with_desc = true;
-                app.description_value = iced::widget::text_editor::Content::new();
-                return iced::widget::operation::focus(iced::widget::Id::new("description_input"));
+            app.creating_with_desc = true;
+            if app.input_value.text().trim().is_empty() {
+                iced::widget::operation::focus(iced::widget::Id::new("main_input"))
+            } else {
+                iced::widget::operation::focus(iced::widget::Id::new("description_input"))
             }
-            Task::none()
         }
 
         Message::SubmitTask => handle_submit(app),
@@ -542,11 +543,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::EscCaptured => {
             // If editing/creating child -> cancel and focus back; otherwise soft escape.
-            if app.editing_uid.is_some() || app.creating_child_of.is_some() {
+            if app.editing_uid.is_some()
+                || app.creating_child_of.is_some()
+                || app.creating_with_desc
+            {
                 app.input_value = text_editor::Content::new();
                 app.description_value = text_editor::Content::new();
                 app.editing_uid = None;
                 app.creating_child_of = None;
+                app.creating_with_desc = false;
                 scroll_to_selected_delayed(app, true)
             } else {
                 scroll_to_selected_delayed(app, true)
@@ -560,12 +565,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.moving_task_uid.is_some() {
                 app.moving_task_uid = None;
                 captured_action = true;
-            } else if app.editing_uid.is_some() || app.creating_child_of.is_some() {
+            } else if app.editing_uid.is_some()
+                || app.creating_child_of.is_some()
+                || app.creating_with_desc
+            {
                 app.input_value = text_editor::Content::new();
                 app.description_value = text_editor::Content::new();
                 app.editing_uid = None;
                 app.creating_child_of = None;
                 app.child_lock_active = false;
+                app.creating_with_desc = false;
                 captured_action = true;
             } else if app.yanked_uid.is_some() {
                 app.yanked_uid = None;
