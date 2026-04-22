@@ -416,16 +416,14 @@ impl TaskStore {
         let mut fixes = Vec::new();
         for task in new_map.values() {
             // History snapshots are always completed and lack an RRULE
-            if task.status.is_done() && task.rrule.is_none() {
-                if let Some(p_uid) = &task.parent_uid {
-                    if let Some(parent) = new_map.get(p_uid) {
+            if task.status.is_done() && task.rrule.is_none()
+                && let Some(p_uid) = &task.parent_uid
+                    && let Some(parent) = new_map.get(p_uid) {
                         // If it matches the parent's summary, it's definitely a history snapshot
                         if parent.rrule.is_some() && parent.summary == task.summary {
                             fixes.push(task.uid.clone());
                         }
                     }
-                }
-            }
         }
 
         for uid in fixes {
