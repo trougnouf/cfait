@@ -687,35 +687,40 @@ impl IcsAdapter {
 
         for line in unfolded.lines() {
             let line = line.trim();
-            if line == "BEGIN:VTODO" {
+            let line_upper = line.to_uppercase(); // Use uppercase for safe checking
+
+            if line_upper == "BEGIN:VTODO" {
                 in_vtodo = true;
                 continue;
             }
-            if line == "END:VTODO" {
+            if line_upper == "END:VTODO" {
                 in_vtodo = false;
                 continue;
             }
-            if line == "BEGIN:VALARM" {
+            if line_upper == "BEGIN:VALARM" {
                 in_valarm = true;
                 continue;
             }
-            if line == "END:VALARM" {
+            if line_upper == "END:VALARM" {
                 in_valarm = false;
                 continue;
             }
 
             if in_vtodo && !in_valarm {
-                if line.starts_with("RELATED-TO")
+                // Case-insensitive checks
+                if line_upper.starts_with("RELATED-TO")
                     && let Some((raw_key, val)) = line.split_once(':')
                 {
                     let parts: Vec<&str> = raw_key.split(';').collect();
                     let mut is_dep = false;
                     let mut is_sibling = false;
+
                     for param in parts.iter().skip(1) {
-                        if param.contains("RELTYPE") {
-                            if param.contains("DEPENDS-ON") {
+                        let param_u = param.to_uppercase();
+                        if param_u.contains("RELTYPE") {
+                            if param_u.contains("DEPENDS-ON") {
                                 is_dep = true;
-                            } else if param.contains("SIBLING") {
+                            } else if param_u.contains("SIBLING") {
                                 is_sibling = true;
                             }
                         }
@@ -736,7 +741,7 @@ impl IcsAdapter {
                 }
 
                 // Manual session parsing
-                if line.starts_with("X-CFAIT-SESSION:")
+                if line_upper.starts_with("X-CFAIT-SESSION:")
                     && let Some((_, val)) = line.split_once(':')
                 {
                     // Un-escape comma in case a previous version escaped it, and fallback to slash

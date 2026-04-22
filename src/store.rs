@@ -412,25 +412,51 @@ impl TaskStore {
             new_map.insert(task.uid.clone(), task);
         }
 
+        // --- ADDED: Automatic cleanup for legacy history tasks mistakenly parsed as children ---
+        let mut fixes = Vec::new();
+        for task in new_map.values() {
+            // History snapshots are always completed and lack an RRULE
+            if task.status.is_done() && task.rrule.is_none() {
+                if let Some(p_uid) = &task.parent_uid {
+                    if let Some(parent) = new_map.get(p_uid) {
+                        // If it matches the parent's summary, it's definitely a history snapshot
+                        if parent.rrule.is_some() && parent.summary == task.summary {
+                            fixes.push(task.uid.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        for uid in fixes {
+            if let Some(task) = new_map.get_mut(&uid) {
+                let p_uid = task.parent_uid.take().unwrap();
+                if !task.related_to.contains(&p_uid) {
+                    task.related_to.push(p_uid);
+                }
+            }
+        }
+        // --- END ADDED ---
+
         // Cleanup old calendars if tasks moved
         for uid in &uids_to_add {
             if let Some(old_href) = self.index.get(uid)
-                && old_href != &calendar_href {
-                    let old_href_clone = old_href.clone();
-                    if let Some(old_map) = self.calendars.get_mut(&old_href_clone) {
-                        old_map.remove(uid);
-                    }
+                && old_href != &calendar_href
+            {
+                let old_href_clone = old_href.clone();
+                if let Some(old_map) = self.calendars.get_mut(&old_href_clone) {
+                    old_map.remove(uid);
                 }
+            }
             self.index.insert(uid.clone(), calendar_href.clone());
         }
 
         // Cleanup index for tasks that were in this calendar but are now gone
         if let Some(old_map) = self.calendars.get(&calendar_href) {
             for uid in old_map.keys() {
-                if !new_map.contains_key(uid)
-                    && self.index.get(uid) == Some(&calendar_href) {
-                        self.index.remove(uid);
-                    }
+                if !new_map.contains_key(uid) && self.index.get(uid) == Some(&calendar_href) {
+                    self.index.remove(uid);
+                }
             }
         }
 
