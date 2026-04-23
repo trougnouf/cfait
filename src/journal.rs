@@ -106,30 +106,51 @@ impl Journal {
             if let Some(&idx) = uid_map.get(&uid)
                 && let Some(prev) = &compacted[idx]
             {
-                match (prev, &action) {
-                    (Action::Create(_), Action::Update(t)) => {
-                        compacted[idx] = Some(Action::Create(t.clone()));
-                        merged = true;
+                let same_calendar = match (prev, &action) {
+                    (Action::Create(t1), Action::Update(t2)) => {
+                        t1.calendar_href == t2.calendar_href
                     }
-                    (Action::Update(_), Action::Update(t)) => {
-                        compacted[idx] = Some(Action::Update(t.clone()));
-                        merged = true;
+                    (Action::Update(t1), Action::Update(t2)) => {
+                        t1.calendar_href == t2.calendar_href
                     }
-                    (Action::Create(_), Action::Delete(_)) => {
-                        compacted[idx] = None;
-                        uid_map.remove(&uid);
-                        merged = true;
+                    (Action::Create(t1), Action::Delete(t2)) => {
+                        t1.calendar_href == t2.calendar_href
                     }
-                    (Action::Update(_), Action::Delete(t)) => {
-                        compacted[idx] = Some(Action::Delete(t.clone()));
-                        merged = true;
+                    (Action::Update(t1), Action::Delete(t2)) => {
+                        t1.calendar_href == t2.calendar_href
                     }
-                    (Action::Create(_), Action::Create(t)) => {
-                        // Merge duplicates: keep the newer version (last wins)
-                        compacted[idx] = Some(Action::Create(t.clone()));
-                        merged = true;
+                    (Action::Create(t1), Action::Create(t2)) => {
+                        t1.calendar_href == t2.calendar_href
                     }
-                    _ => {}
+                    _ => false,
+                };
+
+                if same_calendar {
+                    match (prev, &action) {
+                        (Action::Create(_), Action::Update(t)) => {
+                            compacted[idx] = Some(Action::Create(t.clone()));
+                            merged = true;
+                        }
+                        (Action::Update(_), Action::Update(t)) => {
+                            compacted[idx] = Some(Action::Update(t.clone()));
+                            merged = true;
+                        }
+                        (Action::Create(_), Action::Delete(_)) => {
+                            compacted[idx] = None;
+                            uid_map.remove(&uid);
+                            merged = true;
+                        }
+                        (Action::Update(_), Action::Delete(t)) => {
+                            compacted[idx] = Some(Action::Delete(t.clone()));
+                            merged = true;
+                        }
+                        (Action::Create(_), Action::Create(t)) => {
+                            // Merge duplicates: keep the newer version (last wins)
+                            compacted[idx] = Some(Action::Create(t.clone()));
+                            merged = true;
+                        }
+                        _ => {}
+                    }
                 }
             }
 
@@ -158,13 +179,13 @@ impl Journal {
         for action in &journal.queue {
             match action {
                 Action::Create(t) | Action::Update(t)
-                    if urls_match(&t.calendar_href, calendar_href) => {
-                        pending_uids.insert(t.uid.clone());
-                    }
-                Action::Move(t, target)
-                    if urls_match(target, calendar_href) => {
-                        pending_uids.insert(t.uid.clone());
-                    }
+                    if urls_match(&t.calendar_href, calendar_href) =>
+                {
+                    pending_uids.insert(t.uid.clone());
+                }
+                Action::Move(t, target) if urls_match(target, calendar_href) => {
+                    pending_uids.insert(t.uid.clone());
+                }
                 _ => {}
             }
         }

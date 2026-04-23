@@ -28,6 +28,7 @@ enum StepOutcome {
         refresh_path: Option<String>,
     },
     RetryWith(Box<Action>),
+    ReplaceWith(Vec<Action>),
     Discard,
     RecoveryNeeded(String),
 }
@@ -360,20 +361,20 @@ impl RustyClient {
                 }))
             }
             Err(e) => {
-                if e.contains("404")
-                    || e.contains("NotFound")
-                    || e.contains("409")
-                    || e.contains("Conflict")
-                    || e.contains("403")
-                    || e.contains("InvalidInput")
-                    || e.contains("invalid uri character")
-                    || e.contains("400")
-                    || e.contains("415")
-                {
-                    Ok(StepResult::new(StepOutcome::RecoveryNeeded(e)))
-                } else {
-                    Err(e)
-                }
+                let mut moved = task.clone();
+                moved.calendar_href = new_cal.to_string();
+                moved.href = String::new();
+                moved.etag = String::new();
+
+                // CREATE first, then DELETE the original. This prevents data loss.
+                Ok(StepResult::new(StepOutcome::ReplaceWith(vec![
+                    Action::Create(moved),
+                    Action::Delete(task.clone()),
+                ]))
+                .with_warning(format!(
+                    "MOVE failed ({}), falling back to Create+Delete.",
+                    e
+                )))
             }
         }
     }
@@ -416,6 +417,7 @@ impl RustyClient {
             };
 
             let mut conflict_resolved_action: Option<Action> = None;
+            let mut replaced_actions: Option<Vec<Action>> = None;
             let mut new_etag_to_propagate: Option<String> = None;
             let mut new_href_to_propagate: Option<(String, String)> = None;
             let mut path_for_refresh: Option<String> = None;
@@ -540,6 +542,9 @@ impl RustyClient {
                                 .await;
                             }
                         }
+                        StepOutcome::ReplaceWith(acts) => {
+                            replaced_actions = Some(acts);
+                        }
                         StepOutcome::Discard => {
                             if let Action::Delete(t) = &next_action {
                                 self.sync_companion_event(
@@ -638,22 +643,33 @@ impl RustyClient {
                             if let Some(act) = conflict_resolved_action {
                                 queue.insert(0, act);
                             }
+                            if let Some(acts) = replaced_actions {
+                                for act in acts.into_iter().rev() {
+                                    queue.insert(0, act);
+                                }
+                            }
 
                             if let Some(etag) = new_etag_to_propagate {
-                                let target_uid = match &next_action {
-                                    Action::Create(t) | Action::Update(t) => t.uid.clone(),
-                                    Action::Move(t, _) => t.uid.clone(),
-                                    _ => String::new(),
+                                let (target_uid, target_cal_href) = match &next_action {
+                                    Action::Create(t) | Action::Update(t) => {
+                                        (t.uid.clone(), t.calendar_href.clone())
+                                    }
+                                    Action::Move(t, target) => (t.uid.clone(), target.clone()),
+                                    _ => (String::new(), String::new()),
                                 };
                                 if !target_uid.is_empty() {
                                     for item in queue.iter_mut() {
                                         match item {
                                             Action::Update(t) | Action::Delete(t)
-                                                if t.uid == target_uid =>
+                                                if t.uid == target_uid
+                                                    && t.calendar_href == target_cal_href =>
                                             {
                                                 t.etag = etag.clone();
                                             }
-                                            Action::Move(t, _) if t.uid == target_uid => {
+                                            Action::Move(t, _)
+                                                if t.uid == target_uid
+                                                    && t.calendar_href == target_cal_href =>
+                                            {
                                                 t.etag = etag.clone();
                                             }
                                             _ => {}
@@ -663,18 +679,18 @@ impl RustyClient {
                             }
 
                             if let Some((old_href, new_href)) = new_href_to_propagate {
-                                let target_uid = match &next_action {
-                                    Action::Move(t, _) => t.uid.clone(),
-                                    Action::Create(t) => t.uid.clone(),
-                                    Action::Update(t) => t.uid.clone(),
-                                    _ => String::new(),
+                                let (target_uid, target_cal_href) = match &next_action {
+                                    Action::Move(t, target) => (t.uid.clone(), target.clone()),
+                                    Action::Create(t) => (t.uid.clone(), t.calendar_href.clone()),
+                                    Action::Update(t) => (t.uid.clone(), t.calendar_href.clone()),
+                                    _ => (String::new(), String::new()),
                                 };
                                 for item in queue.iter_mut() {
                                     match item {
                                         Action::Update(t) | Action::Delete(t)
                                             if (t.uid == target_uid
-                                                || (!old_href.is_empty()
-                                                    && t.href == old_href)) =>
+                                                && t.calendar_href == target_cal_href)
+                                                || (!old_href.is_empty() && t.href == old_href) =>
                                         {
                                             t.href = new_href.clone();
                                             if let Some(last_slash) = new_href.rfind('/') {
@@ -682,7 +698,10 @@ impl RustyClient {
                                                     new_href[..=last_slash].to_string();
                                             }
                                         }
-                                        Action::Move(t, _) if t.uid == target_uid => {
+                                        Action::Move(t, _)
+                                            if t.uid == target_uid
+                                                && t.calendar_href == target_cal_href =>
+                                        {
                                             t.href = new_href.clone();
                                         }
                                         _ => {}
