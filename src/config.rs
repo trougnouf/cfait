@@ -17,8 +17,12 @@ fn default_cutoff() -> Option<u32> {
     Some(2)
 }
 
+// Configuration version constant for migration handling
+const CURRENT_CONFIG_VERSION: u32 = 1;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TaskAction {
+    OpenUrl,
     ToggleDetails,
     ToggleTimer,
     StopTimer,
@@ -40,8 +44,9 @@ pub enum TaskAction {
 
 impl TaskAction {
     pub const ALL: &'static [TaskAction] = &[
-        TaskAction::OpenCoordinates, // First - single coordinates
-        TaskAction::OpenLocations,   // Second - multiple coordinates (GPX)
+        TaskAction::OpenUrl,         // First - link out
+        TaskAction::OpenCoordinates, // Second - single coordinates
+        TaskAction::OpenLocations,   // Third - multiple coordinates (GPX)
         TaskAction::ToggleDetails,
         TaskAction::ToggleTimer,
         TaskAction::StopTimer,
@@ -66,7 +71,7 @@ impl TaskAction {
             TaskAction::StopTimer => rust_i18n::t!("stop_reset").to_string(),
             TaskAction::AddSession => rust_i18n::t!("help_metadata_log_time").to_string(),
             TaskAction::IncreasePriority => rust_i18n::t!("increase_priority").to_string(),
-            TaskAction::DecreasePriority => rust_i18n::t!("decrease_priority").to_string(),
+            TaskAction::DecreasePriority => rust_i18n::t!("menu_decrease_prio").to_string(),
             TaskAction::Edit => rust_i18n::t!("edit").to_string(),
             TaskAction::Yank => rust_i18n::t!("yank_copy_id").to_string(),
             TaskAction::CreateSubtask => rust_i18n::t!("create_subtask").to_string(),
@@ -78,13 +83,15 @@ impl TaskAction {
             TaskAction::DeleteTree => rust_i18n::t!("delete_task_tree").to_string(),
             TaskAction::OpenLocations => rust_i18n::t!("action_open_locations").to_string(),
             TaskAction::OpenCoordinates => rust_i18n::t!("open_coordinates").to_string(),
+            TaskAction::OpenUrl => rust_i18n::t!("open_url").to_string(),
         }
     }
 }
 
 fn default_pinned_actions() -> Vec<TaskAction> {
     vec![
-        TaskAction::OpenCoordinates, // First action - open single coordinates
+        TaskAction::OpenUrl, // First action - open URL
+        TaskAction::OpenCoordinates,
         TaskAction::ToggleDetails,
         TaskAction::ToggleTimer,
         TaskAction::IncreasePriority,
@@ -241,6 +248,14 @@ impl fmt::Display for AppTheme {
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Config {
+    /// IMPORTANT FOR DEVELOPERS:
+    /// If you add a new action to `default_pinned_actions()` or modify a default
+    /// collection that existing users should inherit, you MUST increment
+    /// `CURRENT_CONFIG_VERSION` and add a migration step in `Config::load()`.
+    /// Otherwise, existing users' saved configs will override your new defaults.
+    #[serde(default)]
+    pub config_version: u32,
+
     pub url: String,
     pub username: String,
     pub password: String,
@@ -323,6 +338,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            config_version: CURRENT_CONFIG_VERSION,
             url: String::new(),
             username: String::new(),
             password: String::new(),
@@ -372,9 +388,27 @@ impl Config {
             anyhow::anyhow!("Failed to read config file '{}': {}", path.display(), e)
         })?;
 
-        let config: Config = toml::from_str(&contents).map_err(|e| {
+        let mut config: Config = toml::from_str(&contents).map_err(|e| {
             anyhow::anyhow!("Failed to parse config file '{}': {}", path.display(), e)
         })?;
+
+        // --- CONFIG MIGRATIONS ---
+        // Apply migrations for older configs to ensure they receive new features/defaults.
+        // If you bump `CURRENT_CONFIG_VERSION`, add a new `if` block here.
+        if config.config_version == 0 {
+            // Migrate OpenCoordinates (added after v0.5.8)
+            if !config.pinned_actions.contains(&TaskAction::OpenCoordinates) {
+                config.pinned_actions.insert(0, TaskAction::OpenCoordinates);
+            }
+            // Migrate OpenUrl (added after v0.5.8)
+            if !config.pinned_actions.contains(&TaskAction::OpenUrl) {
+                config.pinned_actions.insert(0, TaskAction::OpenUrl);
+            }
+            // Note: Inserting both at 0 one after the other places OpenUrl first,
+            // then OpenCoordinates, perfectly matching `default_pinned_actions()`.
+
+            config.config_version = 1;
+        }
 
         Ok(config)
     }
@@ -550,6 +584,11 @@ impl Config {
             } else if trimmed.starts_with("trash_retention_days =") {
                 out.push_str(line);
                 out.push_str(" # Integer: Days to keep deleted items in local trash before permanent delete. 0 disables trash.");
+            } else if trimmed.starts_with("config_version =") {
+                out.push_str(
+                    "# Internal version for configuration migrations. Do not edit manually.",
+                );
+                out.push_str(line);
             } else {
                 // Pass through unhandled lines
                 out.push_str(line);

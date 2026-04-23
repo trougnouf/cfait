@@ -329,6 +329,9 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             }
             // <--- END ADD BLOCK --->
 
+            if *action == TaskAction::OpenUrl && task.url.is_none() {
+                return None;
+            }
             if *action == TaskAction::DeleteTree && !has_subtasks {
                 return None;
             }
@@ -503,6 +506,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     Message::OpenLocations(uid.clone()),
                     false,
                 ),
+                TaskAction::OpenUrl => (
+                    icon::icon(icon::URL_CHECK).size(14).into(),
+                    Message::OpenUrl(task.url.clone().unwrap()),
+                    false,
+                ),
             };
 
             let btn = button(
@@ -525,6 +533,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         // Custom ordering for context menu - put location actions at top
         let context_menu_order = if *is_full {
             vec![
+                TaskAction::OpenUrl,         // Add this at the top
                 TaskAction::OpenCoordinates, // Single coordinates first
                 TaskAction::OpenLocations,   // GPX export second
                 TaskAction::ToggleDetails,
@@ -550,13 +559,26 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 .filter(|a| !app.pinned_actions.contains(a))
                 .cloned()
                 .collect();
+
+            // Move OpenUrl to front if present
+            let mut insert_idx = 0;
+            if let Some(pos) = unpinned_actions
+                .iter()
+                .position(|&a| a == TaskAction::OpenUrl)
+            {
+                unpinned_actions.remove(pos);
+                unpinned_actions.insert(insert_idx, TaskAction::OpenUrl);
+                insert_idx += 1;
+            }
+
             // Move location actions to front if present (OpenCoordinates first, then OpenLocations)
             if let Some(pos) = unpinned_actions
                 .iter()
                 .position(|&a| a == TaskAction::OpenCoordinates)
             {
                 unpinned_actions.remove(pos);
-                unpinned_actions.insert(0, TaskAction::OpenCoordinates);
+                unpinned_actions.insert(insert_idx, TaskAction::OpenCoordinates);
+                insert_idx += 1;
             }
             if let Some(pos) = unpinned_actions
                 .iter()
@@ -564,11 +586,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             {
                 unpinned_actions.remove(pos);
                 // Insert after OpenCoordinates if present, otherwise at front
-                if unpinned_actions.first() == Some(&TaskAction::OpenCoordinates) {
-                    unpinned_actions.insert(1, TaskAction::OpenLocations);
-                } else {
-                    unpinned_actions.insert(0, TaskAction::OpenLocations);
-                }
+                unpinned_actions.insert(insert_idx, TaskAction::OpenLocations);
             }
             unpinned_actions
         };

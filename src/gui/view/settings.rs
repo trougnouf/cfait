@@ -432,7 +432,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.6)),
                 Space::new().height(10),
-                text("Pinned Actions (Task Row)").size(16),
+                text("Pinned actions (task row)").size(16),
                 {
                     let mut action_col = column![].spacing(2);
                     for action in crate::config::TaskAction::ALL {
@@ -457,6 +457,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                             crate::config::TaskAction::Move => icon::MOVE,
                             crate::config::TaskAction::OpenCoordinates => icon::MAP_LOCATION_DOT,
                             crate::config::TaskAction::OpenLocations => icon::MAP_MARKER_MULTIPLE,
+                            crate::config::TaskAction::OpenUrl => icon::URL_CHECK,
                         };
 
                         let check_icon = if is_pinned {

@@ -423,6 +423,9 @@ pub fn view_task_row<'a>(
                 let is_done_or_cancelled = task.status == crate::model::TaskStatus::Completed
                     || task.status == crate::model::TaskStatus::Cancelled;
 
+                if *action == TaskAction::OpenUrl && task.url.is_none() {
+                    continue;
+                }
                 if *action == TaskAction::ToggleDetails && !(has_info || has_time) {
                     continue;
                 }
@@ -617,6 +620,12 @@ pub fn view_task_row<'a>(
                         Message::OpenLocations(task.uid.clone()),
                         0,
                         rust_i18n::t!("action_open_locations").to_string(),
+                    ),
+                    TaskAction::OpenUrl => (
+                        icon::icon(icon::URL_CHECK).size(14).into(),
+                        Message::OpenUrl(task.url.clone().unwrap()),
+                        0,
+                        format!("{} (o)", label),
                     ),
                 };
 
@@ -1004,21 +1013,6 @@ pub fn view_task_row<'a>(
                             .size(14)
                             .color(Color::from_rgb(0.5, 0.5, 0.5));
                         tags_row = tags_row.push(container(recurrence_icon).padding(0));
-                    }
-
-                    if let Some(u) = &task.url {
-                        let url_btn = button(icon::icon(icon::URL_CHECK).size(14))
-                            .style(button::text)
-                            .padding(0)
-                            .on_press(Message::OpenUrl(u.clone()));
-                        tags_row = tags_row.push(
-                            tooltip(
-                                url_btn,
-                                text(rust_i18n::t!("open_url")).size(12),
-                                tooltip::Position::Top,
-                            )
-                            .style(tooltip_style),
-                        );
                     }
 
                     tags_row.into()
