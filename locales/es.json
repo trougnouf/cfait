@@ -1,4 +1,5 @@
 {
+    "action_open_locations": "Ubicaciones disponibles (GPX)",
     "active_alarm": "Alarma activa",
     "add": "Añadir",
     "add_task_to_target": "Añadir tarea a %{target}",
