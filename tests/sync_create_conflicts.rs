@@ -1,3 +1,4 @@
+// File: ./tests/sync_create_conflicts.rs
 use cfait::client::RustyClient;
 use cfait::context::TestContext;
 use cfait::journal::{Action, Journal};
@@ -117,12 +118,14 @@ async fn test_move_404_handled_gracefully() {
     let mock_create = server
         .mock("PUT", mockito::Matcher::Any)
         .with_status(201)
+        .with_header("ETag", "\"new-etag\"") // Tell the client the new ETag so it doesn't fallback to PROPFIND
         .create_async()
         .await;
 
     let mock_delete = server
         .mock("DELETE", mockito::Matcher::Any)
         .with_status(404) // Source is gone, so delete gets 404 and is happily discarded
+        .expect_at_least(1) // Because of the ANY matcher, it will absorb the task delete + companion event cleanup deletes
         .create_async()
         .await;
 
