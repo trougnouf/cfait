@@ -109,8 +109,20 @@ async fn test_move_404_handled_gracefully() {
     // Mock a MOVE where the source is missing (404)
     // Client should assume it was already moved or deleted and proceed.
     let mock_move = server
-        .mock("MOVE", old_path)
+        .mock("MOVE", mockito::Matcher::Any)
         .with_status(404)
+        .create_async()
+        .await;
+
+    let mock_create = server
+        .mock("PUT", mockito::Matcher::Any)
+        .with_status(201)
+        .create_async()
+        .await;
+
+    let mock_delete = server
+        .mock("DELETE", mockito::Matcher::Any)
+        .with_status(404) // Source is gone, so delete gets 404 and is happily discarded
         .create_async()
         .await;
 
@@ -126,11 +138,13 @@ async fn test_move_404_handled_gracefully() {
     let result = client.sync_journal().await;
 
     mock_move.assert();
+    mock_create.assert();
+    mock_delete.assert();
     assert!(result.is_ok());
 
     let journal = Journal::load(ctx.as_ref());
     assert!(
         journal.is_empty(),
-        "Journal should drop MOVE actions if source is 404"
+        "Journal should be empty after falling back to Create+Delete"
     );
 }
