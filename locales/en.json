@@ -2,7 +2,7 @@
   "active_alarm": "Active alarm",
   "add": "Add",
   "add_task_to_target": "Add task to %{target}",
-  "advanced_settings_button": "Advanced settings",
+  "advanced_settings_button": "More settings",
   "alarm_due_now": "Due now",
   "alarm_task_starting": "Task starting",
   "alias_key_label": "Key (#tag/@@loc)",
