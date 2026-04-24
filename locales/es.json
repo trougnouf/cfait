@@ -3,7 +3,7 @@
     "active_alarm": "Alarma activa",
     "add": "Añadir",
     "add_task_to_target": "Añadir tarea a %{target}",
-    "advanced_settings_button": "Ajustes avanzados",
+    "advanced_settings_button": "Más opciones",
     "alarm_due_now": "Vence ahora",
     "alarm_task_starting": "Empezando tarea",
     "alias_key_label": "Clave (#tag/@@loc)",
