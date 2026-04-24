@@ -1018,7 +1018,7 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     .height(Length::Fixed(40.0))
     .width(Length::Fixed(40.0))
     .style(iced::widget::button::secondary)
-    .on_press(Message::OpenHelp(crate::help::HelpTab::Keyboard));
+    .on_press(Message::OpenHelp(crate::help::HelpTab::Shortcuts));
 
     let help_btn = iced::widget::button(
         container(icon::icon(icon::HELP_RHOMBUS).size(20))

@@ -423,6 +423,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.state = AppState::Help(tab, icon_choice);
             Task::none()
         }
+        Message::JumpToHelpSection(id) => {
+            // Iced's focus operation automatically scrolls the parent Scrollable
+            // to bring the target widget into view!
+            iced::widget::operation::focus(iced::widget::Id::new(id))
+        }
         Message::CloseHelp => {
             app.state = AppState::Active;
             Task::none()
@@ -613,23 +618,24 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::OpenCoordinates(uid) => {
             if let Some(task) = app.store.get_task_ref(&uid)
-                && let Some(geo) = &task.geo {
-                    let geo_target = format!("geo:{}", geo);
-                    let target_url = geo_target.clone();
-                    #[cfg(not(target_os = "android"))]
-                    std::thread::spawn(move || {
-                        #[cfg(target_os = "linux")]
-                        let _ = std::process::Command::new("xdg-open")
-                            .arg(target_url)
-                            .spawn();
-                        #[cfg(target_os = "windows")]
-                        let _ = std::process::Command::new("explorer")
-                            .arg(target_url)
-                            .spawn();
-                        #[cfg(target_os = "macos")]
-                        let _ = std::process::Command::new("open").arg(target_url).spawn();
-                    });
-                }
+                && let Some(geo) = &task.geo
+            {
+                let geo_target = format!("geo:{}", geo);
+                let target_url = geo_target.clone();
+                #[cfg(not(target_os = "android"))]
+                std::thread::spawn(move || {
+                    #[cfg(target_os = "linux")]
+                    let _ = std::process::Command::new("xdg-open")
+                        .arg(target_url)
+                        .spawn();
+                    #[cfg(target_os = "windows")]
+                    let _ = std::process::Command::new("explorer")
+                        .arg(target_url)
+                        .spawn();
+                    #[cfg(target_os = "macos")]
+                    let _ = std::process::Command::new("open").arg(target_url).spawn();
+                });
+            }
             Task::none()
         }
         Message::OpenLocations(uid) => {

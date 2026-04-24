@@ -1,22 +1,14 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/help.rs
-//! Dynamic, localized help sections.
-//!
-//! This replaces the previous static `&'static str` tables with runtime-generated
-//! `String` values so that the help content reflects the active locale (via
-//! `rust_i18n::t!()`).
-//!
-//! Consumers should call `get_syntax_help()` and `get_keyboard_help()` to obtain
-//! the current localized content. Callers that previously referenced the
-//! `SYNTAX_HELP` / `KEYBOARD_HELP` statics must be updated to use these
-//! functions.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Dynamic, localized help sections with progressive disclosure.
 
 #[cfg_attr(feature = "mobile", derive(uniffi::Enum))]
-#[derive(PartialEq, Clone, Copy, Debug, Default)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, Default)]
 pub enum HelpTab {
     #[default]
     Syntax,
-    Keyboard,
+    Shortcuts,
+    About,
 }
 
 #[derive(Clone, Debug)]
@@ -32,69 +24,35 @@ pub struct HelpSection {
     pub items: Vec<HelpItem>,
 }
 
-/// Returns localized syntax-oriented help sections.
-///
-/// This function uses `rust_i18n::t!()` for all translatable strings so the
-/// result reflects the currently active locale.
 pub fn get_syntax_help() -> Vec<HelpSection> {
     vec![
         HelpSection {
-            title: rust_i18n::t!("organization").to_string(),
+            title: "Quick start".to_string(),
             items: vec![
-                HelpItem {
-                    keys: "- [ ] / [x]".to_string(),
-                    desc: rust_i18n::t!("help_org_subtask").to_string(),
-                    example: "- [ ] Subtask @tomorrow".to_string(),
-                },
-                HelpItem {
-                    keys: "1. [ ]".to_string(),
-                    desc: rust_i18n::t!("help_org_subtask_dep").to_string(),
-                    example: "2. [ ] Depends on 1".to_string(),
-                },
                 HelpItem {
                     keys: "!1..9".to_string(),
                     desc: rust_i18n::t!("help_org_priority").to_string(),
-                    example: "!1, !5, !9".to_string(),
+                    example: "Buy cat food !1".to_string(),
+                },
+                HelpItem {
+                    keys: "@date".to_string(),
+                    desc: rust_i18n::t!("help_timeline_due_date").to_string(),
+                    example: "Meeting @tomorrow".to_string(),
                 },
                 HelpItem {
                     keys: "#tag".to_string(),
                     desc: rust_i18n::t!("help_org_add_category").to_string(),
-                    example: "#work, #dev:backend".to_string(),
+                    example: "Plant plum tree #tree_planting".to_string(),
                 },
                 HelpItem {
                     keys: "@@loc".to_string(),
                     desc: rust_i18n::t!("help_org_location_hierarchy").to_string(),
-                    example: "@@home, @@store:aldi".to_string(),
+                    example: "Buy cookies @@aldi".to_string(),
                 },
                 HelpItem {
                     keys: "~duration".to_string(),
                     desc: rust_i18n::t!("help_org_estimated_duration").to_string(),
-                    example: "~30m, ~1.5h, ~15m-45m".to_string(),
-                },
-                HelpItem {
-                    keys: "done:date".to_string(),
-                    desc: rust_i18n::t!("help_org_done").to_string(), // Fixed mapping!
-                    example: "done:2024-01-01 15:30".to_string(),
-                },
-                HelpItem {
-                    keys: "done:X%".to_string(),
-                    desc: rust_i18n::t!("help_org_done_percent").to_string(),
-                    example: "done:25%, done:70%".to_string(),
-                },
-                HelpItem {
-                    keys: "#a:=#b".to_string(),
-                    desc: rust_i18n::t!("help_org_define_alias").to_string(),
-                    example: "#tree:=#gardening,@@home".to_string(),
-                },
-                HelpItem {
-                    keys: "@@a:=#b".to_string(),
-                    desc: rust_i18n::t!("help_org_location_alias").to_string(),
-                    example: "@@aldi:=#groceries".to_string(),
-                },
-                HelpItem {
-                    keys: "\\#text".to_string(),
-                    desc: rust_i18n::t!("help_org_escape_special").to_string(),
-                    example: "\\#not-a-tag".to_string(),
+                    example: "Exercise ~30m".to_string(),
                 },
             ],
         },
@@ -102,39 +60,29 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
             title: rust_i18n::t!("timeline").to_string(),
             items: vec![
                 HelpItem {
-                    keys: "@date".to_string(),
-                    desc: rust_i18n::t!("help_timeline_due_date").to_string(),
-                    example: "@tomorrow, @2026-06, @2026, @20251231".to_string(),
-                },
-                HelpItem {
                     keys: "^date".to_string(),
                     desc: rust_i18n::t!("help_timeline_start_date").to_string(),
-                    example: "^next week, ^2025-01-01".to_string(),
-                },
-                HelpItem {
-                    keys: "Offsets".to_string(),
-                    desc: rust_i18n::t!("help_timeline_offsets").to_string(),
-                    example: "1d, 2w, 3mo".to_string(),
-                },
-                HelpItem {
-                    keys: "Weekdays".to_string(),
-                    desc: rust_i18n::t!("help_timeline_weekdays").to_string(),
-                    example: "@friday, @next monday".to_string(),
-                },
-                HelpItem {
-                    keys: "Next period".to_string(),
-                    desc: rust_i18n::t!("help_timeline_next_period").to_string(),
-                    example: "@next week, @next month".to_string(),
-                },
-                HelpItem {
-                    keys: "Keywords".to_string(),
-                    desc: rust_i18n::t!("help_timeline_keywords").to_string(),
-                    example: "today, tomorrow".to_string(),
+                    example: "^next week".to_string(),
                 },
                 HelpItem {
                     keys: "^@date".to_string(),
                     desc: rust_i18n::t!("help_timeline_set_both_dates").to_string(),
-                    example: "^@tomorrow, ^@2d".to_string(),
+                    example: "^@tomorrow".to_string(),
+                },
+                HelpItem {
+                    keys: "m, h, d, w, mo, y".to_string(),
+                    desc: "Valid time units for duration or offsets".to_string(),
+                    example: "15m, 2h, 3d, 1w, 6mo, 1y".to_string(),
+                },
+                HelpItem {
+                    keys: "Offsets".to_string(),
+                    desc: "Relative offset from today".to_string(),
+                    example: "@1d, ^2w, @3mo".to_string(),
+                },
+                HelpItem {
+                    keys: "Weekdays".to_string(),
+                    desc: rust_i18n::t!("help_timeline_weekdays").to_string(),
+                    example: "@friday".to_string(),
                 },
             ],
         },
@@ -144,17 +92,12 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "@daily".to_string(),
                     desc: rust_i18n::t!("help_recurrence_quick_presets").to_string(),
-                    example: "@daily, @weekly, @monthly, @yearly".to_string(),
+                    example: "@daily, @weekly".to_string(),
                 },
                 HelpItem {
                     keys: "@every X".to_string(),
                     desc: rust_i18n::t!("help_recurrence_custom_intervals").to_string(),
-                    example: "@every 3 days, @every 2 weeks".to_string(),
-                },
-                HelpItem {
-                    keys: "@every <day>".to_string(),
-                    desc: rust_i18n::t!("help_recurrence_specific_weekdays").to_string(),
-                    example: "@every monday,wednesday".to_string(),
+                    example: "@every 3 days".to_string(),
                 },
                 HelpItem {
                     keys: "until <date>".to_string(),
@@ -166,37 +109,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     desc: rust_i18n::t!("help_recurrence_except_dates").to_string(),
                     example: "@daily except 2025-12-25".to_string(),
                 },
-                HelpItem {
-                    keys: "except day".to_string(),
-                    desc: rust_i18n::t!("help_recurrence_except_day").to_string(),
-                    example: "except mo,tue".to_string(),
-                },
-                HelpItem {
-                    keys: "except month".to_string(),
-                    desc: rust_i18n::t!("help_recurrence_except_month").to_string(),
-                    example: "except oct,nov".to_string(),
-                },
             ],
         },
         HelpSection {
-            title: rust_i18n::t!("metadata").to_string(),
+            title: rust_i18n::t!("notifications_and_reminders").to_string(),
             items: vec![
-                HelpItem {
-                    keys: "url:".to_string(),
-                    desc: rust_i18n::t!("help_metadata_attach_link").to_string(),
-                    example: "url:https://perdu.com".to_string(),
-                },
-                HelpItem {
-                    keys: "geo:".to_string(),
-                    desc: rust_i18n::t!("help_metadata_coordinates").to_string(),
-                    example: "geo:53.04,-121.10, geo:50.12, 4.50, or geo:50.13° N, 4.50° E"
-                        .to_string(),
-                },
-                HelpItem {
-                    keys: "desc:".to_string(),
-                    desc: rust_i18n::t!("help_metadata_append_description").to_string(),
-                    example: "desc:\"Call back later\"".to_string(),
-                },
                 HelpItem {
                     keys: "rem:10m".to_string(),
                     desc: rust_i18n::t!("help_metadata_relative_reminder").to_string(),
@@ -212,40 +129,81 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     desc: rust_i18n::t!("help_metadata_absolute_reminder").to_string(),
                     example: "rem:2025-01-20 9am".to_string(),
                 },
+            ],
+        },
+        HelpSection {
+            title: rust_i18n::t!("organization").to_string(),
+            items: vec![
                 HelpItem {
-                    keys: "+cal".to_string(),
-                    desc: rust_i18n::t!("help_metadata_force_calendar").to_string(),
-                    example: "Task @tomorrow +cal".to_string(),
+                    keys: "done:date".to_string(),
+                    desc: rust_i18n::t!("help_org_done").to_string(),
+                    example: "done:2024-01-01 15:30".to_string(),
                 },
                 HelpItem {
-                    keys: "-cal".to_string(),
-                    desc: rust_i18n::t!("help_metadata_prevent_calendar").to_string(),
-                    example: "Task @tomorrow -cal".to_string(),
+                    keys: "done:X%".to_string(),
+                    desc: rust_i18n::t!("help_org_done_percent").to_string(),
+                    example: "done:25%".to_string(),
+                },
+                HelpItem {
+                    keys: "\\#text".to_string(),
+                    desc: rust_i18n::t!("help_org_escape_special").to_string(),
+                    example: "\\#not-a-tag".to_string(),
+                },
+                HelpItem {
+                    keys: "#a:=#b,#c".to_string(),
+                    desc: "Define tag alias (retroactive)".to_string(),
+                    example: "#tree_planting:=#gardening,@@home".to_string(),
+                },
+                HelpItem {
+                    keys: "@@a:=#b,@@c".to_string(),
+                    desc: "Define location alias".to_string(),
+                    example: "@@aldi:=#groceries,#shopping".to_string(),
                 },
             ],
         },
         HelpSection {
-            title: rust_i18n::t!("help_subtasks_title").to_string(),
+            title: rust_i18n::t!("metadata").to_string(),
             items: vec![
                 HelpItem {
-                    keys: "- [ ] task".to_string(),
-                    desc: rust_i18n::t!("help_subtask_create").to_string(),
-                    example: "- [ ] Buy milk @tomorrow !1".to_string(),
+                    keys: "url:".to_string(),
+                    desc: rust_i18n::t!("help_metadata_attach_link").to_string(),
+                    example: "url:https://perdu.com".to_string(),
                 },
                 HelpItem {
-                    keys: "- [x] task".to_string(),
-                    desc: rust_i18n::t!("help_subtask_done").to_string(),
-                    example: "- [x] Read the brief".to_string(),
+                    keys: "geo:".to_string(),
+                    desc: rust_i18n::t!("help_metadata_coordinates").to_string(),
+                    example: "geo:50.1,4.2".to_string(),
                 },
                 HelpItem {
-                    keys: "1. [ ] task".to_string(),
-                    desc: rust_i18n::t!("help_subtask_dep").to_string(),
+                    keys: "desc:".to_string(),
+                    desc: rust_i18n::t!("help_metadata_append_description").to_string(),
+                    example: "desc:\"Call back later\"".to_string(),
+                },
+                HelpItem {
+                    keys: "+cal / -cal".to_string(),
+                    desc: rust_i18n::t!("help_metadata_force_calendar").to_string(),
+                    example: "Task @tomorrow +cal".to_string(),
+                },
+            ],
+        },
+        HelpSection {
+            // Include the UI icon character directly in the title
+            title: format!("Sub-tasks (inside description {})", '\u{f01c6}'),
+            items: vec![
+                HelpItem {
+                    keys: "- [ ]".to_string(),
+                    desc: "Create a sub-task (mention - [x] to mark as completed)".to_string(),
+                    example: "- [ ] Buy cookies @tomorrow !1".to_string(),
+                },
+                HelpItem {
+                    keys: "1. [ ]".to_string(),
+                    desc: "Numbered dependency (e.g. step 2 depends on 1)".to_string(),
                     example: "2. [ ] Phase 2 (blocked by 1)".to_string(),
                 },
                 HelpItem {
                     keys: "  (indent)".to_string(),
-                    desc: rust_i18n::t!("help_subtask_indent").to_string(),
-                    example: "  Notes for the task above".to_string(),
+                    desc: "Indent to add notes for the sub-task above".to_string(),
+                    example: "  Remember to check the expiration date".to_string(),
                 },
             ],
         },
@@ -258,24 +216,14 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     example: "buy cat food".to_string(),
                 },
                 HelpItem {
-                    keys: "#tag".to_string(),
-                    desc: rust_i18n::t!("help_search_filter_tag").to_string(),
-                    example: "#gardening".to_string(),
-                },
-                HelpItem {
-                    keys: "@@loc".to_string(),
-                    desc: rust_i18n::t!("help_search_location").to_string(),
-                    example: "@@home".to_string(),
-                },
-                HelpItem {
                     keys: "is:ready".to_string(),
                     desc: rust_i18n::t!("help_search_is_ready").to_string(),
-                    example: rust_i18n::t!("help_search_is_ready_explain").to_string(),
+                    example: "is:ready".to_string(),
                 },
                 HelpItem {
                     keys: "is:status".to_string(),
                     desc: rust_i18n::t!("help_search_filter_state").to_string(),
-                    example: "is:done, is:started, is:active, is:blocked".to_string(),
+                    example: "is:done, is:started, is:active".to_string(),
                 },
                 HelpItem {
                     keys: "< > <=".to_string(),
@@ -288,11 +236,6 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     example: "@<today (Overdue), ^>1w".to_string(),
                 },
                 HelpItem {
-                    keys: "Date!".to_string(),
-                    desc: rust_i18n::t!("help_search_date_exclaim").to_string(),
-                    example: "@<today!".to_string(),
-                },
-                HelpItem {
                     keys: "(A | B) -C".to_string(),
                     desc: rust_i18n::t!("help_search_combine").to_string(),
                     example: "is:ready (#work | #school) -@today".to_string(),
@@ -302,25 +245,14 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
     ]
 }
 
-/// Returns localized keyboard help sections.
-///
-/// Many of the keyboard descriptions are short action names; where a translation
-/// key exists we use it, otherwise we fall back to concise translation keys so
-/// the text can be localized.
-pub fn get_keyboard_help() -> Vec<HelpSection> {
+pub fn get_shortcuts_help() -> Vec<HelpSection> {
     vec![
         HelpSection {
-            title: rust_i18n::t!("keyboard_shortcuts").to_string(),
+            title: "Navigation & general".to_string(),
             items: vec![
                 HelpItem {
                     keys: "?".to_string(),
-                    // prefer the "about" label already in translations
                     desc: rust_i18n::t!("help_about").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "q".to_string(),
-                    desc: rust_i18n::t!("quit_application").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
@@ -329,7 +261,7 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                     example: "".to_string(),
                 },
                 HelpItem {
-                    keys: "j / k".to_string(),
+                    keys: "j / k / Dn / Up".to_string(),
                     desc: rust_i18n::t!("help_keyboard_move_selection").to_string(),
                     example: "".to_string(),
                 },
@@ -354,24 +286,13 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                     example: "".to_string(),
                 },
                 HelpItem {
-                    keys: "Ctrl + e".to_string(),
-                    desc: rust_i18n::t!("help_keyboard_create_desc").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "e".to_string(),
+                    keys: "e / E".to_string(),
                     desc: rust_i18n::t!("edit").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
-                    keys: "Ctrl + d".to_string(),
-                    desc: rust_i18n::t!("duplicate_task").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "E".to_string(),
-                    // Change this from edit_task_title to edit_description_title
-                    desc: rust_i18n::t!("edit_description_title").to_string(),
+                    keys: "Ctrl + e".to_string(),
+                    desc: rust_i18n::t!("help_keyboard_create_desc").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
@@ -380,7 +301,17 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                     example: "".to_string(),
                 },
                 HelpItem {
-                    keys: "Delete".to_string(),
+                    keys: "s / S".to_string(),
+                    desc: rust_i18n::t!("start_task").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "x".to_string(),
+                    desc: rust_i18n::t!("cancel").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Del".to_string(),
                     desc: rust_i18n::t!("delete").to_string(),
                     example: "".to_string(),
                 },
@@ -390,18 +321,8 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                     example: "".to_string(),
                 },
                 HelpItem {
-                    keys: "s".to_string(),
-                    desc: rust_i18n::t!("start_task").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "S".to_string(),
-                    desc: rust_i18n::t!("stop_reset").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "x".to_string(),
-                    desc: rust_i18n::t!("cancel").to_string(),
+                    keys: "Ctrl + d".to_string(),
+                    desc: rust_i18n::t!("duplicate_task").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
@@ -412,11 +333,6 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "M".to_string(),
                     desc: rust_i18n::t!("move_label").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "y".to_string(),
-                    desc: rust_i18n::t!("yank_link").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
@@ -439,33 +355,18 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
             title: rust_i18n::t!("metadata").to_string(),
             items: vec![
                 HelpItem {
-                    keys: "c".to_string(),
-                    desc: rust_i18n::t!("help_metadata_link_yanked_child").to_string(),
+                    keys: "y".to_string(),
+                    desc: rust_i18n::t!("yank_copy_id").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
-                    keys: "C".to_string(),
-                    desc: rust_i18n::t!("create_subtask").to_string(),
+                    keys: "b / c / l".to_string(),
+                    desc: "Block / Child / Relate to Yanked".to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
-                    keys: "b".to_string(),
-                    desc: rust_i18n::t!("help_metadata_mark_blocked").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "l".to_string(),
-                    desc: rust_i18n::t!("help_metadata_relate_selected").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "> / .".to_string(),
-                    desc: rust_i18n::t!("make_child").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "< / ,".to_string(),
-                    desc: rust_i18n::t!("promote_remove_parent").to_string(),
+                    keys: "> / <".to_string(),
+                    desc: "Indent / Outdent Task".to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
@@ -476,41 +377,6 @@ pub fn get_keyboard_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "Enter".to_string(),
                     desc: rust_i18n::t!("help_metadata_toggle_subtasks").to_string(),
-                    example: "".to_string(),
-                },
-            ],
-        },
-        HelpSection {
-            title: rust_i18n::t!("search_and_filtering").to_string(),
-            items: vec![
-                HelpItem {
-                    keys: "/".to_string(),
-                    desc: rust_i18n::t!("search").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "1, 2, 3".to_string(),
-                    desc: rust_i18n::t!("support_switch_sidebar_tab").to_string(),
-                    example: rust_i18n::t!("support_switch_sidebar_tab").to_string(),
-                },
-                HelpItem {
-                    keys: "m".to_string(),
-                    desc: rust_i18n::t!("toggle_matching_logic").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "H".to_string(),
-                    desc: rust_i18n::t!("hide_completed_and_canceled_tasks").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "*".to_string(),
-                    desc: rust_i18n::t!("support_clear_filters").to_string(),
-                    example: "".to_string(),
-                },
-                HelpItem {
-                    keys: "Right".to_string(),
-                    desc: rust_i18n::t!("support_isolate_calendar").to_string(),
                     example: "".to_string(),
                 },
             ],

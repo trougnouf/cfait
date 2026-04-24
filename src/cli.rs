@@ -170,12 +170,16 @@ pub fn print_help(binary_name: &str) {
         println!("    {}", rust_i18n::t!("cli_press_question"));
         println!();
         println!("{}", rust_i18n::t!("cli_smart_input_heading"));
-        for sec in crate::help::get_syntax_help() {
+
+        // Only print the first section (Quick start) for the CLI
+        if let Some(sec) = crate::help::get_syntax_help().first() {
             for item in &sec.items {
                 let padded = format!("{:width$}", item.keys, width = 18);
                 println!("    {} {}", padded, item.desc);
             }
         }
+        println!();
+        println!("    {}", rust_i18n::t!("help_advanced_prompt"));
         println!();
         println!("{}", rust_i18n::t!("cli_examples_heading"));
         println!("    Buy cookies !1 @2025-01-16 #shopping rem:2025-01-16 8am");

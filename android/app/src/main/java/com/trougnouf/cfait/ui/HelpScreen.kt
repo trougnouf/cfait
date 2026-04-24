@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Compose UI screen for help documentation.
 package com.trougnouf.cfait.ui
 
-import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -19,279 +18,222 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.BuildConfig
 import com.trougnouf.cfait.R
-import kotlinx.coroutines.launch
-import kotlin.random.Random
-
 import com.trougnouf.cfait.core.CfaitMobile
+import com.trougnouf.cfait.core.HelpCategory
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HelpScreen(api: CfaitMobile, onBack: () -> Unit) {
-    val clipboard = LocalClipboard.current
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
+    val coroutineScope = rememberCoroutineScope()
 
-    // Resolve localized strings at the composable level so nested functions/coroutines can use them
-    val donationLabel = androidx.compose.ui.res.stringResource(R.string.donation_address_label)
-    val copiedClipboard = androidx.compose.ui.res.stringResource(R.string.copied_to_clipboard)
-    val couldNotOpenUrl = androidx.compose.ui.res.stringResource(R.string.could_not_open_url)
-
-    fun copy(text: String) {
-        scope.launch {
-            clipboard.setClipEntry(ClipEntry(ClipData.newPlainText(donationLabel, text)))
-            Toast.makeText(context, copiedClipboard, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    fun openUrl(url: String) {
-        try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            Toast.makeText(context, couldNotOpenUrl, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    // Randomize icon (choose between 3 icons)
-    val helpIconRes = when (Random.nextInt(3)) {
-        0 -> R.drawable.nf_cod_question_breeze_face_hugs
-        1 -> R.drawable.nf_md_robot_confused_breeze_face_hugs
-        else -> R.drawable.nf_md_robot_confused_help_breeze_face_hugs
-    }
-
-    val apiHelpData = remember { api.getSyntaxHelp() }
-
-    // Pre-resolve localized titles so we can map them back to icons
-    val orgTitle = androidx.compose.ui.res.stringResource(R.string.organization)
-    val timelineTitle = androidx.compose.ui.res.stringResource(R.string.timeline)
-    val recTitle = androidx.compose.ui.res.stringResource(R.string.recurrence)
-    val searchTitle = androidx.compose.ui.res.stringResource(R.string.search_and_filtering)
+    // Fetch categorized data structure from Rust backend
+    val helpData = remember { api.getHelpData() }
+    val pagerState = rememberPagerState(pageCount = { helpData.size })
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Image(
-                            painter = painterResource(id = helpIconRes),
-                            contentDescription = null,
-                            modifier = Modifier.width(52.5.dp).height(20.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(androidx.compose.ui.res.stringResource(R.string.help_about))
-                    }
-                },
+                title = { Text(stringResource(R.string.help_about)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { NfIcon(NfIcons.BACK, 20.sp) }
                 },
             )
         },
-    ) { p ->
-        LazyColumn(
-            modifier = Modifier.padding(p).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            // Dynamically render sections from Rust API
-            apiHelpData.forEach { section ->
-                item {
-                    val iconStr = when (section.title) {
-                        orgTitle -> NfIcons.TAG
-                        timelineTitle -> NfIcons.CALENDAR
-                        recTitle -> NfIcons.REPEAT
-                        searchTitle -> NfIcons.SEARCH
-                        else -> NfIcons.INFO
-                    }
-                    HelpSection(
-                        title = section.title,
-                        icon = iconStr,
-                        items = section.items.map { HelpItem(it.keys, it.desc, it.example) }
-                    )
-                }
-            }
+    ) { padding ->
+        Column(modifier = Modifier.padding(padding).fillMaxSize()) {
 
-            item {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
-                            alpha = 0.5f
-                        )
-                    )
-                ) {
-                    Column(Modifier.padding(12.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        ) {
-                            NfIcon(NfIcons.HEART_HAND, 18.sp, Color(0xFFE57373))
-                            Spacer(Modifier.width(8.dp))
+            // Swipeable Tab Row for Categories
+            ScrollableTabRow(
+                selectedTabIndex = pagerState.currentPage,
+                edgePadding = 8.dp,
+                containerColor = MaterialTheme.colorScheme.surface,
+                divider = { HorizontalDivider() }
+            ) {
+                helpData.forEachIndexed { index, categoryData ->
+                    Tab(
+                        selected = pagerState.currentPage == index,
+                        onClick = { coroutineScope.launch { pagerState.animateScrollToPage(index) } },
+                        text = {
                             Text(
-                                androidx.compose.ui.res.stringResource(R.string.support_card_title),
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                categoryData.title,
+                                fontWeight = if (pagerState.currentPage == index) FontWeight.Bold else FontWeight.Normal
                             )
                         }
-                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
-                        Spacer(Modifier.height(8.dp))
+                    )
+                }
+            }
 
-                        DonationRow(
-                            icon = NfIcons.CREDIT_CARD,
-                            name = "Liberapay",
-                            value = "https://liberapay.com/trougnouf",
-                            trailingIcon = { NfIcon(NfIcons.EXTERNAL_LINK, 14.sp, Color.Gray) },
-                        ) { openUrl("https://liberapay.com/trougnouf") }
-                        DonationRow(
-                            icon = NfIcons.CREDIT_CARD,
-                            name = "Ko-fi",
-                            value = "https://ko-fi.com/trougnouf",
-                            trailingIcon = { NfIcon(NfIcons.EXTERNAL_LINK, 14.sp, Color.Gray) },
-                        ) { openUrl("https://ko-fi.com/trougnouf") }
-                        DonationRow(
-                            NfIcons.BANK,
-                            "Bank (SEPA)",
-                            "BE77 9731 6116 6342"
-                        ) { copy("BE77 9731 6116 6342") }
-                        DonationRow(
-                            NfIcons.BITCOIN,
-                            "Bitcoin",
-                            "bc1qc3z9ctv34v0ufxwpmq875r89umnt6ggeclp979",
-                        ) { copy("bc1qc3z9ctv34v0ufxwpmq875r89umnt6ggeclp979") }
-                        DonationRow(
-                            NfIcons.LITECOIN,
-                            "Litecoin",
-                            "ltc1qv0xcmeuve080j7ad2cj2sd9d22kgqmlxfxvhmg"
-                        ) {
-                            copy("ltc1qv0xcmeuve080j7ad2cj2sd9d22kgqmlxfxvhmg")
-                        }
-                        DonationRow(
-                            NfIcons.ETHEREUM,
-                            "Ethereum",
-                            "0x0A5281F3B6f609aeb9D71D7ED7acbEc5d00687CB"
-                        ) {
-                            copy("0x0A5281F3B6f609aeb9D71D7ED7acbEc5d00687CB")
+            HorizontalPager(state = pagerState, modifier = Modifier.weight(1f)) { page ->
+                val pageData = helpData[page]
+
+                if (pageData.category == HelpCategory.ABOUT) {
+                    // Custom Kotlin About Screen UI
+                    AboutTabContent()
+                } else {
+                    // Dynamic Rust-backed Documentation
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(pageData.sections) { section ->
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(
+                                        alpha = 0.5f
+                                    )
+                                ),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = section.title,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontSize = 18.sp,
+                                        modifier = Modifier.padding(bottom = 12.dp)
+                                    )
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
+                                    Spacer(Modifier.height(12.dp))
+
+                                    section.items.forEach { item ->
+                                        HelpRow(item)
+                                        if (item != section.items.last()) Spacer(Modifier.height(16.dp))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
-
-            item {
-                Spacer(Modifier.height(16.dp))
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(
-                        "${androidx.compose.ui.res.stringResource(R.string.app_name)} v${BuildConfig.VERSION_NAME} • GPL3",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.Gray
-                    )
-                    Text("Trougnouf (Benoit Brummer)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-                    Text(
-                        text = "https://codeberg.org/trougnouf/cfait",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.clickable { openUrl("https://codeberg.org/trougnouf/cfait") },
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-            }
         }
     }
 }
 
 @Composable
-fun HelpSection(
-    title: String,
-    icon: String,
-    items: List<HelpItem>,
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-    ) {
-        Column(Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
-                NfIcon(icon, 18.sp, MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(8.dp))
-                Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
-            Spacer(Modifier.height(8.dp))
-            items.forEach { item ->
-                HelpRow(item)
-                if (item != items.last()) Spacer(Modifier.height(8.dp))
-            }
-        }
-    }
-}
-
-@Composable
-fun HelpRow(item: HelpItem) {
+fun HelpRow(item: com.trougnouf.cfait.core.MobileHelpItem) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
-                modifier =
-                    Modifier
-                        .background(MaterialTheme.colorScheme.tertiaryContainer, RoundedCornerShape(4.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                modifier = Modifier
+                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
             ) {
                 Text(
-                    item.syntax,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    item.keys,
+                    fontSize = 14.sp,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
             }
-            Spacer(Modifier.width(8.dp))
-            Text(item.desc, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+            Spacer(Modifier.width(12.dp))
+            Text(item.desc, fontSize = 15.sp, modifier = Modifier.weight(1f))
         }
         if (item.example.isNotEmpty()) {
             Text(
                 "e.g. ${item.example}",
-                style = MaterialTheme.typography.bodySmall,
+                fontSize = 13.sp,
                 color = Color.Gray,
-                fontSize = 10.sp,
-                modifier = Modifier.padding(start = 0.dp, top = 2.dp),
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.padding(start = 16.dp, top = 4.dp),
             )
         }
     }
 }
 
 @Composable
-fun DonationRow(
-    icon: String,
-    name: String,
-    value: String,
-    trailingIcon: @Composable () -> Unit = { NfIcon(NfIcons.COPY, 14.sp, Color.Gray) },
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clickable { onClick() }
-                .padding(vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        NfIcon(icon, 16.sp, Color.Gray)
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(name, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
-            Text(value, style = MaterialTheme.typography.bodySmall, color = Color.Gray, fontSize = 10.sp, maxLines = 1)
+fun AboutTabContent() {
+    val context = LocalContext.current
+    fun openUrl(url: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            context.startActivity(intent)
+        } catch (e: Exception) {
         }
-        trailingIcon()
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
+                        NfIcon(NfIcons.HEART_HAND, 20.sp, Color(0xFFE57373))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            stringResource(R.string.support_card_title),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
+                    Spacer(Modifier.height(8.dp))
+
+                    DonationRow(
+                        NfIcons.CREDIT_CARD,
+                        "Liberapay",
+                        "https://liberapay.com/trougnouf"
+                    ) { openUrl("https://liberapay.com/trougnouf") }
+                    DonationRow(
+                        NfIcons.CREDIT_CARD,
+                        "Ko-fi",
+                        "https://ko-fi.com/trougnouf"
+                    ) { openUrl("https://ko-fi.com/trougnouf") }
+                    DonationRow(NfIcons.BANK, "Bank (SEPA)", "BE77 9731 6116 6342", isCopy = true)
+                    DonationRow(NfIcons.BITCOIN, "Bitcoin", "bc1qc3z9ctv34v0ufxwpmq875r89umnt6ggeclp979", isCopy = true)
+                }
+            }
+        }
+        item {
+            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("${stringResource(R.string.app_name)} v${BuildConfig.VERSION_NAME} • GPL3", color = Color.Gray)
+                Text("Trougnouf (Benoit Brummer)", color = Color.Gray)
+                Text(
+                    "https://codeberg.org/trougnouf/cfait",
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.clickable { openUrl("https://codeberg.org/trougnouf/cfait") })
+            }
+        }
     }
 }
 
-data class HelpItem(
-    val syntax: String,
-    val desc: String,
-    val example: String = "",
-)
+@Composable
+fun DonationRow(icon: String, name: String, value: String, isCopy: Boolean = false, onClick: () -> Unit = {}) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable {
+            if (isCopy) {
+                val clipboard =
+                    context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val clip = android.content.ClipData.newPlainText("Donation Address", value)
+                clipboard.setPrimaryClip(clip)
+                android.widget.Toast.makeText(context, "Copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                onClick()
+            }
+        }.padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        NfIcon(icon, 18.sp, Color.Gray)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(name, fontSize = 15.sp)
+            Text(value, color = Color.Gray, fontSize = 12.sp, maxLines = 1)
+        }
+        if (!isCopy) NfIcon(NfIcons.EXTERNAL_LINK, 16.sp, Color.Gray)
+        else NfIcon(NfIcons.COPY, 16.sp, Color.Gray)
+    }
+}

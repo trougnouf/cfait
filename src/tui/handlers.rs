@@ -742,16 +742,26 @@ pub async fn handle_key_event(
             KeyCode::PageUp => state.jump_backward(10),
             _ => {}
         },
-        InputMode::Help(tab) => match key.code {
+        InputMode::Help(current_tab) => match key.code {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('?') => {
                 state.mode = InputMode::Normal;
             }
-            KeyCode::Tab => {
-                state.mode = InputMode::Help(if tab == crate::help::HelpTab::Keyboard {
-                    crate::help::HelpTab::Syntax
-                } else {
-                    crate::help::HelpTab::Keyboard
-                });
+            KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => {
+                let next_tab = match current_tab {
+                    crate::help::HelpTab::Syntax => crate::help::HelpTab::Shortcuts,
+                    crate::help::HelpTab::Shortcuts => crate::help::HelpTab::About,
+                    crate::help::HelpTab::About => crate::help::HelpTab::Syntax,
+                };
+                state.mode = InputMode::Help(next_tab);
+                state.edit_scroll_offset = 0;
+            }
+            KeyCode::BackTab | KeyCode::Left | KeyCode::Char('h') => {
+                let prev_tab = match current_tab {
+                    crate::help::HelpTab::Syntax => crate::help::HelpTab::About,
+                    crate::help::HelpTab::Shortcuts => crate::help::HelpTab::Syntax,
+                    crate::help::HelpTab::About => crate::help::HelpTab::Shortcuts,
+                };
+                state.mode = InputMode::Help(prev_tab);
                 state.edit_scroll_offset = 0;
             }
             KeyCode::Down | KeyCode::Char('j') => {
@@ -795,7 +805,7 @@ pub async fn handle_key_event(
                 }
             }
             KeyCode::Char('?') => {
-                state.mode = InputMode::Help(crate::help::HelpTab::Keyboard);
+                state.mode = InputMode::Help(crate::help::HelpTab::Shortcuts);
                 state.edit_scroll_offset = 0;
             }
             KeyCode::Char('q') => return Some(Action::Quit),

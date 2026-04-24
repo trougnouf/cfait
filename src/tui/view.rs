@@ -1236,87 +1236,102 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         let area = centered_rect(90, 90, f.area());
         f.render_widget(Clear, area);
 
-        let data = match tab {
-            crate::help::HelpTab::Syntax => crate::help::get_syntax_help(),
-            crate::help::HelpTab::Keyboard => crate::help::get_keyboard_help(),
-        };
-
-        let mut lines = vec![
-            Line::from(vec![
-                Span::styled(
-                    if tab == crate::help::HelpTab::Keyboard {
-                        " [Keyboard] "
-                    } else {
-                        "  Keyboard  "
-                    },
-                    Style::default()
-                        .fg(if tab == crate::help::HelpTab::Keyboard {
-                            Color::Yellow
-                        } else {
-                            Color::DarkGray
-                        })
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(" | "),
-                Span::styled(
-                    if tab == crate::help::HelpTab::Syntax {
-                        " [Syntax] "
-                    } else {
-                        "  Syntax  "
-                    },
-                    Style::default()
-                        .fg(if tab == crate::help::HelpTab::Syntax {
-                            Color::Yellow
-                        } else {
-                            Color::DarkGray
-                        })
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw("   (Press Tab to switch)"),
-            ]),
-            Line::from(""),
+        // 1. Build the Top Tabs
+        let mut tab_spans = Vec::new();
+        // Manually iterate over the 3 tabs for the TUI
+        let tabs = [
+            crate::help::HelpTab::Syntax,
+            crate::help::HelpTab::Shortcuts,
+            crate::help::HelpTab::About,
         ];
 
-        for sec in data {
-            lines.push(Line::from(Span::styled(
-                format!("--- {} ---", sec.title),
-                Style::default()
-                    .fg(Color::LightCyan)
-                    .add_modifier(Modifier::BOLD),
-            )));
-            for item in sec.items {
-                let keys_span = Span::styled(
-                    format!("{:width$}", item.keys, width = 22),
-                    Style::default().fg(Color::Green),
-                );
-                let desc_span = Span::raw(item.desc);
-                if item.example.is_empty() {
-                    lines.push(Line::from(vec![Span::raw("  "), keys_span, desc_span]));
-                } else {
-                    let example_span = Span::styled(
-                        format!(" (e.g. {})", item.example),
-                        Style::default().fg(Color::DarkGray),
-                    );
-                    lines.push(Line::from(vec![
-                        Span::raw("  "),
-                        keys_span,
-                        desc_span,
-                        example_span,
-                    ]));
-                }
+        for &c in &tabs {
+            let label = match c {
+                crate::help::HelpTab::Syntax => " Syntax ",
+                crate::help::HelpTab::Shortcuts => " Shortcuts ",
+                crate::help::HelpTab::About => " About ",
+            };
+            if c == tab {
+                tab_spans.push(Span::styled(
+                    label,
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ));
+            } else {
+                tab_spans.push(Span::styled(label, Style::default().fg(Color::DarkGray)));
             }
-            lines.push(Line::from(""));
+            tab_spans.push(Span::raw(" "));
         }
 
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title(" Help ")
-            .border_style(Style::default().fg(Color::Yellow));
-        let p = Paragraph::new(lines)
-            .block(block)
-            .wrap(Wrap { trim: false })
-            .scroll((state.edit_scroll_offset, 0));
-        f.render_widget(p, area);
+        let mut lines = vec![Line::from(tab_spans), Line::from("")];
+
+        // 2. Render Content
+        if tab == crate::help::HelpTab::About {
+            lines.push(Line::from(Span::styled(
+                "Cfait Task Manager",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::from(format!("Version {}", env!("CARGO_PKG_VERSION"))));
+            lines.push(Line::from("GPL-3.0 License"));
+            lines.push(Line::from(""));
+            lines.push(Line::from(
+                "Repository: https://codeberg.org/trougnouf/cfait",
+            ));
+            lines.push(Line::from("Chat: #Cfait:matrix.org"));
+        } else {
+            let data = if tab == crate::help::HelpTab::Syntax {
+                crate::help::get_syntax_help()
+            } else {
+                crate::help::get_shortcuts_help()
+            };
+
+            for sec in data {
+                lines.push(Line::from(Span::styled(
+                    format!("--- {} ---", sec.title),
+                    Style::default()
+                        .fg(Color::LightCyan)
+                        .add_modifier(Modifier::BOLD),
+                )));
+                for item in sec.items {
+                    let keys_span = Span::styled(
+                        format!("{:width$}", item.keys, width = 22),
+                        Style::default().fg(Color::Green),
+                    );
+                    let desc_span = Span::raw(item.desc);
+                    if item.example.is_empty() {
+                        lines.push(Line::from(vec![Span::raw("  "), keys_span, desc_span]));
+                    } else {
+                        let example_span = Span::styled(
+                            format!(" (e.g. {})", item.example),
+                            Style::default().fg(Color::DarkGray),
+                        );
+                        lines.push(Line::from(vec![
+                            Span::raw("  "),
+                            keys_span,
+                            desc_span,
+                            example_span,
+                        ]));
+                    }
+                }
+                lines.push(Line::from(""));
+            }
+
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .title(format!(" {} (Tab to switch) ", rust_i18n::t!("help")))
+                .border_style(Style::default().fg(Color::Yellow));
+
+            let p = Paragraph::new(lines)
+                .block(block)
+                .wrap(Wrap { trim: false })
+                .scroll((state.edit_scroll_offset, 0));
+
+            f.render_widget(p, area);
+        }
     }
 }
 

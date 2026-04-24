@@ -101,6 +101,8 @@ pub const BITCOIN: char = '\u{f10f}'; // nf-fa-bitcoin
 pub const LITECOIN: char = '\u{f0a61}'; // nf-md-litecoin
 pub const ETHEREUM: char = '\u{ed58}'; // nf-fa-ethereum
 pub const HAND_STOP: char = '\u{f256}'; // nf-fa-hand_stop_o
+pub const COPY: char = '\u{f0c5}'; // nf-fa-copy
+pub const EXTERNAL_LINK: char = '\u{f08e}'; // nf-fa-external_link
 
 // --- NEW FIELD ICONS (Updated) ---
 pub const LOCATION: char = '\u{ef4b}'; // Default European Earth

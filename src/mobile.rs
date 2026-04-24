@@ -6,6 +6,7 @@ use crate::client::RustyClient;
 use crate::config::Config;
 use crate::context::{AppContext, StandardContext};
 use crate::controller::TaskController;
+use crate::help::HelpTab;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::model::{AlarmTrigger, DateType, Task};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
@@ -271,6 +272,13 @@ pub struct MobileHelpItem {
 pub struct MobileHelpSection {
     pub title: String,
     pub items: Vec<MobileHelpItem>,
+}
+
+#[derive(uniffi::Record)]
+pub struct MobileHelpCategoryData {
+    pub category: HelpTab,
+    pub title: String,
+    pub sections: Vec<MobileHelpSection>,
 }
 
 #[uniffi::export]
