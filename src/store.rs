@@ -80,6 +80,7 @@ struct HierarchyContext<'a> {
     result: &'a mut Vec<TaskListItem>,
     visited_keys: &'a mut HashSet<(String, String)>,
     expanded_groups: &'a HashSet<String>,
+    collapsed_trees: &'a HashSet<String>,
     max_done_subtasks: usize,
 }
 
@@ -94,6 +95,7 @@ pub fn organize_hierarchy(
     mut tasks: Vec<Task>,
     default_priority: u8,
     expanded_groups: &HashSet<String>,
+    collapsed_trees: &HashSet<String>,
     max_done_roots: usize,
     max_done_subtasks: usize,
 ) -> Vec<TaskListItem> {
@@ -129,6 +131,7 @@ pub fn organize_hierarchy(
         result: &mut result,
         visited_keys: &mut visited_keys,
         expanded_groups,
+        collapsed_trees,
         max_done_subtasks,
     };
 
@@ -198,7 +201,18 @@ pub fn organize_hierarchy(
 
         let mut t = task.clone();
         t.depth = depth;
+
+        // --- THE FIX ---
+        // Only show the tree icon if children survived the current filters
+        t.has_visible_subtasks = context.children_map.contains_key(&task.uid);
+        // ---------------
+
         context.result.push(TaskListItem::Task(Box::new(t)));
+
+        // If the user manually folded this tree, truncate children iteration
+        if context.collapsed_trees.contains(&task.uid) {
+            return;
+        }
 
         if let Some(children) = context.children_map.get(&task.uid) {
             let (active, done): (Vec<Task>, Vec<Task>) =
@@ -343,6 +357,7 @@ pub struct FilterOptions<'a> {
     pub default_priority: u8,
     pub start_grace_period_days: u32,
     pub expanded_done_groups: &'a HashSet<String>,
+    pub collapsed_trees: &'a HashSet<String>,
     pub max_done_roots: usize,
     pub max_done_subtasks: usize,
 }
@@ -1793,6 +1808,7 @@ impl TaskStore {
             final_tasks_processed,
             options.default_priority,
             options.expanded_done_groups,
+            options.collapsed_trees,
             options.max_done_roots,
             options.max_done_subtasks,
         );
@@ -1824,5 +1840,18 @@ impl TaskStore {
             .filter_map(|id| self.get_task_ref(id))
             .filter(|t| t.geo.is_some())
             .count()
+    }
+
+    /// Fast lookup to see which tasks are parents
+    pub fn get_all_parent_uids(&self) -> HashSet<String> {
+        let mut parents = HashSet::new();
+        for map in self.calendars.values() {
+            for t in map.values() {
+                if let Some(p) = &t.parent_uid {
+                    parents.insert(p.clone());
+                }
+            }
+        }
+        parents
     }
 }

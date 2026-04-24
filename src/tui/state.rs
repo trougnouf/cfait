@@ -112,6 +112,9 @@ pub struct AppState {
 
     // Expanded Done Groups (keys are parent UIDs; empty string for root group)
     pub expanded_done_groups: HashSet<String>,
+
+    // Collapsed active subtrees
+    pub collapsed_trees: HashSet<String>,
 }
 
 impl Default for AppState {
@@ -204,6 +207,7 @@ impl AppState {
 
             // Track expanded completed groups (keys are parent UIDs, empty string for roots)
             expanded_done_groups: HashSet::new(),
+            collapsed_trees: HashSet::new(),
         }
     }
 
@@ -274,6 +278,7 @@ impl AppState {
             start_grace_period_days: self.start_grace_period_days,
             // Pass expanded groups and configured limits
             expanded_done_groups: &self.expanded_done_groups,
+            collapsed_trees: &self.collapsed_trees,
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
         });

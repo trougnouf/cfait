@@ -302,11 +302,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             }
         };
 
-        let has_subtasks = app.store.calendars.values().any(|map| {
-            map.values()
-                .any(|t| t.parent_uid.as_deref() == Some(task.uid.as_str()))
-        });
-
         let has_info = !task.description.is_empty()
             || !task.dependencies.is_empty()
             || !app.store.get_tasks_blocking(&task.uid).is_empty();
@@ -332,7 +327,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             if *action == TaskAction::OpenUrl && task.url.is_none() {
                 return None;
             }
-            if *action == TaskAction::DeleteTree && !has_subtasks {
+            if *action == TaskAction::DeleteTree && !task.has_subtasks {
                 return None;
             }
             if *action == TaskAction::OpenCoordinates && task.geo.is_none() {
@@ -366,7 +361,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             }
 
             let mut label = action.label();
-            if *action == TaskAction::DuplicateTree && !has_subtasks {
+            if *action == TaskAction::DuplicateTree && !task.has_subtasks {
                 label = "Duplicate task".to_string();
             }
             if *action == TaskAction::ToggleTimer {
@@ -675,7 +670,12 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         let targets: Vec<_> = app
             .calendars
             .iter()
-            .filter(|c| c.href != task.calendar_href && !app.disabled_calendars.contains(&c.href))
+            .filter(|c| {
+                c.href != task.calendar_href
+                    && !app.disabled_calendars.contains(&c.href)
+                    && c.href != crate::storage::LOCAL_TRASH_HREF
+                    && c.href != "local://recovery"
+            })
             .collect();
 
         let icon_header = container(

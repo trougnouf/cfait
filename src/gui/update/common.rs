@@ -78,6 +78,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         default_priority: app.default_priority,
         start_grace_period_days: app.start_grace_period_days,
         expanded_done_groups: &app.expanded_done_groups,
+        collapsed_trees: &app.collapsed_trees,
         max_done_roots: config.max_done_roots,
         max_done_subtasks: config.max_done_subtasks,
     });
@@ -92,6 +93,8 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
 
     let mut quick_lookup: std::collections::HashMap<String, &crate::model::Task> =
         std::collections::HashMap::new();
+    let parent_uids = app.store.get_all_parent_uids();
+
     // Create an O(1) lookup table for tasks across all calendars so that parent attribute
     // resolution can work even if the parent is not in the current filtered view.
     for map in app.store.calendars.values() {
@@ -100,8 +103,10 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         }
     }
 
-    for item in &app.tasks {
+    for item in &mut app.tasks {
         if let crate::store::TaskListItem::Task(task) = item {
+            task.has_subtasks = parent_uids.contains(&task.uid);
+
             app.task_ids
                 .entry(task.uid.clone())
                 .or_insert_with(iced::widget::Id::unique);

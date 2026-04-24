@@ -1359,7 +1359,10 @@ pub async fn handle_key_event(
                         .calendars
                         .iter()
                         .filter(|c| {
-                            c.href != current_href && !state.disabled_calendars.contains(&c.href)
+                            c.href != current_href
+                                && !state.disabled_calendars.contains(&c.href)
+                                && c.href != crate::storage::LOCAL_TRASH_HREF
+                                && c.href != "local://recovery"
                         })
                         .cloned()
                         .collect();
@@ -1382,6 +1385,16 @@ pub async fn handle_key_event(
             KeyCode::Char('2') => {
                 state.sidebar_mode = SidebarMode::Categories;
                 state.refresh_filtered_view();
+            }
+            KeyCode::Char('z') => {
+                if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
+                    if state.collapsed_trees.contains(&uid) {
+                        state.collapsed_trees.remove(&uid);
+                    } else {
+                        state.collapsed_trees.insert(uid);
+                    }
+                    state.refresh_filtered_view();
+                }
             }
             KeyCode::Char('3') => {
                 state.sidebar_mode = SidebarMode::Locations;

@@ -213,3 +213,11 @@ pub const ARROW_EXPAND_UP_FALLBACK: char = '^';
 // duplicating codepoints across the codebase.
 pub const VIRTUAL_EXPAND_DOWN: char = ARROW_EXPAND_DOWN;
 pub const VIRTUAL_EXPAND_UP: char = ARROW_EXPAND_UP;
+
+// Tree Hierarchy Icons
+pub const FAMILY_TREE: char = '\u{f160e}'; // nf-md-family_tree
+pub const TREE_FA: char = '\u{f1bb}'; // nf-fa-tree
+pub const TREE_FAE: char = '\u{e21c}'; // nf-fae-tree
+pub const TREE_MD: char = '\u{f0531}'; // nf-md-tree
+pub const PALM_TREE: char = '\u{f1055}'; // nf-md-palm_tree
+pub const PINE_TREE: char = '\u{f0405}'; // nf-md-pine_tree

@@ -111,7 +111,14 @@ fn test_hierarchy_organization() {
 
     // This function rebuilds the visual list (flattened tree)
     // Updated signature includes expanded_done_groups, max_done_roots, max_done_subtasks.
-    let organized = organize_hierarchy(tasks, 5, &HashSet::new(), usize::MAX, usize::MAX);
+    let organized = organize_hierarchy(
+        tasks,
+        5,
+        &HashSet::new(),
+        &HashSet::new(),
+        usize::MAX,
+        usize::MAX,
+    );
 
     assert_eq!(organized.len(), 2);
     if let cfait::store::TaskListItem::Task(task0) = &organized[0] {

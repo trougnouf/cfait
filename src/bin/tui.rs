@@ -402,6 +402,7 @@ async fn main() -> Result<()> {
                 default_priority: config.default_priority,
                 start_grace_period_days: config.start_grace_period_days,
                 expanded_done_groups: &expanded_done_groups,
+                collapsed_trees: &HashSet::new(),
                 max_done_roots: usize::MAX,
                 max_done_subtasks: usize::MAX,
             });

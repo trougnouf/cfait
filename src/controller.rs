@@ -146,6 +146,13 @@ impl TaskController {
     ///    update the store with any server-assigned metadata (etag/href).
     /// 3. If offline or remote failure, journal the Create action for background sync.
     pub async fn create_task(&self, mut task: Task) -> Result<String, String> {
+        // Prevent writing to system/trash calendars directly
+        if task.calendar_href == crate::storage::LOCAL_TRASH_HREF
+            || task.calendar_href == "local://recovery"
+        {
+            task.calendar_href = crate::storage::LOCAL_CALENDAR_HREF.to_string();
+        }
+
         // Pre-compute full_href for remote tasks so it's ready for the UI instantly
         if !task.calendar_href.starts_with("local://") {
             let cal_path = task.calendar_href.clone();
@@ -487,34 +494,42 @@ impl TaskController {
     /// This returns the original task state so callers can persist a Move action
     /// to the journal/network indicating the source calendar and target.
     pub async fn move_task(&self, uid: &str, new_cal_href: &str) -> Result<Vec<String>, String> {
+        // Prevent manual moves to system calendars
+        let target_href = if new_cal_href == crate::storage::LOCAL_TRASH_HREF
+            || new_cal_href == "local://recovery"
+        {
+            crate::storage::LOCAL_CALENDAR_HREF.to_string()
+        } else {
+            new_cal_href.to_string()
+        };
+
         let mut store = self.store.lock().await;
         let (original, _) = store
-            .move_task(uid, new_cal_href.to_string())
+            .move_task(uid, target_href.clone())
             .ok_or("Task not found".to_string())?;
         drop(store);
 
-        if !original.calendar_href.starts_with("local://") && !new_cal_href.starts_with("local://")
-        {
-            self.persist_change(Action::Move(original, new_cal_href.to_string()))
+        if !original.calendar_href.starts_with("local://") && !target_href.starts_with("local://") {
+            self.persist_change(Action::Move(original, target_href))
                 .await
         } else if !original.calendar_href.starts_with("local://")
-            && new_cal_href.starts_with("local://")
+            && target_href.starts_with("local://")
         {
             let _ = self.persist_change(Action::Delete(original.clone())).await;
             let mut moved = original.clone();
-            moved.calendar_href = new_cal_href.to_string();
+            moved.calendar_href = target_href.clone();
             self.persist_change(Action::Create(moved)).await
         } else if original.calendar_href.starts_with("local://")
-            && !new_cal_href.starts_with("local://")
+            && !target_href.starts_with("local://")
         {
             let _ = self.persist_change(Action::Delete(original.clone())).await;
             let mut moved = original.clone();
-            moved.calendar_href = new_cal_href.to_string();
+            moved.calendar_href = target_href.clone();
             moved.href = String::new();
             moved.etag = String::new();
             self.persist_change(Action::Create(moved)).await
         } else {
-            self.persist_change(Action::Move(original, new_cal_href.to_string()))
+            self.persist_change(Action::Move(original, target_href))
                 .await
         }
     }

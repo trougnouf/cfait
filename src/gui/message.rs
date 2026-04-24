@@ -131,6 +131,8 @@ pub enum Message {
     CloseHelp,
     // Virtual group toggles (expand/collapse) for completed/cancelled grouping
     ToggleDoneGroup(String),
+    ToggleTreeCollapse(String),
+    ToggleHelpSection(String),
 
     // --- Navigation & Actions ---
     YankTask(String),

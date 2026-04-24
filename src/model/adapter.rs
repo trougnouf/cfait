@@ -919,6 +919,8 @@ impl IcsAdapter {
             create_event,
             is_blocked: false,
             is_implicitly_blocked: false,
+            has_subtasks: false,
+            has_visible_subtasks: false,
             sort_rank: 0,
             effective_priority: 0,
             effective_due: None,

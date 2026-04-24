@@ -130,6 +130,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     let cal_options: Vec<CalOption> = app
         .calendars
         .iter()
+        .filter(|c| c.href != crate::storage::LOCAL_TRASH_HREF && c.href != "local://recovery")
         .map(|c| CalOption {
             name: c.name.clone(),
             href: c.href.clone(),

@@ -82,7 +82,26 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
     let mut content_col = column![].spacing(20).padding(20).max_width(800);
 
     for section in data {
-        content_col = content_col.push(help_card(
+        let is_expanded = app.help_expanded_sections.contains(&section.title);
+
+        let header_btn = button(
+            row![
+                crate::gui::icon::icon(if is_expanded {
+                    crate::gui::icon::ARROW_EXPAND_DOWN
+                } else {
+                    crate::gui::icon::ARROW_RIGHT
+                })
+                .size(16),
+                text(section.title.clone()).size(18)
+            ]
+            .spacing(8)
+            .align_y(iced::Alignment::Center),
+        )
+        .style(iced::widget::button::text)
+        .width(Length::Fill)
+        .on_press(Message::ToggleHelpSection(section.title.clone()));
+
+        let card_content = help_card(
             section.title.as_str(),
             if tab == HelpTab::Syntax {
                 crate::gui::icon::INFO
@@ -90,7 +109,14 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
                 crate::gui::icon::KEYBOARD
             },
             &section.items,
-        ));
+        );
+
+        if is_expanded {
+            content_col = content_col.push(header_btn);
+            content_col = content_col.push(card_content);
+        } else {
+            content_col = content_col.push(header_btn);
+        }
     }
 
     content_col = content_col.push(support_card());

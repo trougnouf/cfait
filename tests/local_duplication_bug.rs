@@ -66,6 +66,7 @@ fn test_reproduce_android_local_revert_bug() {
         start_grace_period_days: 1,
         // Newly required fields in FilterOptions:
         expanded_done_groups: &HashSet::new(),
+        collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
     });

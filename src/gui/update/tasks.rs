@@ -135,6 +135,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             Task::none()
         }
+        Message::ToggleTreeCollapse(uid) => {
+            if app.collapsed_trees.contains(&uid) {
+                app.collapsed_trees.remove(&uid);
+            } else {
+                app.collapsed_trees.insert(uid);
+            }
+            refresh_filtered_tasks(app);
+            Task::none()
+        }
+        Message::ToggleHelpSection(title) => {
+            if app.help_expanded_sections.contains(&title) {
+                app.help_expanded_sections.remove(&title);
+            } else {
+                app.help_expanded_sections.insert(title);
+            }
+            Task::none()
+        }
 
         Message::DeleteTask(index) => {
             if let Some(view_task) = app.get_task_at_index(index) {

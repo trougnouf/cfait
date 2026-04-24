@@ -311,6 +311,49 @@ pub fn view_task_row<'a>(
 
             let mut actions = row![].spacing(3).align_y(iced::Alignment::Center);
 
+            let is_tree_collapsed = app.collapsed_trees.contains(&task.uid);
+            if task.has_visible_subtasks || is_tree_collapsed {
+                // Determine icons and styling
+                let (icon_char, is_primary, tooltip_text) = if is_tree_collapsed {
+                    // Tree is hidden -> Show highlighted Family Tree to expand
+                    (icon::FAMILY_TREE, true, "Expand tree")
+                } else {
+                    // Tree is visible -> Show a "random" tree based on UID hash to collapse
+                    let trees = [
+                        icon::TREE_FA,
+                        icon::TREE_FAE,
+                        icon::TREE_MD,
+                        icon::PALM_TREE,
+                        icon::PINE_TREE,
+                    ];
+                    // Deterministic stable "random" choice using the task UID
+                    let hash = task
+                        .uid
+                        .bytes()
+                        .fold(0u32, |acc, b| acc.wrapping_add(b as u32));
+                    (trees[(hash % 5) as usize], false, "Collapse tree")
+                };
+
+                let collapse_btn = button(icon::icon(icon_char).size(14))
+                    .style(if is_primary {
+                        iced::widget::button::primary
+                    } else {
+                        action_style
+                    })
+                    .padding(4)
+                    .on_press(Message::ToggleTreeCollapse(task.uid.clone()));
+
+                actions = actions.push(
+                    tooltip(
+                        collapse_btn,
+                        text(tooltip_text).size(12),
+                        tooltip::Position::Top,
+                    )
+                    .style(tooltip_style)
+                    .delay(Duration::from_millis(700)),
+                );
+            }
+
             // 1. INDICATORS (Related)
             if has_related || has_incoming_related {
                 let related_icon_name = if !task.related_to.is_empty() {
@@ -410,10 +453,6 @@ pub fn view_task_row<'a>(
             }
 
             use crate::config::TaskAction;
-            let has_subtasks = app.store.calendars.values().any(|map| {
-                map.values()
-                    .any(|t| t.parent_uid.as_deref() == Some(task.uid.as_str()))
-            });
 
             for action in TaskAction::ALL {
                 if !app.pinned_actions.contains(action) {
@@ -429,7 +468,7 @@ pub fn view_task_row<'a>(
                 if *action == TaskAction::ToggleDetails && !(has_info || has_time) {
                     continue;
                 }
-                if *action == TaskAction::DeleteTree && !has_subtasks {
+                if *action == TaskAction::DeleteTree && !task.has_subtasks {
                     continue;
                 }
                 if *action == TaskAction::OpenCoordinates && task.geo.is_none() {
@@ -460,7 +499,7 @@ pub fn view_task_row<'a>(
                 }
 
                 let mut label = action.label();
-                if *action == TaskAction::DuplicateTree && !has_subtasks {
+                if *action == TaskAction::DuplicateTree && !task.has_subtasks {
                     label = "Duplicate task".to_string();
                 }
 

@@ -169,6 +169,7 @@ fn test_is_ready_filters_future_start_dates() {
         default_priority: 5,
         start_grace_period_days: 1,
         expanded_done_groups: &HashSet::new(),
+        collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
     };
@@ -245,6 +246,7 @@ fn test_is_ready_filters_blocked_tasks() {
         default_priority: 5,
         start_grace_period_days: 1,
         expanded_done_groups: &HashSet::new(),
+        collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
     };
@@ -327,6 +329,7 @@ fn test_is_ready_combines_with_other_filters() {
         default_priority: 5,
         start_grace_period_days: 1,
         expanded_done_groups: &HashSet::new(),
+        collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
     };

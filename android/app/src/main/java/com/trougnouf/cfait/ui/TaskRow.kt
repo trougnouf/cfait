@@ -43,7 +43,9 @@ fun TaskRow(
     parentLocation: String? = null,
     aliasMap: Map<String, List<String>> = emptyMap(),
     isHighlighted: Boolean = false,
-    incomingRelations: List<String> = emptyList()
+    incomingRelations: List<String> = emptyList(),
+    isCollapsed: Boolean = false,
+    onToggleCollapse: () -> Unit = {}
 ) {
     val startPadding = (task.depth.toInt() * 12).dp
     var expanded by remember { mutableStateOf(false) }
@@ -408,6 +410,25 @@ fun TaskRow(
                 }
                 IconButton(onClick = { onAction("related") }, modifier = Modifier.size(32.dp)) {
                     NfIcon(getRandomRelatedIcon(task.uid, yankedUid), 18.sp, MaterialTheme.colorScheme.secondary)
+                }
+            }
+
+            if (task.hasVisibleSubtasks || isCollapsed) {
+                val iconChar = if (isCollapsed) {
+                    NfIcons.FAMILY_TREE
+                } else {
+                    val trees =
+                        listOf(NfIcons.TREE_FA, NfIcons.TREE_FAE, NfIcons.TREE_MD, NfIcons.PALM_TREE, NfIcons.PINE_TREE)
+                    val hash = kotlin.math.abs(task.uid.hashCode())
+                    trees[hash % 5]
+                }
+                val iconColor =
+                    if (isCollapsed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(
+                        alpha = 0.6f
+                    )
+
+                IconButton(onClick = onToggleCollapse, modifier = Modifier.size(24.dp)) {
+                    NfIcon(iconChar, 16.sp, iconColor)
                 }
             }
 

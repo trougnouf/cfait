@@ -135,6 +135,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CompleteTaskFromAlarm(_, _)
         | Message::CancelTaskFromAlarm(_, _)
         | Message::ToggleDoneGroup(_)
+        | Message::ToggleTreeCollapse(_)
+        | Message::ToggleHelpSection(_)
         | Message::StartAddSession(_)
         | Message::SessionInputChanged(_)
         | Message::SubmitSession

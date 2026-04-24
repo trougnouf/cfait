@@ -226,6 +226,7 @@ fun HomeScreen(
     var filterLocations by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
     var matchAllCategories by rememberSaveable { mutableStateOf(true) }
     var expandedGroups by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
+    var collapsedGroups by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
@@ -324,7 +325,7 @@ fun HomeScreen(
             try {
                 val viewData = api.getViewTasks(
                     filterTags.toList(), filterLocations.toList(), searchQuery,
-                    expandedGroups.toList(), matchAllCategories
+                    expandedGroups.toList(), collapsedGroups.toList(), matchAllCategories
                 )
                 onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, api.getConfig().tagAliases)
             } catch (e: Exception) {
@@ -777,7 +778,7 @@ fun HomeScreen(
 
     LaunchedEffect(
         searchQuery, filterTags, filterLocations, isLoading,
-        calendars, refreshTick, expandedGroups, matchAllCategories
+        calendars, refreshTick, expandedGroups, collapsedGroups, matchAllCategories
     ) {
         updateTaskList()
     }
@@ -1884,7 +1885,12 @@ fun HomeScreen(
                                                 parentLocation = parent?.location,
                                                 aliasMap = aliases,
                                                 isHighlighted = task.uid == highlightedUid,
-                                                incomingRelations = incomingRelationsMap[task.uid] ?: emptyList()
+                                                incomingRelations = incomingRelationsMap[task.uid] ?: emptyList(),
+                                                isCollapsed = collapsedGroups.contains(task.uid),
+                                                onToggleCollapse = {
+                                                    collapsedGroups =
+                                                        if (collapsedGroups.contains(task.uid)) collapsedGroups - task.uid else collapsedGroups + task.uid
+                                                }
                                             )
                                         } else {
                                             VirtualTaskRow(task = task) {

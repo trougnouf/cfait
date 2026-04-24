@@ -331,6 +331,10 @@ pub struct Task {
     #[serde(skip)]
     pub is_implicitly_blocked: bool,
     #[serde(skip)]
+    pub has_subtasks: bool,
+    #[serde(skip)]
+    pub has_visible_subtasks: bool,
+    #[serde(skip)]
     pub sort_rank: u8,
     #[serde(skip)]
     pub effective_priority: u8,
@@ -502,6 +506,8 @@ impl Task {
             create_event: None,
             is_blocked: false,
             is_implicitly_blocked: false,
+            has_subtasks: false,
+            has_visible_subtasks: false,
             sort_rank: 0,
             effective_priority: 0,
             effective_due: None,

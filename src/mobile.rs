@@ -164,8 +164,9 @@ pub struct MobileTask {
     pub related_to_uids: Vec<String>,
     pub related_to_names: Vec<String>,
     pub is_paused: bool,
-    pub has_subtasks: bool,       // <--- ADD THIS
-    pub tree_location_count: u32, // ADD THIS
+    pub has_subtasks: bool,
+    pub has_visible_subtasks: bool,
+    pub tree_location_count: u32,
     pub location: Option<String>,
     pub url: Option<String>,
     pub geo: Option<String>,
@@ -345,6 +346,7 @@ fn task_to_mobile(
     t: &Task,
     store: &TaskStore,
     aliases: &HashMap<String, Vec<String>>,
+    parent_uids: &HashSet<String>,
 ) -> MobileTask {
     let smart = t.to_smart_string();
     let status_str = format!("{:?}", t.status);
@@ -412,11 +414,8 @@ fn task_to_mobile(
     let (visible_categories, visible_location) =
         t.resolve_visual_attributes(&parent_tags, &parent_loc, aliases);
 
-    // Check if this task has any children in the store
-    let has_subtasks = store.calendars.values().any(|map| {
-        map.values()
-            .any(|t_inner| t_inner.parent_uid.as_deref() == Some(&t.uid))
-    });
+    // O(1) Check if this task has any children (visible or hidden) in the store
+    let has_subtasks = parent_uids.contains(&t.uid);
 
     // Count waypoints in the tree for GPX export
     let tree_location_count = store.count_tree_locations(&t.uid) as u32;
@@ -458,7 +457,8 @@ fn task_to_mobile(
         related_to_uids: t.related_to.clone(),
         related_to_names,
         is_paused: t.is_paused(),
-        has_subtasks, // <--- ADD THIS
+        has_subtasks,
+        has_visible_subtasks: t.has_visible_subtasks,
         tree_location_count,
         location: t.location.clone(),
         url: t.url.clone(),
@@ -815,11 +815,12 @@ impl CfaitMobile {
     pub fn get_ongoing_tasks(&self) -> Vec<MobileTask> {
         let store = self.controller.store.blocking_lock();
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let parent_uids = store.get_all_parent_uids();
         let mut results = Vec::new();
         for map in store.calendars.values() {
             for t in map.values() {
                 if t.status == crate::model::TaskStatus::InProcess {
-                    results.push(task_to_mobile(t, &store, &config.tag_aliases));
+                    results.push(task_to_mobile(t, &store, &config.tag_aliases, &parent_uids));
                 }
             }
         }
@@ -1355,9 +1356,15 @@ impl CfaitMobile {
     pub async fn get_task_by_uid(&self, uid: String) -> Option<MobileTask> {
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let parent_uids = store.get_all_parent_uids();
 
         if let Some(task) = store.get_task_ref(&uid) {
-            Some(task_to_mobile(task, &store, &config.tag_aliases))
+            Some(task_to_mobile(
+                task,
+                &store,
+                &config.tag_aliases,
+                &parent_uids,
+            ))
         } else {
             None
         }
@@ -1371,15 +1378,17 @@ impl CfaitMobile {
         search_query: String,
         // Caller-provided list of expanded done-group keys
         expanded_groups: Vec<String>,
-        match_all_categories: bool, // <--- ADDED PARAM
+        collapsed_groups: Vec<String>,
+        match_all_categories: bool,
     ) -> MobileViewData {
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
 
-        // Convert expanded vector into a set for efficient lookup
+        // Convert expanded/collapsed vectors into sets for efficient lookup
         let expanded_set: HashSet<String> = expanded_groups.into_iter().collect();
+        let collapsed_set: HashSet<String> = collapsed_groups.into_iter().collect();
 
         let cutoff_date = config
             .sort_cutoff_months
@@ -1404,10 +1413,12 @@ impl CfaitMobile {
 
             // Pass expansion state and configured limits into the store filter
             expanded_done_groups: &expanded_set,
+            collapsed_trees: &collapsed_set,
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
         });
 
+        let parent_uids = store.get_all_parent_uids();
         let tasks = filtered
             .items
             .into_iter()
@@ -1418,7 +1429,7 @@ impl CfaitMobile {
                     None
                 }
             })
-            .map(|t| task_to_mobile(&t, &store, &config.tag_aliases))
+            .map(|t| task_to_mobile(&t, &store, &config.tag_aliases, &parent_uids))
             .collect();
 
         let tags = filtered
@@ -1478,6 +1489,7 @@ impl CfaitMobile {
             default_priority: config.default_priority,
             start_grace_period_days: config.start_grace_period_days,
             expanded_done_groups: &HashSet::new(),
+            collapsed_trees: &HashSet::new(),
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
         });

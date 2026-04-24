@@ -110,6 +110,8 @@ pub struct GuiApp {
     pub new_task_title: String,
     pub expanded_tasks: HashSet<String>,
     pub expanded_done_groups: HashSet<String>,
+    pub collapsed_trees: HashSet<String>,
+    pub help_expanded_sections: HashSet<String>,
     pub unsynced_changes: bool,
     pub last_sync_failed: bool,
 
@@ -356,6 +358,8 @@ impl Default for GuiApp {
             new_task_title: String::new(),
             expanded_tasks: HashSet::new(),
             expanded_done_groups: HashSet::new(),
+            collapsed_trees: HashSet::new(),
+            help_expanded_sections: HashSet::new(),
             unsynced_changes: false,
             last_sync_failed: false,
 
