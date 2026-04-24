@@ -1179,7 +1179,10 @@ pub fn view_task_row<'a>(
                         text(rust_i18n::t!("parent"))
                             .size(12)
                             .color(Color::from_rgb(0.4, 0.8, 0.4)),
-                        text(p_name).size(12),
+                        button(text(p_name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
+                            .style(button::text)
+                            .padding(0)
+                            .on_press(Message::JumpToTask(p_uid.clone())),
                         tooltip(
                             remove_parent_btn,
                             text(rust_i18n::t!("remove_parent")).size(12),
