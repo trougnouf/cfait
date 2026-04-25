@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
-use crate::gui::view::focusable::focusable;
 use crate::help::HelpTab;
 use iced::widget::{MouseArea, Space, button, column, container, row, scrollable, svg, text};
 use iced::{Color, Element, Font, Length, Theme};
@@ -11,17 +10,63 @@ const COL_ACCENT: Color = Color::from_rgb(0.4, 0.7, 1.0);
 const COL_SYNTAX: Color = Color::from_rgb(1.0, 0.85, 0.4);
 const COL_MUTED: Color = Color::from_rgb(0.6, 0.6, 0.6);
 
-// Helper function to create a tab button, solving the lifetime issue
-fn tab_btn(label: &'static str, target_id: &'static str) -> Element<'static, Message> {
-    button(text(label).size(16))
+// Helper function to create a pretty, colored, rounded tab button
+fn tab_btn(
+    icon_char: char,
+    label: &'static str,
+    is_active: bool,
+    msg: Message,
+    base_color: Color,
+) -> Element<'static, Message> {
+    let content = row![
+        text(icon_char).font(crate::gui::icon::FONT).size(18),
+        text(label).size(16)
+    ]
+    .spacing(8)
+    .align_y(iced::Alignment::Center);
+
+    button(container(content).center_x(Length::Fill))
         .width(Length::Fill)
-        .style(iced::widget::button::secondary)
-        .padding(10)
-        .on_press(Message::JumpToHelpSection(target_id))
+        .padding([12, 20])
+        .style(
+            move |_theme: &Theme, status: iced::widget::button::Status| {
+                let is_hovered = status == iced::widget::button::Status::Hovered;
+                let bg_alpha = if is_active {
+                    0.4
+                } else if is_hovered {
+                    0.25
+                } else {
+                    0.15
+                };
+
+                let border_alpha = if is_active { 0.9 } else { 0.5 };
+
+                iced::widget::button::Style {
+                    background: Some(
+                        Color {
+                            a: bg_alpha,
+                            ..base_color
+                        }
+                        .into(),
+                    ),
+                    text_color: base_color,
+                    border: iced::Border {
+                        radius: 20.0.into(),
+                        width: if is_active { 2.0 } else { 1.0 },
+                        color: Color {
+                            a: border_alpha,
+                            ..base_color
+                        },
+                    },
+                    ..Default::default()
+                }
+            },
+        )
+        .on_press(msg)
         .into()
 }
 
-pub fn view_help<'a>(_tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
+pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
     let icon_choice = match app.state {
         AppState::Help(_, choice) => choice,
         _ => 0,
@@ -55,12 +100,41 @@ pub fn view_help<'a>(_tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
         .on_press(Message::WindowDragged);
 
     // --- 1. Sticky Top Tabs ---
+    let support_icons = [
+        '\u{f0a52}',
+        '\u{f185c}',
+        '\u{f188f}',
+        '\u{f118}',
+        '\u{eda9}',
+        '\u{eeed}',
+        '\u{f0b79}',
+    ];
+    let support_icon = support_icons[(icon_choice as usize) % support_icons.len()];
+
     let tabs_row = row![
-        tab_btn("Syntax", "help_syntax"),
-        tab_btn("Shortcuts", "help_shortcuts"),
-        tab_btn("Support & links", "help_about")
+        tab_btn(
+            '\u{f1fa}',
+            "Syntax",
+            tab == HelpTab::Syntax,
+            Message::OpenHelp(HelpTab::Syntax),
+            Color::from_rgb(0.9, 0.6, 0.2)
+        ),
+        tab_btn(
+            '\u{f11c}',
+            "Shortcuts",
+            tab == HelpTab::Shortcuts,
+            Message::OpenHelp(HelpTab::Shortcuts),
+            Color::from_rgb(0.2, 0.8, 0.4)
+        ),
+        tab_btn(
+            support_icon,
+            "Support & links",
+            tab == HelpTab::About,
+            Message::OpenHelp(HelpTab::About),
+            Color::from_rgb(0.8, 0.3, 0.7)
+        ),
     ]
-    .spacing(10)
+    .spacing(15)
     .padding(iced::Padding {
         left: 20.0,
         right: 20.0,
@@ -68,132 +142,152 @@ pub fn view_help<'a>(_tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
         top: 0.0,
     });
 
-    // --- 2. Continuous Content Generation ---
+    // --- 2. Dynamic Content Generation ---
     let mut content_col = column![].spacing(30).padding(20).max_width(800);
 
-    // A. Syntax Section
-    let syntax_anchor = focusable(
-        text("Syntax")
-            .size(28)
-            .font(Font {
-                weight: iced::font::Weight::Bold,
-                ..Default::default()
-            })
-            .style(|theme: &Theme| text::Style {
-                color: Some(if theme.extended_palette().is_dark {
-                    COL_ACCENT
-                } else {
-                    theme.extended_palette().primary.base.color
-                }),
-            }),
-    )
-    .id(iced::widget::Id::new("help_syntax"));
-
-    content_col = content_col.push(syntax_anchor);
-    for section in crate::help::get_syntax_help() {
-        content_col = content_col.push(help_card(&section.title, &section.items));
-    }
-
-    // B. Shortcuts Section
-    let shortcuts_anchor = focusable(
-        text("Shortcuts")
-            .size(28)
-            .font(Font {
-                weight: iced::font::Weight::Bold,
-                ..Default::default()
-            })
-            .style(|theme: &Theme| text::Style {
-                color: Some(if theme.extended_palette().is_dark {
-                    COL_ACCENT
-                } else {
-                    theme.extended_palette().primary.base.color
-                }),
-            }),
-    )
-    .id(iced::widget::Id::new("help_shortcuts"));
-
-    content_col = content_col.push(shortcuts_anchor);
-    for section in crate::help::get_shortcuts_help() {
-        content_col = content_col.push(help_card(&section.title, &section.items));
-    }
-
-    // C. About / Support Section
-    let about_anchor = focusable(
-        text("Support development")
-            .size(28)
-            .font(Font {
-                weight: iced::font::Weight::Bold,
-                ..Default::default()
-            })
-            .style(|theme: &Theme| text::Style {
-                color: Some(if theme.extended_palette().is_dark {
-                    COL_ACCENT
-                } else {
-                    theme.extended_palette().primary.base.color
-                }),
-            }),
-    )
-    .id(iced::widget::Id::new("help_about"));
-
-    let footer_links = column![
-        text(format!("Cfait v{}  •  GPL-3.0", env!("CARGO_PKG_VERSION")))
-            .size(14)
-            .style(|_: &Theme| text::Style {
-                color: Some(COL_MUTED)
-            }),
-        text("Trougnouf (Benoit Brummer)")
-            .size(14)
-            .style(|_: &Theme| text::Style {
-                color: Some(COL_MUTED)
-            }),
-        button(
-            text("https://codeberg.org/trougnouf/cfait")
-                .size(14)
-                .style(|theme: &Theme| text::Style {
-                    color: Some(if theme.extended_palette().is_dark {
-                        COL_ACCENT
-                    } else {
-                        theme.extended_palette().primary.base.color
+    match tab {
+        HelpTab::Syntax => {
+            let syntax_header = row![
+                text('\u{f1fa}')
+                    .font(crate::gui::icon::FONT)
+                    .size(28)
+                    .style(|_theme: &Theme| text::Style {
+                        color: Some(COL_ACCENT)
+                    }),
+                text("Syntax")
+                    .size(28)
+                    .font(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
                     })
-                })
-        )
-        .padding(0)
-        .style(iced::widget::button::text)
-        .on_press(Message::OpenUrl(
-            "https://codeberg.org/trougnouf/cfait".to_string()
-        )),
-        button(
-            text("Chat: #Cfait:matrix.org")
-                .size(14)
-                .style(|theme: &Theme| text::Style {
-                    color: Some(if theme.extended_palette().is_dark {
-                        COL_ACCENT
-                    } else {
-                        theme.extended_palette().primary.base.color
+                    .style(|_theme: &Theme| text::Style {
+                        color: Some(COL_ACCENT)
                     })
-                })
-        )
-        .padding(0)
-        .style(iced::widget::button::text)
-        .on_press(Message::OpenUrl(
-            "https://matrix.to/#/#Cfait:matrix.org".to_string()
-        ))
-    ]
-    .spacing(8)
-    .align_x(iced::Alignment::Center);
+            ]
+            .spacing(12)
+            .align_y(iced::Alignment::Center);
 
-    content_col = content_col.push(
-        column![about_anchor, support_card(), footer_links]
-            .spacing(20)
-            .align_x(iced::Alignment::Center),
-    );
+            content_col = content_col.push(syntax_header);
+
+            for section in crate::help::get_syntax_help() {
+                content_col = content_col.push(help_card(&section.title, &section.items));
+            }
+        }
+        HelpTab::Shortcuts => {
+            let shortcuts_header = row![
+                text('\u{f11c}')
+                    .font(crate::gui::icon::FONT)
+                    .size(28)
+                    .style(|_theme: &Theme| text::Style {
+                        color: Some(COL_ACCENT)
+                    }),
+                text("Shortcuts")
+                    .size(28)
+                    .font(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    })
+                    .style(|_theme: &Theme| text::Style {
+                        color: Some(COL_ACCENT)
+                    })
+            ]
+            .spacing(12)
+            .align_y(iced::Alignment::Center);
+
+            content_col = content_col.push(shortcuts_header);
+
+            for section in crate::help::get_shortcuts_help() {
+                content_col = content_col.push(help_card(&section.title, &section.items));
+            }
+        }
+        HelpTab::About => {
+            let about_header = row![
+                text(support_icon)
+                    .font(crate::gui::icon::FONT)
+                    .size(28)
+                    .style(|_theme: &Theme| text::Style {
+                        color: Some(COL_ACCENT)
+                    }),
+                text("Support development")
+                    .size(28)
+                    .font(Font {
+                        weight: iced::font::Weight::Bold,
+                        ..Default::default()
+                    })
+                    .style(|_theme: &Theme| text::Style {
+                        color: Some(COL_ACCENT)
+                    })
+            ]
+            .spacing(12)
+            .align_y(iced::Alignment::Center);
+
+            let footer_links = column![
+                text(format!("Cfait v{}  •  GPL-3.0", env!("CARGO_PKG_VERSION")))
+                    .size(14)
+                    .style(|_: &Theme| text::Style {
+                        color: Some(COL_MUTED)
+                    }),
+                text("Trougnouf (Benoit Brummer)")
+                    .size(14)
+                    .style(|_: &Theme| text::Style {
+                        color: Some(COL_MUTED)
+                    }),
+                button(text("https://codeberg.org/trougnouf/cfait").size(14).style(
+                    |theme: &Theme| text::Style {
+                        color: Some(if theme.extended_palette().is_dark {
+                            COL_ACCENT
+                        } else {
+                            theme.extended_palette().primary.base.color
+                        })
+                    }
+                ))
+                .padding(0)
+                .style(iced::widget::button::text)
+                .on_press(Message::OpenUrl(
+                    "https://codeberg.org/trougnouf/cfait".to_string()
+                )),
+                button(
+                    text("Chat: #Cfait:matrix.org")
+                        .size(14)
+                        .style(|theme: &Theme| text::Style {
+                            color: Some(if theme.extended_palette().is_dark {
+                                COL_ACCENT
+                            } else {
+                                theme.extended_palette().primary.base.color
+                            })
+                        })
+                )
+                .padding(0)
+                .style(iced::widget::button::text)
+                .on_press(Message::OpenUrl(
+                    "https://matrix.to/#/#Cfait:matrix.org".to_string()
+                ))
+            ]
+            .spacing(8)
+            .align_x(iced::Alignment::Center);
+
+            content_col = content_col.push(
+                column![about_header, support_card(), footer_links]
+                    .spacing(20)
+                    .align_x(iced::Alignment::Center),
+            );
+        }
+    }
 
     // --- 3. Final Assembly ---
+    // Assign a unique ID per tab so the scroll position resets to the top when navigating
+    let scrollable_id = match tab {
+        HelpTab::Syntax => iced::widget::Id::new("scroll_help_syntax"),
+        HelpTab::Shortcuts => iced::widget::Id::new("scroll_help_shortcuts"),
+        HelpTab::About => iced::widget::Id::new("scroll_help_about"),
+    };
+
     let scrollable_content = scrollable(
         container(content_col)
             .width(Length::Fill)
             .center_x(Length::Fill),
-    );
+    )
+    .id(scrollable_id);
 
     column![title, tabs_row, scrollable_content].into()
 }
@@ -242,7 +336,7 @@ fn help_card<'a>(title: &str, items: &[crate::help::HelpItem]) -> Element<'a, Me
 
         let content = column![
             row![
-                syntax_pill.width(Length::Fixed(170.0)),
+                syntax_pill.width(Length::Fixed(180.0)),
                 text::<Theme, iced::Renderer>(item.desc.clone())
                     .size(15)
                     .width(Length::Fill)
@@ -251,7 +345,7 @@ fn help_card<'a>(title: &str, items: &[crate::help::HelpItem]) -> Element<'a, Me
             .align_y(iced::Alignment::Center),
             if !item.example.is_empty() {
                 Element::from(row![
-                    Space::new().width(Length::Fixed(185.0)),
+                    Space::new().width(Length::Fixed(195.0)),
                     text::<Theme, iced::Renderer>(format!("e.g. {}", item.example))
                         .size(13)
                         .font(Font::MONOSPACE)

@@ -423,11 +423,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.state = AppState::Help(tab, icon_choice);
             Task::none()
         }
-        Message::JumpToHelpSection(id) => {
-            // Iced's focus operation automatically scrolls the parent Scrollable
-            // to bring the target widget into view!
-            iced::widget::operation::focus(iced::widget::Id::new(id))
-        }
         Message::CloseHelp => {
             app.state = AppState::Active;
             Task::none()

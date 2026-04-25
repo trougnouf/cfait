@@ -217,8 +217,6 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             view::handle(app, message)
         }
 
-        Message::JumpToHelpSection(id) => iced::widget::operation::focus(iced::widget::Id::new(id)),
-
         Message::SnapToSelected { focus } => {
             if let Some(uid) = &app.selected_uid {
                 let present_in_list = app.find_task_index_by_uid(uid).is_some();

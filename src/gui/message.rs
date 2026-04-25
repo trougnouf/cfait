@@ -128,7 +128,6 @@ pub enum Message {
     ToggleHideFullyCompletedTags(bool),
     TabPressed(bool),
     OpenHelp(crate::help::HelpTab),
-    JumpToHelpSection(&'static str),
     CloseHelp,
     // Virtual group toggles (expand/collapse) for completed/cancelled grouping
     ToggleDoneGroup(String),
