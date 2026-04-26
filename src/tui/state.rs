@@ -64,6 +64,10 @@ pub struct AppState {
     pub show_priority_numbers: bool,
     pub sort_cutoff_months: Option<u32>,
 
+    pub quick_filter_term: String,
+    pub quick_filter_icon: String,
+    pub show_quick_filter: bool,
+
     // Cached sidebar values (derived from the last filter result)
     pub cached_categories: Vec<(String, usize)>,
     pub cached_locations: Vec<(String, usize)>,
@@ -165,6 +169,9 @@ impl AppState {
             strikethrough_completed: false,
             hide_fully_completed_tags: false,
             show_priority_numbers: true,
+            quick_filter_term: "is:ready".to_string(),
+            quick_filter_icon: "f0fa9".to_string(),
+            show_quick_filter: true,
             sort_cutoff_months: Some(2),
             // Initialize sidebar caches as empty; they will be populated by refresh_filtered_view()
             cached_categories: Vec::new(),

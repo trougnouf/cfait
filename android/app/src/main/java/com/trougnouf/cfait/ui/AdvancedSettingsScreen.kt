@@ -34,6 +34,9 @@ fun AdvancedSettingsScreen(
     trashRetention: String,
     deleteEventsOnCompletion: Boolean,
     showOngoingNotifications: Boolean,
+    showQuickFilter: Boolean,
+    quickFilterTerm: String,
+    quickFilterIcon: String,
     tabPosition: String,
     tabAutoHide: Boolean,
     onTabPositionChange: (String) -> Unit,
@@ -43,6 +46,9 @@ fun AdvancedSettingsScreen(
     onTrashRetentionChange: (String) -> Unit,
     onDeleteEventsChange: (Boolean) -> Unit,
     onShowOngoingNotificationsChange: (Boolean) -> Unit,
+    onShowQuickFilterChange: (Boolean) -> Unit,
+    onQuickFilterTermChange: (String) -> Unit,
+    onQuickFilterIconChange: (String) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -170,6 +176,38 @@ fun AdvancedSettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            )
+            HorizontalDivider(Modifier.padding(vertical = 16.dp))
+
+            // Quick Filter Section
+            Text(
+                "Quick Filter (Search Bar)",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(
+                    checked = showQuickFilter,
+                    onCheckedChange = onShowQuickFilterChange
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Show quick filter button")
+            }
+            OutlinedTextField(
+                value = quickFilterTerm,
+                onValueChange = onQuickFilterTermChange,
+                label = { Text("Search term") },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                singleLine = true
+            )
+            OutlinedTextField(
+                value = quickFilterIcon,
+                onValueChange = onQuickFilterIconChange,
+                label = { Text("Icon (nerdfonts code)") },
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
+                singleLine = true
             )
             HorizontalDivider(Modifier.padding(vertical = 16.dp))
 

@@ -84,7 +84,10 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetShowPriorityNumbers(_)
         | Message::SetLanguage(_)
         | Message::SetStrikethroughCompleted(_)
-        | Message::TogglePinnedAction(_, _) => settings::handle(app, message),
+        | Message::TogglePinnedAction(_, _)
+        | Message::SetShowQuickFilter(_)
+        | Message::SetQuickFilterTerm(_)
+        | Message::SetQuickFilterIcon(_) => settings::handle(app, message),
 
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)
@@ -205,6 +208,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ZoomIn
         | Message::ZoomOut
         | Message::ZoomReset
+        | Message::ToggleQuickFilter
         | Message::MoveSelected => view::handle(app, message),
 
         Message::Refresh

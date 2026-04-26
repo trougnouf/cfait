@@ -391,6 +391,29 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             Task::none()
         }
+        Message::ToggleQuickFilter => {
+            let current = app.search_value.text();
+            let new_text = if current.contains(&app.quick_filter_term) {
+                current
+                    .replace(&app.quick_filter_term, "")
+                    .trim()
+                    .to_string()
+            } else {
+                if current.is_empty() {
+                    app.quick_filter_term.clone()
+                } else {
+                    format!("{} {}", app.quick_filter_term, current)
+                }
+            };
+            app.search_value = iced::widget::text_editor::Content::with_text(&new_text);
+            app.search_value
+                .perform(iced::widget::text_editor::Action::Move(
+                    iced::widget::text_editor::Motion::DocumentEnd,
+                ));
+            app.search_debounce_version = app.search_debounce_version.wrapping_add(1);
+            crate::gui::update::common::refresh_filtered_tasks(app);
+            Task::none()
+        }
         Message::SetMinDuration(val) => {
             app.filter_min_duration = val;
             refresh_filtered_tasks(app);

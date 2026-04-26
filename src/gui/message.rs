@@ -108,6 +108,7 @@ pub enum Message {
     ZoomIn,
     ZoomOut,
     ZoomReset,
+    ToggleQuickFilter,
 
     // --- View & Filter ---
     ToggleChildLock,
@@ -211,6 +212,10 @@ pub enum Message {
     SetSnoozeShort(String),
     SetSnoozeLong(String),
     SetAutoRefreshInterval(String), // Added
+
+    SetShowQuickFilter(bool),
+    SetQuickFilterTerm(String),
+    SetQuickFilterIcon(String),
 
     // --- Context Menu ---
     OpenContextMenu(String, bool),

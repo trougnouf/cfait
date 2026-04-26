@@ -259,6 +259,9 @@ pub struct MobileConfig {
     pub max_done_roots: u32,
     pub max_done_subtasks: u32,
     pub show_ongoing_notifications: bool,
+    pub show_quick_filter: bool,
+    pub quick_filter_term: String,
+    pub quick_filter_icon: String,
 }
 
 #[derive(uniffi::Record)]
@@ -700,6 +703,9 @@ impl CfaitMobile {
             max_done_roots: c.max_done_roots as u32,
             max_done_subtasks: c.max_done_subtasks as u32,
             show_ongoing_notifications: c.show_ongoing_notifications,
+            show_quick_filter: c.show_quick_filter,
+            quick_filter_term: c.quick_filter_term,
+            quick_filter_icon: c.quick_filter_icon,
         }
     }
 
@@ -781,6 +787,9 @@ impl CfaitMobile {
         max_done_roots: u32,
         max_done_subtasks: u32,
         show_ongoing_notifications: bool,
+        show_quick_filter: bool,
+        quick_filter_term: String,
+        quick_filter_icon: String,
     ) -> Result<(), MobileError> {
         let mut c = Config::load(self.ctx.as_ref()).unwrap_or_default();
         c.url = url;
@@ -808,6 +817,9 @@ impl CfaitMobile {
         c.max_done_roots = max_done_roots as usize;
         c.max_done_subtasks = max_done_subtasks as usize;
         c.show_ongoing_notifications = show_ongoing_notifications;
+        c.show_quick_filter = show_quick_filter;
+        c.quick_filter_term = quick_filter_term;
+        c.quick_filter_icon = quick_filter_icon;
 
         c.save(self.ctx.as_ref()).map_err(MobileError::from)
     }

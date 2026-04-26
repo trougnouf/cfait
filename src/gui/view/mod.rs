@@ -1280,6 +1280,31 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     let mut search_row = row![].align_y(iced::Alignment::Center).spacing(5);
 
+    if app.show_quick_filter {
+        let is_active = search_text.contains(&app.quick_filter_term);
+        let qf_icon_char = crate::gui::icon::parse_icon(&app.quick_filter_icon);
+        let qf_color = if is_active {
+            app.theme().extended_palette().primary.base.color
+        } else {
+            app.theme().extended_palette().background.base.text
+        };
+
+        let qf_btn = iced::widget::button(icon::icon(qf_icon_char).size(16).color(qf_color))
+            .style(iced::widget::button::text)
+            .padding(6)
+            .on_press(Message::ToggleQuickFilter);
+
+        search_row = search_row.push(
+            tooltip(
+                qf_btn,
+                text(format!("Toggle '{}' (w)", app.quick_filter_term)).size(12),
+                tooltip::Position::Bottom,
+            )
+            .style(tooltip_style)
+            .delay(Duration::from_millis(700)),
+        );
+    }
+
     let random_btn = iced::widget::button(icon::icon(app.random_icon).size(16))
         .style(iced::widget::button::text)
         .padding(6)

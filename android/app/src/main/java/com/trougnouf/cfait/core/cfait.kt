@@ -1203,6 +1203,9 @@ internal object UniffiLib {
         `maxDoneRoots`: Int,
         `maxDoneSubtasks`: Int,
         `showOngoingNotifications`: Byte,
+        `showQuickFilter`: Byte,
+        `quickFilterTerm`: RustBuffer.ByValue,
+        `quickFilterIcon`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
@@ -1668,7 +1671,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_related_to() != 37228.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 29233.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 12820.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility() != 45711.toShort()) {
@@ -2426,6 +2429,9 @@ public interface CfaitMobileInterface {
         `maxDoneRoots`: kotlin.UInt,
         `maxDoneSubtasks`: kotlin.UInt,
         `showOngoingNotifications`: kotlin.Boolean,
+        `showQuickFilter`: kotlin.Boolean,
+        `quickFilterTerm`: kotlin.String,
+        `quickFilterIcon`: kotlin.String,
     )
 
     fun `setCalendarVisibility`(
@@ -3488,6 +3494,9 @@ open class CfaitMobile :
         `maxDoneRoots`: kotlin.UInt,
         `maxDoneSubtasks`: kotlin.UInt,
         `showOngoingNotifications`: kotlin.Boolean,
+        `showQuickFilter`: kotlin.Boolean,
+        `quickFilterTerm`: kotlin.String,
+        `quickFilterIcon`: kotlin.String,
     ) = callWithHandle {
         uniffiRustCallWithError(MobileException) { _status ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_save_config(
@@ -3513,6 +3522,9 @@ open class CfaitMobile :
                 FfiConverterUInt.lower(`maxDoneRoots`),
                 FfiConverterUInt.lower(`maxDoneSubtasks`),
                 FfiConverterBoolean.lower(`showOngoingNotifications`),
+                FfiConverterBoolean.lower(`showQuickFilter`),
+                FfiConverterString.lower(`quickFilterTerm`),
+                FfiConverterString.lower(`quickFilterIcon`),
                 _status,
             )
         }
@@ -3975,6 +3987,9 @@ data class MobileConfig(
     var `maxDoneRoots`: kotlin.UInt,
     var `maxDoneSubtasks`: kotlin.UInt,
     var `showOngoingNotifications`: kotlin.Boolean,
+    var `showQuickFilter`: kotlin.Boolean,
+    var `quickFilterTerm`: kotlin.String,
+    var `quickFilterIcon`: kotlin.String,
 ) {
     companion object
 }
@@ -4007,6 +4022,9 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterUInt.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
         )
 
     override fun allocationSize(value: MobileConfig) =
@@ -4032,7 +4050,10 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterUInt.allocationSize(value.`trashRetention`) +
                 FfiConverterUInt.allocationSize(value.`maxDoneRoots`) +
                 FfiConverterUInt.allocationSize(value.`maxDoneSubtasks`) +
-                FfiConverterBoolean.allocationSize(value.`showOngoingNotifications`)
+                FfiConverterBoolean.allocationSize(value.`showOngoingNotifications`) +
+                FfiConverterBoolean.allocationSize(value.`showQuickFilter`) +
+                FfiConverterString.allocationSize(value.`quickFilterTerm`) +
+                FfiConverterString.allocationSize(value.`quickFilterIcon`)
         )
 
     override fun write(
@@ -4061,6 +4082,9 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterUInt.write(value.`maxDoneRoots`, buf)
         FfiConverterUInt.write(value.`maxDoneSubtasks`, buf)
         FfiConverterBoolean.write(value.`showOngoingNotifications`, buf)
+        FfiConverterBoolean.write(value.`showQuickFilter`, buf)
+        FfiConverterString.write(value.`quickFilterTerm`, buf)
+        FfiConverterString.write(value.`quickFilterIcon`, buf)
     }
 }
 

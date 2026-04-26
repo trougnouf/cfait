@@ -179,6 +179,7 @@ fn handle_hotkey(
                     ("m", false) => Some(Message::CategoryMatchModeToggle),
                     ("m", true) => Some(Message::MoveSelected),
                     ("q", false) => Some(Message::CloseWindow),
+                    ("w", false) => Some(Message::ToggleQuickFilter),
                     ("r", false) => Some(Message::Refresh),
                     ("r", true) => Some(Message::JumpToRandomTask),
                     // Fallback to match exact char for symbols and numbers

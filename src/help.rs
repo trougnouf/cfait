@@ -430,6 +430,11 @@ pub fn get_shortcuts_help() -> Vec<HelpSection> {
                     desc: rust_i18n::t!("support_isolate_calendar").to_string(),
                     example: "".to_string(),
                 },
+                HelpItem {
+                    keys: "w".to_string(),
+                    desc: "Toggle Quick Filter (is:ready)".to_string(),
+                    example: "".to_string(),
+                },
             ],
         },
     ]

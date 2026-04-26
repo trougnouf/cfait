@@ -181,6 +181,9 @@ fun CfaitNavHost(
     var autoScrollUid by remember { mutableStateOf<String?>(null) }
     var refreshTick by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var isLoading by remember { mutableStateOf(false) }
+    var showQuickFilter by remember { mutableStateOf(true) }
+    var quickFilterTerm by remember { mutableStateOf("is:ready") }
+    var quickFilterIcon by remember { mutableStateOf("f0fa9") }
 
     // Lift state for advanced settings so it persists across navigation
     var maxDoneRoots by remember { mutableStateOf("20") }
@@ -294,6 +297,9 @@ fun CfaitNavHost(
                 defaultCalHref = config.defaultCalendar
                 defaultPriority = config.defaultPriority.toInt() // Fetch config value
                 hasUnsynced = api.hasUnsyncedChanges()
+                showQuickFilter = config.showQuickFilter
+                quickFilterTerm = config.quickFilterTerm
+                quickFilterIcon = config.quickFilterIcon
                 AlarmScheduler.scheduleNextAlarm(context, api)
                 AlarmScheduler.cleanupObsoleteNotifications(context, api)
                 NotificationHelper.updateOngoingNotifications(context, api)
@@ -486,6 +492,9 @@ fun CfaitNavHost(
                 isLoading = isLoading,
                 hasUnsynced = hasUnsynced,
                 autoScrollUid = autoScrollUid,
+                showQuickFilter = showQuickFilter,
+                quickFilterTerm = quickFilterTerm,
+                quickFilterIcon = quickFilterIcon,
                 refreshTick = refreshTick,
                 tabPosition = tabPosition,
                 tabAutoHide = tabAutoHide, // <-- ADD THIS LINE
@@ -548,6 +557,9 @@ fun CfaitNavHost(
             var localTrash by remember { mutableStateOf("14") }
             var deleteEvents by remember { mutableStateOf(false) }
             var showOngoingNotifs by remember { mutableStateOf(true) }
+            var showQuickFilterAdv by remember { mutableStateOf(showQuickFilter) }
+            var quickFilterTermAdv by remember { mutableStateOf(quickFilterTerm) }
+            var quickFilterIconAdv by remember { mutableStateOf(quickFilterIcon) }
 
             LaunchedEffect(Unit) {
                 try {
@@ -557,6 +569,9 @@ fun CfaitNavHost(
                     localTrash = cfg.trashRetention.toString()
                     deleteEvents = cfg.deleteEventsOnCompletion
                     showOngoingNotifs = cfg.showOngoingNotifications
+                    showQuickFilterAdv = cfg.showQuickFilter
+                    quickFilterTermAdv = cfg.quickFilterTerm
+                    quickFilterIconAdv = cfg.quickFilterIcon
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     // ignore
@@ -573,6 +588,9 @@ fun CfaitNavHost(
                 trashRetention = localTrash,
                 deleteEventsOnCompletion = deleteEvents,
                 showOngoingNotifications = showOngoingNotifs,
+                showQuickFilter = showQuickFilterAdv,
+                quickFilterTerm = quickFilterTermAdv,
+                quickFilterIcon = quickFilterIconAdv,
                 tabPosition = tabPosition,
                 tabAutoHide = tabAutoHide,
                 onTabPositionChange = onTabPositionChange,
@@ -582,6 +600,9 @@ fun CfaitNavHost(
                 onTrashRetentionChange = { localTrash = it },
                 onDeleteEventsChange = { deleteEvents = it },
                 onShowOngoingNotificationsChange = { showOngoingNotifs = it },
+                onShowQuickFilterChange = { showQuickFilterAdv = it },
+                onQuickFilterTermChange = { quickFilterTermAdv = it },
+                onQuickFilterIconChange = { quickFilterIconAdv = it },
                 onBack = {
                     // Save on exit
                     try {
@@ -595,7 +616,8 @@ fun CfaitNavHost(
                             cfg.defaultPriority, cfg.startGracePeriodDays, cfg.autoReminders,
                             cfg.defaultReminderTime, cfg.snoozeShort, cfg.createEventsForTasks,
                             deleteEvents, cfg.autoRefreshInterval,
-                            t, r, s, showOngoingNotifs // New values (added trash retention and ongoing notifications)
+                            t, r, s, showOngoingNotifs,
+                            showQuickFilterAdv, quickFilterTermAdv, quickFilterIconAdv
                         )
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e

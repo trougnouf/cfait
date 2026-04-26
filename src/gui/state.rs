@@ -97,6 +97,12 @@ pub struct GuiApp {
     pub filter_max_duration: Option<u32>,
     pub filter_include_unset_duration: bool,
 
+    pub quick_filter_term: String,
+    pub quick_filter_icon: String,
+    pub show_quick_filter: bool,
+    pub ob_quick_filter_term_input: String,
+    pub ob_quick_filter_icon_input: String,
+
     // Inputs - Main
     pub input_value: text_editor::Content,
     pub description_value: text_editor::Content,
@@ -345,6 +351,12 @@ impl Default for GuiApp {
             filter_min_duration: None,
             filter_max_duration: None,
             filter_include_unset_duration: true,
+
+            quick_filter_term: "is:ready".to_string(),
+            quick_filter_icon: "f0fa9".to_string(),
+            show_quick_filter: true,
+            ob_quick_filter_term_input: "is:ready".to_string(),
+            ob_quick_filter_icon_input: "f0fa9".to_string(),
 
             input_value: text_editor::Content::new(),
             description_value: text_editor::Content::new(),

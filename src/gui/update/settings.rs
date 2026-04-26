@@ -30,6 +30,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.show_priority_numbers = config.show_priority_numbers;
             app.current_theme = config.theme;
 
+            app.quick_filter_term = config.quick_filter_term.clone();
+            app.quick_filter_icon = config.quick_filter_icon.clone();
+            app.show_quick_filter = config.show_quick_filter;
+            app.ob_quick_filter_term_input = config.quick_filter_term.clone();
+            app.ob_quick_filter_icon_input = config.quick_filter_icon.clone();
+
             app.ob_url = config.url.clone();
             app.ob_user = config.username.clone();
             app.ob_pass = config.password.clone();
@@ -197,6 +203,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 };
                 app.trash_retention_days = cfg.trash_retention_days;
                 app.ob_trash_retention_input = cfg.trash_retention_days.to_string();
+
+                app.ob_quick_filter_term_input = cfg.quick_filter_term.clone();
+                app.ob_quick_filter_icon_input = cfg.quick_filter_icon.clone();
+                app.show_quick_filter = cfg.show_quick_filter;
             }
             app.state = AppState::Settings;
             Task::none()
@@ -258,11 +268,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
                             let actions = apply_alias_retroactively(app, &key, &tags);
                             if !actions.is_empty()
-                                && let Some(tx) = &app.bg_tx {
-                                    let _ = tx.try_send(
-                                        crate::gui::async_ops::WorkerCommand::Batch(actions),
-                                    );
-                                }
+                                && let Some(tx) = &app.bg_tx
+                            {
+                                let _ = tx
+                                    .try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+                            }
                         }
                         Err(e) => {
                             app.error_msg = Some(format!("Cannot add alias: {}", e));
@@ -478,6 +488,24 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.pinned_actions.retain(|a| *a != action);
             }
             crate::gui::update::common::save_config(app);
+            Task::none()
+        }
+        Message::SetShowQuickFilter(val) => {
+            app.show_quick_filter = val;
+            save_config(app);
+            Task::none()
+        }
+        Message::SetQuickFilterTerm(val) => {
+            app.ob_quick_filter_term_input = val.clone();
+            app.quick_filter_term = val;
+            save_config(app);
+            refresh_filtered_tasks(app);
+            Task::none()
+        }
+        Message::SetQuickFilterIcon(val) => {
+            app.ob_quick_filter_icon_input = val.clone();
+            app.quick_filter_icon = val;
+            save_config(app);
             Task::none()
         }
         Message::DeleteAllCalendarEvents => {

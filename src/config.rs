@@ -181,6 +181,14 @@ fn default_max_done_subtasks() -> usize {
     5
 }
 
+// Quick Filter defaults
+fn default_quick_filter_term() -> String {
+    "is:ready".to_string()
+}
+fn default_quick_filter_icon() -> String {
+    "f0fa9".to_string()
+}
+
 // Default trash retention moved to advanced settings; default shortened to 14 days.
 fn default_trash_retention() -> u32 {
     14
@@ -328,6 +336,13 @@ pub struct Config {
     #[serde(default = "default_pinned_actions")]
     pub pinned_actions: Vec<TaskAction>,
 
+    #[serde(default = "default_quick_filter_term")]
+    pub quick_filter_term: String,
+    #[serde(default = "default_quick_filter_icon")]
+    pub quick_filter_icon: String,
+    #[serde(default = "default_true")]
+    pub show_quick_filter: bool,
+
     // Maps are typically at the end in TOML
     #[serde(default)]
     pub hidden_calendars: Vec<String>,
@@ -371,6 +386,9 @@ impl Default for Config {
             show_ongoing_notifications: true,
             show_priority_numbers: true,
             pinned_actions: default_pinned_actions(),
+            quick_filter_term: default_quick_filter_term(),
+            quick_filter_icon: default_quick_filter_icon(),
+            show_quick_filter: true,
         }
     }
 }
@@ -575,6 +593,15 @@ impl Config {
             } else if trimmed.starts_with("show_ongoing_notifications =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Display ongoing timer notification for active tasks.");
+            } else if trimmed.starts_with("quick_filter_term =") {
+                out.push_str(line);
+                out.push_str(" # String: The search term toggled by the quick filter button.");
+            } else if trimmed.starts_with("quick_filter_icon =") {
+                out.push_str(line);
+                out.push_str(" # String: Hex code or character for the quick filter button icon.");
+            } else if trimmed.starts_with("show_quick_filter =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Display the quick filter button in the search bar.");
             } else if trimmed.starts_with("show_priority_numbers =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Render priority numbers (!X) visually next to tags.");

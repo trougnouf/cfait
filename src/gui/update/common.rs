@@ -176,6 +176,10 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.max_done_roots = app.ob_max_done_roots_input.parse().unwrap_or(20);
     cfg.max_done_subtasks = app.ob_max_done_subtasks_input.parse().unwrap_or(5);
 
+    cfg.quick_filter_term = app.quick_filter_term.clone();
+    cfg.quick_filter_icon = app.quick_filter_icon.clone();
+    cfg.show_quick_filter = app.show_quick_filter;
+
     // --- ASYNC SAVE FIX ---
     let ctx_clone = app.ctx.clone();
     let cfg_clone = cfg.clone();

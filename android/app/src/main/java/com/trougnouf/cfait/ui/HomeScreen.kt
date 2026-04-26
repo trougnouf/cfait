@@ -86,6 +86,18 @@ fun ColoredOverflowDots() {
     }
 }
 
+fun parseIcon(s: String): String {
+    val trimmed = s.trim()
+    if (trimmed.length == 1) return trimmed
+    try {
+        val hex = trimmed.removePrefix("0x").removePrefix("U+")
+        val code = hex.toInt(16)
+        return String(Character.toChars(code))
+    } catch (e: Exception) {
+        return String(Character.toChars(0xf0fa9)) // nf-md-clock_check
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
@@ -102,6 +114,9 @@ fun HomeScreen(
     hasUnsynced: Boolean,
     autoScrollUid: String? = null,
     refreshTick: Long,
+    showQuickFilter: Boolean,
+    quickFilterTerm: String,
+    quickFilterIcon: String,
     tabPosition: String,
     tabAutoHide: Boolean = true,
     listStates: SnapshotStateMap<String, LazyListState>,
@@ -1522,6 +1537,23 @@ fun HomeScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy((-12).dp)
                                 ) {
+                                    if (showQuickFilter) {
+                                        val isActive = searchQuery.contains(quickFilterTerm)
+                                        val qfColor =
+                                            if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                        IconButton(onClick = {
+                                            if (isActive) {
+                                                searchQuery = searchQuery.replace(quickFilterTerm, "").trim()
+                                            } else {
+                                                searchQuery =
+                                                    if (searchQuery.isEmpty()) quickFilterTerm else "$quickFilterTerm $searchQuery"
+                                            }
+                                            isSearchActive = true
+                                            keyboardController?.hide()
+                                        }) {
+                                            NfIcon(parseIcon(quickFilterIcon), 18.sp, color = qfColor)
+                                        }
+                                    }
                                     IconButton(onClick = { jumpToRandomTask() }) { NfIcon(currentRandomIcon, 20.sp) }
                                     IconButton(onClick = {
                                         isSearchActive = !isSearchActive

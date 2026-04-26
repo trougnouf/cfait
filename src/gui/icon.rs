@@ -27,6 +27,18 @@ pub fn icon<'a>(codepoint: char) -> Text<'a> {
     text(codepoint.to_string()).font(FONT)
 }
 
+pub fn parse_icon(s: &str) -> char {
+    let s = s.trim();
+    if s.chars().count() == 1 {
+        return s.chars().next().unwrap();
+    }
+    if let Ok(code) = u32::from_str_radix(s.trim_start_matches("0x").trim_start_matches("U+"), 16)
+        && let Some(c) = std::char::from_u32(code) {
+            return c;
+        }
+    '\u{f0fa9}' // default nf-md-clock_check
+}
+
 // --- NERD FONT MAPPING ---
 
 pub const CALENDAR: char = '\u{f073}'; // 

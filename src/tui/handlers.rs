@@ -105,6 +105,9 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
     // Load priority rendering toggle directly from config when events arrive
     if let Ok(cfg) = Config::load(state.ctx.as_ref()) {
         state.show_priority_numbers = cfg.show_priority_numbers;
+        state.quick_filter_term = cfg.quick_filter_term.clone();
+        state.quick_filter_icon = cfg.quick_filter_icon.clone();
+        state.show_quick_filter = cfg.show_quick_filter;
     }
 }
 
@@ -809,6 +812,23 @@ pub async fn handle_key_event(
             KeyCode::Char('?') => {
                 state.mode = InputMode::Help(crate::help::HelpTab::Shortcuts);
                 state.edit_scroll_offset = 0;
+            }
+            KeyCode::Char('w') => {
+                if state.active_search_query.contains(&state.quick_filter_term) {
+                    state.active_search_query = state
+                        .active_search_query
+                        .replace(&state.quick_filter_term, "")
+                        .trim()
+                        .to_string();
+                } else {
+                    if state.active_search_query.is_empty() {
+                        state.active_search_query = state.quick_filter_term.clone();
+                    } else {
+                        state.active_search_query =
+                            format!("{} {}", state.quick_filter_term, state.active_search_query);
+                    }
+                }
+                state.refresh_filtered_view();
             }
             KeyCode::Char('q') => return Some(Action::Quit),
             KeyCode::Char('r') => return Some(Action::Refresh),
