@@ -246,7 +246,7 @@
   "help_timeline_next_period": "Next week/month/year",
   "help_timeline_offsets": "Add time from today",
   "help_timeline_set_both_dates": "Set both start and due dates",
-  "help_timeline_start_date": "Start date. Hides until date",
+  "help_timeline_start_date": "Start date (hidden below until date)",
   "help_timeline_weekdays": "Next occurrence ('next' optional)",
   "hide": "Hide",
   "hide_completed_and_canceled_tasks": "Hide completed and canceled tasks",

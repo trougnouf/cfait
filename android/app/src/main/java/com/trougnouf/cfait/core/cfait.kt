@@ -803,6 +803,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_help_data(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time(): Short
@@ -1041,6 +1043,11 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_firing_alarms(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_help_data(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
@@ -1590,6 +1597,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_firing_alarms() != 46005.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_help_data() != 42666.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_alarm_timestamp() != 17664.toShort()) {
@@ -2310,6 +2320,8 @@ public interface CfaitMobileInterface {
     fun `getConfig`(): MobileConfig
 
     fun `getFiringAlarms`(): List<MobileAlarmInfo>
+
+    fun `getHelpData`(): List<MobileHelpCategoryData>
 
     fun `getNextAlarmTimestamp`(): kotlin.Long?
 
@@ -3057,6 +3069,18 @@ open class CfaitMobile :
             callWithHandle {
                 uniffiRustCall { _status ->
                     UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_firing_alarms(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    override fun `getHelpData`(): List<MobileHelpCategoryData> =
+        FfiConverterSequenceTypeMobileHelpCategoryData.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_help_data(
                         it,
                         _status,
                     )
@@ -4893,6 +4917,34 @@ public object FfiConverterSequenceTypeMobileCalendar : FfiConverterRustBuffer<Li
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileCalendar.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMobileHelpCategoryData : FfiConverterRustBuffer<List<MobileHelpCategoryData>> {
+    override fun read(buf: ByteBuffer): List<MobileHelpCategoryData> {
+        val len = buf.getInt()
+        return List<MobileHelpCategoryData>(len) {
+            FfiConverterTypeMobileHelpCategoryData.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MobileHelpCategoryData>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMobileHelpCategoryData.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<MobileHelpCategoryData>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMobileHelpCategoryData.write(it, buf)
         }
     }
 }
