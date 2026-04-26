@@ -99,6 +99,7 @@ winresource = "0.1" # (Keep existing)
 
 [target.'cfg(target_os = "windows")'.dependencies]
 os_info = "3"
+windows-native-keyring-store = "1.0.0"
 
 # --- ANDROID SPECIFIC ---
 [target.'cfg(target_os = "android")'.dependencies]
@@ -107,6 +108,7 @@ webpki-roots = "1.0"
 android_logger = "0.15"
 log = "0.4"
 zip = "8.1"
+android-native-keyring-store = "1.0.0"
 
 [dev-dependencies]
 mockito = "1.7" # For mocking the HTTP server
@@ -181,3 +183,14 @@ pre-release-hook = ["python3", "scripts/prepare_release.py"]
 [package.metadata.android]
 # This must match (Major * 10000 + Minor * 100 + Patch)
 version_code = 508
+
+# --- Keyring ecosystem for secure password storage ---
+[dependencies.keyring-core]
+version = "1.0.0"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "1.0.0", features = ["keychain"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+dbus-secret-service-keyring-store = { version = "1.0.0", features = ["crypto-rust"] }
+linux-keyutils-keyring-store = "1.0.0"

@@ -128,6 +128,52 @@ pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool) {
     }
 }
 
+pub fn init_keyring() {
+    use keyring_core::set_default_store;
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(store) = windows_native_keyring_store::Store::new() {
+            set_default_store(store);
+            log::info!("Initialized Windows Credential Manager.");
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        // MacOS apps not running in a sandbox without an Apple provisioning profile must use the "keychain" store
+        // rather than the iOS-style "protected" store.
+        if let Ok(store) = apple_native_keyring_store::keychain::Store::new() {
+            set_default_store(store);
+            log::info!("Initialized macOS Keychain.");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Try D-Bus Secret Service first (standard for Desktop Linux)
+        if let Ok(store) = dbus_secret_service_keyring_store::Store::new() {
+            set_default_store(store);
+            log::info!("Initialized Linux Secret Service.");
+        }
+        // Fallback to Kernel Keyutils (for headless servers / pure TUI environments)
+        else if let Ok(store) = linux_keyutils_keyring_store::Store::new() {
+            set_default_store(store);
+            log::info!("Initialized Linux Keyutils (headless fallback).");
+        } else {
+            log::warn!("Failed to initialize any Linux keyring backend.");
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        if let Ok(store) = android_native_keyring_store::Store::new() {
+            set_default_store(store);
+            log::info!("Initialized Android Native Keystore.");
+        }
+    }
+}
+
 /// Spawns the background alarm manager.
 /// returns: Sender to update the task list or change state.
 pub fn spawn_alarm_actor(

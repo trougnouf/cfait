@@ -588,6 +588,7 @@ impl CfaitMobile {
 
         // Initialize dual file + logcat logging for Android
         crate::system::init_logging(ctx.as_ref(), false);
+        crate::system::init_keyring(); // <-- ADD THIS LINE
 
         let store = Arc::new(Mutex::new(TaskStore::new(ctx.clone())));
         let client = Arc::new(Mutex::new(None));

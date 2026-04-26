@@ -266,7 +266,11 @@ pub struct Config {
 
     pub url: String,
     pub username: String,
+
+    // Skip saving to disk, but allow reading (with default) for migration!
+    #[serde(skip_serializing, default)]
     pub password: String,
+
     #[serde(default)]
     pub allow_insecure_certs: bool,
     #[serde(default)]
@@ -428,6 +432,27 @@ impl Config {
             config.config_version = 1;
         }
 
+        // --- KEYRING MIGRATION & LOAD ---
+        let user_key = if config.username.is_empty() {
+            "default"
+        } else {
+            &config.username
+        };
+
+        if let Ok(entry) = keyring_core::Entry::new("cfait", user_key) {
+            if !config.password.is_empty() {
+                // Migration: plaintext password found in config.toml!
+                // Move it securely into the OS keyring.
+                let _ = entry.set_password(&config.password);
+            } else {
+                // Normal run: fetch the password from the OS keyring.
+                if let Ok(pw) = entry.get_password() {
+                    config.password = pw;
+                }
+            }
+        }
+        // --------------------------------
+
         Ok(config)
     }
 
@@ -454,6 +479,24 @@ impl Config {
     /// This method post-processes the TOML string to inject documentation comments.
     pub fn save(&self, ctx: &dyn AppContext) -> Result<()> {
         let path = ctx.get_config_file_path()?;
+
+        // --- KEYRING SAVE ---
+        let user_key = if self.username.is_empty() {
+            "default"
+        } else {
+            &self.username
+        };
+
+        if let Ok(entry) = keyring_core::Entry::new("cfait", user_key) {
+            if !self.password.is_empty() {
+                let _ = entry.set_password(&self.password);
+            } else {
+                // Delete credential if the user cleared the password
+                let _ = entry.delete_credential();
+            }
+        }
+        // --------------------
+
         LocalStorage::with_lock(&path, || {
             let toml_str = toml::to_string_pretty(self)?;
             let documented_toml = Self::inject_documentation(&toml_str);
@@ -492,7 +535,7 @@ impl Config {
             } else if trimmed.starts_with("create_events_for_tasks =") {
                 out.push_str("\n# --- Calendar Integration (VEVENT Sync) ---\n");
             } else if trimmed.starts_with("max_done_roots =") {
-                out.push_str("\n# --- Advanced Performance Settings ---\n");
+                out.push_str("\n# --- Advanced Settings ---\n");
             } else if trimmed.starts_with("[tag_aliases]") {
                 out.push_str("\n# --- Aliases (Global Templates) ---\n");
                 out.push_str("# Map shortcuts to sets of tags/locations/priorities.\n");

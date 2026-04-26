@@ -149,6 +149,7 @@ async fn main() -> Result<()> {
     // It is ONLY safe to use stderr if we are NOT in the interactive TUI.
     let is_interactive_tui = command.is_empty();
     cfait::system::init_logging(ctx.as_ref(), !is_interactive_tui);
+    cfait::system::init_keyring(); // <-- ADD THIS LINE
 
     if command.starts_with('-') || command == "help" {
         cfait::cli::print_help(&binary_name);

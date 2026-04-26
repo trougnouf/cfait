@@ -61,6 +61,7 @@ fn main() -> iced::Result {
 
     // Initialize logging - enable stderr for GUI since it's safe
     cfait::system::init_logging(ctx.as_ref(), true);
+    cfait::system::init_keyring(); // <-- ADD THIS LINE
 
     // Handle help flag
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {
