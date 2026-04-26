@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
@@ -30,6 +31,7 @@ fun IcsImportScreen(
     var selectedCalendar by remember { mutableStateOf<String?>(null) }
     var taskCount by remember { mutableStateOf<Int?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
 
     // Parse ICS content to count tasks
     LaunchedEffect(icsContent) {
@@ -37,7 +39,7 @@ fun IcsImportScreen(
             // Simple count of VTODO entries
             taskCount = icsContent.split("BEGIN:VTODO").size - 1
         } catch (e: Exception) {
-            errorMessage = "Failed to parse ICS file: ${e.message}"
+            errorMessage = context.getString(R.string.import_failed_to_parse, e.message ?: "")
         }
     }
 

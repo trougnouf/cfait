@@ -954,7 +954,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let mut input_spans = vec![prefix_span];
 
             if state.mode == InputMode::EditingDescription {
-                input_spans.push(Span::raw("Press Enter for newline. Esc / Ctrl+S to save."));
+                input_spans.push(Span::raw(rust_i18n::t!("desc_editor_help").to_string()));
             } else {
                 let tokens =
                     tokenize_smart_input(&visible_text, state.mode == InputMode::Searching);
@@ -1039,23 +1039,21 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         .title(format!(" {} ", rust_i18n::t!("status"))),
                 );
             let help_text = match state.active_focus {
-                Focus::Sidebar => {
-                    "?:Help q:Quit Tab:Tasks ↵:Select Spc:Show/Hide *:All →:Iso".to_string()
-                }
+                Focus::Sidebar => rust_i18n::t!("tui_sidebar_help").to_string(),
                 Focus::Main => {
                     if let Some(uid) = &state.yanked_uid {
                         let summary = state
                             .store
                             .get_summary(uid)
                             .unwrap_or_else(|| "Unknown".to_string());
-                        format!(
-                            "{} '{}' — b:Block c:Child l:Link (Esc:Clear)",
-                            rust_i18n::t!("yanked_label"),
-                            summary
+                        rust_i18n::t!(
+                            "tui_yanked_help",
+                            yanked_label = rust_i18n::t!("yanked_label"),
+                            summary = summary
                         )
+                        .to_string()
                     } else {
-                        "?:Help q:Quit Tab:Side a:Add e:Edit E:Details Spc:Done Del:Del y:Yank /:Find z:Fold"
-                            .to_string()
+                        rust_i18n::t!("tui_main_help").to_string()
                     }
                 }
             };
@@ -1247,9 +1245,9 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
         for &c in &tabs {
             let label = match c {
-                crate::help::HelpTab::Syntax => " Syntax ",
-                crate::help::HelpTab::Shortcuts => " Shortcuts ",
-                crate::help::HelpTab::About => " About ",
+                crate::help::HelpTab::Syntax => rust_i18n::t!("help_syntax_tab").to_string(),
+                crate::help::HelpTab::Shortcuts => rust_i18n::t!("help_shortcuts_tab").to_string(),
+                crate::help::HelpTab::About => rust_i18n::t!("help_about_tab").to_string(),
             };
             if c == tab {
                 tab_spans.push(Span::styled(
@@ -1322,7 +1320,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
 
             let block = Block::default()
                 .borders(Borders::ALL)
-                .title(format!(" {} (Tab to switch) ", rust_i18n::t!("help")))
+                .title(format!(
+                    " {}{}",
+                    rust_i18n::t!("help"),
+                    rust_i18n::t!("help_tab_to_switch")
+                ))
                 .border_style(Style::default().fg(Color::Yellow));
 
             let p = Paragraph::new(lines)

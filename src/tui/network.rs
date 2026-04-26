@@ -147,18 +147,15 @@ pub async fn run_network_actor(
         Err(e) => {
             let err_str = e.to_string();
             if err_str.contains("InvalidCertificate") {
-                let mut helpful_msg =
-                    "Connection failed: The server presented an invalid TLS/SSL certificate."
-                        .to_string();
-                let config_advice = format!(
-                    "\n\nTo fix this, please edit your config file:\n  {}",
-                    crate::config::Config::get_path_string(ctx.as_ref())
+                let mut helpful_msg = rust_i18n::t!("error_invalid_tls_detailed").to_string();
+                let config_advice = rust_i18n::t!(
+                    "error_tls_config_advice",
+                    path = crate::config::Config::get_path_string(ctx.as_ref())
                         .unwrap_or_else(|_| "path unknown".to_string())
-                );
+                )
+                .to_string();
                 if !allow_insecure {
-                    helpful_msg.push_str(
-                        "\nIf this is a self-hosted server, set 'allow_insecure_certs = true'.",
-                    );
+                    helpful_msg.push_str(rust_i18n::t!("error_tls_self_hosted").as_ref());
                 }
                 helpful_msg.push_str(&config_advice);
                 let _ = event_tx.send(AppEvent::Error(helpful_msg)).await;
@@ -505,7 +502,8 @@ pub async fn run_network_actor(
                             let _ = event_tx
                                 .send(AppEvent::Status {
                                     key: "migration_complete".to_string(),
-                                    human: rust_i18n::t!("migration_complete_moved", count = count).to_string(),
+                                    human: rust_i18n::t!("migration_complete_moved", count = count)
+                                        .to_string(),
                                 })
                                 .await;
 
@@ -524,7 +522,9 @@ pub async fn run_network_actor(
                     }
                 } else {
                     let _ = event_tx
-                        .send(AppEvent::Error(rust_i18n::t!("failed_to_load_local_tasks").to_string()))
+                        .send(AppEvent::Error(
+                            rust_i18n::t!("failed_to_load_local_tasks").to_string(),
+                        ))
                         .await;
                 }
             }

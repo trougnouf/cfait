@@ -120,7 +120,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ConfigLoaded(Err(e)) => {
             app.state = AppState::Onboarding;
             if !e.contains("Config file not found") {
-                app.error_msg = Some(format!("Configuration Error:\n{}", e));
+                app.error_msg = Some(rust_i18n::t!("config_error_prefix", error = e).to_string());
                 app.config_was_corrupted = true;
             }
             Task::none()
@@ -167,7 +167,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let _ = config_to_save.save(app.ctx.as_ref());
 
             app.state = AppState::Loading;
-            app.error_msg = Some("Connecting...".to_string());
+            app.error_msg = Some(rust_i18n::t!("connecting").to_string());
 
             Task::perform(
                 connect_and_fetch_wrapper(app.ctx.clone(), config_to_save),
@@ -671,7 +671,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             use uuid::Uuid;
             let id = Uuid::new_v4().to_string();
             let new_cal = crate::model::CalendarListEntry {
-                name: "New Calendar".to_string(),
+                name: rust_i18n::t!("new_calendar_name").to_string(),
                 href: format!("local://{}", id),
                 color: None,
             };

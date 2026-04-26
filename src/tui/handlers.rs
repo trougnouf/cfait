@@ -280,7 +280,7 @@ pub async fn handle_key_event(
                     state.input_buffer.clear();
                     state.cursor_position = 0;
                     state.mode = InputMode::EditingDescription;
-                    state.message = "Write notes or subtasks (- [ ]). Ctrl+S to save.".to_string();
+                    state.message = rust_i18n::t!("edit_description_instructions").to_string();
                     return None;
                 }
 
@@ -315,7 +315,7 @@ pub async fn handle_key_event(
                     if is_alias_only {
                         state.mode = InputMode::Normal;
                         state.reset_input();
-                        state.message = "Alias updated.".to_string();
+                        state.message = rust_i18n::t!("alias_updated").to_string();
                         return None;
                     }
                 }
@@ -356,10 +356,9 @@ pub async fn handle_key_event(
                     return Some(Action::CreateTask(task));
                 }
                 state.message = if state.local_mode_enabled {
-                    "No calendar available.".to_string()
+                    rust_i18n::t!("error_no_calendar_available").to_string()
                 } else {
-                    "No remote calendar available. Enable local mode or configure a remote calendar."
-                        .to_string()
+                    rust_i18n::t!("error_no_remote_calendar").to_string()
                 };
                 state.mode = InputMode::Normal;
                 state.reset_input();
@@ -369,6 +368,7 @@ pub async fn handle_key_event(
                 state.reset_input();
                 state.creating_with_desc = false;
                 state.new_task_title.clear();
+                state.message = rust_i18n::t!("editing_cancelled").to_string();
             }
             KeyCode::Char(c) => state.enter_char(c),
             KeyCode::Backspace => state.delete_char(),
@@ -670,7 +670,9 @@ pub async fn handle_key_event(
                         update_alarms(state);
                     }
                 } else {
-                    state.message = format!("Invalid duration: '{}'", state.input_buffer);
+                    state.message =
+                        rust_i18n::t!("error_invalid_duration", val = state.input_buffer.clone())
+                            .to_string();
                 }
                 return None;
             }
@@ -1123,7 +1125,7 @@ pub async fn handle_key_event(
 
                 if let Some((child_uid, parent_uid)) = data {
                     if child_uid == parent_uid {
-                        state.message = "Cannot be child of self!".to_string();
+                        state.message = rust_i18n::t!("error_cannot_be_child_of_self").to_string();
                     } else if let Some(updated) =
                         state.store.set_parent(&child_uid, Some(parent_uid))
                     {
@@ -1160,7 +1162,8 @@ pub async fn handle_key_event(
                     state.creating_with_desc = false;
                     state.new_task_title.clear();
                     state.creating_child_of = Some(uid);
-                    state.message = format!("New Child of '{}'...", summary);
+                    state.message =
+                        rust_i18n::t!("new_child_of_task", summary = summary).to_string();
                 }
             }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -1191,7 +1194,8 @@ pub async fn handle_key_event(
                     use std::io::Write;
                     let _ = std::io::stdout().flush();
 
-                    state.message = format!("Yanked & Copied: {}", summary);
+                    state.message =
+                        rust_i18n::t!("yanked_and_copied", summary = summary).to_string();
                 }
             }
             KeyCode::Char('g') => {
@@ -1266,7 +1270,7 @@ pub async fn handle_key_event(
                         }
                         state.message = rust_i18n::t!("open_coordinates").to_string();
                     } else {
-                        state.message = "No location associated with this task.".to_string();
+                        state.message = rust_i18n::t!("error_no_location").to_string();
                     }
                 }
             }
@@ -1291,7 +1295,7 @@ pub async fn handle_key_event(
                         }
                         state.message = rust_i18n::t!("open_url").to_string();
                     } else {
-                        state.message = "No URL associated with this task.".to_string();
+                        state.message = rust_i18n::t!("error_no_url").to_string();
                     }
                 }
             }
@@ -1306,7 +1310,7 @@ pub async fn handle_key_event(
 
                 if let Some((curr_uid, yanked_uid)) = data {
                     if curr_uid == yanked_uid {
-                        state.message = "Cannot depend on self!".to_string();
+                        state.message = rust_i18n::t!("error_cannot_depend_on_self").to_string();
                     } else if let Some(updated) = state.store.add_dependency(&curr_uid, yanked_uid)
                     {
                         state.yanked_uid = None;
@@ -1326,7 +1330,7 @@ pub async fn handle_key_event(
 
                 if let Some((curr_uid, yanked_uid)) = data {
                     if curr_uid == yanked_uid {
-                        state.message = "Cannot relate to self!".to_string();
+                        state.message = rust_i18n::t!("error_cannot_relate_to_self").to_string();
                     } else if let Some(updated) = state.store.add_related_to(&curr_uid, yanked_uid)
                     {
                         state.yanked_uid = None;
@@ -1478,7 +1482,7 @@ pub async fn handle_key_event(
                         state.message =
                             "Select task to jump to (Enter) or Esc to cancel".to_string();
                     } else {
-                        state.message = "No related tasks to browse.".to_string();
+                        state.message = rust_i18n::t!("error_no_related_tasks").to_string();
                     }
                 }
             }
@@ -1694,7 +1698,7 @@ pub async fn handle_key_event(
                         return Some(Action::UpdateTask(cloned));
                     }
                 } else {
-                    state.message = "Failed to parse time format.".to_string();
+                    state.message = rust_i18n::t!("error_failed_to_parse_time").to_string();
                 }
             }
             KeyCode::Esc => {
@@ -1816,13 +1820,15 @@ pub async fn handle_key_event(
                     if !state.export_targets.is_empty() {
                         state.export_selection_state.select(Some(0));
                         state.mode = InputMode::Exporting;
-                        state.message = format!(
-                            "Exporting from '{}'. Select destination calendar.",
-                            source.name
-                        );
+                        state.message = rust_i18n::t!(
+                            "exporting_select_destination",
+                            name = source.name.clone()
+                        )
+                        .to_string();
                     } else {
                         state.mode = InputMode::Normal;
-                        state.message = "No remote calendars available for export.".to_string();
+                        state.message =
+                            rust_i18n::t!("error_no_remote_calendars_export").to_string();
                     }
                 }
             }
@@ -1899,9 +1905,9 @@ pub async fn handle_key_event(
                         }
 
                         state.mode = InputMode::Normal;
-                        state.message = "Jumped to task".to_string();
+                        state.message = rust_i18n::t!("jumped_to_task").to_string();
                     } else {
-                        state.message = "Task not found".to_string();
+                        state.message = rust_i18n::t!("error_task_not_found").to_string();
                         state.mode = InputMode::Normal;
                     }
                 }

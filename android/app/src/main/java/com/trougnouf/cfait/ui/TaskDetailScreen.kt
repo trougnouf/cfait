@@ -471,7 +471,7 @@ fun TaskDetailScreen(
                     OutlinedTextField(
                         value = sessionInput,
                         onValueChange = { sessionInput = it },
-                        placeholder = { Text(stringResource(R.string.eg) + " 30m, yesterday 2h") },
+                        placeholder = { Text(stringResource(R.string.eg_log_time_placeholder)) },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )

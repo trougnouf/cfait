@@ -433,7 +433,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.6)),
                 Space::new().height(10),
-                text("Pinned actions (task row)").size(16),
+                text(rust_i18n::t!("pinned_actions_label")).size(16),
                 {
                     let mut action_col = column![].spacing(2);
                     for action in crate::config::TaskAction::ALL {
@@ -500,12 +500,12 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .size(12)
                     .color(Color::from_rgb(0.6, 0.6, 0.6)),
                 Space::new().height(10),
-                text("Quick Filter (Search Bar)").size(16),
+                text(rust_i18n::t!("quick_filter_title")).size(16),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_quick_filter)
-                    .label("Show quick filter button")
+                    .label(rust_i18n::t!("quick_filter_show_button"))
                     .on_toggle(Message::SetShowQuickFilter),
                 row![
-                    text("Search term:").width(Length::Fixed(150.0)),
+                    text(rust_i18n::t!("quick_filter_search_term")).width(Length::Fixed(150.0)),
                     text_input("is:ready", &app.ob_quick_filter_term_input)
                         .on_input(Message::SetQuickFilterTerm)
                         .width(Length::Fill)
@@ -514,7 +514,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .spacing(10)
                 .align_y(iced::Alignment::Center),
                 row![
-                    text("Icon (nerdfonts code):").width(Length::Fixed(150.0)),
+                    text(rust_i18n::t!("quick_filter_icon")).width(Length::Fixed(150.0)),
                     text_input("f0fa9", &app.ob_quick_filter_icon_input)
                         .on_input(Message::SetQuickFilterIcon)
                         .width(Length::Fill)

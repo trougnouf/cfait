@@ -599,7 +599,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         if !added_unpinned {
             menu_actions = menu_actions.push(
                 container(
-                    text("All actions pinned")
+                    text(rust_i18n::t!("all_actions_pinned"))
                         .size(12)
                         .color(Color::from_rgb(0.5, 0.5, 0.5)),
                 )
@@ -1738,7 +1738,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
 
     let expand_tooltip = tooltip(
         expand_btn,
-        text("Add Description & Subtasks (Ctrl+E)").size(12),
+        text(rust_i18n::t!("add_description_tooltip")).size(12),
         tooltip::Position::Top,
     )
     .style(tooltip_style);
@@ -1752,9 +1752,9 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
         let max_desc_height = (app.current_window_size.height - 250.0).max(160.0);
 
         let placeholder = if app.creating_with_desc {
-            "Write notes here, or create subtasks:\n- [ ] Subtask 1 @tomorrow\n- [x] Completed task done:today\n\nUse numbers for dependencies:\n1. [ ] First step\n2. [ ] Second step (blocked by 1)"
+            rust_i18n::t!("notes_create_subtasks_placeholder").into_owned()
         } else {
-            &app.notes_placeholder
+            app.notes_placeholder.clone()
         };
 
         let input_desc = text_editor(&app.description_value)

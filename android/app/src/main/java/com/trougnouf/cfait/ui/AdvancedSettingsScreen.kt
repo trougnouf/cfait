@@ -110,7 +110,7 @@ fun AdvancedSettingsScreen(
             ) {
                 Switch(checked = tabAutoHide, onCheckedChange = onTabAutoHideChange)
                 Spacer(Modifier.width(8.dp))
-                Text("Auto-hide collection tabs", style = MaterialTheme.typography.bodyMedium)
+                Text(stringResource(R.string.tab_auto_hide), style = MaterialTheme.typography.bodyMedium)
             }
             HorizontalDivider(Modifier.padding(vertical = 16.dp))
 
@@ -181,7 +181,7 @@ fun AdvancedSettingsScreen(
 
             // Quick Filter Section
             Text(
-                "Quick Filter (Search Bar)",
+                stringResource(R.string.quick_filter_title),
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
                 color = MaterialTheme.colorScheme.primary,
@@ -193,19 +193,19 @@ fun AdvancedSettingsScreen(
                     onCheckedChange = onShowQuickFilterChange
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Show quick filter button")
+                Text(stringResource(R.string.quick_filter_show_button))
             }
             OutlinedTextField(
                 value = quickFilterTerm,
                 onValueChange = onQuickFilterTermChange,
-                label = { Text("Search term") },
+                label = { Text(stringResource(R.string.quick_filter_search_term)) },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                 singleLine = true
             )
             OutlinedTextField(
                 value = quickFilterIcon,
                 onValueChange = onQuickFilterIconChange,
-                label = { Text("Icon (nerdfonts code)") },
+                label = { Text(stringResource(R.string.quick_filter_icon)) },
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp),
                 singleLine = true
             )

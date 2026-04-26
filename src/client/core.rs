@@ -270,9 +270,7 @@ impl RustyClient {
         let ((calendars, corrected_url_opt), warning) = match client.get_calendars().await {
             Ok((c, corrected_url)) => {
                 if c.is_empty() {
-                    let helpful_msg =
-                        "Connection successful, but no Task calendars found. Check your URL."
-                            .to_string();
+                    let helpful_msg = rust_i18n::t!("error_no_calendars_found").to_string();
                     ((c, corrected_url), Some(helpful_msg))
                 } else {
                     let _ = Cache::save_calendars(client.ctx.as_ref(), &c);
@@ -284,8 +282,8 @@ impl RustyClient {
                 let mut specific_warning = None;
                 if error_msg.contains("InvalidCertificate") {
                     return Err(anyhow::anyhow!(
-                        "Connection failed: Invalid TLS Certificate. {}",
-                        error_msg
+                        "{}",
+                        rust_i18n::t!("error_invalid_tls", error = error_msg)
                     ));
                 }
                 if error_msg.contains("Unauthorized")
@@ -293,22 +291,17 @@ impl RustyClient {
                     || error_msg.contains("401")
                     || error_msg.contains("403")
                 {
-                    specific_warning =
-                        Some("Authentication failed. Check username and password.".to_string());
+                    specific_warning = Some(rust_i18n::t!("error_auth_failed").to_string());
                 } else if error_msg.contains("NotFound") || error_msg.contains("404") {
-                    specific_warning = Some(
-                        "The CalDAV resource or user principal was not found (404). Check the URL."
-                            .to_string(),
-                    );
+                    specific_warning = Some(rust_i18n::t!("error_404_not_found").to_string());
                 } else if error_msg.contains("Timeout") {
-                    specific_warning =
-                        Some("Connection timed out. Check network or server address.".to_string());
+                    specific_warning = Some(rust_i18n::t!("error_timeout").to_string());
                 }
 
                 let cals = Cache::load_calendars(client.ctx.as_ref()).unwrap_or_default();
 
                 let final_warning = specific_warning.unwrap_or_else(|| {
-                    format!("Offline mode (Network or server error: {}).", error_msg)
+                    rust_i18n::t!("error_offline_fallback", error = error_msg.clone()).to_string()
                 });
 
                 ((cals, None), Some(final_warning))

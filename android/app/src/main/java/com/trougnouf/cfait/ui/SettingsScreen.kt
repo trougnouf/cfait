@@ -262,7 +262,10 @@ fun SettingsScreen(
             aRefresh,
             trashInt,
             maxRootsInt, maxSubtasksInt,
-            cfg.showOngoingNotifications
+            cfg.showOngoingNotifications,
+            cfg.showQuickFilter,
+            cfg.quickFilterTerm,
+            cfg.quickFilterIcon
         )
     }
 
@@ -835,7 +838,7 @@ fun SettingsScreen(
                     onClick = {
                         scope.launch {
                             try {
-                                api.createLocalCalendar("New Calendar", null)
+                                api.createLocalCalendar(context.getString(R.string.new_calendar_name), null)
                                 reload()
                             } catch (e: Exception) {
                                 if (e is kotlinx.coroutines.CancellationException) throw e
