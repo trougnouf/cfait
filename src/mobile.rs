@@ -665,6 +665,7 @@ impl CfaitMobile {
             let mut store = self.controller.store.lock().await;
             if let Some((task, _)) = store.get_task_mut(&uid) {
                 task.add_session(session);
+                task.sequence += 1;
                 let cloned = task.clone();
                 drop(store);
                 // Persist via controller
@@ -690,6 +691,7 @@ impl CfaitMobile {
         if let Some((task, _)) = store.get_task_mut(&uid) {
             let idx = index as usize;
             task.remove_session(idx);
+            task.sequence += 1;
             let cloned = task.clone();
             drop(store);
             // Persist via controller
@@ -1771,6 +1773,7 @@ impl CfaitMobile {
         self.apply_store_mutation(&uid, |t, id| {
             if let Some((task, _)) = t.get_task_mut(id) {
                 task.apply_smart_input(&smart_input, &config.tag_aliases, def_time);
+                task.sequence += 1;
                 Some(task.clone())
             } else {
                 None
@@ -1787,6 +1790,7 @@ impl CfaitMobile {
         self.apply_store_mutation(&uid, |t, id| {
             if let Some((task, _)) = t.get_task_mut(id) {
                 task.description = description;
+                task.sequence += 1;
                 Some(task.clone())
             } else {
                 None

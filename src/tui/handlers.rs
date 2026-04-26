@@ -407,6 +407,7 @@ pub async fn handle_key_event(
                     let def_time =
                         NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
                     t.apply_smart_input(&clean_input, &state.tag_aliases, def_time);
+                    t.sequence += 1;
                     let clone = t.clone();
                     state.refresh_filtered_view();
                     update_alarms(state);
@@ -542,6 +543,7 @@ pub async fn handle_key_event(
                         && let Some((t, _)) = state.store.get_task_mut(&uid)
                     {
                         t.description = state.input_buffer.clone();
+                        t.sequence += 1;
                         let clone = t.clone();
                         state.refresh_filtered_view();
                         state.mode = InputMode::Normal;
@@ -1664,6 +1666,7 @@ pub async fn handle_key_event(
                         && let Some((t_mut, _)) = state.store.get_task_mut(&uid)
                     {
                         t_mut.add_session(session);
+                        t_mut.sequence += 1;
                         let cloned = t_mut.clone();
                         state.refresh_filtered_view();
                         state.mode = InputMode::Normal;
@@ -1713,6 +1716,7 @@ pub async fn handle_key_event(
                     && let Some((t_mut, _)) = state.store.get_task_mut(&uid)
                 {
                     t_mut.remove_session(real_idx);
+                    t_mut.sequence += 1;
                     let cloned = t_mut.clone();
                     state.mode = InputMode::Normal;
                     state.refresh_filtered_view();

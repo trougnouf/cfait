@@ -308,14 +308,13 @@ impl RustyClient {
             Err(WebDavError::BadStatusCode(StatusCode::NOT_FOUND)) => {
                 Ok(StepResult::new(StepOutcome::Discard))
             }
-            Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED)) => {
-                Ok(StepResult::new(StepOutcome::Success {
-                    etag: None,
-                    href: None,
-                    refresh_path: None,
-                })
+            Err(WebDavError::BadStatusCode(StatusCode::PRECONDITION_FAILED))
+            | Err(WebDavError::PreconditionFailed(_)) => {
+                let mut retry_task = task.clone();
+                retry_task.etag = String::new(); // clear etag to force delete on next attempt
+                Ok(StepResult::new(StepOutcome::RetryWith(Box::new(Action::Delete(retry_task))))
                 .with_warning(format!(
-                    "Conflict on delete task '{}'. Already modified/deleted.",
+                    "Conflict on delete task '{}'. Forcing delete.",
                     task.summary
                 )))
             }

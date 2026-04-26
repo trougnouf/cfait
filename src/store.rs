@@ -422,8 +422,16 @@ impl TaskStore {
         let mut new_map = HashMap::new();
         let mut uids_to_add = Vec::new();
 
-        for task in tasks {
+        for mut task in tasks {
             uids_to_add.push(task.uid.clone());
+
+            // Protect against stale reads wiping out recent local mutations
+            if let Some(existing_map) = self.calendars.get(&calendar_href)
+                && let Some(existing_task) = existing_map.get(&task.uid)
+                    && existing_task.sequence > task.sequence {
+                        task = existing_task.clone();
+                    }
+
             new_map.insert(task.uid.clone(), task);
         }
 
@@ -613,7 +621,8 @@ impl TaskStore {
         uid: &str,
         status: TaskStatus,
     ) -> Option<(Task, Option<Task>, Vec<Task>)> {
-        let task_copy = self.get_task_ref(uid)?.clone();
+        let mut task_copy = self.get_task_ref(uid)?.clone();
+        task_copy.sequence += 1;
         // If the task is recurring and we are completing it we may need to reset children
         let should_reset_children = task_copy.rrule.is_some() && status.is_done();
 
@@ -695,6 +704,7 @@ impl TaskStore {
                     changed = true;
                 }
                 if changed {
+                    task.sequence += 1;
                     updated.push(task.clone());
                 }
                 if let Some(p) = task.parent_uid.clone() {
@@ -749,6 +759,7 @@ impl TaskStore {
                 }
 
                 if changed {
+                    task.sequence += 1;
                     updated.push(task.clone());
                 }
 
@@ -802,6 +813,7 @@ impl TaskStore {
                 }
 
                 if changed {
+                    task.sequence += 1;
                     updated.push(task.clone());
                 }
 
@@ -830,6 +842,7 @@ impl TaskStore {
             }
 
             task.priority = p as u8;
+            task.sequence += 1;
             return Some(task.clone());
         }
         None
@@ -959,6 +972,7 @@ impl TaskStore {
     pub fn set_parent(&mut self, child_uid: &str, parent_uid: Option<String>) -> Option<Task> {
         if let Some((task, _)) = self.get_task_mut(child_uid) {
             task.parent_uid = parent_uid;
+            task.sequence += 1;
             return Some(task.clone());
         }
         None
@@ -970,6 +984,7 @@ impl TaskStore {
             && !task.dependencies.contains(&dep_uid)
         {
             task.dependencies.push(dep_uid.clone());
+            task.sequence += 1;
             let task_clone = task.clone();
             self.blocking_index
                 .entry(dep_uid)
@@ -986,6 +1001,7 @@ impl TaskStore {
             && let Some(pos) = task.dependencies.iter().position(|d| d == dep_uid)
         {
             task.dependencies.remove(pos);
+            task.sequence += 1;
             let task_clone = task.clone();
             if let Some(list) = self.blocking_index.get_mut(dep_uid) {
                 list.retain(|u| u != task_uid);
@@ -1004,6 +1020,7 @@ impl TaskStore {
             && !task.related_to.contains(&related_uid)
         {
             task.related_to.push(related_uid.clone());
+            task.sequence += 1;
             Some(task.clone())
         } else {
             None
@@ -1023,6 +1040,7 @@ impl TaskStore {
             && let Some(pos) = task.related_to.iter().position(|r| r == related_uid)
         {
             task.related_to.remove(pos);
+            task.sequence += 1;
             Some(task.clone())
         } else {
             None
@@ -1050,6 +1068,7 @@ impl TaskStore {
             }
             let original = task.clone();
             task.calendar_href = target_href.clone();
+            task.sequence += 1;
             self.add_task(task.clone());
             return Some((original, task));
         }
@@ -1140,6 +1159,7 @@ impl TaskStore {
                 }
                 task.categories.sort();
                 task.categories.dedup();
+                task.sequence += 1;
                 modified_tasks.push(task.clone());
             }
         }

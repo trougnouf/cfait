@@ -864,6 +864,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     && let Some((t_mut, _)) = app.store.get_task_mut(uid)
                 {
                     t_mut.add_session(session);
+                    t_mut.sequence += 1;
                     let cloned = t_mut.clone();
                     app.adding_session_uid = None;
                     app.session_input = iced::widget::text_editor::Content::new();
@@ -982,6 +983,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         if let Some((task, _)) = app.store.get_task_mut(edit_uid) {
             task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
             task.description = desc_text; // use RAW description to preserve their markdown checklist
+            task.sequence += 1;
             let task_copy = task.clone();
 
             app.input_value = text_editor::Content::new();

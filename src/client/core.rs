@@ -617,32 +617,19 @@ impl RustyClient {
         }
 
         // 3. DELETE obsolete/trailing session events
-        // Loop upwards to find any stray sessions. Allow up to 3 consecutive 404 misses to ensure
-        // gaps from buggy versions are wiped out.
         let mut session_idx = if should_delete {
             0
         } else {
             task.sessions.len()
         };
-        let mut miss_count = 0;
+        let max_delete = session_idx + 5; // Delete at most 5 beyond known to handle slight desyncs/deletions
 
-        while miss_count < 3 && session_idx < 1000 {
+        while session_idx < max_delete {
             let session_suffix = format!("-session-{}", session_idx);
             let event_filename = format!("{}{}.ics", base_uid, session_suffix);
             let event_path = format!("{}{}", strip_host(&cal_path), event_filename);
 
-            match client.request(Delete::new(&event_path).force()).await {
-                Ok(_) => {
-                    miss_count = 0;
-                }
-                Err(WebDavError::BadStatusCode(http::StatusCode::NOT_FOUND)) => {
-                    miss_count += 1;
-                }
-                Err(_) => {
-                    success = false;
-                    break;
-                }
-            }
+            let _ = client.request(Delete::new(&event_path).force()).await;
             session_idx += 1;
         }
 
