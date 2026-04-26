@@ -156,7 +156,6 @@
   "migrating_local": "Migrating local...",
   "migration_complete_moved": "Migration complete. Moved %{count}.",
   "failed_to_load_local_tasks": "Failed to load local tasks",
-  "connecting": "Connecting...",
   "ready": "Ready.",
   "sync_warning": "Sync warning: %{msg}",
   "syncing": "Syncing...",
@@ -328,7 +327,6 @@
   "min": "Min",
   "more_actions": "More actions",
   "move_failed": "Move failed: %{error}",
-  "move_label": "Move",
   "move_task_title": "Move task",
   "move_to": "Move to:",
   "name_label": "Name",
@@ -478,6 +476,5 @@
   "yanked_label": "Yanked:",
   "yank_tooltip_block": "Make '%{target}' depend on '%{yanked}' (b)",
   "yank_tooltip_child": "Make '%{target}' a child of '%{yanked}' (c)",
-  "yank_tooltip_relate": "Relate '%{target}' to '%{yanked}' (l)",
   "related_to_tooltip": "Relate '%{target}' to '%{yanked}' (l)"
 }

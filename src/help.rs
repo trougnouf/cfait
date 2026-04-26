@@ -353,7 +353,7 @@ pub fn get_shortcuts_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "M".to_string(),
-                    desc: rust_i18n::t!("move_label").to_string(),
+                    desc: rust_i18n::t!("menu_move").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
