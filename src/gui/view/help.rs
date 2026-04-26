@@ -13,7 +13,7 @@ const COL_MUTED: Color = Color::from_rgb(0.6, 0.6, 0.6);
 // Helper function to create a pretty, colored, rounded tab button
 fn tab_btn(
     icon_char: char,
-    label: &'static str,
+    label: String,
     is_active: bool,
     msg: Message,
     base_color: Color,
@@ -114,21 +114,21 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
     let tabs_row = row![
         tab_btn(
             '\u{f1fa}',
-            "Syntax",
+            rust_i18n::t!("syntax_help").to_string(),
             tab == HelpTab::Syntax,
             Message::OpenHelp(HelpTab::Syntax),
             Color::from_rgb(0.9, 0.6, 0.2)
         ),
         tab_btn(
             '\u{f11c}',
-            "Shortcuts",
+            rust_i18n::t!("keyboard_shortcuts").to_string(),
             tab == HelpTab::Shortcuts,
             Message::OpenHelp(HelpTab::Shortcuts),
             Color::from_rgb(0.2, 0.8, 0.4)
         ),
         tab_btn(
             support_icon,
-            "Support & links",
+            rust_i18n::t!("support_card_title").to_string(),
             tab == HelpTab::About,
             Message::OpenHelp(HelpTab::About),
             Color::from_rgb(0.8, 0.3, 0.7)
@@ -208,7 +208,7 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
                     .style(|_theme: &Theme| text::Style {
                         color: Some(COL_ACCENT)
                     }),
-                text("Support development")
+                text(rust_i18n::t!("support_card_title").to_string())
                     .size(28)
                     .font(Font {
                         weight: iced::font::Weight::Bold,
@@ -222,17 +222,22 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
             .align_y(iced::Alignment::Center);
 
             let footer_links = column![
-                text(format!("Cfait v{}  •  GPL-3.0", env!("CARGO_PKG_VERSION")))
+                text(rust_i18n::t!("about_title").to_string())
                     .size(14)
                     .style(|_: &Theme| text::Style {
                         color: Some(COL_MUTED)
                     }),
-                text("Trougnouf (Benoit Brummer)")
+                text(rust_i18n::t!("about_version", version = env!("CARGO_PKG_VERSION")).to_string())
                     .size(14)
                     .style(|_: &Theme| text::Style {
                         color: Some(COL_MUTED)
                     }),
-                button(text("https://codeberg.org/trougnouf/cfait").size(14).style(
+                text(rust_i18n::t!("about_license").to_string())
+                    .size(14)
+                    .style(|_: &Theme| text::Style {
+                        color: Some(COL_MUTED)
+                    }),
+                button(text(rust_i18n::t!("about_repository", url = "https://codeberg.org/trougnouf/cfait").to_string()).size(14).style(
                     |theme: &Theme| text::Style {
                         color: Some(if theme.extended_palette().is_dark {
                             COL_ACCENT
@@ -247,7 +252,7 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
                     "https://codeberg.org/trougnouf/cfait".to_string()
                 )),
                 button(
-                    text("Chat: #Cfait:matrix.org")
+                    text(rust_i18n::t!("about_chat", url = "#Cfait:matrix.org").to_string())
                         .size(14)
                         .style(|theme: &Theme| text::Style {
                             color: Some(if theme.extended_palette().is_dark {

@@ -500,7 +500,7 @@ pub fn view_task_row<'a>(
 
                 let mut label = action.label();
                 if *action == TaskAction::DuplicateTree && !task.has_subtasks {
-                    label = "Duplicate task".to_string();
+                    label = rust_i18n::t!("duplicate_single_task").to_string();
                 }
 
                 let (icon_element, msg, style_mode, tooltip_str): (

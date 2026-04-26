@@ -36,8 +36,8 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() > 1 && (args[1] == "--help" || args[1] == "-h") {
         println!(
-            "Cfait v{} - A powerful, fast and elegant CalDAV task manager (TUI)",
-            env!("CARGO_PKG_VERSION")
+            "{} - A powerful, fast and elegant CalDAV task manager (TUI)",
+            rust_i18n::t!("about_title")
         );
         println!();
         println!("USAGE:");

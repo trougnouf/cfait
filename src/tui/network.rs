@@ -138,7 +138,7 @@ pub async fn run_network_actor(
     let _ = event_tx
         .send(AppEvent::Status {
             key: "connecting".to_string(),
-            human: "Connecting...".to_string(),
+            human: rust_i18n::t!("connecting").to_string(),
         })
         .await;
 
@@ -167,7 +167,7 @@ pub async fn run_network_actor(
                 let _ = event_tx
                     .send(AppEvent::Status {
                         key: "sync_warning".to_string(),
-                        human: format!("Sync warning: {}", err_str),
+                        human: rust_i18n::t!("sync_warning", msg = err_str).to_string(),
                     })
                     .await;
                 vec![]
@@ -192,7 +192,7 @@ pub async fn run_network_actor(
     let _ = event_tx
         .send(AppEvent::Status {
             key: "syncing".to_string(),
-            human: "Syncing...".to_string(),
+            human: rust_i18n::t!("syncing").to_string(),
         })
         .await;
 
@@ -219,7 +219,7 @@ pub async fn run_network_actor(
             let _ = event_tx
                 .send(AppEvent::Status {
                     key: "ready".to_string(),
-                    human: "Ready.".to_string(),
+                    human: rust_i18n::t!("ready").to_string(),
                 })
                 .await;
         }
@@ -227,7 +227,7 @@ pub async fn run_network_actor(
             let _ = event_tx
                 .send(AppEvent::Status {
                     key: "sync_warning".to_string(),
-                    human: format!("Sync warning: {}", e),
+                    human: rust_i18n::t!("sync_warning", msg = e).to_string(),
                 })
                 .await;
         }
@@ -391,7 +391,7 @@ pub async fn run_network_actor(
                         let _ = event_tx
                             .send(AppEvent::Status {
                                 key: "refreshed".to_string(),
-                                human: "Refreshed.".to_string(),
+                                human: rust_i18n::t!("refreshed").to_string(),
                             })
                             .await;
                     }
@@ -434,7 +434,7 @@ pub async fn run_network_actor(
                 let _ = event_tx
                     .send(AppEvent::Status {
                         key: "duplicating".to_string(),
-                        human: "Duplicating task tree...".to_string(),
+                        human: rust_i18n::t!("duplicating_task_tree").to_string(),
                     })
                     .await;
 
@@ -450,7 +450,7 @@ pub async fn run_network_actor(
                         let _ = event_tx
                             .send(AppEvent::Status {
                                 key: "status_duplicated".to_string(),
-                                human: "Task duplicated successfully.".to_string(),
+                                human: rust_i18n::t!("status_duplicated").to_string(),
                             })
                             .await;
                     }
@@ -469,7 +469,7 @@ pub async fn run_network_actor(
                 let _ = event_tx
                     .send(AppEvent::Status {
                         key: "deleting_tree".to_string(),
-                        human: "Deleting task tree...".to_string(),
+                        human: rust_i18n::t!("deleting_task_tree").to_string(),
                     })
                     .await;
 
@@ -494,7 +494,7 @@ pub async fn run_network_actor(
                 let _ = event_tx
                     .send(AppEvent::Status {
                         key: "migrating_local".to_string(),
-                        human: "Migrating local...".to_string(),
+                        human: rust_i18n::t!("migrating_local").to_string(),
                     })
                     .await;
 
@@ -505,7 +505,7 @@ pub async fn run_network_actor(
                             let _ = event_tx
                                 .send(AppEvent::Status {
                                     key: "migration_complete".to_string(),
-                                    human: format!("Migration complete. Moved {}.", count),
+                                    human: rust_i18n::t!("migration_complete_moved", count = count).to_string(),
                                 })
                                 .await;
 
@@ -513,7 +513,7 @@ pub async fn run_network_actor(
                             let _ = event_tx
                                 .send(AppEvent::Status {
                                     key: "refreshing".to_string(),
-                                    human: "Refreshing...".to_string(),
+                                    human: rust_i18n::t!("refreshing").to_string(),
                                 })
                                 .await;
                             // (Existing refresh logic usually follows here or user presses 'r')
@@ -524,7 +524,7 @@ pub async fn run_network_actor(
                     }
                 } else {
                     let _ = event_tx
-                        .send(AppEvent::Error("Failed to load local tasks".to_string()))
+                        .send(AppEvent::Error(rust_i18n::t!("failed_to_load_local_tasks").to_string()))
                         .await;
                 }
             }

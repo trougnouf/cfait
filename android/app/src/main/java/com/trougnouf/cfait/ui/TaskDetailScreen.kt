@@ -293,7 +293,7 @@ fun TaskDetailScreen(
                                         if (e is kotlinx.coroutines.CancellationException) throw e
                                         android.widget.Toast.makeText(
                                             context,
-                                            "Error: ${e.message}",
+                                            context.getString(R.string.error_general, e.message ?: ""),
                                             android.widget.Toast.LENGTH_SHORT
                                         ).show()
                                     }
@@ -490,7 +490,7 @@ fun TaskDetailScreen(
                                         if (msg.contains("Invalid time format") || msg.contains("Task not found")) {
                                             android.widget.Toast.makeText(
                                                 context,
-                                                "Format error: $msg",
+                                                context.getString(R.string.error_format, msg),
                                                 android.widget.Toast.LENGTH_SHORT
                                             ).show()
                                         } else {
@@ -561,7 +561,7 @@ fun TaskDetailScreen(
                                     if (e is kotlinx.coroutines.CancellationException) throw e
                                     android.widget.Toast.makeText(
                                         context,
-                                        "Error deleting session: ${e.message}",
+                                        context.getString(R.string.error_deleting_session, e.message ?: ""),
                                         android.widget.Toast.LENGTH_SHORT
                                     ).show()
                                 }

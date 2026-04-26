@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.BuildConfig
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
-import com.trougnouf.cfait.core.HelpCategory
+import com.trougnouf.cfait.core.HelpTab
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,7 +76,7 @@ fun HelpScreen(api: CfaitMobile, onBack: () -> Unit) {
             HorizontalPager(state = pagerState, modifier = Modifier.weight(1f)) { page ->
                 val pageData = helpData[page]
 
-                if (pageData.category == HelpCategory.ABOUT) {
+                if (pageData.category == HelpTab.ABOUT) {
                     // Custom Kotlin About Screen UI
                     AboutTabContent()
                 } else {
