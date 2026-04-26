@@ -12,6 +12,8 @@ class CfaitApplication : Application() {
     lateinit var api: CfaitMobile
         private set
 
+    private external fun initNdkContext(context: android.content.Context)
+
     override fun onCreate() {
         super.onCreate()
 
@@ -21,7 +23,11 @@ class CfaitApplication : Application() {
 
         // Initialize the Tokio runtime before calling any Rust code that needs it.
         // This call is synchronous and sets up the background runtime for Rust.
+        // Importantly, this also loads the native library securely via UniFFI.
         com.trougnouf.cfait.core.initTokioRuntime()
+
+        // Initialize the NDK context for the Android Keyring store.
+        initNdkContext(this)
 
         // Initialize the Rust backend once for the lifetime of the application
         api = CfaitMobile(filesDir.absolutePath)

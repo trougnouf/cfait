@@ -109,6 +109,8 @@ android_logger = "0.15"
 log = "0.4"
 zip = "8.1"
 android-native-keyring-store = "1.0.0"
+jni = "0.22"
+ndk-context = "0.1"
 
 [dev-dependencies]
 mockito = "1.7" # For mocking the HTTP server
