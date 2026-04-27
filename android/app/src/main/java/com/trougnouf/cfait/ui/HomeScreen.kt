@@ -1537,6 +1537,7 @@ fun HomeScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy((-12).dp)
                                 ) {
+                                    IconButton(onClick = { jumpToRandomTask() }) { NfIcon(currentRandomIcon, 20.sp) }
                                     if (showQuickFilter) {
                                         val isActive = searchQuery.contains(quickFilterTerm)
                                         val qfColor =
@@ -1554,7 +1555,6 @@ fun HomeScreen(
                                             NfIcon(parseIcon(quickFilterIcon), 18.sp, color = qfColor)
                                         }
                                     }
-                                    IconButton(onClick = { jumpToRandomTask() }) { NfIcon(currentRandomIcon, 20.sp) }
                                     IconButton(onClick = {
                                         isSearchActive = !isSearchActive
                                         if (!isSearchActive) {

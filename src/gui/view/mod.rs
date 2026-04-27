@@ -1280,6 +1280,21 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     let mut search_row = row![].align_y(iced::Alignment::Center).spacing(5);
 
+    let random_btn = iced::widget::button(icon::icon(app.random_icon).size(16))
+        .style(iced::widget::button::text)
+        .padding(6)
+        .on_press(Message::JumpToRandomTask);
+
+    search_row = search_row.push(
+        tooltip(
+            random_btn,
+            text(rust_i18n::t!("jump_to_random_task")).size(12),
+            tooltip::Position::Bottom,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700)),
+    );
+
     if app.show_quick_filter {
         let is_active = search_text.contains(&app.quick_filter_term);
         let qf_icon_char = crate::gui::icon::parse_icon(&app.quick_filter_icon);
@@ -1304,21 +1319,6 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             .delay(Duration::from_millis(700)),
         );
     }
-
-    let random_btn = iced::widget::button(icon::icon(app.random_icon).size(16))
-        .style(iced::widget::button::text)
-        .padding(6)
-        .on_press(Message::JumpToRandomTask);
-
-    search_row = search_row.push(
-        tooltip(
-            random_btn,
-            text(rust_i18n::t!("jump_to_random_task")).size(12),
-            tooltip::Position::Bottom,
-        )
-        .style(tooltip_style)
-        .delay(Duration::from_millis(700)),
-    );
 
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
     let is_search_empty = app.search_value.text().is_empty();
