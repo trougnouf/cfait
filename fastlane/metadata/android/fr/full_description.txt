@@ -1,0 +1,58 @@
+<b>Take control of your TODO list.</b>
+<br><br>
+Cfait is designed for speed and stability using Rust, it puts you in control of your data with a local-first approach that syncs seamlessly across your devices.
+<br><br>
+<b>Why Cfait?</b>
+<ul>
+  <li><b>Open Source & Cross-Platform:</b> Use Cfait on Android, Linux, and Windows. Your tasks adhere to open standards (CalDAV and iCalendar), not walled gardens.</li>
+  <li><b>Syncs Everywhere:</b> Fully compatible with Nextcloud, iCloud, Radicale, Xandikos, and other standard CalDAV servers.</li>
+  <li><b>Offline First:</b> Optimistic UI updates mean you never wait for a server response. Use the persistent "Local" calendar for offline tasks and migrate them to a server later.</li>
+  <li><b>Smart Input:</b> Add tasks naturally. Typing "Buy cat food !1 @tomorrow @@grocery_store ~15m" automatically sets the priority, due date, location and duration.</li>
+</ul>
+<br>
+<b>Productivity Features</b>
+<ul>
+  <li><b>GTD Workflow:</b> Mark tasks as Needs Action, In Process (&gt;), Cancelled (x), or Done.</li>
+  <li><b>Hierarchy:</b> Create sub-tasks, promote children, and organize nested lists.</li>
+  <li><b>Dependencies:</b> Link tasks using "Blocked-by" or "Child-of" logic (RFC 9253).</li>
+  <li><b>Tags & Aliases:</b> Organize with hierarchical tags (e.g., #work:backend). Create inline aliases (e.g., #shed:=#home_improvement and @home_improvement:=@@home) for rapid filing.</li>
+  <li><b>Sane Sorting:</b> Tasks are sorted by Status &gt; Start Date &gt; Due Date &gt; Priority.</li>
+</ul>
+<br>
+<b>Smart Syntax Guide</b>
+<br>
+When adding or editing a task, use these shortcuts:
+<ul>
+  <li><b>!1 to !9:</b> Set Priority (1 is Critical, 9 is Low).</li>
+  <li><b>@date:</b> Set Due Date (e.g., @tomorrow, @2025-12-31, @2w, @in two weeks).</li>
+  <li><b>^date:</b> Set Start Date (hides task until date).</li>
+  <li><b>~duration:</b> Estimate time (e.g., ~30m, ~2h).</li>
+  <li><b>@every X:</b> Set Recurrence (e.g., @daily, @every 2 weeks).</li>
+  <li><b>@@loc:</b> Set Location (e.g., @@home, @@"hardware store").</li>
+  <li><b>url:http://perdu.com:</b> Attach a URL.</li>
+</ul>
+<br>
+<b>Advanced Search</b>
+<br>
+Find exactly what you need with powerful filters:
+<ul>
+  <li><b>is:active</b> / <b>is:done:</b> Filter by status.</li>
+  <li><b>~&lt;30m:</b> Find tasks taking less than 30 minutes.</li>
+  <li><b>!&lt;3:</b> Find high-priority tasks.</li>
+  <li><b>@&lt;today:</b> Find overdue tasks.</li>
+  <li><b>@@home:</b> Find tasks at a specific location.</li>
+</ul>
+<br>
+<b>Support the Developer</b>
+<br>
+If you enjoy using Cfait, please consider supporting its developer:
+<ul>
+  <li>💳 <b>Liberapay:</b> https://liberapay.com/trougnouf</li>
+  <li>🏦₿ Other payment details are available within the app's "Help & About" screen or on the project website.</li>
+</ul>
+<br>
+<b>Community & Source</b>
+<br>
+Cfait is developed by Benoit Brummer (Trougnouf) and released under the GPL3 License.
+<br><br>
+Source code, desktop versions, and issue tracking available at: https://codeberg.org/trougnouf/cfait
