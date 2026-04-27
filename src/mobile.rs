@@ -39,19 +39,26 @@ impl From<String> for MobileError {
 
 #[cfg(target_os = "android")]
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_trougnouf_cfait_CfaitApplication_initNdkContext(
-    // Use the safe, high-level EnvUnowned wrapper and JObject for jni 0.22+
-    mut env: jni::EnvUnowned,
-    _class: jni::objects::JObject,
-    context: jni::objects::JObject,
+pub extern "system" fn Java_com_trougnouf_cfait_CfaitApplication_initNdkContext<'local>(
+    mut unowned_env: jni::EnvUnowned<'local>,
+    _class: jni::objects::JClass<'local>,
+    context: jni::objects::JObject<'local>,
 ) {
-    // Use with_env to get access to the full Env.
-    // The closure MUST return a jni::errors::Result.
-    let _ = env.with_env(|env| -> jni::errors::Result<()> {
+    // Upgrade the unowned environment to a usable Env
+    let _ = unowned_env.with_env(|env| -> jni::errors::Result<()> {
         let vm = env.get_java_vm()?;
-        let vm_ptr = vm.get_raw() as *mut std::ffi::c_void;
-        let context_ptr = context.as_raw() as *mut std::ffi::c_void;
-        unsafe { ndk_context::initialize_android_context(vm_ptr, context_ptr) };
+
+        // Create the global reference
+        let global_context = env.new_global_ref(&context)?;
+
+        unsafe {
+            // ndk_context expects raw c_void pointers
+            ndk_context::initialize_android_context(
+                vm.get_raw() as *mut std::ffi::c_void,
+                global_context.into_raw() as *mut std::ffi::c_void,
+            );
+        }
+
         Ok(())
     });
 }
