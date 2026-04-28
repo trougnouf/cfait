@@ -736,7 +736,14 @@ impl IcsAdapter {
                             related_to.push(value);
                         }
                     } else {
-                        parent_uid = Some(value);
+                        // FIX: Only assign parent_uid to the first un-typed RELATED-TO.
+                        // If the server stripped RELTYPE=SIBLING from subsequent relations,
+                        // safely route them back to the siblings list.
+                        if parent_uid.is_none() {
+                            parent_uid = Some(value);
+                        } else if !related_to.contains(&value) {
+                            related_to.push(value);
+                        }
                     }
                 }
 

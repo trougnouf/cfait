@@ -428,9 +428,10 @@ impl TaskStore {
             // Protect against stale reads wiping out recent local mutations
             if let Some(existing_map) = self.calendars.get(&calendar_href)
                 && let Some(existing_task) = existing_map.get(&task.uid)
-                    && existing_task.sequence > task.sequence {
-                        task = existing_task.clone();
-                    }
+                && existing_task.sequence > task.sequence
+            {
+                task = existing_task.clone();
+            }
 
             new_map.insert(task.uid.clone(), task);
         }
@@ -438,14 +439,36 @@ impl TaskStore {
         // --- ADDED: Automatic cleanup for legacy history tasks mistakenly parsed as children ---
         let mut fixes = Vec::new();
         for task in new_map.values() {
-            // History snapshots are always completed and lack an RRULE
+            // A task is a history snapshot if:
+            // 1. It is completed and not recurring itself.
+            // 2. Its parent is a recurring task.
+            // 3. EITHER its CREATED timestamp OR its summary matches the parent's.
             if task.status.is_done()
                 && task.rrule.is_none()
                 && let Some(p_uid) = &task.parent_uid
                 && let Some(parent) = new_map.get(p_uid)
+                && parent.rrule.is_some()
             {
-                // If it matches the parent's summary, it's definitely a history snapshot
-                if parent.rrule.is_some() && parent.summary == task.summary {
+                let mut is_history_snapshot = false;
+
+                // Heuristic 1 (most reliable): Check for matching CREATED timestamp.
+                let task_created = task.unmapped_properties.iter().find(|p| p.key == "CREATED");
+                let parent_created = parent
+                    .unmapped_properties
+                    .iter()
+                    .find(|p| p.key == "CREATED");
+
+                if let (Some(tc), Some(pc)) = (task_created, parent_created)
+                    && tc.value == pc.value {
+                        is_history_snapshot = true;
+                    }
+
+                // Heuristic 2 (fallback): Check for matching summary.
+                if !is_history_snapshot && parent.summary == task.summary {
+                    is_history_snapshot = true;
+                }
+
+                if is_history_snapshot {
                     fixes.push(task.uid.clone());
                 }
             }
@@ -453,7 +476,9 @@ impl TaskStore {
 
         for uid in fixes {
             if let Some(task) = new_map.get_mut(&uid) {
+                // Take the parent_uid...
                 let p_uid = task.parent_uid.take().unwrap();
+                // ...and correctly move it to the related_to list.
                 if !task.related_to.contains(&p_uid) {
                     task.related_to.push(p_uid);
                 }
