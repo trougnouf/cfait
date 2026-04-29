@@ -88,11 +88,12 @@ pub enum Message {
     ClearAllFilters,
     KeyboardAddDependency,
     KeyboardAddRelation,
-    KeyboardDuplicateTask,  // 'Ctrl+D' logic
-    KeyboardDeleteTaskTree, // 'Ctrl+Delete' logic
-    KeyboardOpenLocations,  // 'g' logic
-    KeyboardOpenUrl,        // 'o' logic
-    DuplicateTask(String),  // Used by Yank bar button & hotkey
+    KeyboardToggleTreeCollapse, // 'z' logic
+    KeyboardDuplicateTask,      // 'Ctrl+D' logic
+    KeyboardDeleteTaskTree,     // 'Ctrl+Delete' logic
+    KeyboardOpenLocations,      // 'g' logic
+    KeyboardOpenUrl,            // 'o' logic
+    DuplicateTask(String),      // Used by Yank bar button & hotkey
     DeleteTaskTree(String),
     ToggleActiveSelected,       // 's' logic
     StopSelected,               // 'S' logic

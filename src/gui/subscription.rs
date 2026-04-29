@@ -178,6 +178,7 @@ fn handle_hotkey(
                     ("h", true) => Some(Message::ToggleHideCompletedToggle),
                     ("m", false) => Some(Message::CategoryMatchModeToggle),
                     ("m", true) => Some(Message::MoveSelected),
+                    ("z", false) => Some(Message::KeyboardToggleTreeCollapse),
                     ("q", false) => Some(Message::CloseWindow),
                     ("w", false) => Some(Message::ToggleQuickFilter),
                     ("r", false) => Some(Message::Refresh),

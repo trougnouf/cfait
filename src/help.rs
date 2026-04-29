@@ -306,6 +306,16 @@ pub fn get_shortcuts_help() -> Vec<HelpSection> {
                     desc: rust_i18n::t!("help_keyboard_zoom_ui").to_string(),
                     example: rust_i18n::t!("help_keyboard_zoom_note").to_string(),
                 },
+                HelpItem {
+                    keys: "z".to_string(),
+                    desc: "Fold / Unfold Task Tree".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Shift + r".to_string(),
+                    desc: rust_i18n::t!("jump_to_random_task").to_string(),
+                    example: "".to_string(),
+                },
             ],
         },
         HelpSection {
@@ -354,6 +364,16 @@ pub fn get_shortcuts_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "Ctrl + d".to_string(),
                     desc: rust_i18n::t!("duplicate_task").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "t".to_string(),
+                    desc: rust_i18n::t!("help_metadata_log_time").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Shift + t".to_string(),
+                    desc: rust_i18n::t!("help_metadata_manage_sessions").to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {

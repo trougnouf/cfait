@@ -294,6 +294,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::KeyboardToggleTreeCollapse => {
+            if let Some(uid) = &app.selected_uid {
+                return handle(app, Message::ToggleTreeCollapse(uid.clone()));
+            }
+            Task::none()
+        }
+
         Message::DuplicateTask(uid) => {
             app.yanked_uid = None;
             app.yank_lock_active = false;

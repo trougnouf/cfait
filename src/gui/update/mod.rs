@@ -148,6 +148,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleShowAllSessions(_)
         | Message::KeyboardAddSession
         | Message::KeyboardToggleSessions
+        | Message::KeyboardToggleTreeCollapse
         | Message::StartMoveTask(_)
         | Message::CancelMoveTask => tasks::handle(app, message),
 

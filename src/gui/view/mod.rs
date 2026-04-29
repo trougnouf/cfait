@@ -1288,7 +1288,11 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     search_row = search_row.push(
         tooltip(
             random_btn,
-            text(rust_i18n::t!("jump_to_random_task")).size(12),
+            text(format!(
+                "{} (Shift+R)",
+                rust_i18n::t!("jump_to_random_task")
+            ))
+            .size(12),
             tooltip::Position::Bottom,
         )
         .style(tooltip_style)

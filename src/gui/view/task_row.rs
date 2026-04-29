@@ -316,7 +316,11 @@ pub fn view_task_row<'a>(
                 // Determine icons and styling
                 let (icon_char, is_primary, tooltip_text) = if is_tree_collapsed {
                     // Tree is hidden -> Show highlighted Family Tree to expand
-                    (icon::FAMILY_TREE, true, "Expand tree")
+                    (
+                        icon::FAMILY_TREE,
+                        true,
+                        rust_i18n::t!("expand_tree_with_key").to_string(),
+                    )
                 } else {
                     // Tree is visible -> Show a "random" tree based on UID hash to collapse
                     let trees = [
@@ -331,7 +335,11 @@ pub fn view_task_row<'a>(
                         .uid
                         .bytes()
                         .fold(0u32, |acc, b| acc.wrapping_add(b as u32));
-                    (trees[(hash % 5) as usize], false, "Collapse tree")
+                    (
+                        trees[(hash % 5) as usize],
+                        false,
+                        rust_i18n::t!("collapse_tree_with_key").to_string(),
+                    )
                 };
 
                 let collapse_btn = button(icon::icon(icon_char).size(14))
