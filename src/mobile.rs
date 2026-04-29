@@ -1736,7 +1736,13 @@ impl CfaitMobile {
             crate::model::extractor::extract_markdown_tasks(&description);
 
         let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
-        task.description = cleaned_desc;
+        if !cleaned_desc.is_empty() {
+            if task.description.is_empty() {
+                task.description = cleaned_desc;
+            } else {
+                task.description.push_str(&format!("\n\n{}", cleaned_desc));
+            }
+        }
         task.calendar_href = config
             .default_calendar
             .clone()
@@ -1752,7 +1758,14 @@ impl CfaitMobile {
         for ext in extracted_subtasks {
             let mut sub = Task::new(&ext.raw_text, &config.tag_aliases, def_time);
             sub.uid = ext.uid.clone();
-            sub.description = ext.description;
+            if !ext.description.is_empty() {
+                if sub.description.is_empty() {
+                    sub.description = ext.description;
+                } else {
+                    sub.description
+                        .push_str(&format!("\n\n{}", ext.description));
+                }
+            }
             if ext.is_completed {
                 sub.status = crate::model::TaskStatus::Completed;
                 sub.set_completion_date(Some(chrono::Utc::now()));

@@ -981,8 +981,8 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
     if let Some(edit_uid) = &app.editing_uid {
         // ONLY EDIT EXISTING - Do not extract to avoid duplication!
         if let Some((task, _)) = app.store.get_task_mut(edit_uid) {
-            task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
             task.description = desc_text; // use RAW description to preserve their markdown checklist
+            task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
             task.sequence += 1;
             let task_copy = task.clone();
 
@@ -998,7 +998,16 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
     } else if !clean_input.is_empty() {
         // CREATE NEW TASK
         let mut new_task = TodoTask::new(&clean_input, &app.tag_aliases, config_time);
-        new_task.description = cleaned_desc; // Use the stripped description!
+
+        if !cleaned_desc.is_empty() {
+            if new_task.description.is_empty() {
+                new_task.description = cleaned_desc;
+            } else {
+                new_task
+                    .description
+                    .push_str(&format!("\n\n{}", cleaned_desc));
+            }
+        }
 
         if let Some(parent) = &app.creating_child_of {
             new_task.parent_uid = Some(parent.clone());
@@ -1026,7 +1035,14 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             for ext in extracted_subtasks {
                 let mut sub = TodoTask::new(&ext.raw_text, &app.tag_aliases, config_time);
                 sub.uid = ext.uid; // Must use Extractor's UID so dependencies map correctly
-                sub.description = ext.description;
+                if !ext.description.is_empty() {
+                    if sub.description.is_empty() {
+                        sub.description = ext.description;
+                    } else {
+                        sub.description
+                            .push_str(&format!("\n\n{}", ext.description));
+                    }
+                }
                 if ext.is_completed {
                     sub.status = crate::model::TaskStatus::Completed;
                     sub.set_completion_date(Some(chrono::Utc::now()));

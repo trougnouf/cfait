@@ -459,7 +459,13 @@ pub async fn handle_key_event(
                             .ok();
 
                     let mut parent = Task::new(&clean_input, &state.tag_aliases, def_time);
-                    parent.description = clean_desc;
+                    if !clean_desc.is_empty() {
+                        if parent.description.is_empty() {
+                            parent.description = clean_desc;
+                        } else {
+                            parent.description.push_str(&format!("\n\n{}", clean_desc));
+                        }
+                    }
                     parent.parent_uid = state.creating_child_of.clone();
 
                     let Some(target_href) = state
@@ -503,7 +509,14 @@ pub async fn handle_key_event(
                     for ext in extracted {
                         let mut sub = Task::new(&ext.raw_text, &state.tag_aliases, def_time);
                         sub.uid = ext.uid;
-                        sub.description = ext.description;
+                        if !ext.description.is_empty() {
+                            if sub.description.is_empty() {
+                                sub.description = ext.description;
+                            } else {
+                                sub.description
+                                    .push_str(&format!("\n\n{}", ext.description));
+                            }
+                        }
                         if ext.is_completed {
                             sub.status = crate::model::TaskStatus::Completed;
                             sub.set_completion_date(Some(chrono::Utc::now()));
