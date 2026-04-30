@@ -9,7 +9,7 @@ fn main() {
     // Only compile the resource for Windows targets
     if std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() == "windows" {
         let mut res = winresource::WindowsResource::new();
-        res.set_icon("assets/cfait.ico");
+        res.set_icon("assets/autogen/cfait.ico");
 
         // Optional: Set file properties visible in Windows "Properties -> Details"
         res.set("ProductName", "Cfait");
