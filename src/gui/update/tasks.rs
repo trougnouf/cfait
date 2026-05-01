@@ -635,26 +635,37 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::MakeChild(target_uid) => {
             if let Some(parent_uid) = app.yanked_uid.clone()
                 && let Some(_orig) = app.store.get_task_ref(&target_uid)
-                && let Some(updated) = app.store.set_parent(&target_uid, Some(parent_uid))
             {
-                app.selected_uid = Some(target_uid.clone());
-                if !app.yank_lock_active {
-                    app.yanked_uid = None;
-                }
-                refresh_filtered_tasks(app);
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
+                match app.store.set_parent(&target_uid, Some(parent_uid)) {
+                    Ok(updated) => {
+                        app.selected_uid = Some(target_uid.clone());
+                        if !app.yank_lock_active {
+                            app.yanked_uid = None;
+                        }
+                        refresh_filtered_tasks(app);
+                        if let Some(tx) = &app.bg_tx {
+                            let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
+                        }
+                    }
+                    Err(e) => {
+                        app.error_msg = Some(e.to_string());
+                    }
                 }
             }
             Task::none()
         }
 
         Message::RemoveParent(child_uid) => {
-            if let Some(updated) = app.store.set_parent(&child_uid, None) {
-                app.selected_uid = Some(child_uid);
-                refresh_filtered_tasks(app);
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
+            match app.store.set_parent(&child_uid, None) {
+                Ok(updated) => {
+                    app.selected_uid = Some(child_uid);
+                    refresh_filtered_tasks(app);
+                    if let Some(tx) = &app.bg_tx {
+                        let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
+                    }
+                }
+                Err(e) => {
+                    app.error_msg = Some(e.to_string());
                 }
             }
             Task::none()

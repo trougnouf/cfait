@@ -1351,13 +1351,21 @@ impl CfaitMobile {
         child_uid: String,
         parent_uid: Option<String>,
     ) -> Result<(), MobileError> {
-        if let Some(p) = &parent_uid
-            && *p == child_uid
-        {
-            return Err(MobileError::from("Cannot be child of self"));
+        let mut err_msg = None;
+        let res = self.apply_store_mutation(&child_uid, |store, id| {
+            match store.set_parent(id, parent_uid) {
+                Ok(t) => Some(t),
+                Err(e) => {
+                    err_msg = Some(e);
+                    None
+                }
+            }
+        }).await;
+
+        if let Some(e) = err_msg {
+            return Err(MobileError::from(e));
         }
-        self.apply_store_mutation(&child_uid, |store, id| store.set_parent(id, parent_uid))
-            .await
+        res
     }
 
     pub async fn add_related_to(

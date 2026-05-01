@@ -996,13 +996,21 @@ impl TaskStore {
     }
 
     /// Set or unset a parent relationship for a task.
-    pub fn set_parent(&mut self, child_uid: &str, parent_uid: Option<String>) -> Option<Task> {
+    pub fn set_parent(&mut self, child_uid: &str, parent_uid: Option<String>) -> Result<Task, &'static str> {
+        if let Some(p_uid) = &parent_uid {
+            if p_uid == child_uid {
+                return Err("Cannot be child of self");
+            }
+            if self.get_descendant_uids(child_uid).contains(p_uid) {
+                return Err("Cycle detected: Cannot set a task as a child of its own descendant");
+            }
+        }
         if let Some((task, _)) = self.get_task_mut(child_uid) {
             task.parent_uid = parent_uid;
             task.sequence += 1;
-            return Some(task.clone());
+            return Ok(task.clone());
         }
-        None
+        Err("Task not found")
     }
 
     /// Add a dependency (task_uid depends on dep_uid). Maintain reverse blocking index.

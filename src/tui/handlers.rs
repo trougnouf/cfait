@@ -1137,14 +1137,15 @@ pub async fn handle_key_event(
                 };
 
                 if let Some((child_uid, parent_uid)) = data {
-                    if child_uid == parent_uid {
-                        state.message = rust_i18n::t!("error_cannot_be_child_of_self").to_string();
-                    } else if let Some(updated) =
-                        state.store.set_parent(&child_uid, Some(parent_uid))
-                    {
-                        state.yanked_uid = None;
-                        state.refresh_filtered_view();
-                        return Some(Action::UpdateTask(updated));
+                    match state.store.set_parent(&child_uid, Some(parent_uid)) {
+                        Ok(updated) => {
+                            state.yanked_uid = None;
+                            state.refresh_filtered_view();
+                            return Some(Action::UpdateTask(updated));
+                        }
+                        Err(e) => {
+                            state.message = e.to_string();
+                        }
                     }
                 }
             }
@@ -1364,9 +1365,14 @@ pub async fn handle_key_event(
                 {
                     let parent_uid = parent_task.uid.clone();
                     let current_uid = current_task.uid.clone();
-                    if let Some(updated) = state.store.set_parent(&current_uid, Some(parent_uid)) {
-                        state.refresh_filtered_view();
-                        return Some(Action::UpdateTask(updated));
+                    match state.store.set_parent(&current_uid, Some(parent_uid)) {
+                        Ok(updated) => {
+                            state.refresh_filtered_view();
+                            return Some(Action::UpdateTask(updated));
+                        }
+                        Err(e) => {
+                            state.message = e.to_string();
+                        }
                     }
                 }
             }
@@ -1376,9 +1382,14 @@ pub async fn handle_key_event(
                     && view_task.parent_uid.is_some()
                 {
                     let uid = view_task.uid.clone();
-                    if let Some(updated) = state.store.set_parent(&uid, None) {
-                        state.refresh_filtered_view();
-                        return Some(Action::UpdateTask(updated));
+                    match state.store.set_parent(&uid, None) {
+                        Ok(updated) => {
+                            state.refresh_filtered_view();
+                            return Some(Action::UpdateTask(updated));
+                        }
+                        Err(e) => {
+                            state.message = e.to_string();
+                        }
                     }
                 }
             }
