@@ -4,16 +4,16 @@ use std::collections::HashMap;
 
 #[test]
 fn test_time_only_alarm_binds_to_task_date() {
-    let task = Task::new("Pay rent @2026-04-01 rem:10am", &HashMap::new(), None);
+    let task = Task::new("Pay rent @3000-04-01 rem:10am", &HashMap::new(), None);
 
     // Should have one alarm
     assert_eq!(task.alarms.len(), 1);
 
-    // The alarm should be absolute and on 2026-04-01 at 10:00
+    // The alarm should be absolute and on 3000-04-01 at 10:00
     match &task.alarms[0].trigger {
         cfait::model::item::AlarmTrigger::Absolute(dt) => {
             let local = dt.with_timezone(&chrono::Local);
-            assert_eq!(local.year(), 2026);
+            assert_eq!(local.year(), 3000);
             assert_eq!(local.month(), 4);
             assert_eq!(local.day(), 1);
             assert_eq!(local.hour(), 10);
@@ -54,7 +54,7 @@ fn test_recurrence_advances_absolute_alarms() {
     use cfait::model::recurrence::RecurrenceEngine;
 
     let task = Task::new(
-        "Pay rent @2026-04-01 @monthly rem:10am",
+        "Pay rent @3000-04-01 @monthly rem:10am",
         &HashMap::new(),
         None,
     );
@@ -93,10 +93,10 @@ fn test_recurrence_advances_absolute_alarms() {
 
 #[test]
 fn test_display_formatting_hides_date_when_same_as_task() {
-    let task = Task::new("Pay rent @2026-04-01 rem:10am", &HashMap::new(), None);
+    let task = Task::new("Pay rent @3000-04-01 rem:10am", &HashMap::new(), None);
     let smart_string = task.to_smart_string();
 
-    // Should display as "rem:10:00" not "rem:2026-04-01 10:00"
+    // Should display as "rem:10:00" not "rem:3000-04-01 10:00"
     assert!(smart_string.contains("rem:10:00"));
-    assert!(!smart_string.contains("rem:2026-04-01"));
+    assert!(!smart_string.contains("rem:3000-04-01"));
 }
