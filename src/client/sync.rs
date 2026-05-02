@@ -12,7 +12,7 @@ use http::{Request, StatusCode};
 use libdav::caldav::CalDavClient;
 use libdav::dav::WebDavError;
 use libdav::dav::{Delete, PutResource};
-use percent_encoding::{AsciiSet, CONTROLS};
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use std::sync::OnceLock;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -76,39 +76,49 @@ fn actions_match_identity(a: &Action, b: &Action) -> bool {
 }
 
 // --- Sync Logic as RustyClient methods ---
-/// Normalizes paths from the server. Fixes paths stripped by proxies and encodes spaces,
-/// but crucially leaves '@' unencoded for Nextcloud compatibility.
 fn fix_and_encode_path(
-    client: &CalDavClient<HttpsClient>,
+    client: &libdav::caldav::CalDavClient<crate::client::core::HttpsClient>,
     raw_href: &str,
     filename: Option<&str>,
 ) -> String {
-    let mut path = strip_host(raw_href);
+    let mut path = crate::client::core::strip_host(raw_href);
     if let Some(idx) = path.find('?') {
         path.truncate(idx);
     }
 
     let base_path = client.base_url().path();
 
-    // Proxy fixup: Reconstruct missing base paths
+    // Best Practice Proxy Fixup: Dynamic Overlap Detection
     if !path.starts_with(base_path) && base_path != "/" {
-        let mut fixed = base_path.to_string();
-        if !fixed.ends_with('/') { fixed.push('/'); }
-        // FIXED: Removed the hardcoded "calendars/" injection
-        fixed.push_str(path.trim_start_matches('/'));
+        let mut best_overlap = "";
+
+        // Safely iterate over valid UTF-8 boundaries to avoid panics
+        for (i, _) in base_path.char_indices() {
+            let suffix = &base_path[i..];
+            if path.starts_with(suffix) {
+                best_overlap = suffix;
+                break;
+            }
+        }
+
+        let mut fixed = base_path[..base_path.len() - best_overlap.len()].to_string();
+        if !fixed.ends_with('/') && !path.starts_with('/') {
+            fixed.push('/');
+        }
+        fixed.push_str(&path);
         path = fixed;
     }
 
     if let Some(fname) = filename {
-        if !path.ends_with('/') { path.push('/'); }
+        if !path.ends_with('/') {
+            path.push('/');
+        }
         path.push_str(fname);
     }
 
-    // Robust Encoding for Polish and special characters
+    // Robust encoding that preserves folder structures and prevents double-encoding
     path.split('/')
-        .map(|segment| {
-            percent_encoding::utf8_percent_encode(segment, PATH_ENCODE_SET).to_string()
-        })
+        .map(|segment| utf8_percent_encode(segment, PATH_ENCODE_SET).to_string())
         .collect::<Vec<_>>()
         .join("/")
 }
