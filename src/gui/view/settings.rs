@@ -174,7 +174,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         for loc in available {
             lang_options.push(LangOption {
                 code: loc.to_string(),
-                label: get_native_language_name(loc),
+                label: get_native_language_name(&loc),
             });
         }
 

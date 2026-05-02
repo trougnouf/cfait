@@ -105,10 +105,10 @@ fn default_pinned_actions() -> Vec<TaskAction> {
 
 pub fn set_locale_with_fallback(locale: &str) {
     let available = rust_i18n::available_locales!();
-    if available.contains(&locale) {
+    if available.iter().any(|l| l == locale) {
         rust_i18n::set_locale(locale);
     } else if let Some(primary) = locale.split(&['_', '-'][..]).next() {
-        if available.contains(&primary) {
+        if available.iter().any(|l| l == primary) {
             rust_i18n::set_locale(primary);
         } else {
             rust_i18n::set_locale(locale);
