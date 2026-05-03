@@ -42,7 +42,7 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     };
 
     let toggle_all = toggler(are_all_visible)
-        .label(rust_i18n::t!("show_all"))
+        .label(format!("{} (*)", rust_i18n::t!("show_all")))
         .text_size(12)
         .text_alignment(iced::alignment::Horizontal::Left)
         .spacing(10)
@@ -195,7 +195,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
 
     let clear_tooltip = tooltip(
         clear_btn,
-        text(rust_i18n::t!("clear_all_tags")).size(12),
+        text(format!("{} (*)", rust_i18n::t!("clear_all_tags"))).size(12),
         tooltip::Position::Top,
     )
     .style(tooltip_style)
@@ -213,7 +213,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
 
     let logic_tooltip = tooltip(
         logic_btn,
-        text(rust_i18n::t!("toggle_matching_logic")).size(12),
+        text(format!("{} (m)", rust_i18n::t!("toggle_matching_logic"))).size(12),
         tooltip::Position::Top,
     )
     .style(tooltip_style)
@@ -475,7 +475,7 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
 
     let clear_tooltip = tooltip(
         clear_btn,
-        text(rust_i18n::t!("clear_all_locations")).size(12),
+        text(format!("{} (*)", rust_i18n::t!("clear_all_locations"))).size(12),
         tooltip::Position::Top,
     )
     .style(tooltip_style)

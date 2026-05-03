@@ -179,6 +179,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleDetails(_)
         | Message::OpenHelp(_)
         | Message::CloseHelp
+        | Message::SwitchHelpTab(_)
         | Message::WindowDragged
         | Message::MinimizeWindow
         | Message::CloseWindow

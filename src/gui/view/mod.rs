@@ -940,7 +940,7 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     let is_tag_error = is_filter_empty && !app.selected_categories.is_empty();
     let is_loc_error = is_filter_empty && !app.selected_locations.is_empty();
 
-    let btn_cals =
+    let btn_cals = tooltip(
         button(container(icon::icon(icon::CALENDARS_HEADER).size(18)).center_x(Length::Fill))
             .padding(8)
             .width(Length::Fill)
@@ -949,7 +949,12 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             } else {
                 button::text
             })
-            .on_press(Message::SidebarModeChanged(SidebarMode::Calendars));
+            .on_press(Message::SidebarModeChanged(SidebarMode::Calendars)),
+        text(format!("{} (1)", rust_i18n::t!("calendars"))).size(12),
+        tooltip::Position::Bottom,
+    )
+    .style(tooltip_style)
+    .delay(Duration::from_millis(700));
 
     let tag_icon = {
         if is_tag_error && app.sidebar_mode != SidebarMode::Categories {
@@ -960,15 +965,21 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             icon::icon(icon::TAGS_HEADER).size(18)
         }
     };
-    let btn_tags = button(container(tag_icon).center_x(Length::Fill))
-        .padding(8)
-        .width(Length::Fill)
-        .style(if app.sidebar_mode == SidebarMode::Categories {
-            active_style
-        } else {
-            button::text
-        })
-        .on_press(Message::SidebarModeChanged(SidebarMode::Categories));
+    let btn_tags = tooltip(
+        button(container(tag_icon).center_x(Length::Fill))
+            .padding(8)
+            .width(Length::Fill)
+            .style(if app.sidebar_mode == SidebarMode::Categories {
+                active_style
+            } else {
+                button::text
+            })
+            .on_press(Message::SidebarModeChanged(SidebarMode::Categories)),
+        text(format!("{} (2)", rust_i18n::t!("tags"))).size(12),
+        tooltip::Position::Bottom,
+    )
+    .style(tooltip_style)
+    .delay(Duration::from_millis(700));
 
     let loc_icon = {
         if is_loc_error && app.sidebar_mode != SidebarMode::Locations {
@@ -979,15 +990,21 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             icon::icon(app.location_tab_icon).size(18)
         }
     };
-    let btn_locs = button(container(loc_icon).center_x(Length::Fill))
-        .padding(8)
-        .width(Length::Fill)
-        .style(if app.sidebar_mode == SidebarMode::Locations {
-            active_style
-        } else {
-            button::text
-        })
-        .on_press(Message::SidebarModeChanged(SidebarMode::Locations));
+    let btn_locs = tooltip(
+        button(container(loc_icon).center_x(Length::Fill))
+            .padding(8)
+            .width(Length::Fill)
+            .style(if app.sidebar_mode == SidebarMode::Locations {
+                active_style
+            } else {
+                button::text
+            })
+            .on_press(Message::SidebarModeChanged(SidebarMode::Locations)),
+        text(format!("{} (3)", rust_i18n::t!("locations"))).size(12),
+        tooltip::Position::Bottom,
+    )
+    .style(tooltip_style)
+    .delay(Duration::from_millis(700));
 
     let tabs = row![btn_cals, btn_tags, btn_locs].spacing(2);
 
@@ -1034,21 +1051,21 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     let footer = row![
         tooltip(
             settings_btn,
-            text(rust_i18n::t!("settings")).size(12),
+            text(format!("{} (Ctrl+,)", rust_i18n::t!("settings"))).size(12),
             tooltip::Position::Top
         )
         .style(tooltip_style)
         .delay(Duration::from_millis(700)),
         tooltip(
             keyboard_btn,
-            text(rust_i18n::t!("keyboard_tooltip")).size(12),
+            text(format!("{} (?)", rust_i18n::t!("keyboard_shortcuts"))).size(12),
             tooltip::Position::Top
         )
         .style(tooltip_style)
         .delay(Duration::from_millis(700)),
         tooltip(
             help_btn,
-            text(rust_i18n::t!("syntax_tooltip")).size(12),
+            text(format!("{} (?)", rust_i18n::t!("syntax_help"))).size(12),
             tooltip::Position::Top
         )
         .style(tooltip_style)
@@ -1195,7 +1212,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     title_group = title_group.push(
         tooltip(
             title_btn,
-            text(rust_i18n::t!("support_clear_filters")),
+            text(format!("{} (*)", rust_i18n::t!("support_clear_filters"))),
             tooltip::Position::Bottom,
         )
         .style(tooltip_style)
@@ -1362,7 +1379,18 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         search_input_container
     };
 
-    search_row = search_row.push(clear_btn);
+    search_row = search_row.push(if is_search_empty {
+        Element::from(clear_btn)
+    } else {
+        tooltip(
+            clear_btn,
+            text("Clear (*)").size(12),
+            tooltip::Position::Bottom,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700))
+        .into()
+    });
     search_row = search_row.push(final_search_widget);
 
     let window_controls = if app.force_ssd {

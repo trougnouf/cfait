@@ -86,11 +86,15 @@ pub fn view_help<'a>(tab: HelpTab, app: &'a GuiApp) -> Element<'a, Message> {
             .width(Length::Fixed(84.0))
             .height(Length::Fixed(32.0))
             .content_fit(iced::ContentFit::Contain),
-        text(rust_i18n::t!("help_about"))
-            .size(28)
-            .style(|theme: &Theme| text::Style {
-                color: Some(theme.extended_palette().background.base.text)
-            }),
+        text(format!(
+            "{}{}",
+            rust_i18n::t!("help"),
+            rust_i18n::t!("help_tab_to_switch")
+        ))
+        .size(28)
+        .style(|theme: &Theme| text::Style {
+            color: Some(theme.extended_palette().background.base.text)
+        }),
         Space::new().width(Length::Fill)
     ]
     .spacing(15)

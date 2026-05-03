@@ -27,10 +27,16 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
         }));
     }
 
-    if app.state == AppState::Active {
-        // Use a static function to handle hotkeys so we don't capture `app`
-        // This avoids the "expected fn pointer, found closure" error
-        subs.push(event::listen_with(handle_hotkey));
+    match app.state {
+        AppState::Active => {
+            // Use a static function to handle hotkeys so we don't capture `app`
+            // This avoids the "expected fn pointer, found closure" error
+            subs.push(event::listen_with(handle_hotkey));
+        }
+        AppState::Help(_, _) => {
+            subs.push(event::listen_with(handle_help_hotkey));
+        }
+        _ => {}
     }
 
     // Track window metrics (Size and Cursor Position)
@@ -68,6 +74,38 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
     }
 
     Subscription::batch(subs)
+}
+
+fn handle_help_hotkey(
+    evt: iced::Event,
+    status: iced::event::Status,
+    _id: iced::window::Id,
+) -> Option<Message> {
+    if status == iced::event::Status::Captured {
+        return None;
+    }
+    if let iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = evt {
+        match key.as_ref() {
+            keyboard::Key::Named(keyboard::key::Named::Escape) => Some(Message::CloseHelp),
+            keyboard::Key::Named(keyboard::key::Named::Tab) => {
+                Some(Message::SwitchHelpTab(!modifiers.shift()))
+            }
+            keyboard::Key::Named(keyboard::key::Named::ArrowRight) => {
+                Some(Message::SwitchHelpTab(true))
+            }
+            keyboard::Key::Named(keyboard::key::Named::ArrowLeft) => {
+                Some(Message::SwitchHelpTab(false))
+            }
+            keyboard::Key::Character(s) if s == "q" || s == "?" || s == "/" => {
+                Some(Message::CloseHelp)
+            }
+            keyboard::Key::Character(s) if s == "l" => Some(Message::SwitchHelpTab(true)),
+            keyboard::Key::Character(s) if s == "h" => Some(Message::SwitchHelpTab(false)),
+            _ => None,
+        }
+    } else {
+        None
+    }
 }
 
 fn handle_hotkey(
@@ -121,6 +159,8 @@ fn handle_hotkey(
                 } else if s == "e" {
                     // Catch Ctrl+E while typing in the main input bar to expand!
                     return Some(Message::StartCreateWithDescription);
+                } else if s == "," {
+                    return Some(Message::OpenSettings);
                 }
             }
         }
@@ -183,12 +223,14 @@ fn handle_hotkey(
                     ("w", false) => Some(Message::ToggleQuickFilter),
                     ("r", false) => Some(Message::Refresh),
                     ("r", true) => Some(Message::JumpToRandomTask),
+                    ("/", false) => Some(Message::FocusSearch),
+                    ("/", true) => Some(Message::OpenHelp(crate::help::HelpTab::Shortcuts)),
+                    ("?", _) => Some(Message::OpenHelp(crate::help::HelpTab::Shortcuts)),
                     // Fallback to match exact char for symbols and numbers
                     _ => match s {
                         "1" => Some(Message::SidebarModeChanged(SidebarMode::Calendars)),
                         "2" => Some(Message::SidebarModeChanged(SidebarMode::Categories)),
                         "3" => Some(Message::SidebarModeChanged(SidebarMode::Locations)),
-                        "/" | "?" => Some(Message::FocusSearch),
                         "*" => Some(Message::ClearAllFilters),
                         "+" | "=" => Some(Message::ChangePrioritySelected(1)),
                         "-" => Some(Message::ChangePrioritySelected(-1)),

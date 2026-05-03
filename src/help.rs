@@ -316,6 +316,11 @@ pub fn get_shortcuts_help() -> Vec<HelpSection> {
                     desc: rust_i18n::t!("jump_to_random_task").to_string(),
                     example: "".to_string(),
                 },
+                HelpItem {
+                    keys: "Ctrl + ,".to_string(),
+                    desc: rust_i18n::t!("settings").to_string(),
+                    example: "".to_string(),
+                },
             ],
         },
         HelpSection {

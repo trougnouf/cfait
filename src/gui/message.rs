@@ -131,6 +131,7 @@ pub enum Message {
     TabPressed(bool),
     OpenHelp(crate::help::HelpTab),
     CloseHelp,
+    SwitchHelpTab(bool),
     // Virtual group toggles (expand/collapse) for completed/cancelled grouping
     ToggleDoneGroup(String),
     ToggleTreeCollapse(String),

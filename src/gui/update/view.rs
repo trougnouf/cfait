@@ -450,6 +450,25 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.state = AppState::Active;
             Task::none()
         }
+        Message::SwitchHelpTab(forward) => {
+            if let AppState::Help(current_tab, icon_choice) = app.state {
+                let next_tab = if forward {
+                    match current_tab {
+                        crate::help::HelpTab::Syntax => crate::help::HelpTab::Shortcuts,
+                        crate::help::HelpTab::Shortcuts => crate::help::HelpTab::About,
+                        crate::help::HelpTab::About => crate::help::HelpTab::Syntax,
+                    }
+                } else {
+                    match current_tab {
+                        crate::help::HelpTab::Syntax => crate::help::HelpTab::About,
+                        crate::help::HelpTab::Shortcuts => crate::help::HelpTab::Syntax,
+                        crate::help::HelpTab::About => crate::help::HelpTab::Shortcuts,
+                    }
+                };
+                app.state = AppState::Help(next_tab, icon_choice);
+            }
+            Task::none()
+        }
         Message::WindowDragged => window::latest().then(|id| {
             if let Some(id) = id {
                 window::drag(id)
