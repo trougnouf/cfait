@@ -99,8 +99,8 @@ fn handle_help_hotkey(
             keyboard::Key::Character(s) if s == "q" || s == "?" || s == "/" => {
                 Some(Message::CloseHelp)
             }
-            keyboard::Key::Character(s) if s == "l" => Some(Message::SwitchHelpTab(true)),
-            keyboard::Key::Character(s) if s == "h" => Some(Message::SwitchHelpTab(false)),
+            keyboard::Key::Character("l") => Some(Message::SwitchHelpTab(true)),
+            keyboard::Key::Character("h") => Some(Message::SwitchHelpTab(false)),
             _ => None,
         }
     } else {
