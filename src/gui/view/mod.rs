@@ -1381,7 +1381,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     } else {
         tooltip(
             clear_btn,
-            text("Clear (*)").size(12),
+            text("Clear (Esc)").size(12),
             tooltip::Position::Bottom,
         )
         .style(tooltip_style)
@@ -1803,12 +1803,25 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
 
         let desc_container = container(scrollable_desc).max_height(max_desc_height);
 
-        let cancel_btn = iced::widget::button(text(rust_i18n::t!("cancel")).size(16))
-            .style(iced::widget::button::secondary)
-            .on_press(Message::CancelEdit);
-        let save_btn = iced::widget::button(text(rust_i18n::t!("save")).size(16))
-            .style(iced::widget::button::primary)
-            .on_press(Message::SubmitTask);
+        let cancel_btn = tooltip(
+            iced::widget::button(text(rust_i18n::t!("cancel")).size(16))
+                .style(iced::widget::button::secondary)
+                .on_press(Message::CancelEdit),
+            text("Cancel (Esc)").size(12),
+            tooltip::Position::Top,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700));
+
+        let save_btn = tooltip(
+            iced::widget::button(text(rust_i18n::t!("save")).size(16))
+                .style(iced::widget::button::primary)
+                .on_press(Message::SubmitTask),
+            text("Save (Ctrl+S)").size(12),
+            tooltip::Position::Top,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700));
 
         let header_label = if app.creating_with_desc {
             rust_i18n::t!("mode_create")

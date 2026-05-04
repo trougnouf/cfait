@@ -26,6 +26,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let text_editor::Action::Edit(text_editor::Edit::Enter) = action {
                 return handle_submit(app);
             }
+            // Safely intercept 'Tab' insertions so normal navigation takes over.
+            if let text_editor::Action::Edit(text_editor::Edit::Insert('\t')) = action {
+                return Task::none();
+            }
             app.input_value.perform(action);
             Task::none()
         }
@@ -288,6 +292,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some(selected) = &app.selected_uid
             {
                 return handle(app, Message::AddRelatedTo(selected.clone()));
+            }
+            Task::none()
+        }
+
+        Message::KeyboardOpenContextMenu => {
+            if let Some(uid) = &app.selected_uid {
+                return crate::gui::update::view::handle(
+                    app,
+                    Message::OpenContextMenu(uid.clone(), true),
+                );
             }
             Task::none()
         }
@@ -871,6 +885,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 action
             {
                 return handle(app, Message::SubmitSession);
+            }
+            if let iced::widget::text_editor::Action::Edit(
+                iced::widget::text_editor::Edit::Insert('\t'),
+            ) = action
+            {
+                return Task::none();
             }
             app.session_input.perform(action);
             Task::none()

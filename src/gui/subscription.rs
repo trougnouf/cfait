@@ -149,15 +149,16 @@ fn handle_hotkey(
             if *key == keyboard::Key::Named(Named::Escape) {
                 return Some(Message::EscCaptured);
             }
+            if *key == keyboard::Key::Named(Named::Tab) {
+                return Some(Message::TabPressed(modifiers.shift()));
+            }
             let is_cmd = modifiers.control() || modifiers.command();
             if is_cmd && let keyboard::Key::Character(s) = key.as_ref() {
-                if s == "s" {
-                    return Some(Message::SubmitTask);
-                } else if s == "e" {
-                    // Catch Ctrl+E while typing in the main input bar to expand!
-                    return Some(Message::StartCreateWithDescription);
-                } else if s == "," {
-                    return Some(Message::OpenSettings);
+                match s {
+                    "s" => return Some(Message::SubmitTask),
+                    "e" => return Some(Message::StartCreateWithDescription),
+                    "," => return Some(Message::OpenSettings),
+                    _ => {}
                 }
             }
         }
@@ -177,6 +178,7 @@ fn handle_hotkey(
                     "d" => return Some(Message::KeyboardDuplicateTask),
                     "s" => return Some(Message::SubmitTask),
                     "e" => return Some(Message::StartCreateWithDescription), // Fallback if not focused
+                    "," => return Some(Message::OpenSettings),
                     _ => {}
                 }
             } else if let keyboard::Key::Named(Named::Delete) = key.as_ref() {
@@ -209,6 +211,7 @@ fn handle_hotkey(
                     ("t", true) => Some(Message::KeyboardToggleSessions),
                     ("b", false) => Some(Message::KeyboardAddDependency),
                     ("l", false) => Some(Message::KeyboardAddRelation),
+                    ("l", true) => Some(Message::KeyboardOpenContextMenu),
                     ("g", false) => Some(Message::KeyboardOpenLocations),
                     ("o", false) => Some(Message::KeyboardOpenUrl),
                     ("a", false) => Some(Message::FocusInput),
@@ -249,6 +252,7 @@ fn handle_hotkey(
                 // Handled in is_cmd block for Ctrl+Delete, so here it's just Delete
                 Some(Message::DeleteSelected)
             }
+            keyboard::Key::Named(Named::Tab) => Some(Message::TabPressed(modifiers.shift())),
 
             _ => None,
         }

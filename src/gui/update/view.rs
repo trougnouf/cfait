@@ -120,6 +120,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::TabPressed(shift_held) => {
+            // Ignore Tab navigation if we are actively editing a description,
+            // allowing the Tab character to be inserted in the description editor instead.
+            if app.editing_uid.is_some() || app.creating_with_desc {
+                return Task::none();
+            }
+
             if shift_held {
                 operation::focus_previous()
             } else {
@@ -363,6 +369,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SearchChanged(action) => {
+            if let iced::widget::text_editor::Action::Edit(
+                iced::widget::text_editor::Edit::Insert('\t'),
+            ) = &action
+            {
+                return Task::none();
+            }
             app.search_value.perform(action);
 
             // Increment the debounce version

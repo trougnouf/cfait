@@ -42,14 +42,21 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     };
 
     let toggle_all = toggler(are_all_visible)
-        .label(format!("{} (*)", rust_i18n::t!("show_all")))
+        .label(rust_i18n::t!("show_all").to_string())
         .text_size(12)
         .text_alignment(iced::alignment::Horizontal::Left)
         .spacing(10)
         .width(Length::Fill)
         .on_toggle(Message::ToggleAllCalendars)
         .style(toggler_style);
-    let toggle_container = container(toggle_all).padding(5);
+
+    let toggle_container = tooltip(
+        container(toggle_all).padding(5),
+        text(format!("{} (*)", rust_i18n::t!("show_all"))).size(12),
+        tooltip::Position::Bottom,
+    )
+    .style(tooltip_style)
+    .delay(Duration::from_millis(700));
 
     let list = column(
         visible_calendars

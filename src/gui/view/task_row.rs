@@ -660,13 +660,13 @@ pub fn view_task_row<'a>(
                         icon::icon(icon::MAP_LOCATION_DOT).size(14).into(),
                         Message::OpenCoordinates(task.uid.clone()),
                         0,
-                        rust_i18n::t!("open_coordinates").to_string(),
+                        format!("{} (g)", rust_i18n::t!("open_coordinates")),
                     ),
                     TaskAction::OpenLocations => (
                         icon::icon(icon::MAP_MARKER_MULTIPLE).size(14).into(),
                         Message::OpenLocations(task.uid.clone()),
                         0,
-                        rust_i18n::t!("action_open_locations").to_string(),
+                        format!("{} (g)", rust_i18n::t!("action_open_locations")),
                     ),
                     TaskAction::OpenUrl => (
                         icon::icon(icon::URL_CHECK).size(14).into(),
@@ -1134,9 +1134,18 @@ pub fn view_task_row<'a>(
             .width(Length::Fill)
             .height(Length::Shrink);
 
+            let status_btn_element: Element<'a, Message> = tooltip(
+                status_btn,
+                text("Toggle (Space)").size(12),
+                tooltip::Position::Top,
+            )
+            .style(tooltip_style)
+            .delay(Duration::from_millis(700))
+            .into();
+
             let row_main = row![
                 indent,
-                status_btn,
+                status_btn_element,
                 main_text_col,
                 date_and_alarm_section,
                 actions
@@ -1389,18 +1398,19 @@ pub fn view_task_row<'a>(
                     );
                     for (related_uid, mut related_name) in incoming_related {
                         if let Some(rel_task) = app.store.get_task_ref(&related_uid)
-                            && rel_task.status.is_done() {
-                                if let Some(comp_date) = rel_task.completion_date() {
-                                    let local = comp_date.with_timezone(&chrono::Local);
-                                    related_name = format!(
-                                        "{} (✓ {})",
-                                        related_name,
-                                        local.format("%Y-%m-%d %H:%M")
-                                    );
-                                } else {
-                                    related_name = format!("{} (✓)", related_name);
-                                }
+                            && rel_task.status.is_done()
+                        {
+                            if let Some(comp_date) = rel_task.completion_date() {
+                                let local = comp_date.with_timezone(&chrono::Local);
+                                related_name = format!(
+                                    "{} (✓ {})",
+                                    related_name,
+                                    local.format("%Y-%m-%d %H:%M")
+                                );
+                            } else {
+                                related_name = format!("{} (✓)", related_name);
                             }
+                        }
                         let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
                             .style(button::danger)
                             .padding(2)

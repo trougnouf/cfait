@@ -93,6 +93,7 @@ pub enum Message {
     KeyboardDeleteTaskTree,     // 'Ctrl+Delete' logic
     KeyboardOpenLocations,      // 'g' logic
     KeyboardOpenUrl,            // 'o' logic
+    KeyboardOpenContextMenu,    // 'L' logic
     DuplicateTask(String),      // Used by Yank bar button & hotkey
     DeleteTaskTree(String),
     ToggleActiveSelected,       // 's' logic
