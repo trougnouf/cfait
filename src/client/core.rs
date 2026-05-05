@@ -405,12 +405,12 @@ impl RustyClient {
                 .ok()
                 .and_then(|r| r.value);
 
-            let comps = self
+            let (comps, can_write) = self
                 .get_supported_components(&col.href)
                 .await
-                .unwrap_or_default();
+                .unwrap_or_else(|_| (Vec::new(), true));
 
-            if comps.iter().any(|c| c.eq_ignore_ascii_case("VTODO")) {
+            if can_write && comps.iter().any(|c| c.eq_ignore_ascii_case("VTODO")) {
                 calendars.push(CalendarListEntry {
                     name,
                     href: col.href,
@@ -493,23 +493,46 @@ impl RustyClient {
     pub async fn get_supported_components(
         &self,
         calendar_href: &str,
-    ) -> anyhow::Result<Vec<String>> {
+    ) -> anyhow::Result<(Vec<String>, bool)> {
         if let Some(_client) = &self.client {
+            let privilege_set_prop = PropertyName::new("DAV:", "current-user-privilege-set");
             let req = Propfind::new(calendar_href)
-                .with_properties(&[&names::SUPPORTED_CALENDAR_COMPONENT_SET])
+                .with_properties(&[
+                    &names::SUPPORTED_CALENDAR_COMPONENT_SET,
+                    &privilege_set_prop,
+                ])
                 .with_depth(libdav::Depth::Zero);
             let response = self.client.as_ref().unwrap().request(req).await?;
             let xml_str = std::str::from_utf8(&response.body)?;
             let doc = Document::parse(xml_str)?;
             let mut components = Vec::new();
+            let mut can_write = false;
+            let mut has_privilege_set = false;
+
             for node in doc.descendants() {
                 if node.tag_name().name().eq_ignore_ascii_case("comp")
                     && let Some(name) = node.attribute("name")
                 {
                     components.push(name.to_uppercase());
                 }
+                if node
+                    .tag_name()
+                    .name()
+                    .eq_ignore_ascii_case("current-user-privilege-set")
+                {
+                    has_privilege_set = true;
+                }
+                if node.tag_name().name().eq_ignore_ascii_case("write")
+                    || node.tag_name().name().eq_ignore_ascii_case("write-content")
+                    || node.tag_name().name().eq_ignore_ascii_case("bind")
+                {
+                    can_write = true;
+                }
             }
-            Ok(components)
+            if !has_privilege_set {
+                can_write = true;
+            }
+            Ok((components, can_write))
         } else {
             Err(anyhow::anyhow!("Offline"))
         }

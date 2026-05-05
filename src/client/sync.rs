@@ -177,6 +177,8 @@ impl RustyClient {
             Err(e) => {
                 let msg = format!("{:?}", e);
                 if msg.contains("403 Forbidden")
+                    || msg.contains("405 Method Not Allowed")
+                    || msg.contains("405")
                     || msg.contains("400 Bad Request")
                     || msg.contains("415 Unsupported Media Type")
                     || msg.contains("404 Not Found")
@@ -296,6 +298,8 @@ impl RustyClient {
                         )),
                     )
                 } else if msg.contains("403 Forbidden")
+                    || msg.contains("405 Method Not Allowed")
+                    || msg.contains("405")
                     || msg.contains("400 Bad Request")
                     || msg.contains("415 Unsupported Media Type")
                     || msg.contains("409 Conflict")
@@ -365,6 +369,8 @@ impl RustyClient {
             Err(e) => {
                 let msg = format!("{:?}", e);
                 if msg.contains("403 Forbidden")
+                    || msg.contains("405 Method Not Allowed")
+                    || msg.contains("405")
                     || msg.contains("400 Bad Request")
                     || msg.contains("415 Unsupported Media Type")
                     || msg.contains("409 Conflict")
@@ -507,7 +513,7 @@ impl RustyClient {
 
             let step_result = if let Some(err) = test_forced_err {
                 let err_msg = err.to_string();
-                if err_msg.contains("400") || err_msg.contains("403") || err_msg.contains("415") {
+                if err_msg.contains("400") || err_msg.contains("403") || err_msg.contains("405") || err_msg.contains("415") {
                     Ok(StepResult::new(StepOutcome::RecoveryNeeded(err_msg)))
                 } else if err_msg.contains("413") {
                     Ok(StepResult::new(StepOutcome::Discard).with_warning(err_msg))
