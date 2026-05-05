@@ -1,0 +1,381 @@
+## [0.5.9] - 2026-05-05
+
+### 🚀 Features
+
+- *(sorting)* If a task depends on another task, the due date(time) of the blocking task is the sooner of its own or that of the task it blocks
+- Handle more ISO 8601 date formats (YYYYMMDD and YYYY-MM) as well as YYYY alone ( https://codeberg.org/trougnouf/cfait/issues/38 )
+- *(parser)* Allow decimal degrees with cardinal directions geo-coordinates format (e.g. "geo:50.13120° N, 4.50010° E", default format in OsmAnd~)
+- *(android)* Add "geo:here" syntax to map current geo-coordinates
+- Support sub(sub*) tasks creation and descriptions in initial task creation dialog using markdown syntax ( https://github.com/trougnouf/cfait/issues/22 )
+- *(android)* Support sub(sub*) tasks creation and descriptions in initial task creation dialog usin markdown syntax ( https://github.com/trougnouf/cfait/issues/22 )
+- Log to file (CLI, GUI, and TUI) and to stderr (CLI and TUI) ( https://codeberg.org/trougnouf/cfait/issues/48 )
+- *(android)* Log to file which is part of the exportable debug data ( https://codeberg.org/trougnouf/cfait/issues/48 )
+- Build Flatpak and Windows executables in rolling release
+- *(android)* Add delete task tree, duplicate and promote actions (TUI/GUI parity)
+- *(android)* Add haptic feedback
+- Open locations (GPX) action which opens all sub-tasks locations on a map (Android, GUI, TUI)
+- Improve create task with details and sub-tasks (Ctrl+e) experience (GUI, TUI)
+- *(gui)* Add Open URL action to the customizable actions and version the settings
+- *(gui)* Clickable jump to parent task
+- Add a collapse/expand button for task trees
+- Add work mode / is:ready "w" keyboard shortcut and button (feature requested by Geoffrey Frogeye, ﻿T[]M_S∆W, Martin Stut)
+- Use OS-native keyring instead of plaintext password ( https://github.com/trougnouf/cfait/issues/9 , https://codeberg.org/trougnouf/cfait/issues/33 )
+- Implement 'z' tree fold shortcut in GUI and update help documentation
+- Implement robust history (custom) tagging and display completion info for related tasks
+- *(gui)* Add missing keyboard shortcuts (TUI parity)
+- *(gui)* Add keyboard shortcuts and document them on hover, use tab to switch from search/add to task list
+- Filter read-only collections and handle 405 errors via task recovery ( https://github.com/trougnouf/cfait/issues/11 )
+- Catch unrecoverable errors with error codes only ( https://github.com/trougnouf/cfait/issues/11 )
+
+### 🐛 Bug Fixes
+
+- Support geo coordinates in alias and fix uncategorized tasks filtering ( https://codeberg.org/trougnouf/cfait/issues/39 and https://codeberg.org/trougnouf/cfait/issues/40 )
+- Fix recurence issues
+- Count sub-tags only once ( https://codeberg.org/trougnouf/cfait/issues/41 )
+- *(android)* Detect global locale if system is set to an untranslated regional variation (e.g. fr_FR -> fr, https://codeberg.org/trougnouf/cfait/issues/42 )
+- *(android)* Use strict CalDAV Content-Type and fix coroutine cancellation handling
+- *(Android)* Log sync errors, show journaled tasks in tasks list
+- *(sync)* Route 404/409 errors to local recovery and prevent infinite sync loops ( https://codeberg.org/trougnouf/cfait/issues/43 )
+- *(client)* Robust strip_host logic to fix URL matching collisions (journal_apply_move_removes_from_source_and_adds_to_target test failed on the CI but passed locally)
+- *(android)* Fix geo:here feature (request permission)
+- *(sync)* Enforce RFC 5545 compliance and resolve migration duplication ( https://codeberg.org/trougnouf/cfait/issues/43 )
+- *(model)* Restore RFC 5545 duration compliance rules for ICS serialization
+- *(ui)* Use (UID, Collection) identity to resolve disappearing tags and recovery tasks ( https://codeberg.org/trougnouf/cfait/issues/43 )
+- Fix search result context and restore cross-collection parent-child linking
+- *(gui)* Restore theme selection lost in 31fc410fedb80bf994fbd37c3d7d143afdb1bfbb ( https://github.com/trougnouf/cfait/issues/23 )
+- Catch and send all network exceptions to the logger ( https://codeberg.org/trougnouf/cfait/issues/48 ), mute iced, winit and wgpu libraries ( https://codeberg.org/trougnouf/cfait/issues/50 ), increase channel size from 10 to 100
+- Connection timeouts and sync race conditions via transactional journal processing ( https://github.com/trougnouf/cfait/issues/25 )
+- *(gui)* Fix flickering help icon
+- *(tui)* Preserve create flow and add remote-only mode
+- *(tui)* Create with alias
+- *(gui)* Fix flickering help icon
+- *(gui)* Prevent timeout from unseating the active application
+- Ensure fs sync on atomic writes and DRY on datetime and duration utilities
+- Decouple UI mutations from background sync via transactional diffing and fix tree soft-delete ( https://github.com/trougnouf/cfait/issues/25 )
+- *(gui)* Clear remote metadata on remote-to-local moves and optimize worker batching
+- *(gui)* Stabilize widget tree reconciliation
+- Case-insensitive RELATED-TO parsing and auto-heal mislinked sub-tasks
+- *(android)* Fix GPX file export
+- Fallback to create+delete if move failed ( https://codeberg.org/trougnouf/cfait/issues/54 )
+- Resolve CalDAV connection timeouts and task state reversion race conditions ( https://github.com/trougnouf/cfait/issues/25 )
+- *(keyring)* Initialize ndk-context via JNI to resolve Android startup crash
+- *(android)* Properly initialize NDK context via global JNI reference
+- *(gui)* Remote task creation was mapped to update action ( https://github.com/trougnouf/cfait/issues/27 )
+- Prevent recurring history snapshots from being misparsed as sub-tasks
+- Properly randomize "Support development" icon
+- Merge description tags from smart input with editor content instead of overwriting it
+- *(windows)* Correct path to cfait.ico ( https://github.com/trougnouf/cfait/discussions/28 , https://github.com/trougnouf/cfait/issues/24 )
+- Detect and reject cyclic parent/sub-tasks dependencies ( https://codeberg.org/trougnouf/cfait/issues/56 )
+- Improve CalDAV compatibility, URL encoding, and sync reliability ( https://github.com/trougnouf/cfait/issues/25 )
+- Robust CalDAV path reconstruction for proxies and safe character encoding
+- *(flatpak)* Add keyring support
+- Debounce toggling, add startup timeouts, strict error matching ( https://github.com/trougnouf/cfait/issues/25 )
+- *(flatpak)* Fix flatpak keyring using oo7
+
+### 💼 Other
+
+- Added translation using Weblate (Russian)
+- Added translation using Weblate (Russian)
+- Added translation using Weblate (Russian)
+- Translated using Weblate (Russian)
+
+Currently translated at 19.1% (75 of 391 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
+- Translated using Weblate (Russian)
+
+Currently translated at 31.2% (122 of 391 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+- Translated using Weblate (French)
+
+Currently translated at 100.0% (391 of 391 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 100.0% (391 of 391 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (391 of 391 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Translated using Weblate (French)
+
+Currently translated at 99.4% (390 of 392 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 100.0% (392 of 392 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (German)
+
+Currently translated at 93.8% (368 of 392 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (392 of 392 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Translated using Weblate (Italian)
+
+Currently translated at 93.8% (368 of 392 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
+- Translated using Weblate (Dutch)
+
+Currently translated at 7.6% (30 of 392 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
+- Translated using Weblate (Russian)
+
+Currently translated at 30.8% (121 of 392 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+- Translated using Weblate (French)
+
+Currently translated at 99.7% (391 of 392 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
+- Added translation using Weblate (Czech)
+- Added translation using Weblate (Czech)
+- Added translation using Weblate (Czech)
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (398 of 398 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 100.0% (398 of 398 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Merge branch 'master' into master
+- Merge pull request '[FEATURE] add online only mode and some fixes' (#51) from d1diiego/cfait:master into master
+
+Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/51
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 100.0% (399 of 399 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (399 of 399 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+- Translated using Weblate (French)
+
+Currently translated at 100.0% (400 of 400 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (400 of 400 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (400 of 400 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (404 of 404 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 100.0% (404 of 404 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (404 of 404 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Translated using Weblate (French)
+
+Currently translated at 100.0% (423 of 423 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 100.0% (423 of 423 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (423 of 423 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (423 of 423 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+- Translated using Weblate (Spanish)
+
+Currently translated at 94.7% (447 of 472 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Translated using Weblate (Spanish)
+
+Currently translated at 99.5% (468 of 470 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Translated using Weblate (French)
+
+Currently translated at 89.5% (421 of 470 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (470 of 470 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Translated using Weblate (French)
+
+Currently translated at 100.0% (470 of 470 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
+- Added translation using Weblate (French)
+- Translated using Weblate (French) - restore fr description by mrjoops
+
+Currently translated at 100.0% (1 of 1 strings)
+
+Translation: Cfait/Android fastlane long description
+Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-long-description/fr/
+- Translated using Weblate (French)
+
+Currently translated at 99.1% (475 of 479 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 100.0% (479 of 479 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (479 of 479 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+
+### 🚜 Refactor
+
+- Remove redundant Tokio runtime in GUI to fix UI thread blocking
+- Remove VirtualState from Task model and decouple UI rendering lists
+- Better error handling with anyhow
+- Better error handling with anyhow (up to GUI boundary)
+- *(gui)* Migrate GUI to debounced background actor to eliminate store cloning, prevent network spam, and ensure safe tree restoration
+
+### 📚 Documentation
+
+- Explicitly mention the dependencies, set rfd to use xdg-portal s.t. gtk3 is not required ( https://codeberg.org/trougnouf/cfait/issues/44 )
+- *(pkg)* Add vulkan to requirements
+- Clarify dependencies and use PKGBUILD as ground-truth ( https://codeberg.org/trougnouf/cfait/issues/44 and https://codeberg.org/trougnouf/cfait/issues/46 )
+- Clarify dependencies ( https://codeberg.org/trougnouf/cfait/issues/44 and https://codeberg.org/trougnouf/cfait/issues/46 )
+- Rename Advanced settings to More settings ( https://codeberg.org/trougnouf/cfait/issues/52 )
+- Begin refactoring the built-in help
+- Refactor built-in help
+- Improve built-in help
+- Make hardcoded strings translatable
+- Update French translations
+- *(i18n)* Fix missing and hardcoded strings
+- *(android)* Remove keyboard shortcuts from Android built-in help
+
+### ⚡ Performance
+
+- MULTIGET parallel chunking optimization ( https://codeberg.org/trougnouf/cfait/issues/49 )
+- Prevent stack overflow in the alias validation
+- *(gui)* Debounce the search bar, make config saving asynchronous, incremental store indexing
+- *(gui)* Keyed columns
+- *(gui)* Fix performance and D-Bus spam by using cached config values
+
+### 🎨 Styling
+
+- Change editor expansion icon (Android, GUI)
+- *(android)* Make the help button more obvious
+- *(gui)* More accurate GUI scroll-to-selected
+- *(gui)* More accurate GUI scroll-to-selected
+- Invert random task and work mode button position (Android, GUI)
+
+### 🧪 Testing
+
+- *(tui)* Add test_tui_creating_task_and_alias_simultaneously
+- Adapt sync_create_conflicts to MOVE create+delete fallback
+
+### ⚙️ Miscellaneous Tasks
+
+- Bump up chache and local store version (required with 4adb37573ee3094a9bf1b772689d3e410105a6e9 )
+- Remove parent_map from search
+- Update rust toolchain to 1.95.0
+- Fix CI indentation
+- Update license to GPL-3.0-or-later and specify it in all source files ( https://codeberg.org/trougnouf/cfait/issues/47 )
+- Change CI permissions for flatpak build
+- Rename gui to cfait-gui ( https://codeberg.org/trougnouf/cfait/issues/45 )
+- Fix CI flatpak build
+- Fix CI flatpak build
+- Fix CI flatpak build
+- Lint
+- Remove PULL.md from repository
+- Fix CI rolling release upload
+- Fix CI per-commit upload
+- Ensure recurrence engine handles TZID parameter
+- Make storage more robust to manual local store changes
+- *(android)* Fix missing strings and icon compilation error
+- Lint
+- Fix failing test
+- Fix Android compilation issue, move hardcoded strings to en.json
+- Remove duplicate strings
+- Remove unused translated strings (previously removed duplicates)
+- Fix failed test
+- Update rust-i18n and iced_aw crates
+- Lint
