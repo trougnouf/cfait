@@ -12,16 +12,25 @@ fun getCargoVersionInfo(): Pair<String, Int> {
     val cargoFile = File(project.rootDir.parentFile, "Cargo.toml")
     var version = "0.0.1"
     var code = 1
+    var inPackageSection = false
 
     if (cargoFile.exists()) {
         cargoFile.useLines { lines ->
             for (line in lines) {
                 val trimmed = line.trim()
-                // Parse Version String
-                if (trimmed.startsWith("version") && trimmed.contains("=")) {
+                // Track section headers
+                if (trimmed == "[package]") {
+                    inPackageSection = true
+                    continue
+                }
+                if (trimmed.startsWith("[") && trimmed != "[package]") {
+                    inPackageSection = false
+                }
+                // Parse Version String (only from [package] section)
+                if (inPackageSection && trimmed.startsWith("version") && trimmed.contains("=")) {
                     version = trimmed.split("=")[1].trim().replace("\"", "")
                 }
-                // Parse Version Code (New logic)
+                // Parse Version Code (only from [package.metadata.android] section)
                 if (trimmed.startsWith("version_code") && trimmed.contains("=")) {
                     val codeStr = trimmed.split("=")[1].trim()
                     code = codeStr.toIntOrNull() ?: 1
