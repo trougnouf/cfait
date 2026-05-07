@@ -59,6 +59,132 @@ async fn test_tui_create_preserves_existing_calendar_tasks() {
         .create_async()
         .await;
 
+    // Mocks for Refresh action
+    let _m_root_refresh = server
+        .mock("PROPFIND", "/")
+        .with_status(207)
+        .with_body(r#"<d:multistatus xmlns:d="DAV:">
+            <d:response>
+                <d:href>/</d:href>
+                <d:propstat>
+                    <d:prop>
+                        <d:current-user-principal><d:href>/principal/</d:href></d:current-user-principal>
+                    </d:prop>
+                    <d:status>HTTP/1.1 200 OK</d:status>
+                </d:propstat>
+            </d:response>
+        </d:multistatus>"#)
+        .create_async()
+        .await;
+
+    let _m_home_refresh = server
+        .mock("PROPFIND", "/principal/")
+        .with_status(207)
+        .with_body(r#"<d:multistatus xmlns:d="DAV:">
+            <d:response>
+                <d:href>/principal/</d:href>
+                <d:propstat>
+                    <d:prop>
+                        <c:calendar-home-set xmlns:c="urn:ietf:params:xml:ns:caldav"><d:href>/cal/</d:href></c:calendar-home-set>
+                    </d:prop>
+                    <d:status>HTTP/1.1 200 OK</d:status>
+                </d:propstat>
+            </d:response>
+        </d:multistatus>"#)
+        .create_async()
+        .await;
+
+    let _m_calendars_refresh = server
+        .mock("PROPFIND", "/cal/")
+        .with_status(207)
+        .with_body(r#"<d:multistatus xmlns:d="DAV:">
+            <d:response>
+                <d:href>/cal/</d:href>
+                <d:propstat>
+                    <d:prop>
+                        <d:resourcetype>
+                            <d:collection/>
+                            <c:calendar xmlns:c="urn:ietf:params:xml:ns:caldav"/>
+                        </d:resourcetype>
+                        <d:displayname>Remote</d:displayname>
+                    </d:prop>
+                    <d:status>HTTP/1.1 200 OK</d:status>
+                </d:propstat>
+            </d:response>
+        </d:multistatus>"#)
+        .create_async()
+        .await;
+
+    // Mock for get_supported_components during refresh
+    let _m_components_refresh = server
+        .mock("PROPFIND", "/cal/")
+        .with_status(207)
+        .with_body(r#"<d:multistatus xmlns:d="DAV:">
+            <d:response>
+                <d:href>/cal/</d:href>
+                <d:propstat>
+                    <d:prop>
+                        <c:supported-calendar-component-set xmlns:c="urn:ietf:params:xml:ns:caldav">
+                            <c:comp name="VTODO"/>
+                        </c:supported-calendar-component-set>
+                    </d:prop>
+                    <d:status>HTTP/1.1 200 OK</d:status>
+                </d:propstat>
+            </d:response>
+        </d:multistatus>"#)
+        .create_async()
+        .await;
+
+    let _m_tasks_refresh = server
+        .mock("PROPFIND", "/cal/")
+        .with_status(207)
+        .with_body(r#"<d:multistatus xmlns:d="DAV:">
+            <d:response>
+                <d:href>/cal/existing-task.ics</d:href>
+                <d:propstat>
+                    <d:prop>
+                        <d:getetag>"existing-etag"</d:getetag>
+                    </d:prop>
+                    <d:status>HTTP/1.1 200 OK</d:status>
+                </d:propstat>
+            </d:response>
+            <d:response>
+                <d:href>/cal/new-task.ics</d:href>
+                <d:propstat>
+                    <d:prop>
+                        <d:getetag>"new-etag"</d:getetag>
+                    </d:prop>
+                    <d:status>HTTP/1.1 200 OK</d:status>
+                </d:propstat>
+                </d:response>
+        </d:multistatus>"#)
+        .create_async()
+        .await;
+
+    let _m_report_refresh = server
+        .mock("REPORT", "/cal/")
+        .with_status(207)
+        .with_body(r#"<d:multistatus xmlns:d="DAV:" xmlns:cal="urn:ietf:params:xml:ns:caldav">
+            <d:response>
+                <d:href>/cal/new-task.ics</d:href>
+                <d:propstat>
+                    <d:prop>
+                        <d:getetag>"new-etag"</d:getetag>
+                        <cal:calendar-data>BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VTODO
+UID:new-task
+SUMMARY:New
+END:VTODO
+END:VCALENDAR</cal:calendar-data>
+                    </d:prop>
+                    <d:status>HTTP/1.1 200 OK</d:status>
+                </d:propstat>
+            </d:response>
+        </d:multistatus>"#)
+        .create_async()
+        .await;
+
     let (action_tx, action_rx) = mpsc::channel(10);
     let (event_tx, mut event_rx) = mpsc::channel(20);
 
@@ -98,30 +224,24 @@ async fn test_tui_create_preserves_existing_calendar_tasks() {
         .await
         .expect("Failed to send create action");
 
+    let mut synced_new_task = false;
+
+    // Wait for the status saved and task synced events
     loop {
         match tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv()).await {
-            Ok(Some(AppEvent::TasksLoaded(results))) => {
-                if let Some((_, tasks)) = results.iter().find(|(href, _)| href == &cal_href) {
-                    let uids: std::collections::HashSet<_> =
-                        tasks.iter().map(|t| t.uid.as_str()).collect();
-                    if uids.contains("existing-task") && uids.contains("new-task") {
-                        break;
-                    }
+            Ok(Some(AppEvent::TaskSynced { uid, .. })) => {
+                if uid == new_uid {
+                    synced_new_task = true;
                 }
+            }
+            Ok(Some(AppEvent::Status { key, .. })) if key == "status_saved" => {
+                assert!(synced_new_task, "New task should have been synced!");
+                break;
             }
             Ok(Some(AppEvent::Error(e))) => panic!("Actor returned error: {}", e),
-            Ok(Some(AppEvent::Status { key, .. })) => {
-                // Accept status updates, but continue waiting for TasksLoaded
-                if key == "status_saved" {
-                    // Status saved means the persist succeeded, but we still need TasksLoaded
-                    continue;
-                }
-                // For other statuses, continue waiting
-                continue;
-            }
             Ok(Some(_)) => continue,
-            Ok(None) => panic!("Actor channel closed during create flow"),
-            Err(_) => panic!("Timeout waiting for post-create task snapshot"),
+            Ok(None) => panic!("Actor channel closed"),
+            Err(_) => panic!("Timeout"),
         }
     }
 

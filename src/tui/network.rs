@@ -49,15 +49,6 @@ async fn merge_results_into_store(
     }
 }
 
-async fn snapshot_store(store: &Arc<Mutex<TaskStore>>) -> Vec<(String, Vec<crate::model::Task>)> {
-    let s = store.lock().await;
-    let mut results = Vec::new();
-    for (href, map) in &s.calendars {
-        results.push((href.clone(), map.values().cloned().collect()));
-    }
-    results
-}
-
 pub async fn run_network_actor(
     ctx: Arc<dyn AppContext>,
     config: NetworkActorConfig,
@@ -270,19 +261,45 @@ pub async fn run_network_actor(
             },
 
             Action::PersistBatch(actions) => {
+                // To keep the network actor's store in sync, apply actions here too
+                let mut s = store.lock().await;
+                for action in &actions {
+                    match action {
+                        crate::journal::Action::Create(t) | crate::journal::Action::Update(t) => {
+                            s.update_or_add_task(t.clone());
+                        }
+                        crate::journal::Action::Delete(t) => {
+                            let _ = s.delete_task(&t.uid);
+                        }
+                        crate::journal::Action::Move(t, target) => {
+                            let _ = s.move_task(&t.uid, target.clone());
+                        }
+                    }
+                }
+                drop(s);
+
                 let client_container = Arc::new(Mutex::new(Some(client.clone())));
                 let controller = TaskController::new(store.clone(), client_container, ctx.clone());
 
                 match controller.persist_changes(actions).await {
                     Ok((_warnings, synced_tasks)) => {
                         let mut s = store.lock().await;
-                        for sync_task in synced_tasks {
-                            s.update_or_add_task(sync_task);
+                        for sync_task in &synced_tasks {
+                            s.update_or_add_task(sync_task.clone());
                         }
                         drop(s);
 
-                        let results = snapshot_store(&store).await;
-                        let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
+                        // Send TaskSynced events instead of TasksLoaded to update metadata
+                        // without overwriting the UI's optimistic state!
+                        for sync_task in synced_tasks {
+                            let _ = event_tx.send(AppEvent::TaskSynced {
+                                uid: sync_task.uid,
+                                href: sync_task.href,
+                                etag: sync_task.etag,
+                                sequence: sync_task.sequence,
+                            }).await;
+                        }
+
                         let _ = event_tx
                             .send(AppEvent::Status {
                                 key: "status_saved".to_string(),
