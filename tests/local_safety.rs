@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for local safety.
 use cfait::context::TestContext;
 use cfait::journal::Journal;
 use cfait::model::Task;

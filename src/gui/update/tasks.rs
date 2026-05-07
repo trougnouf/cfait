@@ -1,24 +1,15 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/update/tasks.rs
-//
+// SPDX-License-Identifier: GPL-3.0-or-later
 // Simplified GUI task handlers: always dispatch controller actions via
-// `async_controller_dispatch` (which accepts the `Option<RustyClient>` and
-// routes offline vs online automatically). Removed offline helper functions
-// and unused imports to silence warnings after the TaskController refactor.
+// DispatchIntent which routes to the TaskController.
 
-use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{GuiApp, SidebarMode};
-use crate::gui::update::common::{
-    apply_alias_retroactively, refresh_filtered_tasks, save_config, scroll_to_selected,
-    scroll_to_selected_delayed,
-};
-use crate::journal::Action;
-use crate::model::{Task as TodoTask, extract_inline_aliases};
+use crate::gui::update::common;
+use crate::model::AppIntent;
 use chrono::NaiveTime;
 use iced::Task;
 use iced::widget::text_editor;
-use std::collections::HashMap;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
@@ -26,7 +17,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let text_editor::Action::Edit(text_editor::Edit::Enter) = action {
                 return handle_submit(app);
             }
-            // Safely intercept 'Tab' insertions so normal navigation takes over.
             if let text_editor::Action::Edit(text_editor::Edit::Insert('\t')) = action {
                 return Task::none();
             }
@@ -75,10 +65,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SubmitTask => handle_submit(app),
 
         Message::EditTaskStart(index) => {
-            if let Some(task) = app.get_task_at_index(index) {
-                let task_uid = task.uid.clone();
-                let task_summary = task.to_smart_string();
-                let task_description = task.description.clone();
+            let data = app.get_task_at_index(index).map(|t| {
+                (t.uid.clone(), t.to_smart_string(), t.description.clone())
+            });
+            if let Some((task_uid, task_summary, task_description)) = data {
 
                 app.input_value = text_editor::Content::with_text(&task_summary);
                 app.input_value
@@ -100,57 +90,44 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.creating_child_of = None;
             app.child_lock_active = false;
             app.creating_with_desc = false;
-            scroll_to_selected(app, true)
+            common::scroll_to_selected(app, true)
         }
 
         Message::ToggleTask(index, _) => {
-            if let Some(view_task) = app.get_task_at_index(index) {
-                // Prevent rapid-clicking and conflict copies while task is syncing
-                if view_task.etag == "pending_refresh" {
+            let data = app.get_task_at_index(index).map(|t| (t.uid.clone(), t.etag == "pending_refresh"));
+            if let Some((uid, is_pending)) = data {
+                if is_pending {
                     return Task::none();
                 }
-
-                let task_uid = view_task.uid.clone();
-                app.selected_uid = Some(task_uid.clone());
-
-                if let Some((primary, secondary, children)) = app.store.toggle_task(&task_uid) {
-                    refresh_filtered_tasks(app);
-                    let mut actions = Vec::new();
-
-                    if let Some(sec) = secondary {
-                        actions.push(Action::Create(primary));
-                        actions.push(Action::Update(sec));
-                    } else {
-                        actions.push(Action::Update(primary));
-                    }
-                    for child in children {
-                        actions.push(Action::Update(child));
-                    }
-
-                    if let Some(tx) = &app.bg_tx {
-                        let _ = tx.try_send(WorkerCommand::Batch(actions));
-                    }
-                }
+                common::dispatch_intent(
+                    app,
+                    AppIntent::ToggleTask { uid },
+                );
             }
             Task::none()
         }
 
         Message::ToggleDoneGroup(key) => {
-            if app.expanded_done_groups.contains(&key) {
-                app.expanded_done_groups.remove(&key);
+            if let Some(pos) = app
+                .session
+                .expanded_done_groups
+                .iter()
+                .position(|x| x == &key)
+            {
+                app.session.expanded_done_groups.remove(pos);
             } else {
-                app.expanded_done_groups.insert(key.clone());
+                app.session.expanded_done_groups.push(key);
             }
-            refresh_filtered_tasks(app);
+            common::refresh_filtered_tasks(app);
             Task::none()
         }
         Message::ToggleTreeCollapse(uid) => {
-            if app.collapsed_trees.contains(&uid) {
-                app.collapsed_trees.remove(&uid);
+            if let Some(pos) = app.session.collapsed_trees.iter().position(|x| x == &uid) {
+                app.session.collapsed_trees.remove(pos);
             } else {
-                app.collapsed_trees.insert(uid);
+                app.session.collapsed_trees.push(uid);
             }
-            refresh_filtered_tasks(app);
+            common::refresh_filtered_tasks(app);
             Task::none()
         }
         Message::ToggleHelpSection(title) => {
@@ -163,48 +140,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::DeleteTask(index) => {
-            if let Some(view_task) = app.get_task_at_index(index) {
-                let uid = view_task.uid.clone();
-                let is_already_trash = view_task.calendar_href == crate::storage::LOCAL_TRASH_HREF;
+            if let Some(uid) = app.get_task_at_index(index).map(|t| t.uid.clone()) {
                 app.selected_uid = Some(uid.clone());
-
-                let config = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
-                let mut actions = Vec::new();
-
-                if config.trash_retention_days == 0 || is_already_trash {
-                    if let Some((deleted, _)) = app.store.delete_task(&uid) {
-                        actions.push(Action::Delete(deleted));
-                    }
-                } else {
-                    app.store
-                        .calendars
-                        .entry(crate::storage::LOCAL_TRASH_HREF.to_string())
-                        .or_default();
-                    if let Some((orig, mut updated)) = app
-                        .store
-                        .move_task(&uid, crate::storage::LOCAL_TRASH_HREF.to_string())
-                    {
-                        let now_str = chrono::Utc::now().to_rfc3339();
-                        updated
-                            .unmapped_properties
-                            .retain(|p| p.key != "X-TRASHED-DATE");
-                        updated.unmapped_properties.push(crate::model::RawProperty {
-                            key: "X-TRASHED-DATE".to_string(),
-                            value: now_str,
-                            params: vec![],
-                        });
-                        app.store.update_or_add_task(updated.clone());
-                        actions.push(Action::Move(
-                            orig,
-                            crate::storage::LOCAL_TRASH_HREF.to_string(),
-                        ));
-                    }
-                }
-
-                refresh_filtered_tasks(app);
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(actions));
-                }
+                common::dispatch_intent(
+                    app,
+                    AppIntent::DeleteTask { uid },
+                );
             }
             Task::none()
         }
@@ -222,31 +163,31 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::PromoteSelected => {
-            if let Some(uid) = &app.selected_uid {
-                return handle(app, Message::RemoveParent(uid.clone()));
+            if let Some(uid) = app.selected_uid.clone() {
+                common::dispatch_intent(app, AppIntent::RemoveParent { uid });
             }
             Task::none()
         }
 
         Message::DemoteSelected => {
-            if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.find_task_index_by_uid(uid)
+            if let Some(uid) = app.selected_uid.clone()
+                && let Some(idx) = app.find_task_index_by_uid(&uid)
                 && idx > 0
             {
                 let parent_candidate_uid = app.get_task_at_index(idx - 1).unwrap().uid.clone();
-                if parent_candidate_uid != *uid {
+                if parent_candidate_uid != uid {
                     app.yanked_uid = Some(parent_candidate_uid);
-                    return handle(app, Message::MakeChild(uid.clone()));
+                    return handle(app, Message::MakeChild(uid));
                 }
             }
             Task::none()
         }
 
         Message::YankSelected => {
-            if let Some(uid) = &app.selected_uid {
+            if let Some(uid) = app.selected_uid.clone() {
                 app.yanked_uid = Some(uid.clone());
-                let mut tasks = vec![scroll_to_selected(app, false)];
-                if let Some(idx) = app.find_task_index_by_uid(uid)
+                let mut tasks = vec![common::scroll_to_selected(app, false)];
+                if let Some(idx) = app.find_task_index_by_uid(&uid)
                     && let Some(t) = app.get_task_at_index(idx)
                 {
                     let text = if t.description.is_empty() {
@@ -262,60 +203,63 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::KeyboardLinkChild => {
-            if let Some(parent_uid) = &app.yanked_uid
-                && let Some(selected_uid) = &app.selected_uid
+            if let Some(parent_uid) = app.yanked_uid.clone()
+                && let Some(selected_uid) = app.selected_uid.clone()
                 && parent_uid != selected_uid
             {
-                return handle(app, Message::MakeChild(selected_uid.clone()));
-            }
-            Task::none()
-        }
-
-        Message::KeyboardCreateChild => {
-            if let Some(selected_uid) = &app.selected_uid {
-                return handle(app, Message::StartCreateChild(selected_uid.clone()));
-            }
-            Task::none()
-        }
-
-        Message::KeyboardAddDependency => {
-            if let Some(_yanked) = &app.yanked_uid
-                && let Some(selected) = &app.selected_uid
-            {
-                return handle(app, Message::AddDependency(selected.clone()));
-            }
-            Task::none()
-        }
-
-        Message::KeyboardAddRelation => {
-            if let Some(_yanked) = &app.yanked_uid
-                && let Some(selected) = &app.selected_uid
-            {
-                return handle(app, Message::AddRelatedTo(selected.clone()));
-            }
-            Task::none()
-        }
-
-        Message::KeyboardOpenContextMenu => {
-            if let Some(uid) = &app.selected_uid {
-                return crate::gui::update::view::handle(
+                common::dispatch_intent(
                     app,
-                    Message::OpenContextMenu(uid.clone(), true),
+                    AppIntent::MakeChild {
+                        uid: selected_uid,
+                        parent_uid,
+                    },
                 );
             }
             Task::none()
         }
 
+        Message::KeyboardCreateChild => {
+            if let Some(selected_uid) = app.selected_uid.clone() {
+                return handle(app, Message::StartCreateChild(selected_uid));
+            }
+            Task::none()
+        }
+
+        Message::KeyboardAddDependency => {
+            if let Some(blocker_uid) = app.yanked_uid.clone()
+                && let Some(uid) = app.selected_uid.clone()
+            {
+                common::dispatch_intent(app, AppIntent::AddDependency { uid, blocker_uid });
+            }
+            Task::none()
+        }
+
+        Message::KeyboardAddRelation => {
+            if let Some(related_uid) = app.yanked_uid.clone()
+                && let Some(uid) = app.selected_uid.clone()
+            {
+                common::dispatch_intent(app, AppIntent::AddRelatedTo { uid, related_uid });
+            }
+            Task::none()
+        }
+
+        Message::KeyboardOpenContextMenu => {
+            if let Some(uid) = app.selected_uid.clone() {
+                return crate::gui::update::view::handle(app, Message::OpenContextMenu(uid, true));
+            }
+            Task::none()
+        }
+
         Message::KeyboardDuplicateTask => {
-            if let Some(selected) = &app.selected_uid {
-                return handle(app, Message::DuplicateTask(selected.clone()));
+            if let Some(selected) = app.selected_uid.clone() {
+                return handle(app, Message::DuplicateTask(selected));
             }
             Task::none()
         }
 
         Message::KeyboardToggleTreeCollapse => {
-            if let Some(uid) = &app.selected_uid {
-                return handle(app, Message::ToggleTreeCollapse(uid.clone()));
+            if let Some(uid) = app.selected_uid.clone() {
+                return handle(app, Message::ToggleTreeCollapse(uid));
             }
             Task::none()
         }
@@ -323,41 +267,25 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::DuplicateTask(uid) => {
             app.yanked_uid = None;
             app.yank_lock_active = false;
-
-            let new_tasks = app.store.duplicate_task_tree(&uid);
-            refresh_filtered_tasks(app);
-
-            let mut actions = Vec::new();
-            for task in new_tasks {
-                actions.push(Action::Create(task));
-            }
-            if let Some(tx) = &app.bg_tx {
-                let _ = tx.try_send(WorkerCommand::Batch(actions));
-            }
+            common::dispatch_intent(app, AppIntent::DuplicateTaskTree { uid });
             Task::none()
         }
 
         Message::KeyboardOpenLocations => {
-            if let Some(uid) = &app.selected_uid {
-                let count = app.store.count_tree_locations(uid);
+            if let Some(uid) = app.selected_uid.clone() {
+                let count = app.store.count_tree_locations(&uid);
                 if count > 1 {
-                    return crate::gui::update::view::handle(
-                        app,
-                        Message::OpenLocations(uid.clone()),
-                    );
+                    return crate::gui::update::view::handle(app, Message::OpenLocations(uid));
                 } else if count == 1 {
-                    return crate::gui::update::view::handle(
-                        app,
-                        Message::OpenCoordinates(uid.clone()),
-                    );
+                    return crate::gui::update::view::handle(app, Message::OpenCoordinates(uid));
                 }
             }
             Task::none()
         }
 
         Message::KeyboardOpenUrl => {
-            if let Some(uid) = &app.selected_uid
-                && let Some(task) = app.store.get_task_ref(uid)
+            if let Some(uid) = app.selected_uid.clone()
+                && let Some(task) = app.store.get_task_ref(&uid)
                 && let Some(url) = &task.url
             {
                 return crate::gui::update::view::handle(app, Message::OpenUrl(url.clone()));
@@ -366,8 +294,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::KeyboardDeleteTaskTree => {
-            if let Some(uid) = &app.selected_uid {
-                return handle(app, Message::DeleteTaskTree(uid.clone()));
+            if let Some(uid) = app.selected_uid.clone() {
+                return handle(app, Message::DeleteTaskTree(uid));
             }
             Task::none()
         }
@@ -375,196 +303,97 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::DeleteTaskTree(uid) => {
             app.yanked_uid = None;
             app.yank_lock_active = false;
-            let config = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
-
-            let mut uids_to_delete = app.store.get_descendant_uids(&uid);
-            uids_to_delete.push(uid.clone());
-            let mut actions = Vec::new();
-
-            for d_uid in uids_to_delete {
-                let is_already_trash = app
-                    .store
-                    .get_task_ref(&d_uid)
-                    .map(|t| t.calendar_href == crate::storage::LOCAL_TRASH_HREF)
-                    .unwrap_or(false);
-
-                if config.trash_retention_days == 0 || is_already_trash {
-                    if let Some((deleted, _)) = app.store.delete_task(&d_uid) {
-                        actions.push(Action::Delete(deleted));
-                    }
-                } else {
-                    app.store
-                        .calendars
-                        .entry(crate::storage::LOCAL_TRASH_HREF.to_string())
-                        .or_default();
-                    if let Some((orig, mut updated)) = app
-                        .store
-                        .move_task(&d_uid, crate::storage::LOCAL_TRASH_HREF.to_string())
-                    {
-                        let now_str = chrono::Utc::now().to_rfc3339();
-                        updated
-                            .unmapped_properties
-                            .retain(|p| p.key != "X-TRASHED-DATE");
-                        updated.unmapped_properties.push(crate::model::RawProperty {
-                            key: "X-TRASHED-DATE".to_string(),
-                            value: now_str,
-                            params: vec![],
-                        });
-                        app.store.update_or_add_task(updated.clone());
-                        actions.push(Action::Move(
-                            orig,
-                            crate::storage::LOCAL_TRASH_HREF.to_string(),
-                        ));
-                    }
-                }
-            }
-
-            refresh_filtered_tasks(app);
-            if let Some(tx) = &app.bg_tx {
-                let _ = tx.try_send(WorkerCommand::Batch(actions));
-            }
+            common::dispatch_intent(app, AppIntent::DeleteTaskTree { uid });
             Task::none()
         }
 
         Message::ToggleActiveSelected => {
-            if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.find_task_index_by_uid(uid)
+            if let Some(uid) = app.selected_uid.clone()
+                && let Some(idx) = app.find_task_index_by_uid(&uid)
                 && let Some(t) = app.get_task_at_index(idx)
             {
                 if t.status == crate::model::TaskStatus::InProcess {
-                    return handle(app, Message::PauseTask(uid.clone()));
+                    common::dispatch_intent(app, AppIntent::PauseTask { uid });
                 } else {
-                    return handle(app, Message::StartTask(uid.clone()));
+                    common::dispatch_intent(app, AppIntent::StartTask { uid });
                 }
             }
             Task::none()
         }
 
         Message::StopSelected => {
-            if let Some(uid) = &app.selected_uid {
-                return handle(app, Message::StopTask(uid.clone()));
+            if let Some(uid) = app.selected_uid.clone() {
+                common::dispatch_intent(app, AppIntent::StopTask { uid });
             }
             Task::none()
         }
 
         Message::CancelSelected => {
-            if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.find_task_index_by_uid(uid)
-            {
-                return handle(
-                    app,
-                    Message::SetTaskStatus(idx, crate::model::TaskStatus::Cancelled),
-                );
+            if let Some(uid) = app.selected_uid.clone() {
+                common::dispatch_intent(app, AppIntent::CancelTask { uid });
             }
             Task::none()
         }
 
         Message::ChangePrioritySelected(delta) => {
-            if let Some(uid) = &app.selected_uid
-                && let Some(idx) = app.find_task_index_by_uid(uid)
-            {
-                return handle(app, Message::ChangePriority(idx, delta));
+            if let Some(uid) = app.selected_uid.clone() {
+                common::dispatch_intent(app, AppIntent::ChangePriority { uid, delta });
             }
             Task::none()
         }
 
         Message::ChangePriority(index, delta) => {
-            if let Some(view_task) = app.get_task_at_index(index) {
-                let task_uid = view_task.uid.clone();
-                app.selected_uid = Some(task_uid.clone());
-
-                if let Some(updated) =
-                    app.store
-                        .change_priority(&task_uid, delta, app.default_priority)
-                {
-                    refresh_filtered_tasks(app);
-                    if let Some(tx) = &app.bg_tx {
-                        let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
-                    }
-                }
+            if let Some(uid) = app.get_task_at_index(index).map(|t| t.uid.clone()) {
+                app.selected_uid = Some(uid.clone());
+                common::dispatch_intent(
+                    app,
+                    AppIntent::ChangePriority {
+                        uid,
+                        delta,
+                    },
+                );
             }
             Task::none()
         }
 
         Message::SetTaskStatus(index, new_status) => {
-            if let Some(view_task) = app.get_task_at_index(index) {
-                let task_uid = view_task.uid.clone();
-                app.selected_uid = Some(task_uid.clone());
-
-                if let Some((primary, secondary, children)) =
-                    app.store.set_status(&task_uid, new_status)
-                {
-                    refresh_filtered_tasks(app);
-                    let mut actions = Vec::new();
-                    if let Some(sec) = secondary {
-                        actions.push(Action::Create(primary));
-                        actions.push(Action::Update(sec));
-                    } else {
-                        actions.push(Action::Update(primary));
-                    }
-                    for child in children {
-                        actions.push(Action::Update(child));
-                    }
-                    if let Some(tx) = &app.bg_tx {
-                        let _ = tx.try_send(WorkerCommand::Batch(actions));
-                    }
+            if let Some(uid) = app.get_task_at_index(index).map(|t| t.uid.clone()) {
+                app.selected_uid = Some(uid.clone());
+                if new_status == crate::model::TaskStatus::Cancelled {
+                    common::dispatch_intent(app, AppIntent::CancelTask { uid });
+                } else if new_status.is_done() {
+                    common::dispatch_intent(app, AppIntent::ToggleTask { uid });
                 }
             }
+            Task::none()
+        }
+
+        Message::MoveTask(uid, target_href) => {
+            app.selected_uid = Some(uid.clone());
+            app.moving_task_uid = None;
+            common::dispatch_intent(app, AppIntent::MoveTask { uid, target_href });
             Task::none()
         }
 
         Message::StartTask(uid) => {
-            let updated_tasks = app.store.set_status_in_process(&uid);
-            if !updated_tasks.is_empty() {
-                app.selected_uid = Some(uid.clone());
-                refresh_filtered_tasks(app);
-                let mut actions = Vec::new();
-                for t in updated_tasks {
-                    actions.push(Action::Update(t));
-                }
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(actions));
-                }
-            }
+            common::dispatch_intent(app, AppIntent::StartTask { uid });
             Task::none()
         }
 
         Message::PauseTask(uid) => {
-            let updated_tasks = app.store.pause_task(&uid);
-            if !updated_tasks.is_empty() {
-                app.selected_uid = Some(uid.clone());
-                refresh_filtered_tasks(app);
-                let mut actions = Vec::new();
-                for t in updated_tasks {
-                    actions.push(Action::Update(t));
-                }
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(actions));
-                }
-            }
+            common::dispatch_intent(app, AppIntent::PauseTask { uid });
             Task::none()
         }
 
         Message::StopTask(uid) => {
-            let updated_tasks = app.store.stop_task(&uid);
-            if !updated_tasks.is_empty() {
-                app.selected_uid = Some(uid.clone());
-                refresh_filtered_tasks(app);
-                let mut actions = Vec::new();
-                for t in updated_tasks {
-                    actions.push(Action::Update(t));
-                }
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(actions));
-                }
-            }
+            common::dispatch_intent(app, AppIntent::StopTask { uid });
             Task::none()
         }
 
         Message::YankTask(uid) => {
             app.yanked_uid = Some(uid.clone());
             app.selected_uid = Some(uid.clone());
-            let mut tasks = vec![scroll_to_selected(app, false)];
+            let mut tasks = vec![common::scroll_to_selected(app, false)];
             if let Some(idx) = app.find_task_index_by_uid(&uid)
                 && let Some(t) = app.get_task_at_index(idx)
             {
@@ -585,7 +414,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::EscCaptured => {
-            // If editing/creating child -> cancel and focus back; otherwise soft escape.
             if app.editing_uid.is_some()
                 || app.creating_child_of.is_some()
                 || app.creating_with_desc
@@ -595,9 +423,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.editing_uid = None;
                 app.creating_child_of = None;
                 app.creating_with_desc = false;
-                scroll_to_selected_delayed(app, true)
+                common::scroll_to_selected_delayed(app, true)
             } else {
-                scroll_to_selected_delayed(app, true)
+                common::scroll_to_selected_delayed(app, true)
             }
         }
 
@@ -630,22 +458,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.search_value = text_editor::Content::new();
                 needs_refresh = true;
                 captured_action = true;
-            } else if !app.selected_categories.is_empty() {
-                app.selected_categories.clear();
+            } else if !app.session.selected_categories.is_empty() {
+                app.session.selected_categories.clear();
                 needs_refresh = true;
                 captured_action = true;
-            } else if !app.selected_locations.is_empty() {
-                app.selected_locations.clear();
+            } else if !app.session.selected_locations.is_empty() {
+                app.session.selected_locations.clear();
                 needs_refresh = true;
                 captured_action = true;
             }
 
             if needs_refresh {
-                refresh_filtered_tasks(app);
+                common::refresh_filtered_tasks(app);
             }
 
             if captured_action || app.editing_uid.is_none() {
-                return scroll_to_selected_delayed(app, true);
+                return common::scroll_to_selected_delayed(app, true);
             }
 
             Task::none()
@@ -655,94 +483,63 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(parent_uid) = app.yanked_uid.clone()
                 && let Some(_orig) = app.store.get_task_ref(&target_uid)
             {
-                match app.store.set_parent(&target_uid, Some(parent_uid)) {
-                    Ok(updated) => {
-                        app.selected_uid = Some(target_uid.clone());
-                        if !app.yank_lock_active {
-                            app.yanked_uid = None;
-                        }
-                        refresh_filtered_tasks(app);
-                        if let Some(tx) = &app.bg_tx {
-                            let _ =
-                                tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
-                        }
-                    }
-                    Err(e) => {
-                        app.error_msg = Some(e.to_string());
-                    }
+                if !app.yank_lock_active {
+                    app.yanked_uid = None;
                 }
+                common::dispatch_intent(
+                    app,
+                    AppIntent::MakeChild {
+                        uid: target_uid,
+                        parent_uid,
+                    },
+                );
             }
             Task::none()
         }
 
         Message::RemoveParent(child_uid) => {
-            match app.store.set_parent(&child_uid, None) {
-                Ok(updated) => {
-                    app.selected_uid = Some(child_uid);
-                    refresh_filtered_tasks(app);
-                    if let Some(tx) = &app.bg_tx {
-                        let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
-                    }
-                }
-                Err(e) => {
-                    app.error_msg = Some(e.to_string());
-                }
-            }
+            common::dispatch_intent(app, AppIntent::RemoveParent { uid: child_uid });
             Task::none()
         }
 
-        Message::RemoveDependency(task_uid, dep_uid) => {
-            if let Some(updated) = app.store.remove_dependency(&task_uid, &dep_uid) {
-                app.selected_uid = Some(task_uid);
-                refresh_filtered_tasks(app);
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
-                }
-            }
+        Message::RemoveDependency(uid, blocker_uid) => {
+            common::dispatch_intent(app, AppIntent::RemoveDependency { uid, blocker_uid });
             Task::none()
         }
 
-        Message::RemoveRelatedTo(task_uid, related_uid) => {
-            if let Some(updated) = app.store.remove_related_to(&task_uid, &related_uid) {
-                app.selected_uid = Some(task_uid);
-                refresh_filtered_tasks(app);
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
-                }
-            }
+        Message::RemoveRelatedTo(uid, related_uid) => {
+            common::dispatch_intent(app, AppIntent::RemoveRelatedTo { uid, related_uid });
             Task::none()
         }
 
         Message::AddDependency(target_uid) => {
-            let blocker_opt = app.yanked_uid.clone();
-            if let Some(blocker_uid) = blocker_opt
-                && let Some(updated) = app.store.add_dependency(&target_uid, blocker_uid.clone())
-            {
-                app.selected_uid = Some(target_uid);
+            if let Some(blocker_uid) = app.yanked_uid.clone() {
                 if !app.yank_lock_active {
                     app.yanked_uid = None;
                 }
-                refresh_filtered_tasks(app);
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
-                }
+                common::dispatch_intent(
+                    app,
+                    AppIntent::AddDependency {
+                        uid: target_uid,
+                        blocker_uid,
+                    },
+                );
             }
             Task::none()
         }
 
         Message::AddRelatedTo(target_uid) => {
-            let related_opt = app.yanked_uid.clone();
-            if let Some(related_uid) = related_opt
-                && let Some(updated) = app.store.add_related_to(&target_uid, related_uid.clone())
-            {
-                app.selected_uid = Some(target_uid);
+            if let Some(related_uid) = app.yanked_uid.clone() {
                 if !app.yank_lock_active {
                     app.yanked_uid = None;
                 }
-                refresh_filtered_tasks(app);
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(updated)]));
-                }
+                common::dispatch_intent(
+                    app,
+                    AppIntent::AddRelatedTo {
+                        uid: target_uid,
+                        related_uid,
+                    },
+                );
             }
             Task::none()
         }
@@ -758,20 +555,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        Message::MoveTask(task_uid, target_href) => {
-            app.selected_uid = Some(task_uid.clone());
-            app.moving_task_uid = None;
-
-            if let Some((orig, _updated)) = app.store.move_task(&task_uid, target_href.clone()) {
-                refresh_filtered_tasks(app);
-                if let Some(tx) = &app.bg_tx {
-                    let _ =
-                        tx.try_send(WorkerCommand::Batch(vec![Action::Move(orig, target_href)]));
-                }
-            }
-            Task::none()
-        }
-
         Message::MigrateLocalTo(source_href, target_href) => {
             if let Some(local_map) = app.store.calendars.get(&source_href) {
                 let tasks_to_move: Vec<_> = local_map.values().cloned().collect();
@@ -781,11 +564,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
                 app.loading = true;
 
-                // async_migrate_wrapper requires a concrete RustyClient, so only call it when
-                // we have an active client. Otherwise surface an error to the user.
                 if let Some(client) = &app.client {
                     return Task::perform(
-                        async_migrate_wrapper(client.clone(), tasks_to_move, target_href),
+                        crate::gui::async_ops::async_migrate_wrapper(
+                            client.clone(),
+                            tasks_to_move,
+                            target_href,
+                        ),
                         |res| Message::MigrationComplete(res.map_err(|e| e.to_string())),
                     );
                 } else {
@@ -826,7 +611,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if task.etag == "pending_refresh" {
                     return Task::none();
                 }
-                return handle(app, Message::ToggleTask(idx, true));
+                common::dispatch_intent(app, AppIntent::ToggleTask { uid: t_uid });
             }
             Task::none()
         }
@@ -835,11 +620,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ringing_tasks
                 .retain(|(t, a)| !(t.uid == t_uid && a.uid == a_uid));
 
-            if let Some(idx) = app.find_task_index_by_uid(&t_uid) {
-                return handle(
-                    app,
-                    Message::SetTaskStatus(idx, crate::model::TaskStatus::Cancelled),
-                );
+            if app.find_task_index_by_uid(&t_uid).is_some() {
+                common::dispatch_intent(app, AppIntent::CancelTask { uid: t_uid });
             }
             Task::none()
         }
@@ -848,11 +630,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some((task, _)) = app.store.get_task_mut(&t_uid)
                 && task.handle_snooze(&a_uid, mins)
             {
-                let t_clone = task.clone();
-                refresh_filtered_tasks(app);
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(t_clone)]));
-                }
+                common::refresh_filtered_tasks(app);
+                common::dispatch_intent(app, AppIntent::ToggleTask { uid: t_uid });
             }
             Task::none()
         }
@@ -861,25 +640,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some((task, _)) = app.store.get_task_mut(&t_uid)
                 && task.handle_dismiss(&a_uid)
             {
-                let t_clone = task.clone();
-                refresh_filtered_tasks(app);
-                if let Some(tx) = &app.bg_tx {
-                    let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(t_clone)]));
-                }
+                common::refresh_filtered_tasks(app);
+                common::dispatch_intent(app, AppIntent::ToggleTask { uid: t_uid });
             }
             Task::none()
         }
 
-        // Start showing the inline add-session input for the given task.
         Message::StartAddSession(uid) => {
             app.adding_session_uid = Some(uid.clone());
             app.session_input = iced::widget::text_editor::Content::new();
             app.expanded_tasks.insert(uid.clone());
-            // Focus the inline input (best-effort; may be a no-op depending on widget tree)
             iced::widget::operation::focus(iced::widget::Id::from(format!("session_input_{}", uid)))
         }
 
-        // Update session input buffer (from the TextEditor/widget)
         Message::SessionInputChanged(action) => {
             if let iced::widget::text_editor::Action::Edit(iced::widget::text_editor::Edit::Enter) =
                 action
@@ -902,30 +675,47 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        // Submit the session text: parse and apply to the selected task, then persist via controller.
         Message::SubmitSession => {
-            if let Some(uid) = &app.adding_session_uid {
+            if let Some(uid) = app.adding_session_uid.clone() {
                 let input_text = app.session_input.text();
 
                 if let Some(session) = crate::model::parser::parse_session_input(&input_text)
-                    && let Some((t_mut, _)) = app.store.get_task_mut(uid)
+                    && let Some((t_mut, _)) = app.store.get_task_mut(&uid)
                 {
                     t_mut.add_session(session);
                     t_mut.sequence += 1;
                     let cloned = t_mut.clone();
+
                     app.adding_session_uid = None;
                     app.session_input = iced::widget::text_editor::Content::new();
-                    crate::gui::update::common::refresh_filtered_tasks(app);
+                    common::refresh_filtered_tasks(app);
 
                     if let Some(tx) = &app.bg_tx {
-                        let _ = tx.try_send(WorkerCommand::Batch(vec![Action::Update(cloned)]));
+                        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
+                            crate::journal::Action::Update(cloned),
+                        ]));
                     }
                 }
             }
             Task::none()
         }
 
-        // Toggle whether to show all sessions for a task in its expanded details
+        Message::DeleteSession(uid, idx) => {
+            if let Some((t_mut, _)) = app.store.get_task_mut(&uid) {
+                t_mut.remove_session(idx);
+                t_mut.sequence += 1;
+                let cloned = t_mut.clone();
+                common::refresh_filtered_tasks(app);
+
+                if let Some(tx) = &app.bg_tx {
+                    let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
+                        crate::journal::Action::Update(cloned),
+                    ]));
+                }
+            }
+            Task::none()
+        }
+
         Message::ToggleShowAllSessions(uid) => {
             app.expanded_tasks.insert(uid.clone());
             if app.show_all_sessions.contains(&uid) {
@@ -937,15 +727,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::KeyboardAddSession => {
-            if let Some(selected_uid) = &app.selected_uid {
-                return handle(app, Message::StartAddSession(selected_uid.clone()));
+            if let Some(selected_uid) = app.selected_uid.clone() {
+                return handle(app, Message::StartAddSession(selected_uid));
             }
             Task::none()
         }
 
         Message::KeyboardToggleSessions => {
-            if let Some(selected_uid) = &app.selected_uid {
-                return handle(app, Message::ToggleDetails(selected_uid.clone()));
+            if let Some(selected_uid) = app.selected_uid.clone() {
+                return handle(app, Message::ToggleDetails(selected_uid));
             }
             Task::none()
         }
@@ -955,6 +745,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 }
 
 fn handle_submit(app: &mut GuiApp) -> Task<Message> {
+    use crate::gui::update::common::{
+        apply_alias_retroactively, refresh_filtered_tasks, save_config,
+    };
+    use crate::model::{Task as TodoTask, extract_inline_aliases};
+
     let raw_text = app.input_value.text();
     let text_to_submit = raw_text.trim().to_string();
 
@@ -963,8 +758,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         return Task::none();
     }
 
-    let (clean_input, new_aliases): (String, HashMap<String, Vec<String>>) =
-        extract_inline_aliases(&text_to_submit);
+    let (clean_input, new_aliases) = extract_inline_aliases(&text_to_submit);
 
     let mut retroactive_sync_batch = Vec::new();
 
@@ -976,7 +770,6 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         save_config(app);
     }
 
-    // Logic for Tag/Loc isolated jumps ... (kept identical to your existing file)
     if clean_input.starts_with('#')
         && !clean_input.trim().contains(' ')
         && app.editing_uid.is_none()
@@ -984,14 +777,20 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         let tag = clean_input.trim().trim_start_matches('#').to_string();
         if !tag.is_empty() && !text_to_submit.contains(":=") {
             app.sidebar_mode = SidebarMode::Categories;
-            app.selected_categories.clear();
-            app.selected_categories.insert(tag);
+            app.session.selected_categories.clear();
+            app.session.selected_categories.push(tag);
             app.input_value = text_editor::Content::new();
             refresh_filtered_tasks(app);
-            if !retroactive_sync_batch.is_empty()
-                && let Some(tx) = &app.bg_tx
-            {
-                let _ = tx.try_send(WorkerCommand::Batch(retroactive_sync_batch));
+
+            if !retroactive_sync_batch.is_empty() {
+                let mut actions = Vec::new();
+                for t in retroactive_sync_batch {
+                    actions.push(crate::journal::Action::Update(t));
+                }
+                if !actions.is_empty()
+                    && let Some(tx) = &app.bg_tx {
+                        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+                    }
             }
             return Task::none();
         }
@@ -1005,14 +804,20 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         );
         if !loc.is_empty() {
             app.sidebar_mode = SidebarMode::Locations;
-            app.selected_locations.clear();
-            app.selected_locations.insert(loc);
+            app.session.selected_locations.clear();
+            app.session.selected_locations.push(loc);
             app.input_value = text_editor::Content::new();
             refresh_filtered_tasks(app);
-            if !retroactive_sync_batch.is_empty()
-                && let Some(tx) = &app.bg_tx
-            {
-                let _ = tx.try_send(WorkerCommand::Batch(retroactive_sync_batch));
+
+            if !retroactive_sync_batch.is_empty() {
+                let mut actions = Vec::new();
+                for t in retroactive_sync_batch {
+                    actions.push(crate::journal::Action::Update(t));
+                }
+                if !actions.is_empty()
+                    && let Some(tx) = &app.bg_tx {
+                        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+                    }
             }
             return Task::none();
         }
@@ -1020,15 +825,13 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
     let config_time = NaiveTime::parse_from_str(&app.default_reminder_time, "%H:%M").ok();
 
-    // EXTRACT SUBTASKS
     let desc_text = app.description_value.text();
     let (cleaned_desc, extracted_subtasks) =
         crate::model::extractor::extract_markdown_tasks(&desc_text);
 
     if let Some(edit_uid) = &app.editing_uid {
-        // ONLY EDIT EXISTING - Do not extract to avoid duplication!
         if let Some((task, _)) = app.store.get_task_mut(edit_uid) {
-            task.description = desc_text; // use RAW description to preserve their markdown checklist
+            task.description = desc_text;
             task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
             task.sequence += 1;
             let task_copy = task.clone();
@@ -1040,10 +843,20 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
             refresh_filtered_tasks(app);
 
-            retroactive_sync_batch.push(Action::Update(task_copy));
+            let mut actions = Vec::new();
+            actions.push(crate::journal::Action::Update(task_copy));
+            for t in retroactive_sync_batch {
+                actions.push(crate::journal::Action::Update(t));
+            }
+
+            if !actions.is_empty()
+                && let Some(tx) = &app.bg_tx {
+                    let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+                }
+
+            return Task::none();
         }
     } else if !clean_input.is_empty() {
-        // CREATE NEW TASK
         let mut new_task = TodoTask::new(&clean_input, &app.tag_aliases, config_time);
 
         if !cleaned_desc.is_empty() {
@@ -1078,10 +891,11 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 .entry(new_task.uid.clone())
                 .or_insert_with(iced::widget::Id::unique);
 
-            // Create Subtasks resulting from Markdown Extraction
+            let mut tasks_to_create = vec![new_task];
+
             for ext in extracted_subtasks {
                 let mut sub = TodoTask::new(&ext.raw_text, &app.tag_aliases, config_time);
-                sub.uid = ext.uid; // Must use Extractor's UID so dependencies map correctly
+                sub.uid = ext.uid;
                 if !ext.description.is_empty() {
                     if sub.description.is_empty() {
                         sub.description = ext.description;
@@ -1101,33 +915,49 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
                 sub.calendar_href = target_href.clone();
 
                 app.store.add_task(sub.clone());
-                retroactive_sync_batch.push(Action::Create(sub));
+                tasks_to_create.push(sub);
             }
 
-            app.selected_uid = Some(parent_uid);
+            app.selected_uid = Some(parent_uid.clone());
             refresh_filtered_tasks(app);
 
             app.input_value = text_editor::Content::new();
             app.description_value = text_editor::Content::new();
             app.creating_with_desc = false;
 
-            retroactive_sync_batch.push(Action::Create(new_task));
-
-            let scroll_cmd = crate::gui::update::common::scroll_to_selected_delayed(app, false);
+            let scroll_cmd = common::scroll_to_selected_delayed(app, false);
             let focus_cmd = iced::widget::operation::focus(iced::widget::Id::new("main_input"));
 
-            if let Some(tx) = &app.bg_tx {
-                let _ = tx.try_send(WorkerCommand::Batch(retroactive_sync_batch));
+            let mut actions = Vec::new();
+            for t in tasks_to_create {
+                actions.push(crate::journal::Action::Create(t));
             }
+
+            if !retroactive_sync_batch.is_empty() {
+                for t in retroactive_sync_batch {
+                    actions.push(crate::journal::Action::Update(t));
+                }
+            }
+
+            if !actions.is_empty()
+                && let Some(tx) = &app.bg_tx {
+                    let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+                }
 
             return Task::batch(vec![scroll_cmd, focus_cmd]);
         }
     }
 
-    if !retroactive_sync_batch.is_empty()
-        && let Some(tx) = &app.bg_tx
-    {
-        let _ = tx.try_send(WorkerCommand::Batch(retroactive_sync_batch));
+    if !retroactive_sync_batch.is_empty() {
+        let mut actions = Vec::new();
+        for t in retroactive_sync_batch {
+            actions.push(crate::journal::Action::Update(t));
+        }
+        if !actions.is_empty()
+            && let Some(tx) = &app.bg_tx {
+                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+            }
     }
+
     Task::none()
 }

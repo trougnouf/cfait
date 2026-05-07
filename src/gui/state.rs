@@ -48,6 +48,8 @@ pub struct GuiApp {
     pub state: AppState,
     pub ctx: Arc<dyn AppContext>,
     pub store: TaskStore,
+    pub controller: crate::controller::TaskController,
+    pub session: crate::model::SessionState,
     pub tasks: Vec<crate::store::TaskListItem>,
     pub calendars: Vec<CalendarListEntry>,
     pub client: Option<RustyClient>,
@@ -71,9 +73,6 @@ pub struct GuiApp {
     pub active_cal_href: Option<String>,
     pub hidden_calendars: HashSet<String>,
     pub disabled_calendars: HashSet<String>,
-    pub selected_categories: HashSet<String>,
-    pub selected_locations: HashSet<String>,
-    pub match_all_categories: bool,
     pub yanked_uid: Option<String>,
     pub yank_lock_active: bool,
 
@@ -115,8 +114,6 @@ pub struct GuiApp {
     pub creating_with_desc: bool,
     pub new_task_title: String,
     pub expanded_tasks: HashSet<String>,
-    pub expanded_done_groups: HashSet<String>,
-    pub collapsed_trees: HashSet<String>,
     pub help_expanded_sections: HashSet<String>,
     pub unsynced_changes: bool,
     pub last_sync_failed: bool,
@@ -312,10 +309,19 @@ impl Default for GuiApp {
         };
 
         let ctx = Arc::new(crate::context::StandardContext::new(None));
+        let store = TaskStore::new(ctx.clone());
+        let client = Arc::new(tokio::sync::Mutex::new(None));
+        let controller = crate::controller::TaskController::new(
+            Arc::new(tokio::sync::Mutex::new(store.clone())),
+            client,
+            ctx.clone(),
+        );
         Self {
             ctx: ctx.clone(),
             state: AppState::Loading,
-            store: TaskStore::new(ctx.clone()),
+            store,
+            controller,
+            session: crate::model::SessionState::default(),
             tasks: vec![],
             calendars: vec![],
             client: None,
@@ -332,9 +338,6 @@ impl Default for GuiApp {
             active_cal_href: None,
             hidden_calendars: HashSet::new(),
             disabled_calendars: HashSet::new(),
-            selected_categories: HashSet::new(),
-            selected_locations: HashSet::new(),
-            match_all_categories: true,
             yanked_uid: None,
             yank_lock_active: false,
             selected_uid: None,
@@ -369,8 +372,6 @@ impl Default for GuiApp {
             creating_with_desc: false,
             new_task_title: String::new(),
             expanded_tasks: HashSet::new(),
-            expanded_done_groups: HashSet::new(),
-            collapsed_trees: HashSet::new(),
             help_expanded_sections: HashSet::new(),
             unsynced_changes: false,
             last_sync_failed: false,

@@ -1,4 +1,5 @@
-// File: tests/session_roundtrip.rs
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for session roundtrip serialization.
 use cfait::model::{Task, item::WorkSession};
 use std::collections::HashMap;
 

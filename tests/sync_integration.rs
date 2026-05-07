@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Integration tests for synchronization.
 use cfait::cache::Cache;
 use cfait::client::RustyClient;
 use cfait::context::TestContext;

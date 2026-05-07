@@ -269,43 +269,20 @@ pub async fn run_network_actor(
                 }
             },
 
-            Action::CreateTask(new_task) => {
-                // Delegate to TaskController (single source of truth).
-                // Build a controller instance that has access to the same in-memory store
-                // and a client wrapper so background syncs can be triggered.
+            Action::PersistBatch(actions) => {
                 let client_container = Arc::new(Mutex::new(Some(client.clone())));
                 let controller = TaskController::new(store.clone(), client_container, ctx.clone());
 
-                match controller.create_task(new_task).await {
-                    Ok(_uid) => {
-                        // Re-read the controller store and emit a TasksLoaded event so UI refreshes.
-                        let results = snapshot_store(&controller.store).await;
+                match controller.persist_changes(actions).await {
+                    Ok((_warnings, synced_tasks)) => {
+                        let mut s = store.lock().await;
+                        for sync_task in synced_tasks {
+                            s.update_or_add_task(sync_task);
+                        }
+                        drop(s);
+
+                        let results = snapshot_store(&store).await;
                         let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
-
-                        let _ = event_tx
-                            .send(AppEvent::Status {
-                                key: "status_created".to_string(),
-                                human: rust_i18n::t!("status_created").to_string(),
-                            })
-                            .await;
-                    }
-                    Err(e) => {
-                        let _ = event_tx.send(AppEvent::Error(e)).await;
-                    }
-                }
-            }
-
-            Action::UpdateTask(task) => {
-                // Use controller to perform update (handles recurrence, history, children).
-                let client_container = Arc::new(Mutex::new(Some(client.clone())));
-                let controller = TaskController::new(store.clone(), client_container, ctx.clone());
-
-                match controller.update_task(task.clone()).await {
-                    Ok(_warnings) => {
-                        // Re-read the controller store and emit TasksLoaded so UI refreshes.
-                        let results = snapshot_store(&controller.store).await;
-                        let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
-
                         let _ = event_tx
                             .send(AppEvent::Status {
                                 key: "status_saved".to_string(),
@@ -315,38 +292,6 @@ pub async fn run_network_actor(
                     }
                     Err(e) => {
                         let _ = event_tx.send(AppEvent::Error(e)).await;
-                        // Attempt best-effort reload from client to revert local view
-                        if let Ok(t) = client.get_tasks(&task.calendar_href).await {
-                            let _ = event_tx
-                                .send(AppEvent::TasksLoaded(vec![(task.calendar_href.clone(), t)]))
-                                .await;
-                        }
-                    }
-                }
-            }
-
-            Action::DeleteTask(uid) => {
-                // Controller will handle soft-vs-hard delete, journaling and local trash logic.
-                let client_container = Arc::new(Mutex::new(Some(client.clone())));
-                let controller = TaskController::new(store.clone(), client_container, ctx.clone());
-
-                match controller.delete_task(&uid).await {
-                    Ok(_warnings) => {
-                        // Re-read store and emit TasksLoaded for updated UI.
-                        let results = snapshot_store(&controller.store).await;
-                        let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
-
-                        let _ = event_tx
-                            .send(AppEvent::Status {
-                                key: "status_deleted".to_string(),
-                                human: rust_i18n::t!("status_deleted").to_string(),
-                            })
-                            .await;
-                    }
-                    Err(e) => {
-                        let _ = event_tx.send(AppEvent::Error(e)).await;
-                        // Best-effort: reload calendar of interest if possible.
-                        // We don't know the original href here; rely on client refresh if needed.
                     }
                 }
             }
@@ -394,95 +339,6 @@ pub async fn run_network_actor(
                     }
                     Err(e) => {
                         let _ = event_tx.send(AppEvent::Error(e.to_string())).await;
-                    }
-                }
-            }
-
-            Action::MoveTask(uid, new_href) => {
-                // Use TaskController to perform the move (handles local<->remote transitions).
-                let client_container = Arc::new(Mutex::new(Some(client.clone())));
-                let controller = TaskController::new(store.clone(), client_container, ctx.clone());
-
-                match controller.move_task(&uid, &new_href).await {
-                    Ok(_warnings) => {
-                        // Re-read the controller store and emit TasksLoaded so the UI reflects both calendars.
-                        let results = snapshot_store(&controller.store).await;
-                        let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
-
-                        let _ = event_tx
-                            .send(AppEvent::Status {
-                                key: "status_moved".to_string(),
-                                human: rust_i18n::t!("status_moved").to_string(),
-                            })
-                            .await;
-                    }
-                    Err(e) => {
-                        let _ = event_tx
-                            .send(AppEvent::Error(format!("Move failed: {}", e)))
-                            .await;
-                    }
-                }
-            }
-
-            Action::DuplicateTask(uid) => {
-                let client_container = Arc::new(Mutex::new(Some(client.clone())));
-                let controller = TaskController::new(store.clone(), client_container, ctx.clone());
-
-                let _ = event_tx
-                    .send(AppEvent::Status {
-                        key: "duplicating".to_string(),
-                        human: rust_i18n::t!("duplicating_task_tree").to_string(),
-                    })
-                    .await;
-
-                match controller.duplicate_task_tree(&uid).await {
-                    Ok(_) => {
-                        let s = controller.store.lock().await;
-                        let mut results: Vec<(String, Vec<crate::model::Task>)> = Vec::new();
-                        for (href, map) in &s.calendars {
-                            results.push((href.clone(), map.values().cloned().collect()));
-                        }
-                        let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
-
-                        let _ = event_tx
-                            .send(AppEvent::Status {
-                                key: "status_duplicated".to_string(),
-                                human: rust_i18n::t!("status_duplicated").to_string(),
-                            })
-                            .await;
-                    }
-                    Err(e) => {
-                        let _ = event_tx
-                            .send(AppEvent::Error(format!("Duplicate failed: {}", e)))
-                            .await;
-                    }
-                }
-            }
-
-            Action::DeleteTaskTree(uid) => {
-                let client_container = Arc::new(Mutex::new(Some(client.clone())));
-                let controller = TaskController::new(store.clone(), client_container, ctx.clone());
-
-                let _ = event_tx
-                    .send(AppEvent::Status {
-                        key: "deleting_tree".to_string(),
-                        human: rust_i18n::t!("deleting_task_tree").to_string(),
-                    })
-                    .await;
-
-                match controller.delete_task_tree(&uid).await {
-                    Ok(_) => {
-                        let s = controller.store.lock().await;
-                        let mut results: Vec<(String, Vec<crate::model::Task>)> = Vec::new();
-                        for (href, map) in &s.calendars {
-                            results.push((href.clone(), map.values().cloned().collect()));
-                        }
-                        let _ = event_tx.send(AppEvent::TasksLoaded(results)).await;
-                    }
-                    Err(e) => {
-                        let _ = event_tx
-                            .send(AppEvent::Error(format!("Delete tree failed: {}", e)))
-                            .await;
                     }
                 }
             }

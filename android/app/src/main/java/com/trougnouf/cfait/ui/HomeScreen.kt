@@ -338,9 +338,16 @@ fun HomeScreen(
     fun updateTaskList() {
         scope.launch {
             try {
+                val options = MobileFilterOptions(
+                    filterTags = filterTags.toList(),
+                    filterLocations = filterLocations.toList(),
+                    searchQuery = searchQuery,
+                    expandedGroups = expandedGroups.toList(),
+                    collapsedGroups = collapsedGroups.toList(),
+                    matchAllCategories = matchAllCategories
+                )
                 val viewData = api.getViewTasks(
-                    filterTags.toList(), filterLocations.toList(), searchQuery,
-                    expandedGroups.toList(), collapsedGroups.toList(), matchAllCategories
+                    options, isDark
                 )
                 onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, api.getConfig().tagAliases)
             } catch (e: Exception) {
@@ -390,30 +397,19 @@ fun HomeScreen(
     }
 
     fun toggleTask(task: MobileTask) {
-        // TRIGGER HAPTIC FEEDBACK
-        // HapticFeedbackType.LongPress provides a satisfying "click" feel on Android
         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-
-        val newIsDone = !task.isDone
-        val newStatus = if (newIsDone) "Completed" else "NeedsAction"
-        val updatedList = tasks.map {
-            if (it.uid == task.uid) it.copy(isDone = newIsDone, statusString = newStatus, isPaused = false) else it
-        }
-        onUpdateViewData(updatedList, tags, locations, aliases)
         scope.launch {
             activeOpCount++
             try {
-                api.toggleTask(task.uid)
-                updateTaskList()
+                val viewData = api.dispatch(AppIntent.ToggleTask(task.uid), isDark)
+                onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, aliases)
                 checkSyncStatus()
                 onDataChanged()
                 lastSyncFailed = false
             } catch (e: Exception) {
-                if (e is CancellationException) throw e
                 lastSyncFailed = true
-                updateTaskList()
-                checkSyncStatus()
             } finally {
+                checkSyncStatus()
                 activeOpCount--
             }
         }
@@ -579,9 +575,7 @@ fun HomeScreen(
             }
             return
         }
-        if (action == "move") {
-            taskToMove = task; return
-        }
+        if (action == "move") { taskToMove = task; return }
         if (action == "create_child") {
             creatingChildUid = task.uid
             yankedUid = null
@@ -594,80 +588,47 @@ fun HomeScreen(
             return
         }
 
-        // A double-impact or distinct feel for deletion
         if (action == "delete" || action == "delete_tree") {
             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
         }
 
-        val updatedList = tasks.map { t ->
-            if (t.uid == task.uid) {
-                when (action) {
-                    "delete", "delete_tree" -> null
-                    "cancel" -> t.copy(statusString = "Cancelled", isDone = true)
-                    "playpause" -> if (t.statusString == "InProcess") t.copy(
-                        statusString = "NeedsAction",
-                        isPaused = true
-                    )
-                    else t.copy(statusString = "InProcess", isPaused = false)
-
-                    "stop" -> t.copy(statusString = "NeedsAction", isPaused = false)
-                    "prio_up" -> {
-                        var p = t.priority.toInt()
-                        if (p == 0) p = (defaultPriority - 1).coerceAtLeast(1) else if (p > 1) p -= 1
-                        t.copy(priority = p.toUByte())
-                    }
-
-                    "prio_down" -> {
-                        var p = t.priority.toInt()
-                        if (p == 0) p = (defaultPriority + 1).coerceAtMost(9) else if (p < 9) p += 1
-                        t.copy(priority = p.toUByte())
-                    }
-
-                    else -> t
-                }
-            } else t
-        }.filterNotNull()
-        onUpdateViewData(updatedList, tags, locations, aliases)
-
         scope.launch {
             activeOpCount++
             try {
-                when (action) {
-                    "delete" -> api.deleteTask(task.uid)
-                    "delete_tree" -> api.deleteTaskTree(task.uid)
-                    "duplicate" -> api.duplicateTaskTree(task.uid)
-                    "promote" -> api.setParent(task.uid, null)
-                    "cancel" -> api.setStatusCancelled(task.uid)
-                    "playpause" -> if (task.statusString == "InProcess") api.pauseTask(task.uid) else api.startTask(task.uid)
-                    "stop" -> api.stopTask(task.uid)
-                    "prio_up" -> api.changePriority(task.uid, 1)
-                    "prio_down" -> api.changePriority(task.uid, -1)
+                val intent = when(action) {
+                    "delete" -> AppIntent.DeleteTask(task.uid)
+                    "delete_tree" -> AppIntent.DeleteTaskTree(task.uid)
+                    "duplicate" -> AppIntent.DuplicateTaskTree(task.uid)
+                    "promote" -> AppIntent.RemoveParent(task.uid)
+                    "cancel" -> AppIntent.CancelTask(task.uid)
+                    "playpause" -> if (task.statusString == "InProcess") AppIntent.PauseTask(task.uid) else AppIntent.StartTask(task.uid)
+                    "stop" -> AppIntent.StopTask(task.uid)
+                    "prio_up" -> AppIntent.ChangePriority(task.uid, 1)
+                    "prio_down" -> AppIntent.ChangePriority(task.uid, -1)
                     "yank" -> {
                         yankedUid = task.uid
                         val textToCopy =
                             if (task.description.isEmpty()) task.smartString else "${task.smartString}\n\n${task.description}"
                         clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("task_details", textToCopy)))
+                        null
                     }
-
-                    "block" -> if (yankedUid != null) {
-                        api.addDependency(task.uid, yankedUid!!); if (!yankLockActive) yankedUid = null
-                    }
-
-                    "child" -> if (yankedUid != null) {
-                        api.setParent(task.uid, yankedUid!!); if (!yankLockActive) yankedUid = null
-                    }
-
-                    "related" -> if (yankedUid != null) {
-                        api.addRelatedTo(task.uid, yankedUid!!); if (!yankLockActive) yankedUid = null
-                    }
+                    "block" -> if (yankedUid != null) AppIntent.AddDependency(task.uid, yankedUid!!) else null
+                    "child" -> if (yankedUid != null) AppIntent.MakeChild(task.uid, yankedUid!!) else null
+                    "related" -> if (yankedUid != null) AppIntent.AddRelatedTo(task.uid, yankedUid!!) else null
+                    else -> null
                 }
-                updateTaskList()
-                onDataChanged()
-                lastSyncFailed = false
+
+                if (intent != null) {
+                    val viewData = api.dispatch(intent, isDark)
+                    onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, aliases)
+                    if (action == "block" || action == "child" || action == "related") {
+                        if (!yankLockActive) yankedUid = null
+                    }
+                    onDataChanged()
+                    lastSyncFailed = false
+                }
             } catch (e: Exception) {
-                if (e is CancellationException) throw e
                 lastSyncFailed = true
-                updateTaskList()
             } finally {
                 checkSyncStatus()
                 activeOpCount--
@@ -1902,22 +1863,15 @@ fun HomeScreen(
                                     items(pageTasks, key = { it.uid }) { task ->
                                         if (task.virtualType == "none") {
                                             val calColor = calColorMap[task.calendarHref] ?: Color.Gray
-                                            val parent = task.parentUid?.let { taskMap[it] }
-
                                             TaskRow(
                                                 task = task,
                                                 calColor = calColor,
-                                                isDark = isDark,
                                                 onToggle = { toggleTask(task) },
                                                 onAction = { act -> onTaskAction(act, task) },
                                                 onClick = onTaskClick,
                                                 yankedUid = yankedUid,
                                                 enabledCalendarCount = enabledCalendarCount,
-                                                parentCategories = parent?.categories ?: emptyList(),
-                                                parentLocation = parent?.location,
-                                                aliasMap = aliases,
                                                 isHighlighted = task.uid == highlightedUid,
-                                                incomingRelations = incomingRelationsMap[task.uid] ?: emptyList(),
                                                 isCollapsed = collapsedGroups.contains(task.uid),
                                                 onToggleCollapse = {
                                                     collapsedGroups =

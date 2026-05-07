@@ -1,4 +1,6 @@
 // Tests for additional smart input features.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for smart input extensions.
 use cfait::model::Task;
 use std::collections::HashMap;
 

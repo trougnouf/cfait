@@ -1,4 +1,5 @@
-// File: ./tests/recurrence_duration_fix.rs
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Regression tests for recurrence duration fix.
 // Reproduces the issue where All-Day tasks lose their duration (gap between start and due)
 // upon recurrence calculation.
 

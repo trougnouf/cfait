@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for journal propagation.
 use cfait::client::RustyClient;
 use cfait::context::TestContext;
 use cfait::journal::{Action, Journal};

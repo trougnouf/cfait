@@ -106,7 +106,11 @@ impl GuiApp {
 
         let mut tasks = vec![
             Task::perform(
-                async move { Config::load(ctx_clone.as_ref()).map_err(|e| e.to_string()) },
+                async move {
+                    Config::load(ctx_clone.as_ref())
+                        .map(Box::new)
+                        .map_err(|e| e.to_string())
+                },
                 Message::ConfigLoaded,
             ),
             font::load(icon::FONT_BYTES).map(|_| Message::FontLoaded(Ok(()))),

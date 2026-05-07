@@ -1,4 +1,5 @@
-// Tests ensuring no data loss in local storage logic.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests ensuring no data loss in local storage logic.
 use cfait::context::TestContext;
 use cfait::journal::Journal;
 use cfait::model::Task;

@@ -109,8 +109,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::CategoryMatchModeToggle => {
-            let new_val = !app.match_all_categories;
-            handle(app, Message::CategoryMatchModeChanged(new_val))
+            app.session.match_all_categories = !app.session.match_all_categories;
+            refresh_filtered_tasks(app);
+            Task::none()
         }
         Message::MoveSelected => {
             if let Some(uid) = &app.selected_uid {
@@ -261,52 +262,56 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::CategoryToggled(cat) => {
-            if app.selected_categories.contains(&cat) {
-                app.selected_categories.remove(&cat);
+            if let Some(pos) = app
+                .session
+                .selected_categories
+                .iter()
+                .position(|x| x == &cat)
+            {
+                app.session.selected_categories.remove(pos);
             } else {
-                app.selected_categories.insert(cat);
+                app.session.selected_categories.push(cat);
             }
             refresh_filtered_tasks(app);
             Task::none()
         }
         Message::LocationToggled(loc) => {
-            if app.selected_locations.contains(&loc) {
-                app.selected_locations.remove(&loc);
+            if let Some(pos) = app
+                .session
+                .selected_locations
+                .iter()
+                .position(|x| x == &loc)
+            {
+                app.session.selected_locations.remove(pos);
             } else {
-                app.selected_locations.insert(loc);
+                app.session.selected_locations.push(loc);
             }
             refresh_filtered_tasks(app);
             Task::none()
         }
         Message::ClearAllTags => {
-            app.selected_categories.clear();
+            app.session.selected_categories.clear();
             refresh_filtered_tasks(app);
             Task::none()
         }
         Message::ClearAllLocations => {
-            app.selected_locations.clear();
+            app.session.selected_locations.clear();
             refresh_filtered_tasks(app);
             Task::none()
         }
         Message::ClearAllFilters => {
-            // TUI Parity: '*' clears all sidebar filters and search
-            app.selected_categories.clear();
-            app.selected_locations.clear();
-
-            // Also clear search text properly
+            app.session.selected_categories.clear();
+            app.session.selected_locations.clear();
+            app.session.search_term.clear();
             if !app.search_value.text().is_empty() {
                 app.search_value = iced::widget::text_editor::Content::new();
             }
-
             refresh_filtered_tasks(app);
-
-            // Reset sidebar mode to Calendars default
             app.sidebar_mode = SidebarMode::Calendars;
-
             Task::none()
         }
         Message::CategoryMatchModeChanged(val) => {
-            app.match_all_categories = val;
+            app.session.match_all_categories = val;
             refresh_filtered_tasks(app);
             Task::none()
         }
@@ -376,12 +381,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 return Task::none();
             }
             app.search_value.perform(action);
+            app.session.search_term = app.search_value.text();
 
-            // Increment the debounce version
             app.search_debounce_version = app.search_debounce_version.wrapping_add(1);
             let version = app.search_debounce_version;
 
-            // Wait 250ms before applying the filter
             Task::perform(
                 async move {
                     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
@@ -398,8 +402,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ClearSearch => {
-            // Actually clear the text editor content
             app.search_value = iced::widget::text_editor::Content::new();
+            app.session.search_term.clear();
             refresh_filtered_tasks(app);
             Task::none()
         }
@@ -418,12 +422,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 }
             };
             app.search_value = iced::widget::text_editor::Content::with_text(&new_text);
+            app.session.search_term = new_text.clone();
             app.search_value
                 .perform(iced::widget::text_editor::Action::Move(
                     iced::widget::text_editor::Motion::DocumentEnd,
                 ));
             app.search_debounce_version = app.search_debounce_version.wrapping_add(1);
-            crate::gui::update::common::refresh_filtered_tasks(app);
+            refresh_filtered_tasks(app);
             Task::none()
         }
         Message::SetMinDuration(val) => {
@@ -532,18 +537,20 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         // Focus Handlers (No scrolling)
         Message::FocusTag(tag) => {
             app.sidebar_mode = SidebarMode::Categories;
-            app.selected_categories.clear();
-            app.selected_categories.insert(tag.clone());
+            app.session.selected_categories.clear();
+            app.session.selected_categories.push(tag.clone());
             app.search_value = iced::widget::text_editor::Content::new();
+            app.session.search_term.clear();
             refresh_filtered_tasks(app);
             // DO NOT scroll sidebar here, as user just clicked the arrow
             Task::none()
         }
         Message::FocusLocation(loc) => {
             app.sidebar_mode = SidebarMode::Locations;
-            app.selected_locations.clear();
-            app.selected_locations.insert(loc.clone());
+            app.session.selected_locations.clear();
+            app.session.selected_locations.push(loc.clone());
             app.search_value = iced::widget::text_editor::Content::new();
+            app.session.search_term.clear();
             refresh_filtered_tasks(app);
             // DO NOT scroll sidebar here
             Task::none()
@@ -552,9 +559,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         // KEEP: JumpToTag still scrolls (used for tags in task list)
         Message::JumpToTag(tag) => {
             app.sidebar_mode = SidebarMode::Categories;
-            app.selected_categories.clear();
-            app.selected_categories.insert(tag.clone());
+            app.session.selected_categories.clear();
+            app.session.selected_categories.push(tag.clone());
             app.search_value = iced::widget::text_editor::Content::new();
+            app.session.search_term.clear();
             refresh_filtered_tasks(app);
 
             // Auto-scroll logic is kept for JumpTo...
@@ -577,9 +585,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         // KEEP: JumpToLocation still scrolls
         Message::JumpToLocation(loc) => {
             app.sidebar_mode = SidebarMode::Locations;
-            app.selected_locations.clear();
-            app.selected_locations.insert(loc.clone());
+            app.session.selected_locations.clear();
+            app.session.selected_locations.push(loc.clone());
             app.search_value = iced::widget::text_editor::Content::new();
+            app.session.search_term.clear();
             refresh_filtered_tasks(app);
 
             let all_locs = &app.cached_locations;
@@ -617,14 +626,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 // 3. Clear filters that might hide the task
                 if !app.search_value.text().is_empty() {
                     app.search_value = iced::widget::text_editor::Content::new();
+                    app.session.search_term.clear();
                     needs_refresh = true;
                 }
-                if !app.selected_categories.is_empty() {
-                    app.selected_categories.clear();
+                if !app.session.selected_categories.is_empty() {
+                    app.session.selected_categories.clear();
                     needs_refresh = true;
                 }
-                if !app.selected_locations.is_empty() {
-                    app.selected_locations.clear();
+                if !app.session.selected_locations.is_empty() {
+                    app.session.selected_locations.clear();
                     needs_refresh = true;
                 }
 

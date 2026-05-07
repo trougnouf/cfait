@@ -1,4 +1,5 @@
-// Tests for task sorting logic.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for task sorting logic.
 use cfait::model::{DateType, Task, TaskStatus};
 use cfait::store::organize_hierarchy;
 use chrono::{Duration, Utc};

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Regression tests for recurrence bug reproduction.
 // Updated recurrence tests to use the `recycle` method which mirrors how the
 // application/store handles recurring task completion/cancellation.
 use cfait::model::{DateType, Task, TaskStatus};

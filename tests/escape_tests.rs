@@ -1,4 +1,5 @@
-// Tests for escaping special characters in input.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for escaping special characters in input.
 use cfait::model::{
     Task,
     parser::{extract_inline_aliases, strip_quotes},

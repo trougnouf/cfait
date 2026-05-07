@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// File: ./src/controller.rs
 //! Central logic controller for Task operations.
-//! This is the single source of truth for all business logic (create, update, delete, etc.).
-//! All UI layers (TUI, GUI, Mobile) must delegate actions to this controller to ensure
-//! consistent behavior for both online and offline operations.
+//! This is the single source of truth for background persistence orchestration.
 use crate::client::RustyClient;
 use crate::config::Config;
 use crate::context::AppContext;
 use crate::journal::{Action, Journal};
-use crate::model::{RawProperty, Task};
-use crate::storage::{LOCAL_TRASH_HREF, LocalCalendarRegistry, LocalStorage};
+use crate::model::Task;
+use crate::storage::{LocalCalendarRegistry, LocalStorage};
 use crate::store::TaskStore;
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
@@ -34,20 +31,14 @@ impl TaskController {
         Self { store, client, ctx }
     }
 
-    /// Internal helper: persist an Action.
-    ///
-    /// Strategy:
-    /// 1. If the action targets a local calendar (`local://...`), write directly to `LocalStorage`
-    ///    and skip the `Journal` entirely.
-    /// 2. If a network client is available, push the action to the local Journal
-    ///    (so the action is durable) before attempting an immediate sync. Pushing
-    ///    to the journal first ensures that a crash during sync does not lose the
-    ///    user's intent.
-    /// 3. If the client is present, trigger `client.sync_journal()` to attempt
-    ///    delivering queued actions to the server and return any warnings.
-    /// 4. If no client is available (offline), keep the action in the journal and
-    ///    return a quiet success indicating the change is queued.
-    async fn persist_change(&self, action: Action) -> Result<Vec<String>, String> {
+    /// Persist an Action to LocalStorage or Journal, auto-initializing system calendars if needed.
+    pub async fn persist_change(&self, action: Action) -> Result<Vec<String>, String> {
+        // Prevent Data-Loss: Ensure Trash calendar is registered on disk during a trash-create event
+        if let Action::Create(t) | Action::Update(t) = &action
+            && t.calendar_href == crate::storage::LOCAL_TRASH_HREF {
+                let _ = LocalCalendarRegistry::ensure_trash_calendar_exists(self.ctx.as_ref());
+            }
+
         let is_local = match &action {
             Action::Create(t) | Action::Update(t) | Action::Delete(t) => {
                 t.calendar_href.starts_with("local://")
@@ -99,7 +90,6 @@ impl TaskController {
             Action::Move(t, _) => t.uid.clone(),
         };
 
-        // Flag as pending in memory to prevent Precondition Failed loops
         {
             let mut store = self.store.lock().await;
             if let Some((existing, _)) = store.get_task_mut(&uid)
@@ -109,12 +99,10 @@ impl TaskController {
             }
         }
 
-        // Durable push to journal BEFORE network attempt
         Journal::push(self.ctx.as_ref(), action).map_err(|e| e.to_string())?;
 
         let client_opt = self.client.lock().await.clone();
         if let Some(client) = client_opt {
-            // Await the sync directly so ETags are applied to the active store before returning
             if let Ok((warns, synced)) = client.sync_journal().await {
                 let mut s = self.store.lock().await;
                 for sync_task in synced {
@@ -125,35 +113,124 @@ impl TaskController {
                 }
                 Ok(warns)
             } else {
-                #[cfg(target_os = "android")]
-                log::error!("sync_journal failed in persist_change");
-                #[cfg(not(target_os = "android"))]
-                eprintln!("sync_journal failed in persist_change");
-                Ok(vec![
-                    "Network error: Changes queued for next sync.".to_string(),
-                ])
+                Ok(vec!["Network error: Changes queued for next sync.".to_string()])
             }
         } else {
             Ok(vec!["Offline: Changes queued.".to_string()])
         }
     }
 
-    /// Create a task.
-    ///
-    /// Optimistic update pattern:
-    /// 1. Insert into in-memory store for instant UI feedback.
-    /// 2. If the network client is available, attempt to create remotely and then
-    ///    update the store with any server-assigned metadata (etag/href).
-    /// 3. If offline or remote failure, journal the Create action for background sync.
+    /// Process a batch of actions atomically to ensure proper journal queueing,
+    /// avoiding excessive network calls by batching all remote actions into a single sync.
+    pub async fn persist_changes(&self, actions: Vec<Action>) -> Result<(Vec<String>, Vec<Task>), String> {
+        let mut warnings = Vec::new();
+        let mut remote_actions = Vec::new();
+
+        for action in actions {
+            // Prevent Data-Loss: Ensure Trash calendar is registered on disk during a trash-create event
+            if let Action::Create(ref t) | Action::Update(ref t) = action
+                && t.calendar_href == crate::storage::LOCAL_TRASH_HREF {
+                    let _ = LocalCalendarRegistry::ensure_trash_calendar_exists(self.ctx.as_ref());
+                }
+
+            let is_local = match &action {
+                Action::Create(t) | Action::Update(t) | Action::Delete(t) => {
+                    t.calendar_href.starts_with("local://")
+                }
+                Action::Move(t, _) => t.calendar_href.starts_with("local://"),
+            };
+
+            if is_local {
+                match &action {
+                    Action::Create(t) | Action::Update(t) => {
+                        let task_clone = t.clone();
+                        let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), &t.calendar_href, |all| {
+                            if let Some(idx) = all.iter().position(|item| item.uid == task_clone.uid) {
+                                all[idx] = task_clone;
+                            } else {
+                                all.push(task_clone);
+                            }
+                        });
+                    }
+                    Action::Delete(t) => {
+                        let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), &t.calendar_href, |all| {
+                            all.retain(|item| item.uid != t.uid);
+                        });
+                    }
+                    Action::Move(t, target_href) => {
+                        let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), &t.calendar_href, |all| {
+                            all.retain(|item| item.uid != t.uid);
+                        });
+                        if target_href.starts_with("local://") {
+                            let mut moved = t.clone();
+                            moved.calendar_href = target_href.clone();
+                            let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), target_href, |all| {
+                                all.push(moved);
+                            });
+                        }
+                    }
+                }
+            } else {
+                remote_actions.push(action);
+            }
+        }
+
+        if remote_actions.is_empty() {
+            return Ok((warnings, vec![]));
+        }
+
+        {
+            let mut store = self.store.lock().await;
+            for action in &remote_actions {
+                let uid = match action {
+                    Action::Create(t) | Action::Update(t) | Action::Delete(t) => &t.uid,
+                    Action::Move(t, _) => &t.uid,
+                };
+                if let Some((existing, _)) = store.get_task_mut(uid)
+                    && existing.etag.is_empty() {
+                        existing.etag = "pending_refresh".to_string();
+                    }
+            }
+        }
+
+        Journal::modify(self.ctx.as_ref(), |queue| {
+            queue.extend(remote_actions);
+            let mut tmp_j = Journal { queue: std::mem::take(queue) };
+            tmp_j.compact();
+            *queue = tmp_j.queue;
+        }).map_err(|e| e.to_string())?;
+
+        let client_opt = self.client.lock().await.clone();
+        if let Some(client) = client_opt {
+            if let Ok((warns, synced)) = client.sync_journal().await {
+                let mut s = self.store.lock().await;
+                for sync_task in &synced {
+                    if let Some((existing, _)) = s.get_task_mut(&sync_task.uid) {
+                        existing.etag = sync_task.etag.clone();
+                        existing.href = sync_task.href.clone();
+                    } else {
+                        // Task doesn't exist in store yet (newly created task), add it
+                        s.add_task(sync_task.clone());
+                    }
+                }
+                warnings.extend(warns);
+                Ok((warnings, synced))
+            } else {
+                warnings.push("Network error: Changes queued for next sync.".to_string());
+                Ok((warnings, vec![]))
+            }
+        } else {
+            warnings.push("Offline: Changes queued.".to_string());
+            Ok((warnings, vec![]))
+        }
+    }
+
     pub async fn create_task(&self, mut task: Task) -> Result<String, String> {
-        // Prevent writing to system/trash calendars directly
         if task.calendar_href == crate::storage::LOCAL_TRASH_HREF
             || task.calendar_href == "local://recovery"
         {
             task.calendar_href = crate::storage::LOCAL_CALENDAR_HREF.to_string();
         }
-
-        // Pre-compute full_href for remote tasks so it's ready for the UI instantly
         if !task.calendar_href.starts_with("local://") {
             let cal_path = task.calendar_href.clone();
             let filename = format!("{}.ics", task.uid);
@@ -164,198 +241,22 @@ impl TaskController {
             };
             task.href = full_href;
         }
-
         self.store.lock().await.add_task(task.clone());
         let _ = self.persist_change(Action::Create(task.clone())).await;
-
         Ok(task.uid)
     }
 
-    /// Update an existing task.
-    ///
-    /// Special handling for recurring completions:
-    /// - If the update marks a recurring task as completed, we must:
-    ///   a) create a history snapshot (new UID) that represents the completed instance,
-    ///   b) advance the recurring item to its next occurrence (if possible),
-    ///   c) perform optimistic UI updates for both history and next instance,
-    ///   d) persist both mutations (history create + next update) via journaling/sync.
-    ///
-    /// For non-recurring updates, perform optimistic store update and persist the Update.
     pub async fn update_task(&self, mut task: Task) -> Result<Vec<String>, String> {
         task.sequence += 1;
-
         let mut store = self.store.lock().await;
-
-        // Detect a recurring task being completed (transition from not-done -> done).
-        let is_recurring_completion = if let Some(existing) = store.get_task_ref(&task.uid) {
-            task.rrule.is_some() && task.status.is_done() && !existing.status.is_done()
-        } else {
-            false
-        };
-
-        if is_recurring_completion {
-            // Revert the task status to its previous state so `recycle` knows it's a forward transition,
-            // not an "undo" of a previously completed/cancelled task.
-            let target_status = task.status;
-            let existing = store.get_task_ref(&task.uid).unwrap();
-            task.status = existing.status;
-
-            // Recycle produces a history snapshot and optionally a next-instance.
-            let (history, next_opt) = task.recycle(target_status);
-
-            if next_opt.is_none() {
-                // Recurrence failed to advance (e.g. reached UNTIL).
-                // `history` is actually the updated original task. We treat it as a standard update.
-                store.update_or_add_task(history.clone());
-                drop(store);
-                return self.persist_change(Action::Update(history)).await;
-            }
-
-            // 1. Optimistic UI: insert history (new UID) and update next/main item.
-            store.add_task(history.clone());
-
-            let next = next_opt.unwrap();
-            store.update_or_add_task(next.clone());
-
-            let mut reset_children: Vec<Task> = Vec::new();
-            let mut adjacency: std::collections::HashMap<String, Vec<String>> =
-                std::collections::HashMap::new();
-            for map in store.calendars.values() {
-                for t in map.values() {
-                    if let Some(p) = &t.parent_uid {
-                        adjacency.entry(p.clone()).or_default().push(t.uid.clone());
-                    }
-                }
-            }
-
-            let mut queue = vec![task.uid.clone()];
-            let mut descendants = std::collections::HashSet::new();
-
-            while let Some(parent) = queue.pop() {
-                if let Some(children) = adjacency.get(&parent) {
-                    for child_uid in children {
-                        if descendants.insert(child_uid.clone()) {
-                            queue.push(child_uid.clone());
-                        }
-                    }
-                }
-            }
-
-            for child_uid in descendants {
-                if let Some((child, _)) = store.get_task_mut(&child_uid)
-                    && child.status.is_done()
-                {
-                    child.status = crate::model::TaskStatus::NeedsAction;
-                    child.percent_complete = None;
-                    child
-                        .unmapped_properties
-                        .retain(|p| p.key.to_uppercase() != "COMPLETED");
-
-                    reset_children.push(child.clone());
-                }
-            }
-
-            // Drop the lock before performing network/disk operations.
-            drop(store);
-
-            // 2. Persist changes: history create and next update
-            let mut logs = self.persist_change(Action::Create(history)).await?;
-            let next_logs = self.persist_change(Action::Update(next)).await?;
-            logs.extend(next_logs);
-
-            for child in reset_children {
-                if let Ok(w) = self.persist_change(Action::Update(child)).await {
-                    logs.extend(w);
-                }
-            }
-
-            return Ok(logs);
-        }
-
-        // Standard update path
         store.update_or_add_task(task.clone());
         drop(store);
-
         self.persist_change(Action::Update(task)).await
     }
 
-    /// Delete a task.
-    ///
-    /// Soft-delete behavior:
-    /// - If trash retention is enabled (>0) and the task is not already in the trash,
-    ///   move the task to the local trash calendar and stamp X-TRASHED-DATE.
-    /// - If retention is 0 or the task is already in trash, perform a hard delete.
-    ///
-    /// Steps for soft delete:
-    /// 1. Ensure trash calendar exists in registry/disk.
-    /// 2. Ensure an in-memory entry for the trash calendar.
-    /// 3. Move the task in the store to the trash calendar.
-    /// 4. Stamp deletion date on the moved item.
-    /// 5. Persist the trash item to disk (local storage).
-    /// 6. If original was remote, push a Delete action for background sync.
-    pub async fn delete_task(&self, uid: &str) -> Result<Vec<String>, String> {
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-
-        let mut store = self.store.lock().await;
-        let task_ref = store
-            .get_task_ref(uid)
-            .ok_or("Task not found".to_string())?;
-
-        let is_already_trash = task_ref.calendar_href == LOCAL_TRASH_HREF;
-        let retention = config.trash_retention_days;
-
-        // Hard delete if retention is disabled or item already in trash.
-        if retention == 0 || is_already_trash {
-            let (task, _) = store.delete_task(uid).ok_or("Task not found".to_string())?;
-            drop(store);
-            return self.persist_change(Action::Delete(task)).await;
-        }
-
-        // Soft delete path: move to trash.
-        let target_href = LOCAL_TRASH_HREF.to_string();
-
-        // Ensure trash calendar is registered on disk/registry.
-        let _ = LocalCalendarRegistry::ensure_trash_calendar_exists(self.ctx.as_ref());
-        // Ensure in-memory store has an entry for trash.
-        store.calendars.entry(target_href.clone()).or_default();
-
-        // Move in store; move_task returns (original, updated)
-        let (original, mut updated) = store
-            .move_task(uid, target_href.clone())
-            .ok_or("Task not found".to_string())?;
-
-        // Stamp deletion date so pruning can determine age.
-        let now_str = Utc::now().to_rfc3339();
-        updated
-            .unmapped_properties
-            .retain(|p| p.key != "X-TRASHED-DATE");
-        updated.unmapped_properties.push(RawProperty {
-            key: "X-TRASHED-DATE".to_string(),
-            value: now_str,
-            params: vec![],
-        });
-
-        store.update_or_add_task(updated.clone());
-        drop(store);
-
-        // Save the updated task to the trash local collection
-        let _ = self.persist_change(Action::Create(updated)).await;
-
-        // Delete the original
-        self.persist_change(Action::Delete(original)).await
-    }
-
-    /// Prune items from the trash that have exceeded retention.
-    ///
-    /// Algorithm:
-    /// - Load configured retention days.
-    /// - If retention == 0, nothing to do.
-    /// - Walk the trash calendar, parse X-TRASHED-DATE and collect UIDs older than retention.
-    /// - Delete each found UID from the store and push a Delete action to keep journal consistent.
     pub async fn prune_trash(&self) -> Result<usize, String> {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let retention_days = config.trash_retention_days as i64;
-
         if retention_days == 0 {
             return Ok(0);
         }
@@ -365,7 +266,7 @@ impl TaskController {
 
         let mut store = self.store.lock().await;
 
-        if let Some(trash_map) = store.calendars.get(LOCAL_TRASH_HREF) {
+        if let Some(trash_map) = store.calendars.get(crate::storage::LOCAL_TRASH_HREF) {
             for task in trash_map.values() {
                 if let Some(prop) = task
                     .unmapped_properties
@@ -393,144 +294,6 @@ impl TaskController {
         for task in purged_tasks {
             let _ = self.persist_change(Action::Delete(task)).await;
         }
-
         Ok(count)
-    }
-
-    /// Toggle a task's done state.
-    ///
-    /// Workflow:
-    /// 1. Acquire store read/modify lock and determine current and next status.
-    /// 2. Apply the store-level set_status which returns:
-    ///    - primary: the history or updated task that represents the immediate change
-    ///    - optional secondary: for recurring tasks, the advanced next-instance
-    ///    - children: any descendant tasks that were auto-reset (need persistence)
-    /// 3. Drop the lock and persist the produced mutations via `persist_change`.
-    /// 4. Persist any children mutations as well.
-    pub async fn toggle_task(&self, uid: &str) -> Result<Vec<String>, String> {
-        let mut store = self.store.lock().await;
-
-        let primary_ref = store
-            .get_task_ref(uid)
-            .ok_or("Task not found".to_string())?;
-        let current_status = primary_ref.status;
-
-        let next_status = if current_status.is_done() {
-            crate::model::TaskStatus::NeedsAction
-        } else {
-            crate::model::TaskStatus::Completed
-        };
-
-        let (primary, secondary, children) = store
-            .set_status(uid, next_status)
-            .ok_or("Failed to set status".to_string())?;
-
-        drop(store);
-
-        // Persist all produced mutations, aggregating any warnings/messages.
-        let mut all_warnings: Vec<String> = Vec::new();
-
-        if let Some(sec) = secondary {
-            // Recurrence advanced: persist the created history and the updated next instance.
-            if let Ok(w) = self.persist_change(Action::Create(primary)).await {
-                all_warnings.extend(w);
-            }
-            if let Ok(w) = self.persist_change(Action::Update(sec)).await {
-                all_warnings.extend(w);
-            }
-        } else if let Ok(w) = self.persist_change(Action::Update(primary)).await {
-            // Simple toggle: persist the single Update action.
-            all_warnings.extend(w);
-        }
-
-        // Persist any children that were auto-reset by the store's logic.
-        for child in children {
-            if let Ok(w) = self.persist_change(Action::Update(child)).await {
-                all_warnings.extend(w);
-            }
-        }
-
-        Ok(all_warnings)
-    }
-
-    /// Deep-duplicate a task and its descendants.
-    pub async fn duplicate_task_tree(&self, uid: &str) -> Result<Vec<String>, String> {
-        let mut store = self.store.lock().await;
-        let new_tasks = store.duplicate_task_tree(uid);
-        drop(store);
-
-        let mut all_warnings = Vec::new();
-        for task in new_tasks {
-            if let Ok(w) = self.persist_change(Action::Create(task)).await {
-                all_warnings.extend(w);
-            }
-        }
-        Ok(all_warnings)
-    }
-
-    /// Delete a task and all its descendants recursively.
-    pub async fn delete_task_tree(&self, uid: &str) -> Result<Vec<String>, String> {
-        let descendants = {
-            let store = self.store.lock().await;
-            store.get_descendant_uids(uid)
-        };
-
-        let mut all_warnings = Vec::new();
-        // Delete descendants first (bottom-up is safer for some servers)
-        for d_uid in descendants {
-            if let Ok(w) = self.delete_task(&d_uid).await {
-                all_warnings.extend(w);
-            }
-        }
-        // Finally delete the root
-        if let Ok(w) = self.delete_task(uid).await {
-            all_warnings.extend(w);
-        }
-        Ok(all_warnings)
-    }
-
-    /// Move a task between calendars.
-    ///
-    /// This returns the original task state so callers can persist a Move action
-    /// to the journal/network indicating the source calendar and target.
-    pub async fn move_task(&self, uid: &str, new_cal_href: &str) -> Result<Vec<String>, String> {
-        // Prevent manual moves to system calendars
-        let target_href = if new_cal_href == crate::storage::LOCAL_TRASH_HREF
-            || new_cal_href == "local://recovery"
-        {
-            crate::storage::LOCAL_CALENDAR_HREF.to_string()
-        } else {
-            new_cal_href.to_string()
-        };
-
-        let mut store = self.store.lock().await;
-        let (original, _) = store
-            .move_task(uid, target_href.clone())
-            .ok_or("Task not found".to_string())?;
-        drop(store);
-
-        if !original.calendar_href.starts_with("local://") && !target_href.starts_with("local://") {
-            self.persist_change(Action::Move(original, target_href))
-                .await
-        } else if !original.calendar_href.starts_with("local://")
-            && target_href.starts_with("local://")
-        {
-            let _ = self.persist_change(Action::Delete(original.clone())).await;
-            let mut moved = original.clone();
-            moved.calendar_href = target_href.clone();
-            self.persist_change(Action::Create(moved)).await
-        } else if original.calendar_href.starts_with("local://")
-            && !target_href.starts_with("local://")
-        {
-            let _ = self.persist_change(Action::Delete(original.clone())).await;
-            let mut moved = original.clone();
-            moved.calendar_href = target_href.clone();
-            moved.href = String::new();
-            moved.etag = String::new();
-            self.persist_change(Action::Create(moved)).await
-        } else {
-            self.persist_change(Action::Move(original, target_href))
-                .await
-        }
     }
 }

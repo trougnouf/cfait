@@ -25,8 +25,11 @@ object NotificationHelper {
             return
         }
 
+        val nightModeFlags = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+        val isDark = nightModeFlags == android.content.res.Configuration.UI_MODE_NIGHT_YES
+
         val config = api.getConfig()
-        val ongoingTasks = api.getOngoingTasks()
+        val ongoingTasks = api.getOngoingTasks(isDark)
         val prefs = context.getSharedPreferences("cfait_ongoing_notifs", Context.MODE_PRIVATE)
 
         // Cleanup dismissed flags for tasks no longer ongoing

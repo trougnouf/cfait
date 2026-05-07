@@ -1,3 +1,4 @@
+// File: ./src/gui/message.rs
 // SPDX-License-Identifier: GPL-3.0-or-later
 /*
 File: cfait/src/gui/message.rs
@@ -41,7 +42,7 @@ pub enum Message {
 
     // --- Input & Editing ---
     InputChanged(text_editor::Action),
-    StartCreateWithDescription, // <-- NEW
+    StartCreateWithDescription,
     DescriptionChanged(text_editor::Action),
     SearchChanged(text_editor::Action),
     ApplySearch(usize),
@@ -72,10 +73,8 @@ pub enum Message {
     ClearYank,
     EscapePressed,
     EscCaptured,
-    // TUI parity: split child behavior into explicit "link child" and "create new subtask"
-    KeyboardLinkChild,   // 'c' (Link selected to yanked)
-    KeyboardCreateChild, // 'C' (Create new subtask for selected)
-    // --- Session / Time-tracking shortcuts & actions ---
+    KeyboardLinkChild,
+    KeyboardCreateChild,
     StartAddSession(String),
     SessionInputChanged(iced::widget::text_editor::Action),
     SubmitSession,
@@ -84,29 +83,27 @@ pub enum Message {
     ToggleShowAllSessions(String),
     KeyboardAddSession,
     KeyboardToggleSessions,
-    // Clear all filters (TUI '*' behavior)
     ClearAllFilters,
     KeyboardAddDependency,
     KeyboardAddRelation,
-    KeyboardToggleTreeCollapse, // 'z' logic
-    KeyboardDuplicateTask,      // 'Ctrl+D' logic
-    KeyboardDeleteTaskTree,     // 'Ctrl+Delete' logic
-    KeyboardOpenLocations,      // 'g' logic
-    KeyboardOpenUrl,            // 'o' logic
-    KeyboardOpenContextMenu,    // 'L' logic
-    DuplicateTask(String),      // Used by Yank bar button & hotkey
+    KeyboardToggleTreeCollapse,
+    KeyboardDuplicateTask,
+    KeyboardDeleteTaskTree,
+    KeyboardOpenLocations,
+    KeyboardOpenUrl,
+    KeyboardOpenContextMenu,
+    DuplicateTask(String),
     DeleteTaskTree(String),
-    ToggleActiveSelected,       // 's' logic
-    StopSelected,               // 'S' logic
-    CancelSelected,             // 'x' logic
-    ChangePrioritySelected(i8), // '+' / '-' logic
-    ToggleHideCompletedToggle,  // 'H' (Stateless switch)
-    CategoryMatchModeToggle,    // 'm' (Stateless switch)
+    ToggleActiveSelected,
+    StopSelected,
+    CancelSelected,
+    ChangePrioritySelected(i8),
+    ToggleHideCompletedToggle,
+    CategoryMatchModeToggle,
     FocusInput,
     FocusSearch,
     Refresh,
 
-    // Zoom controls (Ctrl/Cmd + '+' / '-' / '0')
     ZoomIn,
     ZoomOut,
     ZoomReset,
@@ -133,7 +130,6 @@ pub enum Message {
     OpenHelp(crate::help::HelpTab),
     CloseHelp,
     SwitchHelpTab(bool),
-    // Virtual group toggles (expand/collapse) for completed/cancelled grouping
     ToggleDoneGroup(String),
     ToggleTreeCollapse(String),
     ToggleHelpSection(String),
@@ -159,7 +155,7 @@ pub enum Message {
     JumpToTag(String),
     JumpToLocation(String),
     JumpToTask(String),
-    JumpToRandomTask, // Jump to a weighted-random task
+    JumpToRandomTask,
     SnapToSelected { focus: bool },
     TagHovered(Option<String>),
     FocusTag(String),
@@ -167,10 +163,10 @@ pub enum Message {
     OpenUrl(String),
     OpenCoordinates(String),
     OpenLocations(String),
-    TaskClick(usize, String), // Added
+    TaskClick(usize, String),
 
     // --- System & Network Events ---
-    ConfigLoaded(Result<Config, String>),
+    ConfigLoaded(Result<Box<Config>, String>),
     ObSortMonthsChanged(String),
     ThemeChanged(AppTheme),
     Loaded(LoadedResult),
@@ -204,8 +200,8 @@ pub enum Message {
     // --- Alarms & Reminders ---
     InitAlarmActor(mpsc::Sender<SystemEvent>),
     AlarmSignalReceived(Arc<AlarmMessage>),
-    CompleteTaskFromAlarm(String, String), // TaskUID, AlarmUID
-    CancelTaskFromAlarm(String, String),   // TaskUID, AlarmUID
+    CompleteTaskFromAlarm(String, String),
+    CancelTaskFromAlarm(String, String),
     SnoozeAlarm(String, String, u32),
     DismissAlarm(String, String),
     SnoozeCustomInput(String),
@@ -214,7 +210,7 @@ pub enum Message {
     SetDefaultReminderTime(String),
     SetSnoozeShort(String),
     SetSnoozeLong(String),
-    SetAutoRefreshInterval(String), // Added
+    SetAutoRefreshInterval(String),
 
     SetShowQuickFilter(bool),
     SetQuickFilterTerm(String),

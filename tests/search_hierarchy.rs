@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for search hierarchy functionality.
 use cfait::context::TestContext;
 use cfait::model::Task;
 use cfait::store::{FilterOptions, TaskStore};

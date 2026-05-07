@@ -1,4 +1,5 @@
-// Regression tests for task relationships.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Regression tests for task relationships.
 use cfait::model::Task;
 use std::collections::HashMap;
 

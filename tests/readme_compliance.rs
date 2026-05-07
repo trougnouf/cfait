@@ -1,4 +1,5 @@
-// Tests ensuring compatibility with README examples.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests ensuring compatibility with README examples.
 use cfait::model::Task;
 use chrono::{Duration, Local};
 use std::collections::HashMap;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for import functionality.
 use cfait::context::TestContext;
 use cfait::model::Task;
 use cfait::storage::LocalStorage;

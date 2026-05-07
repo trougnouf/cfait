@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for blocked sorting functionality.
 use cfait::context::TestContext;
 use cfait::model::{DateType, Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};

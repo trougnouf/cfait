@@ -173,10 +173,16 @@ async fn test_controller_move_local_to_remote() {
     let controller = cfait::controller::TaskController::new(store.clone(), client_arc, ctx.clone());
 
     let dest = "https://example.com/cal/dest/";
-    let res = controller.move_task(&task.uid, dest).await;
+    let (orig, mut updated) = store.lock().await.move_task(&task.uid, dest.to_string()).unwrap();
+    updated.href = String::new();
+    updated.etag = String::new();
+    let res = controller.persist_changes(vec![
+        cfait::journal::Action::Delete(orig),
+        cfait::journal::Action::Create(updated)
+    ]).await;
     assert!(
         res.is_ok(),
-        "Expected controller move_task to succeed in queuing migration"
+        "Expected controller persist_changes to succeed in queuing migration"
     );
 
     // Source should be deleted from local storage

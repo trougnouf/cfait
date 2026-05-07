@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for TUI create input.
 use cfait::context::TestContext;
 use cfait::model::CalendarListEntry;
 use cfait::tui::action::Action;
@@ -33,13 +34,18 @@ async fn test_tui_creating_tag_only_input_creates_task_instead_of_filtering() {
     .await;
 
     match action {
-        Some(Action::CreateTask(task)) => {
-            assert!(
-                task.categories.contains(&"work".to_string()),
-                "Expected the smart input to become a task tag"
-            );
+        Some(Action::PersistBatch(actions)) => {
+            assert_eq!(actions.len(), 1, "Expected exactly one action");
+            if let cfait::journal::Action::Create(task) = &actions[0] {
+                assert!(
+                    task.categories.contains(&"work".to_string()),
+                    "Expected the smart input to become a task tag"
+                );
+            } else {
+                panic!("Expected Create action in PersistBatch");
+            }
         }
-        other => panic!("Expected CreateTask, got {:?}", other),
+        other => panic!("Expected PersistBatch, got {:?}", other),
     }
 
     assert!(
@@ -77,13 +83,18 @@ async fn test_tui_creating_task_and_alias_simultaneously() {
 
     // 1. Verify the task was created correctly
     match action {
-        Some(Action::CreateTask(task)) => {
-            assert_eq!(task.summary, "Test buy groceries");
-            assert_eq!(task.location, Some("aldi".to_string()));
-            assert!(task.categories.contains(&"groceries".to_string()));
-            assert_eq!(task.geo, Some("50.19531,4.53557".to_string()));
+        Some(Action::PersistBatch(actions)) => {
+            assert_eq!(actions.len(), 1, "Expected exactly one action");
+            if let cfait::journal::Action::Create(task) = &actions[0] {
+                assert_eq!(task.summary, "Test buy groceries");
+                assert_eq!(task.location, Some("aldi".to_string()));
+                assert!(task.categories.contains(&"groceries".to_string()));
+                assert_eq!(task.geo, Some("50.19531,4.53557".to_string()));
+            } else {
+                panic!("Expected Create action in PersistBatch");
+            }
         }
-        other => panic!("Expected CreateTask, got {:?}", other),
+        other => panic!("Expected PersistBatch, got {:?}", other),
     }
 
     // 2. Verify the alias was actually saved in the state

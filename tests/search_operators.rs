@@ -1,4 +1,5 @@
-// Tests for search query operators.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for search query operators.
 use cfait::model::{DateType, Task, TaskStatus}; // Added DateType import
 use chrono::{Duration, Local, Utc}; // Added Utc import
 use std::collections::HashMap;

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for synchronization edge cases.
 use cfait::client::RustyClient;
 use cfait::context::TestContext;
 use cfait::journal::{Action, Journal};
@@ -136,7 +138,10 @@ async fn test_sync_ignores_companion_events_to_prevent_multiget_spam() {
 
     // 3. Run the sync
     let client = RustyClient::new(ctx.clone(), &url, "user", "pass", true, None).unwrap();
-    let tasks = client.get_tasks(&format!("{}{}", url, cal_path)).await.unwrap();
+    let tasks = client
+        .get_tasks(&format!("{}{}", url, cal_path))
+        .await
+        .unwrap();
 
     // 4. Assertions
     mock_list.assert();

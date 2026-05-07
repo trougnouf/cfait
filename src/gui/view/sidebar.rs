@@ -168,7 +168,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     let all_cats = &app.cached_categories;
 
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
-    let has_selection = !app.selected_categories.is_empty();
+    let has_selection = !app.session.selected_categories.is_empty();
 
     let clear_btn = if has_selection {
         if is_filter_empty {
@@ -208,7 +208,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     .style(tooltip_style)
     .delay(Duration::from_millis(700));
 
-    let logic_text = if app.match_all_categories {
+    let logic_text = if app.session.match_all_categories {
         rust_i18n::t!("match_and")
     } else {
         rust_i18n::t!("match_or")
@@ -216,7 +216,9 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     let logic_btn = button(text(logic_text).size(12))
         .style(button::secondary)
         .padding(5)
-        .on_press(Message::CategoryMatchModeChanged(!app.match_all_categories));
+        .on_press(Message::CategoryMatchModeChanged(
+            !app.session.match_all_categories,
+        ));
 
     let logic_tooltip = tooltip(
         logic_btn,
@@ -326,7 +328,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                 .iter()
                 .map(|(cat, count)| {
                     let is_hovered = app.hovered_tag_uid.as_ref() == Some(cat);
-                    let is_selected = app.selected_categories.contains(cat.as_str());
+                    let is_selected = app.session.selected_categories.contains(cat);
                     let cat_clone_toggle = cat.clone();
                     let cat_clone_focus = cat.clone();
 
@@ -447,7 +449,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
 // --- LOCATIONS ---
 pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
     let all_locs = &app.cached_locations;
-    let has_selection = !app.selected_locations.is_empty();
+    let has_selection = !app.session.selected_locations.is_empty();
 
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
     let clear_btn = if has_selection {
@@ -509,7 +511,7 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
             all_locs
                 .iter()
                 .map(|(loc, count)| {
-                    let is_selected = app.selected_locations.contains(loc.as_str());
+                    let is_selected = app.session.selected_locations.contains(loc);
                     let loc_clone_toggle = loc.clone();
                     let loc_clone_focus = loc.clone();
 

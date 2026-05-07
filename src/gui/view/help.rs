@@ -1,5 +1,6 @@
 // File: ./src/gui/view/help.rs
 // SPDX-License-Identifier: GPL-3.0-or-later
+//! GUI view component for displaying the help screen.
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::help::HelpTab;

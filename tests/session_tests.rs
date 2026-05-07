@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for session functionality.
 use cfait::model::parser::parse_session_input;
 use chrono::Local;
 

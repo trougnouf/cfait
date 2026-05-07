@@ -1,5 +1,5 @@
-// Tests for duration range functionality
-//
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for duration range functionality.
 // This tests the new duration range feature that allows tasks to have
 // both a minimum and maximum estimated duration (e.g., ~30m-1h).
 

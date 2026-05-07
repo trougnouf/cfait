@@ -1,6 +1,5 @@
-// File: tests/./rfc5545_duration_compliance.rs
-// Tests ensuring ICS compliance regarding DUE/DURATION properties.
-//
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests ensuring RFC 5545 compliance regarding DUE/DURATION properties.
 // Tests to ensure RFC 5545 compliance: VTODO components cannot contain both
 // DUE and DURATION properties simultaneously.
 //

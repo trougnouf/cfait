@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for export and roundtrip functionality.
 use cfait::context::TestContext;
 use cfait::model::{Alarm, DateType, Task, TaskStatus};
 use cfait::storage::LocalStorage;

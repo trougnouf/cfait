@@ -1,4 +1,5 @@
-// Tests for newer filter features (relative dates, etc.).
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for newer filter features (relative dates, etc.).
 use cfait::context::TestContext;
 use cfait::model::{Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};

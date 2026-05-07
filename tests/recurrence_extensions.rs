@@ -1,4 +1,5 @@
-// Tests for extended recurrence features (until/except).
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for extended recurrence features (until/except).
 // Tests for "until" and "except" recurrence extensions
 
 use cfait::model::{DateType, Task};

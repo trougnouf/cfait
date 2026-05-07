@@ -1,4 +1,5 @@
-// File: tests/local_concurrency.rs
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for local concurrency handling.
 use cfait::context::TestContext;
 use cfait::model::Task;
 use cfait::storage::LocalStorage;

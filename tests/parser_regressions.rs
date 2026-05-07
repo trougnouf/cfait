@@ -1,4 +1,5 @@
-// Regression tests for input parsing bugs.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Regression tests for input parsing bugs.
 use cfait::model::{AlarmTrigger, Task};
 use chrono::{Local, Timelike};
 use std::collections::HashMap;

@@ -1,4 +1,5 @@
-// File: ./tests/sync_create_conflicts.rs
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for synchronization create conflicts.
 use cfait::client::RustyClient;
 use cfait::context::TestContext;
 use cfait::journal::{Action, Journal};

@@ -1,4 +1,5 @@
-// Tests for recurrence date calculation logic.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for recurrence date calculation logic.
 use cfait::model::{DateType, Task, TaskStatus};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;

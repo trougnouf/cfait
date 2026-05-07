@@ -1,5 +1,6 @@
+// File: ./src/gui/update/settings.rs
 // SPDX-License-Identifier: GPL-3.0-or-later
-// File: src/gui/update/settings.rs
+// Renders the settings and onboarding screens.
 use crate::cache::Cache;
 
 use crate::gui::async_ops::*;
@@ -12,7 +13,8 @@ use iced::Task;
 
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
-        Message::ConfigLoaded(Ok(config)) => {
+        Message::ConfigLoaded(Ok(config_box)) => {
+            let config = *config_box;
             let locals = LocalCalendarRegistry::load(app.ctx.as_ref()).unwrap_or_default();
             app.local_cals_editing = locals.clone();
 
@@ -266,12 +268,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             app.error_msg = None;
                             save_config(app);
 
-                            let actions = apply_alias_retroactively(app, &key, &tags);
-                            if !actions.is_empty()
-                                && let Some(tx) = &app.bg_tx
-                            {
-                                let _ = tx
-                                    .try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+                            let modified_tasks = apply_alias_retroactively(app, &key, &tags);
+                            if !modified_tasks.is_empty() {
+                                let actions: Vec<_> = modified_tasks
+                                    .into_iter()
+                                    .map(crate::journal::Action::Update)
+                                    .collect();
+                                if let Some(tx) = &app.bg_tx {
+                                    let _ = tx.try_send(
+                                        crate::gui::async_ops::WorkerCommand::Batch(actions),
+                                    );
+                                }
                             }
                         }
                         Err(e) => {

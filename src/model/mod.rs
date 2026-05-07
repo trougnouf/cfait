@@ -9,7 +9,9 @@ pub mod item;
 pub mod matcher;
 pub mod merge;
 pub mod parser;
+pub mod presentation;
 pub mod recurrence;
+pub mod session;
 
 // Re-export everything from `item.rs` so `crate::model::Task` and related types work.
 pub use item::{Alarm, AlarmTrigger, CalendarListEntry, DateType, RawProperty, Task, TaskStatus};
@@ -24,3 +26,9 @@ pub use extractor::{ExtractedTask, extract_markdown_tasks};
 pub use adapter::IcsAdapter;
 pub use display::TaskDisplay;
 pub use recurrence::RecurrenceEngine;
+
+// Re-export presentation model for UI rendering
+pub use presentation::{RenderableTag, RenderableTask};
+
+// Re-export session model for UI state management
+pub use session::{AppIntent, SessionState};

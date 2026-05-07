@@ -73,8 +73,10 @@ class NotificationActionWorker(
                     // 2. Dismiss the specific alarm that triggered this
                     api.dismissAlarm(taskUid, alarmUid)
 
+                    val nightModeFlags = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+                    val isDark = nightModeFlags == android.content.res.Configuration.UI_MODE_NIGHT_YES
                     // 3. Fetch fresh task data to get accurate time tracking info
-                    val task = api.getTaskByUid(taskUid)
+                    val task = api.getTaskByUid(taskUid, isDark)
                     if (task != null) {
                         com.trougnouf.cfait.util.NotificationHelper.showActiveTaskNotification(context, task, alarmUid)
                     }

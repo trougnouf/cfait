@@ -471,6 +471,7 @@ async fn main() -> Result<()> {
                 None => std::process::exit(1),
             };
 
+            let config = cfait::config::Config::load(ctx.as_ref()).unwrap_or_default();
             let store_arc = Arc::new(tokio::sync::Mutex::new(store));
             let client_arc = Arc::new(tokio::sync::Mutex::new(None));
             let controller =
@@ -478,37 +479,27 @@ async fn main() -> Result<()> {
 
             match command {
                 "start" => {
-                    // Mark the task and its ancestry as InProcess in the in-memory store,
-                    // then persist each updated task via controller.update_task.
                     let mut store_lock = controller.store.lock().await;
-                    let updated = store_lock.set_status_in_process(&full_uid);
+                    let intent = cfait::model::AppIntent::StartTask { uid: full_uid.clone() };
+                    let actions = store_lock.apply_task_intent(&intent, &config);
                     drop(store_lock);
-                    for t in updated {
-                        controller
-                            .update_task(t)
-                            .await
-                            .map_err(|e| anyhow::anyhow!(e))?;
-                    }
+                    controller.persist_changes(actions).await.map_err(|e| anyhow::anyhow!(e))?;
                     println!("Task {} started.", partial_uid);
                 }
                 "pause" => {
-                    // Pause the task subtree in-memory (commit timing/sessions), then persist.
                     let mut store_lock = controller.store.lock().await;
-                    let updated = store_lock.pause_task(&full_uid);
+                    let intent = cfait::model::AppIntent::PauseTask { uid: full_uid.clone() };
+                    let actions = store_lock.apply_task_intent(&intent, &config);
                     drop(store_lock);
-                    for t in updated {
-                        controller
-                            .update_task(t)
-                            .await
-                            .map_err(|e| anyhow::anyhow!(e))?;
-                    }
+                    controller.persist_changes(actions).await.map_err(|e| anyhow::anyhow!(e))?;
                     println!("Task {} paused.", partial_uid);
                 }
                 _ => {
-                    controller
-                        .toggle_task(&full_uid)
-                        .await
-                        .map_err(|e| anyhow::anyhow!(e))?;
+                    let mut store_lock = controller.store.lock().await;
+                    let intent = cfait::model::AppIntent::ToggleTask { uid: full_uid.clone() };
+                    let actions = store_lock.apply_task_intent(&intent, &config);
+                    drop(store_lock);
+                    controller.persist_changes(actions).await.map_err(|e| anyhow::anyhow!(e))?;
                     println!("Task {} toggled.", partial_uid);
                 }
             }
@@ -531,15 +522,18 @@ async fn main() -> Result<()> {
                 None => std::process::exit(1),
             };
 
+            let config = cfait::config::Config::load(ctx.as_ref()).unwrap_or_default();
             let store_arc = Arc::new(tokio::sync::Mutex::new(store));
             let client_arc = Arc::new(tokio::sync::Mutex::new(None));
             let controller =
                 cfait::controller::TaskController::new(store_arc, client_arc, ctx.clone());
 
-            controller
-                .delete_task(&full_uid)
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?;
+            let actions = {
+                let mut store_lock = controller.store.lock().await;
+                let intent = cfait::model::AppIntent::DeleteTask { uid: full_uid.clone() };
+                store_lock.apply_task_intent(&intent, &config)
+            };
+            controller.persist_changes(actions).await.map_err(|e| anyhow::anyhow!(e))?;
             println!("Task {} deleted.", partial_uid);
 
             // Best-effort background sync

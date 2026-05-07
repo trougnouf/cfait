@@ -21,19 +21,16 @@ pub enum SidebarMode {
 #[derive(Debug)]
 pub enum Action {
     SwitchCalendar(String),
-    CreateTask(Task),
-    UpdateTask(Task),
-    DeleteTask(String), // UID
     Refresh,
     Quit,
-    MoveTask(String, String), // UID, target_href
-    ToggleTask(String),       // UID
     StartCreateChild(String),
     MigrateLocal(String, String), // (source_calendar_href, target_calendar_href)
     ToggleCalendarVisibility(String),
     IsolateCalendar(String),
+    ToggleTask(String),       // UID
     DuplicateTask(String),
     DeleteTaskTree(String),
+    PersistBatch(Vec<crate::journal::Action>), // <-- ADD THIS
 }
 
 #[derive(Debug)]

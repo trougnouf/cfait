@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for alarm recurrence fix.
 use cfait::model::item::Task;
 use chrono::{Datelike, Timelike};
 use std::collections::HashMap;

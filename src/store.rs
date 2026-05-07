@@ -50,8 +50,10 @@ Implementation notes:
      transient attributes are computed).
 */
 
+use crate::config::Config;
 use crate::context::AppContext;
-use crate::model::{DateType, Task, TaskStatus};
+use crate::journal::Action as JournalAction;
+use crate::model::{AppIntent, DateType, Task, TaskStatus};
 use chrono::{DateTime, Utc};
 use fastrand;
 use std::collections::{HashMap, HashSet};
@@ -624,6 +626,41 @@ impl TaskStore {
             return Some((task, href));
         }
         None
+    }
+
+    /// Evaluates retention settings and safely moves a task to the local trash.
+    /// Returns (OriginalDeletedTask, Option<NewTrashedTask>).
+    pub fn soft_delete_task(&mut self, uid: &str, retention_days: u32) -> Option<(Task, Option<Task>)> {
+        let is_already_trash = self.get_task_ref(uid).map(|t| t.calendar_href == crate::storage::LOCAL_TRASH_HREF).unwrap_or(false);
+        if retention_days == 0 || is_already_trash {
+            let (deleted, _) = self.delete_task(uid)?;
+            Some((deleted, None))
+        } else {
+            self.calendars.entry(crate::storage::LOCAL_TRASH_HREF.to_string()).or_default();
+            let (orig, mut updated) = self.move_task(uid, crate::storage::LOCAL_TRASH_HREF.to_string())?;
+            let now_str = chrono::Utc::now().to_rfc3339();
+            updated.unmapped_properties.retain(|p| p.key != "X-TRASHED-DATE");
+            updated.unmapped_properties.push(crate::model::RawProperty {
+                key: "X-TRASHED-DATE".to_string(),
+                value: now_str,
+                params: vec![],
+            });
+            self.update_or_add_task(updated.clone());
+            Some((orig, Some(updated)))
+        }
+    }
+
+    /// Extends soft_delete_task recursively to the entire sub-tree.
+    pub fn soft_delete_task_tree(&mut self, root_uid: &str, retention_days: u32) -> Vec<(Task, Option<Task>)> {
+        let mut uids = self.get_descendant_uids(root_uid);
+        uids.push(root_uid.to_string());
+        let mut results = Vec::new();
+        for uid in uids {
+            if let Some(res) = self.soft_delete_task(&uid, retention_days) {
+                results.push(res);
+            }
+        }
+        results
     }
 
     /// Toggle convenience: Completed <-> NeedsAction (returns primary, optional secondary, reset children)
@@ -1908,5 +1945,123 @@ impl TaskStore {
             }
         }
         parents
+    }
+
+    /// Applies a Task-related AppIntent to the in-memory store and returns the list of
+    /// persistence Actions that should be written to the journal/server.
+    /// This method ignores Session-related intents (like SetSearchTerm).
+    pub fn apply_task_intent(&mut self, intent: &AppIntent, config: &Config) -> Vec<JournalAction> {
+        let mut actions = Vec::new();
+        match intent {
+            AppIntent::ToggleTask { uid } => {
+                if let Some((primary, secondary, children)) = self.toggle_task(uid) {
+                    if let Some(sec) = secondary {
+                        actions.push(JournalAction::Create(primary));
+                        actions.push(JournalAction::Update(sec));
+                    } else {
+                        actions.push(JournalAction::Update(primary));
+                    }
+                    for c in children { actions.push(JournalAction::Update(c)); }
+                }
+            }
+            AppIntent::DeleteTask { uid } => {
+                if let Some((deleted, trashed_opt)) = self.soft_delete_task(uid, config.trash_retention_days) {
+                    actions.push(JournalAction::Delete(deleted));
+                    if let Some(trashed) = trashed_opt { actions.push(JournalAction::Create(trashed)); }
+                }
+            }
+            AppIntent::DeleteTaskTree { uid } => {
+                let pairs = self.soft_delete_task_tree(uid, config.trash_retention_days);
+                for (deleted, trashed_opt) in pairs {
+                    actions.push(JournalAction::Delete(deleted));
+                    if let Some(trashed) = trashed_opt { actions.push(JournalAction::Create(trashed)); }
+                }
+            }
+            AppIntent::CancelTask { uid } => {
+                if let Some((primary, secondary, children)) = self.set_status(uid, crate::model::TaskStatus::Cancelled) {
+                    if let Some(sec) = secondary {
+                        actions.push(JournalAction::Create(primary));
+                        actions.push(JournalAction::Update(sec));
+                    } else {
+                        actions.push(JournalAction::Update(primary));
+                    }
+                    for c in children { actions.push(JournalAction::Update(c)); }
+                }
+            }
+            AppIntent::ChangePriority { uid, delta } => {
+                if let Some(updated) = self.change_priority(uid, *delta, config.default_priority) {
+                    actions.push(JournalAction::Update(updated));
+                }
+            }
+            AppIntent::StartTask { uid } => {
+                let updated = self.set_status_in_process(uid);
+                actions.extend(updated.into_iter().map(JournalAction::Update));
+            }
+            AppIntent::PauseTask { uid } => {
+                let updated = self.pause_task(uid);
+                actions.extend(updated.into_iter().map(JournalAction::Update));
+            }
+            AppIntent::StopTask { uid } => {
+                let updated = self.stop_task(uid);
+                actions.extend(updated.into_iter().map(JournalAction::Update));
+            }
+            AppIntent::MoveTask { uid, target_href } => {
+                let safe_target = if target_href == crate::storage::LOCAL_TRASH_HREF || target_href == "local://recovery" {
+                    crate::storage::LOCAL_CALENDAR_HREF.to_string()
+                } else {
+                    target_href.clone()
+                };
+                if let Some((orig, updated)) = self.move_task(uid, safe_target.clone()) {
+                    if !orig.calendar_href.starts_with("local://") && safe_target.starts_with("local://") {
+                        actions.push(JournalAction::Delete(orig));
+                        actions.push(JournalAction::Create(updated));
+                    } else if orig.calendar_href.starts_with("local://") && !safe_target.starts_with("local://") {
+                        actions.push(JournalAction::Delete(orig));
+                        let mut moved = updated.clone();
+                        moved.href = String::new();
+                        moved.etag = String::new();
+                        actions.push(JournalAction::Create(moved));
+                    } else {
+                        actions.push(JournalAction::Move(orig, safe_target));
+                    }
+                }
+            }
+            AppIntent::DuplicateTaskTree { uid } => {
+                let new_tasks = self.duplicate_task_tree(uid);
+                actions.extend(new_tasks.into_iter().map(JournalAction::Create));
+            }
+            AppIntent::RemoveParent { uid } => {
+                if let Ok(updated) = self.set_parent(uid, None) {
+                    actions.push(JournalAction::Update(updated));
+                }
+            }
+            AppIntent::MakeChild { uid, parent_uid } => {
+                if let Ok(updated) = self.set_parent(uid, Some(parent_uid.clone())) {
+                    actions.push(JournalAction::Update(updated));
+                }
+            }
+            AppIntent::AddDependency { uid, blocker_uid } => {
+                if let Some(updated) = self.add_dependency(uid, blocker_uid.clone()) {
+                    actions.push(JournalAction::Update(updated));
+                }
+            }
+            AppIntent::RemoveDependency { uid, blocker_uid } => {
+                if let Some(updated) = self.remove_dependency(uid, blocker_uid) {
+                    actions.push(JournalAction::Update(updated));
+                }
+            }
+            AppIntent::AddRelatedTo { uid, related_uid } => {
+                if let Some(updated) = self.add_related_to(uid, related_uid.clone()) {
+                    actions.push(JournalAction::Update(updated));
+                }
+            }
+            AppIntent::RemoveRelatedTo { uid, related_uid } => {
+                if let Some(updated) = self.remove_related_to(uid, related_uid) {
+                    actions.push(JournalAction::Update(updated));
+                }
+            }
+            _ => {} // Ignore session intents
+        }
+        actions
     }
 }

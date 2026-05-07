@@ -1,4 +1,5 @@
-// Tests for alarm snoozing and dismissal logic.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for alarm snoozing and dismissal logic.
 use cfait::model::{AlarmTrigger, DateType, Task};
 use chrono::{Duration, Utc};
 use std::collections::HashMap;

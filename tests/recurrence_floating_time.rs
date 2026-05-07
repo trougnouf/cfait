@@ -1,4 +1,5 @@
-// Tests for floating time behavior in recurrence engine.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for floating time behavior in recurrence engine.
 // Ensures that recurring tasks respect local wall-clock time across Daylight Saving Time boundaries.
 
 use cfait::model::{DateType, Task};

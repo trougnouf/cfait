@@ -1,31 +1,28 @@
+// File: ./src/gui/update/common.rs
 // SPDX-License-Identifier: GPL-3.0-or-later
-// File: src/gui/update/common.rs
-/*
- Common utilities for GUI update handlers.
-
- This module implements shared helper routines used by the GUI update flow:
-  - building the filtered task list for the UI,
-  - saving configuration back to disk,
-  - applying alias changes retroactively,
-  - and helper scrolling/focus utilities used by the view layer.
-
- Key design notes:
-  - The filter pipeline is intentionally split so that most predicate checks
-    operate on &Task references (no clones). Only the final, visible tasks are
-    cloned for UI rendering. This keeps memory churn low on frequent refreshes.
-  - We maintain a small parent-attribute cache here (tags/location) to avoid
-    repeated lookups while rendering task rows.
-  - The scrolling helpers attempt a bounds-aware snap (pixel-accurate) when a
-    widget Id and its layout bounds are available; they fall back to index-based
-    heuristics when bounds are not yet registered.
-*/
+//! Common utilities for GUI update handlers.
+//!
+//! This module implements shared helper routines used by the GUI update flow:
+//!   - building the filtered task list for the UI,
+//!   - saving configuration back to disk,
+//!   - applying alias changes retroactively,
+//!   - and helper scrolling/focus utilities used by the view layer.
+//!
+//! Key design notes:
+//!   - The filter pipeline is intentionally split so that most predicate checks
+//!     operate on &Task references (no clones). Only the final, visible tasks are
+//!     cloned for UI rendering. This keeps memory churn low on frequent refreshes.
+//!   - We maintain a small parent-attribute cache here (tags/location) to avoid
+//!     repeated lookups while rendering task rows.
+//!   - The scrolling helpers attempt a bounds-aware snap (pixel-accurate) when a
+//!     widget Id and its layout bounds are available; they fall back to index-based
+//!     heuristics when bounds are not yet registered.
 
 use crate::config::Config;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
 use crate::gui::view::focusable::{clear_focus_bounds, get_all_focus_bounds, get_focus_bounds};
-use crate::journal::Action;
-use crate::store::FilterOptions;
+
 use crate::system::SystemEvent;
 
 use iced::Task;
@@ -42,61 +39,27 @@ use std::time::Duration as StdDuration;
 /// 4) Build a small parent-attribute cache used by task row rendering (inheritance of tags/location).
 /// 5) Notify the alarm actor with the full task set (for alarm scheduling).
 pub fn refresh_filtered_tasks(app: &mut GuiApp) {
-    // Clear focus bounds before rebuilding the list. This prevents stale layout
-    // information from interfering with subsequent focus/scroll computations.
+    // Clear focus bounds before rebuilding the list.
     clear_focus_bounds();
 
-    let cutoff_date = app
-        .sort_cutoff_months
-        .map(|m| chrono::Utc::now() + chrono::Duration::days(m as i64 * 30));
-
-    // Load configuration so the filter honors the current advanced limits (max done roots/subtasks).
     let config = Config::load(app.ctx.as_ref()).unwrap_or_default();
 
-    // Effective hidden calendars: union of explicitly hidden and disabled calendars.
-    // This set is passed to the filter to exclude those calendars efficiently.
-    let mut effective_hidden = app.hidden_calendars.clone();
-    effective_hidden.extend(app.disabled_calendars.clone());
+    // Sync specific Iced state to SessionState
+    app.session.active_calendar_href = app.active_cal_href.clone();
+    app.session.search_term = app.search_value.text();
 
-    let search_text = app.search_value.text();
-
-    let filter_res = app.store.filter(FilterOptions {
-        active_cal_href: None,
-        hidden_calendars: &effective_hidden,
-        selected_categories: &app.selected_categories,
-        selected_locations: &app.selected_locations,
-        match_all_categories: app.match_all_categories,
-        search_term: &search_text,
-        hide_completed_global: app.hide_completed,
-        hide_fully_completed_tags: app.hide_fully_completed_tags,
-        cutoff_date,
-        min_duration: app.filter_min_duration,
-        max_duration: app.filter_max_duration,
-        include_unset_duration: app.filter_include_unset_duration,
-        urgent_days: app.urgent_days,
-        urgent_prio: app.urgent_prio,
-        default_priority: app.default_priority,
-        start_grace_period_days: app.start_grace_period_days,
-        expanded_done_groups: &app.expanded_done_groups,
-        collapsed_trees: &app.collapsed_trees,
-        max_done_roots: config.max_done_roots,
-        max_done_subtasks: config.max_done_subtasks,
-    });
+    // Delegate entirely to session state
+    let filter_res = app.session.get_filtered_view(&app.store, &config);
 
     app.tasks = filter_res.items;
     app.cached_categories = filter_res.categories;
     app.cached_locations = filter_res.locations;
 
-    // Rebuild a tiny parent attribute cache (tags + location). This allows task rows
-    // to inherit visual attributes without performing repeated map lookups.
     app.parent_attributes_cache.clear();
 
-    let mut quick_lookup: std::collections::HashMap<String, &crate::model::Task> =
-        std::collections::HashMap::new();
+    let mut quick_lookup = std::collections::HashMap::new();
     let parent_uids = app.store.get_all_parent_uids();
 
-    // Create an O(1) lookup table for tasks across all calendars so that parent attribute
-    // resolution can work even if the parent is not in the current filtered view.
     for map in app.store.calendars.values() {
         for t in map.values() {
             quick_lookup.insert(t.uid.clone(), t);
@@ -123,7 +86,6 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         }
     }
 
-    // Notify the alarm actor with the complete task set so scheduling/enablement can run off the latest data.
     if let Some(tx) = &app.alarm_tx {
         let all_tasks: Vec<crate::model::Task> = app
             .store
@@ -199,7 +161,7 @@ pub fn apply_alias_retroactively(
     app: &mut GuiApp,
     alias_key: &str,
     target_tags: &[String],
-) -> Vec<Action> {
+) -> Vec<crate::model::Task> {
     let modified_tasks = app.store.apply_alias_retroactively(alias_key, target_tags);
 
     if modified_tasks.is_empty() {
@@ -207,7 +169,7 @@ pub fn apply_alias_retroactively(
     }
 
     refresh_filtered_tasks(app);
-    modified_tasks.into_iter().map(Action::Update).collect()
+    modified_tasks
 }
 
 /// Scroll the main list to the selected task.
@@ -408,4 +370,24 @@ pub fn scroll_to_selected_delayed(_app: &GuiApp, focus: bool) -> Task<Message> {
             move |_| Message::SnapToSelected { focus },
         ),
     ])
+}
+
+use crate::model::AppIntent;
+
+pub fn dispatch_intent(app: &mut GuiApp, intent: AppIntent) {
+    let config = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
+    
+    // 1. Update UI filters synchronously
+    app.session.apply_session_intent(&intent);
+    
+    // 2. Mutate in-memory store synchronously & extract persistence actions
+    let actions = app.store.apply_task_intent(&intent, &config);
+
+    // 3. Update the UI rendering
+    refresh_filtered_tasks(app);
+
+    // 4. Send actions to background thread for disk/network persistence
+    if !actions.is_empty() && let Some(tx) = &app.bg_tx {
+        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+    }
 }

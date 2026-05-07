@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for store behavior.
 use cfait::context::TestContext;
 use cfait::model::{Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};

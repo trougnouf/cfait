@@ -1,4 +1,5 @@
-// General tests for search functionality.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! General tests for search functionality.
 use cfait::model::Task;
 use std::collections::HashMap;
 

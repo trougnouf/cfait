@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.trougnouf.cfait.R
+import com.trougnouf.cfait.core.AppIntent
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileCalendar
 import com.trougnouf.cfait.core.MobileTask
@@ -104,7 +105,7 @@ fun TaskDetailScreen(
         scope.launch {
             // Use direct lookup instead of searching in the filtered view list.
             // This ensures completed/hidden tasks can still be opened and edited.
-            task = api.getTaskByUid(uid)
+            task = api.getTaskByUid(uid, isDark)
             task?.let {
                 smartInput = it.smartString
                 description = it.description
@@ -182,7 +183,7 @@ fun TaskDetailScreen(
                         TextButton(onClick = {
                             scope.launch {
                                 try {
-                                    api.moveTask(uid, cal.href)
+                                    api.dispatch(AppIntent.MoveTask(uid, cal.href), isDark)
                                     showMoveDialog = false
                                     onBack()
                                 } catch (e: Exception) {
@@ -287,7 +288,7 @@ fun TaskDetailScreen(
                             onClick = {
                                 scope.launch {
                                     try {
-                                        api.removeDependency(task!!.uid, blockerUid)
+                                        api.dispatch(AppIntent.RemoveDependency(task!!.uid, blockerUid), isDark)
                                         reload()
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
@@ -315,7 +316,7 @@ fun TaskDetailScreen(
                         ) {
                             NfIcon(NfIcons.BLOCKED, 12.sp, androidx.compose.ui.graphics.Color.Gray)
                             Spacer(Modifier.width(4.dp))
-                            DynamicTaskName(api, name, blockerUid)
+                            DynamicTaskName(api, name, blockerUid, isDark)
                         }
                     }
                 }
@@ -344,7 +345,7 @@ fun TaskDetailScreen(
                                 scope.launch {
                                     try {
                                         // To unblock, remove this task.uid from the blocked task's dependencies
-                                        api.removeDependency(blockedUid, task!!.uid)
+                                        api.dispatch(AppIntent.RemoveDependency(blockedUid, task!!.uid), isDark)
                                         reload()
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
@@ -373,7 +374,7 @@ fun TaskDetailScreen(
                             // Use Down Arrow to indicate successor flow
                             NfIcon(NfIcons.HAND_STOP, 12.sp, androidx.compose.ui.graphics.Color.Gray)
                             Spacer(Modifier.width(4.dp))
-                            DynamicTaskName(api, name, blockedUid)
+                            DynamicTaskName(api, name, blockedUid, isDark)
                         }
                     }
                 }
@@ -400,7 +401,7 @@ fun TaskDetailScreen(
                             onClick = {
                                 scope.launch {
                                     try {
-                                        api.removeRelatedTo(task!!.uid, relatedUid)
+                                        api.dispatch(AppIntent.RemoveRelatedTo(task!!.uid, relatedUid), isDark)
                                         reload()
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
@@ -432,7 +433,7 @@ fun TaskDetailScreen(
                                 androidx.compose.ui.graphics.Color.Gray
                             )
                             Spacer(Modifier.width(4.dp))
-                            DynamicTaskName(api, name, relatedUid)
+                            DynamicTaskName(api, name, relatedUid, isDark)
                         }
                     }
                 }
@@ -619,7 +620,7 @@ fun TaskDetailScreen(
                             onClick = {
                                 scope.launch {
                                     try {
-                                        api.removeRelatedTo(relatedTask.uid, task!!.uid)
+                                        api.dispatch(AppIntent.RemoveRelatedTo(relatedTask.uid, task!!.uid), isDark)
                                         reload()
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
@@ -651,7 +652,7 @@ fun TaskDetailScreen(
                                 androidx.compose.ui.graphics.Color.Gray
                             )
                             Spacer(Modifier.width(4.dp))
-                            DynamicTaskName(api, relatedTask.summary, relatedTask.uid)
+                            DynamicTaskName(api, relatedTask.summary, relatedTask.uid, isDark)
                         }
                     }
                 }
@@ -672,12 +673,12 @@ fun TaskDetailScreen(
 }
 
 @Composable
-fun DynamicTaskName(api: CfaitMobile, defaultName: String, uid: String) {
+fun DynamicTaskName(api: CfaitMobile, defaultName: String, uid: String, isDark: Boolean) {
     var displayName by remember(uid) { mutableStateOf(defaultName) }
 
     LaunchedEffect(uid) {
         try {
-            val t = api.getTaskByUid(uid)
+            val t = api.getTaskByUid(uid, isDark)
             if (t != null && t.isDone) {
                 val dateStr = t.completedDateIso?.let { formatIsoToLocal(it) }
                 displayName = if (dateStr != null) "${t.summary} (✓ $dateStr)" else "${t.summary} (✓)"

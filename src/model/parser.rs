@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/model/parser.rs
-// File: ./src/model/parser.rs
 /*
 File: cfait/src/model/parser.rs
 Logic for parsing smart input strings into task properties.
@@ -1948,7 +1947,8 @@ pub fn apply_smart_input(
                     matched = true;
                 } else if let Some(d) = parse_smart_date(clean_val) {
                     let mut temp_consumed = 1;
-                    let (dt, _) = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
+                    let (dt, _) =
+                        finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
 
                     let utc_dt = match dt {
                         DateType::Specific(t) => t,
@@ -2173,7 +2173,8 @@ pub fn apply_smart_input(
             if !matched_date {
                 if let Some(d) = parse_smart_date(clean) {
                     let mut temp_consumed = 1;
-                    let (dt, dt_end) = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
+                    let (dt, dt_end) =
+                        finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                     if let Some(end) = dt_end {
                         task.dtstart = Some(dt);
                         task.due = Some(end);
@@ -2192,14 +2193,18 @@ pub fn apply_smart_input(
                     if t1 <= now_local.time() {
                         target_date += Duration::days(1);
                     }
-                    let dt1 = DateType::Specific(crate::model::item::safe_local_to_utc(target_date, t1));
-                    
+                    let dt1 =
+                        DateType::Specific(crate::model::item::safe_local_to_utc(target_date, t1));
+
                     let mut target_date_end = target_date;
                     if t2 < t1 {
                         target_date_end += Duration::days(1);
                     }
-                    let dt2 = DateType::Specific(crate::model::item::safe_local_to_utc(target_date_end, t2));
-                    
+                    let dt2 = DateType::Specific(crate::model::item::safe_local_to_utc(
+                        target_date_end,
+                        t2,
+                    ));
+
                     task.dtstart = Some(dt1);
                     task.due = Some(dt2);
                 } else if let Some(t) = parse_time_string(clean) {
@@ -2321,7 +2326,8 @@ pub fn apply_smart_input(
                 }
             } else if let Some(d) = parse_smart_date(val) {
                 let mut temp_consumed = 1;
-                let (dt, dt_end) = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
+                let (dt, dt_end) =
+                    finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                 if let Some(end) = dt_end {
                     task.dtstart = Some(dt);
                     task.due = Some(end);
@@ -2340,14 +2346,16 @@ pub fn apply_smart_input(
                 if t1 <= now_local.time() {
                     target_date += Duration::days(1);
                 }
-                let dt1 = DateType::Specific(crate::model::item::safe_local_to_utc(target_date, t1));
-                
+                let dt1 =
+                    DateType::Specific(crate::model::item::safe_local_to_utc(target_date, t1));
+
                 let mut target_date_end = target_date;
                 if t2 < t1 {
                     target_date_end += Duration::days(1);
                 }
-                let dt2 = DateType::Specific(crate::model::item::safe_local_to_utc(target_date_end, t2));
-                
+                let dt2 =
+                    DateType::Specific(crate::model::item::safe_local_to_utc(target_date_end, t2));
+
                 task.dtstart = Some(dt1);
                 task.due = Some(dt2);
             } else if let Some(rrule) = parse_recurrence(val) {
@@ -2393,21 +2401,24 @@ pub fn apply_smart_input(
                 if t1 <= now_local.time() {
                     target_date += Duration::days(1);
                 }
-                let dt1 = DateType::Specific(crate::model::item::safe_local_to_utc(target_date, t1));
-                
+                let dt1 =
+                    DateType::Specific(crate::model::item::safe_local_to_utc(target_date, t1));
+
                 let mut target_date_end = target_date;
                 if t2 < t1 {
                     target_date_end += Duration::days(1);
                 }
-                let dt2 = DateType::Specific(crate::model::item::safe_local_to_utc(target_date_end, t2));
-                
+                let dt2 =
+                    DateType::Specific(crate::model::item::safe_local_to_utc(target_date_end, t2));
+
                 task.dtstart = Some(dt1);
                 task.due = Some(dt2);
             } else if let Some(_stripped) = token_lower.strip_prefix("due:") {
                 let real_val = &token[4..];
                 if let Some(d) = parse_smart_date(real_val) {
                     let mut temp_consumed = 1;
-                    let (dt, _) = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
+                    let (dt, _) =
+                        finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                     task.due = Some(dt);
                     consumed = temp_consumed;
                 } else {
@@ -2420,7 +2431,8 @@ pub fn apply_smart_input(
             let val = &token[4..];
             if let Some(d) = parse_smart_date(val) {
                 let mut temp_consumed = 1;
-                let (dt, _) = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
+                let (dt, _) =
+                    finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                 task.due = Some(dt);
                 consumed = temp_consumed;
             } else {
@@ -2437,7 +2449,8 @@ pub fn apply_smart_input(
             };
             if let Some(d) = parse_smart_date(clean_val) {
                 let mut temp_consumed = 1;
-                let (dt, _) = finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
+                let (dt, _) =
+                    finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                 task.dtstart = Some(dt);
                 consumed = temp_consumed;
             } else if let Some(d) = parse_weekday_date(clean_val) {

@@ -1,4 +1,5 @@
-// Stress tests for the smart input parser.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Stress tests for the smart input parser.
 use cfait::model::Task;
 use chrono::{Datelike, Duration, Local};
 use std::collections::HashMap;
@@ -129,15 +130,19 @@ fn test_date_with_time_range() {
     let t = parse("sometask ^@2026-06-06 15:00-18:30");
     assert!(t.dtstart.is_some());
     assert!(t.due.is_some());
-    
+
     let start = t.dtstart.as_ref().unwrap();
     let due = t.due.as_ref().unwrap();
-    
+
     assert_eq!(start.format_smart(), "2026-06-06 15:00");
     assert_eq!(due.format_smart(), "2026-06-06 18:30");
-    
+
     let s = t.to_smart_string();
-    assert!(s.contains("^@2026-06-06 15:00-18:30"), "Smart string was: {}", s);
+    assert!(
+        s.contains("^@2026-06-06 15:00-18:30"),
+        "Smart string was: {}",
+        s
+    );
 }
 
 // --- METADATA TESTS ---

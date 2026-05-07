@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for start grace period functionality.
 use cfait::context::TestContext;
 use cfait::model::{Alarm, DateType, Task};
 use cfait::store::{FilterOptions, TaskStore};

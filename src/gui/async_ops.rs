@@ -4,9 +4,10 @@
 use crate::client::RustyClient;
 use crate::config::Config;
 use crate::context::AppContext;
-use crate::journal::{Action, Journal};
+use crate::controller::TaskController;
+use crate::journal::Action;
 use crate::model::{CalendarListEntry, Task as TodoTask};
-use crate::storage::LocalStorage;
+use crate::store::TaskStore;
 use futures::stream::{self, StreamExt};
 use iced::futures::SinkExt;
 use iced::futures::channel::mpsc::Sender as IcedSender;
@@ -116,7 +117,10 @@ pub fn spawn_background_worker(
     let (tx, mut rx) = mpsc::channel::<WorkerCommand>(100);
 
     tokio::spawn(async move {
-        let mut client: Option<RustyClient> = None;
+        // Initialize an isolated TaskController for background persistence handling
+        let store = Arc::new(tokio::sync::Mutex::new(TaskStore::new(ctx.clone())));
+        let client_container = Arc::new(tokio::sync::Mutex::new(None));
+        let controller = TaskController::new(store, client_container.clone(), ctx.clone());
         let mut sync_pending = false;
 
         loop {
@@ -124,99 +128,11 @@ pub fn spawn_background_worker(
                 cmd = rx.recv() => {
                     match cmd {
                         Some(WorkerCommand::UpdateClient(c)) => {
-                            client = c;
+                            *client_container.lock().await = c;
                         }
                         Some(WorkerCommand::Batch(actions)) => {
-                            let mut local_actions = Vec::new();
-                            let mut remote_actions = Vec::new();
-
-                            for action in actions {
-                                match action {
-                                    Action::Create(t) => {
-                                        if t.calendar_href.starts_with("local://") {
-                                            local_actions.push(Action::Create(t));
-                                        } else {
-                                            remote_actions.push(Action::Create(t));
-                                        }
-                                    }
-                                    Action::Update(t) => {
-                                        if t.calendar_href.starts_with("local://") {
-                                            local_actions.push(Action::Update(t));
-                                        } else {
-                                            remote_actions.push(Action::Update(t));
-                                        }
-                                    }
-                                    Action::Delete(t) => {
-                                        if t.calendar_href.starts_with("local://") {
-                                            local_actions.push(Action::Delete(t));
-                                        } else {
-                                            remote_actions.push(Action::Delete(t));
-                                        }
-                                    }
-                                    Action::Move(t, target) => {
-                                        if t.calendar_href.starts_with("local://") && target.starts_with("local://") {
-                                            local_actions.push(Action::Move(t, target));
-                                        } else if t.calendar_href.starts_with("local://") && !target.starts_with("local://") {
-                                            local_actions.push(Action::Delete(t.clone()));
-                                            let mut moved = t.clone();
-                                            moved.calendar_href = target.clone();
-                                            moved.href = String::new();
-                                            moved.etag = String::new();
-                                            remote_actions.push(Action::Create(moved));
-                                        } else if !t.calendar_href.starts_with("local://") && target.starts_with("local://") {
-                                            remote_actions.push(Action::Delete(t.clone()));
-                                            let mut moved = t.clone();
-                                            moved.calendar_href = target.clone();
-                                            moved.href = String::new();
-                                            moved.etag = String::new();
-                                            local_actions.push(Action::Create(moved));
-                                        } else {
-                                            remote_actions.push(Action::Move(t, target));
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Process local actions immediately
-                            for action in local_actions {
-                                match action {
-                                    Action::Create(t) | Action::Update(t) => {
-                                        let _ = LocalStorage::modify_for_href(ctx.as_ref(), &t.calendar_href, |all| {
-                                            if let Some(idx) = all.iter().position(|item| item.uid == t.uid) {
-                                                all[idx] = t.clone();
-                                            } else {
-                                                all.push(t.clone());
-                                            }
-                                        });
-                                    }
-                                    Action::Delete(t) => {
-                                        let _ = LocalStorage::modify_for_href(ctx.as_ref(), &t.calendar_href, |all| {
-                                            all.retain(|item| item.uid != t.uid);
-                                        });
-                                    }
-                                    Action::Move(t, target) => {
-                                        let _ = LocalStorage::modify_for_href(ctx.as_ref(), &t.calendar_href, |all| {
-                                            all.retain(|item| item.uid != t.uid);
-                                        });
-                                        let mut moved = t.clone();
-                                        moved.calendar_href = target.clone();
-                                        let _ = LocalStorage::modify_for_href(ctx.as_ref(), &target, |all| {
-                                            all.push(moved);
-                                        });
-                                    }
-                                }
-                            }
-
-                            // Process remote actions via Journal with automatic compaction
-                            if !remote_actions.is_empty() {
-                                let _ = Journal::modify(ctx.as_ref(), |queue| {
-                                    queue.extend(remote_actions);
-                                    let mut tmp_j = Journal { queue: std::mem::take(queue) };
-                                    tmp_j.compact();
-                                    *queue = tmp_j.queue;
-                                });
-                                sync_pending = true;
-                            }
+                            let _ = controller.persist_changes(actions).await;
+                            sync_pending = true;
                         }
                         Some(WorkerCommand::SyncNow) => {
                             sync_pending = true;
@@ -227,7 +143,8 @@ pub fn spawn_background_worker(
                 // Debounce network synchronization by 500ms
                 _ = sleep(Duration::from_millis(500)), if sync_pending => {
                     sync_pending = false;
-                    if let Some(c) = &client {
+                    let c_opt = client_container.lock().await.clone();
+                    if let Some(c) = c_opt {
                         if let Ok((_warns, synced_tasks)) = c.sync_journal().await {
                             if !synced_tasks.is_empty() {
                                 let _ = ui_tx.send(crate::gui::message::Message::BackgroundSyncComplete(synced_tasks)).await;

@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for smart input processing.
 /* Updated: Pass is_search = false to tokenizer calls in tests so highlighting logic treats these as input mode. */
-// Tests for smart input processing.
 use cfait::model::{
     Task,
     parser::{SyntaxType, tokenize_smart_input},

@@ -785,6 +785,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_dispatch(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_duplicate_task_tree(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_export_local_ics(): Short
@@ -1006,6 +1008,12 @@ internal object UniffiLib {
         `alarmUid`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_dispatch(
+        `ptr`: Long,
+        `intent`: RustBuffer.ByValue,
+        `isDarkTheme`: Byte,
+    ): Long
+
     external fun uniffi_cfait_fn_method_cfaitmobile_duplicate_task_tree(
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
@@ -1061,6 +1069,7 @@ internal object UniffiLib {
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_ongoing_tasks(
         `ptr`: Long,
+        `isDarkTheme`: Byte,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -1079,6 +1088,7 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_get_task_by_uid(
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
+        `isDarkTheme`: Byte,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_tasks_related_to(
@@ -1088,12 +1098,8 @@ internal object UniffiLib {
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
         `ptr`: Long,
-        `filterTags`: RustBuffer.ByValue,
-        `filterLocations`: RustBuffer.ByValue,
-        `searchQuery`: RustBuffer.ByValue,
-        `expandedGroups`: RustBuffer.ByValue,
-        `collapsedGroups`: RustBuffer.ByValue,
-        `matchAllCategories`: Byte,
+        `options`: RustBuffer.ByValue,
+        `isDarkTheme`: Byte,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_has_any_tasks(
@@ -1575,6 +1581,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm() != 49985.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_dispatch() != 19172.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_duplicate_task_tree() != 29876.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1611,7 +1620,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time() != 15513.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_ongoing_tasks() != 23439.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_ongoing_tasks() != 13939.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid() != 32270.toShort()) {
@@ -1620,13 +1629,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_syntax_help() != 49497.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_task_by_uid() != 45186.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_task_by_uid() != 22035.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 40919.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 56403.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 6914.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_any_tasks() != 42815.toShort()) {
@@ -2306,6 +2315,11 @@ public interface CfaitMobileInterface {
         `alarmUid`: kotlin.String,
     )
 
+    suspend fun `dispatch`(
+        `intent`: AppIntent,
+        `isDarkTheme`: kotlin.Boolean,
+    ): MobileViewData
+
     suspend fun `duplicateTaskTree`(`uid`: kotlin.String)
 
     fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String
@@ -2330,7 +2344,7 @@ public interface CfaitMobileInterface {
 
     suspend fun `getNextGlobalAlarmTime`(): kotlin.Long?
 
-    fun `getOngoingTasks`(): List<MobileTask>
+    fun `getOngoingTasks`(`isDarkTheme`: kotlin.Boolean): List<MobileTask>
 
     suspend fun `getRandomTaskUid`(
         `filterTags`: List<kotlin.String>,
@@ -2340,17 +2354,16 @@ public interface CfaitMobileInterface {
 
     fun `getSyntaxHelp`(): List<MobileHelpSection>
 
-    suspend fun `getTaskByUid`(`uid`: kotlin.String): MobileTask?
+    suspend fun `getTaskByUid`(
+        `uid`: kotlin.String,
+        `isDarkTheme`: kotlin.Boolean,
+    ): MobileTask?
 
     suspend fun `getTasksRelatedTo`(`uid`: kotlin.String): List<MobileRelatedTask>
 
     suspend fun `getViewTasks`(
-        `filterTags`: List<kotlin.String>,
-        `filterLocations`: List<kotlin.String>,
-        `searchQuery`: kotlin.String,
-        `expandedGroups`: List<kotlin.String>,
-        `collapsedGroups`: List<kotlin.String>,
-        `matchAllCategories`: kotlin.Boolean,
+        `options`: MobileFilterOptions,
+        `isDarkTheme`: kotlin.Boolean,
     ): MobileViewData
 
     /**
@@ -2955,6 +2968,29 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `dispatch`(
+        `intent`: AppIntent,
+        `isDarkTheme`: kotlin.Boolean,
+    ): MobileViewData =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_dispatch(
+                    uniffiHandle,
+                    FfiConverterTypeAppIntent.lower(`intent`),
+                    FfiConverterBoolean.lower(`isDarkTheme`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeMobileViewData.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `duplicateTaskTree`(`uid`: kotlin.String) =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
@@ -3123,12 +3159,13 @@ open class CfaitMobile :
             UniffiNullRustCallStatusErrorHandler,
         )
 
-    override fun `getOngoingTasks`(): List<MobileTask> =
+    override fun `getOngoingTasks`(`isDarkTheme`: kotlin.Boolean): List<MobileTask> =
         FfiConverterSequenceTypeMobileTask.lift(
             callWithHandle {
                 uniffiRustCall { _status ->
                     UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_ongoing_tasks(
                         it,
+                        FfiConverterBoolean.lower(`isDarkTheme`),
                         _status,
                     )
                 }
@@ -3172,12 +3209,16 @@ open class CfaitMobile :
         )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getTaskByUid`(`uid`: kotlin.String): MobileTask? =
+    override suspend fun `getTaskByUid`(
+        `uid`: kotlin.String,
+        `isDarkTheme`: kotlin.Boolean,
+    ): MobileTask? =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_task_by_uid(
                     uniffiHandle,
                     FfiConverterString.lower(`uid`),
+                    FfiConverterBoolean.lower(`isDarkTheme`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
@@ -3209,23 +3250,15 @@ open class CfaitMobile :
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `getViewTasks`(
-        `filterTags`: List<kotlin.String>,
-        `filterLocations`: List<kotlin.String>,
-        `searchQuery`: kotlin.String,
-        `expandedGroups`: List<kotlin.String>,
-        `collapsedGroups`: List<kotlin.String>,
-        `matchAllCategories`: kotlin.Boolean,
+        `options`: MobileFilterOptions,
+        `isDarkTheme`: kotlin.Boolean,
     ): MobileViewData =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
                     uniffiHandle,
-                    FfiConverterSequenceString.lower(`filterTags`),
-                    FfiConverterSequenceString.lower(`filterLocations`),
-                    FfiConverterString.lower(`searchQuery`),
-                    FfiConverterSequenceString.lower(`expandedGroups`),
-                    FfiConverterSequenceString.lower(`collapsedGroups`),
-                    FfiConverterBoolean.lower(`matchAllCategories`),
+                    FfiConverterTypeMobileFilterOptions.lower(`options`),
+                    FfiConverterBoolean.lower(`isDarkTheme`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
@@ -4088,6 +4121,54 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
     }
 }
 
+data class MobileFilterOptions(
+    var `filterTags`: List<kotlin.String>,
+    var `filterLocations`: List<kotlin.String>,
+    var `searchQuery`: kotlin.String,
+    var `expandedGroups`: List<kotlin.String>,
+    var `collapsedGroups`: List<kotlin.String>,
+    var `matchAllCategories`: kotlin.Boolean,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileFilterOptions : FfiConverterRustBuffer<MobileFilterOptions> {
+    override fun read(buf: ByteBuffer): MobileFilterOptions =
+        MobileFilterOptions(
+            FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+
+    override fun allocationSize(value: MobileFilterOptions) =
+        (
+            FfiConverterSequenceString.allocationSize(value.`filterTags`) +
+                FfiConverterSequenceString.allocationSize(value.`filterLocations`) +
+                FfiConverterString.allocationSize(value.`searchQuery`) +
+                FfiConverterSequenceString.allocationSize(value.`expandedGroups`) +
+                FfiConverterSequenceString.allocationSize(value.`collapsedGroups`) +
+                FfiConverterBoolean.allocationSize(value.`matchAllCategories`)
+        )
+
+    override fun write(
+        value: MobileFilterOptions,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceString.write(value.`filterTags`, buf)
+        FfiConverterSequenceString.write(value.`filterLocations`, buf)
+        FfiConverterString.write(value.`searchQuery`, buf)
+        FfiConverterSequenceString.write(value.`expandedGroups`, buf)
+        FfiConverterSequenceString.write(value.`collapsedGroups`, buf)
+        FfiConverterBoolean.write(value.`matchAllCategories`, buf)
+    }
+}
+
 data class MobileHelpCategoryData(
     var `category`: HelpTab,
     var `title`: kotlin.String,
@@ -4370,8 +4451,7 @@ data class MobileTask(
     var `sessions`: List<MobileWorkSession>,
     var `virtualType`: kotlin.String,
     var `virtualPayload`: kotlin.String,
-    var `visibleCategories`: List<kotlin.String>,
-    var `visibleLocation`: kotlin.String?,
+    var `visuals`: RenderableTask,
 ) {
     companion object
 }
@@ -4423,8 +4503,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterSequenceTypeMobileWorkSession.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
-            FfiConverterSequenceString.read(buf),
-            FfiConverterOptionalString.read(buf),
+            FfiConverterTypeRenderableTask.read(buf),
         )
 
     override fun allocationSize(value: MobileTask) =
@@ -4470,8 +4549,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterSequenceTypeMobileWorkSession.allocationSize(value.`sessions`) +
                 FfiConverterString.allocationSize(value.`virtualType`) +
                 FfiConverterString.allocationSize(value.`virtualPayload`) +
-                FfiConverterSequenceString.allocationSize(value.`visibleCategories`) +
-                FfiConverterOptionalString.allocationSize(value.`visibleLocation`)
+                FfiConverterTypeRenderableTask.allocationSize(value.`visuals`)
         )
 
     override fun write(
@@ -4519,8 +4597,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterSequenceTypeMobileWorkSession.write(value.`sessions`, buf)
         FfiConverterString.write(value.`virtualType`, buf)
         FfiConverterString.write(value.`virtualPayload`, buf)
-        FfiConverterSequenceString.write(value.`visibleCategories`, buf)
-        FfiConverterOptionalString.write(value.`visibleLocation`, buf)
+        FfiConverterTypeRenderableTask.write(value.`visuals`, buf)
     }
 }
 
@@ -4589,6 +4666,906 @@ public object FfiConverterTypeMobileWorkSession : FfiConverterRustBuffer<MobileW
     ) {
         FfiConverterLong.write(value.`startMs`, buf)
         FfiConverterLong.write(value.`endMs`, buf)
+    }
+}
+
+data class RenderableTag(
+    var `name`: kotlin.String,
+    var `bgColorHex`: kotlin.String,
+    var `textColorHex`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRenderableTag : FfiConverterRustBuffer<RenderableTag> {
+    override fun read(buf: ByteBuffer): RenderableTag =
+        RenderableTag(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: RenderableTag) =
+        (
+            FfiConverterString.allocationSize(value.`name`) +
+                FfiConverterString.allocationSize(value.`bgColorHex`) +
+                FfiConverterString.allocationSize(value.`textColorHex`)
+        )
+
+    override fun write(
+        value: RenderableTag,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`name`, buf)
+        FfiConverterString.write(value.`bgColorHex`, buf)
+        FfiConverterString.write(value.`textColorHex`, buf)
+    }
+}
+
+data class RenderableTask(
+    var `uid`: kotlin.String,
+    var `summary`: kotlin.String,
+    var `isDone`: kotlin.Boolean,
+    var `isBlocked`: kotlin.Boolean,
+    var `depth`: kotlin.UInt,
+    var `statusString`: kotlin.String,
+    var `isPaused`: kotlin.Boolean,
+    var `titleColorHex`: kotlin.String,
+    var `dateBadge`: kotlin.String?,
+    var `dateColorHex`: kotlin.String,
+    var `dateIcon`: kotlin.String,
+    var `durationBadge`: kotlin.String?,
+    var `durationColorHex`: kotlin.String,
+    var `hasActiveAlarm`: kotlin.Boolean,
+    var `tags`: List<RenderableTag>,
+    var `locationBadge`: kotlin.String?,
+    var `hasSubtasks`: kotlin.Boolean,
+    var `isTreeCollapsed`: kotlin.Boolean,
+    var `hasNotesOrDeps`: kotlin.Boolean,
+    var `url`: kotlin.String?,
+    var `geo`: kotlin.String?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRenderableTask : FfiConverterRustBuffer<RenderableTask> {
+    override fun read(buf: ByteBuffer): RenderableTask =
+        RenderableTask(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterSequenceTypeRenderableTag.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: RenderableTask) =
+        (
+            FfiConverterString.allocationSize(value.`uid`) +
+                FfiConverterString.allocationSize(value.`summary`) +
+                FfiConverterBoolean.allocationSize(value.`isDone`) +
+                FfiConverterBoolean.allocationSize(value.`isBlocked`) +
+                FfiConverterUInt.allocationSize(value.`depth`) +
+                FfiConverterString.allocationSize(value.`statusString`) +
+                FfiConverterBoolean.allocationSize(value.`isPaused`) +
+                FfiConverterString.allocationSize(value.`titleColorHex`) +
+                FfiConverterOptionalString.allocationSize(value.`dateBadge`) +
+                FfiConverterString.allocationSize(value.`dateColorHex`) +
+                FfiConverterString.allocationSize(value.`dateIcon`) +
+                FfiConverterOptionalString.allocationSize(value.`durationBadge`) +
+                FfiConverterString.allocationSize(value.`durationColorHex`) +
+                FfiConverterBoolean.allocationSize(value.`hasActiveAlarm`) +
+                FfiConverterSequenceTypeRenderableTag.allocationSize(value.`tags`) +
+                FfiConverterOptionalString.allocationSize(value.`locationBadge`) +
+                FfiConverterBoolean.allocationSize(value.`hasSubtasks`) +
+                FfiConverterBoolean.allocationSize(value.`isTreeCollapsed`) +
+                FfiConverterBoolean.allocationSize(value.`hasNotesOrDeps`) +
+                FfiConverterOptionalString.allocationSize(value.`url`) +
+                FfiConverterOptionalString.allocationSize(value.`geo`)
+        )
+
+    override fun write(
+        value: RenderableTask,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`uid`, buf)
+        FfiConverterString.write(value.`summary`, buf)
+        FfiConverterBoolean.write(value.`isDone`, buf)
+        FfiConverterBoolean.write(value.`isBlocked`, buf)
+        FfiConverterUInt.write(value.`depth`, buf)
+        FfiConverterString.write(value.`statusString`, buf)
+        FfiConverterBoolean.write(value.`isPaused`, buf)
+        FfiConverterString.write(value.`titleColorHex`, buf)
+        FfiConverterOptionalString.write(value.`dateBadge`, buf)
+        FfiConverterString.write(value.`dateColorHex`, buf)
+        FfiConverterString.write(value.`dateIcon`, buf)
+        FfiConverterOptionalString.write(value.`durationBadge`, buf)
+        FfiConverterString.write(value.`durationColorHex`, buf)
+        FfiConverterBoolean.write(value.`hasActiveAlarm`, buf)
+        FfiConverterSequenceTypeRenderableTag.write(value.`tags`, buf)
+        FfiConverterOptionalString.write(value.`locationBadge`, buf)
+        FfiConverterBoolean.write(value.`hasSubtasks`, buf)
+        FfiConverterBoolean.write(value.`isTreeCollapsed`, buf)
+        FfiConverterBoolean.write(value.`hasNotesOrDeps`, buf)
+        FfiConverterOptionalString.write(value.`url`, buf)
+        FfiConverterOptionalString.write(value.`geo`, buf)
+    }
+}
+
+/**
+ * Unified session state held by the Rust core for each active client.
+ */
+data class SessionState(
+    var `searchTerm`: kotlin.String,
+    var `selectedCategories`: List<kotlin.String>,
+    var `selectedLocations`: List<kotlin.String>,
+    var `activeCalendarHref`: kotlin.String?,
+    var `matchAllCategories`: kotlin.Boolean,
+    var `expandedDoneGroups`: List<kotlin.String>,
+    var `collapsedTrees`: List<kotlin.String>,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSessionState : FfiConverterRustBuffer<SessionState> {
+    override fun read(buf: ByteBuffer): SessionState =
+        SessionState(
+            FfiConverterString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
+        )
+
+    override fun allocationSize(value: SessionState) =
+        (
+            FfiConverterString.allocationSize(value.`searchTerm`) +
+                FfiConverterSequenceString.allocationSize(value.`selectedCategories`) +
+                FfiConverterSequenceString.allocationSize(value.`selectedLocations`) +
+                FfiConverterOptionalString.allocationSize(value.`activeCalendarHref`) +
+                FfiConverterBoolean.allocationSize(value.`matchAllCategories`) +
+                FfiConverterSequenceString.allocationSize(value.`expandedDoneGroups`) +
+                FfiConverterSequenceString.allocationSize(value.`collapsedTrees`)
+        )
+
+    override fun write(
+        value: SessionState,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`searchTerm`, buf)
+        FfiConverterSequenceString.write(value.`selectedCategories`, buf)
+        FfiConverterSequenceString.write(value.`selectedLocations`, buf)
+        FfiConverterOptionalString.write(value.`activeCalendarHref`, buf)
+        FfiConverterBoolean.write(value.`matchAllCategories`, buf)
+        FfiConverterSequenceString.write(value.`expandedDoneGroups`, buf)
+        FfiConverterSequenceString.write(value.`collapsedTrees`, buf)
+    }
+}
+
+/**
+ * A generic intent dispatched by any UI (Mobile, GUI, TUI).
+ */
+sealed class AppIntent {
+    data class ToggleTask(
+        val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class DeleteTask(
+        val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class DeleteTaskTree(
+        val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class CancelTask(
+        val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class ChangePriority(
+        val `uid`: kotlin.String,
+        val `delta`: kotlin.Byte,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class StartTask(
+        val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class PauseTask(
+        val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class StopTask(
+        val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class MoveTask(
+        val `uid`: kotlin.String,
+        val `targetHref`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class DuplicateTaskTree(
+        val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class RemoveParent(
+        val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class MakeChild(
+        val `uid`: kotlin.String,
+        val `parentUid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class AddDependency(
+        val `uid`: kotlin.String,
+        val `blockerUid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class RemoveDependency(
+        val `uid`: kotlin.String,
+        val `blockerUid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class AddRelatedTo(
+        val `uid`: kotlin.String,
+        val `relatedUid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class RemoveRelatedTo(
+        val `uid`: kotlin.String,
+        val `relatedUid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class SetSearchTerm(
+        val `term`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class ToggleTagFilter(
+        val `tag`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class ToggleLocationFilter(
+        val `location`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    object ClearFilters : AppIntent()
+
+    object ToggleMatchAllCategories : AppIntent()
+
+    data class SetSidebarCalendar(
+        val `href`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    object ClearTagFilters : AppIntent()
+
+    object ClearLocationFilters : AppIntent()
+
+    data class ToggleTreeCollapse(
+        val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class ToggleDoneGroup(
+        val `key`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
+    override fun read(buf: ByteBuffer): AppIntent =
+        when (buf.getInt()) {
+            1 -> {
+                AppIntent.ToggleTask(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            2 -> {
+                AppIntent.DeleteTask(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            3 -> {
+                AppIntent.DeleteTaskTree(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            4 -> {
+                AppIntent.CancelTask(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            5 -> {
+                AppIntent.ChangePriority(
+                    FfiConverterString.read(buf),
+                    FfiConverterByte.read(buf),
+                )
+            }
+
+            6 -> {
+                AppIntent.StartTask(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            7 -> {
+                AppIntent.PauseTask(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            8 -> {
+                AppIntent.StopTask(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            9 -> {
+                AppIntent.MoveTask(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            10 -> {
+                AppIntent.DuplicateTaskTree(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            11 -> {
+                AppIntent.RemoveParent(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            12 -> {
+                AppIntent.MakeChild(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            13 -> {
+                AppIntent.AddDependency(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            14 -> {
+                AppIntent.RemoveDependency(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            15 -> {
+                AppIntent.AddRelatedTo(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            16 -> {
+                AppIntent.RemoveRelatedTo(
+                    FfiConverterString.read(buf),
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            17 -> {
+                AppIntent.SetSearchTerm(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            18 -> {
+                AppIntent.ToggleTagFilter(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            19 -> {
+                AppIntent.ToggleLocationFilter(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            20 -> {
+                AppIntent.ClearFilters
+            }
+
+            21 -> {
+                AppIntent.ToggleMatchAllCategories
+            }
+
+            22 -> {
+                AppIntent.SetSidebarCalendar(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            23 -> {
+                AppIntent.ClearTagFilters
+            }
+
+            24 -> {
+                AppIntent.ClearLocationFilters
+            }
+
+            25 -> {
+                AppIntent.ToggleTreeCollapse(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            26 -> {
+                AppIntent.ToggleDoneGroup(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            else -> {
+                throw RuntimeException("invalid enum value, something is very wrong!!")
+            }
+        }
+
+    override fun allocationSize(value: AppIntent) =
+        when (value) {
+            is AppIntent.ToggleTask -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`)
+                )
+            }
+
+            is AppIntent.DeleteTask -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`)
+                )
+            }
+
+            is AppIntent.DeleteTaskTree -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`)
+                )
+            }
+
+            is AppIntent.CancelTask -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`)
+                )
+            }
+
+            is AppIntent.ChangePriority -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`) +
+                        FfiConverterByte.allocationSize(value.`delta`)
+                )
+            }
+
+            is AppIntent.StartTask -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`)
+                )
+            }
+
+            is AppIntent.PauseTask -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`)
+                )
+            }
+
+            is AppIntent.StopTask -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`)
+                )
+            }
+
+            is AppIntent.MoveTask -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`) +
+                        FfiConverterString.allocationSize(value.`targetHref`)
+                )
+            }
+
+            is AppIntent.DuplicateTaskTree -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`)
+                )
+            }
+
+            is AppIntent.RemoveParent -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`)
+                )
+            }
+
+            is AppIntent.MakeChild -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`) +
+                        FfiConverterString.allocationSize(value.`parentUid`)
+                )
+            }
+
+            is AppIntent.AddDependency -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`) +
+                        FfiConverterString.allocationSize(value.`blockerUid`)
+                )
+            }
+
+            is AppIntent.RemoveDependency -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`) +
+                        FfiConverterString.allocationSize(value.`blockerUid`)
+                )
+            }
+
+            is AppIntent.AddRelatedTo -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`) +
+                        FfiConverterString.allocationSize(value.`relatedUid`)
+                )
+            }
+
+            is AppIntent.RemoveRelatedTo -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`) +
+                        FfiConverterString.allocationSize(value.`relatedUid`)
+                )
+            }
+
+            is AppIntent.SetSearchTerm -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`term`)
+                )
+            }
+
+            is AppIntent.ToggleTagFilter -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`tag`)
+                )
+            }
+
+            is AppIntent.ToggleLocationFilter -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`location`)
+                )
+            }
+
+            is AppIntent.ClearFilters -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is AppIntent.ToggleMatchAllCategories -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is AppIntent.SetSidebarCalendar -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`href`)
+                )
+            }
+
+            is AppIntent.ClearTagFilters -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is AppIntent.ClearLocationFilters -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is AppIntent.ToggleTreeCollapse -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`)
+                )
+            }
+
+            is AppIntent.ToggleDoneGroup -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`key`)
+                )
+            }
+        }
+
+    override fun write(
+        value: AppIntent,
+        buf: ByteBuffer,
+    ) {
+        when (value) {
+            is AppIntent.ToggleTask -> {
+                buf.putInt(1)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.DeleteTask -> {
+                buf.putInt(2)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.DeleteTaskTree -> {
+                buf.putInt(3)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.CancelTask -> {
+                buf.putInt(4)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.ChangePriority -> {
+                buf.putInt(5)
+                FfiConverterString.write(value.`uid`, buf)
+                FfiConverterByte.write(value.`delta`, buf)
+                Unit
+            }
+
+            is AppIntent.StartTask -> {
+                buf.putInt(6)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.PauseTask -> {
+                buf.putInt(7)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.StopTask -> {
+                buf.putInt(8)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.MoveTask -> {
+                buf.putInt(9)
+                FfiConverterString.write(value.`uid`, buf)
+                FfiConverterString.write(value.`targetHref`, buf)
+                Unit
+            }
+
+            is AppIntent.DuplicateTaskTree -> {
+                buf.putInt(10)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.RemoveParent -> {
+                buf.putInt(11)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.MakeChild -> {
+                buf.putInt(12)
+                FfiConverterString.write(value.`uid`, buf)
+                FfiConverterString.write(value.`parentUid`, buf)
+                Unit
+            }
+
+            is AppIntent.AddDependency -> {
+                buf.putInt(13)
+                FfiConverterString.write(value.`uid`, buf)
+                FfiConverterString.write(value.`blockerUid`, buf)
+                Unit
+            }
+
+            is AppIntent.RemoveDependency -> {
+                buf.putInt(14)
+                FfiConverterString.write(value.`uid`, buf)
+                FfiConverterString.write(value.`blockerUid`, buf)
+                Unit
+            }
+
+            is AppIntent.AddRelatedTo -> {
+                buf.putInt(15)
+                FfiConverterString.write(value.`uid`, buf)
+                FfiConverterString.write(value.`relatedUid`, buf)
+                Unit
+            }
+
+            is AppIntent.RemoveRelatedTo -> {
+                buf.putInt(16)
+                FfiConverterString.write(value.`uid`, buf)
+                FfiConverterString.write(value.`relatedUid`, buf)
+                Unit
+            }
+
+            is AppIntent.SetSearchTerm -> {
+                buf.putInt(17)
+                FfiConverterString.write(value.`term`, buf)
+                Unit
+            }
+
+            is AppIntent.ToggleTagFilter -> {
+                buf.putInt(18)
+                FfiConverterString.write(value.`tag`, buf)
+                Unit
+            }
+
+            is AppIntent.ToggleLocationFilter -> {
+                buf.putInt(19)
+                FfiConverterString.write(value.`location`, buf)
+                Unit
+            }
+
+            is AppIntent.ClearFilters -> {
+                buf.putInt(20)
+                Unit
+            }
+
+            is AppIntent.ToggleMatchAllCategories -> {
+                buf.putInt(21)
+                Unit
+            }
+
+            is AppIntent.SetSidebarCalendar -> {
+                buf.putInt(22)
+                FfiConverterString.write(value.`href`, buf)
+                Unit
+            }
+
+            is AppIntent.ClearTagFilters -> {
+                buf.putInt(23)
+                Unit
+            }
+
+            is AppIntent.ClearLocationFilters -> {
+                buf.putInt(24)
+                Unit
+            }
+
+            is AppIntent.ToggleTreeCollapse -> {
+                buf.putInt(25)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
+
+            is AppIntent.ToggleDoneGroup -> {
+                buf.putInt(26)
+                FfiConverterString.write(value.`key`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 }
 
@@ -5193,6 +6170,34 @@ public object FfiConverterSequenceTypeMobileWorkSession : FfiConverterRustBuffer
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileWorkSession.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeRenderableTag : FfiConverterRustBuffer<List<RenderableTag>> {
+    override fun read(buf: ByteBuffer): List<RenderableTag> {
+        val len = buf.getInt()
+        return List<RenderableTag>(len) {
+            FfiConverterTypeRenderableTag.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<RenderableTag>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeRenderableTag.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<RenderableTag>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeRenderableTag.write(it, buf)
         }
     }
 }

@@ -1,5 +1,5 @@
-// File: ./tests/tui_network_toggle.rs
-// Integration tests for TUI network task toggling.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Integration tests for TUI network task toggling.
 use cfait::context::TestContext;
 use cfait::model::{Task, TaskStatus};
 use cfait::tui::action::{Action, AppEvent};
@@ -64,7 +64,7 @@ async fn test_tui_toggle_task_does_not_revert_status() {
     let _ = event_rx.recv().await;
 
     action_tx
-        .send(Action::UpdateTask(task))
+        .send(Action::PersistBatch(vec![cfait::journal::Action::Update(task)]))
         .await
         .expect("Failed to send action");
 

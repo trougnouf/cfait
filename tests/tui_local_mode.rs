@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for TUI local mode.
 use cfait::context::TestContext;
 use cfait::model::CalendarListEntry;
 use cfait::tui::action::AppEvent;

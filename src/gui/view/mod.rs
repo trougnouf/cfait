@@ -934,8 +934,8 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         };
 
     let is_filter_empty = app.tasks.is_empty() && app.store.has_any_tasks();
-    let is_tag_error = is_filter_empty && !app.selected_categories.is_empty();
-    let is_loc_error = is_filter_empty && !app.selected_locations.is_empty();
+    let is_tag_error = is_filter_empty && !app.session.selected_categories.is_empty();
+    let is_loc_error = is_filter_empty && !app.session.selected_locations.is_empty();
 
     let btn_cals = tooltip(
         button(container(icon::icon(icon::CALENDARS_HEADER).size(18)).center_x(Length::Fill))
@@ -1115,7 +1115,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         rust_i18n::t!("loading").to_string()
     } else if let Some(cal) = active_cal {
         cal.name.clone()
-    } else if app.selected_categories.is_empty() {
+    } else if app.session.selected_categories.is_empty() {
         rust_i18n::t!("all_tasks").to_string()
     } else {
         rust_i18n::t!("tasks").to_string()
@@ -1167,12 +1167,12 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     let search_text = app.search_value.text();
     if !search_text.is_empty() {
         subtitle.push_str(&format!(" | Search: '{}'", search_text));
-    } else if !app.selected_categories.is_empty() {
-        let tag_count = app.selected_categories.len();
+    } else if !app.session.selected_categories.is_empty() {
+        let tag_count = app.session.selected_categories.len();
         if tag_count == 1 {
             subtitle.push_str(&format!(
                 " | Tag: #{}",
-                app.selected_categories.iter().next().unwrap()
+                app.session.selected_categories.first().unwrap()
             ));
         } else {
             subtitle.push_str(&format!(" | {} Tags", tag_count));

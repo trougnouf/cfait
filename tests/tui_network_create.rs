@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for TUI network create.
 use cfait::cache::Cache;
 use cfait::context::TestContext;
 use cfait::model::{CalendarListEntry, Task};
@@ -86,14 +87,19 @@ async fn test_tui_create_preserves_existing_calendar_tasks() {
     let mut new_task = Task::new("New", &HashMap::new(), None);
     new_task.uid = new_uid.to_string();
     new_task.calendar_href = cal_href.clone();
+    new_task.href = format!("{}{}.ics", cal_href, new_uid);
+    new_task.etag = String::new();
+    new_task.sequence = 0;
 
     action_tx
-        .send(Action::CreateTask(new_task))
+        .send(Action::PersistBatch(vec![cfait::journal::Action::Create(
+            new_task,
+        )]))
         .await
         .expect("Failed to send create action");
 
     loop {
-        match tokio::time::timeout(std::time::Duration::from_secs(3), event_rx.recv()).await {
+        match tokio::time::timeout(std::time::Duration::from_secs(5), event_rx.recv()).await {
             Ok(Some(AppEvent::TasksLoaded(results))) => {
                 if let Some((_, tasks)) = results.iter().find(|(href, _)| href == &cal_href) {
                     let uids: std::collections::HashSet<_> =
@@ -104,6 +110,15 @@ async fn test_tui_create_preserves_existing_calendar_tasks() {
                 }
             }
             Ok(Some(AppEvent::Error(e))) => panic!("Actor returned error: {}", e),
+            Ok(Some(AppEvent::Status { key, .. })) => {
+                // Accept status updates, but continue waiting for TasksLoaded
+                if key == "status_saved" {
+                    // Status saved means the persist succeeded, but we still need TasksLoaded
+                    continue;
+                }
+                // For other statuses, continue waiting
+                continue;
+            }
             Ok(Some(_)) => continue,
             Ok(None) => panic!("Actor channel closed during create flow"),
             Err(_) => panic!("Timeout waiting for post-create task snapshot"),

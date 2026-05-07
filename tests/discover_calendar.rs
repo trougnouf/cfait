@@ -1,4 +1,5 @@
-// File: tests/discover_calendar.rs
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for calendar discovery.
 use cfait::client::core::RustyClient;
 use cfait::context::TestContext;
 use mockito::Server;

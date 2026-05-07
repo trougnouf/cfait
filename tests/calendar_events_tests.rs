@@ -1,4 +1,5 @@
-// File: tests/calendar_events_tests.rs
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Tests for calendar events functionality.
 use cfait::model::{DateType, Task, TaskStatus};
 use chrono::{NaiveDate, TimeZone, Utc};
 use std::collections::HashMap;
@@ -174,12 +175,18 @@ fn test_event_generation_with_exdates() {
     ));
 
     let result = task.to_event_ics();
-    assert!(!result.is_empty(), "Recurring task should generate an event");
+    assert!(
+        !result.is_empty(),
+        "Recurring task should generate an event"
+    );
 
     let main_event = result.iter().find(|(s, _)| s.is_empty()).unwrap();
 
     // Verify both the RRULE and EXDATE are present in the generated VEVENT
-    assert!(main_event.1.contains("RRULE:FREQ=WEEKLY"), "VEVENT missing RRULE");
+    assert!(
+        main_event.1.contains("RRULE:FREQ=WEEKLY"),
+        "VEVENT missing RRULE"
+    );
     assert!(
         main_event.1.contains("EXDATE;VALUE=DATE:20250108"),
         "VEVENT missing EXDATE (Calendar apps will incorrectly show the canceled event!)"
