@@ -104,29 +104,159 @@ pub fn view_task_row<'a>(
                     (HashSet::new(), None)
                 };
 
-            let renderable = task.to_renderable(
-                is_dark_theme,
-                &parent_tags,
-                &parent_location,
-                &app.tag_aliases,
-                is_tree_collapsed,
-            );
+            let (visible_tags, visible_location) =
+                task.resolve_visual_attributes(&parent_tags, &parent_location, &app.tag_aliases);
 
-            let parse_color = |hex: &str| -> Color {
-                crate::color_utils::parse_hex_to_floats(hex)
-                    .map(|(r, g, b)| Color::from_rgb(r, g, b))
-                    .unwrap_or(Color::WHITE)
+            let is_done = task.status.is_done();
+            let is_trash = task.calendar_href == "local://trash";
+            let is_blocked = task.is_blocked;
+
+            let title_color = if is_done || is_trash {
+                if is_dark_theme {
+                    Color::from_rgb(0.53, 0.53, 0.53)
+                } else {
+                    Color::from_rgb(0.63, 0.63, 0.63)
+                }
+            } else if is_blocked {
+                if is_dark_theme {
+                    Color::from_rgb(0.47, 0.47, 0.47)
+                } else {
+                    Color::from_rgb(0.5, 0.5, 0.5)
+                }
+            } else if task.priority > 0 {
+                let (r, g, b) = crate::color_utils::get_priority_rgb(task.priority, is_dark_theme);
+                Color::from_rgb(r, g, b)
+            } else {
+                theme.extended_palette().background.base.text
             };
 
-            let title_color = parse_color(&renderable.title_color_hex);
-            let date_color = parse_color(&renderable.date_color_hex);
-            let dur_color = parse_color(&renderable.duration_color_hex);
+            let is_paused = task.status == crate::model::TaskStatus::NeedsAction
+                && ((task.percent_complete.unwrap_or(0) > 0
+                    && task.percent_complete.unwrap_or(0) < 100)
+                    || task.time_spent_seconds > 0
+                    || !task.sessions.is_empty());
+
+            let now = chrono::Utc::now();
+            let mut date_badge = None;
+            let mut date_color = if is_dark_theme {
+                Color::from_rgb(0.67, 0.67, 0.67)
+            } else {
+                Color::from_rgb(0.4, 0.4, 0.4)
+            };
+            let mut date_icon = icon::CALENDAR;
+
+            if is_done {
+                if let Some(done_dt) = task.completion_date() {
+                    let local = done_dt.with_timezone(&chrono::Local);
+                    date_badge = Some(local.format("%Y-%m-%d %H:%M").to_string());
+                    date_icon = if task.status == crate::model::TaskStatus::Completed {
+                        icon::CALENDAR_CHECK
+                    } else {
+                        icon::CALENDAR_XMARK
+                    };
+                    date_color = if task.status == crate::model::TaskStatus::Completed {
+                        Color::from_rgb(0.4, 0.73, 0.42) // #66BB6A
+                    } else {
+                        Color::from_rgb(0.94, 0.33, 0.31) // #EF5350
+                    };
+                }
+            } else if let Some(start) = &task
+                .dtstart
+                .as_ref()
+                .filter(|s| s.to_start_comparison_time() > now)
+            {
+                let start_str = start.format_smart();
+                date_icon = icon::HOURGLASS_START;
+                if let Some(due) = &task.due {
+                    if start_str == due.format_smart() {
+                        date_badge = Some(start_str);
+                    } else {
+                        date_badge = Some(format!("{} - {}", start_str, due.format_smart()));
+                    }
+                } else {
+                    date_badge = Some(start_str);
+                }
+            } else if let Some(d) = &task.due {
+                let is_overdue = d.to_comparison_time() < now;
+                date_badge = Some(d.format_smart());
+                date_icon = icon::HOURGLASS_END;
+                if is_overdue {
+                    date_color = Color::from_rgb(0.94, 0.33, 0.31); // #EF5350
+                }
+            }
+
+            let has_active_alarm = task.alarms.iter().any(|a| a.acknowledged.is_none());
+
+            let now_ts = now.timestamp();
+            let current_session = task
+                .last_started_at
+                .map(|s| (now_ts - s).max(0) as u64)
+                .unwrap_or(0);
+            let total_mins = (task.time_spent_seconds + current_session) / 60;
+
+            let est_str = if let Some(min) = task.estimated_duration {
+                if let Some(max) = task.estimated_duration_max.filter(|m| *m > min) {
+                    format!(
+                        "~{}-{}",
+                        crate::model::parser::format_duration_compact(min),
+                        crate::model::parser::format_duration_compact(max)
+                    )
+                } else {
+                    format!("~{}", crate::model::parser::format_duration_compact(min))
+                }
+            } else {
+                "".to_string()
+            };
+
+            let time_str = if total_mins > 0 || task.last_started_at.is_some() {
+                if !est_str.is_empty() {
+                    format!(
+                        "{} / {}",
+                        crate::model::parser::format_duration_compact(total_mins as u32),
+                        est_str
+                    )
+                } else {
+                    crate::model::parser::format_duration_compact(total_mins as u32).to_string()
+                }
+            } else {
+                est_str
+            };
+
+            let pc_str = if !is_done && task.percent_complete.unwrap_or(0) > 0 {
+                format!("{}%", task.percent_complete.unwrap())
+            } else {
+                "".to_string()
+            };
+
+            let duration_badge = if !pc_str.is_empty() && !time_str.is_empty() {
+                Some(format!("{} | {}", pc_str, time_str))
+            } else if !pc_str.is_empty() {
+                Some(pc_str)
+            } else if !time_str.is_empty() {
+                Some(time_str)
+            } else {
+                None
+            };
+
+            let dur_color = if task.last_started_at.is_some() {
+                Color::from_rgb(0.4, 0.73, 0.42) // #66BB6A
+            } else {
+                if is_dark_theme {
+                    Color::from_rgb(0.67, 0.67, 0.67)
+                } else {
+                    Color::from_rgb(0.4, 0.4, 0.4)
+                }
+            };
 
             let closure_theme = theme.clone();
+            let summary_text = task.summary.clone();
+            
             let main_text_col = responsive(move |_size| {
                 let mut badges = row![].spacing(6).align_y(iced::Alignment::Center);
+                let mut has_badges = false;
 
-                if renderable.is_blocked {
+                if is_blocked {
+                    has_badges = true;
                     badges = badges.push(
                         container(
                             text(rust_i18n::t!("blocked"))
@@ -144,27 +274,27 @@ pub fn view_task_row<'a>(
                         .padding(3),
                     );
                 }
-                if renderable.has_active_alarm {
+                if has_active_alarm {
+                    has_badges = true;
                     badges = badges.push(
                         icon::icon(icon::BELL)
                             .size(12)
                             .color(Color::from_rgb(1.0, 0.4, 0.0)),
                     );
                 }
-                if let Some(date_text) = &renderable.date_badge {
+                if let Some(date_text) = &date_badge {
+                    has_badges = true;
                     badges = badges.push(
                         row![
-                            text(renderable.date_icon.clone())
-                                .font(icon::FONT)
-                                .size(12)
-                                .color(date_color),
+                            icon::icon(date_icon).size(12).color(date_color),
                             text(date_text.clone()).size(12).color(date_color)
                         ]
                         .spacing(3)
                         .align_y(iced::Alignment::Center),
                     );
                 }
-                if let Some(dur_text) = &renderable.duration_badge {
+                if let Some(dur_text) = &duration_badge {
+                    has_badges = true;
                     badges = badges.push(
                         container(
                             text(dur_text.clone())
@@ -182,7 +312,8 @@ pub fn view_task_row<'a>(
                         .padding(3),
                     );
                 }
-                if let Some(loc) = &renderable.location_badge {
+                if let Some(loc) = &visible_location {
+                    has_badges = true;
                     badges = badges.push(
                         button(text(format!("@{}", loc)).size(12).color(Color::WHITE))
                             .style(move |_, _| button::Style {
@@ -197,11 +328,13 @@ pub fn view_task_row<'a>(
                             .on_press(Message::JumpToLocation(loc.clone())),
                     );
                 }
-                for tag in &renderable.tags {
-                    let bg = parse_color(&tag.bg_color_hex);
-                    let tc = parse_color(&tag.text_color_hex);
+                for tag in &visible_tags {
+                    has_badges = true;
+                    let (r, g, b) = crate::color_utils::generate_color(tag);
+                    let bg = Color::from_rgb(r, g, b);
+                    let tc = if crate::color_utils::is_dark(r, g, b) { Color::WHITE } else { Color::BLACK };
                     badges = badges.push(
-                        button(text(format!("#{}", tag.name)).size(12).color(tc))
+                        button(text(format!("#{}", tag)).size(12).color(tc))
                             .style(move |_, _| button::Style {
                                 background: Some(bg.into()),
                                 border: iced::Border {
@@ -211,22 +344,33 @@ pub fn view_task_row<'a>(
                                 ..button::Style::default()
                             })
                             .padding(3)
-                            .on_press(Message::JumpToTag(tag.name.clone())),
+                            .on_press(Message::JumpToTag(tag.clone())),
                     );
                 }
 
-                let summary = text(renderable.summary.clone())
+                let summary = text(summary_text.clone())
                     .size(20)
                     .color(title_color)
                     .width(Length::Fill)
                     .wrapping(iced::widget::text::Wrapping::Word);
-                column![summary, badges].spacing(2).into()
+                
+                if has_badges {
+                    column![summary, badges].spacing(2).into()
+                } else {
+                    column![summary].into()
+                }
             })
-            .width(Length::Fill);
+            .width(Length::Fill)
+            .height(Length::Shrink);
 
             let mut actions = row![].spacing(3).align_y(iced::Alignment::Center);
 
-            if renderable.has_subtasks || is_tree_collapsed {
+            let has_subtasks = task.has_visible_subtasks;
+            let has_notes_or_deps = !task.description.is_empty()
+                || !task.dependencies.is_empty()
+                || !task.related_to.is_empty();
+
+            if has_subtasks || is_tree_collapsed {
                 let (icon_char, tooltip_text) = if is_tree_collapsed {
                     (
                         icon::FAMILY_TREE,
@@ -271,22 +415,22 @@ pub fn view_task_row<'a>(
                     continue;
                 }
                 let is_done_or_cancelled =
-                    renderable.is_done || renderable.status_string == "Cancelled";
+                    is_done || task.status == crate::model::TaskStatus::Cancelled;
 
-                if *action == TaskAction::OpenUrl && renderable.url.is_none() {
+                if *action == TaskAction::OpenUrl && task.url.is_none() {
                     continue;
                 }
                 if *action == TaskAction::ToggleDetails
-                    && !(renderable.has_notes_or_deps
+                    && !(has_notes_or_deps
                         || task.time_spent_seconds > 0
                         || !task.sessions.is_empty())
                 {
                     continue;
                 }
-                if *action == TaskAction::DeleteTree && !renderable.has_subtasks {
+                if *action == TaskAction::DeleteTree && !has_subtasks {
                     continue;
                 }
-                if *action == TaskAction::OpenCoordinates && renderable.geo.is_none() {
+                if *action == TaskAction::OpenCoordinates && task.geo.is_none() {
                     continue;
                 }
                 if *action == TaskAction::OpenLocations
@@ -301,7 +445,7 @@ pub fn view_task_row<'a>(
                     continue;
                 }
                 if *action == TaskAction::StopTimer
-                    && !(renderable.status_string == "InProcess" || renderable.is_paused)
+                    && !(task.status == crate::model::TaskStatus::InProcess || is_paused)
                 {
                     continue;
                 }
@@ -314,7 +458,7 @@ pub fn view_task_row<'a>(
                 }
 
                 let mut label = action.label();
-                if *action == TaskAction::DuplicateTree && !renderable.has_subtasks {
+                if *action == TaskAction::DuplicateTree && !has_subtasks {
                     label = rust_i18n::t!("duplicate_single_task").to_string();
                 }
 
@@ -331,14 +475,14 @@ pub fn view_task_row<'a>(
                         rust_i18n::t!("show_details").to_string(),
                     ),
                     TaskAction::ToggleTimer => {
-                        if renderable.status_string == "InProcess" {
+                        if task.status == crate::model::TaskStatus::InProcess {
                             (
                                 icon::icon(icon::PAUSE).size(14).into(),
                                 Message::PauseTask(task.uid.clone()),
                                 0,
                                 rust_i18n::t!("pause_task").to_string(),
                             )
-                        } else if renderable.is_paused {
+                        } else if is_paused {
                             (
                                 icon::icon(icon::PLAY).size(14).into(),
                                 Message::StartTask(task.uid.clone()),
@@ -446,7 +590,7 @@ pub fn view_task_row<'a>(
                     ),
                     TaskAction::OpenUrl => (
                         icon::icon(icon::URL_CHECK).size(14).into(),
-                        Message::OpenUrl(renderable.url.clone().unwrap()),
+                        Message::OpenUrl(task.url.clone().unwrap()),
                         0,
                         rust_i18n::t!("open_url").to_string(),
                     ),
@@ -470,25 +614,25 @@ pub fn view_task_row<'a>(
             actions = actions.push(ellipsis_btn);
 
             // Restore the Native Checkbox
-            let (icon_char, bg_color, default_border_color) = if renderable.is_paused {
+            let (icon_char, bg_color, default_border_color) = if is_paused {
                 (
                     icon::PAUSE,
                     Color::from_rgb(0.9, 0.7, 0.2),
                     Color::from_rgb(0.6, 0.5, 0.2),
                 )
             } else {
-                match renderable.status_string.as_str() {
-                    "InProcess" => (
+                match task.status {
+                    crate::model::TaskStatus::InProcess => (
                         icon::PLAY_FA,
                         Color::from_rgb(0.6, 0.8, 0.6),
                         Color::from_rgb(0.4, 0.5, 0.4),
                     ),
-                    "Cancelled" => (
+                    crate::model::TaskStatus::Cancelled => (
                         icon::CROSS,
                         Color::from_rgb(0.3, 0.2, 0.2),
                         Color::from_rgb(0.5, 0.4, 0.4),
                     ),
-                    "Completed" => (
+                    crate::model::TaskStatus::Completed => (
                         icon::CHECK,
                         Color::from_rgb(0.0, 0.6, 0.0),
                         Color::from_rgb(0.0, 0.8, 0.0),

@@ -41,7 +41,7 @@ impl SessionState {
         let collapsed_trees: HashSet<String> = self.collapsed_trees.iter().cloned().collect();
 
         store.filter(FilterOptions {
-            active_cal_href: self.active_calendar_href.as_deref(),
+            active_cal_href: None, // Logic handled by hidden_calendars
             hidden_calendars: &hidden,
             selected_categories: &selected_categories,
             selected_locations: &selected_locations,
