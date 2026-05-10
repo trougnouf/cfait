@@ -163,7 +163,7 @@ license-file = ["LICENSE", "4"]
 extended-description = """
 Cfait is a powerful yet simple tasks / TODO CalDAV client. (TUI and GUI)
 """
-depends = "$auto"
+depends = "$auto, libsecret-1-0, libvulkan1"
 section = "utils"
 priority = "optional"
 assets = [

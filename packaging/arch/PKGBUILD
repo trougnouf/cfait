@@ -12,6 +12,7 @@ depends=(
     'fontconfig'        # Required by the GUI for system font discovery
     'libxkbcommon'      # Required by the GUI for keyboard handling (especially on Wayland)
     'vulkan-icd-loader' # Required by the GUI to load Vulkan drivers for rendering
+    'org.freedesktop.secrets'  # Required to store the CalDAV password
 )
 makedepends=('cargo' 'pkgconf' 'git')  # git is needed as long as libdav > 0.10.3 is not released
 # Optional dependencies for the GUI and specific features
