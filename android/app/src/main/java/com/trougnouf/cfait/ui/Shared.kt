@@ -386,12 +386,13 @@ fun formatDuration(
     }
 }
 
+private val timeFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+
 fun formatIsoToLocal(isoString: String): String {
     return try {
         val instant = OffsetDateTime.parse(isoString).toInstant()
         val zone = ZoneId.systemDefault()
-        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-        instant.atZone(zone).format(formatter)
+        instant.atZone(zone).format(timeFormatter)
     } catch (e: Exception) {
         // Fallback for malformed strings or unexpected formats
         isoString.take(16).replace("T", " ")

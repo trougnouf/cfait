@@ -1,13 +1,25 @@
 // File: ./src/gui/view/task_row.rs
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! GUI view component for rendering individual task rows.
+use crate::color_utils;
 use crate::gui::icon;
 use crate::gui::message::Message;
 use crate::gui::state::GuiApp;
+use crate::gui::view::COLOR_LOCATION;
 use crate::gui::view::focusable::focusable;
-use iced::widget::{MouseArea, Space, button, container, row, text, tooltip};
-use iced::{Color, Element, Length, Theme};
+
+use crate::model::display::random_related_icon;
+use chrono::Utc;
+use rust_i18n::t;
 use std::collections::HashSet;
+use std::time::Duration;
+
+use super::tooltip_style;
+use iced::widget::{
+    Space, button, column, container, responsive, rich_text, row, span, text,
+    text_editor, tooltip,
+};
+use iced::{Color, Element, Length, Theme};
 
 // Helper inside the file to provide generic action styles
 pub fn action_style(theme: &Theme, status: button::Status, style_mode: u8) -> button::Style {
@@ -16,6 +28,8 @@ pub fn action_style(theme: &Theme, status: button::Status, style_mode: u8) -> bu
         background: Some(Color::TRANSPARENT.into()),
         text_color: if style_mode == 1 {
             palette.danger.base.color
+        } else if style_mode == 3 {
+            palette.primary.base.color
         } else {
             palette.background.weak.text
         },
@@ -26,11 +40,19 @@ pub fn action_style(theme: &Theme, status: button::Status, style_mode: u8) -> bu
         button::Status::Hovered | button::Status::Pressed => button::Style {
             background: Some(if style_mode == 1 {
                 palette.danger.base.color.into()
+            } else if style_mode == 3 {
+                Color {
+                    a: 0.2,
+                    ..palette.primary.base.color
+                }
+                .into()
             } else {
                 palette.background.strong.color.into()
             }),
             text_color: if style_mode == 1 {
                 palette.danger.base.text
+            } else if style_mode == 3 {
+                palette.primary.base.text
             } else {
                 palette.background.strong.text
             },
@@ -86,12 +108,27 @@ pub fn view_task_row<'a>(
             focusable(row![indent, btn]).id(row_id).into()
         }
         crate::store::TaskListItem::Task(task) => {
+            let is_blocked = task.is_blocked;
+            let is_selected = app.selected_uid.as_ref() == Some(&task.uid);
+
             let theme = app.theme();
             let is_dark_theme = theme.extended_palette().is_dark;
-            let is_selected = app.selected_uid.as_ref() == Some(&task.uid);
+            let default_text_color = theme.extended_palette().background.base.text;
+
+            let color = if is_blocked {
+                Color::from_rgb(0.5, 0.5, 0.5)
+            } else if task.priority == 0 {
+                default_text_color
+            } else {
+                let (r, g, b) = color_utils::get_priority_rgb(task.priority, is_dark_theme);
+                Color::from_rgb(r, g, b)
+            };
+
             let show_indent = app.active_cal_href.is_some();
             let indent_size = if show_indent { task.depth * 12 } else { 0 };
+            let indent = Space::new().width(Length::Fixed(indent_size as f32));
             let is_tree_collapsed = app.session.collapsed_trees.contains(&task.uid);
+            let is_expanded = app.expanded_tasks.contains(&task.uid);
 
             let (parent_tags, parent_location) =
                 if show_indent && let Some(p_uid) = &task.parent_uid {
@@ -108,27 +145,7 @@ pub fn view_task_row<'a>(
                 task.resolve_visual_attributes(&parent_tags, &parent_location, &app.tag_aliases);
 
             let is_done = task.status.is_done();
-            let is_trash = task.calendar_href == "local://trash";
-            let is_blocked = task.is_blocked;
-
-            let title_color = if is_done || is_trash {
-                if is_dark_theme {
-                    Color::from_rgb(0.53, 0.53, 0.53)
-                } else {
-                    Color::from_rgb(0.63, 0.63, 0.63)
-                }
-            } else if is_blocked {
-                if is_dark_theme {
-                    Color::from_rgb(0.47, 0.47, 0.47)
-                } else {
-                    Color::from_rgb(0.5, 0.5, 0.5)
-                }
-            } else if task.priority > 0 {
-                let (r, g, b) = crate::color_utils::get_priority_rgb(task.priority, is_dark_theme);
-                Color::from_rgb(r, g, b)
-            } else {
-                theme.extended_palette().background.base.text
-            };
+            let _is_trash = task.calendar_href == "local://trash";
 
             let is_paused = task.status == crate::model::TaskStatus::NeedsAction
                 && ((task.percent_complete.unwrap_or(0) > 0
@@ -136,224 +153,475 @@ pub fn view_task_row<'a>(
                     || task.time_spent_seconds > 0
                     || !task.sessions.is_empty());
 
-            let now = chrono::Utc::now();
-            let mut date_badge = None;
-            let mut date_color = if is_dark_theme {
-                Color::from_rgb(0.67, 0.67, 0.67)
-            } else {
-                Color::from_rgb(0.4, 0.4, 0.4)
-            };
-            let mut date_icon = icon::CALENDAR;
-
-            if is_done {
-                if let Some(done_dt) = task.completion_date() {
-                    let local = done_dt.with_timezone(&chrono::Local);
-                    date_badge = Some(local.format("%Y-%m-%d %H:%M").to_string());
-                    date_icon = if task.status == crate::model::TaskStatus::Completed {
-                        icon::CALENDAR_CHECK
-                    } else {
-                        icon::CALENDAR_XMARK
-                    };
-                    date_color = if task.status == crate::model::TaskStatus::Completed {
-                        Color::from_rgb(0.4, 0.73, 0.42) // #66BB6A
-                    } else {
-                        Color::from_rgb(0.94, 0.33, 0.31) // #EF5350
-                    };
-                }
-            } else if let Some(start) = &task
-                .dtstart
-                .as_ref()
-                .filter(|s| s.to_start_comparison_time() > now)
-            {
-                let start_str = start.format_smart();
-                date_icon = icon::HOURGLASS_START;
-                if let Some(due) = &task.due {
-                    if start_str == due.format_smart() {
-                        date_badge = Some(start_str);
-                    } else {
-                        date_badge = Some(format!("{} - {}", start_str, due.format_smart()));
-                    }
-                } else {
-                    date_badge = Some(start_str);
-                }
-            } else if let Some(d) = &task.due {
-                let is_overdue = d.to_comparison_time() < now;
-                date_badge = Some(d.format_smart());
-                date_icon = icon::HOURGLASS_END;
-                if is_overdue {
-                    date_color = Color::from_rgb(0.94, 0.33, 0.31); // #EF5350
-                }
-            }
-
             let has_active_alarm = task.alarms.iter().any(|a| a.acknowledged.is_none());
 
-            let now_ts = now.timestamp();
-            let current_session = task
-                .last_started_at
-                .map(|s| (now_ts - s).max(0) as u64)
-                .unwrap_or(0);
-            let total_mins = (task.time_spent_seconds + current_session) / 60;
+            let date_and_alarm_section: Element<'a, Message> = {
+                let mut row_content = row![].spacing(3).align_y(iced::Alignment::Center);
 
-            let est_str = if let Some(min) = task.estimated_duration {
-                if let Some(max) = task.estimated_duration_max.filter(|m| *m > min) {
-                    format!(
-                        "~{}-{}",
-                        crate::model::parser::format_duration_compact(min),
-                        crate::model::parser::format_duration_compact(max)
-                    )
-                } else {
-                    format!("~{}", crate::model::parser::format_duration_compact(min))
+                if has_active_alarm {
+                    let bell_icon = icon::icon(icon::BELL)
+                        .size(14)
+                        .color(Color::from_rgb(1.0, 0.4, 0.0));
+
+                    row_content = row_content.push(
+                        tooltip(
+                            container(bell_icon).padding(1),
+                            text(rust_i18n::t!("active_alarm")).size(12),
+                            tooltip::Position::Top,
+                        )
+                        .style(crate::gui::view::tooltip_style),
+                    );
                 }
-            } else {
-                "".to_string()
-            };
 
-            let time_str = if total_mins > 0 || task.last_started_at.is_some() {
-                if !est_str.is_empty() {
-                    format!(
-                        "{} / {}",
-                        crate::model::parser::format_duration_compact(total_mins as u32),
-                        est_str
-                    )
+                let now = Utc::now();
+                let is_future_start = task
+                    .dtstart
+                    .as_ref()
+                    .map(|start| start.to_start_comparison_time() > now)
+                    .unwrap_or(false);
+
+                let dim_color = Color::from_rgb(0.7, 0.7, 0.7);
+
+                let is_overdue = if let Some(d) = &task.due {
+                    !task.status.is_done() && d.to_comparison_time() < now
                 } else {
-                    crate::model::parser::format_duration_compact(total_mins as u32).to_string()
-                }
-            } else {
-                est_str
-            };
+                    false
+                };
 
-            let pc_str = if !is_done && task.percent_complete.unwrap_or(0) > 0 {
-                format!("{}%", task.percent_complete.unwrap())
-            } else {
-                "".to_string()
-            };
-
-            let duration_badge = if !pc_str.is_empty() && !time_str.is_empty() {
-                Some(format!("{} | {}", pc_str, time_str))
-            } else if !pc_str.is_empty() {
-                Some(pc_str)
-            } else if !time_str.is_empty() {
-                Some(time_str)
-            } else {
-                None
-            };
-
-            let dur_color = if task.last_started_at.is_some() {
-                Color::from_rgb(0.4, 0.73, 0.42) // #66BB6A
-            } else {
-                if is_dark_theme {
-                    Color::from_rgb(0.67, 0.67, 0.67)
+                let due_color = if is_overdue {
+                    Color::from_rgb(0.8, 0.2, 0.2)
                 } else {
-                    Color::from_rgb(0.4, 0.4, 0.4)
+                    Color::from_rgb(0.5, 0.5, 0.5)
+                };
+
+                if task.status.is_done() {
+                    if let Some(done_dt) = task.completion_date() {
+                        let local_done = done_dt.with_timezone(&chrono::Local);
+                        let (done_icon, done_color) =
+                            if task.status == crate::model::TaskStatus::Completed {
+                                (icon::CALENDAR_CHECK, Color::from_rgb(0.4, 0.6, 0.4))
+                            } else {
+                                (icon::CALENDAR_XMARK, Color::from_rgb(0.8, 0.2, 0.2))
+                            };
+
+                        row_content = row_content.push(
+                            container(icon::icon(done_icon).size(12).color(done_color))
+                                .align_y(iced::Alignment::Center),
+                        );
+                        row_content = row_content.push(
+                            text(local_done.format("%Y-%m-%d %H:%M").to_string())
+                                .size(14)
+                                .color(done_color),
+                        );
+                    }
+                } else if is_future_start {
+                    row_content = row_content.push(
+                        container(icon::icon(icon::HOURGLASS_START).size(12).color(dim_color))
+                            .align_y(iced::Alignment::Center),
+                    );
+
+                    let start_ref = task.dtstart.as_ref().unwrap();
+                    let start_str = start_ref.format_smart();
+
+                    if let Some(due) = &task.due {
+                        let is_same_day = start_ref.to_date_naive() == due.to_date_naive();
+
+                        let due_str = if is_same_day {
+                            match due {
+                                crate::model::DateType::Specific(dt) => {
+                                    dt.with_timezone(&chrono::Local).format("%H:%M").to_string()
+                                }
+                                crate::model::DateType::AllDay(_) => due.format_smart(),
+                                crate::model::DateType::Month(_, _) => due.format_smart(),
+                                crate::model::DateType::Year(_) => due.format_smart(),
+                            }
+                        } else {
+                            due.format_smart()
+                        };
+
+                        if start_str == due.format_smart() {
+                            row_content =
+                                row_content.push(text(start_str).size(14).color(dim_color));
+                        } else {
+                            row_content = row_content.push(
+                                text(format!("{} - {}", start_str, due_str))
+                                    .size(14)
+                                    .color(dim_color),
+                            );
+                        }
+                        row_content = row_content.push(
+                            container(icon::icon(icon::HOURGLASS_END).size(12).color(dim_color))
+                                .align_y(iced::Alignment::Center),
+                        );
+                    } else {
+                        row_content = row_content.push(text(start_str).size(14).color(dim_color));
+                    }
+                } else if let Some(d) = &task.due {
+                    row_content = row_content.push(
+                        container(icon::icon(icon::CALENDAR).size(12).color(due_color))
+                            .align_y(iced::Alignment::Center),
+                    );
+                    row_content =
+                        row_content.push(text(d.format_smart()).size(14).color(due_color));
                 }
+
+                container(row_content).width(Length::Shrink).into()
             };
 
-            let summary = text(task.summary.clone())
-                .size(20)
-                .color(title_color)
-                .width(Length::Fill)
-                .wrapping(iced::widget::text::Wrapping::Word);
+            let has_desc = !task.description.is_empty();
+            let has_valid_parent = task.parent_uid.as_ref().is_some_and(|uid| !uid.is_empty());
+            let has_deps = !task.dependencies.is_empty();
+            let has_related = !task.related_to.is_empty();
+            let has_incoming_related = !app.store.get_tasks_related_to(&task.uid).is_empty();
+            let has_blocking = !app.store.get_tasks_blocking(&task.uid).is_empty();
 
-            let mut badges = row![].spacing(6).align_y(iced::Alignment::Center);
-            let mut has_badges = false;
+            let has_info = has_desc
+                || has_deps
+                || has_blocking
+                || has_related
+                || has_incoming_related
+                || has_valid_parent;
+            let has_time = !task.sessions.is_empty() || task.time_spent_seconds > 0;
 
-            if is_blocked {
-                has_badges = true;
-                badges = badges.push(
-                    container(
-                        text(rust_i18n::t!("blocked"))
-                            .size(12)
-                            .color(theme.extended_palette().background.base.text),
-                    )
-                    .style(|_| container::Style {
-                        background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
-                        border: iced::Border {
-                            radius: 4.0.into(),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    })
-                    .padding(3),
-                );
-            }
-            if has_active_alarm {
-                has_badges = true;
-                badges = badges.push(
-                    icon::icon(icon::BELL)
-                        .size(12)
-                        .color(Color::from_rgb(1.0, 0.4, 0.0)),
-                );
-            }
-            if let Some(date_text) = date_badge {
-                has_badges = true;
-                badges = badges.push(
+            let has_content_to_show =
+                has_info || has_time || app.adding_session_uid.as_ref() == Some(&task.uid);
+
+            let has_metadata = !task.categories.is_empty()
+                || task.rrule.is_some()
+                || is_blocked
+                || task.estimated_duration.is_some()
+                || task.location.is_some()
+                || task.url.is_some()
+                || task.geo.is_some()
+                || task.time_spent_seconds > 0
+                || task.last_started_at.is_some();
+
+            let main_text_col = responsive(move |size| {
+                let available_width = size.width;
+                let mut tags_width = 0.0;
+
+                if has_metadata {
+                    let show_pc = !task.status.is_done() && task.percent_complete.unwrap_or(0) > 0;
+
+                    if is_blocked {
+                        tags_width += 65.0;
+                    }
+                    if app.show_priority_numbers && task.priority > 0 {
+                        tags_width += 25.0;
+                    }
+                    for cat in &visible_tags {
+                        tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
+                    }
+                    if let Some(l) = &visible_location {
+                        tags_width += (l.len() as f32 * 7.0) + 25.0;
+                    }
+                    if task.estimated_duration.is_some()
+                        || task.time_spent_seconds > 0
+                        || task.last_started_at.is_some()
+                        || show_pc
+                    {
+                        tags_width += 50.0;
+                        if show_pc {
+                            tags_width += 30.0; // Extra room for "100% | "
+                        }
+                    }
+                    if task.rrule.is_some() {
+                        tags_width += 30.0;
+                    }
+                    if task.url.is_some() {
+                        tags_width += 20.0;
+                    }
+                }
+
+                let build_tags = || -> Element<'a, Message> {
+                    let mut tags_row: iced::widget::Row<'_, Message> =
+                        row![].spacing(3).align_y(iced::Alignment::Center);
+
+                    if is_blocked {
+                        tags_row = tags_row.push(
+                            container(text(rust_i18n::t!("blocked")).size(12).style(
+                                |theme: &Theme| text::Style {
+                                    color: Some(theme.extended_palette().background.base.text),
+                                },
+                            ))
+                            .style(|_| container::Style {
+                                background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
+                                border: iced::Border {
+                                    radius: 4.0.into(),
+                                    ..Default::default()
+                                },
+                                ..Default::default()
+                            })
+                            .padding(3),
+                        );
+                    }
+
+                    if app.show_priority_numbers && task.priority > 0 {
+                        let priority_text =
+                            text(format!("!{}", task.priority)).size(11).color(color);
+                        tags_row = tags_row.push(container(priority_text).padding([2, 4]).style(
+                            move |_| container::Style {
+                                border: iced::Border {
+                                    radius: 4.0.into(),
+                                    color: color.scale_alpha(0.5),
+                                    width: 1.0,
+                                },
+                                ..Default::default()
+                            },
+                        ));
+                    }
+
+                    for cat in &visible_tags {
+                        let (r, g, b) = color_utils::generate_color(cat);
+                        let bg_color = Color::from_rgb(r, g, b);
+
+                        let text_color = if color_utils::is_dark(r, g, b) {
+                            Color::WHITE
+                        } else {
+                            Color::BLACK
+                        };
+
+                        tags_row = tags_row.push(
+                            button(text(format!("#{}", cat)).size(12).color(text_color))
+                                .style(move |_theme, status| {
+                                    let base = button::Style {
+                                        background: Some(bg_color.into()),
+                                        text_color,
+                                        border: iced::Border {
+                                            radius: 4.0.into(),
+                                            ..Default::default()
+                                        },
+                                        ..button::Style::default()
+                                    };
+                                    match status {
+                                        button::Status::Hovered | button::Status::Pressed => {
+                                            button::Style {
+                                                border: iced::Border {
+                                                    color: Color::BLACK.scale_alpha(0.2),
+                                                    width: 1.0,
+                                                    radius: 4.0.into(),
+                                                },
+                                                ..base
+                                            }
+                                        }
+                                        _ => base,
+                                    }
+                                })
+                                .padding(3)
+                                .on_press(Message::JumpToTag(cat.clone())),
+                        );
+                    }
+
+                    if let Some(loc) = &visible_location {
+                        let text_color = Color::WHITE;
+
+                        let loc_btn = button(text(format!("@@{}", loc)).size(12).color(text_color))
+                            .style(move |_theme, status| {
+                                let base = button::Style {
+                                    background: Some(COLOR_LOCATION.into()),
+                                    text_color,
+                                    border: iced::Border {
+                                        radius: 4.0.into(),
+                                        ..Default::default()
+                                    },
+                                    ..button::Style::default()
+                                };
+                                match status {
+                                    button::Status::Hovered | button::Status::Pressed => {
+                                        button::Style {
+                                            border: iced::Border {
+                                                color: Color::BLACK.scale_alpha(0.2),
+                                                width: 1.0,
+                                                radius: 4.0.into(),
+                                            },
+                                            ..base
+                                        }
+                                    }
+                                    _ => base,
+                                }
+                            })
+                            .padding(3)
+                            .on_press(Message::JumpToLocation(loc.clone()));
+
+                        tags_row = tags_row.push(loc_btn);
+                    }
+
+                    let now_ts = Utc::now().timestamp();
+                    let current_session = task
+                        .last_started_at
+                        .map(|start| (now_ts - start).max(0) as u64)
+                        .unwrap_or(0);
+                    let total_seconds = task.time_spent_seconds + current_session;
+                    let total_mins = (total_seconds / 60) as u32;
+
+                    let show_pc = !task.status.is_done() && task.percent_complete.unwrap_or(0) > 0;
+
+                    if total_mins > 0
+                        || task.estimated_duration.is_some()
+                        || task.last_started_at.is_some()
+                        || show_pc
+                    {
+                        let est_label = if let Some(min) = task.estimated_duration {
+                            if let Some(max) = task.estimated_duration_max {
+                                if max > min {
+                                    format!(
+                                        "~{}-{}",
+                                        crate::model::parser::format_duration_compact(min),
+                                        crate::model::parser::format_duration_compact(max)
+                                    )
+                                } else {
+                                    format!(
+                                        "~{}",
+                                        crate::model::parser::format_duration_compact(min)
+                                    )
+                                }
+                            } else {
+                                format!("~{}", crate::model::parser::format_duration_compact(min))
+                            }
+                        } else {
+                            String::new()
+                        };
+
+                        let time_label = if total_mins > 0 || task.last_started_at.is_some() {
+                            if !est_label.is_empty() {
+                                format!(
+                                    "{} / {}",
+                                    crate::model::parser::format_duration_compact(total_mins),
+                                    est_label
+                                )
+                            } else {
+                                crate::model::parser::format_duration_compact(total_mins)
+                            }
+                        } else {
+                            est_label
+                        };
+
+                        let pc_str = if show_pc {
+                            task.percent_complete
+                                .map(|pc| format!("{}%", pc))
+                                .unwrap_or_default()
+                        } else {
+                            String::new()
+                        };
+
+                        let label = if !pc_str.is_empty() && !time_label.is_empty() {
+                            format!("{} | {}", pc_str, time_label)
+                        } else if !pc_str.is_empty() {
+                            pc_str
+                        } else {
+                            time_label
+                        };
+
+                        let dur_bg = if task.last_started_at.is_some() {
+                            Color::from_rgb(0.25, 0.50, 0.25)
+                        } else {
+                            Color::from_rgb(0.50, 0.50, 0.50)
+                        };
+                        let dur_border = if task.last_started_at.is_some() {
+                            Color::from_rgb(0.25, 0.60, 0.25)
+                        } else {
+                            Color::BLACK.scale_alpha(0.05)
+                        };
+
+                        tags_row = tags_row.push(
+                            container(text(label).size(10).style(|theme: &Theme| text::Style {
+                                color: Some(theme.extended_palette().background.base.text),
+                            }))
+                            .style(move |_| container::Style {
+                                background: Some(dur_bg.into()),
+                                border: iced::Border {
+                                    radius: 4.0.into(),
+                                    color: dur_border,
+                                    ..Default::default()
+                                },
+                                ..Default::default()
+                            })
+                            .padding(3),
+                        );
+                    }
+                    if task.rrule.is_some() {
+                        let recurrence_icon = icon::icon(icon::REPEAT)
+                            .size(14)
+                            .color(Color::from_rgb(0.5, 0.5, 0.5));
+                        tags_row = tags_row.push(container(recurrence_icon).padding(0));
+                    }
+
+                    tags_row.into()
+                };
+
+                let title_width_est = task.summary.len() as f32 * 10.0;
+                let required_title_space = title_width_est.min(90.0);
+                let padding_safety = 5.0;
+
+                let place_inline = if !has_metadata {
+                    true
+                } else {
+                    (available_width - tags_width - padding_safety) > required_title_space
+                };
+
+                let is_done_or_cancelled =
+                    task.status.is_done() || task.status == crate::model::TaskStatus::Cancelled;
+                let title_color = if is_done_or_cancelled {
+                    Color { a: 0.75, ..color }
+                } else {
+                    color
+                };
+
+                let is_trash = task.calendar_href == "local://trash";
+
+                let summary_text: Element<'a, Message> =
+                    if (app.strikethrough_completed && task.status.is_done()) || is_trash {
+                        Into::<Element<'a, Message>>::into(
+                            rich_text![
+                                span::<Message, iced::Font>(task.summary.clone())
+                                    .strikethrough(true)
+                            ]
+                            .size(20)
+                            .color(title_color)
+                            .width(Length::Fill),
+                        )
+                    } else {
+                        Into::<Element<'a, Message>>::into(
+                            text(&task.summary)
+                                .size(20)
+                                .color(title_color)
+                                .width(Length::Fill)
+                                .wrapping(iced::widget::text::Wrapping::Word),
+                        )
+                    };
+
+                if place_inline {
                     row![
-                        icon::icon(date_icon).size(12).color(date_color),
-                        text(date_text).size(12).color(date_color)
+                        summary_text,
+                        if has_metadata {
+                            build_tags()
+                        } else {
+                            Space::new().width(Length::Fixed(0.0)).into()
+                        }
                     ]
-                    .spacing(3)
-                    .align_y(iced::Alignment::Center),
-                );
-            }
-            if let Some(dur_text) = duration_badge {
-                has_badges = true;
-                badges = badges.push(
-                    container(
-                        text(dur_text)
-                            .size(10)
-                            .color(theme.extended_palette().background.base.text),
-                    )
-                    .style(move |_| container::Style {
-                        background: Some(dur_color.into()),
-                        border: iced::Border {
-                            radius: 4.0.into(),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    })
-                    .padding(3),
-                );
-            }
-            if let Some(loc) = visible_location {
-                has_badges = true;
-                badges = badges.push(
-                    button(text(format!("@{}", loc)).size(12).color(Color::WHITE))
-                        .style(move |_, _| button::Style {
-                            background: Some(crate::gui::view::COLOR_LOCATION.into()),
-                            border: iced::Border {
-                                radius: 4.0.into(),
-                                ..Default::default()
-                            },
-                            ..button::Style::default()
-                        })
-                        .padding(3)
-                        .on_press(Message::JumpToLocation(loc)),
-                );
-            }
-            for tag in visible_tags {
-                has_badges = true;
-                let (r, g, b) = crate::color_utils::generate_color(&tag);
-                let bg = Color::from_rgb(r, g, b);
-                let tc = if crate::color_utils::is_dark(r, g, b) { Color::WHITE } else { Color::BLACK };
-                badges = badges.push(
-                    button(text(format!("#{}", tag)).size(12).color(tc))
-                        .style(move |_, _| button::Style {
-                            background: Some(bg.into()),
-                            border: iced::Border {
-                                radius: 4.0.into(),
-                                ..Default::default()
-                            },
-                            ..button::Style::default()
-                        })
-                        .padding(3)
-                        .on_press(Message::JumpToTag(tag)),
-                );
-            }
+                    .spacing(6)
+                    .align_y(iced::Alignment::Center)
+                    .into()
+                } else {
+                    column![
+                        summary_text,
+                        if has_metadata {
+                            row![Space::new().width(Length::Fill), build_tags()]
+                        } else {
+                            row![]
+                        }
+                    ]
+                    .spacing(2)
+                    .into()
+                }
+            })
+            .width(Length::Fill)
+            .height(Length::Shrink);
 
             let mut actions = row![].spacing(3).align_y(iced::Alignment::Center);
 
             let has_subtasks = task.has_visible_subtasks;
-            let has_notes_or_deps = !task.description.is_empty()
+            let _has_notes_or_deps = !task.description.is_empty()
                 || !task.dependencies.is_empty()
                 || !task.related_to.is_empty();
 
@@ -392,8 +660,105 @@ pub fn view_task_row<'a>(
                         tooltip::Position::Top,
                     )
                     .style(crate::gui::view::tooltip_style)
-                    .delay(std::time::Duration::from_millis(700)),
+                    .delay(Duration::from_millis(700)),
                 );
+            }
+
+            if has_related || has_incoming_related {
+                let related_icon_name = if !task.related_to.is_empty() {
+                    random_related_icon(&task.uid, &task.related_to[0])
+                } else if has_incoming_related {
+                    let incoming = app.store.get_tasks_related_to(&task.uid);
+                    if !incoming.is_empty() {
+                        random_related_icon(&task.uid, &incoming[0].0)
+                    } else {
+                        icon::LINK
+                    }
+                } else {
+                    icon::LINK
+                };
+
+                actions = actions.push(
+                    icon::icon(related_icon_name)
+                        .size(12)
+                        .color(Color::from_rgb(0.5, 0.5, 0.5)),
+                );
+            }
+
+            if let Some(yanked) = &app.yanked_uid {
+                if *yanked != task.uid {
+                    let yanked_summary = app.store.get_summary(yanked).unwrap_or_default();
+
+                    let block_btn = button(icon::icon(icon::BLOCKED).size(14))
+                        .style(|theme, status| action_style(theme, status, 0))
+                        .padding(4)
+                        .on_press(Message::AddDependency(task.uid.clone()));
+                    actions = actions.push(
+                        tooltip(
+                            block_btn,
+                            text(rust_i18n::t!(
+                                "yank_tooltip_block",
+                                target = task.summary.clone(),
+                                yanked = yanked_summary.clone()
+                            ))
+                            .size(12),
+                            tooltip::Position::Top,
+                        )
+                        .style(tooltip_style)
+                        .delay(Duration::from_millis(700)),
+                    );
+                    let child_btn = button(icon::icon(icon::CHILD).size(14))
+                        .style(|theme, status| action_style(theme, status, 0))
+                        .padding(4)
+                        .on_press(Message::MakeChild(task.uid.clone()));
+                    actions = actions.push(
+                        tooltip(
+                            child_btn,
+                            text(rust_i18n::t!(
+                                "yank_tooltip_child",
+                                target = task.summary.clone(),
+                                yanked = yanked_summary.clone()
+                            ))
+                            .size(12),
+                            tooltip::Position::Top,
+                        )
+                        .style(tooltip_style)
+                        .delay(Duration::from_millis(700)),
+                    );
+                    let related_btn =
+                        button(icon::icon(random_related_icon(&task.uid, yanked)).size(14))
+                            .style(|theme, status| action_style(theme, status, 0))
+                            .padding(4)
+                            .on_press(Message::AddRelatedTo(task.uid.clone()));
+                    actions = actions.push(
+                        tooltip(
+                            related_btn,
+                            text(rust_i18n::t!(
+                                "related_to_tooltip",
+                                target = task.summary.clone(),
+                                yanked = yanked_summary.clone()
+                            ))
+                            .size(12),
+                            tooltip::Position::Top,
+                        )
+                        .style(tooltip_style)
+                        .delay(Duration::from_millis(700)),
+                    );
+                } else {
+                    let unlink_btn = button(icon::icon(icon::UNLINK).size(14))
+                        .style(button::primary)
+                        .padding(4)
+                        .on_press(Message::EscapePressed);
+                    actions = actions.push(
+                        tooltip(
+                            unlink_btn,
+                            text(format!("{} (Esc)", rust_i18n::t!("unlink"))).size(12),
+                            tooltip::Position::Top,
+                        )
+                        .style(tooltip_style)
+                        .delay(Duration::from_millis(700)),
+                    );
+                }
             }
 
             use crate::config::TaskAction;
@@ -407,11 +772,7 @@ pub fn view_task_row<'a>(
                 if *action == TaskAction::OpenUrl && task.url.is_none() {
                     continue;
                 }
-                if *action == TaskAction::ToggleDetails
-                    && !(has_notes_or_deps
-                        || task.time_spent_seconds > 0
-                        || !task.sessions.is_empty())
-                {
+                if *action == TaskAction::ToggleDetails && !(has_info || has_time) {
                     continue;
                 }
                 if *action == TaskAction::DeleteTree && !has_subtasks {
@@ -450,17 +811,40 @@ pub fn view_task_row<'a>(
                 }
 
                 let (icon_element, msg, style_mode, tooltip_str): (
-                    Element<'_, Message>,
+                    Element<'a, Message>,
                     Message,
                     u8,
                     String,
                 ) = match action {
-                    TaskAction::ToggleDetails => (
-                        icon::icon(icon::INFO).size(14).into(),
-                        Message::ToggleDetails(task.uid.clone()),
-                        0,
-                        rust_i18n::t!("show_details").to_string(),
-                    ),
+                    TaskAction::ToggleDetails => {
+                        let mut icon_row = row![].spacing(2).align_y(iced::Alignment::Center);
+                        if has_info {
+                            icon_row =
+                                icon_row.push(icon::icon(icon::INFO).size(14).line_height(1.0));
+                        }
+                        if has_time {
+                            icon_row = icon_row
+                                .push(icon::icon(icon::TIMER_SETTINGS).size(14).line_height(1.0));
+                        }
+                        let tooltip_text = if has_info && has_time {
+                            format!(
+                                "{} / {}",
+                                rust_i18n::t!("show_details"),
+                                rust_i18n::t!("help_metadata_manage_sessions")
+                            )
+                        } else if has_time {
+                            rust_i18n::t!("help_metadata_manage_sessions").to_string()
+                        } else {
+                            rust_i18n::t!("show_details").to_string()
+                        };
+                        let style = if is_expanded { 3 } else { 0 };
+                        (
+                            icon_row.into(),
+                            Message::ToggleDetails(task.uid.clone()),
+                            style,
+                            tooltip_text,
+                        )
+                    }
                     TaskAction::ToggleTimer => {
                         if task.status == crate::model::TaskStatus::InProcess {
                             (
@@ -491,12 +875,20 @@ pub fn view_task_row<'a>(
                         0,
                         rust_i18n::t!("stop_reset").to_string(),
                     ),
-                    TaskAction::AddSession => (
-                        icon::icon(icon::TIMER_PLUS).size(14).into(),
-                        Message::StartAddSession(task.uid.clone()),
-                        0,
-                        rust_i18n::t!("help_metadata_log_time").to_string(),
-                    ),
+                    TaskAction::AddSession => {
+                        let style = if app.adding_session_uid.as_deref() == Some(task.uid.as_str())
+                        {
+                            3
+                        } else {
+                            0
+                        };
+                        (
+                            icon::icon(icon::TIMER_PLUS).size(14).into(),
+                            Message::StartAddSession(task.uid.clone()),
+                            style,
+                            rust_i18n::t!("help_metadata_log_time").to_string(),
+                        )
+                    }
                     TaskAction::IncreasePriority => (
                         icon::icon(icon::PLUS).size(14).into(),
                         Message::ChangePriority(index, 1),
@@ -583,8 +975,9 @@ pub fn view_task_row<'a>(
                     ),
                 };
 
+                let style_mode_mapped = if style_mode == 2 { 1 } else { style_mode };
                 let btn = button(icon_element)
-                    .style(move |theme, status| action_style(theme, status, style_mode))
+                    .style(move |theme, status| action_style(theme, status, style_mode_mapped))
                     .padding(4)
                     .on_press(msg);
                 actions = actions.push(
@@ -594,9 +987,17 @@ pub fn view_task_row<'a>(
                 );
             }
 
+            let is_context_menu_active =
+                app.active_context_menu.as_ref().map(|(u, _, _)| u) == Some(&task.uid);
             let ellipsis_btn = button(icon::icon(icon::ELLIPSIS).size(14))
                 .padding(4)
-                .style(|theme, status| action_style(theme, status, 0))
+                .style(move |theme, status| {
+                    if is_context_menu_active {
+                        action_style(theme, status, 3)
+                    } else {
+                        action_style(theme, status, 0)
+                    }
+                })
                 .on_press(Message::OpenContextMenu(task.uid.clone(), false));
             actions = actions.push(ellipsis_btn);
 
@@ -681,17 +1082,21 @@ pub fn view_task_row<'a>(
                 }
             });
 
-            let right_side = if has_badges {
-                row![badges, actions].spacing(10).align_y(iced::Alignment::Center)
-            } else {
-                actions
-            };
+            let status_btn_element: Element<'a, Message> = tooltip(
+                status_btn,
+                text("Toggle (Space)").size(12),
+                tooltip::Position::Top,
+            )
+            .style(tooltip_style)
+            .delay(Duration::from_millis(700))
+            .into();
 
             let row_main = row![
-                Space::new().width(Length::Fixed(indent_size as f32)),
-                status_btn,
-                summary,
-                right_side
+                indent,
+                status_btn_element,
+                main_text_col,
+                date_and_alarm_section,
+                actions
             ]
             .spacing(10)
             .align_y(iced::Alignment::Center);
@@ -733,11 +1138,401 @@ pub fn view_task_row<'a>(
                     }
                 });
 
-            let container_content: Element<'a, Message> = MouseArea::new(task_button)
+            let mut details_col = column![].spacing(5);
+
+            if has_content_to_show && is_expanded {
+                if !task.description.is_empty() {
+                    details_col = details_col.push(
+                        text(&task.description)
+                            .size(14)
+                            .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                    );
+                }
+
+                if has_valid_parent {
+                    let p_uid = task.parent_uid.as_ref().unwrap();
+                    let p_name = app
+                        .store
+                        .get_summary(p_uid)
+                        .unwrap_or_else(|| rust_i18n::t!("unknown_parent").to_string());
+                    let remove_parent_btn = button(icon::icon(icon::CROSS).size(10))
+                        .style(button::danger)
+                        .padding(2)
+                        .on_press(Message::RemoveParent(task.uid.clone()));
+                    let row = row![
+                        text(rust_i18n::t!("parent"))
+                            .size(12)
+                            .color(Color::from_rgb(0.4, 0.8, 0.4)),
+                        button(text(p_name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
+                            .style(button::text)
+                            .padding(0)
+                            .on_press(Message::JumpToTask(p_uid.clone())),
+                        tooltip(
+                            remove_parent_btn,
+                            text(rust_i18n::t!("remove_parent")).size(12),
+                            tooltip::Position::Top
+                        )
+                        .style(crate::gui::view::tooltip_style)
+                        .delay(Duration::from_millis(700))
+                    ]
+                    .spacing(5)
+                    .align_y(iced::Alignment::Center);
+                    details_col = details_col.push(row);
+                }
+
+                if !task.dependencies.is_empty() {
+                    details_col = details_col.push(
+                        text(rust_i18n::t!("blocked_by"))
+                            .size(12)
+                            .color(Color::from_rgb(0.8, 0.4, 0.4)),
+                    );
+                    for dep_uid in &task.dependencies {
+                        let name = app
+                            .store
+                            .get_summary(dep_uid)
+                            .unwrap_or_else(|| rust_i18n::t!("unknown_task").to_string());
+                        let is_done = app.store.is_task_done(dep_uid).unwrap_or(false);
+                        let check = if is_done { "[x]" } else { "[ ]" };
+                        let remove_dep_btn = button(icon::icon(icon::CROSS).size(10))
+                            .style(button::danger)
+                            .padding(2)
+                            .on_press(Message::RemoveDependency(task.uid.clone(), dep_uid.clone()));
+                        let name_btn = button(
+                            text(format!("{} {}", check, name))
+                                .size(12)
+                                .color(Color::from_rgb(0.6, 0.6, 0.6)),
+                        )
+                        .style(button::text)
+                        .padding(0)
+                        .on_press(Message::JumpToTask(dep_uid.clone()));
+
+                        let dep_row = row![
+                            name_btn,
+                            tooltip(
+                                remove_dep_btn,
+                                text(rust_i18n::t!("remove_dependency")).size(12),
+                                tooltip::Position::Top
+                            )
+                            .style(crate::gui::view::tooltip_style)
+                            .delay(Duration::from_millis(700))
+                        ]
+                        .spacing(5)
+                        .align_y(iced::Alignment::Center);
+                        details_col = details_col.push(dep_row);
+                    }
+                }
+
+                if !task.related_to.is_empty() {
+                    details_col = details_col.push(
+                        text(rust_i18n::t!("related_to_label"))
+                            .size(12)
+                            .color(Color::from_rgb(0.6, 0.6, 0.8)),
+                    );
+                    for related_uid in &task.related_to {
+                        let mut name = rust_i18n::t!("unknown_task").to_string();
+                        if let Some(rel_task) = app.store.get_task_ref(related_uid) {
+                            name = rel_task.summary.clone();
+                            if rel_task.status.is_done() {
+                                if let Some(comp_date) = rel_task.completion_date() {
+                                    let local = comp_date.with_timezone(&chrono::Local);
+                                    name =
+                                        format!("{} (✓ {})", name, local.format("%Y-%m-%d %H:%M"));
+                                } else {
+                                    name = format!("{} (✓)", name);
+                                }
+                            }
+                        }
+                        let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
+                            .style(button::danger)
+                            .padding(2)
+                            .on_press(Message::RemoveRelatedTo(
+                                task.uid.clone(),
+                                related_uid.clone(),
+                            ));
+                        let name_btn =
+                            button(text(name).size(12).color(Color::from_rgb(0.7, 0.7, 0.7)))
+                                .style(button::text)
+                                .padding(0)
+                                .on_press(Message::JumpToTask(related_uid.clone()));
+
+                        let related_row = row![
+                            icon::icon(random_related_icon(&task.uid, related_uid)).size(12),
+                            name_btn,
+                            tooltip(
+                                remove_related_btn,
+                                text(rust_i18n::t!("remove_relation")).size(12),
+                                tooltip::Position::Top
+                            )
+                            .style(crate::gui::view::tooltip_style)
+                            .delay(Duration::from_millis(700))
+                        ]
+                        .spacing(5)
+                        .align_y(iced::Alignment::Center);
+                        details_col = details_col.push(related_row);
+                    }
+                }
+
+                let blocking_tasks = app.store.get_tasks_blocking(&task.uid);
+                if !blocking_tasks.is_empty() {
+                    details_col = details_col.push(
+                        text(rust_i18n::t!("blocking_label"))
+                            .size(12)
+                            .color(Color::from_rgb(0.6, 0.4, 0.8)),
+                    );
+                    for (blocked_uid, blocked_name) in blocking_tasks {
+                        let remove_block_btn = button(icon::icon(icon::UNLINK).size(10))
+                            .style(button::danger)
+                            .padding(2)
+                            .on_press(Message::RemoveDependency(
+                                blocked_uid.clone(),
+                                task.uid.clone(),
+                            ));
+
+                        let name_btn = button(
+                            text(blocked_name)
+                                .size(12)
+                                .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                        )
+                        .style(button::text)
+                        .padding(0)
+                        .on_press(Message::JumpToTask(blocked_uid.clone()));
+
+                        let blocking_row = row![
+                            icon::icon(icon::HAND_STOP)
+                                .size(12)
+                                .color(Color::from_rgb(0.5, 0.5, 0.5)),
+                            name_btn,
+                            tooltip(
+                                remove_block_btn,
+                                text(rust_i18n::t!("unblock_remove_dependency")).size(12),
+                                tooltip::Position::Top
+                            )
+                            .style(crate::gui::view::tooltip_style)
+                            .delay(Duration::from_millis(700))
+                        ]
+                        .spacing(5)
+                        .align_y(iced::Alignment::Center);
+
+                        details_col = details_col.push(blocking_row);
+                    }
+                }
+
+                let incoming_related = app.store.get_tasks_related_to(&task.uid);
+                if !incoming_related.is_empty() {
+                    details_col = details_col.push(
+                        text(rust_i18n::t!("related_from_label"))
+                            .size(12)
+                            .color(Color::from_rgb(0.8, 0.6, 0.8)),
+                    );
+                    for (related_uid, mut related_name) in incoming_related {
+                        if let Some(rel_task) = app.store.get_task_ref(&related_uid)
+                            && rel_task.status.is_done()
+                        {
+                            if let Some(comp_date) = rel_task.completion_date() {
+                                let local = comp_date.with_timezone(&chrono::Local);
+                                related_name = format!(
+                                    "{} (✓ {})",
+                                    related_name,
+                                    local.format("%Y-%m-%d %H:%M")
+                                );
+                            } else {
+                                related_name = format!("{} (✓)", related_name);
+                            }
+                        }
+                        let remove_related_btn = button(icon::icon(icon::CROSS).size(10))
+                            .style(button::danger)
+                            .padding(2)
+                            .on_press(Message::RemoveRelatedTo(
+                                related_uid.clone(),
+                                task.uid.clone(),
+                            ));
+                        let name_btn = button(
+                            text(related_name)
+                                .size(12)
+                                .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                        )
+                        .style(button::text)
+                        .padding(0)
+                        .on_press(Message::JumpToTask(related_uid.clone()));
+
+                        let related_row = row![
+                            icon::icon(random_related_icon(&task.uid, &related_uid)).size(12),
+                            name_btn,
+                            tooltip(
+                                remove_related_btn,
+                                text(rust_i18n::t!("remove_relation")).size(12),
+                                tooltip::Position::Top
+                            )
+                            .style(crate::gui::view::tooltip_style)
+                            .delay(Duration::from_millis(700))
+                        ]
+                        .spacing(5)
+                        .align_y(iced::Alignment::Center);
+                        details_col = details_col.push(related_row);
+                    }
+                }
+
+                // --- Work Sessions Rendering ---
+                if !task.sessions.is_empty()
+                    || app.adding_session_uid.as_ref() == Some(&task.uid)
+                    || task.time_spent_seconds > 0
+                {
+                    details_col = details_col.push(Space::new().height(5.0));
+
+                    let now_ts = Utc::now().timestamp();
+                    let current_session = task
+                        .last_started_at
+                        .map(|start| (now_ts - start).max(0) as u64)
+                        .unwrap_or(0);
+                    let total_seconds = task.time_spent_seconds + current_session;
+                    let total_mins = total_seconds / 60;
+
+                    let mut session_header = row![
+                        text(t!(
+                            "time_tracked_duration",
+                            h = total_mins / 60,
+                            m = total_mins % 60
+                        ))
+                        .size(12)
+                        .color(Color::from_rgb(0.6, 0.8, 0.6))
+                    ]
+                    .spacing(10)
+                    .align_y(iced::Alignment::Center);
+
+                    // Inline add button inside the expanded view for rapid logging
+                    if app.adding_session_uid.as_ref() != Some(&task.uid) {
+                        session_header = session_header.push(
+                            button(icon::icon(icon::TIMER_PLUS).size(12))
+                                .style(|theme, status| action_style(theme, status, 0))
+                                .padding(2)
+                                .on_press(Message::StartAddSession(task.uid.clone())),
+                        );
+                    }
+
+                    details_col = details_col.push(session_header);
+
+                    if app.adding_session_uid.as_ref() == Some(&task.uid) {
+                        let is_dark_theme = app.theme().extended_palette().is_dark;
+                        let input = text_editor(&app.session_input)
+                            .id(iced::widget::Id::from(format!(
+                                "session_input_{}",
+                                task.uid
+                            )))
+                            .placeholder(format!("{} 30m, yesterday 2h, 14:00-15:30", t!("eg")))
+                            .on_action(Message::SessionInputChanged)
+                            .height(Length::Fixed(32.0))
+                            .highlight_with::<crate::gui::view::syntax::SessionHighlighter>(
+                                is_dark_theme,
+                                |highlight, _theme| *highlight,
+                            )
+                            .padding(6);
+
+                        let input_row = row![
+                            input,
+                            button(icon::icon(icon::CHECK).size(12))
+                                .style(button::primary)
+                                .padding(5)
+                                .on_press(Message::SubmitSession),
+                            button(icon::icon(icon::CROSS).size(12))
+                                .style(button::danger)
+                                .padding(5)
+                                .on_press(Message::CancelAddSession)
+                        ]
+                        .spacing(5)
+                        .align_y(iced::Alignment::Center);
+                        details_col = details_col.push(input_row);
+                    }
+
+                    let show_all = app.show_all_sessions.contains(&task.uid);
+                    let visible_count = if show_all {
+                        task.sessions.len()
+                    } else {
+                        std::cmp::min(3, task.sessions.len())
+                    };
+
+                    for (idx, session) in task.sessions.iter().enumerate().rev().take(visible_count)
+                    {
+                        let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
+                            .unwrap_or_default()
+                            .with_timezone(&chrono::Local);
+                        let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
+                            .unwrap_or_default()
+                            .with_timezone(&chrono::Local);
+                        let dur = (session.end - session.start) / 60;
+
+                        let date_str = s_dt.format("%Y-%m-%d").to_string();
+                        let time_str = format!("{}-{}", s_dt.format("%H:%M"), e_dt.format("%H:%M"));
+
+                        let del_btn = button(
+                            icon::icon(icon::CROSS)
+                                .size(10)
+                                .color(Color::from_rgb(0.8, 0.2, 0.2)),
+                        )
+                        .style(button::text)
+                        .padding(2)
+                        .on_press(Message::DeleteSession(task.uid.clone(), idx));
+
+                        details_col = details_col.push(
+                            row![
+                                text(format!("{} {}", date_str, time_str))
+                                    .size(12)
+                                    .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                                Space::new().width(Length::Fixed(6.0)),
+                                text(format!("({}m)", dur))
+                                    .size(12)
+                                    .color(Color::from_rgb(0.5, 0.5, 0.5)),
+                                Space::new().width(Length::Fill),
+                                del_btn
+                            ]
+                            .spacing(0)
+                            .align_y(iced::Alignment::Center),
+                        );
+                    }
+
+                    if task.sessions.len() > 3 {
+                        let toggle_text = if show_all {
+                            t!("show_less").to_string()
+                        } else {
+                            t!("show_older_sessions", count = task.sessions.len() - 3).to_string()
+                        };
+                        details_col = details_col.push(
+                            button(
+                                text(toggle_text)
+                                    .size(10)
+                                    .color(Color::from_rgb(0.5, 0.5, 0.8)),
+                            )
+                            .style(button::text)
+                            .padding(0)
+                            .on_press(Message::ToggleShowAllSessions(task.uid.clone())),
+                        );
+                    }
+                }
+            }
+
+            let col_content = if is_expanded && has_content_to_show {
+                let desc_row = row![
+                    Space::new().width(Length::Fixed(indent_size as f32 + 30.0)),
+                    details_col
+                ];
+
+                column![task_button, desc_row].spacing(5)
+            } else {
+                column![task_button]
+            };
+
+            let container_content: Element<'a, Message> = iced::widget::MouseArea::new(col_content)
                 .on_right_press(Message::OpenContextMenu(task.uid.clone(), true))
                 .into();
 
-            focusable(container(container_content)).id(row_id).into()
+            focusable(
+                container(container_content).padding(if is_expanded && has_content_to_show {
+                    5
+                } else {
+                    0
+                }),
+            )
+            .id(row_id)
+            .into()
         }
     }
 }

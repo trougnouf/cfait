@@ -1011,7 +1011,6 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_dispatch(
         `ptr`: Long,
         `intent`: RustBuffer.ByValue,
-        `isDarkTheme`: Byte,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_duplicate_task_tree(
@@ -1069,7 +1068,6 @@ internal object UniffiLib {
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_ongoing_tasks(
         `ptr`: Long,
-        `isDarkTheme`: Byte,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -1088,7 +1086,6 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_get_task_by_uid(
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
-        `isDarkTheme`: Byte,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_tasks_related_to(
@@ -1099,7 +1096,6 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
         `ptr`: Long,
         `options`: RustBuffer.ByValue,
-        `isDarkTheme`: Byte,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_has_any_tasks(
@@ -1581,7 +1577,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_dismiss_alarm() != 49985.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_dispatch() != 19172.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_dispatch() != 9577.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_duplicate_task_tree() != 29876.toShort()) {
@@ -1620,7 +1616,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_next_global_alarm_time() != 15513.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_ongoing_tasks() != 13939.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_ongoing_tasks() != 23439.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_random_task_uid() != 32270.toShort()) {
@@ -1629,16 +1625,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_syntax_help() != 49497.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_task_by_uid() != 22035.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_task_by_uid() != 45186.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 40919.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 6914.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_view_tasks() != 7480.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_any_tasks() != 42815.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_any_tasks() != 62656.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_has_unsynced_changes() != 21802.toShort()) {
@@ -2315,10 +2311,7 @@ public interface CfaitMobileInterface {
         `alarmUid`: kotlin.String,
     )
 
-    suspend fun `dispatch`(
-        `intent`: AppIntent,
-        `isDarkTheme`: kotlin.Boolean,
-    ): MobileViewData
+    suspend fun `dispatch`(`intent`: AppIntent): MobileViewData
 
     suspend fun `duplicateTaskTree`(`uid`: kotlin.String)
 
@@ -2344,7 +2337,7 @@ public interface CfaitMobileInterface {
 
     suspend fun `getNextGlobalAlarmTime`(): kotlin.Long?
 
-    fun `getOngoingTasks`(`isDarkTheme`: kotlin.Boolean): List<MobileTask>
+    fun `getOngoingTasks`(): List<MobileTask>
 
     suspend fun `getRandomTaskUid`(
         `filterTags`: List<kotlin.String>,
@@ -2354,22 +2347,12 @@ public interface CfaitMobileInterface {
 
     fun `getSyntaxHelp`(): List<MobileHelpSection>
 
-    suspend fun `getTaskByUid`(
-        `uid`: kotlin.String,
-        `isDarkTheme`: kotlin.Boolean,
-    ): MobileTask?
+    suspend fun `getTaskByUid`(`uid`: kotlin.String): MobileTask?
 
     suspend fun `getTasksRelatedTo`(`uid`: kotlin.String): List<MobileRelatedTask>
 
-    suspend fun `getViewTasks`(
-        `options`: MobileFilterOptions,
-        `isDarkTheme`: kotlin.Boolean,
-    ): MobileViewData
+    suspend fun `getViewTasks`(`options`: MobileFilterOptions): MobileViewData
 
-    /**
-     * Returns true if the in-memory store contains any tasks across any calendars.
-     * This is useful for clients to distinguish "no data at all" from "filters produced no results".
-     */
     fun `hasAnyTasks`(): kotlin.Boolean
 
     fun `hasUnsyncedChanges`(): kotlin.Boolean
@@ -2968,16 +2951,12 @@ open class CfaitMobile :
 
     @Throws(MobileException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `dispatch`(
-        `intent`: AppIntent,
-        `isDarkTheme`: kotlin.Boolean,
-    ): MobileViewData =
+    override suspend fun `dispatch`(`intent`: AppIntent): MobileViewData =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_dispatch(
                     uniffiHandle,
                     FfiConverterTypeAppIntent.lower(`intent`),
-                    FfiConverterBoolean.lower(`isDarkTheme`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
@@ -3159,13 +3138,12 @@ open class CfaitMobile :
             UniffiNullRustCallStatusErrorHandler,
         )
 
-    override fun `getOngoingTasks`(`isDarkTheme`: kotlin.Boolean): List<MobileTask> =
+    override fun `getOngoingTasks`(): List<MobileTask> =
         FfiConverterSequenceTypeMobileTask.lift(
             callWithHandle {
                 uniffiRustCall { _status ->
                     UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_ongoing_tasks(
                         it,
-                        FfiConverterBoolean.lower(`isDarkTheme`),
                         _status,
                     )
                 }
@@ -3209,16 +3187,12 @@ open class CfaitMobile :
         )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getTaskByUid`(
-        `uid`: kotlin.String,
-        `isDarkTheme`: kotlin.Boolean,
-    ): MobileTask? =
+    override suspend fun `getTaskByUid`(`uid`: kotlin.String): MobileTask? =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_task_by_uid(
                     uniffiHandle,
                     FfiConverterString.lower(`uid`),
-                    FfiConverterBoolean.lower(`isDarkTheme`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
@@ -3249,16 +3223,12 @@ open class CfaitMobile :
         )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `getViewTasks`(
-        `options`: MobileFilterOptions,
-        `isDarkTheme`: kotlin.Boolean,
-    ): MobileViewData =
+    override suspend fun `getViewTasks`(`options`: MobileFilterOptions): MobileViewData =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_view_tasks(
                     uniffiHandle,
                     FfiConverterTypeMobileFilterOptions.lower(`options`),
-                    FfiConverterBoolean.lower(`isDarkTheme`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
@@ -3270,10 +3240,6 @@ open class CfaitMobile :
             UniffiNullRustCallStatusErrorHandler,
         )
 
-    /**
-     * Returns true if the in-memory store contains any tasks across any calendars.
-     * This is useful for clients to distinguish "no data at all" from "filters produced no results".
-     */
     override fun `hasAnyTasks`(): kotlin.Boolean =
         FfiConverterBoolean.lift(
             callWithHandle {
@@ -4451,7 +4417,8 @@ data class MobileTask(
     var `sessions`: List<MobileWorkSession>,
     var `virtualType`: kotlin.String,
     var `virtualPayload`: kotlin.String,
-    var `visuals`: RenderableTask,
+    var `visibleCategories`: List<kotlin.String>,
+    var `visibleLocation`: kotlin.String?,
 ) {
     companion object
 }
@@ -4503,7 +4470,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterSequenceTypeMobileWorkSession.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
-            FfiConverterTypeRenderableTask.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterOptionalString.read(buf),
         )
 
     override fun allocationSize(value: MobileTask) =
@@ -4549,7 +4517,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterSequenceTypeMobileWorkSession.allocationSize(value.`sessions`) +
                 FfiConverterString.allocationSize(value.`virtualType`) +
                 FfiConverterString.allocationSize(value.`virtualPayload`) +
-                FfiConverterTypeRenderableTask.allocationSize(value.`visuals`)
+                FfiConverterSequenceString.allocationSize(value.`visibleCategories`) +
+                FfiConverterOptionalString.allocationSize(value.`visibleLocation`)
         )
 
     override fun write(
@@ -4597,7 +4566,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterSequenceTypeMobileWorkSession.write(value.`sessions`, buf)
         FfiConverterString.write(value.`virtualType`, buf)
         FfiConverterString.write(value.`virtualPayload`, buf)
-        FfiConverterTypeRenderableTask.write(value.`visuals`, buf)
+        FfiConverterSequenceString.write(value.`visibleCategories`, buf)
+        FfiConverterOptionalString.write(value.`visibleLocation`, buf)
     }
 }
 
@@ -4666,150 +4636,6 @@ public object FfiConverterTypeMobileWorkSession : FfiConverterRustBuffer<MobileW
     ) {
         FfiConverterLong.write(value.`startMs`, buf)
         FfiConverterLong.write(value.`endMs`, buf)
-    }
-}
-
-data class RenderableTag(
-    var `name`: kotlin.String,
-    var `bgColorHex`: kotlin.String,
-    var `textColorHex`: kotlin.String,
-) {
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeRenderableTag : FfiConverterRustBuffer<RenderableTag> {
-    override fun read(buf: ByteBuffer): RenderableTag =
-        RenderableTag(
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-        )
-
-    override fun allocationSize(value: RenderableTag) =
-        (
-            FfiConverterString.allocationSize(value.`name`) +
-                FfiConverterString.allocationSize(value.`bgColorHex`) +
-                FfiConverterString.allocationSize(value.`textColorHex`)
-        )
-
-    override fun write(
-        value: RenderableTag,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`name`, buf)
-        FfiConverterString.write(value.`bgColorHex`, buf)
-        FfiConverterString.write(value.`textColorHex`, buf)
-    }
-}
-
-data class RenderableTask(
-    var `uid`: kotlin.String,
-    var `summary`: kotlin.String,
-    var `isDone`: kotlin.Boolean,
-    var `isBlocked`: kotlin.Boolean,
-    var `depth`: kotlin.UInt,
-    var `statusString`: kotlin.String,
-    var `isPaused`: kotlin.Boolean,
-    var `titleColorHex`: kotlin.String,
-    var `dateBadge`: kotlin.String?,
-    var `dateColorHex`: kotlin.String,
-    var `dateIcon`: kotlin.String,
-    var `durationBadge`: kotlin.String?,
-    var `durationColorHex`: kotlin.String,
-    var `hasActiveAlarm`: kotlin.Boolean,
-    var `tags`: List<RenderableTag>,
-    var `locationBadge`: kotlin.String?,
-    var `hasSubtasks`: kotlin.Boolean,
-    var `isTreeCollapsed`: kotlin.Boolean,
-    var `hasNotesOrDeps`: kotlin.Boolean,
-    var `url`: kotlin.String?,
-    var `geo`: kotlin.String?,
-) {
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeRenderableTask : FfiConverterRustBuffer<RenderableTask> {
-    override fun read(buf: ByteBuffer): RenderableTask =
-        RenderableTask(
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterUInt.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterSequenceTypeRenderableTag.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterOptionalString.read(buf),
-        )
-
-    override fun allocationSize(value: RenderableTask) =
-        (
-            FfiConverterString.allocationSize(value.`uid`) +
-                FfiConverterString.allocationSize(value.`summary`) +
-                FfiConverterBoolean.allocationSize(value.`isDone`) +
-                FfiConverterBoolean.allocationSize(value.`isBlocked`) +
-                FfiConverterUInt.allocationSize(value.`depth`) +
-                FfiConverterString.allocationSize(value.`statusString`) +
-                FfiConverterBoolean.allocationSize(value.`isPaused`) +
-                FfiConverterString.allocationSize(value.`titleColorHex`) +
-                FfiConverterOptionalString.allocationSize(value.`dateBadge`) +
-                FfiConverterString.allocationSize(value.`dateColorHex`) +
-                FfiConverterString.allocationSize(value.`dateIcon`) +
-                FfiConverterOptionalString.allocationSize(value.`durationBadge`) +
-                FfiConverterString.allocationSize(value.`durationColorHex`) +
-                FfiConverterBoolean.allocationSize(value.`hasActiveAlarm`) +
-                FfiConverterSequenceTypeRenderableTag.allocationSize(value.`tags`) +
-                FfiConverterOptionalString.allocationSize(value.`locationBadge`) +
-                FfiConverterBoolean.allocationSize(value.`hasSubtasks`) +
-                FfiConverterBoolean.allocationSize(value.`isTreeCollapsed`) +
-                FfiConverterBoolean.allocationSize(value.`hasNotesOrDeps`) +
-                FfiConverterOptionalString.allocationSize(value.`url`) +
-                FfiConverterOptionalString.allocationSize(value.`geo`)
-        )
-
-    override fun write(
-        value: RenderableTask,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`uid`, buf)
-        FfiConverterString.write(value.`summary`, buf)
-        FfiConverterBoolean.write(value.`isDone`, buf)
-        FfiConverterBoolean.write(value.`isBlocked`, buf)
-        FfiConverterUInt.write(value.`depth`, buf)
-        FfiConverterString.write(value.`statusString`, buf)
-        FfiConverterBoolean.write(value.`isPaused`, buf)
-        FfiConverterString.write(value.`titleColorHex`, buf)
-        FfiConverterOptionalString.write(value.`dateBadge`, buf)
-        FfiConverterString.write(value.`dateColorHex`, buf)
-        FfiConverterString.write(value.`dateIcon`, buf)
-        FfiConverterOptionalString.write(value.`durationBadge`, buf)
-        FfiConverterString.write(value.`durationColorHex`, buf)
-        FfiConverterBoolean.write(value.`hasActiveAlarm`, buf)
-        FfiConverterSequenceTypeRenderableTag.write(value.`tags`, buf)
-        FfiConverterOptionalString.write(value.`locationBadge`, buf)
-        FfiConverterBoolean.write(value.`hasSubtasks`, buf)
-        FfiConverterBoolean.write(value.`isTreeCollapsed`, buf)
-        FfiConverterBoolean.write(value.`hasNotesOrDeps`, buf)
-        FfiConverterOptionalString.write(value.`url`, buf)
-        FfiConverterOptionalString.write(value.`geo`, buf)
     }
 }
 
@@ -6170,34 +5996,6 @@ public object FfiConverterSequenceTypeMobileWorkSession : FfiConverterRustBuffer
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileWorkSession.write(it, buf)
-        }
-    }
-}
-
-/**
- * @suppress
- */
-public object FfiConverterSequenceTypeRenderableTag : FfiConverterRustBuffer<List<RenderableTag>> {
-    override fun read(buf: ByteBuffer): List<RenderableTag> {
-        val len = buf.getInt()
-        return List<RenderableTag>(len) {
-            FfiConverterTypeRenderableTag.read(buf)
-        }
-    }
-
-    override fun allocationSize(value: List<RenderableTag>): ULong {
-        val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeRenderableTag.allocationSize(it) }.sum()
-        return sizeForLength + sizeForItems
-    }
-
-    override fun write(
-        value: List<RenderableTag>,
-        buf: ByteBuffer,
-    ) {
-        buf.putInt(value.size)
-        value.iterator().forEach {
-            FfiConverterTypeRenderableTag.write(it, buf)
         }
     }
 }

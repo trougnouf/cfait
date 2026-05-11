@@ -1,6 +1,6 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/model/mod.rs
-// Central model module re-exports to make types available as `crate::model::*`.
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Central model module re-exports to make types available as `crate::model::*`.
 
 pub mod adapter;
 pub mod display;
@@ -9,7 +9,6 @@ pub mod item;
 pub mod matcher;
 pub mod merge;
 pub mod parser;
-pub mod presentation;
 pub mod recurrence;
 pub mod session;
 
@@ -26,9 +25,6 @@ pub use extractor::{ExtractedTask, extract_markdown_tasks};
 pub use adapter::IcsAdapter;
 pub use display::TaskDisplay;
 pub use recurrence::RecurrenceEngine;
-
-// Re-export presentation model for UI rendering
-pub use presentation::{RenderableTag, RenderableTask};
 
 // Re-export session model for UI state management
 pub use session::{AppIntent, SessionState};

@@ -105,7 +105,7 @@ fun TaskDetailScreen(
         scope.launch {
             // Use direct lookup instead of searching in the filtered view list.
             // This ensures completed/hidden tasks can still be opened and edited.
-            task = api.getTaskByUid(uid, isDark)
+            task = api.getTaskByUid(uid)
             task?.let {
                 smartInput = it.smartString
                 description = it.description
@@ -183,7 +183,7 @@ fun TaskDetailScreen(
                         TextButton(onClick = {
                             scope.launch {
                                 try {
-                                    api.dispatch(AppIntent.MoveTask(uid, cal.href), isDark)
+                                    api.dispatch(AppIntent.MoveTask(uid, cal.href))
                                     showMoveDialog = false
                                     onBack()
                                 } catch (e: Exception) {
@@ -288,7 +288,7 @@ fun TaskDetailScreen(
                             onClick = {
                                 scope.launch {
                                     try {
-                                        api.dispatch(AppIntent.RemoveDependency(task!!.uid, blockerUid), isDark)
+                                        api.dispatch(AppIntent.RemoveDependency(task!!.uid, blockerUid))
                                         reload()
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
@@ -316,7 +316,7 @@ fun TaskDetailScreen(
                         ) {
                             NfIcon(NfIcons.BLOCKED, 12.sp, androidx.compose.ui.graphics.Color.Gray)
                             Spacer(Modifier.width(4.dp))
-                            DynamicTaskName(api, name, blockerUid, isDark)
+                            DynamicTaskName(api, name, blockerUid)
                         }
                     }
                 }
@@ -345,7 +345,7 @@ fun TaskDetailScreen(
                                 scope.launch {
                                     try {
                                         // To unblock, remove this task.uid from the blocked task's dependencies
-                                        api.dispatch(AppIntent.RemoveDependency(blockedUid, task!!.uid), isDark)
+                                        api.dispatch(AppIntent.RemoveDependency(blockedUid, task!!.uid))
                                         reload()
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
@@ -374,7 +374,7 @@ fun TaskDetailScreen(
                             // Use Down Arrow to indicate successor flow
                             NfIcon(NfIcons.HAND_STOP, 12.sp, androidx.compose.ui.graphics.Color.Gray)
                             Spacer(Modifier.width(4.dp))
-                            DynamicTaskName(api, name, blockedUid, isDark)
+                            DynamicTaskName(api, name, blockedUid)
                         }
                     }
                 }
@@ -401,7 +401,7 @@ fun TaskDetailScreen(
                             onClick = {
                                 scope.launch {
                                     try {
-                                        api.dispatch(AppIntent.RemoveRelatedTo(task!!.uid, relatedUid), isDark)
+                                        api.dispatch(AppIntent.RemoveRelatedTo(task!!.uid, relatedUid))
                                         reload()
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
@@ -433,7 +433,7 @@ fun TaskDetailScreen(
                                 androidx.compose.ui.graphics.Color.Gray
                             )
                             Spacer(Modifier.width(4.dp))
-                            DynamicTaskName(api, name, relatedUid, isDark)
+                            DynamicTaskName(api, name, relatedUid)
                         }
                     }
                 }
@@ -620,7 +620,7 @@ fun TaskDetailScreen(
                             onClick = {
                                 scope.launch {
                                     try {
-                                        api.dispatch(AppIntent.RemoveRelatedTo(relatedTask.uid, task!!.uid), isDark)
+                                        api.dispatch(AppIntent.RemoveRelatedTo(relatedTask.uid, task!!.uid))
                                         reload()
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
@@ -652,7 +652,7 @@ fun TaskDetailScreen(
                                 androidx.compose.ui.graphics.Color.Gray
                             )
                             Spacer(Modifier.width(4.dp))
-                            DynamicTaskName(api, relatedTask.summary, relatedTask.uid, isDark)
+                            DynamicTaskName(api, relatedTask.summary, relatedTask.uid)
                         }
                     }
                 }
@@ -673,12 +673,12 @@ fun TaskDetailScreen(
 }
 
 @Composable
-fun DynamicTaskName(api: CfaitMobile, defaultName: String, uid: String, isDark: Boolean) {
+fun DynamicTaskName(api: CfaitMobile, defaultName: String, uid: String) {
     var displayName by remember(uid) { mutableStateOf(defaultName) }
 
     LaunchedEffect(uid) {
         try {
-            val t = api.getTaskByUid(uid, isDark)
+            val t = api.getTaskByUid(uid)
             if (t != null && t.isDone) {
                 val dateStr = t.completedDateIso?.let { formatIsoToLocal(it) }
                 displayName = if (dateStr != null) "${t.summary} (✓ $dateStr)" else "${t.summary} (✓)"

@@ -346,9 +346,7 @@ fun HomeScreen(
                     collapsedGroups = collapsedGroups.toList(),
                     matchAllCategories = matchAllCategories
                 )
-                val viewData = api.getViewTasks(
-                    options, isDark
-                )
+                val viewData = api.getViewTasks(options)
                 onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, api.getConfig().tagAliases)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
@@ -401,7 +399,7 @@ fun HomeScreen(
         scope.launch {
             activeOpCount++
             try {
-                val viewData = api.dispatch(AppIntent.ToggleTask(task.uid), isDark)
+                val viewData = api.dispatch(AppIntent.ToggleTask(task.uid))
                 onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, aliases)
                 checkSyncStatus()
                 onDataChanged()
@@ -619,7 +617,7 @@ fun HomeScreen(
                 }
 
                 if (intent != null) {
-                    val viewData = api.dispatch(intent, isDark)
+                    val viewData = api.dispatch(intent)
                     onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, aliases)
                     if (action == "block" || action == "child" || action == "related") {
                         if (!yankLockActive) yankedUid = null

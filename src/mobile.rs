@@ -9,7 +9,7 @@ use crate::context::{AppContext, StandardContext};
 use crate::controller::TaskController;
 use crate::help::HelpTab;
 use crate::model::parser::{SyntaxType, tokenize_smart_input};
-use crate::model::{AlarmTrigger, DateType, RenderableTask, Task};
+use crate::model::{AlarmTrigger, DateType, Task};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
 use chrono::{DateTime, Local, NaiveDate, NaiveTime, Utc};
@@ -41,21 +41,15 @@ pub extern "system" fn Java_com_trougnouf_cfait_CfaitApplication_initNdkContext<
     _class: jni::objects::JClass<'local>,
     context: jni::objects::JObject<'local>,
 ) {
-    // Upgrade the unowned environment to a usable Env
     let _ = unowned_env.with_env(|env| -> jni::errors::Result<()> {
         let vm = env.get_java_vm()?;
-
-        // Create the global reference
         let global_context = env.new_global_ref(&context)?;
-
         unsafe {
-            // ndk_context expects raw c_void pointers
             ndk_context::initialize_android_context(
                 vm.get_raw() as *mut std::ffi::c_void,
                 global_context.into_raw() as *mut std::ffi::c_void,
             );
         }
-
         Ok(())
     });
 }
@@ -82,7 +76,6 @@ impl std::fmt::Display for MobileError {
 }
 impl std::error::Error for MobileError {}
 
-// This will be the runtime for all mobile async operations.
 static TOKIO_RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 #[uniffi::export]
@@ -202,45 +195,19 @@ pub struct MobileTask {
     pub location: Option<String>,
     pub url: Option<String>,
     pub geo: Option<String>,
-
     pub time_spent_seconds: u64,
     pub last_started_at: Option<i64>,
-
     pub sessions: Vec<MobileWorkSession>,
-
     pub virtual_type: String,
     pub virtual_payload: String,
 
-    // Pre-computed visual attributes from the presentation model
-    pub visuals: RenderableTask,
+    // UI Visual resolution fields
+    pub visible_categories: Vec<String>,
+    pub visible_location: Option<String>,
 }
 
 impl MobileTask {
     fn empty_virtual(vtype: &str, payload: &str, depth: u32) -> Self {
-        let dummy_visuals = RenderableTask {
-            uid: String::new(),
-            summary: String::new(),
-            is_done: false,
-            is_blocked: false,
-            depth,
-            status_string: String::new(),
-            is_paused: false,
-            title_color_hex: "#FFFFFF".to_string(),
-            date_badge: None,
-            date_color_hex: "#FFFFFF".to_string(),
-            date_icon: String::new(),
-            duration_badge: None,
-            duration_color_hex: "#FFFFFF".to_string(),
-            has_active_alarm: false,
-            tags: vec![],
-            location_badge: None,
-            has_subtasks: false,
-            is_tree_collapsed: false,
-            has_notes_or_deps: false,
-            url: None,
-            geo: None,
-        };
-
         Self {
             uid: String::new(),
             summary: String::new(),
@@ -283,7 +250,8 @@ impl MobileTask {
             sessions: vec![],
             virtual_type: vtype.to_string(),
             virtual_payload: payload.to_string(),
-            visuals: dummy_visuals,
+            visible_categories: vec![],
+            visible_location: None,
         }
     }
 }
@@ -484,8 +452,6 @@ fn task_to_mobile(
     store: &TaskStore,
     aliases: &HashMap<String, Vec<String>>,
     parent_uids: &HashSet<String>,
-    is_tree_collapsed: bool,
-    is_dark_theme: bool,
 ) -> MobileTask {
     let smart = t.to_smart_string();
     let status_str = format!("{:?}", t.status);
@@ -497,9 +463,7 @@ fn task_to_mobile(
         .filter_map(|uid| store.get_summary(uid))
         .collect();
 
-    // Determine tasks that THIS task is blocking (successors) via reverse index
     let blocking_pairs = store.get_tasks_blocking(&t.uid);
-    // Unzip into parallel vectors: (uids, names)
     let (blocking_uids, blocking_names): (Vec<String>, Vec<String>) =
         blocking_pairs.into_iter().unzip();
 
@@ -550,18 +514,13 @@ fn task_to_mobile(
         (std::collections::HashSet::new(), None)
     };
 
+    let (visible_categories, visible_location) =
+        t.resolve_visual_attributes(&parent_tags, &parent_loc, aliases);
+
     let has_subtasks = parent_uids.contains(&t.uid);
     let tree_location_count = store.count_tree_locations(&t.uid) as u32;
 
     let (v_type, v_payload) = ("none".to_string(), "".to_string());
-
-    let visuals = t.to_renderable(
-        is_dark_theme,
-        &parent_tags,
-        &parent_loc,
-        aliases,
-        is_tree_collapsed
-    );
 
     MobileTask {
         uid: t.uid.clone(),
@@ -612,7 +571,8 @@ fn task_to_mobile(
             .collect(),
         virtual_type: v_type,
         virtual_payload: v_payload,
-        visuals,
+        visible_categories,
+        visible_location,
     }
 }
 
@@ -631,23 +591,19 @@ impl CfaitMobile {
         let ctx: Arc<dyn AppContext> =
             Arc::new(StandardContext::new(Some(PathBuf::from(android_files_dir))));
 
-        // Initialize dual file + logcat logging for Android
         crate::system::init_logging(ctx.as_ref(), false);
-        crate::system::init_keyring(); // <-- ADD THIS LINE
+        crate::system::init_keyring();
 
         let store = Arc::new(Mutex::new(TaskStore::new(ctx.clone())));
         let client = Arc::new(Mutex::new(None));
         let controller = TaskController::new(store, client, ctx.clone());
 
-        // Trigger prune on startup
         let c_clone = controller.clone();
-        // This is the critical change. We must explicitly use the runtime we created.
         if let Some(runtime) = TOKIO_RUNTIME.get() {
             runtime.spawn(async move {
                 let _ = c_clone.prune_trash().await;
             });
         } else {
-            // Log an error if the runtime wasn't initialized.
             #[cfg(target_os = "android")]
             log::error!("Tokio runtime not initialized before CfaitMobile::new() was called!");
         }
@@ -664,7 +620,6 @@ impl CfaitMobile {
         self.create_debug_export_internal()
     }
 
-    // Expose locale switching to Kotlin
     pub fn set_locale(&self, locale: String) {
         crate::config::set_locale_with_fallback(&locale);
     }
@@ -673,8 +628,6 @@ impl CfaitMobile {
         !crate::journal::Journal::load(self.ctx.as_ref()).is_empty()
     }
 
-    /// Returns true if the in-memory store contains any tasks across any calendars.
-    /// This is useful for clients to distinguish "no data at all" from "filters produced no results".
     pub fn has_any_tasks(&self) -> bool {
         self.controller.store.blocking_lock().has_any_tasks()
     }
@@ -762,19 +715,16 @@ impl CfaitMobile {
 
     pub async fn add_session(&self, uid: String, input: String) -> Result<(), MobileError> {
         if let Some(session) = crate::model::parser::parse_session_input(&input) {
-            // Acquire store lock and mutate in-place
             let mut store = self.controller.store.lock().await;
             if let Some((task, _)) = store.get_task_mut(&uid) {
                 task.add_session(session);
                 task.sequence += 1;
                 let cloned = task.clone();
                 drop(store);
-                // Persist via controller
                 self.controller
                     .update_task(cloned)
                     .await
                     .map_err(MobileError::from)?;
-                // Rebuild alarms/index after mutation
                 let store_locked = self.controller.store.lock().await;
                 self.rebuild_alarm_index(&store_locked).await;
                 Ok(())
@@ -787,7 +737,6 @@ impl CfaitMobile {
     }
 
     pub async fn delete_session(&self, uid: String, index: u32) -> Result<(), MobileError> {
-        // Acquire store lock and mutate in-place
         let mut store = self.controller.store.lock().await;
         if let Some((task, _)) = store.get_task_mut(&uid) {
             let idx = index as usize;
@@ -795,12 +744,10 @@ impl CfaitMobile {
             task.sequence += 1;
             let cloned = task.clone();
             drop(store);
-            // Persist via controller
             self.controller
                 .update_task(cloned)
                 .await
                 .map_err(MobileError::from)?;
-            // Rebuild alarms/index after mutation
             let store_locked = self.controller.store.lock().await;
             self.rebuild_alarm_index(&store_locked).await;
             Ok(())
@@ -830,7 +777,6 @@ impl CfaitMobile {
         delete_events_on_completion: bool,
         auto_refresh_interval: u32,
         trash_retention: u32,
-        // NEW ARGUMENTS
         max_done_roots: u32,
         max_done_subtasks: u32,
         show_ongoing_notifications: bool,
@@ -860,7 +806,6 @@ impl CfaitMobile {
         c.auto_refresh_interval_mins = auto_refresh_interval;
         c.trash_retention_days = trash_retention;
 
-        // Save new values
         c.max_done_roots = max_done_roots as usize;
         c.max_done_subtasks = max_done_subtasks as usize;
         c.show_ongoing_notifications = show_ongoing_notifications;
@@ -875,11 +820,9 @@ impl CfaitMobile {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let disabled_set: HashSet<String> = config.disabled_calendars.iter().cloned().collect();
         let mut result = Vec::new();
-        // Acquire a blocking lock to inspect local store counts for the trash calendar
         let store = self.controller.store.blocking_lock();
         if let Ok(locals) = LocalCalendarRegistry::load(self.ctx.as_ref()) {
             for loc in locals {
-                // Special-case: hide empty trash and recovery calendars from mobile list
                 if loc.href == crate::storage::LOCAL_TRASH_HREF || loc.href == "local://recovery" {
                     if let Some(map) = store.calendars.get(&loc.href) {
                         if map.is_empty() {
@@ -929,7 +872,7 @@ impl CfaitMobile {
         result
     }
 
-    pub fn get_ongoing_tasks(&self, is_dark_theme: bool) -> Vec<MobileTask> {
+    pub fn get_ongoing_tasks(&self) -> Vec<MobileTask> {
         let store = self.controller.store.blocking_lock();
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let parent_uids = store.get_all_parent_uids();
@@ -937,14 +880,7 @@ impl CfaitMobile {
         for map in store.calendars.values() {
             for t in map.values() {
                 if t.status == crate::model::TaskStatus::InProcess {
-                    results.push(task_to_mobile(
-                        t,
-                        &store,
-                        &config.tag_aliases,
-                        &parent_uids,
-                        false,
-                        is_dark_theme,
-                    ));
+                    results.push(task_to_mobile(t, &store, &config.tag_aliases, &parent_uids));
                 }
             }
         }
@@ -1100,7 +1036,6 @@ impl CfaitMobile {
 
         for tasks_map in store.calendars.values() {
             for task in tasks_map.values() {
-                // UPDATE: Skip InProcess here
                 if task.status.is_done() || task.status == crate::model::TaskStatus::InProcess {
                     continue;
                 }
@@ -1119,7 +1054,6 @@ impl CfaitMobile {
                         .iter()
                         .any(|a| a.acknowledged.is_none() && !a.is_snooze())
                 {
-                    // Check implicit logic using explicitly referenced parameters
                     let mut check_implicit = |dt: DateTime<Utc>| {
                         if !task.has_alarm_at(dt) {
                             check_ts(dt.timestamp(), &mut global_earliest);
@@ -1228,7 +1162,6 @@ impl CfaitMobile {
         let mut results = Vec::new();
         for tasks_map in store.calendars.values() {
             for task in tasks_map.values() {
-                // UPDATE: Skip InProcess here
                 if task.status.is_done() || task.status == crate::model::TaskStatus::InProcess {
                     continue;
                 }
@@ -1305,7 +1238,6 @@ impl CfaitMobile {
                                     .with_timezone(&Utc)
                             }
                         };
-                        // Use rust_i18n lookup for localized description (Single Source of Truth)
                         let alarm_due_now = rust_i18n::t!("alarm_due_now");
                         check_implicit(dt, alarm_due_now.as_ref(), "due");
                     }
@@ -1332,7 +1264,6 @@ impl CfaitMobile {
                                     .with_timezone(&Utc)
                             }
                         };
-                        // Use rust_i18n lookup for localized description (Single Source of Truth)
                         let alarm_task_starting = rust_i18n::t!("alarm_task_starting");
                         check_implicit(dt, alarm_task_starting.as_ref(), "start");
                     }
@@ -1359,7 +1290,6 @@ impl CfaitMobile {
         drop(store);
         if !modified.is_empty() {
             for t in modified {
-                // Delegate to Controller
                 self.controller
                     .update_task(t)
                     .await
@@ -1472,22 +1402,15 @@ impl CfaitMobile {
         self.apply_connection(config).await
     }
 
-    // get_all_tags removed: tags are now derived from view data returned by `get_view_data`.
-    // Keep a lightweight compatibility shim that returns an empty vector so callers that
-    // haven't been migrated won't panic (prefer updating callers to use `get_view_data`).
     pub async fn get_all_tags(&self) -> Vec<MobileTag> {
         Vec::new()
     }
 
-    // get_all_locations removed: locations are now derived from view data returned by `get_view_data`.
-    // Compatibility shim returning empty vector to avoid panics for callers that were not updated yet.
     pub async fn get_all_locations(&self) -> Vec<MobileLocation> {
         Vec::new()
     }
 
-    // Direct lookup to support opening specific tasks (e.g. via notification or deep link)
-    // regardless of current view filters (hidden/completed/collapsed).
-    pub async fn get_task_by_uid(&self, uid: String, is_dark_theme: bool) -> Option<MobileTask> {
+    pub async fn get_task_by_uid(&self, uid: String) -> Option<MobileTask> {
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let parent_uids = store.get_all_parent_uids();
@@ -1498,26 +1421,18 @@ impl CfaitMobile {
                 &store,
                 &config.tag_aliases,
                 &parent_uids,
-                false,
-                is_dark_theme,
             ))
         } else {
             None
         }
     }
 
-    // get_view_tasks returns tasks + contextual tags/locations (kept MobileViewData return).
-    pub async fn get_view_tasks(
-        &self,
-        options: MobileFilterOptions,
-        is_dark_theme: bool,
-    ) -> MobileViewData {
+    pub async fn get_view_tasks(&self, options: MobileFilterOptions) -> MobileViewData {
         let store = self.controller.store.lock().await;
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let mut hidden: HashSet<String> = config.hidden_calendars.into_iter().collect();
         hidden.extend(config.disabled_calendars);
 
-        // Convert expanded/collapsed vectors into sets for efficient lookup
         let expanded_set: HashSet<String> = options.expanded_groups.into_iter().collect();
         let collapsed_set: HashSet<String> = options.collapsed_groups.into_iter().collect();
 
@@ -1542,7 +1457,6 @@ impl CfaitMobile {
             default_priority: config.default_priority,
             start_grace_period_days: config.start_grace_period_days,
 
-            // Pass expansion state and configured limits into the store filter
             expanded_done_groups: &expanded_set,
             collapsed_trees: &collapsed_set,
             max_done_roots: config.max_done_roots,
@@ -1555,14 +1469,11 @@ impl CfaitMobile {
             .into_iter()
             .filter_map(|item| {
                 if let crate::store::TaskListItem::Task(t) = item {
-                    let is_collapsed = collapsed_set.contains(&t.uid);
                     Some(task_to_mobile(
                         &t,
                         &store,
                         &config.tag_aliases,
                         &parent_uids,
-                        is_collapsed,
-                        is_dark_theme,
                     ))
                 } else if let crate::store::TaskListItem::ExpandGroup(p_uid, depth) = item {
                     Some(MobileTask::empty_virtual("expand", &p_uid, depth as u32))
@@ -1600,21 +1511,14 @@ impl CfaitMobile {
         }
     }
 
-    // Unified dispatch method that handles all user intents
-    pub async fn dispatch(
-        &self,
-        intent: crate::model::AppIntent,
-        is_dark_theme: bool,
-    ) -> Result<MobileViewData, MobileError> {
+    pub async fn dispatch(&self, intent: crate::model::AppIntent) -> Result<MobileViewData, MobileError> {
         let mut session = self.session.lock().await;
         let mut store = self.controller.store.lock().await;
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
 
-        // 1. Apply Intents to centralized logic
         session.apply_session_intent(&intent);
         let actions = store.apply_task_intent(&intent, &config);
 
-        // ... Keep the existing code that builds the `filter_res` and `MobileViewData` ...
         let filter_res = session.get_filtered_view(&store, &config);
         let parent_uids = store.get_all_parent_uids();
 
@@ -1623,14 +1527,11 @@ impl CfaitMobile {
             .into_iter()
             .filter_map(|item| {
                 if let crate::store::TaskListItem::Task(t) = item {
-                    let is_collapsed = session.collapsed_trees.contains(&t.uid);
                     Some(task_to_mobile(
                         &t,
                         &store,
                         &config.tag_aliases,
                         &parent_uids,
-                        is_collapsed,
-                        is_dark_theme,
                     ))
                 } else if let crate::store::TaskListItem::ExpandGroup(p_uid, depth) = item {
                     Some(MobileTask::empty_virtual("expand", &p_uid, depth as u32))
@@ -1667,7 +1568,6 @@ impl CfaitMobile {
             locations,
         };
 
-        // Drop the store lock before spawning async network tasks
         drop(store);
         drop(session);
 
@@ -1678,7 +1578,6 @@ impl CfaitMobile {
             });
         }
 
-        // Rebuild Alarms asynchronously since data mutated!
         let store_arc = self.controller.store.clone();
         let alarm_cache = self.alarm_index_cache.clone();
         let ctx_clone = self.ctx.clone();
@@ -1829,7 +1728,6 @@ impl CfaitMobile {
         let mut config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let (clean_input, new_aliases) = crate::model::extract_inline_aliases(&input);
 
-        // Handle inline aliases retroactively (same as add_task_smart)
         if !new_aliases.is_empty() {
             for (k, v) in &new_aliases {
                 crate::model::validate_alias_integrity(k, v, &config.tag_aliases)
@@ -1872,7 +1770,6 @@ impl CfaitMobile {
         let def_time =
             chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
-        // Run the extractor engine!
         let (cleaned_desc, extracted_subtasks) =
             crate::model::extractor::extract_markdown_tasks(&description);
 
@@ -1895,7 +1792,6 @@ impl CfaitMobile {
             .await
             .map_err(MobileError::from)?;
 
-        // Create extracted subtasks
         for ext in extracted_subtasks {
             let mut sub = Task::new(&ext.raw_text, &config.tag_aliases, def_time);
             sub.uid = ext.uid.clone();
@@ -1934,30 +1830,36 @@ impl CfaitMobile {
     }
 
     pub async fn change_priority(&self, uid: String, delta: i8) -> Result<(), MobileError> {
-        self.dispatch(crate::model::AppIntent::ChangePriority { uid, delta }, false).await?;
+        self.dispatch(crate::model::AppIntent::ChangePriority { uid, delta })
+            .await?;
         Ok(())
     }
 
     pub async fn set_status_process(&self, uid: String) -> Result<(), MobileError> {
-        self.dispatch(crate::model::AppIntent::StartTask { uid }, false).await?;
+        self.dispatch(crate::model::AppIntent::StartTask { uid })
+            .await?;
         Ok(())
     }
 
     pub async fn set_status_cancelled(&self, uid: String) -> Result<(), MobileError> {
-        self.dispatch(crate::model::AppIntent::CancelTask { uid }, false).await?;
+        self.dispatch(crate::model::AppIntent::CancelTask { uid })
+            .await?;
         Ok(())
     }
 
     pub async fn pause_task(&self, uid: String) -> Result<(), MobileError> {
-        self.dispatch(crate::model::AppIntent::PauseTask { uid }, false).await?;
+        self.dispatch(crate::model::AppIntent::PauseTask { uid })
+            .await?;
         Ok(())
     }
     pub async fn stop_task(&self, uid: String) -> Result<(), MobileError> {
-        self.dispatch(crate::model::AppIntent::StopTask { uid }, false).await?;
+        self.dispatch(crate::model::AppIntent::StopTask { uid })
+            .await?;
         Ok(())
     }
     pub async fn start_task(&self, uid: String) -> Result<(), MobileError> {
-        self.dispatch(crate::model::AppIntent::StartTask { uid }, false).await?;
+        self.dispatch(crate::model::AppIntent::StartTask { uid })
+            .await?;
         Ok(())
     }
 
@@ -1998,27 +1900,35 @@ impl CfaitMobile {
     }
 
     pub async fn toggle_task(&self, uid: String) -> Result<(), MobileError> {
-        self.dispatch(crate::model::AppIntent::ToggleTask { uid }, false).await?;
+        self.dispatch(crate::model::AppIntent::ToggleTask { uid })
+            .await?;
         Ok(())
     }
 
     pub async fn move_task(&self, uid: String, new_cal_href: String) -> Result<(), MobileError> {
-        self.dispatch(crate::model::AppIntent::MoveTask { uid, target_href: new_cal_href }, false).await?;
+        self.dispatch(crate::model::AppIntent::MoveTask {
+            uid,
+            target_href: new_cal_href,
+        })
+        .await?;
         Ok(())
     }
 
     pub async fn delete_task(&self, uid: String) -> Result<(), MobileError> {
-        self.dispatch(crate::model::AppIntent::DeleteTask { uid }, false).await?;
+        self.dispatch(crate::model::AppIntent::DeleteTask { uid })
+            .await?;
         Ok(())
     }
 
     pub async fn duplicate_task_tree(&self, uid: String) -> Result<(), MobileError> {
-        self.dispatch(crate::model::AppIntent::DuplicateTaskTree { uid }, false).await?;
+        self.dispatch(crate::model::AppIntent::DuplicateTaskTree { uid })
+            .await?;
         Ok(())
     }
 
     pub async fn delete_task_tree(&self, uid: String) -> Result<(), MobileError> {
-        self.dispatch(crate::model::AppIntent::DeleteTaskTree { uid }, false).await?;
+        self.dispatch(crate::model::AppIntent::DeleteTaskTree { uid })
+            .await?;
         Ok(())
     }
 
@@ -2188,7 +2098,6 @@ impl CfaitMobile {
                 .clone()
         };
 
-        // Get a list of all remote calendars we know about
         let cals: Vec<String> = {
             self.controller
                 .store
@@ -2232,7 +2141,6 @@ impl CfaitMobile {
                 .ok_or(MobileError::from("Offline"))?
                 .clone()
         };
-        // --- FIX 5 (Mobile): Only backfill tasks that actually have calendar data ---
         let futures = all_tasks
             .into_iter()
             .filter(|t| t.due.is_some() || t.dtstart.is_some() || !t.sessions.is_empty())
@@ -2282,7 +2190,6 @@ impl CfaitMobile {
         }
 
         if notif_type == "alarm" && task.status == crate::model::TaskStatus::InProcess {
-            // Suppress standard alarm notification if task is actively being tracked
             return false;
         }
 
@@ -2359,13 +2266,11 @@ impl CfaitMobile {
                         current_ts = Some(dt.to_rfc3339());
                     }
 
-                    // If the date changed or was removed, the old implicit alarm is obsolete
                     if current_ts.as_deref() != Some(expected_ts) {
                         return false;
                     }
                 }
             } else {
-                // Explicit alarm no longer exists
                 return false;
             }
         }
@@ -2374,19 +2279,15 @@ impl CfaitMobile {
     }
 }
 
-// Separated impl block for internal non-exported methods
 impl CfaitMobile {
-    // Generic mutator helper
     async fn apply_store_mutation<F>(&self, uid: &str, mutator: F) -> Result<(), MobileError>
     where
         F: FnOnce(&mut TaskStore, &str) -> Option<Task>,
     {
-        // Lock store, apply mutation to get updated task
         let mut store = self.controller.store.lock().await;
         let task_to_save = mutator(&mut store, uid).ok_or(MobileError::from("Task not found"))?;
-        drop(store); // Unlock
+        drop(store);
 
-        // Send to Controller
         self.controller
             .update_task(task_to_save)
             .await
@@ -2398,7 +2299,6 @@ impl CfaitMobile {
         Ok(())
     }
 
-    // ... [Read operations like get_view_tasks use self.controller.store.lock().await] ...
     async fn apply_connection(&self, config: Config) -> Result<String, MobileError> {
         let (client, cals, _, _, warning) =
             RustyClient::connect_with_fallback(self.ctx.clone(), config, Some("Android"))
@@ -2494,11 +2394,9 @@ impl CfaitMobile {
         }
     }
 
-    // Internal implementation not exported via UniFFI. Platform-specific behavior is gated here.
     fn create_debug_export_internal(&self) -> Result<String, MobileError> {
         #[cfg(target_os = "android")]
         {
-            // ADD THIS LINE to ensure all logs are written to disk before zipping
             log::logger().flush();
 
             let data_dir = self
