@@ -81,6 +81,7 @@ fun TaskRow(
     yankedUid: String?,
     enabledCalendarCount: Int,
     isHighlighted: Boolean = false,
+    incomingRelations: List<String> = emptyList(),
     isCollapsed: Boolean = false,
     onToggleCollapse: () -> Unit = {}
 ) {
@@ -135,8 +136,12 @@ fun TaskRow(
                         NfIcon(NfIcons.INFO, size = 10.sp, color = Color.Gray, lineHeight = 10.sp)
                     }
 
-                    if (task.relatedToUids.isNotEmpty() || task.relatedToNames.isNotEmpty()) {
-                        val relatedUid = task.relatedToUids.firstOrNull() ?: ""
+                    if (task.relatedToUids.isNotEmpty() || incomingRelations.isNotEmpty()) {
+                        val relatedUid = if (task.relatedToUids.isNotEmpty()) {
+                            task.relatedToUids[0]
+                        } else {
+                            incomingRelations[0]
+                        }
                         NfIcon(
                             getRandomRelatedIcon(task.uid, relatedUid),
                             size = 10.sp,
@@ -255,7 +260,7 @@ fun TaskRow(
                             MaterialTheme.colorScheme.error // Red
                         } else {
                             Color.Gray
-                        };
+                        }
 
                         val displayStr = remember(task.dueDateIso, task.isAlldayDue) {
                             if (task.isAlldayDue) {
@@ -314,9 +319,7 @@ fun TaskRow(
 
                         val durColor = if (task.lastStartedAt != null) Color(0xFF66BB6A) else Color.Gray
 
-                        Box(modifier = Modifier.background(durColor, RoundedCornerShape(4.dp)).padding(horizontal = 4.dp, vertical = 2.dp)) {
-                            Text(label, color = MaterialTheme.colorScheme.surface, fontSize = 10.sp, lineHeight = 10.sp)
-                        }
+                        Text(label, color = durColor, fontSize = 10.sp, lineHeight = 10.sp)
                     }
 
                     if (task.isRecurring) NfIcon(NfIcons.REPEAT, size = 10.sp, color = Color.Gray, lineHeight = 10.sp)
@@ -384,7 +387,7 @@ fun TaskRow(
                 }
             }
 
-            if (task.hasSubtasks || isCollapsed) {
+            if (task.hasVisibleSubtasks || isCollapsed) {
                 val iconChar = if (isCollapsed) {
                     NfIcons.FAMILY_TREE
                 } else {
@@ -549,6 +552,12 @@ fun CompactTagRow(
         if (onFocus != null) {
             Spacer(Modifier.width(8.dp))
             IconButton(onClick = onFocus, modifier = Modifier.size(24.dp)) {
+                NfIcon(NfIcons.ARROW_RIGHT, 14.sp)
+            }
+        }
+    }
+}
+ IconButton(onClick = onFocus, modifier = Modifier.size(24.dp)) {
                 NfIcon(NfIcons.ARROW_RIGHT, 14.sp)
             }
         }

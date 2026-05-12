@@ -1870,6 +1870,7 @@ fun HomeScreen(
                                                 yankedUid = yankedUid,
                                                 enabledCalendarCount = enabledCalendarCount,
                                                 isHighlighted = task.uid == highlightedUid,
+                                                incomingRelations = incomingRelationsMap[task.uid] ?: emptyList(),
                                                 isCollapsed = collapsedGroups.contains(task.uid),
                                                 onToggleCollapse = {
                                                     collapsedGroups =
