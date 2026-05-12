@@ -38,15 +38,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::BackgroundSyncComplete(synced_tasks) => {
-            for task in synced_tasks {
-                if let Some((existing, _)) = app.store.get_task_mut(&task.uid) {
-                    existing.etag = task.etag;
-                    existing.href = task.href;
-                }
-            }
             app.last_sync_failed = false;
             app.unsynced_changes = !Journal::load(app.ctx.as_ref()).is_empty();
-            // Zero UI refresh required!
+
+            // The TaskController updated the shared TaskStore in the background.
+            // We only need to trigger a heavy UI rebuild if a completely new task
+            // was introduced (like a Conflict Copy), otherwise ETags updating in the
+            // background are invisible to the user.
+            if synced_tasks.iter().any(|t| t.summary.ends_with("(Conflict Copy)")) {
+                crate::gui::update::common::refresh_filtered_tasks(app);
+            }
+
             Task::none()
         }
         Message::BackgroundSyncFailed => {

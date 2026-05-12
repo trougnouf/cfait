@@ -1564,8 +1564,13 @@ impl CfaitMobile {
 
         if !actions.is_empty() {
             let controller = self.controller.clone();
+            // 1. Await disk persistence synchronously so the app doesn't suspend 
+            // before the user's modifications are safely queued to disk.
+            let _ = controller.persist_changes(actions).await;
+            
+            // 2. Spawn the network sync in the background
             tokio::spawn(async move {
-                let _ = controller.persist_changes(actions).await;
+                let _ = controller.sync_and_update_store().await;
             });
         }
 

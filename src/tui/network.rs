@@ -282,30 +282,31 @@ pub async fn run_network_actor(
                 let controller = TaskController::new(store.clone(), client_container, ctx.clone());
 
                 match controller.persist_changes(actions).await {
-                    Ok((_warnings, synced_tasks)) => {
-                        let mut s = store.lock().await;
-                        for sync_task in &synced_tasks {
-                            s.update_or_add_task(sync_task.clone());
-                        }
-                        drop(s);
+                    Ok(_) => {
+                        let controller_clone = controller.clone();
+                        let event_tx_clone = event_tx.clone();
+                        
+                        tokio::spawn(async move {
+                            if let Ok((_warns, synced_tasks)) = controller_clone.sync_and_update_store().await {
+                                // Send TaskSynced events instead of TasksLoaded to update metadata
+                                // without overwriting the UI's optimistic state!
+                                for sync_task in synced_tasks {
+                                    let _ = event_tx_clone.send(AppEvent::TaskSynced {
+                                        uid: sync_task.uid,
+                                        href: sync_task.href,
+                                        etag: sync_task.etag,
+                                        sequence: sync_task.sequence,
+                                    }).await;
+                                }
 
-                        // Send TaskSynced events instead of TasksLoaded to update metadata
-                        // without overwriting the UI's optimistic state!
-                        for sync_task in synced_tasks {
-                            let _ = event_tx.send(AppEvent::TaskSynced {
-                                uid: sync_task.uid,
-                                href: sync_task.href,
-                                etag: sync_task.etag,
-                                sequence: sync_task.sequence,
-                            }).await;
-                        }
-
-                        let _ = event_tx
-                            .send(AppEvent::Status {
-                                key: "status_saved".to_string(),
-                                human: rust_i18n::t!("status_saved").to_string(),
-                            })
-                            .await;
+                                let _ = event_tx_clone
+                                    .send(AppEvent::Status {
+                                        key: "status_saved".to_string(),
+                                        human: rust_i18n::t!("status_saved").to_string(),
+                                    })
+                                    .await;
+                            }
+                        });
                     }
                     Err(e) => {
                         let _ = event_tx.send(AppEvent::Error(e)).await;

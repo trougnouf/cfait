@@ -143,13 +143,12 @@ pub fn spawn_background_worker(
                 // Debounce network synchronization by 500ms
                 _ = sleep(Duration::from_millis(500)), if sync_pending => {
                     sync_pending = false;
-                    let c_opt = client_container.lock().await.clone();
-                    if let Some(c) = c_opt {
-                        if let Ok((_warns, synced_tasks)) = c.sync_journal().await {
-                            if !synced_tasks.is_empty() {
-                                let _ = ui_tx.send(crate::gui::message::Message::BackgroundSyncComplete(synced_tasks)).await;
-                            }
-                        } else {
+                    match controller.sync_and_update_store().await {
+                        Ok((_warns, synced_tasks)) => {
+                            // Always send the success message to allow the GUI to update the unsynced badge
+                            let _ = ui_tx.send(crate::gui::message::Message::BackgroundSyncComplete(synced_tasks)).await;
+                        }
+                        Err(_) => {
                             let _ = ui_tx.send(crate::gui::message::Message::BackgroundSyncFailed).await;
                         }
                     }

@@ -618,16 +618,6 @@ impl RustyClient {
                         Action::Delete(_) => None,
                     };
 
-                    if let Some(ref mut t) = synced_task {
-                        if let Some(ref e) = new_etag_to_propagate {
-                            t.etag = e.clone();
-                        }
-                        if let Some((_, ref new_href)) = new_href_to_propagate {
-                            t.href = new_href.clone();
-                        }
-                        synced_tasks.push(t.clone());
-                    }
-
                     // 3. Pop the item from the disk queue and propagate metadata
                     Journal::modify(self.ctx.as_ref(), |queue| {
                         let should_remove = if let Some(head) = queue.first() {
@@ -635,6 +625,67 @@ impl RustyClient {
                         } else {
                             false
                         };
+
+                        // ALWAYS propagate ETags so rapid toggles don't cause 412s on future retries.
+                        if let Some(etag) = &new_etag_to_propagate {
+                            let (target_uid, target_cal_href) = match &next_action {
+                                Action::Create(t) | Action::Update(t) => {
+                                    (t.uid.clone(), t.calendar_href.clone())
+                                }
+                                Action::Move(t, target) => (t.uid.clone(), target.clone()),
+                                _ => (String::new(), String::new()),
+                            };
+                            if !target_uid.is_empty() {
+                                for item in queue.iter_mut() {
+                                    match item {
+                                        Action::Update(t) | Action::Delete(t)
+                                            if t.uid == target_uid
+                                                && t.calendar_href == target_cal_href =>
+                                        {
+                                            t.etag = etag.clone();
+                                        }
+                                        Action::Move(t, _)
+                                            if t.uid == target_uid
+                                                && t.calendar_href == target_cal_href =>
+                                        {
+                                            t.etag = etag.clone();
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                        }
+
+                        if let Some((old_href, new_href)) = &new_href_to_propagate {
+                            let (target_uid, target_cal_href) = match &next_action {
+                                Action::Move(t, target) => (t.uid.clone(), target.clone()),
+                                Action::Create(t) => (t.uid.clone(), t.calendar_href.clone()),
+                                Action::Update(t) => (t.uid.clone(), t.calendar_href.clone()),
+                                _ => (String::new(), String::new()),
+                            };
+                            for item in queue.iter_mut() {
+                                match item {
+                                    Action::Update(t) | Action::Delete(t)
+                                        if (t.uid == target_uid
+                                            && t.calendar_href == target_cal_href)
+                                            || (!old_href.is_empty() && &t.href == old_href) =>
+                                    {
+                                        t.href = new_href.clone();
+                                        if let Some(last_slash) = new_href.rfind('/') {
+                                            t.calendar_href =
+                                                new_href[..=last_slash].to_string();
+                                        }
+                                    }
+                                    Action::Move(t, _)
+                                        if t.uid == target_uid
+                                            && t.calendar_href == target_cal_href =>
+                                    {
+                                        t.href = new_href.clone();
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
 
                         if should_remove {
                             queue.remove(0);
@@ -647,69 +698,23 @@ impl RustyClient {
                                     queue.insert(0, act);
                                 }
                             }
-
-                            if let Some(etag) = new_etag_to_propagate {
-                                let (target_uid, target_cal_href) = match &next_action {
-                                    Action::Create(t) | Action::Update(t) => {
-                                        (t.uid.clone(), t.calendar_href.clone())
-                                    }
-                                    Action::Move(t, target) => (t.uid.clone(), target.clone()),
-                                    _ => (String::new(), String::new()),
-                                };
-                                if !target_uid.is_empty() {
-                                    for item in queue.iter_mut() {
-                                        match item {
-                                            Action::Update(t) | Action::Delete(t)
-                                                if t.uid == target_uid
-                                                    && t.calendar_href == target_cal_href =>
-                                            {
-                                                t.etag = etag.clone();
-                                            }
-                                            Action::Move(t, _)
-                                                if t.uid == target_uid
-                                                    && t.calendar_href == target_cal_href =>
-                                            {
-                                                t.etag = etag.clone();
-                                            }
-                                            _ => {}
-                                        }
-                                    }
-                                }
-                            }
-
-                            if let Some((old_href, new_href)) = new_href_to_propagate {
-                                let (target_uid, target_cal_href) = match &next_action {
-                                    Action::Move(t, target) => (t.uid.clone(), target.clone()),
-                                    Action::Create(t) => (t.uid.clone(), t.calendar_href.clone()),
-                                    Action::Update(t) => (t.uid.clone(), t.calendar_href.clone()),
-                                    _ => (String::new(), String::new()),
-                                };
-                                for item in queue.iter_mut() {
-                                    match item {
-                                        Action::Update(t) | Action::Delete(t)
-                                            if (t.uid == target_uid
-                                                && t.calendar_href == target_cal_href)
-                                                || (!old_href.is_empty() && t.href == old_href) =>
-                                        {
-                                            t.href = new_href.clone();
-                                            if let Some(last_slash) = new_href.rfind('/') {
-                                                t.calendar_href =
-                                                    new_href[..=last_slash].to_string();
-                                            }
-                                        }
-                                        Action::Move(t, _)
-                                            if t.uid == target_uid
-                                                && t.calendar_href == target_cal_href =>
-                                        {
-                                            t.href = new_href.clone();
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                            }
                         }
                     })
                     .map_err(|e| e.to_string())?;
+
+                    if let Some(ref mut t) = synced_task {
+                        if let Some(ref e) = new_etag_to_propagate {
+                            t.etag = e.clone();
+                        }
+                        if let Some((_, ref new_href)) = new_href_to_propagate {
+                            t.href = new_href.clone();
+                        }
+                        // Only add to synced_tasks if it got a valid etag (successfully uploaded)
+                        // If it failed and is being retried, we shouldn't consider it "synced"
+                        if new_etag_to_propagate.is_some() {
+                            synced_tasks.push(t.clone());
+                        }
+                    }
                 }
                 Err(msg) => {
                     // Stop processing on network error.
