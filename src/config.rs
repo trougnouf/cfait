@@ -347,6 +347,9 @@ pub struct Config {
     #[serde(default = "default_true")]
     pub show_quick_filter: bool,
 
+    #[serde(default)]
+    pub sidebar_is_hidden: bool,
+
     // Maps are typically at the end in TOML
     #[serde(default)]
     pub hidden_calendars: Vec<String>,
@@ -393,6 +396,7 @@ impl Default for Config {
             quick_filter_term: default_quick_filter_term(),
             quick_filter_icon: default_quick_filter_icon(),
             show_quick_filter: true,
+            sidebar_is_hidden: false,
         }
     }
 }
@@ -652,6 +656,9 @@ impl Config {
             } else if trimmed.starts_with("show_quick_filter =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Display the quick filter button in the search bar.");
+            } else if trimmed.starts_with("sidebar_is_hidden =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Hide the left sidebar collections panel.");
             } else if trimmed.starts_with("show_priority_numbers =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Render priority numbers (!X) visually next to tags.");

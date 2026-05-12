@@ -108,6 +108,7 @@ pub enum Message {
     ZoomOut,
     ZoomReset,
     ToggleQuickFilter,
+    ToggleSidebar,
 
     // --- View & Filter ---
     ToggleChildLock,

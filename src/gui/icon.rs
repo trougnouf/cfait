@@ -41,6 +41,7 @@ pub fn parse_icon(s: &str) -> char {
 
 // --- NERD FONT MAPPING ---
 
+pub const BARS: char = '\u{f0c9}'; // nf-fa-bars
 pub const CALENDAR: char = '\u{f073}'; // 
 pub const CALENDAR_CHECK: char = '\u{f274}'; // nf-fa-calendar_check
 pub const CALENDAR_XMARK: char = '\u{f273}'; // nf-fa-calendar_xmark

@@ -407,6 +407,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             Task::none()
         }
+        Message::ToggleSidebar => {
+            app.sidebar_is_hidden = !app.sidebar_is_hidden;
+            save_config(app);
+            Task::none()
+        }
         Message::ToggleQuickFilter => {
             let current = app.search_value.text();
             let new_text = if current.contains(&app.quick_filter_term) {
@@ -527,7 +532,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             })
         }
         Message::WindowResized(size) => {
+            let was_narrow = app.current_window_size.width < 750.0;
+            let is_narrow = size.width < 750.0;
             app.current_window_size = size;
+
+            if !was_narrow && is_narrow {
+                app.sidebar_is_hidden = true;
+                save_config(app);
+            } else if was_narrow && !is_narrow {
+                app.sidebar_is_hidden = false;
+                save_config(app);
+            }
             Task::none()
         }
         Message::CursorMoved(position) => {

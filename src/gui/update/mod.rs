@@ -212,6 +212,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ZoomOut
         | Message::ZoomReset
         | Message::ToggleQuickFilter
+        | Message::ToggleSidebar
         | Message::MoveSelected => view::handle(app, message),
 
         Message::Refresh

@@ -99,6 +99,7 @@ pub struct GuiApp {
     pub quick_filter_term: String,
     pub quick_filter_icon: String,
     pub show_quick_filter: bool,
+    pub sidebar_is_hidden: bool,
     pub ob_quick_filter_term_input: String,
     pub ob_quick_filter_icon_input: String,
 
@@ -358,6 +359,7 @@ impl Default for GuiApp {
             quick_filter_term: "is:ready".to_string(),
             quick_filter_icon: "f0fa9".to_string(),
             show_quick_filter: true,
+            sidebar_is_hidden: false,
             ob_quick_filter_term_input: "is:ready".to_string(),
             ob_quick_filter_icon_input: "f0fa9".to_string(),
 

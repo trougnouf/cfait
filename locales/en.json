@@ -423,6 +423,7 @@
   "support_clear_filters": "Clear all filters / Show all collections",
   "support_isolate_calendar": "Isolate collection / Focus tag or location",
   "support_switch_sidebar_tab": "Switch sidebar tab (Calendars, Tags, Locations)",
+  "toggle_sidebar": "Toggle sidebar (Ctrl+B)",
   "sync_error": "Sync error: %{error}",
   "sync_failed_retry": "Sync failed. Click to retry.",
   "sync_interval_label": "Sync interval:",

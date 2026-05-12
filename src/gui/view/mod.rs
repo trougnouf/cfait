@@ -72,13 +72,22 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             };
             let available_height = app.current_window_size.height - 110.0;
             let show_logo = (available_height - content_height) > 140.0;
-            let content_layout = row![
-                view_sidebar(app, show_logo),
-                iced::widget::rule::vertical(1),
-                container(view_main_content(app, !show_logo))
-                    .width(Length::Fill)
-                    .center_x(Length::Fill)
-            ];
+            
+            let content_layout = if app.sidebar_is_hidden {
+                row![
+                    container(view_main_content(app, !show_logo))
+                        .width(Length::Fill)
+                        .center_x(Length::Fill)
+                ]
+            } else {
+                row![
+                    view_sidebar(app, show_logo),
+                    iced::widget::rule::vertical(1),
+                    container(view_main_content(app, !show_logo))
+                        .width(Length::Fill)
+                        .center_x(Length::Fill)
+                ]
+            };
 
             container(content_layout)
                 .width(Length::Fill)
@@ -1075,7 +1084,23 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             tooltip::Position::Top
         )
         .style(tooltip_style)
-        .delay(Duration::from_millis(700))
+        .delay(Duration::from_millis(700)),
+        tooltip(
+            iced::widget::button(
+                container(icon::icon(icon::BARS).size(20))
+                    .center_x(Length::Fill)
+                    .center_y(Length::Fill),
+            )
+            .padding(0)
+            .height(Length::Fixed(40.0))
+            .width(Length::Fixed(40.0))
+            .style(iced::widget::button::secondary)
+            .on_press(Message::ToggleSidebar),
+            text(rust_i18n::t!("toggle_sidebar")).size(12),
+            tooltip::Position::Top
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700)),
     ]
     .spacing(5);
 
@@ -1190,13 +1215,27 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     let mut title_group = row![].spacing(0).align_y(iced::Alignment::Center);
 
+    if app.sidebar_is_hidden {
+        let sidebar_toggle_btn = tooltip(
+            iced::widget::button(icon::icon(icon::BARS).size(18))
+                .style(iced::widget::button::text)
+                .padding(4)
+                .on_press(Message::ToggleSidebar),
+            text(rust_i18n::t!("toggle_sidebar")).size(12),
+            tooltip::Position::Bottom,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700));
+
+        title_group = title_group.push(sidebar_toggle_btn).push(Space::new().width(8));
+    }
+
     if show_logo {
         title_group = title_group.push(
             svg(svg::Handle::from_memory(icon::LOGO))
                 .width(24)
                 .height(24),
         );
-        title_group = title_group.push(Space::new().width(10));
     }
 
     let are_all_visible = app

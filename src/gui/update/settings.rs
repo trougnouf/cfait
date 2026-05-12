@@ -35,6 +35,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.quick_filter_term = config.quick_filter_term.clone();
             app.quick_filter_icon = config.quick_filter_icon.clone();
             app.show_quick_filter = config.show_quick_filter;
+            app.sidebar_is_hidden = config.sidebar_is_hidden;
             app.ob_quick_filter_term_input = config.quick_filter_term.clone();
             app.ob_quick_filter_icon_input = config.quick_filter_icon.clone();
 
@@ -209,6 +210,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.ob_quick_filter_term_input = cfg.quick_filter_term.clone();
                 app.ob_quick_filter_icon_input = cfg.quick_filter_icon.clone();
                 app.show_quick_filter = cfg.show_quick_filter;
+                app.sidebar_is_hidden = cfg.sidebar_is_hidden;
             }
             app.state = AppState::Settings;
             Task::none()

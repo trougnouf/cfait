@@ -175,6 +175,7 @@ fn handle_hotkey(
                     "+" | "=" => return Some(Message::ZoomIn),
                     "-" => return Some(Message::ZoomOut),
                     "0" => return Some(Message::ZoomReset),
+                    "b" => return Some(Message::ToggleSidebar),
                     "d" => return Some(Message::KeyboardDuplicateTask),
                     "s" => return Some(Message::SubmitTask),
                     "e" => return Some(Message::StartCreateWithDescription), // Fallback if not focused
