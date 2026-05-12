@@ -9,7 +9,7 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 
-const CACHE_VERSION: u32 = 8;
+const CACHE_VERSION: u32 = 9;
 
 #[derive(Serialize, Deserialize)]
 struct CalendarCache {

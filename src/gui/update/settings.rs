@@ -167,8 +167,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             let config_to_save = save_config(app);
 
-            let _ = config_to_save.save(app.ctx.as_ref());
-
             app.state = AppState::Loading;
             app.error_msg = Some(rust_i18n::t!("connecting").to_string());
 
@@ -231,8 +229,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_pass.clear();
 
             let config_to_save = save_config(app);
-
-            let _ = config_to_save.save(app.ctx.as_ref());
 
             app.state = AppState::Loading;
             Task::perform(

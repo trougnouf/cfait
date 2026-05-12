@@ -441,7 +441,7 @@ async fn main() -> Result<()> {
             let partial = args.get(2).map(|s| s.as_str()).unwrap_or("");
             let uid =
                 resolve_uid(&store, partial).ok_or_else(|| anyhow::anyhow!("UID required"))?;
-            let t = store.get_task_ref(&uid).unwrap();
+            let t = store.get_task_ref(&uid).ok_or_else(|| anyhow::anyhow!("Task not found"))?;
 
             println!("Summary:  {}", t.summary);
             println!("Status:   {:?} {}", t.status, t.checkbox_symbol());

@@ -75,7 +75,7 @@ pub struct AlarmIndex {
 impl Default for AlarmIndex {
     fn default() -> Self {
         Self {
-            version: 1,
+            version: 2,
             last_updated: Utc::now().timestamp(),
             alarms: Vec::new(),
         }
@@ -103,6 +103,9 @@ impl AlarmIndex {
         LocalStorage::with_lock(&path, || {
             let content = fs::read_to_string(&path)?;
             let index: AlarmIndex = serde_json::from_str(&content)?;
+            if index.version != 2 {
+                return Ok(Self::default());
+            }
             Ok(index)
         })
         .unwrap_or_else(|_| Self::default())
