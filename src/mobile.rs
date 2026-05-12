@@ -13,7 +13,6 @@ use crate::model::{AlarmTrigger, DateType, Task};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
 use chrono::{DateTime, Local, NaiveDate, NaiveTime, Utc};
-use futures::stream::{self, StreamExt};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -2138,25 +2137,12 @@ impl CfaitMobile {
                 .ok_or(MobileError::from("Offline"))?
                 .clone()
         };
-        let futures = all_tasks
-            .into_iter()
-            .filter(|t| t.due.is_some() || t.dtstart.is_some() || !t.sessions.is_empty())
-            .map(|t| {
-                let c = client.clone();
-                async move {
-                    if c.sync_task_companion_event(&t, true).await.unwrap_or(false) {
-                        1
-                    } else {
-                        0
-                    }
-                }
-            });
-        Ok(stream::iter(futures)
-            .buffer_unordered(8)
-            .collect::<Vec<u32>>()
+        
+        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let count = client.sync_multiple_companion_events(&all_tasks, true, config.delete_events_on_completion)
             .await
-            .iter()
-            .sum())
+            .unwrap_or(0);
+        Ok(count as u32)
     }
 
     pub async fn should_keep_notification(

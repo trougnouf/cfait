@@ -32,9 +32,18 @@ use libdav::caldav::{FindCalendarHomeSet, FindCalendars, GetCalendarResources};
 use libdav::dav::{Delete, GetProperty, ListResources, Propfind, PutResource};
 use libdav::dav::{WebDavClient, WebDavError};
 use libdav::{CalDavClient, PropertyName, names};
+use http::{Request, StatusCode};
 use roxmltree::Document;
 
 use anyhow;
+
+fn xml_escape(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&apos;")
+}
 use futures::stream::{self, StreamExt};
 use http::Uri;
 use hyper_rustls::HttpsConnectorBuilder;
@@ -538,9 +547,102 @@ impl RustyClient {
         }
     }
 
-    /// Sync companion event for a single task (creates/updates/deletes calendar event
-    /// corresponding to the task). This is high-level convenience; underlying network
-    /// errors are mapped to boolean success/failure.
+    pub async fn get_companion_events(&self, calendar_href: &str, task_uid: Option<&str>) -> anyhow::Result<Vec<String>> {
+        let client = self.client.as_ref().ok_or_else(|| anyhow::anyhow!("Offline"))?;
+        let path = strip_host(calendar_href);
+        
+        let body = if let Some(uid) = task_uid {
+            format!(
+                r#"<?xml version="1.0" encoding="utf-8" ?>
+<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+    <D:getetag/>
+  </D:prop>
+  <C:filter>
+    <C:comp-filter name="VCALENDAR">
+      <C:comp-filter name="VEVENT">
+        <C:prop-filter name="X-CFAIT-TASK-UID">
+          <C:text-match collation="i;ascii-casemap">{}</C:text-match>
+        </C:prop-filter>
+      </C:comp-filter>
+    </C:comp-filter>
+  </C:filter>
+</C:calendar-query>"#,
+                xml_escape(uid)
+            )
+        } else {
+            r#"<?xml version="1.0" encoding="utf-8" ?>
+<C:calendar-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:prop>
+    <D:getetag/>
+  </D:prop>
+  <C:filter>
+    <C:comp-filter name="VCALENDAR">
+      <C:comp-filter name="VEVENT">
+        <C:prop-filter name="X-CFAIT-TASK-UID">
+          <C:is-defined/>
+        </C:prop-filter>
+      </C:comp-filter>
+    </C:comp-filter>
+  </C:filter>
+</C:calendar-query>"#.to_string()
+        };
+
+        let base = client.base_url();
+        let scheme = base.scheme_str().unwrap_or("https");
+        let authority = base.authority().map(|a| a.as_str()).unwrap_or("");
+        
+        let clean_path = if path.starts_with('/') {
+            path.clone()
+        } else {
+            format!("/{}", path)
+        };
+        let absolute_destination = format!("{}://{}{}", scheme, authority, clean_path);
+
+        let req = Request::builder()
+            .method("REPORT")
+            .uri(absolute_destination)
+            .header("Content-Type", "application/xml; charset=utf-8")
+            .header("Depth", "1")
+            .body(body)
+            .map_err(|e| anyhow::anyhow!("Request build failed: {}", e))?;
+
+        let (parts, body_bytes) = client.webdav_client.request_raw(req).await.map_err(|e| anyhow::anyhow!("REPORT failed: {:?}", e))?;
+        
+        // Fallback: Strict CalDAV servers might reject REPORT with custom X-properties with 403 or 400.
+        if !parts.status.is_success() && parts.status != StatusCode::MULTI_STATUS {
+            let list_resp = client.request(ListResources::new(&path)).await?;
+            let mut hrefs = Vec::new();
+            for res in list_resp.resources {
+                let filename = res.href.split('/').next_back().unwrap_or("");
+                if filename.starts_with("evt-") && filename.ends_with(".ics") {
+                    if let Some(uid) = task_uid {
+                        if filename.starts_with(&format!("evt-{}", uid)) {
+                            hrefs.push(res.href);
+                        }
+                    } else {
+                        hrefs.push(res.href);
+                    }
+                }
+            }
+            return Ok(hrefs);
+        }
+
+        let xml_str = std::str::from_utf8(&body_bytes).unwrap_or("");
+        let mut hrefs = Vec::new();
+        
+        if let Ok(doc) = roxmltree::Document::parse(xml_str) {
+            for node in doc.descendants() {
+                if node.tag_name().name().eq_ignore_ascii_case("href")
+                    && let Some(text) = node.text() {
+                        hrefs.push(text.to_string());
+                    }
+            }
+        }
+
+        Ok(hrefs)
+    }
+
     pub(crate) async fn sync_companion_event(
         &self,
         task: &Task,
@@ -572,7 +674,6 @@ impl RustyClient {
             None => return false,
         };
 
-        // --- FIX 2: Allow tasks with work sessions to generate calendar events ---
         let has_calendar_data =
             task.due.is_some() || task.dtstart.is_some() || !task.sessions.is_empty();
         let keep_completed = !delete_on_completion && task.status.is_done();
@@ -581,14 +682,17 @@ impl RustyClient {
             || (delete_on_completion && task.status.is_done())
             || (!has_calendar_data && !keep_completed)
             || !should_create_events;
-        // -----------------------------------------------------------------------
 
-        // Optimization: If companion events are globally disabled and not explicitly requested
-        // for this task, we can safely assume they don't exist and skip the DELETE requests.
-        // This avoids spamming 404 DELETEs for every task update.
         if !should_create_events && !is_delete_intent && !delete_on_completion && task.create_event.is_none() {
             return true;
         }
+
+        // Use REPORT to find ground truth of companion events
+        let existing_hrefs = self.get_companion_events(&cal_path, Some(&task.uid)).await.unwrap_or_default();
+        let mut existing_filenames: std::collections::HashSet<String> = existing_hrefs
+            .iter()
+            .map(|h| h.split('/').next_back().unwrap_or("").to_string())
+            .collect();
 
         let mut futures: Vec<futures::future::BoxFuture<'_, Result<(), ()>>> = Vec::new();
 
@@ -598,24 +702,26 @@ impl RustyClient {
             IcsAdapter::to_event_ics(task)
         };
 
-        let target_suffixes: std::collections::HashSet<String> =
-            generated_events.iter().map(|(s, _)| s.clone()).collect();
-
-        // 1. PUT all generated events (Upsert active events)
-        for (suffix, ics_body) in generated_events.into_iter() {
+        // 1. PUT all generated events
+        for (suffix, ics_body) in generated_events.iter() {
             let event_filename = format!("{}{}.ics", base_uid, suffix);
+            
+            // Remove from existing so we know what's left over to delete
+            existing_filenames.remove(&event_filename);
+
             let event_path = format!("{}{}", strip_host(&cal_path), event_filename);
             let c = client.clone();
+            let body_clone = ics_body.clone();
             
             futures.push(Box::pin(async move {
                 let create_req = PutResource::new(&event_path)
-                    .create(ics_body.clone(), "text/calendar; charset=utf-8");
+                    .create(body_clone.clone(), "text/calendar; charset=utf-8");
                 match c.request(create_req).await {
                     Ok(_) => Ok(()),
                     Err(WebDavError::BadStatusCode(http::StatusCode::PRECONDITION_FAILED))
                     | Err(WebDavError::PreconditionFailed(_)) => {
                         let update_req = PutResource::new(&event_path).update(
-                            ics_body,
+                            body_clone,
                             "text/calendar; charset=utf-8",
                             "",
                         );
@@ -630,41 +736,27 @@ impl RustyClient {
             }));
         }
 
-        // 2. DELETE obsolete static events (variants we swapped away from)
-        if !task.href.is_empty() {
-            let static_suffixes = ["", "-start", "-due"];
-            for suffix in static_suffixes {
-                if !target_suffixes.contains(suffix) {
-                    let event_filename = format!("{}{}.ics", base_uid, suffix);
-                    let event_path = format!("{}{}", strip_host(&cal_path), event_filename);
-                    let c = client.clone();
-                    
-                    futures.push(Box::pin(async move {
-                        match c.request(Delete::new(&event_path).force()).await {
-                            Ok(_) => Ok(()),
-                            Err(WebDavError::BadStatusCode(http::StatusCode::NOT_FOUND)) => Ok(()),
-                            Err(_) => Err(()),
-                        }
-                    }));
+        // 2. DELETE obsolete events that we actually know exist
+        for obsolete_filename in existing_filenames {
+            let event_path = format!("{}{}", strip_host(&cal_path), obsolete_filename);
+            let c = client.clone();
+            futures.push(Box::pin(async move {
+                match c.request(Delete::new(&event_path).force()).await {
+                    Ok(_) => Ok(()),
+                    Err(WebDavError::BadStatusCode(http::StatusCode::NOT_FOUND)) => Ok(()),
+                    Err(_) => Err(()),
                 }
-            }
+            }));
         }
-
-        // 3. DELETE obsolete/trailing session events
-        if !task.href.is_empty() {
-            let mut session_idx = if should_delete {
-                0
-            } else {
-                task.sessions.len()
-            };
-            let max_delete = session_idx + 2; // Delete at most 2 beyond known to handle slight desyncs/deletions
-
-            while session_idx < max_delete {
-                let session_suffix = format!("-session-{}", session_idx);
-                let event_filename = format!("{}{}.ics", base_uid, session_suffix);
+        
+        // 3. FALLBACK FOR LEGACY EVENTS
+        // Check old static suffixes just in case they lack the X-CFAIT-TASK-UID property
+        let static_suffixes = ["", "-start", "-due"];
+        for suffix in static_suffixes {
+            let event_filename = format!("{}{}.ics", base_uid, suffix);
+            if !generated_events.iter().any(|(s, _)| s == suffix) {
                 let event_path = format!("{}{}", strip_host(&cal_path), event_filename);
                 let c = client.clone();
-                
                 futures.push(Box::pin(async move {
                     match c.request(Delete::new(&event_path).force()).await {
                         Ok(_) => Ok(()),
@@ -672,7 +764,6 @@ impl RustyClient {
                         Err(_) => Err(()),
                     }
                 }));
-                session_idx += 1;
             }
         }
 
@@ -694,45 +785,163 @@ impl RustyClient {
         Ok(res)
     }
 
+    pub async fn sync_multiple_companion_events(
+        &self,
+        tasks: &[Task],
+        config_enabled: bool,
+        delete_on_completion: bool,
+    ) -> anyhow::Result<usize> {
+        let client = self.client.as_ref().ok_or_else(|| anyhow::anyhow!("Offline"))?;
+        
+        let mut by_calendar: HashMap<String, Vec<&Task>> = HashMap::new();
+        for task in tasks {
+            if !task.calendar_href.starts_with("local://") {
+                let cal_path = if task.calendar_href.ends_with('/') {
+                    task.calendar_href.clone()
+                } else {
+                    let p = strip_host(&task.href);
+                    if let Some(idx) = p.rfind('/') {
+                        p[..=idx].to_string()
+                    } else {
+                        task.calendar_href.clone()
+                    }
+                };
+                by_calendar.entry(cal_path).or_default().push(task);
+            }
+        }
+
+        let mut success_count = 0;
+
+        for (cal_path, cal_tasks) in by_calendar {
+            let existing_hrefs = self.get_companion_events(&cal_path, None).await.unwrap_or_default();
+            
+            let mut all_existing_filenames: std::collections::HashSet<String> = existing_hrefs
+                .into_iter()
+                .map(|h| h.split('/').next_back().unwrap_or("").to_string())
+                .collect();
+
+            let mut futures: Vec<futures::future::BoxFuture<'_, Result<(), ()>>> = Vec::new();
+
+            for task in cal_tasks {
+                let should_create_events = task.create_event.unwrap_or(config_enabled);
+                let base_uid = format!("evt-{}", task.uid);
+
+                let has_calendar_data =
+                    task.due.is_some() || task.dtstart.is_some() || !task.sessions.is_empty();
+                let keep_completed = !delete_on_completion && task.status.is_done();
+
+                let should_delete = (delete_on_completion && task.status.is_done())
+                    || (!has_calendar_data && !keep_completed)
+                    || !should_create_events;
+
+                if !should_create_events && !delete_on_completion && task.create_event.is_none() {
+                    continue;
+                }
+
+                // Safely extract just the filenames belonging to THIS task
+                let mut task_existing_filenames = std::collections::HashSet::new();
+                let mut retain_list = Vec::new();
+                for filename in all_existing_filenames.into_iter() {
+                    if filename.starts_with(&base_uid) && filename.ends_with(".ics") {
+                        task_existing_filenames.insert(filename);
+                    } else {
+                        retain_list.push(filename);
+                    }
+                }
+                all_existing_filenames = retain_list.into_iter().collect();
+
+                let generated_events = if should_delete {
+                    vec![]
+                } else {
+                    IcsAdapter::to_event_ics(task)
+                };
+
+                for (suffix, ics_body) in generated_events.iter() {
+                    let event_filename = format!("{}{}.ics", base_uid, suffix);
+                    task_existing_filenames.remove(&event_filename);
+
+                    let event_path = format!("{}{}", strip_host(&cal_path), event_filename);
+                    let c = client.clone();
+                    let body_clone = ics_body.clone();
+                    
+                    futures.push(Box::pin(async move {
+                        let create_req = PutResource::new(&event_path)
+                            .create(body_clone.clone(), "text/calendar; charset=utf-8");
+                        match c.request(create_req).await {
+                            Ok(_) => Ok(()),
+                            Err(_) => {
+                                let update_req = PutResource::new(&event_path).update(
+                                    body_clone,
+                                    "text/calendar; charset=utf-8",
+                                    "",
+                                );
+                                if c.request(update_req).await.is_err() {
+                                    Err(())
+                                } else {
+                                    Ok(())
+                                }
+                            }
+                        }
+                    }));
+                }
+
+                for obsolete_filename in task_existing_filenames {
+                    let event_path = format!("{}{}", strip_host(&cal_path), obsolete_filename);
+                    let c = client.clone();
+                    futures.push(Box::pin(async move {
+                        match c.request(Delete::new(&event_path).force()).await {
+                            Ok(_) => Ok(()),
+                            Err(_) => Ok(()),
+                        }
+                    }));
+                }
+                
+                // Fallback for legacy events
+                let static_suffixes = ["", "-start", "-due"];
+                for suffix in static_suffixes {
+                    let event_filename = format!("{}{}.ics", base_uid, suffix);
+                    if !generated_events.iter().any(|(s, _)| s == suffix) {
+                        let event_path = format!("{}{}", strip_host(&cal_path), event_filename);
+                        let c = client.clone();
+                        futures.push(Box::pin(async move {
+                            match c.request(Delete::new(&event_path).force()).await {
+                                Ok(_) => Ok(()),
+                                Err(_) => Ok(()),
+                            }
+                        }));
+                    }
+                }
+            }
+
+            let mut stream = futures::stream::iter(futures).buffer_unordered(8);
+            while let Some(res) = stream.next().await {
+                if res.is_ok() {
+                    success_count += 1;
+                }
+            }
+        }
+        
+        Ok(success_count)
+    }
+
     /// Fast-path for bulk deleting all companion events in a calendar.
     /// Uses a single PROPFIND to locate existing events instead of guessing filenames per-task.
     pub async fn delete_all_companion_events(&self, calendar_href: &str) -> anyhow::Result<usize> {
-        // Local calendars don't have remote events
         if calendar_href.starts_with("local://") {
             return Ok(0);
         }
 
-        let client = self
-            .client
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Offline"))?;
+        let client = self.client.as_ref().ok_or_else(|| anyhow::anyhow!("Offline"))?;
         let path = strip_host(calendar_href);
 
-        // 1. Ask the server for all files in the calendar directory
-        let list_resp = client
-            .request(ListResources::new(&path))
-            .await
-            .map_err(|e| anyhow::anyhow!("PROPFIND failed: {:?}", e))?;
-
-        // 2. Filter for files that were generated by Cfait.
-        // We look for "evt-" followed by a 36-character UUID + ".ics".
-        // Minimum length: 4 (evt-) + 36 (uuid) + 4 (.ics) = 44 characters.
-        // This guarantees we don't accidentally delete legitimate events like "evt-meeting.ics".
-        let mut to_delete = Vec::new();
-        for res in list_resp.resources {
-            let filename = res.href.split('/').next_back().unwrap_or("");
-            if filename.starts_with("evt-") && filename.ends_with(".ics") && filename.len() >= 44 {
-                to_delete.push(res.href);
-            }
-        }
-
-        let count = to_delete.len();
+        let hrefs = self.get_companion_events(&path, None).await?;
+        let count = hrefs.len();
+        
         if count == 0 {
             return Ok(0);
         }
 
-        // 3. Delete them concurrently
-        let futures = to_delete.into_iter().map(|href| {
+        let futures = hrefs.into_iter().map(|href| {
             let c = client.clone();
             async move {
                 let _ = c.request(Delete::new(&strip_host(&href)).force()).await;

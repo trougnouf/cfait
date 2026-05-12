@@ -470,8 +470,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     .cloned()
                     .collect();
 
+                let delete_on_completion = app.delete_events_on_completion;
+
                 return Task::perform(
-                    async_backfill_events_wrapper(client.clone(), all_tasks, val),
+                    async_backfill_events_wrapper(client.clone(), all_tasks, val, delete_on_completion),
                     Message::BackfillEventsComplete,
                 );
             }

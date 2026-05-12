@@ -8,7 +8,6 @@ use crate::controller::TaskController;
 use crate::journal::Action;
 use crate::model::{CalendarListEntry, Task as TodoTask};
 use crate::store::TaskStore;
-use futures::stream::{self, StreamExt};
 use iced::futures::SinkExt;
 use iced::futures::channel::mpsc::Sender as IcedSender;
 use iced::stream as iced_stream;
@@ -228,33 +227,16 @@ pub async fn async_backfill_events_wrapper(
     client: RustyClient,
     tasks: Vec<TodoTask>,
     global_enabled: bool,
+    delete_on_completion: bool,
 ) -> Result<usize, String> {
-    let futures = tasks
-        .into_iter()
-        .filter(|task| task.due.is_some() || task.dtstart.is_some() || !task.sessions.is_empty())
-        .map(|task| {
-            let c = client.clone();
-            async move {
-                match tokio::time::timeout(
-                    std::time::Duration::from_secs(30),
-                    c.sync_task_companion_event(&task, global_enabled),
-                )
-                .await
-                {
-                    Ok(Ok(true)) => 1,
-                    _ => 0,
-                }
-            }
-        });
-
-    let count = stream::iter(futures)
-        .buffer_unordered(8)
-        .collect::<Vec<usize>>()
-        .await
-        .iter()
-        .sum();
-
-    Ok(count)
+    match tokio::time::timeout(
+        std::time::Duration::from_secs(120),
+        client.sync_multiple_companion_events(&tasks, global_enabled, delete_on_completion)
+    )
+    .await {
+        Ok(Ok(count)) => Ok(count),
+        _ => Err("Batch creation timed out or failed".to_string()),
+    }
 }
 
 pub async fn async_delete_all_events_wrapper(

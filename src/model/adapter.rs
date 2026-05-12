@@ -1304,6 +1304,7 @@ impl IcsAdapter {
 
         let mut event = Event::new();
         event.add_property("UID", &uid);
+        event.add_property("X-CFAIT-TASK-UID", &task.uid);
 
         let mut summary = match suffix {
             "-start" => format!("{} (start)", task.summary),
