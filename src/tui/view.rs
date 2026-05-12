@@ -16,7 +16,6 @@ use crate::store::{TaskListItem, UNCATEGORIZED_ID};
 use crate::tui::action::SidebarMode;
 use crate::tui::state::{AppState, Focus, InputMode};
 
-use chrono::Utc;
 use rust_i18n::t;
 
 use ratatui::{
@@ -26,7 +25,6 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
 };
-use std::collections::HashSet;
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 fn highlight_markdown_raw(input: &str) -> Text<'static> {
@@ -306,26 +304,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 }
                 TaskListItem::Task(t) => {
                     // Parent attributes (for resolving visible tags/location)
-                    let (parent_tags, parent_location) = if state.active_cal_href.is_some()
-                        && let Some(p_uid) = &t.parent_uid
-                    {
-                        let mut p_tags = HashSet::new();
-                        let mut p_loc = None;
-                        if let Some(p) = state.store.get_task_ref(p_uid) {
-                            p_tags = p.categories.iter().cloned().collect();
-                            p_loc = p.location.clone();
-                        }
-                        (p_tags, p_loc)
-                    } else {
-                        (HashSet::new(), None)
-                    };
-
-                    // Let task resolve visual attributes (shared logic)
-                    let (visible_tags, visible_location) = t.resolve_visual_attributes(
-                        &parent_tags,
-                        &parent_location,
-                        &state.tag_aliases,
-                    );
+                    let visible_tags = &t.visible_categories;
+                    let visible_location = &t.visible_location;
 
                     // Styling
                     let is_blocked = t.is_blocked;
@@ -393,12 +373,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     let inner_char = full_symbol.trim_start_matches('[').trim_end_matches(']');
 
                     // Date / duration / recurrence
-                    let now = Utc::now();
-                    let is_future_start = t
-                        .dtstart
-                        .as_ref()
-                        .map(|s| s.to_start_comparison_time() > now)
-                        .unwrap_or(false);
+                    let is_future_start = t.is_future_start;
 
                     let (date_display_str, date_style) = if t.status.is_done() {
                         // NEW TUI LOGIC for completion date
@@ -449,16 +424,13 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             )
                         }
                     } else if let Some(d) = &t.due {
-                        // --- CHANGED START ---
-                        let is_overdue = !t.status.is_done() && d.to_comparison_time() < now;
-                        let style = if is_overdue {
+                        let style = if t.is_overdue {
                             Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
                         } else {
                             Style::default().fg(Color::Blue)
                         };
 
                         (format!(" @{}⌛", d.format_smart()), style)
-                        // --- CHANGED END ---
                     } else {
                         (String::new(), Style::default())
                     };
@@ -555,7 +527,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         ));
                     }
 
-                    for cat in &visible_tags {
+                    for cat in visible_tags {
                         let (r, g, b) = color_utils::generate_color(cat);
                         if !right_spans.is_empty() {
                             right_spans.push(Span::raw(" "));

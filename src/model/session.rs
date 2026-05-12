@@ -61,6 +61,7 @@ impl SessionState {
             collapsed_trees: &collapsed_trees,
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
+            tag_aliases: &config.tag_aliases,
         })
     }
 

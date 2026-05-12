@@ -4,7 +4,7 @@ use cfait::context::TestContext;
 use cfait::model::{Task, TaskStatus};
 use cfait::store::{FilterOptions, TaskStore};
 use chrono::{Datelike, Duration, Local};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 #[test]
@@ -173,6 +173,7 @@ fn test_is_ready_filters_future_start_dates() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -250,6 +251,7 @@ fn test_is_ready_filters_blocked_tasks() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -333,6 +335,7 @@ fn test_is_ready_combines_with_other_filters() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;

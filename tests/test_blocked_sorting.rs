@@ -54,6 +54,7 @@ fn test_blocked_tasks_skip_urgent_rank() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -132,6 +133,7 @@ fn test_blocked_tasks_skip_due_soon_rank() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -208,6 +210,7 @@ fn test_blocked_tasks_skip_started_rank() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -285,6 +288,7 @@ fn test_dependency_blocked_tasks_also_skip_ranks() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -367,6 +371,7 @@ fn test_is_ready_filters_manually_blocked_tasks() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -435,6 +440,7 @@ fn test_is_blocked_filter_shows_only_blocked() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;

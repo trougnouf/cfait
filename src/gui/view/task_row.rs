@@ -11,7 +11,6 @@ use crate::gui::view::focusable::focusable;
 use crate::model::display::random_related_icon;
 use chrono::Utc;
 use rust_i18n::t;
-use std::collections::HashSet;
 use std::time::Duration;
 
 use super::tooltip_style;
@@ -130,28 +129,11 @@ pub fn view_task_row<'a>(
             let is_tree_collapsed = app.session.collapsed_trees.contains(&task.uid);
             let is_expanded = app.expanded_tasks.contains(&task.uid);
 
-            let (parent_tags, parent_location) =
-                if show_indent && let Some(p_uid) = &task.parent_uid {
-                    if let Some(cached) = app.parent_attributes_cache.get(p_uid) {
-                        (cached.0.clone(), cached.1.clone())
-                    } else {
-                        (HashSet::new(), None)
-                    }
-                } else {
-                    (HashSet::new(), None)
-                };
-
-            let (visible_tags, visible_location) =
-                task.resolve_visual_attributes(&parent_tags, &parent_location, &app.tag_aliases);
+            let visible_tags = &task.visible_categories;
+            let visible_location = &task.visible_location;
 
             let is_done = task.status.is_done();
-            let _is_trash = task.calendar_href == "local://trash";
-
-            let is_paused = task.status == crate::model::TaskStatus::NeedsAction
-                && ((task.percent_complete.unwrap_or(0) > 0
-                    && task.percent_complete.unwrap_or(0) < 100)
-                    || task.time_spent_seconds > 0
-                    || !task.sessions.is_empty());
+            let is_paused = task.is_paused();
 
             let has_active_alarm = task.alarms.iter().any(|a| a.acknowledged.is_none());
 
@@ -173,20 +155,9 @@ pub fn view_task_row<'a>(
                     );
                 }
 
-                let now = Utc::now();
-                let is_future_start = task
-                    .dtstart
-                    .as_ref()
-                    .map(|start| start.to_start_comparison_time() > now)
-                    .unwrap_or(false);
-
+                let is_future_start = task.is_future_start;
+                let is_overdue = task.is_overdue;
                 let dim_color = Color::from_rgb(0.7, 0.7, 0.7);
-
-                let is_overdue = if let Some(d) = &task.due {
-                    !task.status.is_done() && d.to_comparison_time() < now
-                } else {
-                    false
-                };
 
                 let due_color = if is_overdue {
                     Color::from_rgb(0.8, 0.2, 0.2)
@@ -272,8 +243,8 @@ pub fn view_task_row<'a>(
             let has_valid_parent = task.parent_uid.as_ref().is_some_and(|uid| !uid.is_empty());
             let has_deps = !task.dependencies.is_empty();
             let has_related = !task.related_to.is_empty();
-            let has_incoming_related = !app.store.get_tasks_related_to(&task.uid).is_empty();
-            let has_blocking = !app.store.get_tasks_blocking(&task.uid).is_empty();
+            let has_incoming_related = task.has_related_tasks;
+            let has_blocking = task.has_blocking_tasks;
 
             let has_info = has_desc
                 || has_deps
@@ -309,7 +280,7 @@ pub fn view_task_row<'a>(
                     if app.show_priority_numbers && task.priority > 0 {
                         tags_width += 25.0;
                     }
-                    for cat in &visible_tags {
+                    for cat in visible_tags {
                         tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
                     }
                     if let Some(l) = &visible_location {
@@ -371,7 +342,7 @@ pub fn view_task_row<'a>(
                         ));
                     }
 
-                    for cat in &visible_tags {
+                    for cat in visible_tags {
                         let (r, g, b) = color_utils::generate_color(cat);
                         let bg_color = Color::from_rgb(r, g, b);
 
@@ -408,7 +379,7 @@ pub fn view_task_row<'a>(
                                     }
                                 })
                                 .padding(3)
-                                .on_press(Message::JumpToTag(cat.clone())),
+                                .on_press(Message::JumpToTag(cat.to_string())),
                         );
                     }
 
@@ -559,18 +530,14 @@ pub fn view_task_row<'a>(
                     (available_width - tags_width - padding_safety) > required_title_space
                 };
 
-                let is_done_or_cancelled =
-                    task.status.is_done() || task.status == crate::model::TaskStatus::Cancelled;
-                let title_color = if is_done_or_cancelled {
+                let title_color = if task.status.is_done() {
                     Color { a: 0.75, ..color }
                 } else {
                     color
                 };
 
-                let is_trash = task.calendar_href == "local://trash";
-
                 let summary_text: Element<'a, Message> =
-                    if (app.strikethrough_completed && task.status.is_done()) || is_trash {
+                    if (app.strikethrough_completed && task.status.is_done()) || task.calendar_href == "local://trash" {
                         Into::<Element<'a, Message>>::into(
                             rich_text![
                                 span::<Message, iced::Font>(task.summary.clone())
@@ -766,8 +733,7 @@ pub fn view_task_row<'a>(
                 if !app.pinned_actions.contains(action) {
                     continue;
                 }
-                let is_done_or_cancelled =
-                    is_done || task.status == crate::model::TaskStatus::Cancelled;
+                let is_done_or_cancelled = is_done;
 
                 if *action == TaskAction::OpenUrl && task.url.is_none() {
                     continue;

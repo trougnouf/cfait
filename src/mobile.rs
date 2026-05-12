@@ -190,6 +190,8 @@ pub struct MobileTask {
     pub related_to_names: Vec<String>,
     pub is_paused: bool,
     pub has_subtasks: bool,
+    pub has_blocking_tasks: bool,
+    pub has_related_tasks: bool,
     pub has_visible_subtasks: bool,
     pub tree_location_count: u32,
     pub location: Option<String>,
@@ -240,6 +242,8 @@ impl MobileTask {
             related_to_names: vec![],
             is_paused: false,
             has_subtasks: false,
+            has_blocking_tasks: false,
+            has_related_tasks: false,
             has_visible_subtasks: false,
             tree_location_count: 0,
             location: None,
@@ -447,16 +451,35 @@ impl CfaitMobile {
     }
 }
 
+fn populate_transient(t: &mut Task, store: &TaskStore, aliases: &HashMap<String, Vec<String>>, parent_uids: &HashSet<String>) {
+    t.has_blocking_tasks = store.has_tasks_blocking(&t.uid);
+    t.has_related_tasks = store.has_tasks_related_to(&t.uid);
+    t.has_subtasks = parent_uids.contains(&t.uid);
+    let now = Utc::now();
+    t.is_future_start = t.dtstart.as_ref().map(|start| start.to_start_comparison_time() > now).unwrap_or(false);
+    t.is_overdue = t.due.as_ref().map(|d| !t.status.is_done() && d.to_comparison_time() < now).unwrap_or(false);
+    t.is_blocked = store.is_blocked(t);
+    let (p_tags, p_loc) = if let Some(p_uid) = &t.parent_uid {
+        if let Some(p) = store.get_task_ref(p_uid) {
+            (p.categories.iter().cloned().collect(), p.location.clone())
+        } else {
+            (HashSet::new(), None)
+        }
+    } else {
+        (HashSet::new(), None)
+    };
+    let (visible_tags, visible_location) = t.resolve_visual_attributes(&p_tags, &p_loc, aliases);
+    t.visible_categories = visible_tags;
+    t.visible_location = visible_location;
+}
+
 fn task_to_mobile(
     t: &Task,
     store: &TaskStore,
-    aliases: &HashMap<String, Vec<String>>,
-    parent_uids: &HashSet<String>,
 ) -> MobileTask {
     let smart = t.to_smart_string();
     let status_str = format!("{:?}", t.status);
 
-    let is_blocked = t.is_blocked;
     let blocked_by_names = t
         .dependencies
         .iter()
@@ -496,28 +519,6 @@ fn task_to_mobile(
         .iter()
         .all(|a| a.acknowledged.is_some() || a.is_snooze());
 
-    let now = Utc::now();
-    let is_future_start = if let Some(start) = &t.dtstart {
-        start.to_start_comparison_time() > now
-    } else {
-        false
-    };
-
-    let (parent_tags, parent_loc) = if let Some(p_uid) = &t.parent_uid
-        && let Some(parent) = store.get_task_ref(p_uid)
-    {
-        (
-            parent.categories.iter().cloned().collect(),
-            parent.location.clone(),
-        )
-    } else {
-        (std::collections::HashSet::new(), None)
-    };
-
-    let (visible_categories, visible_location) =
-        t.resolve_visual_attributes(&parent_tags, &parent_loc, aliases);
-
-    let has_subtasks = parent_uids.contains(&t.uid);
     let tree_location_count = store.count_tree_locations(&t.uid) as u32;
 
     let (v_type, v_payload) = ("none".to_string(), "".to_string());
@@ -535,7 +536,7 @@ fn task_to_mobile(
         start_date_iso: start_iso,
         is_allday_start: start_allday,
         has_alarms,
-        is_future_start,
+        is_future_start: t.is_future_start,
         duration_mins: t.estimated_duration,
         duration_max_mins: t.estimated_duration_max,
         calendar_href: t.calendar_href.clone(),
@@ -544,7 +545,7 @@ fn task_to_mobile(
         parent_uid: t.parent_uid.clone(),
         smart_string: smart,
         depth: t.depth as u32,
-        is_blocked,
+        is_blocked: t.is_blocked,
         status_string: status_str,
         blocked_by_names,
         blocked_by_uids: t.dependencies.clone(),
@@ -553,7 +554,9 @@ fn task_to_mobile(
         related_to_uids: t.related_to.clone(),
         related_to_names,
         is_paused: t.is_paused(),
-        has_subtasks,
+        has_subtasks: t.has_subtasks,
+        has_blocking_tasks: t.has_blocking_tasks,
+        has_related_tasks: t.has_related_tasks,
         has_visible_subtasks: t.has_visible_subtasks,
         tree_location_count,
         location: t.location.clone(),
@@ -571,8 +574,8 @@ fn task_to_mobile(
             .collect(),
         virtual_type: v_type,
         virtual_payload: v_payload,
-        visible_categories,
-        visible_location,
+        visible_categories: t.visible_categories.clone(),
+        visible_location: t.visible_location.clone(),
     }
 }
 
@@ -880,7 +883,9 @@ impl CfaitMobile {
         for map in store.calendars.values() {
             for t in map.values() {
                 if t.status == crate::model::TaskStatus::InProcess {
-                    results.push(task_to_mobile(t, &store, &config.tag_aliases, &parent_uids));
+                    let mut cloned = t.clone();
+                    populate_transient(&mut cloned, &store, &config.tag_aliases, &parent_uids);
+                    results.push(task_to_mobile(&cloned, &store));
                 }
             }
         }
@@ -1416,12 +1421,9 @@ impl CfaitMobile {
         let parent_uids = store.get_all_parent_uids();
 
         if let Some(task) = store.get_task_ref(&uid) {
-            Some(task_to_mobile(
-                task,
-                &store,
-                &config.tag_aliases,
-                &parent_uids,
-            ))
+            let mut cloned = task.clone();
+            populate_transient(&mut cloned, &store, &config.tag_aliases, &parent_uids);
+            Some(task_to_mobile(&cloned, &store))
         } else {
             None
         }
@@ -1461,20 +1463,15 @@ impl CfaitMobile {
             collapsed_trees: &collapsed_set,
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
+            tag_aliases: &config.tag_aliases,
         });
 
-        let parent_uids = store.get_all_parent_uids();
         let tasks = filtered
             .items
             .into_iter()
             .filter_map(|item| {
                 if let crate::store::TaskListItem::Task(t) = item {
-                    Some(task_to_mobile(
-                        &t,
-                        &store,
-                        &config.tag_aliases,
-                        &parent_uids,
-                    ))
+                    Some(task_to_mobile(&t, &store))
                 } else if let crate::store::TaskListItem::ExpandGroup(p_uid, depth) = item {
                     Some(MobileTask::empty_virtual("expand", &p_uid, depth as u32))
                 } else if let crate::store::TaskListItem::CollapseGroup(p_uid, depth) = item {
@@ -1520,19 +1517,13 @@ impl CfaitMobile {
         let actions = store.apply_task_intent(&intent, &config);
 
         let filter_res = session.get_filtered_view(&store, &config);
-        let parent_uids = store.get_all_parent_uids();
 
         let tasks = filter_res
             .items
             .into_iter()
             .filter_map(|item| {
                 if let crate::store::TaskListItem::Task(t) = item {
-                    Some(task_to_mobile(
-                        &t,
-                        &store,
-                        &config.tag_aliases,
-                        &parent_uids,
-                    ))
+                    Some(task_to_mobile(&t, &store))
                 } else if let crate::store::TaskListItem::ExpandGroup(p_uid, depth) = item {
                     Some(MobileTask::empty_virtual("expand", &p_uid, depth as u32))
                 } else if let crate::store::TaskListItem::CollapseGroup(p_uid, depth) = item {
@@ -1629,6 +1620,7 @@ impl CfaitMobile {
             collapsed_trees: &HashSet::new(),
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
+            tag_aliases: &config.tag_aliases,
         });
         let filtered: Vec<crate::model::Task> = filter_res
             .items

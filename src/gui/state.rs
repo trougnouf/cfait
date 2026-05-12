@@ -60,10 +60,6 @@ pub struct GuiApp {
     pub cached_categories: Vec<(String, usize)>,
     pub cached_locations: Vec<(String, usize)>,
 
-    // Cache for O(1) parent lookup in view_task_row
-    // Map<TaskUID, (ParentTags, ParentLocation)>
-    pub parent_attributes_cache: HashMap<String, (HashSet<String>, Option<String>)>,
-
     // --- Stable ID Cache ---
     // Maps Task UID -> Iced Widget ID. Ensures the View and Update loops use the exact same ID instance.
     pub task_ids: HashMap<String, iced::widget::Id>,
@@ -332,7 +328,6 @@ impl Default for GuiApp {
             cached_categories: Vec::new(),
             cached_locations: Vec::new(),
 
-            parent_attributes_cache: HashMap::new(),
             task_ids: HashMap::new(),
 
             sidebar_mode: SidebarMode::Calendars,

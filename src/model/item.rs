@@ -342,6 +342,18 @@ pub struct Task {
     pub effective_due: Option<DateType>,
     #[serde(skip)]
     pub effective_dtstart: Option<DateType>,
+    #[serde(skip)]
+    pub visible_categories: Vec<String>,
+    #[serde(skip)]
+    pub visible_location: Option<String>,
+    #[serde(skip)]
+    pub has_blocking_tasks: bool,
+    #[serde(skip)]
+    pub has_related_tasks: bool,
+    #[serde(skip)]
+    pub is_future_start: bool,
+    #[serde(skip)]
+    pub is_overdue: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -512,6 +524,12 @@ impl Task {
             effective_priority: 0,
             effective_due: None,
             effective_dtstart: None,
+            visible_categories: Vec::new(),
+            visible_location: None,
+            has_blocking_tasks: false,
+            has_related_tasks: false,
+            is_future_start: false,
+            is_overdue: false,
         };
         task.apply_smart_input(input, aliases, default_reminder_time);
         task

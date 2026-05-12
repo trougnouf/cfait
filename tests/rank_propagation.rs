@@ -63,6 +63,7 @@ fn parent_inherits_child_priority_and_sorts_before_sibling() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let result = store.filter(opts).items;
@@ -149,6 +150,7 @@ fn compare_two_parents_inherited_priorities_determine_order() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let result = store.filter(opts).items;
@@ -230,6 +232,7 @@ fn parent_inherits_started_child_over_unset_sibling() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let result = store.filter(opts).items;

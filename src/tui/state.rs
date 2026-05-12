@@ -288,6 +288,7 @@ impl AppState {
             collapsed_trees: &self.collapsed_trees,
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
+            tag_aliases: &config.tag_aliases,
         });
 
         self.tasks = filter_res.items;

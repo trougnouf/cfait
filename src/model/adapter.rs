@@ -932,6 +932,12 @@ impl IcsAdapter {
             effective_priority: 0,
             effective_due: None,
             effective_dtstart: None,
+            visible_categories: Vec::new(),
+            visible_location: None,
+            has_blocking_tasks: false,
+            has_related_tasks: false,
+            is_future_start: false,
+            is_overdue: false,
         })
     }
 

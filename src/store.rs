@@ -362,6 +362,7 @@ pub struct FilterOptions<'a> {
     pub collapsed_trees: &'a HashSet<String>,
     pub max_done_roots: usize,
     pub max_done_subtasks: usize,
+    pub tag_aliases: &'a HashMap<String, Vec<String>>,
 }
 
 impl TaskStore {
@@ -380,6 +381,14 @@ impl TaskStore {
     /// This is used to differentiate between a truly-empty app vs filters hiding items.
     pub fn has_any_tasks(&self) -> bool {
         !self.index.is_empty()
+    }
+
+    pub fn has_tasks_blocking(&self, uid: &str) -> bool {
+        self.blocking_index.get(uid).map(|l| !l.is_empty()).unwrap_or(false)
+    }
+
+    pub fn has_tasks_related_to(&self, uid: &str) -> bool {
+        self.related_from_index.get(uid).map(|l| !l.is_empty()).unwrap_or(false)
     }
 
     // --- INCREMENTAL INDEX HELPERS ---
@@ -1793,7 +1802,7 @@ impl TaskStore {
             }
         }
 
-        // 6) Compute rank and sort order for the final tasks.
+        // 6) Compute rank, sort order, and transient UI fields for the final tasks.
         for t in final_tasks_processed.iter_mut() {
             let eff_blocked = t.is_blocked || t.is_implicitly_blocked;
             t.sort_rank = t.calculate_base_rank(
@@ -1803,6 +1812,26 @@ impl TaskStore {
                 options.start_grace_period_days,
                 eff_blocked,
             );
+            
+            t.has_blocking_tasks = self.has_tasks_blocking(&t.uid);
+            t.has_related_tasks = self.has_tasks_related_to(&t.uid);
+            
+            t.is_future_start = t.dtstart.as_ref().map(|start| start.to_start_comparison_time() > now).unwrap_or(false);
+            t.is_overdue = t.due.as_ref().map(|d| !t.status.is_done() && d.to_comparison_time() < now).unwrap_or(false);
+            
+            let (p_tags, p_loc) = if let Some(p_uid) = &t.parent_uid {
+                if let Some(p) = self.get_task_ref(p_uid) {
+                    (p.categories.iter().cloned().collect(), p.location.clone())
+                } else {
+                    (HashSet::new(), None)
+                }
+            } else {
+                (HashSet::new(), None)
+            };
+            
+            let (visible_tags, visible_location) = t.resolve_visual_attributes(&p_tags, &p_loc, options.tag_aliases);
+            t.visible_categories = visible_tags;
+            t.visible_location = visible_location;
         }
 
         // Propagation: certain UI operations look up best child/parent contributions.
@@ -1883,8 +1912,11 @@ impl TaskStore {
             }
         }
 
+        let parent_uids = self.get_all_parent_uids();
+
         // Apply propagated sort values back to the tasks so parents sort according to their highest actionable child
         for (i, t) in final_tasks_processed.iter_mut().enumerate() {
+            t.has_subtasks = parent_uids.contains(&t.uid);
             if let Some(best) = cache.get(&i) {
                 t.sort_rank = best.sort_rank;
                 t.effective_priority = best.effective_priority;

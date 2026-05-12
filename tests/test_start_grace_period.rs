@@ -56,6 +56,7 @@ fn test_start_grace_period_keeps_tasks_in_active_section() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -137,6 +138,7 @@ fn test_grace_period_zero_pushes_all_future_starts() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -220,6 +222,7 @@ fn test_acknowledged_alarm_keeps_task_in_active_section() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -312,6 +315,7 @@ fn test_any_acknowledged_alarm_keeps_task_active() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -394,6 +398,7 @@ fn test_recurring_task_with_fresh_dates_goes_to_future() {
         collapsed_trees: &HashSet::new(),
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
+        tag_aliases: &HashMap::new(),
     };
 
     let filtered = store.filter(options).items;

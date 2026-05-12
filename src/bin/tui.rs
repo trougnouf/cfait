@@ -406,6 +406,7 @@ async fn main() -> Result<()> {
                 collapsed_trees: &HashSet::new(),
                 max_done_roots: usize::MAX,
                 max_done_subtasks: usize::MAX,
+                tag_aliases: &config.tag_aliases,
             });
 
             if res.items.is_empty() {

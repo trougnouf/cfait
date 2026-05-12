@@ -36,8 +36,7 @@ use std::time::Duration as StdDuration;
 /// 1) Clear any previously stored focus bounds (these can be stale after major updates).
 /// 2) Build an effective set of hidden calendars (user-hidden + disabled).
 /// 3) Run `store.filter(...)` which operates on references and returns the final cloned list.
-/// 4) Build a small parent-attribute cache used by task row rendering (inheritance of tags/location).
-/// 5) Notify the alarm actor with the full task set (for alarm scheduling).
+/// 4) Notify the alarm actor with the full task set (for alarm scheduling).
 pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     // Clear focus bounds before rebuilding the list.
     clear_focus_bounds();
@@ -55,34 +54,11 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     app.cached_categories = filter_res.categories;
     app.cached_locations = filter_res.locations;
 
-    app.parent_attributes_cache.clear();
-
-    let mut quick_lookup = std::collections::HashMap::new();
-    let parent_uids = app.store.get_all_parent_uids();
-
-    for map in app.store.calendars.values() {
-        for t in map.values() {
-            quick_lookup.insert(t.uid.clone(), t);
-        }
-    }
-
     for item in &mut app.tasks {
         if let crate::store::TaskListItem::Task(task) = item {
-            task.has_subtasks = parent_uids.contains(&task.uid);
-
             app.task_ids
                 .entry(task.uid.clone())
                 .or_insert_with(iced::widget::Id::unique);
-
-            if let Some(p_uid) = &task.parent_uid
-                && let Some(parent) = quick_lookup.get(p_uid)
-            {
-                let p_tags: std::collections::HashSet<String> =
-                    parent.categories.iter().cloned().collect();
-                let p_loc = parent.location.clone();
-                app.parent_attributes_cache
-                    .insert(p_uid.clone(), (p_tags, p_loc));
-            }
         }
     }
 

@@ -319,7 +319,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
         let has_info = !task.description.is_empty()
             || !task.dependencies.is_empty()
-            || !app.store.get_tasks_blocking(&task.uid).is_empty();
+            || task.has_blocking_tasks;
         let has_time = !task.sessions.is_empty() || task.time_spent_seconds > 0;
 
         let build_btn = |action: &TaskAction| -> Option<Element<'_, Message>> {

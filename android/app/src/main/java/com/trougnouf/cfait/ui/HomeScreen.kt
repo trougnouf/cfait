@@ -310,15 +310,6 @@ fun HomeScreen(
         calendars.associate { it.href to (it.color?.let { hex -> parseHexColor(hex) } ?: Color.Gray) }
     }
     val taskMap = remember(tasks) { tasks.associateBy { it.uid } }
-    val incomingRelationsMap = remember(tasks) {
-        val map = mutableMapOf<String, MutableList<String>>()
-        tasks.forEach { task ->
-            task.relatedToUids.forEach { relatedUid ->
-                map.getOrPut(relatedUid) { mutableListOf() }.add(task.uid)
-            }
-        }
-        map
-    }
 
     var hasSetDefaultTab by rememberSaveable { mutableStateOf(false) }
 
@@ -1870,7 +1861,6 @@ fun HomeScreen(
                                                 yankedUid = yankedUid,
                                                 enabledCalendarCount = enabledCalendarCount,
                                                 isHighlighted = task.uid == highlightedUid,
-                                                incomingRelations = incomingRelationsMap[task.uid] ?: emptyList(),
                                                 isCollapsed = collapsedGroups.contains(task.uid),
                                                 onToggleCollapse = {
                                                     collapsedGroups =

@@ -4407,6 +4407,8 @@ data class MobileTask(
     var `relatedToNames`: List<kotlin.String>,
     var `isPaused`: kotlin.Boolean,
     var `hasSubtasks`: kotlin.Boolean,
+    var `hasBlockingTasks`: kotlin.Boolean,
+    var `hasRelatedTasks`: kotlin.Boolean,
     var `hasVisibleSubtasks`: kotlin.Boolean,
     var `treeLocationCount`: kotlin.UInt,
     var `location`: kotlin.String?,
@@ -4461,6 +4463,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterUInt.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
@@ -4507,6 +4511,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterSequenceString.allocationSize(value.`relatedToNames`) +
                 FfiConverterBoolean.allocationSize(value.`isPaused`) +
                 FfiConverterBoolean.allocationSize(value.`hasSubtasks`) +
+                FfiConverterBoolean.allocationSize(value.`hasBlockingTasks`) +
+                FfiConverterBoolean.allocationSize(value.`hasRelatedTasks`) +
                 FfiConverterBoolean.allocationSize(value.`hasVisibleSubtasks`) +
                 FfiConverterUInt.allocationSize(value.`treeLocationCount`) +
                 FfiConverterOptionalString.allocationSize(value.`location`) +
@@ -4556,6 +4562,8 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterSequenceString.write(value.`relatedToNames`, buf)
         FfiConverterBoolean.write(value.`isPaused`, buf)
         FfiConverterBoolean.write(value.`hasSubtasks`, buf)
+        FfiConverterBoolean.write(value.`hasBlockingTasks`, buf)
+        FfiConverterBoolean.write(value.`hasRelatedTasks`, buf)
         FfiConverterBoolean.write(value.`hasVisibleSubtasks`, buf)
         FfiConverterUInt.write(value.`treeLocationCount`, buf)
         FfiConverterOptionalString.write(value.`location`, buf)
