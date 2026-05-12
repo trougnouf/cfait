@@ -319,7 +319,7 @@ pub fn scroll_to_selected_delayed(_app: &GuiApp, focus: bool) -> Task<Message> {
                     if attempts >= 20 {
                         break;
                     }
-                    std::thread::sleep(StdDuration::from_millis(50));
+                    tokio::time::sleep(StdDuration::from_millis(50)).await;
                 }
             },
             move |_| Message::SnapToSelected { focus },
@@ -330,19 +330,19 @@ pub fn scroll_to_selected_delayed(_app: &GuiApp, focus: bool) -> Task<Message> {
     Task::batch(vec![
         Task::perform(
             async {
-                std::thread::sleep(StdDuration::from_millis(120));
+                tokio::time::sleep(StdDuration::from_millis(120)).await;
             },
             move |_| Message::SnapToSelected { focus },
         ),
         Task::perform(
             async {
-                std::thread::sleep(StdDuration::from_millis(360));
+                tokio::time::sleep(StdDuration::from_millis(360)).await;
             },
             move |_| Message::SnapToSelected { focus },
         ),
         Task::perform(
             async {
-                std::thread::sleep(StdDuration::from_millis(720));
+                tokio::time::sleep(StdDuration::from_millis(720)).await;
             },
             move |_| Message::SnapToSelected { focus },
         ),
