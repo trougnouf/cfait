@@ -2,7 +2,7 @@
 // File: ./src/gui/state.rs
 // Manages the application state for the GUI (Iced).
 use crate::client::RustyClient;
-use crate::config::AppTheme;
+use crate::config::{AppTheme, Config};
 use crate::context::AppContext;
 use crate::gui::icon;
 use crate::model::{Alarm, CalendarListEntry, Task as TodoTask};
@@ -45,6 +45,7 @@ pub enum ResizeDirection {
 }
 
 pub struct GuiApp {
+    pub core_config: Config,
     pub state: AppState,
     pub ctx: Arc<dyn AppContext>,
     pub store: TaskStore,
@@ -315,6 +316,7 @@ impl Default for GuiApp {
             ctx.clone(),
         );
         Self {
+            core_config: Config::default(),
             ctx: ctx.clone(),
             state: AppState::Loading,
             store,

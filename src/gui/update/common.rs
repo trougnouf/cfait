@@ -41,14 +41,14 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     // Clear focus bounds before rebuilding the list.
     clear_focus_bounds();
 
-    let config = Config::load(app.ctx.as_ref()).unwrap_or_default();
+    let config = &app.core_config;
 
     // Sync specific Iced state to SessionState
     app.session.active_calendar_href = app.active_cal_href.clone();
     app.session.search_term = app.search_value.text();
 
     // Delegate entirely to session state
-    let filter_res = app.session.get_filtered_view(&app.store, &config);
+    let filter_res = app.session.get_filtered_view(&app.store, config);
 
     app.tasks = filter_res.items;
     app.cached_categories = filter_res.categories;
@@ -81,7 +81,7 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
 /// leave some fields empty while the user types; callers should ensure validation
 /// where necessary.
 pub fn save_config(app: &mut GuiApp) -> Config {
-    let mut cfg = Config::load(app.ctx.as_ref()).unwrap_or_default();
+    let mut cfg = app.core_config.clone();
 
     cfg.url = app.ob_url.clone();
     cfg.username = app.ob_user.clone();
@@ -118,6 +118,9 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.quick_filter_icon = app.quick_filter_icon.clone();
     cfg.show_quick_filter = app.show_quick_filter;
     cfg.sidebar_is_hidden = app.sidebar_is_hidden;
+
+    // Cache the updated config in memory
+    app.core_config = cfg.clone();
 
     // --- ASYNC SAVE FIX ---
     let ctx_clone = app.ctx.clone();
@@ -352,13 +355,13 @@ pub fn scroll_to_selected_delayed(_app: &GuiApp, focus: bool) -> Task<Message> {
 use crate::model::AppIntent;
 
 pub fn dispatch_intent(app: &mut GuiApp, intent: AppIntent) {
-    let config = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
-    
+    let config = &app.core_config;
+
     // 1. Update UI filters synchronously
     app.session.apply_session_intent(&intent);
     
     // 2. Mutate in-memory store synchronously & extract persistence actions
-    let actions = app.store.apply_task_intent(&intent, &config);
+    let actions = app.store.apply_task_intent(&intent, config);
 
     // 3. Update the UI rendering
     refresh_filtered_tasks(app);

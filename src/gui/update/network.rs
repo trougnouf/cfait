@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/update/network.rs
 use crate::cache::Cache;
-use crate::config::Config;
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
@@ -18,9 +17,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.loading = true;
             app.error_msg = None;
 
-            if app.client.is_some()
-                && let Ok(mut cfg) = Config::load(app.ctx.as_ref())
-            {
+            if app.client.is_some() {
+                let mut cfg = app.core_config.clone();
                 cfg.password = app.ob_pass.clone(); // Re-use the securely loaded password
                 return Task::perform(connect_and_fetch_wrapper(app.ctx.clone(), cfg), |res| {
                     Message::Loaded(res.map_err(|e| e.to_string()))
@@ -148,12 +146,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.store.insert(href, tasks);
             }
 
-            if let Ok(cfg) = Config::load(app.ctx.as_ref()) {
-                app.hide_completed = cfg.hide_completed;
-                app.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
-                app.tag_aliases = cfg.tag_aliases;
-                app.disabled_calendars = cfg.disabled_calendars.into_iter().collect();
-            }
+            let cfg = &app.core_config;
+            app.hide_completed = cfg.hide_completed;
+            app.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
+            app.tag_aliases = cfg.tag_aliases.clone();
+            app.disabled_calendars = cfg.disabled_calendars.iter().cloned().collect();
 
             app.state = AppState::Active;
             refresh_filtered_tasks(app);
@@ -190,29 +187,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
 
             if app.state != AppState::Active && app.state != AppState::Settings {
-                if let Ok(cfg) = Config::load(app.ctx.as_ref()) {
-                    if !cfg.url.is_empty() {
-                        app.state = AppState::Active;
-                        let cals = Cache::load_calendars(app.ctx.as_ref()).unwrap_or_default();
-                        app.calendars = cals;
-                        app.sort_calendars();
-                        app.store.clear();
-                        for cal in &app.calendars {
-                            if cal.href.starts_with("local://") {
-                                if let Ok(mut tasks) = crate::storage::LocalStorage::load_for_href(
-                                    app.ctx.as_ref(),
-                                    &cal.href,
-                                ) {
-                                    crate::journal::Journal::apply_to_tasks(
-                                        app.ctx.as_ref(),
-                                        &mut tasks,
-                                        &cal.href,
-                                    );
-                                    app.store.insert(cal.href.clone(), tasks);
-                                }
-                            } else if let Ok((mut tasks, _)) =
-                                Cache::load(app.ctx.as_ref(), &cal.href)
-                            {
+                let cfg = &app.core_config;
+                if !cfg.url.is_empty() {
+                    app.state = AppState::Active;
+                    let cals = Cache::load_calendars(app.ctx.as_ref()).unwrap_or_default();
+                    app.calendars = cals;
+                    app.sort_calendars();
+                    app.store.clear();
+                    for cal in &app.calendars {
+                        if cal.href.starts_with("local://") {
+                            if let Ok(mut tasks) = crate::storage::LocalStorage::load_for_href(
+                                app.ctx.as_ref(),
+                                &cal.href,
+                            ) {
                                 crate::journal::Journal::apply_to_tasks(
                                     app.ctx.as_ref(),
                                     &mut tasks,
@@ -220,11 +207,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                                 );
                                 app.store.insert(cal.href.clone(), tasks);
                             }
+                        } else if let Ok((mut tasks, _)) =
+                            Cache::load(app.ctx.as_ref(), &cal.href)
+                        {
+                            crate::journal::Journal::apply_to_tasks(
+                                app.ctx.as_ref(),
+                                &mut tasks,
+                                &cal.href,
+                            );
+                            app.store.insert(cal.href.clone(), tasks);
                         }
-                        refresh_filtered_tasks(app);
-                    } else {
-                        app.state = AppState::Onboarding;
                     }
+                    refresh_filtered_tasks(app);
                 } else {
                     app.state = AppState::Onboarding;
                 }

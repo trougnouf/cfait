@@ -15,6 +15,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::ConfigLoaded(Ok(config_box)) => {
             let config = *config_box;
+            app.core_config = config.clone();
             let locals = LocalCalendarRegistry::load(app.ctx.as_ref()).unwrap_or_default();
             app.local_cals_editing = locals.clone();
 
@@ -176,40 +177,39 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             )
         }
         Message::OpenSettings => {
-            if let Ok(cfg) = crate::config::Config::load(app.ctx.as_ref()) {
-                app.ob_url = cfg.url;
-                app.ob_user = cfg.username;
-                // app.ob_pass is already securely held in memory from startup
+            let cfg = &app.core_config;
+            app.ob_url = cfg.url.clone();
+            app.ob_user = cfg.username.clone();
+            // app.ob_pass is already securely held in memory from startup
 
-                let mut target_href = cfg.default_calendar;
-                if let Some(ref def) = target_href
-                    && let Some(found) = app
-                        .calendars
-                        .iter()
-                        .find(|c| c.name == *def || c.href == *def)
-                {
-                    target_href = Some(found.href.clone());
-                }
-                app.ob_default_cal = target_href;
-                app.hide_completed = cfg.hide_completed;
-                app.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
-                app.ob_insecure = cfg.allow_insecure_certs;
-                app.hidden_calendars = cfg.hidden_calendars.into_iter().collect();
-                app.tag_aliases = cfg.tag_aliases;
-                app.sort_cutoff_months = cfg.sort_cutoff_months;
-                app.current_theme = cfg.theme;
-                app.ob_sort_months_input = match cfg.sort_cutoff_months {
-                    Some(m) => m.to_string(),
-                    None => "".to_string(),
-                };
-                app.trash_retention_days = cfg.trash_retention_days;
-                app.ob_trash_retention_input = cfg.trash_retention_days.to_string();
-
-                app.ob_quick_filter_term_input = cfg.quick_filter_term.clone();
-                app.ob_quick_filter_icon_input = cfg.quick_filter_icon.clone();
-                app.show_quick_filter = cfg.show_quick_filter;
-                app.sidebar_is_hidden = cfg.sidebar_is_hidden;
+            let mut target_href = cfg.default_calendar.clone();
+            if let Some(ref def) = target_href
+                && let Some(found) = app
+                    .calendars
+                    .iter()
+                    .find(|c| c.name == *def || c.href == *def)
+            {
+                target_href = Some(found.href.clone());
             }
+            app.ob_default_cal = target_href;
+            app.hide_completed = cfg.hide_completed;
+            app.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
+            app.ob_insecure = cfg.allow_insecure_certs;
+            app.hidden_calendars = cfg.hidden_calendars.iter().cloned().collect();
+            app.tag_aliases = cfg.tag_aliases.clone();
+            app.sort_cutoff_months = cfg.sort_cutoff_months;
+            app.current_theme = cfg.theme;
+            app.ob_sort_months_input = match cfg.sort_cutoff_months {
+                Some(m) => m.to_string(),
+                None => "".to_string(),
+            };
+            app.trash_retention_days = cfg.trash_retention_days;
+            app.ob_trash_retention_input = cfg.trash_retention_days.to_string();
+
+            app.ob_quick_filter_term_input = cfg.quick_filter_term.clone();
+            app.ob_quick_filter_icon_input = cfg.quick_filter_icon.clone();
+            app.show_quick_filter = cfg.show_quick_filter;
+            app.sidebar_is_hidden = cfg.sidebar_is_hidden;
             app.state = AppState::Settings;
             Task::none()
         }
@@ -416,8 +416,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
             // Also save the selection into the persistent Config so it's cross-platform.
             // Load existing config (or default), set language, then save.
-            let mut cfg = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
+            let mut cfg = app.core_config.clone();
             cfg.language = app.language.clone();
+            app.core_config = cfg.clone();
             let _ = cfg.save(app.ctx.as_ref());
 
             Task::none()
