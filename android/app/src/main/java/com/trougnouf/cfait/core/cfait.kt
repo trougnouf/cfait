@@ -875,6 +875,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_sync(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_sync_journal(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_toggle_all_calendars(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_toggle_task(): Short
@@ -1271,6 +1273,8 @@ internal object UniffiLib {
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_sync(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_sync_journal(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_toggle_all_calendars(
         `ptr`: Long,
@@ -1710,6 +1714,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_sync() != 10497.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_sync_journal() != 65062.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_all_calendars() != 29217.toShort()) {
@@ -2465,6 +2472,8 @@ public interface CfaitMobileInterface {
     suspend fun `stopTask`(`uid`: kotlin.String)
 
     suspend fun `sync`(): kotlin.String
+
+    suspend fun `syncJournal`(): kotlin.Boolean
 
     fun `toggleAllCalendars`(`showAll`: kotlin.Boolean)
 
@@ -3727,6 +3736,24 @@ open class CfaitMobile :
             { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
             // lift function
             { FfiConverterString.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `syncJournal`(): kotlin.Boolean =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_sync_journal(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_i8(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_i8(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_i8(future) },
+            // lift function
+            { FfiConverterBoolean.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )

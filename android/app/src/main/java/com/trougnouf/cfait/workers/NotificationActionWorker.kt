@@ -118,6 +118,8 @@ class NotificationActionWorker(
                 }
             }
 
+            try { api.syncJournal() } catch (e: Exception) {}
+
             // Refresh UI and Scheduler
             AlarmScheduler.scheduleNextAlarm(context, api)
             AlarmScheduler.cleanupObsoleteNotifications(

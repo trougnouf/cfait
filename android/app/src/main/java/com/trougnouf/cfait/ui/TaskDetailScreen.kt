@@ -186,6 +186,7 @@ fun TaskDetailScreen(
                                     api.dispatch(AppIntent.MoveTask(uid, cal.href))
                                     showMoveDialog = false
                                     onBack()
+                                    triggerBackgroundSync(context, api)
                                 } catch (e: Exception) {
                                     if (e is kotlinx.coroutines.CancellationException) throw e
                                     android.widget.Toast.makeText(
@@ -290,6 +291,7 @@ fun TaskDetailScreen(
                                     try {
                                         api.dispatch(AppIntent.RemoveDependency(task!!.uid, blockerUid))
                                         reload()
+                                        triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
                                         android.widget.Toast.makeText(
@@ -347,6 +349,7 @@ fun TaskDetailScreen(
                                         // To unblock, remove this task.uid from the blocked task's dependencies
                                         api.dispatch(AppIntent.RemoveDependency(blockedUid, task!!.uid))
                                         reload()
+                                        triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
                                         android.widget.Toast.makeText(
@@ -403,6 +406,7 @@ fun TaskDetailScreen(
                                     try {
                                         api.dispatch(AppIntent.RemoveRelatedTo(task!!.uid, relatedUid))
                                         reload()
+                                        triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
                                         android.widget.Toast.makeText(
@@ -485,6 +489,7 @@ fun TaskDetailScreen(
                                         sessionInput = ""
                                         showAddSession = false
                                         reload()
+                                        triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
                                         val msg = e.message ?: ""
@@ -558,6 +563,7 @@ fun TaskDetailScreen(
                                 try {
                                     api.deleteSession(uid, absoluteIdx.toUInt())
                                     reload()
+                                    triggerBackgroundSync(context, api)
                                 } catch (e: Exception) {
                                     if (e is kotlinx.coroutines.CancellationException) throw e
                                     android.widget.Toast.makeText(
@@ -622,6 +628,7 @@ fun TaskDetailScreen(
                                     try {
                                         api.dispatch(AppIntent.RemoveRelatedTo(relatedTask.uid, task!!.uid))
                                         reload()
+                                        triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is kotlinx.coroutines.CancellationException) throw e
                                         android.widget.Toast.makeText(

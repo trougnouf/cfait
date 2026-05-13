@@ -26,6 +26,9 @@ import androidx.compose.ui.unit.sp
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileSyntaxType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import java.time.Instant
@@ -513,5 +516,19 @@ class SmartSyntaxTransformation(
         }
 
         return TransformedText(builder.toAnnotatedString(), OffsetMapping.Identity)
+    }
+}
+
+fun triggerBackgroundSync(context: Context, api: CfaitMobile) {
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            api.syncJournal()
+        } catch (e: Exception) {
+            // Ignore network failures silently, the red sync icon will remain
+        } finally {
+            val intent = android.content.Intent("com.trougnouf.cfait.REFRESH_UI")
+            intent.setPackage(context.packageName)
+            context.sendBroadcast(intent)
+        }
     }
 }

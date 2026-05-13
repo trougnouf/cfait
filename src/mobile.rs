@@ -1384,6 +1384,11 @@ impl CfaitMobile {
             .collect()
     }
 
+    pub async fn sync_journal(&self) -> Result<bool, MobileError> {
+        let (_warns, synced) = self.controller.sync_and_update_store().await.map_err(MobileError::from)?;
+        Ok(synced.iter().any(|t| t.summary.ends_with("(Conflict Copy)")))
+    }
+
     pub async fn sync(&self) -> Result<String, MobileError> {
         let config = Config::load_with_credentials(self.ctx.as_ref()).map_err(MobileError::from)?;
         self.apply_connection(config).await
@@ -1562,15 +1567,9 @@ impl CfaitMobile {
         drop(session);
 
         if !actions.is_empty() {
-            let controller = self.controller.clone();
-            // 1. Await disk persistence synchronously so the app doesn't suspend 
+            // Await disk persistence synchronously so the app doesn't suspend 
             // before the user's modifications are safely queued to disk.
-            let _ = controller.persist_changes(actions).await;
-            
-            // 2. Spawn the network sync in the background
-            tokio::spawn(async move {
-                let _ = controller.sync_and_update_store().await;
-            });
+            let _ = self.controller.persist_changes(actions).await;
         }
 
         let store_arc = self.controller.store.clone();

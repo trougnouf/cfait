@@ -375,6 +375,7 @@ fun CfaitNavHost(
                 api.updateTaskSmart(uid, smart)
                 api.updateTaskDescription(uid, desc)
                 refreshLists()
+                com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e // IGNORE CANCELLATION (don't show to user)
                 Toast.makeText(
@@ -650,6 +651,7 @@ fun CfaitNavHost(
                                 navController.navigate("home") {
                                     popUpTo("home") { inclusive = false }
                                 }
+                                com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
                             } catch (e: Exception) {
                                 if (e is CancellationException) throw e
                                 Toast.makeText(

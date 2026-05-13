@@ -395,6 +395,7 @@ fun HomeScreen(
                 checkSyncStatus()
                 onDataChanged()
                 lastSyncFailed = false
+                triggerBackgroundSync(context, api)
             } catch (e: Exception) {
                 lastSyncFailed = true
             } finally {
@@ -445,6 +446,7 @@ fun HomeScreen(
                     lastSyncFailed = false
                     updateTaskList()
                     scrollTrigger++
+                    triggerBackgroundSync(context, api)
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     lastSyncFailed = true
@@ -615,6 +617,7 @@ fun HomeScreen(
                     }
                     onDataChanged()
                     lastSyncFailed = false
+                    triggerBackgroundSync(context, api)
                 }
             } catch (e: Exception) {
                 lastSyncFailed = true
@@ -859,6 +862,7 @@ fun HomeScreen(
                                         taskToMove = null
                                         updateTaskList()
                                         onDataChanged()
+                                        triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
                                         if (e is CancellationException) throw e
                                         Toast.makeText(

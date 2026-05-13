@@ -1275,7 +1275,10 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             )));
             lines.push(Line::from("Liberapay: https://liberapay.com/trougnouf"));
             lines.push(Line::from("Ko-fi:     https://ko-fi.com/trougnouf"));
+            lines.push(Line::from("Bank (SEPA): BE77 9731 6116 6342"));
             lines.push(Line::from("Bitcoin:   bc1qc3z9ctv34v0ufxwpmq875r89umnt6ggeclp979"));
+            lines.push(Line::from("Litecoin:  ltc1qv0xcmeuve080j7ad2cj2sd9d22kgqmlxfxvhmg"));
+            lines.push(Line::from("Ethereum:  0x0A5281F3B6f609aeb9D71D7ED7acbEc5d00687CB"));
         } else {
             let data = if tab == crate::help::HelpTab::Syntax {
                 crate::help::get_syntax_help()

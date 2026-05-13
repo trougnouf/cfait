@@ -881,6 +881,7 @@ fun SettingsScreen(
                         scope.launch {
                             api.removeAlias(key)
                             reload()
+                            triggerBackgroundSync(context, api)
                         }
                     }) { NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.error) }
                 }
@@ -912,6 +913,7 @@ fun SettingsScreen(
                                     newAliasTags = ""
                                     reload()
                                     if (status.startsWith("Error")) status = ""
+                                    triggerBackgroundSync(context, api)
                                 } catch (e: Exception) {
                                     if (e is kotlinx.coroutines.CancellationException) throw e
                                     status = context.getString(R.string.error_adding_alias, e.message ?: "")
