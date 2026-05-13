@@ -1258,18 +1258,24 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         // 2. Render Content
         if tab == crate::help::HelpTab::About {
             lines.push(Line::from(Span::styled(
-                "Cfait Task Manager",
+                rust_i18n::t!("about_title").to_string(),
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD),
             )));
-            lines.push(Line::from(format!("Version {}", env!("CARGO_PKG_VERSION"))));
-            lines.push(Line::from("GPL-3.0 License"));
+            lines.push(Line::from(rust_i18n::t!("about_version", version = env!("CARGO_PKG_VERSION")).to_string()));
+            lines.push(Line::from(rust_i18n::t!("about_license").to_string()));
             lines.push(Line::from(""));
-            lines.push(Line::from(
-                "Repository: https://codeberg.org/trougnouf/cfait",
-            ));
-            lines.push(Line::from("Chat: #Cfait:matrix.org"));
+            lines.push(Line::from(rust_i18n::t!("about_repository", url = "https://codeberg.org/trougnouf/cfait").to_string()));
+            lines.push(Line::from(rust_i18n::t!("about_chat", url = "#Cfait:matrix.org").to_string()));
+            lines.push(Line::from(""));
+            lines.push(Line::from(Span::styled(
+                rust_i18n::t!("support_card_title").to_string(),
+                Style::default().fg(Color::LightMagenta).add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::from("Liberapay: https://liberapay.com/trougnouf"));
+            lines.push(Line::from("Ko-fi:     https://ko-fi.com/trougnouf"));
+            lines.push(Line::from("Bitcoin:   bc1qc3z9ctv34v0ufxwpmq875r89umnt6ggeclp979"));
         } else {
             let data = if tab == crate::help::HelpTab::Syntax {
                 crate::help::get_syntax_help()
@@ -1307,23 +1313,23 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 }
                 lines.push(Line::from(""));
             }
-
-            let block = Block::default()
-                .borders(Borders::ALL)
-                .title(format!(
-                    " {}{}",
-                    rust_i18n::t!("help"),
-                    rust_i18n::t!("help_tab_to_switch")
-                ))
-                .border_style(Style::default().fg(Color::Yellow));
-
-            let p = Paragraph::new(lines)
-                .block(block)
-                .wrap(Wrap { trim: false })
-                .scroll((state.edit_scroll_offset, 0));
-
-            f.render_widget(p, area);
         }
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(format!(
+                " {}{}",
+                rust_i18n::t!("help"),
+                rust_i18n::t!("help_tab_to_switch")
+            ))
+            .border_style(Style::default().fg(Color::Yellow));
+
+        let p = Paragraph::new(lines)
+            .block(block)
+            .wrap(Wrap { trim: false })
+            .scroll((state.edit_scroll_offset, 0));
+
+        f.render_widget(p, area);
     }
 }
 
