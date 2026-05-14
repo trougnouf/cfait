@@ -231,9 +231,9 @@ impl RustyClient {
             }
             // Fallback to principal/home-set discovery
             if let Ok(Some(principal)) = client.find_current_user_principal().await
-                && let Ok(response) = client.request(FindCalendarHomeSet::new(&principal)).await
+                && let Ok(response) = client.request(FindCalendarHomeSet::new(principal.path())).await
                 && let Some(home_url) = response.home_sets.first()
-                && let Ok(cals_resp) = client.request(FindCalendars::new(home_url)).await
+                && let Ok(cals_resp) = client.request(FindCalendars::new(home_url.path())).await
                 && let Some(first) = cals_resp.calendars.first()
             {
                 return Ok(first.href.clone());
@@ -390,14 +390,14 @@ impl RustyClient {
             return Err(anyhow::anyhow!("No current user principal found."));
         };
 
-        let home_set_resp = client.request(FindCalendarHomeSet::new(&principal)).await?;
+        let home_set_resp = client.request(FindCalendarHomeSet::new(principal.path())).await?;
 
         let home_url = home_set_resp
             .home_sets
             .first()
             .ok_or_else(|| anyhow::anyhow!("No calendar home set found."))?;
 
-        let cals_resp = client.request(FindCalendars::new(home_url)).await?;
+        let cals_resp = client.request(FindCalendars::new(home_url.path())).await?;
 
         let mut calendars = Vec::new();
         for col in cals_resp.calendars {
