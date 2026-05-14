@@ -78,6 +78,88 @@
   </requires>
 
   <releases>
+    <release version="1.0.1" date="2026-05-14">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>(parser) Support start-due time range (e.g. ^@2026-05-06 12:20-16:20)</li>
+          <li>(linux) Warn users using the volatile keyutils keystore ( https://github.com/trougnouf/cfait/issues/29 )</li>
+          <li>(gui) Unsynced icon tooltip shows unsynced items</li>
+          <li>Optimize companion event sync using CalDAV REPORT queries and task UID metadata</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>Decouple keyring access and ensure Linux Secret Service unlocking to fix password loss ( https://github.com/trougnouf/cfait/issues/29 )</li>
+          <li>(gui) Restore broken GUI task list items and navigation</li>
+          <li>(linux) Handle locked keyrings and prevent redundant config save ( https://github.com/trougnouf/cfait/issues/29 )</li>
+          <li>(flatpak-gui) Resolve flatpak hang and prevent mid-session password loss</li>
+          <li>(gui) Silence calloop log noise by replacing blocking sleep with tokio sleep</li>
+          <li>Decouple disk persistence from network sync to resolve timeouts and 412 ETag conflicts ( https://github.com/trougnouf/cfait/issues/25 )</li>
+          <li>(gui) Use in-memory state for UI refreshes to fix config race condition</li>
+          <li>(tui) Restore and localize About/Support help screen</li>
+          <li>(android) Fix Android filter flash by using local UI state after task dispatch</li>
+        </ul>
+        <p>Other:</p>
+        <ul>
+          <li>Translated using Weblate (German)</li>
+          <li>Translated using Weblate (French)</li>
+          <li>Translated using Weblate (Italian)</li>
+          <li>Translated using Weblate (Dutch)</li>
+          <li>Translated using Weblate (Russian)</li>
+          <li>Translated using Weblate (Russian)</li>
+          <li>Translated using Weblate (Czech)</li>
+          <li>Merge remote-tracking branch 'refs/remotes/origin/master'</li>
+          <li>Translated using Weblate (French)</li>
+          <li>Translated using Weblate (Chinese (Simplified Han script))</li>
+          <li>Translated using Weblate (German)</li>
+          <li>Translated using Weblate (Spanish)</li>
+          <li>Translated using Weblate (Italian)</li>
+          <li>Translated using Weblate (Dutch)</li>
+          <li>Translated using Weblate (Russian)</li>
+          <li>Translated using Weblate (Czech)</li>
+          <li>Translated using Weblate (Spanish)</li>
+          <li>Merge remote-tracking branch 'refs/remotes/origin/master'</li>
+          <li>Fix stale unsynced state by triggering journal sync after local actions</li>
+          <li>Translated using Weblate (Chinese (Simplified Han script))</li>
+          <li>Merge remote-tracking branch 'refs/remotes/origin/master'</li>
+        </ul>
+        <p>Refactor:</p>
+        <ul>
+          <li>Centralize clients logic via AppIntent</li>
+          <li>(tui) Preserve optimistic updates by using granular sync events in network actor</li>
+          <li>Revert unified UI code (keep AppIntent, SessienState)</li>
+        </ul>
+        <p>Documentation:</p>
+        <ul>
+          <li>Update cfait-gui bin name</li>
+        </ul>
+        <p>Performance:</p>
+        <ul>
+          <li>(ui) Optimize UI responsiveness by precomputing transient visual attributes in the filtering pipeline</li>
+          <li>(client) Optimize companion event sync with concurrency and early returns</li>
+        </ul>
+        <p>Styling:</p>
+        <ul>
+          <li>(gui) Restore tight layout</li>
+          <li>(gui) Align tags/datetime/etc to the right</li>
+          <li>(android) Improve android UI</li>
+          <li>(gui) Add "Toggle Sidebar (Ctrl+B)" button and auto-hide/show depending on window size ( https://github.com/trougnouf/cfait/issues/12 , https://codeberg.org/trougnouf/cfait/issues/53 )</li>
+          <li>(android) Improve UI</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>(ci) Prevent test_roll.yml jobs on new releases</li>
+          <li>Fix Android version parser and bump version up to v1.0.0</li>
+          <li>(pkg) Add org.freedesktop.secrets dependency (Arch, *.deb, README, https://github.com/trougnouf/cfait/issues/29 )</li>
+          <li>Update libdav dependency (v0.10.4 is out, https://codeberg.org/trougnouf/cfait/issues/57 )</li>
+          <li>Mute zbus spam from log and show INFO messages in the terminal</li>
+          <li>(gui) Add permanent keyring subtitle in the loading screen, mute zbus log messages and unmute others</li>
+          <li>Re-log some iced info messages</li>
+          <li>Bump cache/storage versions, fix config save race condition, and remove unsafe unwraps</li>
+          <li>Update libdav to v0.10.5 (breaking change) and other rust dependencies</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.5.9" date="2026-05-05">
       <description>
         <p>Features:</p>

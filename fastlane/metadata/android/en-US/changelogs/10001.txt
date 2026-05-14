@@ -1,0 +1,164 @@
+## [1.0.1] - 2026-05-14
+
+### 🚀 Features
+
+- *(parser)* Support start-due time range (e.g. ^@2026-05-06 12:20-16:20)
+- *(linux)* Warn users using the volatile keyutils keystore ( https://github.com/trougnouf/cfait/issues/29 )
+- *(gui)* Unsynced icon tooltip shows unsynced items
+- Optimize companion event sync using CalDAV REPORT queries and task UID metadata
+
+### 🐛 Bug Fixes
+
+- Decouple keyring access and ensure Linux Secret Service unlocking to fix password loss ( https://github.com/trougnouf/cfait/issues/29 )
+- *(gui)* Restore broken GUI task list items and navigation
+- *(linux)* Handle locked keyrings and prevent redundant config save ( https://github.com/trougnouf/cfait/issues/29 )
+- *(flatpak-gui)* Resolve flatpak hang and prevent mid-session password loss
+- *(gui)* Silence calloop log noise by replacing blocking sleep with tokio sleep
+- Decouple disk persistence from network sync to resolve timeouts and 412 ETag conflicts ( https://github.com/trougnouf/cfait/issues/25 )
+- *(gui)* Use in-memory state for UI refreshes to fix config race condition
+- *(tui)* Restore and localize About/Support help screen
+- *(android)* Fix Android filter flash by using local UI state after task dispatch
+
+### 💼 Other
+
+- Translated using Weblate (German)
+
+Currently translated at 99.7% (478 of 479 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
+- Translated using Weblate (French)
+
+Currently translated at 99.1% (475 of 479 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
+- Translated using Weblate (Italian)
+
+Currently translated at 75.1% (360 of 479 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
+- Translated using Weblate (Dutch)
+
+Currently translated at 6.0% (29 of 479 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
+- Translated using Weblate (Russian)
+
+Currently translated at 24.8% (119 of 479 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
+- Translated using Weblate (Russian)
+
+Currently translated at 24.8% (119 of 479 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
+- Translated using Weblate (Czech)
+
+Currently translated at 0.0% (0 of 479 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/cs/
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+- Translated using Weblate (French)
+
+Currently translated at 98.7% (475 of 481 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 99.5% (479 of 481 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (German)
+
+Currently translated at 99.3% (478 of 481 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (481 of 481 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Translated using Weblate (Italian)
+
+Currently translated at 74.8% (360 of 481 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
+- Translated using Weblate (Dutch)
+
+Currently translated at 6.0% (29 of 481 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
+- Translated using Weblate (Russian)
+
+Currently translated at 24.7% (119 of 481 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
+- Translated using Weblate (Czech)
+
+Currently translated at 0.0% (0 of 481 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/cs/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (486 of 486 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+- Fix stale unsynced state by triggering journal sync after local actions
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 100.0% (486 of 486 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+
+### 🚜 Refactor
+
+- Centralize clients logic via AppIntent
+- *(tui)* Preserve optimistic updates by using granular sync events in network actor
+- Revert unified UI code (keep AppIntent, SessienState)
+
+### 📚 Documentation
+
+- Update cfait-gui bin name
+
+### ⚡ Performance
+
+- *(ui)* Optimize UI responsiveness by precomputing transient visual attributes in the filtering pipeline
+- *(client)* Optimize companion event sync with concurrency and early returns
+
+### 🎨 Styling
+
+- *(gui)* Restore tight layout
+- *(gui)* Align tags/datetime/etc to the right
+- *(android)* Improve android UI
+- *(gui)* Add "Toggle Sidebar (Ctrl+B)" button and auto-hide/show depending on window size ( https://github.com/trougnouf/cfait/issues/12 , https://codeberg.org/trougnouf/cfait/issues/53 )
+- *(android)* Improve UI
+
+### ⚙️ Miscellaneous Tasks
+
+- *(ci)* Prevent test_roll.yml jobs on new releases
+- Fix Android version parser and bump version up to v1.0.0
+- *(pkg)* Add org.freedesktop.secrets dependency (Arch, *.deb, README, https://github.com/trougnouf/cfait/issues/29 )
+- Update libdav dependency (v0.10.4 is out, https://codeberg.org/trougnouf/cfait/issues/57 )
+- Mute zbus spam from log and show INFO messages in the terminal
+- *(gui)* Add permanent keyring subtitle in the loading screen, mute zbus log messages and unmute others
+- Re-log some iced info messages
+- Bump cache/storage versions, fix config save race condition, and remove unsafe unwraps
+- Update libdav to v0.10.5 (breaking change) and other rust dependencies
