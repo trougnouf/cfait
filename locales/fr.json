@@ -118,7 +118,7 @@
     "data_management": "Gestion des données",
     "debug_export_explain": "Exporter toutes les données de l'application (config, cache, journaux) pour le débogage. Les identifiants seront masqués.",
     "default_collection": "Collection par défaut",
-    "default_priority_label": "Priorité par défaut (!) :",
+    "default_priority_label": "Priorité par défaut ( !) :",
     "default_time_label": "Heure par défaut :",
     "delete": "Supprimer",
     "delete_all_calendar_events": "Supprimer tous les événements de calendrier",
