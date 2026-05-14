@@ -101,10 +101,11 @@ fn fix_and_encode_path(
             }
         }
 
-        // --- APPLIED FIX: ONLY REWRITE IF AN OVERLAP WAS ACTUALLY FOUND ---
-        // If best_overlap is empty, the paths are disjoint (e.g. /dav/ vs /calendars/).
-        // In that case, we must trust the absolute path provided by the server.
-        if !best_overlap.is_empty() {
+        // --- APPLIED FIX: IGNORE MEANINGLESS "/" OVERLAPS ---
+        // If the overlap is just "/", it means the paths share no directories 
+        // (e.g., "/dav/" and "/calendars/"). In this case, they are disjoint, 
+        // and we must trust the absolute path provided by the server.
+        if !best_overlap.is_empty() && best_overlap != "/" {
             let mut fixed = base_path[..base_path.len() - best_overlap.len()].to_string();
 
             // Prevent double slashes
