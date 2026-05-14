@@ -254,6 +254,23 @@ pub fn organize_hierarchy(
     }
 
     process_group(roots, "".to_string(), max_done_roots, true, &mut context, 0);
+
+    // Catch any tasks that were missed due to cyclical parent_uid relationships
+    let mut unvisited = Vec::new();
+    for children in context.children_map.values() {
+        for child in children {
+            let visit_key = (child.uid.clone(), child.calendar_href.clone());
+            if !context.visited_keys.contains(&visit_key) {
+                unvisited.push(child.clone());
+            }
+        }
+    }
+
+    if !unvisited.is_empty() {
+        unvisited.sort_by(|a, b| a.compare_for_sort(b, default_priority));
+        process_group(unvisited, "".to_string(), max_done_roots, true, &mut context, 0);
+    }
+
     result
 }
 
@@ -764,8 +781,12 @@ impl TaskStore {
         let mut updated = Vec::new();
         let mut current_uid = uid.to_string();
         let now = Utc::now().timestamp();
+        let mut visited = HashSet::new();
 
         loop {
+            if !visited.insert(current_uid.clone()) {
+                break;
+            }
             if let Some((task, _)) = self.get_task_mut(&current_uid) {
                 let mut changed = false;
                 if task.status != TaskStatus::InProcess {

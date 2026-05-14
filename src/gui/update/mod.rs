@@ -231,15 +231,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::SnapToSelected { focus } => {
-            if let Some(uid) = &app.selected_uid {
-                let present_in_list = app.find_task_index_by_uid(uid).is_some();
-                let has_cached_id = app.task_ids.contains_key(uid);
-
-                if present_in_list || has_cached_id {
-                    common::scroll_to_selected(app, focus)
-                } else {
-                    common::scroll_to_selected_delayed(app, focus)
-                }
+            if let Some(_uid) = &app.selected_uid {
+                common::scroll_to_selected(app, focus)
             } else {
                 Task::none()
             }
