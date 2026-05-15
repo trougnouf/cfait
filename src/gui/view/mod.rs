@@ -377,7 +377,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
             let mut label = action.label();
             if *action == TaskAction::DuplicateTree && !task.has_subtasks {
-                label = "Duplicate task".to_string();
+                label = rust_i18n::t!("duplicate_single_task").to_string();
             }
             if *action == TaskAction::ToggleTimer {
                 label = if task.status == crate::model::TaskStatus::InProcess {
@@ -1378,7 +1378,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         search_row = search_row.push(
             tooltip(
                 qf_btn,
-                text(format!("Toggle '{}' (w)", app.quick_filter_term)).size(12),
+                text(rust_i18n::t!("tooltip_toggle_quick_filter", term = app.quick_filter_term.clone())).size(12),
                 tooltip::Position::Bottom,
             )
             .style(tooltip_style)
@@ -1429,7 +1429,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     } else {
         tooltip(
             clear_btn,
-            text("Clear (Esc)").size(12),
+            text(rust_i18n::t!("tooltip_clear_esc")).size(12),
             tooltip::Position::Bottom,
         )
         .style(tooltip_style)
@@ -1854,7 +1854,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             iced::widget::button(text(rust_i18n::t!("cancel")).size(16))
                 .style(iced::widget::button::secondary)
                 .on_press(Message::CancelEdit),
-            text("Cancel (Esc)").size(12),
+            text(rust_i18n::t!("tooltip_cancel_esc")).size(12),
             tooltip::Position::Top,
         )
         .style(tooltip_style)
@@ -1864,7 +1864,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             iced::widget::button(text(rust_i18n::t!("save")).size(16))
                 .style(iced::widget::button::primary)
                 .on_press(Message::SubmitTask),
-            text("Save (Ctrl+S)").size(12),
+            text(rust_i18n::t!("tooltip_save_ctrl_s")).size(12),
             tooltip::Position::Top,
         )
         .style(tooltip_style)

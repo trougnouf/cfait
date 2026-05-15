@@ -181,10 +181,7 @@ impl RustyClient {
                     href: None,
                     refresh_path: Some(path),
                 })
-                .with_warning(format!(
-                    "Creation conflict: Task '{}' already exists on server. Mark as synced.",
-                    task.summary
-                )))
+                .with_warning(rust_i18n::t!("sync_conflict_creation", summary = task.summary.clone()).to_string()))
             }
             Err(e) => {
                 let msg = format!("{:?}", e);
@@ -286,10 +283,7 @@ impl RustyClient {
                         StepResult::new(StepOutcome::RetryWith(Box::new(Action::Create(
                             conflict_copy,
                         ))))
-                        .with_warning(format!(
-                            "Conflict (412) on task '{}'. Merge failed. Creating copy.",
-                            task.summary
-                        )),
+                        .with_warning(rust_i18n::t!("sync_conflict_412", summary = task.summary.clone()).to_string()),
                     )
                 }
             }
@@ -314,10 +308,7 @@ impl RustyClient {
                         StepResult::new(StepOutcome::RetryWith(Box::new(Action::Create(
                             conflict_copy,
                         ))))
-                        .with_warning(format!(
-                            "Conflict (412-Fallback) on task '{}'. Creating copy.",
-                            task.summary
-                        )),
+                        .with_warning(rust_i18n::t!("sync_conflict_412_fallback", summary = task.summary.clone()).to_string()),
                     )
                 } else {
                     let is_fatal = match &e {
@@ -390,10 +381,7 @@ impl RustyClient {
                 retry_task.etag = String::new(); // clear etag to force delete on next attempt
                 Ok(
                     StepResult::new(StepOutcome::RetryWith(Box::new(Action::Delete(retry_task))))
-                        .with_warning(format!(
-                            "Conflict on delete task '{}'. Forcing delete.",
-                            task.summary
-                        )),
+                        .with_warning(rust_i18n::t!("sync_conflict_delete", summary = task.summary.clone()).to_string()),
                 )
             }
             Err(e) => {
@@ -474,10 +462,7 @@ impl RustyClient {
                     Action::Create(moved),
                     Action::Delete(task.clone()),
                 ]))
-                .with_warning(format!(
-                    "MOVE failed ({}), falling back to Create+Delete.",
-                    e
-                )))
+                .with_warning(rust_i18n::t!("sync_move_failed_fallback", error = e.to_string()).to_string()))
             }
         }
     }
@@ -633,8 +618,7 @@ impl RustyClient {
                                     },
                                 );
                                 warnings.push(
-                                    "Fatal sync error. Task moved to 'Local (Recovery)'."
-                                        .to_string(),
+                                    rust_i18n::t!("sync_fatal_error_recovery").to_string(),
                                 );
                             }
                         }

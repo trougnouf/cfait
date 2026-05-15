@@ -75,7 +75,7 @@ pub async fn run_network_actor(
     // PRUNE TRASH on startup (best-effort; report error to event channel)
     if let Err(e) = controller.prune_trash().await {
         let _ = event_tx
-            .send(AppEvent::Error(format!("Trash prune failed: {}", e)))
+            .send(AppEvent::Error(rust_i18n::t!("error_trash_prune", error = e.to_string()).to_string()))
             .await;
     }
 
@@ -255,7 +255,7 @@ pub async fn run_network_actor(
                 }
                 Err(e) => {
                     let _ = event_tx
-                        .send(AppEvent::Error(format!("Fetch failed: {}", e)))
+                        .send(AppEvent::Error(rust_i18n::t!("error_fetch_failed", error = e.to_string()).to_string()))
                         .await;
                 }
             },
@@ -318,7 +318,7 @@ pub async fn run_network_actor(
                 let _ = event_tx
                     .send(AppEvent::Status {
                         key: "syncing".to_string(),
-                        human: "Syncing...".to_string(),
+                        human: rust_i18n::t!("syncing").to_string(),
                     })
                     .await;
 

@@ -178,7 +178,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::Loaded(Err(e)) => {
             log::error!("Connection Failed: {}", e);
-            app.error_msg = Some(format!("Connection Failed: {}", e));
+            app.error_msg = Some(rust_i18n::t!("connection_failed", error = e).to_string());
             app.last_sync_failed = true;
             crate::gui::update::common::update_journal_state(app);
 
@@ -242,7 +242,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::RefreshedAll(Err(e)) => {
             log::error!("Sync warning (RefreshedAll): {}", e);
-            app.error_msg = Some(format!("Sync warning: {}", e));
+            app.error_msg = Some(rust_i18n::t!("sync_warning", msg = e).to_string());
             app.last_sync_failed = true;
             app.loading = false;
             Task::none()
@@ -263,21 +263,21 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::TasksRefreshed(Err(e)) => {
             log::error!("Fetch failed (TasksRefreshed): {}", e);
-            app.error_msg = Some(format!("Fetch: {}", e));
+            app.error_msg = Some(rust_i18n::t!("error_fetch_failed", error = e).to_string());
             app.last_sync_failed = true;
             app.loading = false;
             Task::none()
         }
         Message::MigrationComplete(Ok(count)) => {
             app.loading = false;
-            app.error_msg = Some(format!("Migration complete. Moved {} tasks.", count));
+            app.error_msg = Some(rust_i18n::t!("migration_complete_moved", count = count).to_string());
             refresh_filtered_tasks(app);
             Task::perform(async { Ok::<(), String>(()) }, |_| Message::Refresh)
         }
         Message::MigrationComplete(Err(e)) => {
             log::error!("Migration failed: {}", e);
             app.loading = false;
-            app.error_msg = Some(format!("Migration failed: {}", e));
+            app.error_msg = Some(rust_i18n::t!("migration_failed", error = e).to_string());
             Task::none()
         }
         _ => Task::none(),

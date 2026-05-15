@@ -171,7 +171,7 @@ impl RustyClient {
                 let result = rustls_native_certs::load_native_certs();
                 root_store.add_parsable_certificates(result.certs);
                 if root_store.is_empty() {
-                    return Err(anyhow::anyhow!("No valid system certificates found."));
+                    return Err(anyhow::anyhow!(rust_i18n::t!("error_no_certs").to_string()));
                 }
                 tls_config_builder
                     .with_root_certificates(root_store)
@@ -387,7 +387,7 @@ impl RustyClient {
 
         let principal_res = client.find_current_user_principal().await?;
         let Some(principal) = principal_res else {
-            return Err(anyhow::anyhow!("No current user principal found."));
+            return Err(anyhow::anyhow!(rust_i18n::t!("error_no_principal").to_string()));
         };
 
         let home_set_resp = client.request(FindCalendarHomeSet::new(principal.path())).await?;
@@ -395,7 +395,7 @@ impl RustyClient {
         let home_url = home_set_resp
             .home_sets
             .first()
-            .ok_or_else(|| anyhow::anyhow!("No calendar home set found."))?;
+            .ok_or_else(|| anyhow::anyhow!(rust_i18n::t!("error_no_home_set").to_string()))?;
 
         let cals_resp = client.request(FindCalendars::new(home_url.path())).await?;
 

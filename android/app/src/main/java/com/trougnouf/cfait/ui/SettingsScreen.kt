@@ -789,7 +789,7 @@ fun SettingsScreen(
                                 reload()
                             } catch (e: Exception) {
                                 if (e is kotlinx.coroutines.CancellationException) throw e
-                                status = "Error: ${e.message}"
+                                status = context.getString(R.string.error_general, e.message ?: "")
                             }
                         }
                     },
@@ -800,7 +800,7 @@ fun SettingsScreen(
                                 reload()
                             } catch (e: Exception) {
                                 if (e is kotlinx.coroutines.CancellationException) throw e
-                                status = "Error: ${e.message}"
+                                status = context.getString(R.string.error_general, e.message ?: "")
                             }
                         }
                     },
@@ -842,7 +842,7 @@ fun SettingsScreen(
                                 reload()
                             } catch (e: Exception) {
                                 if (e is kotlinx.coroutines.CancellationException) throw e
-                                status = "Error: ${e.message}"
+                                status = context.getString(R.string.error_general, e.message ?: "")
                             }
                         }
                     },
@@ -1027,14 +1027,14 @@ fun ColorPickerRow(
     onColorSelected: (String?) -> Unit
 ) {
     val colors = listOf(
-        null to "None",
-        "#FF4444" to "Red",
-        "#FF8800" to "Orange",
-        "#FFD700" to "Yellow",
-        "#66BB6A" to "Green",
-        "#42A5F5" to "Blue",
-        "#AB47BC" to "Purple",
-        "#9E9E9E" to "Gray"
+        null to stringResource(R.string.color_none),
+        "#FF4444" to stringResource(R.string.color_red),
+        "#FF8800" to stringResource(R.string.color_orange),
+        "#FFD700" to stringResource(R.string.color_yellow),
+        "#66BB6A" to stringResource(R.string.color_green),
+        "#42A5F5" to stringResource(R.string.color_blue),
+        "#AB47BC" to stringResource(R.string.color_purple),
+        "#9E9E9E" to stringResource(R.string.color_gray)
     )
 
     Row(

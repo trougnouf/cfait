@@ -273,7 +273,7 @@ pub async fn handle_key_event(
                 state.cursor_position = 0;
                 state.mode = InputMode::EditingDescription;
                 state.creating_with_desc = true;
-                state.message = "Write notes or subtasks (- [ ]). Ctrl+S to save.".to_string();
+                state.message = rust_i18n::t!("edit_description_instructions").to_string();
                 return None;
             }
             KeyCode::Enter if !state.input_buffer.is_empty() => {
@@ -292,7 +292,7 @@ pub async fn handle_key_event(
                 if !new_aliases.is_empty() {
                     for (key, tags) in new_aliases {
                         if let Err(e) = validate_alias_integrity(&key, &tags, &state.tag_aliases) {
-                            state.message = format!("Alias Error: {}", e);
+                            state.message = rust_i18n::t!("error_general", error = e.to_string()).to_string();
                             return None;
                         }
 
@@ -388,7 +388,7 @@ pub async fn handle_key_event(
                 if !new_aliases.is_empty() {
                     for (k, v) in new_aliases {
                         if let Err(e) = validate_alias_integrity(&k, &v, &state.tag_aliases) {
-                            state.message = format!("Alias Error: {}", e);
+                            state.message = rust_i18n::t!("error_general", error = e.to_string()).to_string();
                             return None;
                         }
 
@@ -492,10 +492,9 @@ pub async fn handle_key_event(
                         })
                     else {
                         state.message = if state.local_mode_enabled {
-                            "No calendar available.".to_string()
+                            rust_i18n::t!("error_no_calendar_available").to_string()
                         } else {
-                            "No remote calendar available. Enable local mode or configure a remote calendar."
-                                .to_string()
+                            rust_i18n::t!("error_no_remote_calendar").to_string()
                         };
                         state.creating_with_desc = false;
                         state.new_task_title.clear();
@@ -596,7 +595,7 @@ pub async fn handle_key_event(
                 state.new_task_title.clear();
                 // -------------------------
 
-                state.message = "Editing cancelled.".to_string();
+                state.message = rust_i18n::t!("editing_cancelled").to_string();
             }
             // Editing & Navigation
             KeyCode::Char(c) => {
@@ -830,13 +829,13 @@ pub async fn handle_key_event(
                 state.creating_with_desc = true;
                 state.reset_input();
                 state.new_task_title.clear();
-                state.message = "Task Title (Press Enter to add Description):".to_string();
+                state.message = rust_i18n::t!("task_title_prompt").to_string();
             }
             KeyCode::Esc => {
                 let mut needs_refresh = false;
                 if state.yanked_uid.is_some() {
                     state.yanked_uid = None;
-                    state.message = "Yank cleared.".to_string();
+                    state.message = rust_i18n::t!("yank_cleared").to_string();
                 } else if !state.active_search_query.is_empty() {
                     state.active_search_query.clear();
                     needs_refresh = true;
@@ -887,7 +886,7 @@ pub async fn handle_key_event(
                 if let Some(idx) = select_weighted_random_index(&real_tasks, state.default_priority)
                 {
                     state.list_state.select(Some(idx));
-                    state.message = "Jumped to random task".to_string();
+                    state.message = rust_i18n::t!("jumped_to_task").to_string();
                 }
             }
 
@@ -1131,7 +1130,7 @@ pub async fn handle_key_event(
                     state.new_task_title.clear();
                     state.creating_child_of = Some(uid);
                     state.message =
-                        rust_i18n::t!("new_child_of_task", summary = summary).to_string();
+                        rust_i18n::t!("new_child_of", name = summary).to_string();
                 }
             }
             KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -1226,7 +1225,7 @@ pub async fn handle_key_event(
                                 }
                                 state.message = rust_i18n::t!("action_open_locations").to_string();
                             } else {
-                                state.message = "Failed to write GPX file.".to_string();
+                                state.message = rust_i18n::t!("error_write_gpx").to_string();
                             }
                         }
                     } else if let Some(_geo) = &task.geo {
@@ -1392,7 +1391,7 @@ pub async fn handle_key_event(
                 if !state.export_source_calendars.is_empty() {
                     state.export_source_selection_state.select(Some(0));
                     state.mode = InputMode::SelectingExportSource;
-                    state.message = "Select source local calendar to export from.".to_string();
+                    state.message = rust_i18n::t!("tui_export_select_source").to_string();
                 }
             }
             KeyCode::Char('M') => {
@@ -1412,7 +1411,7 @@ pub async fn handle_key_event(
                     if !state.move_targets.is_empty() {
                         state.move_selection_state.select(Some(0));
                         state.mode = InputMode::Moving;
-                        state.message = "Select a calendar and press Enter.".to_string();
+                        state.message = rust_i18n::t!("tui_select_calendar_prompt").to_string();
                     }
                 }
             }
@@ -1487,7 +1486,7 @@ pub async fn handle_key_event(
                         state.relationship_selection_state.select(Some(0));
                         state.mode = InputMode::RelationshipBrowsing;
                         state.message =
-                            "Select task to jump to (Enter) or Esc to cancel".to_string();
+                            rust_i18n::t!("tui_select_task_jump").to_string();
                     } else {
                         state.message = rust_i18n::t!("error_no_related_tasks").to_string();
                     }
@@ -1661,7 +1660,7 @@ pub async fn handle_key_event(
                 state.reset_input();
                 state.creating_with_desc = false;
                 state.new_task_title.clear();
-                state.message = "New Task...".to_string();
+                state.message = rust_i18n::t!("new_task_prompt").to_string();
             }
             KeyCode::Char('e') => {
                 if let Some(t) = state.get_selected_task() {
@@ -1797,7 +1796,7 @@ pub async fn handle_key_event(
                     // For safety, re-sync alarms.
                     update_alarms(state);
 
-                    state.message = "Moving task...".to_string();
+                    state.message = rust_i18n::t!("moving_task").to_string();
                     state.mode = InputMode::Normal;
                     
                     if !actions.is_empty() {

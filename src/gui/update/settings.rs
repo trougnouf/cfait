@@ -625,7 +625,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         }
                         Ok(path)
                     } else {
-                        Err("Export cancelled".to_string())
+                        Err(rust_i18n::t!("export_cancelled").to_string())
                     }
                 },
                 Message::ExportSaved,
@@ -639,8 +639,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ExportSaved(Err(e)) => {
-            if e != "Export cancelled" {
-                app.error_msg = Some(format!("Export failed: {}", e));
+            if e != rust_i18n::t!("export_cancelled").to_string() {
+                app.error_msg = Some(rust_i18n::t!("export_error", error = e).to_string());
             }
             Task::none()
         }
@@ -662,15 +662,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                                     &ics_content,
                                 ) {
                                     Ok(count) => {
-                                        Ok(format!("Successfully imported {} task(s)", count))
+                                        let file_name = file.file_name();
+                                        Ok(rust_i18n::t!("import_success_from_file", count = count, file = file_name).to_string())
                                     }
-                                    Err(e) => Err(format!("Import failed: {}", e)),
+                                    Err(e) => Err(rust_i18n::t!("import_failed", error = e.to_string()).to_string()),
                                 }
                             }
-                            Err(e) => Err(format!("Failed to read file as text: {}", e)),
+                            Err(e) => Err(rust_i18n::t!("import_failed_read_text", error = e.to_string()).to_string()),
                         }
                     } else {
-                        Err("Import cancelled".to_string())
+                        Err(rust_i18n::t!("import_cancelled").to_string())
                     }
                 },
                 Message::ImportCompleted,
@@ -688,8 +689,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ImportCompleted(Err(e)) => {
-            if e != "Import cancelled" {
-                app.error_msg = Some(format!("Import failed: {}", e));
+            if e != rust_i18n::t!("import_cancelled").to_string() {
+                app.error_msg = Some(e);
             }
             Task::none()
         }

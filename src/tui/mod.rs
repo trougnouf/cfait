@@ -34,62 +34,9 @@ use tokio::sync::mpsc;
 pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     // --- 1. PREAMBLE & CONFIG ---
     let args: Vec<String> = env::args().collect();
+    let binary_name = args.first().cloned().unwrap_or_else(|| "cfait".to_string());
     if args.len() > 1 && (args[1] == "--help" || args[1] == "-h") {
-        println!(
-            "{} - A powerful, fast and elegant CalDAV task manager (TUI)",
-            rust_i18n::t!("about_title")
-        );
-        println!();
-        println!("USAGE:");
-        println!("    cfait");
-        println!();
-        println!("KEYBINDINGS:");
-        println!("    Press '?' inside the app for full interactive help");
-        println!();
-        println!("SMART INPUT SYNTAX:");
-        println!("    !1-9              Priority (1=highest, 9=lowest)");
-        println!("    #tag              Add category/tag (supports hierarchy: #work:project)");
-        println!("    @@location        Add location (supports hierarchy: @@home:office)");
-        println!("    @date             Set due date (@tomorrow, @2d, @next friday)");
-        println!("    ^date             Set start date (^next week, ^2025-01-01)");
-        println!("    ^@date            Set both start and due dates (^@tomorrow, ^@2d, ^@2026-06-06 15:00-18:30)");
-        println!("    ~duration         Set duration (~30m, ~1.5h)");
-        println!("    @daily            Recurrence (@daily, @weekly, @every 3 days)");
-        println!("    until <date>      End date for recurrence (@daily until 2025-12-31)");
-        println!("    except <date>     Skip dates (@daily except 2025-12-25,2026-01-01)");
-        println!(
-            "    except <weekday>  Exclude weekdays (@daily except mo,tue or saturdays,sundays)"
-        );
-        println!("    except <month>    Exclude months (@monthly except oct,nov,dec)");
-        println!("    @friday           Next weekday (@friday = @next friday)");
-        println!("    @next X           Next week/month/year (@next week, @next month)");
-        println!("    \"in\" optional     @2 weeks = @in 2 weeks (the word \"in\" is optional)");
-        println!("    #alias:=#tags     Define tag alias inline (retroactive)");
-        println!("    @@alias:=#tags    Define location alias (@@aldi:=#groceries,#shopping)");
-        println!("    url:              Attach URL");
-        println!(
-            "    geo:              Add coordinates (e.g. geo:50.13° N, 4.50° E. Android: geo:here)"
-        );
-        println!("    desc:             Add description");
-        println!("    rem:10m           Relative reminder (before due date, adjusts)");
-        println!("    rem:in 5m         Relative from now (becomes absolute)");
-        println!("    rem:next friday   Next occurrence (becomes absolute)");
-        println!("    rem:8am           Absolute reminder (fixed time)");
-        println!("    +cal              Force create calendar event (override global setting)");
-        println!("    -cal              Prevent calendar event creation (override global setting)");
-        println!("    \\#text            Escape special characters");
-        println!();
-        println!("EXAMPLES:");
-        println!("    Buy cookies !1 @2025-01-16 #shopping rem:2025-01-16 8am");
-        println!("    Exercise @daily ~30m #health rem:8am");
-        println!("    Meeting @tomorrow 2pm ~1h +cal (force create calendar event)");
-        println!("    Plant plum tree #tree_planting !3 ~2h @@home:garden");
-        println!("    #tree_planting:=#gardening,@@home");
-        println!("    @@aldi:=#groceries,#shopping (location alias)");
-        println!();
-        println!("MORE INFO:");
-        println!("    Repository: https://codeberg.org/trougnouf/cfait");
-        println!("    License:    GPL-3.0");
+        crate::cli::print_help(&binary_name);
         return Ok(());
     }
 
@@ -119,18 +66,18 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
             }
 
             // Interactive Onboarding
-            println!("Welcome to Cfait (TUI). No configuration file found.");
-            println!("Let's set up your task manager.\n");
+            println!("{}", rust_i18n::t!("tui_welcome_no_config"));
+            println!("{}", rust_i18n::t!("tui_setup_prompt"));
 
             if let Some(Some(warn)) = crate::system::KEYRING_WARNING.get() {
                 println!("{}\n", warn);
             }
 
-            println!("Select mode:");
-            println!("  [1] Connect to CalDAV Server (Radicale, Nextcloud, etc.)");
-            println!("  [2] Offline Mode (Local tasks only)");
+            println!("{}", rust_i18n::t!("tui_select_mode"));
+            println!("  {}", rust_i18n::t!("tui_mode_caldav"));
+            println!("  {}", rust_i18n::t!("tui_mode_offline"));
 
-            print!("\nChoice [1]: ");
+            print!("{}", rust_i18n::t!("tui_choice_prompt"));
             io::stdout().flush()?;
 
             let mut choice = String::new();
@@ -139,35 +86,35 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
             let mut new_config = config::Config::default();
 
             if choice.trim() == "2" {
-                println!("Setting up Offline Mode...");
+                println!("{}", rust_i18n::t!("tui_setting_up_offline"));
                 // Config defaults are already suitable for offline (empty url/creds)
             } else {
                 // CalDAV Setup Loop
                 loop {
-                    println!("\n--- CalDAV Connection Setup ---");
+                    println!("{}", rust_i18n::t!("tui_caldav_setup_title"));
 
-                    print!("Server URL (e.g. https://cloud.example.com/remote.php/dav/): ");
+                    print!("{}", rust_i18n::t!("tui_caldav_url_prompt"));
                     io::stdout().flush()?;
                     let mut url = String::new();
                     io::stdin().read_line(&mut url)?;
                     new_config.url = url.trim().to_string();
 
-                    print!("Username: ");
+                    print!("{}", rust_i18n::t!("tui_username_prompt"));
                     io::stdout().flush()?;
                     let mut user = String::new();
                     io::stdin().read_line(&mut user)?;
                     new_config.username = user.trim().to_string();
 
-                    let pass = prompt_password("Password: ")?;
+                    let pass = prompt_password(rust_i18n::t!("tui_password_prompt").to_string())?;
                     new_config.password = pass;
 
-                    print!("Allow insecure SSL certificates? (y/N): ");
+                    print!("{}", rust_i18n::t!("tui_insecure_ssl_prompt"));
                     io::stdout().flush()?;
                     let mut insecure = String::new();
                     io::stdin().read_line(&mut insecure)?;
                     new_config.allow_insecure_certs = insecure.trim().eq_ignore_ascii_case("y");
 
-                    println!("\nTesting connection...");
+                    println!("{}", rust_i18n::t!("tui_testing_connection"));
 
                     let ctx_clone = ctx.clone();
                     let check_result = async {
@@ -190,18 +137,16 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
 
                     match check_result {
                         Ok(count) => {
-                            println!("Success! Found {} calendars.", count);
+                            println!("{}", rust_i18n::t!("tui_success_found_calendars", count = count));
                             break;
                         }
                         Err(e) => {
-                            eprintln!("Connection failed: {}", e);
-                            println!("Retry configuration? [Y/n]");
+                            eprintln!("{}", rust_i18n::t!("connection_failed", error = e.to_string()));
+                            println!("{}", rust_i18n::t!("tui_retry_config_prompt"));
                             let mut retry = String::new();
                             io::stdin().read_line(&mut retry)?;
                             if retry.trim().eq_ignore_ascii_case("n") {
-                                println!(
-                                    "Falling back to offline mode (saving provided details anyway)."
-                                );
+                                println!("{}", rust_i18n::t!("tui_fallback_offline"));
                                 break;
                             }
                         }
@@ -210,12 +155,12 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
             }
 
             if let Err(e) = new_config.save(ctx.as_ref()) {
-                eprintln!("Warning: Could not save config file: {}", e);
+                eprintln!("{}", rust_i18n::t!("tui_warning_save_config", error = e.to_string()));
             } else if let Ok(path) = config::Config::get_path_string(ctx.as_ref()) {
-                println!("Configuration saved to: {}", path);
+                println!("{}", rust_i18n::t!("tui_config_saved", path = path));
             }
 
-            println!("Starting TUI...");
+            println!("{}", rust_i18n::t!("tui_starting"));
             std::thread::sleep(Duration::from_secs(1));
             new_config
         }

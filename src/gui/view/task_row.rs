@@ -1050,7 +1050,7 @@ pub fn view_task_row<'a>(
 
             let status_btn_element: Element<'a, Message> = tooltip(
                 status_btn,
-                text("Toggle (Space)").size(12),
+                text(rust_i18n::t!("tooltip_toggle_space")).size(12),
                 tooltip::Position::Top,
             )
             .style(tooltip_style)
