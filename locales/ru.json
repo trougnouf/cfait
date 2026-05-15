@@ -445,6 +445,8 @@
     "status_created": "Добавлено.",
     "status_deleted": "Удалено.",
     "status_moved": "Перенесено.",
+    "status_no_tasks_found": "",
+    "status_no_tasks_to_migrate": "",
     "status_saved": "Сохранено.",
     "stop_reset": "Стоп (сброс)",
     "strikethrough_completed": "",
@@ -476,7 +478,8 @@
     "tasks": "Задачи",
     "tasks_count": {
         "one": "",
-        "other": ""
+        "other": "",
+        "zero": ""
     },
     "theme_auto_detect": "",
     "theme_dark": "Тёмная",
