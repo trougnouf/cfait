@@ -1459,7 +1459,12 @@ pub fn view_task_row<'a>(
                         let toggle_text = if show_all {
                             t!("show_less").to_string()
                         } else {
-                            t!("show_older_sessions", count = task.sessions.len() - 3).to_string()
+                            let count = task.sessions.len() - 3;
+                            if count == 1 {
+                                t!("show_older_sessions.one").to_string()
+                            } else {
+                                t!("show_older_sessions.other", count = count).to_string()
+                            }
                         };
                         details_col = details_col.push(
                             button(

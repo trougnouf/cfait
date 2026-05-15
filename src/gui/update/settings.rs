@@ -663,7 +663,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                                 ) {
                                     Ok(count) => {
                                         let file_name = file.file_name();
-                                        Ok(rust_i18n::t!("import_success_from_file", count = count, file = file_name).to_string())
+                                        let msg = if count == 1 {
+                                            rust_i18n::t!("import_success_from_file.one", file = file_name).to_string()
+                                        } else {
+                                            rust_i18n::t!("import_success_from_file.other", count = count, file = file_name).to_string()
+                                        };
+                                        Ok(msg)
                                     }
                                     Err(e) => Err(rust_i18n::t!("import_failed", error = e.to_string()).to_string()),
                                 }

@@ -409,7 +409,10 @@
     "show_all_collections": "显示所有集合",
     "show_details": "显示详情",
     "show_less": "显示更少",
-    "show_older_sessions": "显示 %{count} 个旧会话…",
+    "show_older_sessions": {
+        "one": "显示 1 个旧会话…",
+        "other": "显示 %{count} 个旧会话…"
+    },
     "show_ongoing_notifications_explain": "当任务正在进行时，显示带有计时器的通知。",
     "show_ongoing_notifications_label": "显示正在进行的任务通知",
     "show_priority_numbers": "显示优先级编号 (!X)",
@@ -471,7 +474,10 @@
     "tui_main_help": "?:帮助 q:退出 Tab:侧边栏 a:添加 e:编辑 E:详情 Spc:完成 Del:删除 y:剪切 /:查找 z:折叠",
     "tui_manage_sessions_prompt": "管理会话（Del/x：移除，Esc：取消）",
     "tui_manage_sessions_title": "管理会话（按 Del 键移除）",
-    "tui_older_sessions_hidden": "（… 已隐藏 %{count} 个旧会话）",
+    "tui_older_sessions_hidden": {
+        "one": "（… 已隐藏 1 个旧会话）",
+        "other": "（… 已隐藏 %{count} 个旧会话）"
+    },
     "tui_sidebar_help": "?:帮助 q:退出 Tab:任务 ↵:选择 Spc:显示/隐藏 *:全部 →:隔离视图",
     "tui_yanked_help": "%{yanked_label}“%{summary}”— b:阻止 c:子任务 l:链接 (Esc:清除)",
     "unblock_remove_dependency": "解除阻止（移除依赖）",

@@ -409,7 +409,10 @@
     "show_all_collections": "Alle Sammlungen anzeigen",
     "show_details": "Details anzeigen",
     "show_less": "Weniger anzeigen",
-    "show_older_sessions": "Zeige %{count} ältere Sitzungen…",
+    "show_older_sessions": {
+        "one": "Zeige 1 ältere Sitzung…",
+        "other": "Zeige %{count} ältere Sitzungen…"
+    },
     "show_ongoing_notifications_explain": "Zeige eine Benachrichtigung mit einem Timer wenn eine Aufgabe in Bearbeitung ist.",
     "show_ongoing_notifications_label": "Zeige Benachrichtigungen für laufende Aufgaben",
     "show_priority_numbers": "Zeige Prioritätsnummern (!X)",
@@ -471,7 +474,10 @@
     "tui_main_help": "?:Hilfe q:Beenden Tab:Seite a:Hinzufügen e:Ändern E:Details Spc:Erledigt Del:Löschen y:Merken /:Suchen z:Falten",
     "tui_manage_sessions_prompt": "Sitzungen verwalten (Entf/x: Löschen, Esc: Abbrechen)",
     "tui_manage_sessions_title": "Sitzungen verwalten (Entf zum Löschen)",
-    "tui_older_sessions_hidden": "(… %{count} ältere Sitzungen ausgeblendet)",
+    "tui_older_sessions_hidden": {
+        "one": "(… 1 ältere Sitzung ausgeblendet)",
+        "other": "(… %{count} ältere Sitzungen ausgeblendet)"
+    },
     "tui_sidebar_help": "?:Hilfe q:Ende Tab:Aufgaben ↵:Auswählen Spc:Zeigen/Verbergen *:Alles →:Iso",
     "tui_yanked_help": "%{yanked_label} '%{summary}' — b:Blockieren c:Teilaufgabe l:Beziehung (Esc:Abbrechen)",
     "unblock_remove_dependency": "Entsperren (Abhängigkeit entfernen)",

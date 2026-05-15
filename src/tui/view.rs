@@ -737,10 +737,13 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 details_md.push('\n');
             }
             if task.sessions.len() > 3 {
-                details_md.push_str(&format!(
-                    "*{}*\n",
-                    t!("tui_older_sessions_hidden", count = task.sessions.len() - 3)
-                ));
+                let count = task.sessions.len() - 3;
+                let text = if count == 1 {
+                    t!("tui_older_sessions_hidden.one").to_string()
+                } else {
+                    t!("tui_older_sessions_hidden.other", count = count).to_string()
+                };
+                details_md.push_str(&format!("*{text}*\n"));
             }
             details_md.push('\n');
         }

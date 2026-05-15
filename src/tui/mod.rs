@@ -137,7 +137,11 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
 
                     match check_result {
                         Ok(count) => {
-                            println!("{}", rust_i18n::t!("tui_success_found_calendars", count = count));
+                            if count == 1 {
+                                println!("{}", rust_i18n::t!("tui_success_found_calendars.one"));
+                            } else {
+                                println!("{}", rust_i18n::t!("tui_success_found_calendars.other", count = count));
+                            }
                             break;
                         }
                         Err(e) => {

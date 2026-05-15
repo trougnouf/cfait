@@ -312,7 +312,10 @@
         "one": "1 tarea importada correctamente",
         "other": "%{count} tareas importadas correctamente"
     },
-    "import_success_from_file": "Importado correctamente %{count} tareas desde %{file}",
+    "import_success_from_file": {
+        "one": "1 tarea importada correctamente desde %{file}",
+        "other": "%{count} tareas importadas correctamente desde %{file}"
+    },
     "include_unset": "Incluir sin definir",
     "increase_priority": "Aumentar prioridad",
     "jump_to_random_task": "Ir a tarea aleatoria",
@@ -430,7 +433,10 @@
     "show_all_collections": "Mostrar todas las colecciones",
     "show_details": "Ver detalles",
     "show_less": "Ver menos",
-    "show_older_sessions": "Ver %{count} sesiones más antiguas…",
+    "show_older_sessions": {
+        "one": "Ver 1 sesión más antigua…",
+        "other": "Ver %{count} sesiones más antiguas…"
+    },
     "show_ongoing_notifications_explain": "Mostrar una notificación con un temporizador cuando una tarea esté en curso.",
     "show_ongoing_notifications_label": "Mostrar notificaciones de tareas en curso",
     "show_priority_numbers": "Mostrar prioridad numérica asignada (!X)",
@@ -513,7 +519,10 @@
     "tui_manage_sessions_title": "Gestionar sesiones (Supr para eliminar)",
     "tui_mode_caldav": "[1] Conectarse a un servidor CalDAV (Radicale, Nextcloud, etc.)",
     "tui_mode_offline": "[2] Modo sin conexión (solo tareas locales)",
-    "tui_older_sessions_hidden": "(… %{count} sesiones más antiguas ocultas)",
+    "tui_older_sessions_hidden": {
+        "one": "(… 1 sesión más antigua oculta)",
+        "other": "(… %{count} sesiones más antiguas ocultas)"
+    },
     "tui_password_prompt": "Contraseña: ",
     "tui_retry_config_prompt": "¿Reintentar configuración? [S/N]",
     "tui_select_calendar_prompt": "Selecciona un calendario y pulsa Intro.",
@@ -523,7 +532,10 @@
     "tui_setup_prompt": "Vamos a configurar tu gestor de tareas.\n",
     "tui_sidebar_help": "?:Ayuda q:Salir Tab:Tareas ↵:Seleccionar Spc:Mostrar/Ocultar *:Todo →:Iso",
     "tui_starting": "Iniciando TUI...",
-    "tui_success_found_calendars": "¡Éxito! Se han encontrado %{count} calendarios.",
+    "tui_success_found_calendars": {
+        "one": "¡Éxito! Se ha encontrado 1 calendario.",
+        "other": "¡Éxito! Se han encontrado %{count} calendarios."
+    },
     "tui_testing_connection": "\nComprobando la conexión...",
     "tui_username_prompt": "Nombre de usuario: ",
     "tui_warning_save_config": "Advertencia: No se ha podido guardar el archivo de configuración: %{error}",

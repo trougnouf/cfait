@@ -406,7 +406,10 @@
     "show_all_collections": "Afficher toutes les collections",
     "show_details": "Afficher les détails",
     "show_less": "Voir moins",
-    "show_older_sessions": "Afficher %{count} anciennes sessions…",
+    "show_older_sessions": {
+        "one": "Afficher 1 ancienne session…",
+        "other": "Afficher %{count} anciennes sessions…"
+    },
     "show_ongoing_notifications_explain": "Afficher une notification avec un compte à rebours lorsqu'une tâche est en cours.",
     "show_ongoing_notifications_label": "Montrer les notifications des tâches en cours",
     "show_priority_numbers": "Afficher les numéros des priorités",
@@ -468,7 +471,10 @@
     "tui_main_help": "?:Aide q:Quitter Tab:Côté a:Ajout e:Modif E:Détails Espace:Fait Suppr:Suppr y:Mémoris. /:Rech. z:Plier",
     "tui_manage_sessions_prompt": "Gérer les sessions (Suppr/x : supprimer, Esc : annuler)",
     "tui_manage_sessions_title": "Gérer les sessions (Suppr pour supprimer)",
-    "tui_older_sessions_hidden": "(… %{count} sessions plus anciennes masquées)",
+    "tui_older_sessions_hidden": {
+        "one": "(… 1 session plus ancienne masquée)",
+        "other": "(… %{count} sessions plus anciennes masquées)"
+    },
     "tui_sidebar_help": "?:Aide q:Quitter Tab:Tâches ↵:Sélect Espace:Aff/Masqu *:Toutes →:Isoler",
     "tui_yanked_help": "%{yanked_label} '%{summary}' — b:Bloquer c:Enfant l:Lier (Esc:Annul)",
     "unblock_remove_dependency": "Débloquer (supprimer la dépendance)",

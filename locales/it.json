@@ -406,7 +406,10 @@
     "show_all_collections": "Mostra tutte le collezioni",
     "show_details": "Mostra dettagli",
     "show_less": "Mostra meno",
-    "show_older_sessions": "Mostra %{count} sessioni più vecchie…",
+    "show_older_sessions": {
+        "one": "Mostra 1 sessione più vecchia…",
+        "other": "Mostra %{count} sessioni più vecchie…"
+    },
     "show_ongoing_notifications_explain": "",
     "show_ongoing_notifications_label": "",
     "show_priority_numbers": "",
@@ -468,7 +471,10 @@
     "tui_main_help": "",
     "tui_manage_sessions_prompt": "Gestisci sessioni (Canc/x: Rimuovi, Esc: Annulla)",
     "tui_manage_sessions_title": "Gestisci sessioni (Canc per rimuovere)",
-    "tui_older_sessions_hidden": "(… %{count} vecchie sessioni nascoste)",
+    "tui_older_sessions_hidden": {
+        "one": "(… 1 vecchia sessione nascosta)",
+        "other": "(… %{count} vecchie sessioni nascoste)"
+    },
     "tui_sidebar_help": "",
     "tui_yanked_help": "",
     "unblock_remove_dependency": "Sblocca (rimuovi dipendenza)",

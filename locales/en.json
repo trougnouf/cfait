@@ -312,7 +312,10 @@
     "one": "Successfully imported 1 task",
     "other": "Successfully imported %{count} tasks"
   },
-  "import_success_from_file": "Successfully imported %{count} task(s) from %{file}",
+  "import_success_from_file": {
+    "one": "Successfully imported 1 task from %{file}",
+    "other": "Successfully imported %{count} tasks from %{file}"
+  },
   "include_unset": "Include unset",
   "increase_priority": "Increase priority",
   "jump_to_random_task": "Jump to random task",
@@ -430,7 +433,10 @@
   "show_all_collections": "Show all collections",
   "show_details": "Show details",
   "show_less": "Show less",
-  "show_older_sessions": "Show %{count} older sessions…",
+  "show_older_sessions": {
+    "one": "Show 1 older session…",
+    "other": "Show %{count} older sessions…"
+  },
   "show_ongoing_notifications_explain": "Display a notification with a timer when a task is in progress.",
   "show_ongoing_notifications_label": "Show ongoing task notifications",
   "show_priority_numbers": "Show priority numbers (!X)",
@@ -523,7 +529,10 @@
   "tui_setup_prompt": "Let's set up your task manager.\n",
   "tui_sidebar_help": "?:Help q:Quit Tab:Tasks ↵:Select Spc:Show/Hide *:All →:Iso",
   "tui_starting": "Starting TUI...",
-  "tui_success_found_calendars": "Success! Found %{count} calendars.",
+  "tui_success_found_calendars": {
+    "one": "Success! Found 1 calendar.",
+    "other": "Success! Found %{count} calendars."
+  },
   "tui_testing_connection": "\nTesting connection...",
   "tui_username_prompt": "Username: ",
   "tui_warning_save_config": "Warning: Could not save config file: %{error}",
