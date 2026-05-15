@@ -270,7 +270,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::MigrationComplete(Ok(count)) => {
             app.loading = false;
-            app.error_msg = Some(rust_i18n::t!("migration_complete_moved", count = count).to_string());
+            app.error_msg = Some(if count == 1 {
+                rust_i18n::t!("migration_complete_moved.one").to_string()
+            } else {
+                rust_i18n::t!("migration_complete_moved.other", count = count).to_string()
+            });
             refresh_filtered_tasks(app);
             Task::perform(async { Ok::<(), String>(()) }, |_| Message::Refresh)
         }

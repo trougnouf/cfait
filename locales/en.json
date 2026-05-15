@@ -355,7 +355,10 @@
   "migrating_local": "Migrating local...",
   "migrating_tasks_background": "Migrating tasks in background…",
   "migration_complete": "Migration complete",
-  "migration_complete_moved": "Migration complete. Moved %{count} tasks.",
+  "migration_complete_moved": {
+    "one": "Migration complete. Moved 1 task.",
+    "other": "Migration complete. Moved %{count} tasks."
+  },
   "migration_failed": "Migration failed: %{error}",
   "min": "Min",
   "mode_create": "Create",

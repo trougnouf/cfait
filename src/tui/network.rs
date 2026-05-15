@@ -373,11 +373,15 @@ pub async fn run_network_actor(
                 if let Ok(local_tasks) = LocalStorage::load_for_href(ctx.as_ref(), &source_href) {
                     match client.migrate_tasks(local_tasks, &target_href).await {
                         Ok(count) => {
+                            let human = if count == 1 {
+                                rust_i18n::t!("migration_complete_moved.one").to_string()
+                            } else {
+                                rust_i18n::t!("migration_complete_moved.other", count = count).to_string()
+                            };
                             let _ = event_tx
                                 .send(AppEvent::Status {
                                     key: "migration_complete".to_string(),
-                                    human: rust_i18n::t!("migration_complete_moved", count = count)
-                                        .to_string(),
+                                    human,
                                 })
                                 .await;
 
