@@ -445,6 +445,8 @@
     "status_created": "Creata.",
     "status_deleted": "Eliminata.",
     "status_moved": "Spostata.",
+    "status_no_tasks_found": "",
+    "status_no_tasks_to_migrate": "",
     "status_saved": "Salvata.",
     "stop_reset": "Interrompi (ripristina)",
     "strikethrough_completed": "Barra le attività completate",
@@ -476,7 +478,8 @@
     "tasks": "Attività",
     "tasks_count": {
         "one": "1 attività",
-        "other": "%{count} attività"
+        "other": "%{count} attività",
+        "zero": ""
     },
     "theme_auto_detect": "Automatico",
     "theme_dark": "Scuro",
