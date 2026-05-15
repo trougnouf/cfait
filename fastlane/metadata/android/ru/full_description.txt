@@ -1,8 +1,8 @@
-<b>Take control of your TODO list.</b>
+<b>Возьмите под свой контроль свой список дел.</b>
 <br><br>
 Cfait is designed for speed and stability using Rust, it puts you in control of your data with a local-first approach that syncs seamlessly across your devices.
 <br><br>
-<b>Why Cfait?</b>
+<b>Почему Cfait?</b>
 <ul>
   <li><b>Open Source & Cross-Platform:</b> Use Cfait on Android, Linux, and Windows. Your tasks adhere to open standards (CalDAV and iCalendar), not walled gardens.</li>
   <li><b>Syncs Everywhere:</b> Fully compatible with Nextcloud, iCloud, Radicale, Xandikos, and other standard CalDAV servers.</li>
