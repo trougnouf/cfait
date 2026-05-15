@@ -453,6 +453,8 @@
     "status_created": "Creada.",
     "status_deleted": "Eliminada.",
     "status_moved": "Movida.",
+    "status_no_tasks_found": "No hay tareas.",
+    "status_no_tasks_to_migrate": "Sin tareas para migrar.",
     "status_saved": "Guardada.",
     "stop_reset": "Detener (reiniciar)",
     "strikethrough_completed": "Tachar las tareas completadas",
@@ -484,7 +486,8 @@
     "tasks": "Tareas",
     "tasks_count": {
         "one": "1 tarea",
-        "other": "%{count} tareas"
+        "other": "%{count} tareas",
+        "zero": "Sin tareas"
     },
     "theme_auto_detect": "Automático",
     "theme_dark": "Oscuro",
