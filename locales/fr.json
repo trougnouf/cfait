@@ -354,7 +354,7 @@
         "one": "Migration terminée. 1 déplacée.",
         "other": "Migration terminée. %{count} déplacées."
     },
-    "migration_failed": "Échec de la migration",
+    "migration_failed": "Échec de la migration : %{error}",
     "min": "Min",
     "mode_create": "Créer",
     "more_actions": "Plus d'actions",
