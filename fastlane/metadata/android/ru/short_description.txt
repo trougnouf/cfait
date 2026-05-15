@@ -1,1 +1,1 @@
-Powerful, fast and elegant TODO / task manager. (CalDAV and local)
+Мощный, быстрый и элегантный менеджер задач. (CalDAV и локальный)
