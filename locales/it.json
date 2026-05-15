@@ -333,7 +333,10 @@
     "migrating_local": "",
     "migrating_tasks_background": "Migrazione in background…",
     "migration_complete": "Migrazione completata",
-    "migration_complete_moved": "",
+    "migration_complete_moved": {
+      "one": "",
+      "other": ""
+    },
     "migration_failed": "Migrazione fallita",
     "min": "Min",
     "mode_create": "",

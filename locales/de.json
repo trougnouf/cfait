@@ -336,7 +336,10 @@
     "migrating_local": "Verschiebe lokale Sammlung...",
     "migrating_tasks_background": "Aufgaben werden im Hintergrund migriert…",
     "migration_complete": "Migration abgeschlossen",
-    "migration_complete_moved": "Verschiebung abgeschlossen. %{count} verschoben.",
+    "migration_complete_moved": {
+      "one": "Verschiebung abgeschlossen. 1 verschoben.",
+      "other": "Verschiebung abgeschlossen. %{count} verschoben."
+    },
     "migration_failed": "Migration fehlgeschlagen",
     "min": "Min",
     "mode_create": "Erstellen",

@@ -355,7 +355,10 @@
     "migrating_local": "Migrando localmente...",
     "migrating_tasks_background": "Migrando tareas en segundo plano…",
     "migration_complete": "Migración completa",
-    "migration_complete_moved": "Migración completada. Se han trasladado %{count} tareas.",
+    "migration_complete_moved": {
+      "one": "Migración completada. Se ha trasladado 1 tarea.",
+      "other": "Migración completada. Se han trasladado %{count} tareas."
+    },
     "migration_failed": "La migración ha fallado: %{error}",
     "min": "Mín",
     "mode_create": "Crear",

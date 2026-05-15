@@ -333,7 +333,10 @@
     "migrating_local": "Migration de la collection locale...",
     "migrating_tasks_background": "Migration des tâches en arrière-plan…",
     "migration_complete": "Migration terminée",
-    "migration_complete_moved": "Migration terminée. %{count} déplacées.",
+    "migration_complete_moved": {
+      "one": "Migration terminée. 1 déplacée.",
+      "other": "Migration terminée. %{count} déplacées."
+    },
     "migration_failed": "Échec de la migration",
     "min": "Min",
     "mode_create": "Créer",
