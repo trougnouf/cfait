@@ -1027,21 +1027,21 @@ fun ColorPickerRow(
     onColorSelected: (String?) -> Unit
 ) {
     val colors = listOf(
-        null to stringResource(R.string.color_none),
-        "#FF4444" to stringResource(R.string.color_red),
-        "#FF8800" to stringResource(R.string.color_orange),
-        "#FFD700" to stringResource(R.string.color_yellow),
-        "#66BB6A" to stringResource(R.string.color_green),
-        "#42A5F5" to stringResource(R.string.color_blue),
-        "#AB47BC" to stringResource(R.string.color_purple),
-        "#9E9E9E" to stringResource(R.string.color_gray)
+        null,
+        "#FF4444",
+        "#FF8800",
+        "#FFD700",
+        "#66BB6A",
+        "#42A5F5",
+        "#AB47BC",
+        "#9E9E9E"
     )
 
     Row(
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        colors.forEach { (hex, _) ->
+        colors.forEach { hex ->
             val isSelected = selectedColor == hex
             val colorVal = if (hex == null) Color.Transparent else parseHexColor(hex)
 
