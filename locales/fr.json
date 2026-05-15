@@ -426,6 +426,8 @@
     "status_created": "Créé.",
     "status_deleted": "Supprimé.",
     "status_moved": "Déplacé.",
+    "status_no_tasks_found": "Aucune tâche trouvée.",
+    "status_no_tasks_to_migrate": "Aucune tâche à migrer.",
     "status_saved": "Enregistré.",
     "stop_reset": "Arrêter (réinit.)",
     "strikethrough_completed": "Barrer les tâches terminées",
@@ -449,6 +451,7 @@
     "task_smart_syntax_label": "Tâche (syntaxe intelligente)",
     "tasks": "Tâches",
     "tasks_count": {
+        "zero": "Aucune tâche",
         "one": "1 tâche",
         "other": "%{count} tâches"
     },

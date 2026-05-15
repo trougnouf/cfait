@@ -453,6 +453,8 @@
   "status_created": "Created.",
   "status_deleted": "Deleted.",
   "status_moved": "Moved.",
+  "status_no_tasks_found": "No tasks found.",
+  "status_no_tasks_to_migrate": "No tasks to migrate.",
   "status_saved": "Saved.",
   "stop_reset": "Stop (reset)",
   "strikethrough_completed": "Cross-off (strikethrough) done tasks",
@@ -483,6 +485,7 @@
   "task_title_prompt": "Task Title (Press Enter to add Description):",
   "tasks": "Tasks",
   "tasks_count": {
+    "zero": "No tasks",
     "one": "1 task",
     "other": "%{count} tasks"
   },

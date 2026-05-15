@@ -1192,11 +1192,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
             }
         })
         .count();
-    let mut subtitle = if active_count == 1 {
-        rust_i18n::t!("tasks_count.one").to_string()
-    } else {
-        rust_i18n::t!("tasks_count.other", count = active_count).to_string()
-    };
+    let mut subtitle = rust_i18n::t!("tasks_count", count = active_count).to_string();
 
     let search_text = app.search_value.text();
     if !search_text.is_empty() {

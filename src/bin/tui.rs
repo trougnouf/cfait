@@ -9,6 +9,8 @@
 // Note: This file intentionally mirrors the project's existing controller/store
 // APIs and uses the app context for config/data paths.
 
+rust_i18n::i18n!("../locales", fallback = "en");
+
 use anyhow::Result;
 use cfait::context::{AppContext, StandardContext};
 use cfait::model::Task;
@@ -414,7 +416,7 @@ async fn main() -> Result<()> {
             });
 
             if res.items.is_empty() {
-                println!("No tasks found.");
+                println!("{}", rust_i18n::t!("status_no_tasks_found"));
                 return Ok(());
             }
 

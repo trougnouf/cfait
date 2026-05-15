@@ -1914,7 +1914,7 @@ impl CfaitMobile {
         let tasks = LocalStorage::load_for_href(self.ctx.as_ref(), &source_href)
             .map_err(|e| MobileError::from(e.to_string()))?;
         if tasks.is_empty() {
-            return Ok("No tasks to migrate.".to_string());
+            return Ok(rust_i18n::t!("status_no_tasks_to_migrate").to_string());
         }
         let count = client
             .migrate_tasks(tasks, &target_href)

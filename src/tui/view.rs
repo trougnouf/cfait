@@ -798,7 +798,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             rust_i18n::t!("loading")
         )
     } else {
-        format!(" {} ({}) ", rust_i18n::t!("tasks"), active_count)
+        format!(" {} ", rust_i18n::t!("tasks_count", count = active_count))
     };
     if state.unsynced_changes {
         title.push_str(&format!(" [{}] ", rust_i18n::t!("unsynced")));
