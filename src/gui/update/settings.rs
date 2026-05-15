@@ -639,7 +639,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ExportSaved(Err(e)) => {
-            if e != rust_i18n::t!("export_cancelled").to_string() {
+            if e != rust_i18n::t!("export_cancelled") {
                 app.error_msg = Some(rust_i18n::t!("export_error", error = e).to_string());
             }
             Task::none()
@@ -689,7 +689,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ImportCompleted(Err(e)) => {
-            if e != rust_i18n::t!("import_cancelled").to_string() {
+            if e != rust_i18n::t!("import_cancelled") {
                 app.error_msg = Some(e);
             }
             Task::none()
