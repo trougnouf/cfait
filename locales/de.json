@@ -445,6 +445,8 @@
     "status_created": "Erstellt.",
     "status_deleted": "Gelöscht.",
     "status_moved": "Verschoben.",
+    "status_no_tasks_found": "",
+    "status_no_tasks_to_migrate": "",
     "status_saved": "Gespeichert.",
     "stop_reset": "Stopp (Reset)",
     "strikethrough_completed": "Erledigte Aufgaben durchstreichen",
@@ -476,7 +478,8 @@
     "tasks": "Aufgaben",
     "tasks_count": {
         "one": "1 Aufgabe",
-        "other": "%{count} Aufgaben"
+        "other": "%{count} Aufgaben",
+        "zero": ""
     },
     "theme_auto_detect": "Automatisch",
     "theme_dark": "Dunkel",
