@@ -128,7 +128,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ConfigLoaded(Err(e)) => {
             app.state = AppState::Onboarding;
             if !e.contains("Config file not found") {
-                app.error_msg = Some(rust_i18n::t!("config_error_prefix", error = e).to_string());
+                app.error_msg = Some(rust_i18n::t!("config_error_prefix", error = e).to_string().trim().to_owned());
                 app.config_was_corrupted = true;
             }
             Task::none()

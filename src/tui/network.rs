@@ -138,17 +138,18 @@ pub async fn run_network_actor(
         Err(e) => {
             let err_str = e.to_string();
             if err_str.contains("InvalidCertificate") {
-                let mut helpful_msg = rust_i18n::t!("error_invalid_tls_detailed").to_string();
-                let config_advice = rust_i18n::t!(
-                    "error_tls_config_advice",
-                    path = crate::config::Config::get_path_string(ctx.as_ref())
-                        .unwrap_or_else(|_| "path unknown".to_string())
-                )
-                .to_string();
+                let mut helpful_msg = rust_i18n::t!("error_invalid_tls_detailed").trim().to_string();
+                let config_path = crate::config::Config::get_path_string(ctx.as_ref())
+                    .unwrap_or_else(|_| "path unknown".to_string());
+                let config_advice = rust_i18n::t!("error_tls_config_advice").trim().to_string();
                 if !allow_insecure {
-                    helpful_msg.push_str(rust_i18n::t!("error_tls_self_hosted").as_ref());
+                    helpful_msg.push('\n');
+                    helpful_msg.push_str(rust_i18n::t!("error_tls_self_hosted").trim());
                 }
+                helpful_msg.push_str("\n\n");
                 helpful_msg.push_str(&config_advice);
+                helpful_msg.push_str("\n  ");
+                helpful_msg.push_str(&config_path);
                 let _ = event_tx.send(AppEvent::Error(helpful_msg)).await;
                 return;
             } else {

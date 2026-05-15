@@ -67,7 +67,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
 
             // Interactive Onboarding
             println!("{}", rust_i18n::t!("tui_welcome_no_config"));
-            println!("{}", rust_i18n::t!("tui_setup_prompt"));
+            println!("{}\n", rust_i18n::t!("tui_setup_prompt").trim_end());
 
             if let Some(Some(warn)) = crate::system::KEYRING_WARNING.get() {
                 println!("{}\n", warn);
@@ -77,7 +77,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
             println!("  {}", rust_i18n::t!("tui_mode_caldav"));
             println!("  {}", rust_i18n::t!("tui_mode_offline"));
 
-            print!("{}", rust_i18n::t!("tui_choice_prompt"));
+            print!("\n{}", rust_i18n::t!("tui_choice_prompt").trim_start());
             io::stdout().flush()?;
 
             let mut choice = String::new();
@@ -91,7 +91,8 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
             } else {
                 // CalDAV Setup Loop
                 loop {
-                    println!("{}", rust_i18n::t!("tui_caldav_setup_title"));
+                    let title = rust_i18n::t!("tui_caldav_setup_title");
+                    println!("\n--- {} ---", title.trim_matches(|c| c == '\n' || c == '-' || c == ' '));
 
                     print!("{}", rust_i18n::t!("tui_caldav_url_prompt"));
                     io::stdout().flush()?;
@@ -114,7 +115,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                     io::stdin().read_line(&mut insecure)?;
                     new_config.allow_insecure_certs = insecure.trim().eq_ignore_ascii_case("y");
 
-                    println!("{}", rust_i18n::t!("tui_testing_connection"));
+                    println!("\n{}", rust_i18n::t!("tui_testing_connection").trim_start());
 
                     let ctx_clone = ctx.clone();
                     let check_result = async {
