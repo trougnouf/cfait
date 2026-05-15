@@ -356,8 +356,8 @@
     "migrating_tasks_background": "Migrando tareas en segundo plano…",
     "migration_complete": "Migración completa",
     "migration_complete_moved": {
-      "one": "Migración completada. Se ha trasladado 1 tarea.",
-      "other": "Migración completada. Se han trasladado %{count} tareas."
+        "one": "Migración completada. Se ha trasladado 1 tarea.",
+        "other": "Migración completada. Se han trasladado %{count} tareas."
     },
     "migration_failed": "La migración ha fallado: %{error}",
     "min": "Mín",
@@ -543,6 +543,7 @@
     "username": "Usuario:",
     "waiting_for_keyring": "A la espera de tareas (comprueba si aparece el mensaje del sistema operativo para desbloquear el llavero o el monedero si el problema persiste)...",
     "welcome_title": "Bienvenido",
+    "yank_cleared": "Copiar o cortar limpiado.",
     "yank_copy_id": "Copiar (detalles)",
     "yank_tooltip_block": "Hacer que «%{target}» dependa de «%{yanked}» (b)",
     "yank_tooltip_child": "Convertir «%{target}» en un elemento secundario de «%{yanked}» (c)",
