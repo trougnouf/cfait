@@ -400,7 +400,7 @@ pub fn update_journal_state(app: &mut GuiApp) {
                     &t.summary,
                 ),
                 crate::journal::Action::Delete(t) => (
-                    rust_i18n::t!("unsynced_action_delete").to_string(),
+                    rust_i18n::t!("calendar_action_deleted").to_string(),
                     &t.summary,
                 ),
                 crate::journal::Action::Move(t, _) => (

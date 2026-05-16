@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/state.rs
 // Manages the application state for the GUI (Iced).
+
+rust_i18n::i18n!("../locales", fallback = "en");
+
 use crate::client::RustyClient;
 use crate::config::{AppTheme, Config, LogLevel};
 use crate::context::AppContext;
@@ -385,9 +388,9 @@ impl Default for GuiApp {
             session_input: iced::widget::text_editor::Content::new(),
             show_all_sessions: HashSet::new(),
 
-            current_placeholder: "Add a task...".to_string(),
-            search_placeholder: "Search...".to_string(),
-            notes_placeholder: "Notes...".to_string(),
+            current_placeholder: rust_i18n::t!("new_task_prompt").to_string(),
+            search_placeholder: rust_i18n::t!("search_placeholder").to_string(),
+            notes_placeholder: rust_i18n::t!("notes_placeholder").to_string(),
 
             location_tab_icon,
             random_icon,

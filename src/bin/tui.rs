@@ -66,11 +66,11 @@ fn resolve_uid(store: &TaskStore, partial: &str) -> Option<String> {
     match matches.len() {
         1 => Some(matches.into_iter().next().unwrap()),
         0 => {
-            eprintln!("Error: No task matches UID '{}'", partial);
+            eprintln!("{}", rust_i18n::t!("error_no_task_matches_uid", uid = partial));
             None
         }
         _ => {
-            eprintln!("Error: Ambiguous UID '{}'. Matches:", partial);
+            eprintln!("{}", rust_i18n::t!("error_ambiguous_uid", uid = partial));
             for m in matches {
                 if let Some(t) = store.get_task_ref(&m) {
                     let short = &m[..std::cmp::min(8, m.len())];
@@ -122,7 +122,7 @@ async fn sync_background(
     // Give it up to 10 seconds to sync, otherwise gracefully detach
     match tokio::time::timeout(std::time::Duration::from_secs(10), sync_future).await {
         Ok(res) => res,
-        Err(_) => Err("Sync timed out (changes are safely queued for next sync)".to_string()),
+        Err(_) => Err(rust_i18n::t!("sync_timed_out").to_string()),
     }
 }
 
@@ -161,8 +161,8 @@ async fn main() -> Result<()> {
     match command {
         "import" => {
             if args.len() < 3 {
-                eprintln!("Error: Missing file path");
-                eprintln!("Usage: cfait import <file.ics> [--collection <id>]");
+                eprintln!("{}", rust_i18n::t!("error_missing_file_path"));
+                eprintln!("{}", rust_i18n::t!("cli_usage_import"));
                 std::process::exit(1);
             }
             let file_path = &args[2];
@@ -172,7 +172,7 @@ async fn main() -> Result<()> {
                 None
             };
             let ics_content = std::fs::read_to_string(file_path).unwrap_or_else(|e| {
-                eprintln!("Error reading file '{}': {}", file_path, e);
+                eprintln!("{}", rust_i18n::t!("error_reading_file", path = file_path, error = e.to_string()));
                 std::process::exit(1);
             });
             let href = if let Some(col_id) = collection_id {
@@ -186,12 +186,15 @@ async fn main() -> Result<()> {
             };
 
             match LocalStorage::import_from_ics(ctx.as_ref(), &href, &ics_content) {
-                Ok(count) => println!(
-                    "Successfully imported {} task(s) to collection '{}'",
-                    count, href
-                ),
+                Ok(count) => {
+                    if count == 1 {
+                        println!("{}", rust_i18n::t!("import_success", count = 1));
+                    } else {
+                        println!("{}", rust_i18n::t!("import_success", count = count));
+                    }
+                }
                 Err(e) => {
-                    eprintln!("Error importing tasks: {}", e);
+                    eprintln!("{}", rust_i18n::t!("import_error", error = e.to_string()));
                     std::process::exit(1);
                 }
             }
@@ -220,10 +223,10 @@ async fn main() -> Result<()> {
             let config =
                 cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
             if config.url.is_empty() {
-                println!("Offline mode configured; nothing to sync.");
+                println!("{}", rust_i18n::t!("offline_mode_configured"));
                 return Ok(());
             }
-            println!("Syncing with {}...", config.url);
+            println!("{}", rust_i18n::t!("syncing"));
             match cfait::client::RustyClient::connect_with_fallback(
                 ctx.clone(),
                 config,
@@ -231,31 +234,31 @@ async fn main() -> Result<()> {
             )
             .await
             {
-                Ok(_) => println!("Sync completed successfully."),
+                Ok(_) => println!("{}", rust_i18n::t!("sync_completed_successfully")),
                 Err(e) => {
-                    eprintln!("Sync failed: {}", e);
+                    eprintln!("{}", rust_i18n::t!("sync_error", error = e.to_string()));
                     std::process::exit(1);
                 }
             }
             return Ok(());
         }
         "daemon" => {
-            println!("Starting Cfait background daemon...");
+            println!("{}", rust_i18n::t!("starting_daemon"));
             loop {
                 let config =
                     cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
                 let interval = config.auto_refresh_interval_mins;
                 if interval == 0 {
-                    println!("Auto-refresh is disabled in config. Daemon exiting.");
+                    println!("{}", rust_i18n::t!("daemon_auto_refresh_disabled"));
                     return Ok(());
                 }
                 if config.url.is_empty() {
-                    println!("Offline mode configured. Daemon sleeping...");
+                    println!("{}", rust_i18n::t!("daemon_offline_sleeping"));
                 } else {
                     #[cfg(not(target_os = "android"))]
                     match cfait::storage::DaemonLock::try_acquire_exclusive(ctx.as_ref()) {
                         Ok(Some(_lock)) => {
-                            println!("Daemon: Syncing with {}...", config.url);
+                            println!("{}", rust_i18n::t!("daemon_syncing"));
                             let _ = cfait::client::RustyClient::connect_with_fallback(
                                 ctx.clone(),
                                 config,
@@ -264,7 +267,7 @@ async fn main() -> Result<()> {
                             .await;
                         }
                         Ok(None) => {}
-                        Err(e) => eprintln!("Daemon: Failed to check instance lock: {}", e),
+                        Err(e) => eprintln!("{}", rust_i18n::t!("daemon_lock_failed", error = e.to_string())),
                     }
                 }
                 tokio::time::sleep(tokio::time::Duration::from_secs(interval as u64 * 60)).await;
@@ -273,7 +276,7 @@ async fn main() -> Result<()> {
         "add" | "create" => {
             let input = args[2..].join(" ");
             if input.trim().is_empty() {
-                eprintln!("Error: Task description cannot be empty.");
+                eprintln!("{}", rust_i18n::t!("error_empty_task_description"));
                 std::process::exit(1);
             }
 
@@ -320,8 +323,8 @@ async fn main() -> Result<()> {
 
             if !matched && !target_href.starts_with("local://") && !target_href.starts_with('/') {
                 eprintln!(
-                    "Warning: Calendar '{}' not found. Task will be saved to local recovery.",
-                    target_href
+                    "{}",
+                    rust_i18n::t!("warning_calendar_not_found", calendar = target_href)
                 );
                 target_href = "local://recovery".to_string();
             }
@@ -337,13 +340,13 @@ async fn main() -> Result<()> {
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
             println!(
-                "Task added successfully. (UID: {})",
-                &uid[..std::cmp::min(8, uid.len())]
+                "{}",
+                rust_i18n::t!("task_added_successfully", uid = &uid[..std::cmp::min(8, uid.len())])
             );
 
             // Best-effort background sync of the journal
             if let Err(e) = maybe_sync(ctx.clone()).await {
-                eprintln!("Warning: Background sync failed: {}", e);
+                eprintln!("{}", rust_i18n::t!("warning_background_sync_failed", error = e.to_string()));
             }
             return Ok(());
         }
@@ -446,25 +449,25 @@ async fn main() -> Result<()> {
             let store = build_store_cli(&ctx).await;
             let partial = args.get(2).map(|s| s.as_str()).unwrap_or("");
             let uid =
-                resolve_uid(&store, partial).ok_or_else(|| anyhow::anyhow!("UID required"))?;
+                resolve_uid(&store, partial).ok_or_else(|| anyhow::anyhow!(rust_i18n::t!("error_uid_required")))?;
             let t = store
                 .get_task_ref(&uid)
                 .ok_or_else(|| anyhow::anyhow!(rust_i18n::t!("error_task_not_found")))?;
 
-            println!("Summary:  {}", t.summary);
-            println!("Status:   {:?} {}", t.status, t.checkbox_symbol());
-            println!("UID:      {}", t.uid);
+            println!("{}:  {}", rust_i18n::t!("cli_view_summary"), t.summary);
+            println!("{}:   {:?} {}", rust_i18n::t!("cli_view_status"), t.status, t.checkbox_symbol());
+            println!("{}:      {}", rust_i18n::t!("cli_view_uid"), t.uid);
             if let Some(d) = &t.due {
-                println!("Due:      {}", d.format_smart());
+                println!("{}:      {}", rust_i18n::t!("cli_view_due"), d.format_smart());
             }
             if !t.categories.is_empty() {
-                println!("Tags:     {}", t.categories.join(", "));
+                println!("{}:     {}", rust_i18n::t!("cli_view_tags"), t.categories.join(", "));
             }
             if let Some(l) = &t.location {
-                println!("Location: {}", l);
+                println!("{}: {}", rust_i18n::t!("cli_view_location"), l);
             }
             if !t.description.is_empty() {
-                println!("\nDescription:\n{}", t.description);
+                println!("\n{}:\n{}", rust_i18n::t!("cli_view_description"), t.description);
             }
             return Ok(());
         }
@@ -472,7 +475,7 @@ async fn main() -> Result<()> {
             let store = build_store_cli(&ctx).await;
             let partial_uid = args.get(2).cloned().unwrap_or_default();
             if partial_uid.is_empty() {
-                eprintln!("Error: Missing UID.");
+                eprintln!("{}", rust_i18n::t!("error_missing_uid"));
                 std::process::exit(1);
             }
             let full_uid = match resolve_uid(&store, &partial_uid) {
@@ -499,7 +502,7 @@ async fn main() -> Result<()> {
                         .persist_changes(actions)
                         .await
                         .map_err(|e| anyhow::anyhow!(e))?;
-                    println!("Task {} started.", partial_uid);
+                    println!("{}", rust_i18n::t!("task_started", uid = partial_uid));
                 }
                 "pause" => {
                     let mut store_lock = controller.store.lock().await;
@@ -512,7 +515,7 @@ async fn main() -> Result<()> {
                         .persist_changes(actions)
                         .await
                         .map_err(|e| anyhow::anyhow!(e))?;
-                    println!("Task {} paused.", partial_uid);
+                    println!("{}", rust_i18n::t!("task_paused", uid = partial_uid));
                 }
                 _ => {
                     let mut store_lock = controller.store.lock().await;
@@ -525,20 +528,20 @@ async fn main() -> Result<()> {
                         .persist_changes(actions)
                         .await
                         .map_err(|e| anyhow::anyhow!(e))?;
-                    println!("Task {} toggled.", partial_uid);
+                    println!("{}", rust_i18n::t!("task_toggled", uid = partial_uid));
                 }
             }
 
             // Best-effort background sync
             if let Err(e) = maybe_sync(ctx.clone()).await {
-                eprintln!("Warning: Background sync failed: {}", e);
+                eprintln!("{}", rust_i18n::t!("warning_background_sync_failed", error = e.to_string()));
             }
             return Ok(());
         }
         "delete" | "rm" => {
             let partial_uid = args.get(2).cloned().unwrap_or_default();
             if partial_uid.is_empty() {
-                eprintln!("Error: Missing UID.");
+                eprintln!("{}", rust_i18n::t!("error_missing_uid"));
                 std::process::exit(1);
             }
             let store = build_store_cli(&ctx).await;
@@ -565,11 +568,11 @@ async fn main() -> Result<()> {
                 .persist_changes(actions)
                 .await
                 .map_err(|e| anyhow::anyhow!(e))?;
-            println!("Task {} deleted.", partial_uid);
+            println!("{}", rust_i18n::t!("task_deleted", uid = partial_uid));
 
             // Best-effort background sync
             if let Err(e) = maybe_sync(ctx.clone()).await {
-                eprintln!("Warning: Background sync failed: {}", e);
+                eprintln!("{}", rust_i18n::t!("warning_background_sync_failed", error = e.to_string()));
             }
             return Ok(());
         }
@@ -577,7 +580,7 @@ async fn main() -> Result<()> {
             // No non-interactive command provided; fall through to start the interactive TUI.
         }
         _ => {
-            eprintln!("Unknown command: {}", command);
+            eprintln!("{}", rust_i18n::t!("error_unknown_command", command = command));
             std::process::exit(1);
         }
     }

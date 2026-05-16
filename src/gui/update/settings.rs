@@ -1,6 +1,9 @@
 // File: ./src/gui/update/settings.rs
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Renders the settings and onboarding screens.
+
+rust_i18n::i18n!("../locales", fallback = "en");
+
 use crate::cache::Cache;
 
 use crate::gui::async_ops::*;
@@ -591,7 +594,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
                 app.error_msg = Some(format!("✓ {}", translated));
             } else {
-                app.error_msg = Some("No events were created or deleted".to_string());
+                app.error_msg = Some(rust_i18n::t!("no_events_changed").to_string());
             }
             Task::none()
         }

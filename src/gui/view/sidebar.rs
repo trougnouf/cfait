@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/view/sidebar.rs
 // Renders the sidebar (calendars, tags, locations) for the GUI.
+
+rust_i18n::i18n!("../locales", fallback = "en");
+
 use super::tooltip_style;
 use crate::color_utils;
 use crate::gui::icon;
@@ -258,7 +261,7 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
     }
     let mut sorted_durs: Vec<u32> = dur_set.into_iter().collect();
     sorted_durs.sort();
-    let mut opts = vec![DurationOpt(None, "Any".to_string())];
+    let mut opts = vec![DurationOpt(None, rust_i18n::t!("any").to_string())];
     for d in sorted_durs {
         opts.push(DurationOpt(
             Some(d),

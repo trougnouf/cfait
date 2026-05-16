@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/update/mod.rs
+
+rust_i18n::i18n!("../locales", fallback = "en");
+
 pub mod common;
 pub mod network;
 pub mod settings;
@@ -271,9 +274,9 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                                         action: "DISPLAY".to_string(),
                                         trigger: crate::model::AlarmTrigger::Relative(0),
                                         description: Some(if alarm_uid.contains("due") {
-                                            "Due now".to_string()
+                                            rust_i18n::t!("alarm_due_now").to_string()
                                         } else {
-                                            "Starting".to_string()
+                                            rust_i18n::t!("alarm_task_starting").to_string()
                                         }),
                                         acknowledged: None,
                                         related_to_uid: None,
@@ -365,15 +368,16 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         let parent_name = app
             .store
             .get_summary(parent_uid)
-            .unwrap_or("Parent".to_string());
+            .unwrap_or_else(|| rust_i18n::t!("parent").to_string());
         app.current_placeholder = rust_i18n::t!("new_child_of", name = parent_name).to_string();
     } else {
-        let target_name = app
+        let default_str = rust_i18n::t!("default");
+        let target_name: &str = app
             .calendars
             .iter()
             .find(|c| Some(&c.href) == app.active_cal_href.as_ref())
             .map(|c| c.name.as_str())
-            .unwrap_or("Default");
+            .unwrap_or(&default_str);
         app.current_placeholder = format!(
             "{} ({} {} !1 @tomorrow #groceries ~30m)",
             rust_i18n::t!("add_task_to_target", target = target_name),

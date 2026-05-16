@@ -1,6 +1,9 @@
 // File: ./src/mobile.rs
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Mobile bindings and FFI interface for the Rust core.
+
+rust_i18n::i18n!("../locales", fallback = "en");
+
 use crate::alarm_index::AlarmIndex;
 use crate::cache::Cache;
 use crate::client::RustyClient;
@@ -1140,7 +1143,7 @@ impl CfaitMobile {
                         task_uid: e.task_uid,
                         alarm_uid: e.alarm_uid,
                         title: e.task_title,
-                        body: e.description.unwrap_or("Reminder".to_string()),
+                        body: e.description.unwrap_or_else(|| rust_i18n::t!("reminder").to_string()),
                     })
                     .collect();
             } else {
@@ -1159,7 +1162,7 @@ impl CfaitMobile {
                         task_uid: e.task_uid,
                         alarm_uid: e.alarm_uid,
                         title: e.task_title,
-                        body: e.description.unwrap_or("Reminder".to_string()),
+                        body: e.description.unwrap_or_else(|| rust_i18n::t!("reminder").to_string()),
                     })
                     .collect();
             } else {
@@ -1205,7 +1208,7 @@ impl CfaitMobile {
                             task_uid: task.uid.clone(),
                             alarm_uid: alarm.uid.clone(),
                             title: task.summary.clone(),
-                            body: alarm.description.clone().unwrap_or("Reminder".to_string()),
+                            body: alarm.description.clone().unwrap_or_else(|| rust_i18n::t!("reminder").to_string()),
                         });
                     }
                 }
@@ -1909,7 +1912,7 @@ impl CfaitMobile {
             .lock()
             .await
             .as_ref()
-            .ok_or(MobileError::from("Client not connected"))?
+            .ok_or(MobileError::from(rust_i18n::t!("error_client_not_connected").to_string()))?
             .clone();
         let tasks = LocalStorage::load_for_href(self.ctx.as_ref(), &source_href)
             .map_err(|e| MobileError::from(e.to_string()))?;
@@ -1961,13 +1964,13 @@ impl CfaitMobile {
                 .map_err(|e| MobileError::from(e.to_string()))?;
             Ok(())
         } else {
-            Err(MobileError::from("Calendar not found"))
+            Err(MobileError::from(rust_i18n::t!("error_no_calendar_available").to_string()))
         }
     }
 
     pub async fn delete_local_calendar(&self, href: String) -> Result<(), MobileError> {
         if href == LOCAL_CALENDAR_HREF {
-            return Err(MobileError::from("Cannot delete default calendar"));
+            return Err(MobileError::from(rust_i18n::t!("error_cannot_delete_default_calendar").to_string()));
         }
         let mut locals = LocalCalendarRegistry::load(self.ctx.as_ref())
             .map_err(|e| MobileError::from(e.to_string()))?;
@@ -1984,7 +1987,7 @@ impl CfaitMobile {
             self.rebuild_alarm_index().await;
             Ok(())
         } else {
-            Err(MobileError::from("Calendar not found"))
+            Err(MobileError::from(rust_i18n::t!("error_no_calendar_available").to_string()))
         }
     }
 
@@ -2057,7 +2060,7 @@ impl CfaitMobile {
                 .lock()
                 .await
                 .as_ref()
-                .ok_or(MobileError::from("Offline"))?
+                .ok_or(MobileError::from(rust_i18n::t!("offline").to_string()))?
                 .clone()
         };
 
@@ -2101,7 +2104,7 @@ impl CfaitMobile {
                 .lock()
                 .await
                 .as_ref()
-                .ok_or(MobileError::from("Offline"))?
+                .ok_or(MobileError::from(rust_i18n::t!("offline").to_string()))?
                 .clone()
         };
 
@@ -2321,7 +2324,7 @@ impl CfaitMobile {
         }
         drop(store);
         self.rebuild_alarm_index().await;
-        Ok(warning.unwrap_or_else(|| "Connected".to_string()))
+        Ok(warning.unwrap_or_else(|| rust_i18n::t!("status_connected").to_string()))
     }
 
     async fn rebuild_alarm_index(&self) {
@@ -2422,7 +2425,7 @@ impl CfaitMobile {
         #[cfg(not(target_os = "android"))]
         {
             Err(MobileError::from(
-                "Debug export is only available on Android",
+                rust_i18n::t!("debug_export_android_only").to_string(),
             ))
         }
     }

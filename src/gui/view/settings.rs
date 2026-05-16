@@ -802,11 +802,11 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .on_input(Message::ObUrlChanged)
                     .padding(10),
                 text(rust_i18n::t!("username")),
-                text_input("User", &app.ob_user)
+                text_input(&rust_i18n::t!("username"), &app.ob_user)
                     .on_input(Message::ObUserChanged)
                     .padding(10),
                 text(rust_i18n::t!("password")),
-                text_input("Password", &app.ob_pass)
+                text_input(&rust_i18n::t!("password"), &app.ob_pass)
                     .on_input(Message::ObPassChanged)
                     .secure(true)
                     .padding(10),
