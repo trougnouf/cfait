@@ -5,7 +5,7 @@ on:
     branches:
       - "master"
       - "**"
-    tags-ignore:
+    tags:
       - "**"
   pull_request:
 
@@ -30,7 +30,7 @@ jobs:
   # --- JOB 2: ROLLING ANDROID (Only on PUSH) ---
   rolling-android:
     needs: test
-    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch')
     runs-on: self-hosted-ubuntu
     container:
       image: local/ubuntu-builder
@@ -84,7 +84,7 @@ jobs:
   # --- JOB 4: ROLLING FLATPAK ---
   rolling-flatpak:
     needs: test
-    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch')
     runs-on: self-hosted-arch
     container:
       image: local/arch-builder
@@ -132,7 +132,7 @@ jobs:
   # --- JOB 3: ROLLING WINDOWS (Only on PUSH) ---
   rolling-windows:
     needs: test
-    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref_type == 'branch')
     runs-on: self-hosted-arch
     container:
       image: local/arch-builder
