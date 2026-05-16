@@ -95,6 +95,7 @@
     "cli_sync_commands_heading": "Commandes de synchronisation :",
     "cli_task_placeholder": "tâche…",
     "cli_title": "Cfait v%{version} - un gestionnaire de tâches CalDAV puissant, rapide et élégant (%{mode})",
+    "cli_view_description": "Description :",
     "cli_view_summary": "Résumé :",
     "collapse_tree_with_key": "Replier l'arbre (z)",
     "color_label": "Couleur :",
