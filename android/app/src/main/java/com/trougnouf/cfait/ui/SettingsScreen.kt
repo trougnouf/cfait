@@ -769,7 +769,67 @@ fun SettingsScreen(
                 )
             }
 
-            // 6. Local collections
+            // 6. Remote Collections
+            item {
+                HorizontalDivider(Modifier.padding(vertical = 16.dp))
+                Text(
+                    stringResource(R.string.remote_collections),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            items(allCalendars.filter { !it.isLocal }) { cal ->
+                CollectionEditor(
+                    cal = cal,
+                    isLocal = false,
+                    onUpdate = { name, color ->
+                        scope.launch {
+                            try {
+                                api.updateRemoteCalendar(cal.href, name, color)
+                                status = context.getString(R.string.collection_updated)
+                                reload()
+                                com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                            } catch (e: Exception) {
+                                if (e is kotlinx.coroutines.CancellationException) throw e
+                                status = context.getString(R.string.error_general, e.message ?: "")
+                            }
+                        }
+                    },
+                    onDelete = {},
+                    onExport = {},
+                    onImport = {}
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+            item {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            try {
+                                api.createRemoteCalendar(context.getString(R.string.new_calendar_name), null)
+                                status = context.getString(R.string.collection_created)
+                                reload()
+                                com.trougnouf.cfait.ui.triggerBackgroundSync(context, api)
+                            } catch (e: Exception) {
+                                if (e is kotlinx.coroutines.CancellationException) throw e
+                                status = context.getString(R.string.error_general, e.message ?: "")
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                ) {
+                    NfIcon(NfIcons.ADD, 16.sp)
+                    Spacer(Modifier.width(8.dp))
+                    Text(androidx.compose.ui.res.stringResource(R.string.create_new_remote_calendar))
+                }
+            }
+
+            // 7. Local collections
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
@@ -780,8 +840,9 @@ fun SettingsScreen(
                 )
             }
             items(allCalendars.filter { it.isLocal }) { cal ->
-                LocalCalendarEditor(
+                CollectionEditor(
                     cal = cal,
+                    isLocal = true,
                     onUpdate = { name, color ->
                         scope.launch {
                             try {
@@ -858,7 +919,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 7. Aliases
+            // 8. Aliases
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Text(
@@ -924,7 +985,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 8. Advanced Settings
+            // 9. Advanced Settings
             item {
                 HorizontalDivider(Modifier.padding(vertical = 16.dp))
                 Button(onClick = onAdvanced, modifier = Modifier.fillMaxWidth()) {
@@ -937,8 +998,9 @@ fun SettingsScreen(
 }
 
 @Composable
-fun LocalCalendarEditor(
+fun CollectionEditor(
     cal: MobileCalendar,
+    isLocal: Boolean,
     onUpdate: (String, String?) -> Unit,
     onDelete: () -> Unit,
     onExport: () -> Unit,
@@ -972,33 +1034,35 @@ fun LocalCalendarEditor(
                     }
                 }
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(onClick = onExport) {
-                        NfIcon(NfIcons.EXPORT, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
+                if (isLocal) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(onClick = onExport) {
+                            NfIcon(NfIcons.EXPORT, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text(
+                            stringResource(R.string.export),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 8.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    Text(
-                        stringResource(R.string.export),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 8.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
 
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    IconButton(onClick = onImport) {
-                        NfIcon(NfIcons.IMPORT, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        IconButton(onClick = onImport) {
+                            NfIcon(NfIcons.IMPORT, 20.sp, MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text(
+                            stringResource(R.string.import_action),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontSize = 8.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                    Text(
-                        stringResource(R.string.import_action),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 8.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
 
-                if (!isDefault) {
-                    IconButton(onClick = onDelete) {
-                        NfIcon(NfIcons.DELETE, 20.sp, MaterialTheme.colorScheme.error)
+                    if (!isDefault) {
+                        IconButton(onClick = onDelete) {
+                            NfIcon(NfIcons.DELETE, 20.sp, MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
             }

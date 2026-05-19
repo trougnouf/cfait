@@ -1993,6 +1993,25 @@ impl CfaitMobile {
         Ok(href)
     }
 
+    pub async fn create_remote_calendar(
+        &self,
+        name: String,
+        color: Option<String>,
+    ) -> Result<String, MobileError> {
+        let client = self.controller.client.lock().await.clone().ok_or_else(|| MobileError::from("Offline"))?;
+        client.create_calendar(&name, color.as_deref()).await.map_err(|e| MobileError::from(e.to_string()))
+    }
+
+    pub async fn update_remote_calendar(
+        &self,
+        href: String,
+        name: String,
+        color: Option<String>,
+    ) -> Result<(), MobileError> {
+        let client = self.controller.client.lock().await.clone().ok_or_else(|| MobileError::from("Offline"))?;
+        client.update_calendar(&href, &name, color.as_deref()).await.map_err(|e| MobileError::from(e.to_string()))
+    }
+
     pub async fn update_local_calendar(
         &self,
         href: String,

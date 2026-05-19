@@ -160,6 +160,14 @@ pub fn print_help(binary_name: &str) {
             &format!("{} delete <uid>", binary_name),
             rust_i18n::t!("cli_desc_delete").to_string(),
         );
+        print_cmd(
+            &format!("{} collection create <name> [--color #hex]", binary_name),
+            "Create a remote CalDAV collection.".to_string(),
+        );
+        print_cmd(
+            &format!("{} collection edit <href> --name <name> [--color #hex]", binary_name),
+            "Edit a remote CalDAV collection.".to_string(),
+        );
         println!();
     }
 

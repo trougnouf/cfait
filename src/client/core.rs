@@ -1366,6 +1366,102 @@ impl RustyClient {
         None
     }
 
+    pub async fn create_calendar(&self, name: &str, color: Option<&str>) -> anyhow::Result<String> {
+        let client = self.client.as_ref().ok_or_else(|| anyhow::anyhow!("Offline"))?;
+
+        let principal_res = client.find_current_user_principal().await?;
+        let principal = principal_res.ok_or_else(|| anyhow::anyhow!("No principal found"))?;
+        let home_set_resp = client.request(libdav::caldav::FindCalendarHomeSet::new(principal.path())).await?;
+        let home_url = home_set_resp.home_sets.first().ok_or_else(|| anyhow::anyhow!("No home set found"))?;
+
+        let new_uuid = uuid::Uuid::new_v4().to_string();
+        let home_path = home_url.path();
+        let new_path = if home_path.ends_with('/') {
+            format!("{}{}/", home_path, new_uuid)
+        } else {
+            format!("{}/{}/", home_path, new_uuid)
+        };
+
+        let mut color_xml = String::new();
+        if let Some(c) = color {
+            color_xml = format!(r#"<IC:calendar-color xmlns:IC="http://apple.com/ns/ical/">{}</IC:calendar-color>"#, xml_escape(c));
+        }
+
+        let body = format!(r#"<?xml version="1.0" encoding="utf-8" ?>
+<C:mkcalendar xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+  <D:set>
+    <D:prop>
+      <D:displayname>{}</D:displayname>
+      <C:supported-calendar-component-set>
+        <C:comp name="VTODO"/>
+        <C:comp name="VEVENT"/>
+        <C:comp name="VJOURNAL"/>
+      </C:supported-calendar-component-set>
+      {}
+    </D:prop>
+  </D:set>
+</C:mkcalendar>"#, xml_escape(name), color_xml);
+
+        let req = http::Request::builder()
+            .method("MKCALENDAR")
+            .uri(client.webdav_client.relative_uri(&new_path)?)
+            .header("Content-Type", "application/xml; charset=utf-8")
+            .body(body)?;
+
+        let (parts, body_bytes) = client.webdav_client.request_raw(req).await?;
+        if parts.status.is_success() {
+            Ok(new_path)
+        } else {
+            let err_body = String::from_utf8_lossy(&body_bytes);
+            Err(anyhow::anyhow!("MKCALENDAR failed: {} - {}", parts.status, err_body))
+        }
+    }
+
+    pub async fn update_calendar(&self, href: &str, name: &str, color: Option<&str>) -> anyhow::Result<()> {
+        let client = self.client.as_ref().ok_or_else(|| anyhow::anyhow!("Offline"))?;
+
+        let color_set = if let Some(c) = color {
+            format!(r#"<IC:calendar-color xmlns:IC="http://apple.com/ns/ical/">{}</IC:calendar-color>"#, xml_escape(c))
+        } else {
+            String::new()
+        };
+
+        let color_remove = if color.is_none() {
+            r#"<D:remove>
+    <D:prop>
+      <IC:calendar-color xmlns:IC="http://apple.com/ns/ical/"/>
+    </D:prop>
+  </D:remove>"#
+        } else {
+            ""
+        };
+
+        let body = format!(r#"<?xml version="1.0" encoding="utf-8" ?>
+<D:propertyupdate xmlns:D="DAV:" xmlns:IC="http://apple.com/ns/ical/">
+  <D:set>
+    <D:prop>
+      <D:displayname>{}</D:displayname>
+      {}
+    </D:prop>
+  </D:set>
+  {}
+</D:propertyupdate>"#, xml_escape(name), color_set, color_remove);
+
+        let req = http::Request::builder()
+            .method("PROPPATCH")
+            .uri(client.webdav_client.relative_uri(&strip_host(href))?)
+            .header("Content-Type", "application/xml; charset=utf-8")
+            .body(body)?;
+
+        let (parts, body_bytes) = client.webdav_client.request_raw(req).await?;
+        if parts.status.is_success() || parts.status == http::StatusCode::MULTI_STATUS {
+            Ok(())
+        } else {
+            let err_body = String::from_utf8_lossy(&body_bytes);
+            Err(anyhow::anyhow!("PROPPATCH failed: {} - {}", parts.status, err_body))
+        }
+    }
+
     // Note: The following methods are implemented in src/client/sync.rs:
     // - handle_create, handle_update, handle_delete, handle_move
     // - sync_journal

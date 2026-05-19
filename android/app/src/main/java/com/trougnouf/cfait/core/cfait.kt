@@ -773,6 +773,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_create_missing_calendar_events(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_create_remote_calendar(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_all_calendar_events(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_delete_local_calendar(): Short
@@ -883,6 +885,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_update_local_calendar(): Short
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_update_remote_calendar(): Short
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_update_task_description(): Short
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_update_task_smart(): Short
@@ -980,6 +984,12 @@ internal object UniffiLib {
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_create_missing_calendar_events(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_create_remote_calendar(
+        `ptr`: Long,
+        `name`: RustBuffer.ByValue,
+        `color`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_delete_all_calendar_events(`ptr`: Long): Long
 
@@ -1294,6 +1304,13 @@ internal object UniffiLib {
         `color`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_cfait_fn_method_cfaitmobile_update_remote_calendar(
+        `ptr`: Long,
+        `href`: RustBuffer.ByValue,
+        `name`: RustBuffer.ByValue,
+        `color`: RustBuffer.ByValue,
+    ): Long
+
     external fun uniffi_cfait_fn_method_cfaitmobile_update_task_description(
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
@@ -1563,6 +1580,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_missing_calendar_events() != 20772.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_create_remote_calendar() != 34031.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_delete_all_calendar_events() != 61356.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1726,6 +1746,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_update_local_calendar() != 6023.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_update_remote_calendar() != 45957.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_update_task_description() != 34932.toShort()) {
@@ -2300,6 +2323,11 @@ public interface CfaitMobileInterface {
 
     suspend fun `createMissingCalendarEvents`(): kotlin.UInt
 
+    suspend fun `createRemoteCalendar`(
+        `name`: kotlin.String,
+        `color`: kotlin.String?,
+    ): kotlin.String
+
     suspend fun `deleteAllCalendarEvents`(): kotlin.UInt
 
     suspend fun `deleteLocalCalendar`(`href`: kotlin.String)
@@ -2480,6 +2508,12 @@ public interface CfaitMobileInterface {
     suspend fun `toggleTask`(`uid`: kotlin.String)
 
     suspend fun `updateLocalCalendar`(
+        `href`: kotlin.String,
+        `name`: kotlin.String,
+        `color`: kotlin.String?,
+    )
+
+    suspend fun `updateRemoteCalendar`(
         `href`: kotlin.String,
         `name`: kotlin.String,
         `color`: kotlin.String?,
@@ -2835,6 +2869,29 @@ open class CfaitMobile :
             { future -> UniffiLib.ffi_cfait_rust_future_free_u32(future) },
             // lift function
             { FfiConverterUInt.lift(it) },
+            // Error FFI converter
+            MobileException.ErrorHandler,
+        )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `createRemoteCalendar`(
+        `name`: kotlin.String,
+        `color`: kotlin.String?,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_create_remote_calendar(
+                    uniffiHandle,
+                    FfiConverterString.lower(`name`),
+                    FfiConverterOptionalString.lower(`color`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_cfait_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
             // Error FFI converter
             MobileException.ErrorHandler,
         )
@@ -3798,6 +3855,30 @@ open class CfaitMobile :
     ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_cfait_fn_method_cfaitmobile_update_local_calendar(
+                uniffiHandle,
+                FfiConverterString.lower(`href`),
+                FfiConverterString.lower(`name`),
+                FfiConverterOptionalString.lower(`color`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        MobileException.ErrorHandler,
+    )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `updateRemoteCalendar`(
+        `href`: kotlin.String,
+        `name`: kotlin.String,
+        `color`: kotlin.String?,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_update_remote_calendar(
                 uniffiHandle,
                 FfiConverterString.lower(`href`),
                 FfiConverterString.lower(`name`),

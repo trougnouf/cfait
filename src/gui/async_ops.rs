@@ -87,6 +87,23 @@ pub async fn async_fetch_wrapper(
     }
 }
 
+pub async fn async_create_remote_calendar_wrapper(
+    client: RustyClient,
+    name: String,
+    color: Option<String>,
+) -> anyhow::Result<String> {
+    client.create_calendar(&name, color.as_deref()).await
+}
+
+pub async fn async_update_remote_calendar_wrapper(
+    client: RustyClient,
+    href: String,
+    name: String,
+    color: Option<String>,
+) -> anyhow::Result<()> {
+    client.update_calendar(&href, &name, color.as_deref()).await
+}
+
 pub async fn async_fetch_all_wrapper(
     client: RustyClient,
     cals: Vec<CalendarListEntry>,

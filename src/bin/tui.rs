@@ -538,6 +538,72 @@ async fn main() -> Result<()> {
             }
             return Ok(());
         }
+        "collection" => {
+            if args.len() < 4 {
+                eprintln!("Usage: {} collection [create|edit] ...", binary_name);
+                std::process::exit(1);
+            }
+            let sub = &args[2];
+            let config = cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
+            let client = match cfait::client::RustyClient::new(ctx.clone(), &config.url, &config.username, &config.password, config.allow_insecure_certs, Some("CLI")) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Failed to initialize client: {}", e);
+                    std::process::exit(1);
+                }
+            };
+
+            match sub.as_str() {
+                "create" => {
+                    let name = &args[3];
+                    let mut color = None;
+                    if args.len() >= 6 && args[4] == "--color" {
+                        color = Some(args[5].as_str());
+                    }
+                    match client.create_calendar(name, color).await {
+                        Ok(href) => println!("Created collection: {}", href),
+                        Err(e) => {
+                            eprintln!("Error creating collection: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                "edit" => {
+                    let href = &args[3];
+                    let mut name = None;
+                    let mut color = None;
+                    let mut i = 4;
+                    while i < args.len() {
+                        if args[i] == "--name" && i + 1 < args.len() {
+                            name = Some(args[i+1].as_str());
+                            i += 2;
+                        } else if args[i] == "--color" && i + 1 < args.len() {
+                            color = Some(args[i+1].as_str());
+                            i += 2;
+                        } else {
+                            i += 1;
+                        }
+                    }
+                    if let Some(n) = name {
+                        match client.update_calendar(href, n, color).await {
+                            Ok(_) => println!("Updated collection: {}", href),
+                            Err(e) => {
+                                eprintln!("Error updating collection: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        eprintln!("--name is required when editing");
+                        std::process::exit(1);
+                    }
+                }
+                _ => {
+                    eprintln!("Unknown collection command");
+                    std::process::exit(1);
+                }
+            }
+            return Ok(());
+        }
         "delete" | "rm" => {
             let partial_uid = args.get(2).cloned().unwrap_or_default();
             if partial_uid.is_empty() {

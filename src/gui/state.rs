@@ -156,6 +156,7 @@ pub struct GuiApp {
 
     // Local Calendar Management
     pub local_cals_editing: Vec<CalendarListEntry>,
+    pub remote_cals_editing: Vec<CalendarListEntry>,
     pub color_picker_active_href: Option<String>,
     pub temp_color: iced::Color,
     pub scrollable_id: iced::widget::Id,
@@ -409,6 +410,7 @@ impl Default for GuiApp {
             config_was_corrupted: false,
 
             local_cals_editing: vec![],
+            remote_cals_editing: vec![],
             color_picker_active_href: None,
             temp_color: iced::Color::WHITE,
             scrollable_id: iced::widget::Id::unique(),

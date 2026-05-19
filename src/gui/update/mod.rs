@@ -96,7 +96,12 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetShowQuickFilter(_)
         | Message::SetQuickFilterTerm(_)
         | Message::SetQuickFilterIcon(_)
-        | Message::SetLogLevel(_) => settings::handle(app, message),
+        | Message::SetLogLevel(_)
+        | Message::AddRemoteCalendar
+        | Message::RemoteCalendarNameChanged(_, _)
+        | Message::SubmitRemoteCalendar(_)
+        | Message::RemoteCalendarUpdated(_)
+        | Message::RemoteCalendarCreated(_) => settings::handle(app, message),
 
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)

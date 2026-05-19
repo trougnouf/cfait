@@ -625,18 +625,68 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         Space::new().width(0).into()
     };
 
-    let cal_mgmt_ui: Element<_> = if is_settings && !app.calendars.is_empty() {
-        let mut col = column![text(rust_i18n::t!("manage_collections")).size(20)].spacing(10);
-        for cal in &app.calendars {
-            let is_enabled = !app.disabled_calendars.contains(&cal.href);
-            let row_content = row![
+    let cal_mgmt_ui: Element<_> = if is_settings && (!app.calendars.is_empty() || !app.remote_cals_editing.is_empty()) {
+        let mut col = column![text(rust_i18n::t!("remote_collections")).size(20)].spacing(10);
+        
+        for cal in &app.remote_cals_editing {
+            let cal_href = cal.href.clone();
+            let is_enabled = !app.disabled_calendars.contains(&cal_href);
+
+            let checkbox_elem = {
+                let href = cal_href.clone();
                 checkbox::<Message, iced::Theme, iced::Renderer>(is_enabled)
-                    .label(&cal.name)
-                    .on_toggle(move |v| Message::ToggleCalendarDisabled(cal.href.clone(), !v))
+                    .label("")
+                    .on_toggle(move |v| Message::ToggleCalendarDisabled(href.clone(), !v))
+            };
+
+            let name_input = {
+                let href = cal_href.clone();
+                text_input(&rust_i18n::t!("name_label"), &cal.name)
+                    .on_input(move |s| Message::RemoteCalendarNameChanged(href.clone(), s))
+                    .padding(5)
                     .width(Length::Fill)
-            ];
-            col = col.push(row_content.spacing(10).align_y(iced::Alignment::Center));
+            };
+
+            let original_cal = app.calendars.iter().find(|c| c.href == cal_href);
+            let has_changes = original_cal.is_none_or(|orig| orig.name != cal.name || orig.color != cal.color);
+
+            let current_color = cal.color.as_ref()
+                .and_then(|h| crate::color_utils::parse_hex_to_floats(h))
+                .map(|(r,g,b)| Color::from_rgb(r,g,b))
+                .unwrap_or(Color::from_rgb(0.5,0.5,0.5));
+                
+            let color_btn = {
+                let href = cal_href.clone();
+                button(text(icon::PALETTE_COLOR.to_string()).font(icon::FONT).size(16).color(current_color))
+                    .padding(5).style(button::text).on_press(Message::OpenColorPicker(href.clone(), current_color))
+            };
+
+            let color_widget: Element<_> = if app.color_picker_active_href.as_ref() == Some(&cal_href) {
+                color_picker::ColorPicker::new(true, current_color, color_btn, Message::CancelColorPicker, Message::SubmitColorPicker).into()
+            } else {
+                color_btn.into()
+            };
+
+            let save_btn: Element<_> = if has_changes {
+                let h = cal.href.clone();
+                button(icon::icon(icon::CHECK).size(16).color(app.theme().extended_palette().primary.base.color))
+                    .style(button::text)
+                    .padding(5)
+                    .on_press(Message::SubmitRemoteCalendar(h))
+                    .into()
+            } else {
+                Space::new().width(Length::Fixed(26.0)).into()
+            };
+
+            col = col.push(row![checkbox_elem, name_input, color_widget, save_btn].spacing(5).align_y(iced::Alignment::Center));
         }
+
+        col = col.push(
+            button(text(rust_i18n::t!("create_new_remote_calendar")))
+                .style(button::secondary)
+                .on_press(Message::AddRemoteCalendar)
+        );
+
         container(col)
             .padding(10)
             .style(|_| container::Style {
