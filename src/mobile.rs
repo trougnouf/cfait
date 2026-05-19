@@ -1999,7 +1999,18 @@ impl CfaitMobile {
         color: Option<String>,
     ) -> Result<String, MobileError> {
         let client = self.controller.client.lock().await.clone().ok_or_else(|| MobileError::from("Offline"))?;
-        client.create_calendar(&name, color.as_deref()).await.map_err(|e| MobileError::from(e.to_string()))
+        let href = client.create_calendar(&name, color.as_deref()).await.map_err(|e| MobileError::from(e.to_string()))?;
+
+        // Optimistic update to prevent Android UI jitter
+        if let Ok(mut cals) = crate::cache::Cache::load_calendars(self.ctx.as_ref()) {
+            cals.push(crate::model::CalendarListEntry {
+                name,
+                href: href.clone(),
+                color,
+            });
+            let _ = crate::cache::Cache::save_calendars(self.ctx.as_ref(), &cals);
+        }
+        Ok(href)
     }
 
     pub async fn update_remote_calendar(
@@ -2009,7 +2020,16 @@ impl CfaitMobile {
         color: Option<String>,
     ) -> Result<(), MobileError> {
         let client = self.controller.client.lock().await.clone().ok_or_else(|| MobileError::from("Offline"))?;
-        client.update_calendar(&href, &name, color.as_deref()).await.map_err(|e| MobileError::from(e.to_string()))
+        client.update_calendar(&href, &name, color.as_deref()).await.map_err(|e| MobileError::from(e.to_string()))?;
+
+        // Optimistic update to prevent Android UI jitter
+        if let Ok(mut cals) = crate::cache::Cache::load_calendars(self.ctx.as_ref())
+            && let Some(c) = cals.iter_mut().find(|c| c.href == href) {
+            c.name = name;
+            c.color = color;
+            let _ = crate::cache::Cache::save_calendars(self.ctx.as_ref(), &cals);
+        }
+        Ok(())
     }
 
     pub async fn update_local_calendar(

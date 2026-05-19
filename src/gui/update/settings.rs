@@ -840,29 +840,44 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 && let Some(client) = &app.client {
                     let name = cal.name.clone();
                     let color = cal.color.clone();
+                    let old_href = href.clone();
                     app.loading = true;
                     if href.starts_with("new_remote_") {
                         return Task::perform(
                             async_create_remote_calendar_wrapper(client.clone(), name, color),
-                            |res| Message::RemoteCalendarCreated(res.map_err(|e| e.to_string())),
+                            move |res| Message::RemoteCalendarCreated(old_href.clone(), res.map_err(|e| e.to_string())),
                         );
                     } else {
                         let h = href.clone();
                         return Task::perform(
                             async_update_remote_calendar_wrapper(client.clone(), h, name, color),
-                            |res| Message::RemoteCalendarUpdated(res.map_err(|e| e.to_string())),
+                            move |res| Message::RemoteCalendarUpdated(old_href.clone(), res.map_err(|e| e.to_string())),
                         );
                     }
                 }
             Task::none()
         }
-        Message::RemoteCalendarCreated(Ok(_)) | Message::RemoteCalendarUpdated(Ok(_)) => {
+        Message::RemoteCalendarCreated(old_href, Ok(new_href)) => {
             app.loading = false;
-            app.error_msg = Some(rust_i18n::t!("collection_updated").to_string());
-            app.remote_cals_editing.retain(|c| !c.href.starts_with("new_remote_"));
+            app.error_msg = Some(rust_i18n::t!("collection_created").to_string());
+            if let Some(cal) = app.remote_cals_editing.iter_mut().find(|c| c.href == old_href) {
+                cal.href = new_href.clone();
+                app.calendars.push(cal.clone()); // Optimistic update
+            }
+            app.sort_calendars();
             Task::perform(async { Ok::<(), String>(()) }, |_| Message::Refresh)
         }
-        Message::RemoteCalendarCreated(Err(e)) | Message::RemoteCalendarUpdated(Err(e)) => {
+        Message::RemoteCalendarUpdated(href, Ok(_)) => {
+            app.loading = false;
+            app.error_msg = Some(rust_i18n::t!("collection_updated").to_string());
+            if let Some(cal) = app.remote_cals_editing.iter().find(|c| c.href == href)
+                && let Some(main_cal) = app.calendars.iter_mut().find(|c| c.href == href) {
+                main_cal.name = cal.name.clone();
+                main_cal.color = cal.color.clone();
+            }
+            Task::perform(async { Ok::<(), String>(()) }, |_| Message::Refresh)
+        }
+        Message::RemoteCalendarCreated(_, Err(e)) | Message::RemoteCalendarUpdated(_, Err(e)) => {
             app.loading = false;
             app.error_msg = Some(e);
             Task::none()

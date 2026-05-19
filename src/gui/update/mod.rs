@@ -100,8 +100,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::AddRemoteCalendar
         | Message::RemoteCalendarNameChanged(_, _)
         | Message::SubmitRemoteCalendar(_)
-        | Message::RemoteCalendarUpdated(_)
-        | Message::RemoteCalendarCreated(_) => settings::handle(app, message),
+        | Message::RemoteCalendarUpdated(_, _)
+        | Message::RemoteCalendarCreated(_, _) => settings::handle(app, message),
 
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)
