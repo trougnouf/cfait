@@ -15,7 +15,7 @@ use crate::model::parser::{SyntaxType, tokenize_smart_input};
 use crate::model::{AlarmTrigger, DateType, Task};
 use crate::storage::{LOCAL_CALENDAR_HREF, LocalCalendarRegistry, LocalStorage};
 use crate::store::{FilterOptions, TaskStore, UNCATEGORIZED_ID};
-use chrono::{DateTime, Local, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -1113,24 +1113,14 @@ impl CfaitMobile {
                     if let Some(due) = &task.due {
                         let dt = match due {
                             DateType::Specific(t) => *t,
-                            DateType::AllDay(d) => d
-                                .and_time(default_time)
-                                .and_local_timezone(Local)
-                                .unwrap()
-                                .with_timezone(&Utc),
+                            DateType::AllDay(d) => crate::model::item::safe_local_to_utc(*d, default_time),
                             DateType::Month(y, m) => {
                                 let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                                d.and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc)
+                                crate::model::item::safe_local_to_utc(d, default_time)
                             }
                             DateType::Year(y) => {
                                 let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                                d.and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc)
+                                crate::model::item::safe_local_to_utc(d, default_time)
                             }
                         };
                         check_implicit(dt);
@@ -1138,24 +1128,14 @@ impl CfaitMobile {
                     if let Some(start) = &task.dtstart {
                         let dt = match start {
                             DateType::Specific(t) => *t,
-                            DateType::AllDay(d) => d
-                                .and_time(default_time)
-                                .and_local_timezone(Local)
-                                .unwrap()
-                                .with_timezone(&Utc),
+                            DateType::AllDay(d) => crate::model::item::safe_local_to_utc(*d, default_time),
                             DateType::Month(y, m) => {
                                 let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                                d.and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc)
+                                crate::model::item::safe_local_to_utc(d, default_time)
                             }
                             DateType::Year(y) => {
                                 let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                                d.and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc)
+                                crate::model::item::safe_local_to_utc(d, default_time)
                             }
                         };
                         check_implicit(dt);
@@ -1276,24 +1256,14 @@ impl CfaitMobile {
                     if let Some(due) = &task.due {
                         let dt = match due {
                             DateType::Specific(t) => *t,
-                            DateType::AllDay(d) => d
-                                .and_time(default_time)
-                                .and_local_timezone(Local)
-                                .unwrap()
-                                .with_timezone(&Utc),
+                            DateType::AllDay(d) => crate::model::item::safe_local_to_utc(*d, default_time),
                             DateType::Month(y, m) => {
                                 let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                                d.and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc)
+                                crate::model::item::safe_local_to_utc(d, default_time)
                             }
                             DateType::Year(y) => {
                                 let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                                d.and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc)
+                                crate::model::item::safe_local_to_utc(d, default_time)
                             }
                         };
                         let alarm_due_now = rust_i18n::t!("alarm_due_now");
@@ -1302,24 +1272,14 @@ impl CfaitMobile {
                     if let Some(start) = &task.dtstart {
                         let dt = match start {
                             DateType::Specific(t) => *t,
-                            DateType::AllDay(d) => d
-                                .and_time(default_time)
-                                .and_local_timezone(Local)
-                                .unwrap()
-                                .with_timezone(&Utc),
+                            DateType::AllDay(d) => crate::model::item::safe_local_to_utc(*d, default_time),
                             DateType::Month(y, m) => {
                                 let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                                d.and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc)
+                                crate::model::item::safe_local_to_utc(d, default_time)
                             }
                             DateType::Year(y) => {
                                 let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                                d.and_time(default_time)
-                                    .and_local_timezone(Local)
-                                    .unwrap()
-                                    .with_timezone(&Utc)
+                                crate::model::item::safe_local_to_utc(d, default_time)
                             }
                         };
                         let alarm_task_starting = rust_i18n::t!("alarm_task_starting");
