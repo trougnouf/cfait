@@ -96,7 +96,7 @@ pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<Strin
             // Case 2: Location Alias (@@loc:=... or loc:loc:=...)
             else if left.starts_with("@@") || left.to_lowercase().starts_with("loc:") {
                 let raw = if left.starts_with("@@") {
-                    left.trim_start_matches("@@")
+                    left.trim_start_matches('@')
                 } else {
                     &left[4..]
                 };
@@ -156,7 +156,7 @@ pub fn validate_alias_integrity(
         if val.starts_with('#') {
             Some(strip_quotes(val.trim_start_matches('#')))
         } else if val.starts_with("@@") {
-            Some(format!("@@{}", strip_quotes(val.trim_start_matches("@@"))))
+            Some(format!("@@{}", strip_quotes(val.trim_start_matches('@'))))
         } else if val.to_lowercase().starts_with("loc:") {
             Some(format!("@@{}", strip_quotes(&val[4..])))
         } else {
@@ -1989,11 +1989,15 @@ pub fn apply_smart_input(
                 summary_words.push(unescape(token));
             }
         } else if token.starts_with("@@") {
-            let val = strip_quotes(token.trim_start_matches("@@"));
+            let is_triple = token.starts_with("@@@");
+            let val = strip_quotes(token.trim_start_matches('@'));
             if val.is_empty() {
                 summary_words.push(unescape(token));
             } else {
-                task.location = Some(val);
+                task.location = Some(val.clone());
+                if is_triple {
+                    summary_words.push(val);
+                }
             }
         } else if token_lower.starts_with("loc:") {
             let val = strip_quotes(&token[4..]);
@@ -2053,9 +2057,15 @@ pub fn apply_smart_input(
                 task.description.push_str(&format!("\n{}", desc_val));
             }
         } else if token.starts_with('#') {
+            let is_double = token.starts_with("##");
             let cat = strip_quotes(token.trim_start_matches('#'));
-            if !task.categories.contains(&cat) {
-                task.categories.push(cat);
+            if !cat.is_empty() {
+                if !task.categories.contains(&cat) {
+                    task.categories.push(cat.clone());
+                }
+                if is_double {
+                    summary_words.push(cat);
+                }
             }
         } else if token.starts_with('!') && token.len() > 1 {
             if let Ok(p) = token[1..].parse::<u8>() {

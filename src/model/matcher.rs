@@ -270,10 +270,12 @@ impl Task {
         let part_lower = part_unquoted.to_lowercase();
 
         // --- Location Filter (@@loc or loc:loc) ---
-        if let Some(loc_query) = part_lower
-            .strip_prefix("@@")
-            .or_else(|| part_lower.strip_prefix("loc:"))
-        {
+        if part_lower.starts_with("@@") || part_lower.starts_with("loc:") {
+            let loc_query = if part_lower.starts_with("@@") {
+                part_lower.trim_start_matches('@')
+            } else {
+                part_lower.strip_prefix("loc:").unwrap_or("")
+            };
             if let Some(t_loc) = &self.location {
                 return t_loc.to_lowercase().contains(loc_query);
             } else {

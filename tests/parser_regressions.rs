@@ -31,6 +31,177 @@ fn test_mixed_text_and_reminder_syntax() {
     }
 }
 
+// --- Inline Tags Tests (##tag and @@@location) ---
+
+#[test]
+fn test_double_hash_inline_tag() {
+    let aliases = HashMap::new();
+
+    // Test: "Apply ##CDV suggestions on ##JDDC"
+    // Should save as:
+    // - Title: "Apply CDV suggestions on JDDC"
+    // - Tags: ["CDV", "JDDC"]
+    let t = Task::new("Apply ##CDV suggestions on ##JDDC", &aliases, None);
+
+    assert_eq!(t.summary, "Apply CDV suggestions on JDDC");
+    assert_eq!(t.categories, vec!["CDV", "JDDC"]);
+}
+
+#[test]
+fn test_triple_at_inline_location() {
+    let aliases = HashMap::new();
+
+    // Test: "Fix @@@Office printer"
+    // Should save as:
+    // - Title: "Fix Office printer"
+    // - Location: "Office"
+    let t = Task::new("Fix @@@Office printer", &aliases, None);
+
+    assert_eq!(t.summary, "Fix Office printer");
+    assert_eq!(t.location, Some("Office".to_string()));
+}
+
+#[test]
+fn test_mixed_inline_and_regular_tags() {
+    let aliases = HashMap::new();
+
+    // Test: "Apply ##CDV suggestions #urgent"
+    // Should save as:
+    // - Title: "Apply CDV suggestions"
+    // - Tags: ["CDV", "urgent"]
+    let t = Task::new("Apply ##CDV suggestions #urgent", &aliases, None);
+
+    assert_eq!(t.summary, "Apply CDV suggestions");
+    assert!(t.categories.contains(&"CDV".to_string()));
+    assert!(t.categories.contains(&"urgent".to_string()));
+}
+
+#[test]
+fn test_mixed_inline_and_regular_locations() {
+    let aliases = HashMap::new();
+
+    // Test: "Visit @@@Home and @@Office"
+    // Should save as:
+    // - Title: "Visit Home and"
+    // - Location: "Office" (last one wins, but Home is in title)
+    let t = Task::new("Visit @@@Home and @@Office", &aliases, None);
+
+    assert_eq!(t.summary, "Visit Home and");
+    assert_eq!(t.location, Some("Office".to_string()));
+}
+
+#[test]
+fn test_inline_tag_with_hierarchy() {
+    let aliases = HashMap::new();
+
+    // Test: "Apply ##work:urgent task"
+    // Should save as:
+    // - Title: "Apply work:urgent task"
+    // - Tags: ["work:urgent"]
+    let t = Task::new("Apply ##work:urgent task", &aliases, None);
+
+    assert_eq!(t.summary, "Apply work:urgent task");
+    assert_eq!(t.categories, vec!["work:urgent"]);
+}
+
+#[test]
+fn test_inline_location_with_hierarchy() {
+    let aliases = HashMap::new();
+
+    // Test: "Go to @@@home:garage"
+    // Should save as:
+    // - Title: "Go to home:garage"
+    // - Location: "home:garage"
+    let t = Task::new("Go to @@@home:garage", &aliases, None);
+
+    assert_eq!(t.summary, "Go to home:garage");
+    assert_eq!(t.location, Some("home:garage".to_string()));
+}
+
+#[test]
+fn test_single_hash_still_works() {
+    let aliases = HashMap::new();
+
+    // Test: "Apply #CDV suggestions"
+    // Should save as:
+    // - Title: "Apply suggestions"
+    // - Tags: ["CDV"]
+    let t = Task::new("Apply #CDV suggestions", &aliases, None);
+
+    assert_eq!(t.summary, "Apply suggestions");
+    assert_eq!(t.categories, vec!["CDV"]);
+}
+
+#[test]
+fn test_double_at_still_works() {
+    let aliases = HashMap::new();
+
+    // Test: "Fix @@Office printer"
+    // Should save as:
+    // - Title: "Fix printer"
+    // - Location: "Office"
+    let t = Task::new("Fix @@Office printer", &aliases, None);
+
+    assert_eq!(t.summary, "Fix printer");
+    assert_eq!(t.location, Some("Office".to_string()));
+}
+
+#[test]
+fn test_empty_inline_tag() {
+    let aliases = HashMap::new();
+
+    // Test: "Task ##"
+    // Should save as:
+    // - Title: "Task" (empty tag removed entirely)
+    // - Tags: []
+    let t = Task::new("Task ##", &aliases, None);
+
+    assert_eq!(t.summary, "Task");
+    assert!(t.categories.is_empty());
+}
+
+#[test]
+fn test_empty_inline_location() {
+    let aliases = HashMap::new();
+
+    // Test: "Task @@@"
+    // Should save as:
+    // - Title: "Task @@@" (empty triple-@ kept in title)
+    // - Location: None
+    let t = Task::new("Task @@@", &aliases, None);
+
+    assert_eq!(t.summary, "Task @@@");
+    assert_eq!(t.location, None);
+}
+
+#[test]
+fn test_quoted_inline_tag() {
+    let aliases = HashMap::new();
+
+    // Test: "Apply ##"CDV" suggestions"
+    // Should save as:
+    // - Title: "Apply CDV suggestions"
+    // - Tags: ["CDV"]
+    let t = Task::new("Apply ##\"CDV\" suggestions", &aliases, None);
+
+    assert_eq!(t.summary, "Apply CDV suggestions");
+    assert_eq!(t.categories, vec!["CDV"]);
+}
+
+#[test]
+fn test_quoted_inline_location() {
+    let aliases = HashMap::new();
+
+    // Test: "Go to @@@\"My Office\""
+    // Should save as:
+    // - Title: "Go to My Office"
+    // - Location: "My Office"
+    let t = Task::new("Go to @@@\"My Office\"", &aliases, None);
+
+    assert_eq!(t.summary, "Go to My Office");
+    assert_eq!(t.location, Some("My Office".to_string()));
+}
+
 #[test]
 fn test_bare_keywords_not_escaped() {
     let aliases = HashMap::new();

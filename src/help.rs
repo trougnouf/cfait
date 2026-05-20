@@ -70,6 +70,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     example: "Buy cookies @@aldi".to_string(),
                 },
                 HelpItem {
+                    keys: "##tag, @@@loc".to_string(),
+                    desc: rust_i18n::t!("help_org_inline_tags").to_string(),
+                    example: "Apply ##CDV suggestions @@@Office".to_string(),
+                },
+                HelpItem {
                     keys: "~duration (or est:duration)".to_string(),
                     desc: rust_i18n::t!("help_org_estimated_duration").to_string(),
                     example: "Exercise ~30m, Read a book ~1h-2h".to_string(),

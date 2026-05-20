@@ -250,6 +250,7 @@
     "help_metadata_log_time": "Log time",
     "help_metadata_manage_sessions": "Manage tracked time sessions",
     "help_org_add_category": "Add category/tag (use ':' for hierarchy)",
+    "help_org_inline_tags": "Double-prefix (##, @@@) keeps word in title",
     "help_org_done": "Set completion date explicitly",
     "help_org_done_percent": "Set partial completion percentage",
     "help_org_escape_special": "Escape special characters",
