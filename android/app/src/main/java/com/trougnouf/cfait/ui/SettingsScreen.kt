@@ -774,7 +774,6 @@ fun SettingsScreen(
                     onExport = {},
                     onImport = {}
                 )
-                Spacer(modifier = Modifier.height(12.dp))
             }
             item {
                 Button(
@@ -873,7 +872,6 @@ fun SettingsScreen(
                         importLauncher.launch("*/*")
                     }
                 )
-                Spacer(modifier = Modifier.height(12.dp))
             }
             item {
                 Button(
