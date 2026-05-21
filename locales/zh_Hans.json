@@ -252,6 +252,7 @@
     "help_org_done_percent": "设置部分完成百分比",
     "help_org_escape_special": "转义特殊字符",
     "help_org_estimated_duration": "预计时长（单个或范围）",
+    "help_org_inline_tags": "双前缀（##, @@@）保留标题中的单词",
     "help_org_location_hierarchy": "位置（使用“:”划分层级）",
     "help_org_priority": "优先级从高（1）到低（9）",
     "help_quick_start": "快速入门",
