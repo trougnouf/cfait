@@ -4,6 +4,8 @@
 package com.trougnouf.cfait.ui
 
 import android.content.Context
+import android.app.Activity
+import android.content.ContextWrapper
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
@@ -38,6 +40,12 @@ import java.time.format.DateTimeFormatter
 import kotlin.coroutines.resume
 
 val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
+
+tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
 
 suspend fun fetchCurrentLocation(context: Context): Location? {
     val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager

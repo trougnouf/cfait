@@ -63,6 +63,20 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        val prefs = newBase.getSharedPreferences("cfait_prefs", Context.MODE_PRIVATE)
+        val savedLang = prefs.getString("language", null)
+
+        if (savedLang != null && savedLang != "auto" && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            val locale = java.util.Locale.forLanguageTag(savedLang.replace("_", "-"))
+            val config = android.content.res.Configuration(newBase.resources.configuration)
+            config.setLocale(locale)
+            super.attachBaseContext(newBase.createConfigurationContext(config))
+        } else {
+            super.attachBaseContext(newBase)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
