@@ -521,6 +521,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     Message::OpenUrl(task.url.clone().unwrap()),
                     false,
                 ),
+                TaskAction::CompleteAndShift => (
+                    icon::icon(icon::REPEAT).size(14).into(),
+                    Message::ToggleTaskShift(uid.clone()),
+                    false,
+                ),
             };
 
             let btn = button(
@@ -547,6 +552,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 TaskAction::OpenCoordinates, // Single coordinates first
                 TaskAction::OpenLocations,   // GPX export second
                 TaskAction::ToggleDetails,
+                TaskAction::CompleteAndShift,
                 TaskAction::ToggleTimer,
                 TaskAction::StopTimer,
                 TaskAction::AddSession,
@@ -588,6 +594,14 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             {
                 unpinned_actions.remove(pos);
                 unpinned_actions.insert(insert_idx, TaskAction::OpenCoordinates);
+                insert_idx += 1;
+            }
+            if let Some(pos) = unpinned_actions
+                .iter()
+                .position(|&a| a == TaskAction::CompleteAndShift)
+            {
+                unpinned_actions.remove(pos);
+                unpinned_actions.insert(insert_idx, TaskAction::CompleteAndShift);
                 insert_idx += 1;
             }
             if let Some(pos) = unpinned_actions

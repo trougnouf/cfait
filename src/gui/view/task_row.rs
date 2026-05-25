@@ -754,6 +754,9 @@ pub fn view_task_row<'a>(
                 if *action == TaskAction::ToggleDetails && !(has_info || has_time) {
                     continue;
                 }
+                if *action == TaskAction::CompleteAndShift && (task.rrule.is_none() || is_done_or_cancelled) {
+                    continue;
+                }
                 if *action == TaskAction::DeleteTree && !has_subtasks {
                     continue;
                 }
@@ -795,6 +798,12 @@ pub fn view_task_row<'a>(
                     u8,
                     String,
                 ) = match action {
+                    TaskAction::CompleteAndShift => (
+                        icon::icon(icon::REPEAT).size(14).into(),
+                        Message::ToggleTaskShift(task.uid.clone()),
+                        0,
+                        label.clone(),
+                    ),
                     TaskAction::ToggleDetails => {
                         let mut icon_row = row![].spacing(2).align_y(iced::Alignment::Center);
                         if has_info {

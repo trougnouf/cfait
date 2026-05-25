@@ -144,7 +144,7 @@ impl TaskDisplay for Task {
                 let s_loc = s_dt.with_timezone(&chrono::Local);
                 let d_loc = d_dt.with_timezone(&chrono::Local);
                 if s_loc.date_naive() == d_loc.date_naive() {
-                    s.push_str(&format!(" ^@{} {}-{}", 
+                    s.push_str(&format!(" ^@{} {}-{}",
                         s_loc.format("%Y-%m-%d"),
                         s_loc.format("%H:%M"),
                         d_loc.format("%H:%M")
@@ -195,7 +195,8 @@ impl TaskDisplay for Task {
         }
 
         if let Some(r) = &self.rrule {
-            let pretty = crate::model::parser::prettify_recurrence(r);
+            let is_relative = self.unmapped_properties.iter().any(|p| p.key == "X-CFAIT-RECUR-FROM-COMPLETION");
+            let pretty = crate::model::parser::prettify_recurrence(r, is_relative);
             s.push_str(&format!(" {}", pretty));
         }
 

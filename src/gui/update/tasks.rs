@@ -120,6 +120,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             common::scroll_to_selected(app, true)
         }
 
+        Message::ToggleTaskShift(uid) => {
+            dispatch_and_maintain_selection(app, AppIntent::ToggleTaskShift { uid: uid.clone() }, &uid);
+            Task::none()
+        }
+
+        Message::ToggleTaskShiftSelected => {
+            if let Some(uid) = app.selected_uid.clone() {
+                dispatch_and_maintain_selection(app, AppIntent::ToggleTaskShift { uid: uid.clone() }, &uid);
+            }
+            Task::none()
+        }
+
         Message::ToggleTask(index, _) => {
             let data = app.get_task_at_index(index).map(|t| (t.uid.clone(), t.etag == "pending_refresh"));
             if let Some((uid, is_pending)) = data {

@@ -66,6 +66,7 @@ const CURRENT_CONFIG_VERSION: u32 = 1;
 pub enum TaskAction {
     OpenUrl,
     ToggleDetails,
+    CompleteAndShift,
     ToggleTimer,
     StopTimer,
     AddSession,
@@ -90,6 +91,7 @@ impl TaskAction {
         TaskAction::OpenCoordinates, // Second - single coordinates
         TaskAction::OpenLocations,   // Third - multiple coordinates (GPX)
         TaskAction::ToggleDetails,
+        TaskAction::CompleteAndShift,
         TaskAction::ToggleTimer,
         TaskAction::StopTimer,
         TaskAction::AddSession,
@@ -108,6 +110,7 @@ impl TaskAction {
 
     pub fn label(&self) -> String {
         match self {
+            TaskAction::CompleteAndShift => rust_i18n::t!("action_complete_and_shift").to_string(),
             TaskAction::ToggleDetails => rust_i18n::t!("show_details").to_string(),
             TaskAction::ToggleTimer => rust_i18n::t!("start_task").to_string(),
             TaskAction::StopTimer => rust_i18n::t!("stop_reset").to_string(),

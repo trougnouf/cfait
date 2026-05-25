@@ -189,7 +189,7 @@ fn test_cancel_single_occurrence_daily() {
     };
 
     // Recycle the task to a Cancelled state
-    let (history, recycled) = t.recycle(TaskStatus::Cancelled);
+    let (history, recycled) = t.recycle(TaskStatus::Cancelled, false);
     let advanced_task = recycled.expect("Should advance");
 
     assert_eq!(history.status, TaskStatus::Cancelled);

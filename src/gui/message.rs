@@ -49,6 +49,8 @@ pub enum Message {
     ClearSearch,
     SubmitTask,
     ToggleTask(usize, bool),
+    ToggleTaskShift(String),
+    ToggleTaskShiftSelected,
     DeleteTask(usize),
     EditTaskStart(usize),
     CancelEdit,

@@ -151,7 +151,7 @@ pub async fn handle_key_event(
                         let actions = state.store.apply_task_intent(&intent, &config);
                         // Push update to alarm actor
                         update_alarms(state);
-                        
+
                         let tx = action_tx.clone();
                         tokio::spawn(async move {
                             let _ = tx.send(Action::PersistBatch(actions)).await;
@@ -172,7 +172,7 @@ pub async fn handle_key_event(
                         let intent = AppIntent::ToggleTask { uid: uid.clone() };
                         let actions = state.store.apply_task_intent(&intent, &config);
                         update_alarms(state);
-                        
+
                         let tx = action_tx.clone();
                         tokio::spawn(async move {
                             let _ = tx.send(Action::PersistBatch(actions)).await;
@@ -193,7 +193,7 @@ pub async fn handle_key_event(
                         let intent = AppIntent::ToggleTask { uid: uid.clone() };
                         let actions = state.store.apply_task_intent(&intent, &config);
                         update_alarms(state);
-                        
+
                         let tx = action_tx.clone();
                         tokio::spawn(async move {
                             let _ = tx.send(Action::PersistBatch(actions)).await;
@@ -215,7 +215,7 @@ pub async fn handle_key_event(
                         let actions = state.store.apply_task_intent(&intent, &config);
                         state.refresh_filtered_view();
                         update_alarms(state);
-                        
+
                         let tx = action_tx.clone();
                         tokio::spawn(async move {
                             let _ = tx.send(Action::PersistBatch(actions)).await;
@@ -236,7 +236,7 @@ pub async fn handle_key_event(
                         let actions = state.store.apply_task_intent(&intent, &config);
                         state.refresh_filtered_view();
                         update_alarms(state);
-                        
+
                         let tx = action_tx.clone();
                         tokio::spawn(async move {
                             let _ = tx.send(Action::PersistBatch(actions)).await;
@@ -699,7 +699,7 @@ pub async fn handle_key_event(
                         let intent = AppIntent::ToggleTask { uid: uid.clone() };
                         let actions = state.store.apply_task_intent(&intent, &config);
                         update_alarms(state);
-                        
+
                         let tx = action_tx.clone();
                         tokio::spawn(async move {
                             let _ = tx.send(Action::PersistBatch(actions)).await;
@@ -936,6 +936,7 @@ pub async fn handle_key_event(
             }
 
             KeyCode::Char(' ') => {
+                let is_shift = key.modifiers.contains(KeyModifiers::SHIFT);
                 if state.active_focus == Focus::Main {
                     if let Some(view_task) = state.get_selected_task() {
                         if view_task.etag == "pending_refresh" {
@@ -943,12 +944,17 @@ pub async fn handle_key_event(
                         }
                         let uid = view_task.uid.clone();
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                        let intent = AppIntent::ToggleTask { uid: uid.clone() };
-                        
+
+                        let intent = if is_shift {
+                            AppIntent::ToggleTaskShift { uid: uid.clone() }
+                        } else {
+                            AppIntent::ToggleTask { uid: uid.clone() }
+                        };
+
                         let actions = state.store.apply_task_intent(&intent, &config);
                         state.refresh_filtered_view();
                         update_alarms(state);
-                        
+
                         let tx = action_tx.clone();
                         tokio::spawn(async move {
                             let _ = tx.send(Action::PersistBatch(actions)).await;
@@ -986,7 +992,7 @@ pub async fn handle_key_event(
                     } else {
                         AppIntent::StartTask { uid: uid.clone() }
                     };
-                    
+
                     let actions = state.store.apply_task_intent(&intent, &config);
                     if !actions.is_empty() {
                         state.refresh_filtered_view();
@@ -1002,7 +1008,7 @@ pub async fn handle_key_event(
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::StopTask { uid: uid.clone() };
-                    
+
                     let actions = state.store.apply_task_intent(&intent, &config);
                     if !actions.is_empty() {
                         state.refresh_filtered_view();
@@ -1018,11 +1024,11 @@ pub async fn handle_key_event(
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::CancelTask { uid: uid.clone() };
-                    
+
                     let actions = state.store.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     update_alarms(state);
-                    
+
                     let tx = action_tx.clone();
                     tokio::spawn(async move {
                         let _ = tx.send(Action::PersistBatch(actions)).await;
@@ -1033,7 +1039,7 @@ pub async fn handle_key_event(
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::ChangePriority { uid: uid.clone(), delta: 1 };
-                    
+
                     let actions = state.store.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     if !actions.is_empty() {
@@ -1048,7 +1054,7 @@ pub async fn handle_key_event(
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::ChangePriority { uid: uid.clone(), delta: -1 };
-                    
+
                     let actions = state.store.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     if !actions.is_empty() {
@@ -1067,11 +1073,11 @@ pub async fn handle_key_event(
                     } else {
                         AppIntent::DeleteTask { uid: uid.clone() }
                     };
-                    
+
                     let actions = state.store.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     update_alarms(state);
-                    
+
                     let tx = action_tx.clone();
                     tokio::spawn(async move {
                         let _ = tx.send(Action::PersistBatch(actions)).await;
@@ -1090,7 +1096,7 @@ pub async fn handle_key_event(
                 if let Some((child_uid, parent_uid)) = data {
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::MakeChild { uid: child_uid.clone(), parent_uid: parent_uid.clone() };
-                    
+
                     let actions = state.store.apply_task_intent(&intent, &config);
                     state.yanked_uid = None;
                     state.refresh_filtered_view();
@@ -1137,7 +1143,7 @@ pub async fn handle_key_event(
                 if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::DuplicateTaskTree { uid: uid.clone() };
-                    
+
                     let actions = state.store.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     if !actions.is_empty() {
@@ -1291,7 +1297,7 @@ pub async fn handle_key_event(
                     } else {
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                         let intent = AppIntent::AddDependency { uid: curr_uid.clone(), blocker_uid: yanked_uid.clone() };
-                        
+
                         let actions = state.store.apply_task_intent(&intent, &config);
                         state.yanked_uid = None;
                         state.refresh_filtered_view();
@@ -1319,7 +1325,7 @@ pub async fn handle_key_event(
                     } else {
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                         let intent = AppIntent::AddRelatedTo { uid: curr_uid.clone(), related_uid: yanked_uid.clone() };
-                        
+
                         let actions = state.store.apply_task_intent(&intent, &config);
                         state.yanked_uid = None;
                         state.refresh_filtered_view();
@@ -1346,7 +1352,7 @@ pub async fn handle_key_event(
                     let current_uid = current_task.uid.clone();
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::MakeChild { uid: current_uid.clone(), parent_uid: parent_uid.clone() };
-                    
+
                     let actions = state.store.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     if !actions.is_empty() {
@@ -1365,7 +1371,7 @@ pub async fn handle_key_event(
                     let uid = view_task.uid.clone();
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::RemoveParent { uid: uid.clone() };
-                    
+
                     let actions = state.store.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     if !actions.is_empty() {
@@ -1792,7 +1798,7 @@ pub async fn handle_key_event(
                 if let Some((uid, target_href)) = data {
                     let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
                     let intent = AppIntent::MoveTask { uid: uid.clone(), target_href: target_href.clone() };
-                    
+
                     let actions = state.store.apply_task_intent(&intent, &config);
                     state.refresh_filtered_view();
                     // Update alarms immediately if needed (task moved, though move doesn't clear completion)
@@ -1802,7 +1808,7 @@ pub async fn handle_key_event(
 
                     state.message = rust_i18n::t!("moving_task").to_string();
                     state.mode = InputMode::Normal;
-                    
+
                     if !actions.is_empty() {
                         let tx = action_tx.clone();
                         tokio::spawn(async move {

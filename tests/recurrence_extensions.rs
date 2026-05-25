@@ -255,19 +255,19 @@ fn test_prettify_recurrence_with_until() {
 
     // Daily with until
     let rrule = "FREQ=DAILY;UNTIL=20251231";
-    let pretty = prettify_recurrence(rrule);
+    let pretty = prettify_recurrence(rrule, false);
     assert!(pretty.contains("@daily"));
     assert!(pretty.contains("until 2025-12-31"));
 
     // Weekly with until
     let rrule2 = "FREQ=WEEKLY;UNTIL=20250630";
-    let pretty2 = prettify_recurrence(rrule2);
+    let pretty2 = prettify_recurrence(rrule2, false);
     assert!(pretty2.contains("@weekly"));
     assert!(pretty2.contains("until 2025-06-30"));
 
     // Custom interval with until
     let rrule3 = "FREQ=DAILY;INTERVAL=3;UNTIL=20250315";
-    let pretty3 = prettify_recurrence(rrule3);
+    let pretty3 = prettify_recurrence(rrule3, false);
     assert!(pretty3.contains("@every 3 days"));
     assert!(pretty3.contains("until 2025-03-15"));
 }
@@ -277,7 +277,7 @@ fn test_prettify_recurrence_with_weekday_and_until() {
     use cfait::model::parser::prettify_recurrence;
 
     let rrule = "FREQ=WEEKLY;BYDAY=MO;UNTIL=20251231";
-    let pretty = prettify_recurrence(rrule);
+    let pretty = prettify_recurrence(rrule, false);
     assert!(pretty.contains("@every monday"));
     assert!(pretty.contains("until 2025-12-31"));
 }
@@ -289,7 +289,7 @@ fn test_prettify_recurrence_raw_format_no_until() {
     // Note: The current prettify implementation doesn't check for COUNT,
     // so it will still use smart format and append until. This is a known limitation.
     let rrule = "FREQ=DAILY;COUNT=10;UNTIL=20251231";
-    let pretty = prettify_recurrence(rrule);
+    let pretty = prettify_recurrence(rrule, false);
 
     // Currently outputs "@daily until 2025-12-31" even with COUNT present
     // This could be improved in the future to detect COUNT and use rec: format
@@ -700,7 +700,7 @@ fn test_prettify_except_months() {
 
     // 5 excluded months (7 included) -> should show except
     let rrule = "FREQ=MONTHLY;BYMONTH=3,4,5,6,7,8,9,10,11";
-    let pretty = prettify_recurrence(rrule);
+    let pretty = prettify_recurrence(rrule, false);
     assert_eq!(pretty, "@monthly except jan,feb,dec");
 }
 
@@ -710,7 +710,7 @@ fn test_prettify_except_months_few_excluded() {
 
     // 2 excluded months (10 included) -> should show except
     let rrule = "FREQ=MONTHLY;BYMONTH=1,2,3,4,5,6,7,8,9,10";
-    let pretty = prettify_recurrence(rrule);
+    let pretty = prettify_recurrence(rrule, false);
     assert_eq!(pretty, "@monthly except nov,dec");
 }
 
@@ -720,7 +720,7 @@ fn test_prettify_except_months_many_excluded() {
 
     // 8 excluded months (4 included) -> should still show except format
     let rrule = "FREQ=MONTHLY;BYMONTH=6,7,8,9";
-    let pretty = prettify_recurrence(rrule);
+    let pretty = prettify_recurrence(rrule, false);
     assert_eq!(pretty, "@monthly except jan,feb,mar,apr,may,oct,nov,dec");
 }
 
@@ -730,7 +730,7 @@ fn test_prettify_except_months_all_included() {
 
     // All 12 months -> should show @monthly
     let rrule = "FREQ=MONTHLY;BYMONTH=1,2,3,4,5,6,7,8,9,10,11,12";
-    let pretty = prettify_recurrence(rrule);
+    let pretty = prettify_recurrence(rrule, false);
     assert_eq!(pretty, "@monthly");
 }
 
@@ -745,7 +745,7 @@ fn test_round_trip_except_months() {
 
     // Prettify it back
     use cfait::model::parser::prettify_recurrence;
-    let pretty = prettify_recurrence(rrule);
+    let pretty = prettify_recurrence(rrule, false);
 
     // Should get back a similar format (9 months included = 3 excluded)
     assert_eq!(pretty, "@monthly except jan,feb,dec");
@@ -769,7 +769,7 @@ fn test_prettify_except_months_with_until() {
     use cfait::model::parser::prettify_recurrence;
 
     let rrule = "FREQ=MONTHLY;BYMONTH=3,4,5,6,7,8,9,10,11;UNTIL=20251231";
-    let pretty = prettify_recurrence(rrule);
+    let pretty = prettify_recurrence(rrule, false);
     assert_eq!(pretty, "@monthly until 2025-12-31 except jan,feb,dec");
 }
 
@@ -792,7 +792,7 @@ fn test_user_scenario_water_peyote() {
 
     // Now test the round-trip: convert back to smart string
     use cfait::model::parser::prettify_recurrence;
-    let pretty = prettify_recurrence(rrule);
+    let pretty = prettify_recurrence(rrule, false);
 
     // With 6 months included (6 excluded), should show except format
     // The 6 excluded months are: jan,feb,mar,oct,nov,dec
@@ -802,7 +802,7 @@ fn test_user_scenario_water_peyote() {
     let input2 = "Water peyote @monthly except oct,nov,dec";
     let task2 = parse(input2);
     let rrule2 = task2.rrule.as_ref().unwrap();
-    let pretty2 = prettify_recurrence(rrule2);
+    let pretty2 = prettify_recurrence(rrule2, false);
     assert_eq!(pretty2, "@monthly except oct,nov,dec");
 }
 
@@ -814,17 +814,17 @@ fn test_prettify_except_months_various_counts() {
 
     // 6 included months (6 excluded)
     let rrule_6_included = "FREQ=MONTHLY;BYMONTH=1,2,3,4,5,6";
-    let pretty_6 = prettify_recurrence(rrule_6_included);
+    let pretty_6 = prettify_recurrence(rrule_6_included, false);
     assert_eq!(pretty_6, "@monthly except jul,aug,sep,oct,nov,dec");
 
     // 5 included months (7 excluded)
     let rrule_5_included = "FREQ=MONTHLY;BYMONTH=1,2,3,4,5";
-    let pretty_5 = prettify_recurrence(rrule_5_included);
+    let pretty_5 = prettify_recurrence(rrule_5_included, false);
     assert_eq!(pretty_5, "@monthly except jun,jul,aug,sep,oct,nov,dec");
 
     // 1 included month (11 excluded)
     let rrule_1_included = "FREQ=MONTHLY;BYMONTH=6";
-    let pretty_1 = prettify_recurrence(rrule_1_included);
+    let pretty_1 = prettify_recurrence(rrule_1_included, false);
     assert_eq!(
         pretty_1,
         "@monthly except jan,feb,mar,apr,may,jul,aug,sep,oct,nov,dec"
@@ -850,7 +850,7 @@ fn test_user_scenario_eight_excluded_months() {
 
     // Now test the round-trip: convert back to smart string
     use cfait::model::parser::prettify_recurrence;
-    let pretty = prettify_recurrence(rrule);
+    let pretty = prettify_recurrence(rrule, false);
 
     // With 4 months included (8 excluded), should show except format
     // The 8 excluded months are: jan,feb,mar,apr,may,oct,nov,dec

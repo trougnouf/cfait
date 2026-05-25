@@ -110,6 +110,7 @@ impl SessionState {
 #[derive(Clone, Debug)]
 pub enum AppIntent {
     ToggleTask { uid: String },
+    ToggleTaskShift { uid: String },
     DeleteTask { uid: String },
     DeleteTaskTree { uid: String },
     CancelTask { uid: String },

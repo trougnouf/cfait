@@ -721,7 +721,18 @@ impl TaskStore {
         } else {
             TaskStatus::Completed
         };
-        self.set_status(uid, next_status)
+        self.set_status(uid, next_status, false)
+    }
+
+    /// Shift-Toggle convenience: Forces a relative completion shift
+    pub fn toggle_task_shift(&mut self, uid: &str) -> Option<(Task, Option<Task>, Vec<Task>)> {
+        let current_status = self.get_task_ref(uid)?.status;
+        let next_status = if current_status.is_done() {
+            TaskStatus::NeedsAction
+        } else {
+            TaskStatus::Completed
+        };
+        self.set_status(uid, next_status, true)
     }
 
     /// Set the status for a task. Special handling:
@@ -734,6 +745,7 @@ impl TaskStore {
         &mut self,
         uid: &str,
         status: TaskStatus,
+        shift_schedule: bool,
     ) -> Option<(Task, Option<Task>, Vec<Task>)> {
         let mut task_copy = self.get_task_ref(uid)?.clone();
         task_copy.sequence += 1;
@@ -741,7 +753,7 @@ impl TaskStore {
         let should_reset_children = task_copy.rrule.is_some() && status.is_done();
 
         // Model-level helper computes the primary (history or updated) and optional secondary
-        let (primary, secondary) = task_copy.recycle(status);
+        let (primary, secondary) = task_copy.recycle(status, shift_schedule);
 
         // Save primary and secondary into the store (optimistic/instant UI update)
         self.update_or_add_task(primary.clone());
@@ -1879,14 +1891,14 @@ impl TaskStore {
                 options.start_grace_period_days,
                 eff_blocked,
             );
-            
+
             t.has_blocking_tasks = self.has_tasks_blocking(&t.uid);
             t.has_related_tasks = self.has_tasks_related_to(&t.uid);
-            
+
             t.is_future_start = t.dtstart.as_ref().map(|start| start.to_start_comparison_time() > now).unwrap_or(false);
             t.is_implicitly_future = !t.is_future_start && check_is_effectively_future(t);
             t.is_overdue = t.due.as_ref().map(|d| !t.status.is_done() && d.to_comparison_time() < now).unwrap_or(false);
-            
+
             let (p_tags, p_loc) = if let Some(p_uid) = &t.parent_uid {
                 if let Some(p) = self.get_task_ref(p_uid) {
                     (p.categories.iter().cloned().collect(), p.location.clone())
@@ -1896,7 +1908,7 @@ impl TaskStore {
             } else {
                 (HashSet::new(), None)
             };
-            
+
             let (visible_tags, visible_location) = t.resolve_visual_attributes(&p_tags, &p_loc, options.tag_aliases);
             t.visible_categories = visible_tags;
             t.visible_location = visible_location;
@@ -2064,6 +2076,17 @@ impl TaskStore {
                     for c in children { actions.push(JournalAction::Update(c)); }
                 }
             }
+            AppIntent::ToggleTaskShift { uid } => {
+                if let Some((primary, secondary, children)) = self.toggle_task_shift(uid) {
+                    if let Some(sec) = secondary {
+                        actions.push(JournalAction::Create(primary));
+                        actions.push(JournalAction::Update(sec));
+                    } else {
+                        actions.push(JournalAction::Update(primary));
+                    }
+                    for c in children { actions.push(JournalAction::Update(c)); }
+                }
+            }
             AppIntent::DeleteTask { uid } => {
                 if let Some((deleted, trashed_opt)) = self.soft_delete_task(uid, config.trash_retention_days) {
                     actions.push(JournalAction::Delete(deleted));
@@ -2078,7 +2101,7 @@ impl TaskStore {
                 }
             }
             AppIntent::CancelTask { uid } => {
-                if let Some((primary, secondary, children)) = self.set_status(uid, crate::model::TaskStatus::Cancelled) {
+                if let Some((primary, secondary, children)) = self.set_status(uid, crate::model::TaskStatus::Cancelled, false) {
                     if let Some(sec) = secondary {
                         actions.push(JournalAction::Create(primary));
                         actions.push(JournalAction::Update(sec));

@@ -1875,6 +1875,12 @@ impl CfaitMobile {
         Ok(())
     }
 
+    pub async fn toggle_task_shift(&self, uid: String) -> Result<(), MobileError> {
+        self.dispatch(crate::model::AppIntent::ToggleTaskShift { uid })
+            .await?;
+        Ok(())
+    }
+
     pub async fn move_task(&self, uid: String, new_cal_href: String) -> Result<(), MobileError> {
         self.dispatch(crate::model::AppIntent::MoveTask {
             uid,
@@ -2528,4 +2534,3 @@ mod tests {
         assert_eq!(config.password, "new-secret");
     }
 }
-

@@ -48,7 +48,7 @@ fn test_filter_by_tag() {
         default_priority: 5,
         start_grace_period_days: 1,
         expanded_done_groups: &empty_set,
-        
+
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
@@ -94,7 +94,7 @@ fn test_filter_hierarchical_tags() {
         default_priority: 5,
         start_grace_period_days: 1,
         expanded_done_groups: &empty_set,
-        
+
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
@@ -146,7 +146,7 @@ fn test_hide_hidden_calendars() {
         default_priority: 5,
         start_grace_period_days: 1,
         expanded_done_groups: &empty_set,
-        
+
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
@@ -175,7 +175,7 @@ fn test_set_status_cancelled_advances_recurring_task() {
 
     store.add_task(t);
 
-    let updated = store.set_status("recurring-1", TaskStatus::Cancelled);
+    let updated = store.set_status("recurring-1", TaskStatus::Cancelled, false);
     assert!(updated.is_some());
 
     let (history, secondary, _children) = updated.unwrap();
@@ -206,7 +206,7 @@ fn test_set_status_cancelled_non_recurring_task() {
 
     store.add_task(t);
 
-    let updated = store.set_status("one-time-1", TaskStatus::Cancelled);
+    let updated = store.set_status("one-time-1", TaskStatus::Cancelled, false);
     assert!(updated.is_some());
 
     let (task, _secondary, _children) = updated.unwrap();
@@ -225,13 +225,13 @@ fn test_toggle_status_cancelled_back_to_needs_action() {
 
     store.add_task(t);
 
-    let updated = store.set_status("toggle-1", TaskStatus::Cancelled);
+    let updated = store.set_status("toggle-1", TaskStatus::Cancelled, false);
     assert!(updated.is_some());
     // FIX: Check status on the primary task from the tuple
     let (primary, _sec, _children) = updated.unwrap();
     assert_eq!(primary.status, TaskStatus::Cancelled);
 
-    let updated = store.set_status("toggle-1", TaskStatus::Cancelled);
+    let updated = store.set_status("toggle-1", TaskStatus::Cancelled, false);
     assert!(updated.is_some());
     // FIX: Check status on the primary task from the tuple
     let (primary, _sec, _children) = updated.unwrap();
@@ -266,7 +266,7 @@ fn test_taskstore_clear_and_remove() {
 fn test_get_descendant_uids() {
     let ctx = Arc::new(TestContext::new());
     let mut store = TaskStore::new(ctx);
-    
+
     let mut parent = Task::new("Parent", &HashMap::new(), None);
     parent.uid = "p1".to_string();
     store.add_task(parent);
@@ -330,7 +330,7 @@ fn test_apply_task_intent_comprehensive() {
         trash_retention_days: 0,
         ..Default::default()
     };
-    
+
     let mut t1 = Task::new("T1", &HashMap::new(), None);
     t1.uid = "1".to_string();
     t1.calendar_href = "cal1".to_string();
@@ -367,7 +367,7 @@ fn test_apply_task_intent_comprehensive() {
 
     // ChangePriority
     store.apply_task_intent(&cfait::model::AppIntent::ChangePriority { uid: "1".to_string(), delta: 1 }, &config);
-    
+
     // ToggleTreeCollapse
     store.apply_task_intent(&cfait::model::AppIntent::ToggleTreeCollapse { uid: "1".to_string() }, &config);
     assert!(store.get_task_ref("1").unwrap().collapsed);
@@ -399,28 +399,28 @@ fn test_apply_task_intent_comprehensive() {
 fn test_extract_markdown_tasks_full() {
     let input = "Root description.\n\n- [ ] Subtask 1\n  Details for subtask 1\n* [x] Subtask 2\n1. [ ] Numbered 1\n2. [ ] Numbered 2\n";
     let (root_desc, tasks) = cfait::model::extract_markdown_tasks(input);
-    
+
     assert_eq!(root_desc, "Root description.");
     assert_eq!(tasks.len(), 4);
-    
+
     assert_eq!(tasks[0].raw_text, "Subtask 1");
     assert!(!tasks[0].is_completed);
     assert_eq!(tasks[0].description, "Details for subtask 1");
-    
+
     assert_eq!(tasks[1].raw_text, "Subtask 2");
     assert!(tasks[1].is_completed);
     assert_eq!(tasks[1].description, "");
 
     assert_eq!(tasks[2].raw_text, "Numbered 1");
     assert_eq!(tasks[3].raw_text, "Numbered 2");
-    
+
     assert_eq!(tasks[3].dependencies.len(), 1);
 }
 
 #[test]
 fn test_task_display_logic() {
     let mut task = Task::new("Test", &HashMap::new(), None);
-    
+
     assert_eq!(task.checkbox_symbol(), "[ ]");
     assert!(!task.is_paused());
     assert_eq!(task.format_duration_short(), "");
@@ -498,7 +498,7 @@ fn test_alarm_index_empty_and_default() {
     assert!(next.is_none());
 
     idx.save(ctx.as_ref()).unwrap();
-    
+
     let idx2 = cfait::alarm_index::AlarmIndex::load(ctx.as_ref());
     assert!(idx2.is_empty());
 }
@@ -506,7 +506,7 @@ fn test_alarm_index_empty_and_default() {
 #[test]
 fn test_config_errors_and_save() {
     let ctx = Arc::new(TestContext::new());
-    
+
     let err = cfait::config::Config::load(ctx.as_ref()).unwrap_err();
     assert!(cfait::config::Config::is_missing_config_error(&err));
 
@@ -514,7 +514,7 @@ fn test_config_errors_and_save() {
         url: "http://example.com".to_string(),
         ..Default::default()
     };
-    
+
     config.save_with_credentials(ctx.as_ref()).unwrap();
 
     let loaded = cfait::config::Config::load(ctx.as_ref()).unwrap();
@@ -524,17 +524,17 @@ fn test_config_errors_and_save() {
     assert_eq!(loaded_cred.url, "http://example.com");
 
     assert_eq!(cfait::config::LogLevel::Debug.to_level_filter(), log::LevelFilter::Debug);
-    
+
     assert!(!cfait::config::TaskAction::OpenUrl.label().is_empty());
 }
 
 #[test]
 fn test_system_logging_and_keyring() {
     let ctx = Arc::new(TestContext::new());
-    
+
     cfait::system::init_logging(ctx.as_ref(), false, Some(cfait::config::LogLevel::Debug.to_level_filter()));
     cfait::system::set_log_level(log::LevelFilter::Trace);
-    
+
     cfait::system::init_keyring();
 }
 

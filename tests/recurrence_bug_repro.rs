@@ -27,7 +27,7 @@ fn test_recurrence_recycling_preserves_uid() {
     let original_uid = t.uid.clone();
 
     // Simulate completing the task which the store handles by recycling
-    let (history, secondary) = t.recycle(TaskStatus::Completed);
+    let (history, secondary) = t.recycle(TaskStatus::Completed, false);
     assert_eq!(history.status, TaskStatus::Completed);
 
     let t = secondary.unwrap();
@@ -54,7 +54,7 @@ fn test_scenario_1_cancel_then_done_sequence() {
     let initial_due = t.due.as_ref().unwrap().to_date_naive();
 
     // 1. Mark as done -> Recycle
-    let (history1, secondary1) = t.recycle(TaskStatus::Completed);
+    let (history1, secondary1) = t.recycle(TaskStatus::Completed, false);
     assert_eq!(history1.status, TaskStatus::Completed);
     let t = secondary1.unwrap();
     let due1 = t.due.as_ref().unwrap().to_date_naive();
@@ -62,14 +62,14 @@ fn test_scenario_1_cancel_then_done_sequence() {
     assert_eq!(t.status, TaskStatus::NeedsAction);
 
     // 2. Mark as done -> Recycle again
-    let (history2, secondary2) = t.recycle(TaskStatus::Completed);
+    let (history2, secondary2) = t.recycle(TaskStatus::Completed, false);
     assert_eq!(history2.status, TaskStatus::Completed);
     let t = secondary2.unwrap();
     let due2 = t.due.as_ref().unwrap().to_date_naive();
     assert_eq!(due2, initial_due + Duration::days(14));
 
     // 3. Mark as canceled -> Recycle
-    let (history3, secondary3) = t.recycle(TaskStatus::Cancelled);
+    let (history3, secondary3) = t.recycle(TaskStatus::Cancelled, false);
     assert_eq!(history3.status, TaskStatus::Cancelled);
     let t = secondary3.unwrap();
     let due3 = t.due.as_ref().unwrap().to_date_naive();
@@ -81,7 +81,7 @@ fn test_scenario_1_cancel_then_done_sequence() {
     assert_eq!(t.exdates.len(), 1);
 
     // 4. Mark as canceled again
-    let (history4, secondary4) = t.recycle(TaskStatus::Cancelled);
+    let (history4, secondary4) = t.recycle(TaskStatus::Cancelled, false);
     assert_eq!(history4.status, TaskStatus::Cancelled);
     let t = secondary4.unwrap();
     let due4 = t.due.as_ref().unwrap().to_date_naive();
@@ -95,7 +95,7 @@ fn test_scenario_2_multiple_cancels() {
     let initial_due = t.due.as_ref().unwrap().to_date_naive();
 
     // 1. Cancel -> +7 days
-    let (_, secondary1) = t.recycle(TaskStatus::Cancelled);
+    let (_, secondary1) = t.recycle(TaskStatus::Cancelled, false);
     let t = secondary1.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
@@ -103,7 +103,7 @@ fn test_scenario_2_multiple_cancels() {
     );
 
     // 2. Cancel -> +14 days
-    let (_, secondary2) = t.recycle(TaskStatus::Cancelled);
+    let (_, secondary2) = t.recycle(TaskStatus::Cancelled, false);
     let t = secondary2.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
@@ -111,7 +111,7 @@ fn test_scenario_2_multiple_cancels() {
     );
 
     // 3. Cancel -> +21 days
-    let (_, secondary3) = t.recycle(TaskStatus::Cancelled);
+    let (_, secondary3) = t.recycle(TaskStatus::Cancelled, false);
     let t = secondary3.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
@@ -127,7 +127,7 @@ fn test_scenario_3_cancel_loop() {
     let initial_due = t.due.as_ref().unwrap().to_date_naive();
 
     // Done -> +7
-    let (_, secondary1) = t.recycle(TaskStatus::Completed);
+    let (_, secondary1) = t.recycle(TaskStatus::Completed, false);
     let t = secondary1.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
@@ -135,7 +135,7 @@ fn test_scenario_3_cancel_loop() {
     );
 
     // Cancel -> +14
-    let (_, secondary2) = t.recycle(TaskStatus::Cancelled);
+    let (_, secondary2) = t.recycle(TaskStatus::Cancelled, false);
     let t = secondary2.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
@@ -143,7 +143,7 @@ fn test_scenario_3_cancel_loop() {
     );
 
     // Done -> +21
-    let (_, secondary3) = t.recycle(TaskStatus::Completed);
+    let (_, secondary3) = t.recycle(TaskStatus::Completed, false);
     let t = secondary3.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),
@@ -151,7 +151,7 @@ fn test_scenario_3_cancel_loop() {
     );
 
     // Cancel -> +28
-    let (_, secondary4) = t.recycle(TaskStatus::Cancelled);
+    let (_, secondary4) = t.recycle(TaskStatus::Cancelled, false);
     let t = secondary4.unwrap();
     assert_eq!(
         t.due.as_ref().unwrap().to_date_naive(),

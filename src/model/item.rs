@@ -16,7 +16,7 @@ Notes / rationale:
   modules so higher-level logic stays testable and encapsulated.
 */
 
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -1018,7 +1018,7 @@ impl Task {
     ///
     /// Returns (primary, optional_secondary) where `primary` is what should be inserted/seen
     /// immediately in the UI (history or updated task) and `secondary` is the next-instance.
-    pub fn recycle(&self, target_status: TaskStatus) -> (Task, Option<Task>) {
+    pub fn recycle(&self, target_status: TaskStatus, shift_schedule: bool) -> (Task, Option<Task>) {
         // 0. Commit time tracking: finalize any running timer before creating history.
         let mut base_task = self.clone();
         if let Some(start_ts) = base_task.last_started_at {
@@ -1039,6 +1039,8 @@ impl Task {
             updated.unmapped_properties.retain(|p| p.key != "COMPLETED");
             return (updated, None);
         }
+
+        let is_relative = shift_schedule || base_task.unmapped_properties.iter().any(|p| p.key == "X-CFAIT-RECUR-FROM-COMPLETION");
 
         // Only perform full recycle/advance for recurring tasks when completing.
         if base_task.rrule.is_some() && target_status.is_done() {
@@ -1076,6 +1078,22 @@ impl Task {
 
             // 2. Advance the main recurring item to the next occurrence and reset timing.
             let mut next_task = base_task.clone();
+
+            // If the schedule is relative (@after or Shift+Space), shift the seed date to NOW before advancing.
+            if is_relative && target_status == TaskStatus::Completed {
+                let now = Utc::now();
+                let today = now.date_naive();
+                let update_date = |d: &mut DateType| {
+                    match d {
+                        DateType::Specific(_) => *d = DateType::Specific(now),
+                        DateType::AllDay(_) => *d = DateType::AllDay(today),
+                        DateType::Month(_, _) => *d = DateType::Month(today.year(), today.month()),
+                        DateType::Year(_) => *d = DateType::Year(today.year()),
+                    }
+                };
+                if let Some(ref mut d) = next_task.dtstart { update_date(d); }
+                if let Some(ref mut d) = next_task.due { update_date(d); }
+            }
 
             // Add EXDATE for the current instance if this is a cancellation
             // This prevents the cancelled instance from reappearing in the future

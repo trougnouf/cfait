@@ -110,6 +110,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
             title: rust_i18n::t!("recurrence").to_string(),
             items: vec![
                 HelpItem {
+                    keys: "@after X".to_string(),
+                    desc: "Relative recurrence (shifts based on completion)".to_string(),
+                    example: "@after 1w, @after 2mo".to_string(),
+                },
+                HelpItem {
                     keys: "@daily (or rec:)".to_string(),
                     desc: rust_i18n::t!("help_recurrence_quick_presets").to_string(),
                     example: "@daily, @weekly, @monthly, @yearly".to_string(),
@@ -349,6 +354,11 @@ pub fn get_shortcuts_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "Space".to_string(),
                     desc: rust_i18n::t!("done").to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Shift + Space".to_string(),
+                    desc: "Complete & shift schedule to today".to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {

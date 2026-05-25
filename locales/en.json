@@ -4,6 +4,7 @@
     "about_repository": "Repository: %{url}",
     "about_title": "Cfait Task Manager",
     "about_version": "Version %{version}",
+    "action_complete_and_shift": "Complete & shift schedule",
     "action_open_locations": "Open locations (GPX)",
     "actions": "Actions",
     "active_alarm": "Active alarm",

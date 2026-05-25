@@ -330,7 +330,7 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
 
         // 1. Recurrence
         if matched_kind.is_none()
-            && (word == "@every" || word == "rec:every")
+            && (word == "@every" || word == "rec:every" || word == "@after")
             && i + 1 < words.len()
         {
             let next_token_str = words[i + 1].2.as_str();
@@ -971,7 +971,7 @@ fn month_num_to_short_name(num: u32) -> &'static str {
     }
 }
 
-pub fn prettify_recurrence(rrule: &str) -> String {
+pub fn prettify_recurrence(rrule: &str, is_relative: bool) -> String {
     let mut freq = "";
     let mut interval = "";
     let mut byday = "";
@@ -1015,15 +1015,16 @@ pub fn prettify_recurrence(rrule: &str) -> String {
         let days: Vec<&str> = byday.split(',').collect();
         let all_codes = ["MO", "TU", "WE", "TH", "FR", "SA", "SU"];
 
-        // A. Single Day -> @every monday
+        // A. Single Day -> @every monday or @after monday
         if days.len() == 1 && bymonth.is_empty() {
             let d_name = code_to_full_day(days[0]);
             if !d_name.is_empty() {
-                return format!("@every {}{}", d_name, until_str);
+                let prefix = if is_relative { "@after" } else { "@every" };
+                return format!("{} {}{}", prefix, d_name, until_str);
             }
         }
 
-        // B. 2-3 Days -> @every monday,tuesday,wednesday
+        // B. 2-3 Days -> @every monday,tuesday,wednesday or @after monday,tuesday,wednesday
         if days.len() >= 2 && days.len() <= 3 && bymonth.is_empty() {
             let day_names: Vec<String> = days
                 .iter()
@@ -1032,7 +1033,8 @@ pub fn prettify_recurrence(rrule: &str) -> String {
                 .collect();
 
             if day_names.len() == days.len() {
-                return format!("@every {}{}", day_names.join(","), until_str);
+                let prefix = if is_relative { "@after" } else { "@every" };
+                return format!("{} {}{}", prefix, day_names.join(","), until_str);
             }
         }
 
@@ -1110,31 +1112,48 @@ pub fn prettify_recurrence(rrule: &str) -> String {
         }
     }
 
-    // 3. Handle Custom Intervals (e.g. @every 3 days)
+    // 3. Handle Custom Intervals (e.g. @every 3 days or @after 3d)
     if !freq.is_empty() && !interval.is_empty() && interval != "1" {
         let unit = match freq {
-            "DAILY" => "days",
-            "WEEKLY" => "weeks",
-            "MONTHLY" => "months",
-            "YEARLY" => "years",
+            "DAILY" => if is_relative { "d" } else { "days" },
+            "WEEKLY" => if is_relative { "w" } else { "weeks" },
+            "MONTHLY" => if is_relative { "mo" } else { "months" },
+            "YEARLY" => if is_relative { "y" } else { "years" },
             _ => "",
         };
         if !unit.is_empty() {
-            return format!("@every {} {}{}", interval, unit, until_str);
+            if is_relative {
+                return format!("@after {}{}{}", interval, unit, until_str);
+            } else {
+                return format!("@every {} {}{}", interval, unit, until_str);
+            }
         }
     }
 
-    // 4. Handle Standard Presets (@daily, @monthly...)
+    // 4. Handle Standard Presets (@daily, @monthly... or @after 1d, @after 1w)
     if !freq.is_empty() {
-        let base = match freq {
-            "DAILY" => "@daily",
-            "WEEKLY" => "@weekly",
-            "MONTHLY" => "@monthly",
-            "YEARLY" => "@yearly",
-            _ => "",
-        };
-        if !base.is_empty() {
-            return format!("{}{}", base, until_str);
+        if is_relative {
+            let unit = match freq {
+                "DAILY" => "1d",
+                "WEEKLY" => "1w",
+                "MONTHLY" => "1mo",
+                "YEARLY" => "1y",
+                _ => "",
+            };
+            if !unit.is_empty() {
+                return format!("@after {}{}", unit, until_str);
+            }
+        } else {
+            let base = match freq {
+                "DAILY" => "@daily",
+                "WEEKLY" => "@weekly",
+                "MONTHLY" => "@monthly",
+                "YEARLY" => "@yearly",
+                _ => "",
+            };
+            if !base.is_empty() {
+                return format!("{}{}", base, until_str);
+            }
         }
     }
 
@@ -1586,6 +1605,7 @@ pub fn apply_smart_input(
 ) {
     let mut summary_words = Vec::new();
     // Reset fields
+    task.unmapped_properties.retain(|p| p.key != "X-CFAIT-RECUR-FROM-COMPLETION");
     task.priority = 0;
     task.due = None;
     task.dtstart = None;
@@ -1635,7 +1655,7 @@ pub fn apply_smart_input(
         let token_lower = token.to_lowercase();
 
         // 1. Recurrence
-        if (token == "rec:every" || token == "@every") && i + 1 < stream.len() {
+        if (token == "rec:every" || token == "@every" || token == "@after") && i + 1 < stream.len() {
             let next_token_str = stream[i + 1].as_str();
             let next_next = if i + 2 < stream.len() {
                 Some(stream[i + 2].as_str())
@@ -1648,6 +1668,13 @@ pub fn apply_smart_input(
                 let freq = parse_freq_from_unit(&unit);
                 if !freq.is_empty() {
                     task.rrule = Some(format!("FREQ={};INTERVAL={}", freq, interval));
+                    if token == "@after" && !task.unmapped_properties.iter().any(|p| p.key == "X-CFAIT-RECUR-FROM-COMPLETION") {
+                        task.unmapped_properties.push(crate::model::RawProperty {
+                            key: "X-CFAIT-RECUR-FROM-COMPLETION".to_string(),
+                            value: "TRUE".to_string(),
+                            params: vec![],
+                        });
+                    }
                     has_recurrence = true;
                     consumed = 1 + 1 + extra_consumed;
                 } else {
@@ -1664,6 +1691,13 @@ pub fn apply_smart_input(
                 if !weekday_codes.is_empty() && weekday_codes.len() == parts.len() {
                     // All parts were valid weekdays
                     task.rrule = Some(format!("FREQ=WEEKLY;BYDAY={}", weekday_codes.join(",")));
+                    if token == "@after" && !task.unmapped_properties.iter().any(|p| p.key == "X-CFAIT-RECUR-FROM-COMPLETION") {
+                        task.unmapped_properties.push(crate::model::RawProperty {
+                            key: "X-CFAIT-RECUR-FROM-COMPLETION".to_string(),
+                            value: "TRUE".to_string(),
+                            params: vec![],
+                        });
+                    }
                     has_recurrence = true;
                     consumed = 2;
                 } else {
