@@ -4,6 +4,7 @@
     "about_repository": "Repositorio: %{url}",
     "about_title": "Administrador de tareas de Cfait",
     "about_version": "Versión %{version}",
+    "action_complete_and_shift": "Horario completo y de turnos",
     "action_open_locations": "Ubicaciones disponibles (GPX)",
     "actions": "Acciones",
     "active_alarm": "Alarma activa",
