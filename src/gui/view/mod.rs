@@ -616,9 +616,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         };
 
         let mut added_unpinned = false;
+        let mut num_items = 0;
         for action in context_menu_order {
             if let Some(btn) = build_btn(&action) {
                 menu_actions = menu_actions.push(btn);
+                num_items += 1;
                 if !*is_full && !app.pinned_actions.contains(&action) {
                     added_unpinned = true;
                 }
@@ -634,10 +636,19 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 )
                 .padding(8),
             );
+            num_items += 1;
         }
 
-        let menu_container = container(menu_actions)
+        let max_available_height = (app.current_window_size.height - 20.0).max(100.0);
+
+        let menu_scrollable = scrollable(menu_actions)
+            .direction(Direction::Vertical(
+                Scrollbar::new().width(6).scroller_width(6).margin(0),
+            ));
+
+        let menu_container = container(menu_scrollable)
             .width(Length::Fixed(180.0))
+            .max_height(max_available_height)
             .padding(4)
             .style(|theme: &Theme| {
                 let palette = theme.extended_palette();
@@ -659,24 +670,24 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
 
         // Position the menu exactly by the mouse
         let menu_width = 180.0;
-        let menu_height = if *is_full { 350.0 } else { 150.0 };
+        let estimated_menu_height = (num_items as f32 * 34.0 + 8.0).min(max_available_height);
 
         let mut top_padding = pt.y;
         let mut left_padding = pt.x;
 
         if left_padding + menu_width > app.current_window_size.width {
-            left_padding = app.current_window_size.width - menu_width;
+            left_padding = (app.current_window_size.width - menu_width - 10.0).max(0.0);
         }
-        if top_padding + menu_height > app.current_window_size.height {
-            top_padding = app.current_window_size.height - menu_height;
+        if top_padding + estimated_menu_height > app.current_window_size.height {
+            top_padding = (app.current_window_size.height - estimated_menu_height - 10.0).max(0.0);
         }
 
         let positioned_menu = container(menu_container)
             .width(Length::Fill)
             .height(Length::Fill)
             .padding(iced::Padding {
-                top: top_padding.max(0.0),
-                left: left_padding.max(0.0),
+                top: top_padding,
+                left: left_padding,
                 ..Default::default()
             });
 
