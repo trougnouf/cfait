@@ -224,6 +224,7 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     app_state.strikethrough_completed = cfg.strikethrough_completed;
     app_state.hide_fully_completed_tags = hide_fully_completed_tags;
     app_state.sort_cutoff_months = sort_cutoff;
+    app_state.sort_standard_by_priority = cfg.sort_standard_by_priority;
     app_state.tag_aliases = tag_aliases;
     app_state.hidden_calendars = hidden_calendars.into_iter().collect();
     app_state.disabled_calendars = disabled_calendars.into_iter().collect();

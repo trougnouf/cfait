@@ -92,6 +92,7 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.disabled_calendars = app.disabled_calendars.iter().cloned().collect();
     cfg.hide_completed = app.hide_completed;
     cfg.hide_fully_completed_tags = app.hide_fully_completed_tags;
+    cfg.sort_standard_by_priority = app.sort_standard_by_priority;
     cfg.show_priority_numbers = app.show_priority_numbers;
     cfg.tag_aliases = app.tag_aliases.clone();
     cfg.sort_cutoff_months = app.sort_cutoff_months;

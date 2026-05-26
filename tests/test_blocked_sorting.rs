@@ -50,6 +50,7 @@ fn test_blocked_tasks_skip_urgent_rank() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,
@@ -129,6 +130,7 @@ fn test_blocked_tasks_skip_due_soon_rank() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,
@@ -206,6 +208,7 @@ fn test_blocked_tasks_skip_started_rank() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,
@@ -284,6 +287,7 @@ fn test_dependency_blocked_tasks_also_skip_ranks() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,
@@ -367,6 +371,7 @@ fn test_is_ready_filters_manually_blocked_tasks() {
         urgent_prio: 5,
         default_priority: 5,
         start_grace_period_days: 1,
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,
@@ -436,6 +441,7 @@ fn test_is_blocked_filter_shows_only_blocked() {
         urgent_prio: 5,
         default_priority: 5,
         start_grace_period_days: 1,
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,

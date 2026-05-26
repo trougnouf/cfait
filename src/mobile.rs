@@ -318,6 +318,7 @@ pub struct MobileConfig {
     pub tag_aliases: HashMap<String, Vec<String>>,
     pub disabled_calendars: Vec<String>,
     pub sort_cutoff_months: Option<u32>,
+    pub sort_standard_by_priority: bool,
     pub urgent_days: u32,
     pub urgent_prio: u8,
     pub default_priority: u8,
@@ -738,6 +739,7 @@ impl CfaitMobile {
             tag_aliases: c.tag_aliases,
             disabled_calendars: c.disabled_calendars,
             sort_cutoff_months: c.sort_cutoff_months,
+            sort_standard_by_priority: c.sort_standard_by_priority,
             urgent_days: c.urgent_days_horizon,
             urgent_prio: c.urgent_priority_threshold,
             default_priority: c.default_priority,
@@ -819,6 +821,7 @@ impl CfaitMobile {
         hide_completed: bool,
         disabled_calendars: Vec<String>,
         sort_cutoff_months: Option<u32>,
+        sort_standard_by_priority: bool,
         urgent_days: u32,
         urgent_prio: u8,
         default_priority: u8,
@@ -844,6 +847,7 @@ impl CfaitMobile {
         c.hide_completed = hide_completed;
         c.disabled_calendars = disabled_calendars;
         c.sort_cutoff_months = sort_cutoff_months;
+        c.sort_standard_by_priority = sort_standard_by_priority;
         c.urgent_days_horizon = urgent_days;
         c.urgent_priority_threshold = urgent_prio;
         c.default_priority = default_priority;
@@ -1484,7 +1488,7 @@ impl CfaitMobile {
             urgent_prio: config.urgent_priority_threshold,
             default_priority: config.default_priority,
             start_grace_period_days: config.start_grace_period_days,
-
+            sort_standard_by_priority: config.sort_standard_by_priority,
             expanded_done_groups: &expanded_set,
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
@@ -1599,6 +1603,7 @@ impl CfaitMobile {
             urgent_prio: config.urgent_priority_threshold,
             default_priority: config.default_priority,
             start_grace_period_days: config.start_grace_period_days,
+            sort_standard_by_priority: config.sort_standard_by_priority,
             expanded_done_groups: &HashSet::new(),
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,

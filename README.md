@@ -358,6 +358,17 @@ Cfait organizes tasks in the following order:
 - Future start dates move tasks to rank 6, even if they have urgent priority
 - Thresholds for "urgent", "due soon", and "cutoff" are configurable in settings
 
+### 🔀 Sort by Priority (toggle)
+
+Press **`p`** (TUI/GUI) or click the sort icon (GUI toolbar, left of the random-task button) to switch between two sorting modes for the standard and remaining task groups (ranks 4 & 5):
+
+| Mode | Standard tasks (rank 4) | Remaining tasks (rank 5) |
+| :--- | :--- | :--- |
+| **Date-first** *(default)* | Sorted by due date, then priority | Sorted by priority, then name |
+| **Priority-first** | Ranks 4 & 5 **merged** — sorted by priority, then due date (tasks without a date follow tasks of the same priority that have one), then name |
+
+The setting is saved in the config file and persists across restarts. It can also be set permanently via `sort_standard_by_priority = true` in `~/.config/cfait/config.toml`.
+
 <a name="calendar-events-for-tasks"></a>
 ## 📅 calendar events for tasks
 
@@ -455,6 +466,9 @@ If you are using the Terminal interface (or the GUI), here are the essentials (*
 *   `Enter`: Toggle filter / Select calendar
 *   `Space`: Toggle visibility (show/hide layer)
 *   `*`: Isolate (hide all others)
+
+**View Toggles**
+*   `p`: Toggle **sort by priority** (merges standard & remaining task groups into one priority-ordered list)
 
 **Note:** The sidebar shows hierarchical tags and locations. For example, if you have tasks with `#work:project:urgent` and `#work:meeting`, they'll be organized under the `#work` parent in the sidebar.
 

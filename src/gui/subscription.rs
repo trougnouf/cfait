@@ -224,6 +224,7 @@ fn handle_hotkey(
                     ("w", false) => Some(Message::ToggleQuickFilter),
                     ("r", false) => Some(Message::Refresh),
                     ("r", true) => Some(Message::JumpToRandomTask),
+                    ("p", false) => Some(Message::ToggleSortStandardByPriorityToggle),
                     ("/", false) => Some(Message::FocusSearch),
                     ("/", true) => Some(Message::OpenHelp(crate::help::HelpTab::Shortcuts)),
                     ("?", _) => Some(Message::OpenHelp(crate::help::HelpTab::Shortcuts)),

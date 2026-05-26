@@ -336,6 +336,10 @@ pub struct Config {
     pub hide_fully_completed_tags: bool,
     #[serde(default = "default_cutoff")]
     pub sort_cutoff_months: Option<u32>,
+    /// When `true`, rank-4 (standard tasks with a due date within the cutoff) are sorted
+    /// by priority first, then by due date.  Default is `false` (date-first).
+    #[serde(default)]
+    pub sort_standard_by_priority: bool,
     #[serde(default)]
     pub theme: AppTheme,
 
@@ -425,6 +429,7 @@ impl Default for Config {
             hide_completed: false,
             hide_fully_completed_tags: true,
             sort_cutoff_months: Some(2),
+            sort_standard_by_priority: false,
             tag_aliases: HashMap::new(),
             language: None,
             theme: AppTheme::default(),

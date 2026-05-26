@@ -352,6 +352,9 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .label(rust_i18n::t!("hide_completed_and_canceled_tasks"))
                     .on_toggle(Message::ToggleHideCompleted),
                 hide_fully_ui,
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.sort_standard_by_priority)
+                    .label(rust_i18n::t!("sort_standard_by_priority_label"))
+                    .on_toggle(Message::ToggleSortStandardByPriority),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_priority_numbers)
                     .label(rust_i18n::t!("show_priority_numbers"))
                     .on_toggle(Message::SetShowPriorityNumbers),

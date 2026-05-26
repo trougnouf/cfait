@@ -67,6 +67,7 @@ fun SettingsScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var insecure by remember { mutableStateOf(false) }
     var hideCompleted by remember { mutableStateOf(false) }
+    var sortStandardByPriority by remember { mutableStateOf(false) }
     var sortMonths by remember { mutableStateOf("2") }
     var status by remember { mutableStateOf("") }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
@@ -191,6 +192,7 @@ fun SettingsScreen(
         pass = cfg.password
         insecure = cfg.allowInsecure
         hideCompleted = cfg.hideCompleted
+        sortStandardByPriority = cfg.sortStandardByPriority
         sortMonths = cfg.sortCutoffMonths?.toString() ?: ""
         aliases = cfg.tagAliases
         allCalendars = api.getCalendars()
@@ -257,7 +259,7 @@ fun SettingsScreen(
 
         api.saveConfig(
             url, user, pass, insecure, hideCompleted,
-            disabledSet.toList(), sortInt,
+            disabledSet.toList(), sortInt, sortStandardByPriority,
             daysInt, prioInt, defaultPrioInt, startGraceInt,
             autoRemind, defTime, sShort,
             createEventsForTasks, deleteEventsOnCompletion,
@@ -610,6 +612,13 @@ fun SettingsScreen(
                         saveToDisk()
                     })
                     Text(androidx.compose.ui.res.stringResource(R.string.hide_completed_and_canceled_tasks))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = sortStandardByPriority, onCheckedChange = {
+                        sortStandardByPriority = it
+                        saveToDisk()
+                    })
+                    Text(androidx.compose.ui.res.stringResource(R.string.sort_standard_by_priority_label))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = autoRemind, onCheckedChange = { autoRemind = it })

@@ -86,6 +86,7 @@ pub struct GuiApp {
     pub strikethrough_completed: bool,
     pub hide_fully_completed_tags: bool,
     pub sort_cutoff_months: Option<u32>,
+    pub sort_standard_by_priority: bool,
     pub current_theme: AppTheme,
 
     // Store the resolved random theme for this session
@@ -367,6 +368,7 @@ impl Default for GuiApp {
             hide_completed: false,
             hide_fully_completed_tags: true,
             sort_cutoff_months: Some(2),
+            sort_standard_by_priority: false,
             ob_sort_months_input: "2".to_string(),
             current_theme: AppTheme::default(),
             resolved_random_theme,

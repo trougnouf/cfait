@@ -36,6 +36,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.tag_aliases = config.tag_aliases.clone();
             app.hide_completed = config.hide_completed;
             app.hide_fully_completed_tags = config.hide_fully_completed_tags;
+            app.sort_standard_by_priority = config.sort_standard_by_priority;
             app.show_priority_numbers = config.show_priority_numbers;
             app.current_theme = config.theme;
 

@@ -96,6 +96,7 @@ struct HierarchyContext<'a> {
 pub fn organize_hierarchy(
     mut tasks: Vec<Task>,
     default_priority: u8,
+    sort_standard_by_priority: bool,
     expanded_groups: &HashSet<String>,
     max_done_roots: usize,
     max_done_subtasks: usize,
@@ -106,7 +107,7 @@ pub fn organize_hierarchy(
     let mut roots: Vec<Task> = Vec::new();
 
     // Sort by the canonical comparator before building hierarchy
-    tasks.sort_by(|a, b| a.compare_for_sort(b, default_priority));
+    tasks.sort_by(|a, b| a.compare_for_sort(b, default_priority, sort_standard_by_priority));
 
     for mut task in tasks {
         let is_orphan = match &task.parent_uid {
@@ -296,7 +297,9 @@ pub fn organize_hierarchy(
     }
 
     if !unvisited.is_empty() {
-        unvisited.sort_by(|a, b| a.compare_for_sort(b, default_priority));
+        unvisited.sort_by(|a, b| {
+            a.compare_for_sort(b, default_priority, sort_standard_by_priority)
+        });
         process_group(unvisited, "".to_string(), max_done_roots, true, &mut context, 0);
     }
 
@@ -400,6 +403,7 @@ pub struct FilterOptions<'a> {
     pub urgent_prio: u8,
     pub default_priority: u8,
     pub start_grace_period_days: u32,
+    pub sort_standard_by_priority: bool,
     pub expanded_done_groups: &'a HashSet<String>,
     pub max_done_roots: usize,
     pub max_done_subtasks: usize,
@@ -2030,6 +2034,7 @@ impl TaskStore {
         let organized_items = organize_hierarchy(
             final_tasks_processed,
             options.default_priority,
+            options.sort_standard_by_priority,
             options.expanded_done_groups,
             options.max_done_roots,
             options.max_done_subtasks,
@@ -2288,6 +2293,7 @@ mod tests {
         let result = organize_hierarchy(
             tasks,
             5,  // default_priority
+            false, // sort_standard_by_priority
             &expanded_groups,
             10, // max_done_roots
             10, // max_done_subtasks
@@ -2325,6 +2331,7 @@ mod tests {
         let result = organize_hierarchy(
             tasks,
             5,
+            false, // sort_standard_by_priority
             &expanded_groups,
             10,
             1, // max_done_subtasks = 1, so only 1 done child shown, 1 hidden
@@ -2363,6 +2370,7 @@ mod tests {
         let result = organize_hierarchy(
             tasks,
             5,
+            false, // sort_standard_by_priority
             &expanded_groups,
             3, // max_done_roots = 3, so 2 shown (3-1), 3 hidden
             10,

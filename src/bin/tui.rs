@@ -411,6 +411,7 @@ async fn main() -> Result<()> {
                 urgent_prio: config.urgent_priority_threshold,
                 default_priority: config.default_priority,
                 start_grace_period_days: config.start_grace_period_days,
+                sort_standard_by_priority: config.sort_standard_by_priority,
                 expanded_done_groups: &expanded_done_groups,
                 max_done_roots: usize::MAX,
                 max_done_subtasks: usize::MAX,

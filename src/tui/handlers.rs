@@ -1460,6 +1460,15 @@ pub async fn handle_key_event(
                 state.hide_completed = !state.hide_completed;
                 state.refresh_filtered_view();
             }
+            KeyCode::Char('p') => {
+                state.sort_standard_by_priority = !state.sort_standard_by_priority;
+                state.refresh_filtered_view();
+                state.message = if state.sort_standard_by_priority {
+                    rust_i18n::t!("sort_standard_by_priority").to_string()
+                } else {
+                    rust_i18n::t!("sort_standard_by_date").to_string()
+                };
+            }
             KeyCode::Char('L') => {
                 // Enter relationship browsing mode to navigate to linked tasks
                 if let Some(task) = state.get_selected_task() {

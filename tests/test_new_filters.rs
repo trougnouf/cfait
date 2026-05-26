@@ -169,6 +169,7 @@ fn test_is_ready_filters_future_start_dates() {
         urgent_prio: 5,
         default_priority: 5,
         start_grace_period_days: 1,
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,
@@ -247,6 +248,7 @@ fn test_is_ready_filters_blocked_tasks() {
         urgent_prio: 5,
         default_priority: 5,
         start_grace_period_days: 1,
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,
@@ -331,6 +333,7 @@ fn test_is_ready_combines_with_other_filters() {
         urgent_prio: 5,
         default_priority: 5,
         start_grace_period_days: 1,
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,
@@ -399,6 +402,7 @@ fn test_is_ready_filters_implicitly_future_tasks() {
         urgent_days: 7,
         urgent_prio: 5,
         default_priority: 5,
+        sort_standard_by_priority: false,
         start_grace_period_days: 1,
         expanded_done_groups: &HashSet::new(),
         max_done_roots: usize::MAX,
@@ -453,6 +457,7 @@ fn test_is_ready_filters_implicitly_future_tasks() {
         urgent_days: 7,
         urgent_prio: 5,
         default_priority: 5,
+        sort_standard_by_priority: false,
         start_grace_period_days: 1,
         expanded_done_groups: &HashSet::new(),
         max_done_roots: usize::MAX,

@@ -184,6 +184,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CategoryMatchModeChanged(_)
         | Message::ToggleHideCompleted(_)
         | Message::ToggleHideFullyCompletedTags(_)
+        | Message::ToggleSortStandardByPriority(_)
+        | Message::ToggleSortStandardByPriorityToggle
         | Message::SelectCalendar(_)
         | Message::ToggleCalendarDisabled(_, _)
         | Message::SearchChanged(_)

@@ -63,6 +63,7 @@ pub struct AppState {
     pub strikethrough_completed: bool,
     pub show_priority_numbers: bool,
     pub sort_cutoff_months: Option<u32>,
+    pub sort_standard_by_priority: bool,
 
     pub quick_filter_term: String,
     pub quick_filter_icon: String,
@@ -170,6 +171,7 @@ impl AppState {
             quick_filter_icon: "f0fa9".to_string(),
             show_quick_filter: true,
             sort_cutoff_months: Some(2),
+            sort_standard_by_priority: false,
             // Initialize sidebar caches as empty; they will be populated by refresh_filtered_view()
             cached_categories: Vec::new(),
             cached_locations: Vec::new(),
@@ -279,6 +281,7 @@ impl AppState {
             urgent_prio: self.urgent_prio,
             default_priority: self.default_priority,
             start_grace_period_days: self.start_grace_period_days,
+            sort_standard_by_priority: self.sort_standard_by_priority,
             // Pass expanded groups and configured limits
             expanded_done_groups: &self.expanded_done_groups,
             max_done_roots: config.max_done_roots,

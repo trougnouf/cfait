@@ -59,6 +59,7 @@ fn parent_inherits_child_priority_and_sorts_before_sibling() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,
@@ -146,6 +147,7 @@ fn compare_two_parents_inherited_priorities_determine_order() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,
@@ -228,6 +230,7 @@ fn parent_inherits_started_child_over_unset_sibling() {
         urgent_prio: 1,
         default_priority: 5,
         start_grace_period_days: 1,
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,

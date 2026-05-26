@@ -67,6 +67,7 @@ fn test_reproduce_android_local_revert_bug() {
         default_priority: 5,
         start_grace_period_days: 1,
         // Newly required fields in FilterOptions:
+        sort_standard_by_priority: false,
         expanded_done_groups: &HashSet::new(),
         
         max_done_roots: usize::MAX,

@@ -463,6 +463,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             Task::none()
         }
+        Message::ToggleSortStandardByPriority(val) => {
+            app.sort_standard_by_priority = val;
+            save_config(app);
+            refresh_filtered_tasks(app);
+            Task::none()
+        }
+        Message::ToggleSortStandardByPriorityToggle => {
+            let new_val = !app.sort_standard_by_priority;
+            handle(app, Message::ToggleSortStandardByPriority(new_val))
+        }
         Message::SelectCalendar(href) => {
             if app.sidebar_mode == SidebarMode::Categories {
                 app.sidebar_mode = SidebarMode::Calendars;
