@@ -31,6 +31,7 @@ pub enum Message {
     ObUrlChanged(String),
     ObUserChanged(String),
     ObPassChanged(String),
+    ToggleObPasswordVisibility,
     ObInsecureToggled(bool),
     ToggleCalendarVisibility(String, bool),
     ToggleCalendarDisabled(String, bool),

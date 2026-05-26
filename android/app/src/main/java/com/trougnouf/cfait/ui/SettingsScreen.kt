@@ -64,6 +64,7 @@ fun SettingsScreen(
     var url by remember { mutableStateOf("") }
     var user by remember { mutableStateOf("") }
     var pass by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
     var insecure by remember { mutableStateOf(false) }
     var hideCompleted by remember { mutableStateOf(false) }
     var sortMonths by remember { mutableStateOf("2") }
@@ -187,6 +188,7 @@ fun SettingsScreen(
         val cfg = api.getConfig()
         url = cfg.url
         user = cfg.username
+        pass = cfg.password
         insecure = cfg.allowInsecure
         hideCompleted = cfg.hideCompleted
         sortMonths = cfg.sortCutoffMonths?.toString() ?: ""
@@ -357,7 +359,20 @@ fun SettingsScreen(
                     value = pass,
                     onValueChange = { pass = it },
                     label = { Text(androidx.compose.ui.res.stringResource(R.string.password)) },
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (passwordVisible) {
+                        androidx.compose.ui.text.input.VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            NfIcon(
+                                if (passwordVisible) NfIcons.HIDDEN else NfIcons.VISIBLE,
+                                18.sp,
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Password,

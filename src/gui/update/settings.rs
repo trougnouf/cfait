@@ -19,6 +19,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ConfigLoaded(Ok(config_box)) => {
             let config = *config_box;
             app.core_config = config.clone();
+            app.ob_password_visible = false;
             let locals = LocalCalendarRegistry::load(app.ctx.as_ref()).unwrap_or_default();
             app.local_cals_editing = locals.clone();
 
@@ -155,6 +156,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.ob_pass = v;
             Task::none()
         }
+        Message::ToggleObPasswordVisibility => {
+            app.ob_password_visible = !app.ob_password_visible;
+            Task::none()
+        }
         Message::ObDefaultCalChanged(v) => {
             app.ob_default_cal = Some(v);
             save_config(app);
@@ -170,6 +175,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ObSubmit => {
+            app.ob_password_visible = false;
             app.calendars.retain(|c| !c.href.starts_with("local://"));
             app.calendars.extend(app.local_cals_editing.clone());
             app.sort_calendars();
@@ -192,6 +198,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::OpenSettings => {
             let cfg = &app.core_config;
+            app.ob_password_visible = false;
             app.ob_url = cfg.url.clone();
             app.ob_user = cfg.username.clone();
             // app.ob_pass is already securely held in memory from startup
@@ -231,6 +238,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::CancelSettings => {
+            app.ob_password_visible = false;
             app.calendars.retain(|c| !c.href.starts_with("local://"));
             app.calendars.extend(app.local_cals_editing.clone());
             app.sort_calendars();
@@ -241,6 +249,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ObSubmitOffline => {
+            app.ob_password_visible = false;
             app.ob_url.clear();
             app.ob_user.clear();
             app.ob_pass.clear();
