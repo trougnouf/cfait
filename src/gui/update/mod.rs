@@ -46,6 +46,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ObUrlChanged(_)
         | Message::ObUserChanged(_)
         | Message::ObPassChanged(_)
+        | Message::ToggleObPasswordVisibility
         | Message::ObDefaultCalChanged(_)
         | Message::ObInsecureToggled(_)
         | Message::ObSubmit
