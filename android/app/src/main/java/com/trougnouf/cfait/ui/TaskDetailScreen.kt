@@ -269,6 +269,59 @@ fun TaskDetailScreen(
                 modifier = Modifier.padding(start = 4.dp, bottom = 16.dp),
             )
 
+            if (task!!.parentUid != null) {
+                val pUid = task!!.parentUid!!
+                Text(
+                    stringResource(R.string.parent),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(vertical = 2.dp)
+                ) {
+                    // DELETE BUTTON
+                    IconButton(
+                        onClick = {
+                            scope.launch {
+                                try {
+                                    api.dispatch(AppIntent.RemoveParent(task!!.uid))
+                                    reload()
+                                    triggerBackgroundSync(context, api)
+                                } catch (e: Exception) {
+                                    if (e is CancellationException) throw e
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        context.getString(R.string.error_general, e.message ?: ""),
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
+                    }
+
+                    Spacer(Modifier.width(8.dp))
+
+                    // NAVIGATION AREA
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clickable { onNavigate(pUid) }
+                            .padding(4.dp)
+                    ) {
+                        NfIcon(NfIcons.ELEVATOR_UP, 12.sp, androidx.compose.ui.graphics.Color.Gray)
+                        Spacer(Modifier.width(4.dp))
+                        DynamicTaskName(api, stringResource(R.string.unknown_parent), pUid)
+                    }
+                }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
+
             if (task!!.blockedByNames.isNotEmpty()) {
                 Text(
                     stringResource(R.string.blocked_by),

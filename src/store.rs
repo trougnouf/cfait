@@ -475,17 +475,44 @@ impl TaskStore {
         let mut uids_to_add = Vec::new();
 
         for mut task in tasks {
-            uids_to_add.push(task.uid.clone());
-
+            let uid = task.uid.clone();
+            
             // Protect against stale reads wiping out recent local mutations
             if let Some(existing_map) = self.calendars.get(&calendar_href)
-                && let Some(existing_task) = existing_map.get(&task.uid)
+                && let Some(existing_task) = existing_map.get(&uid)
                 && existing_task.sequence > task.sequence
             {
                 task = existing_task.clone();
             }
 
-            new_map.insert(task.uid.clone(), task);
+            if let Some(existing_href) = self.index.get(&uid)
+                && existing_href != &calendar_href {
+                    // Duplicate UID across calendars found!
+                    // Determine which one wins deterministically.
+                    if let Some(existing_task) = self.calendars.get(existing_href).and_then(|m| m.get(&uid)) {
+                        let keep_existing = if existing_task.sequence != task.sequence {
+                            existing_task.sequence > task.sequence
+                        } else {
+                            // Tie-break with href string comparison to ensure consistency across platforms
+                            existing_href > &calendar_href
+                        };
+                        
+                        if keep_existing {
+                            // Skip inserting this task into the new map
+                            continue;
+                        } else {
+                            // The new task wins. Remove from old calendar.
+                            let old_href_clone = existing_href.clone();
+                            if let Some(old_map) = self.calendars.get_mut(&old_href_clone)
+                                && let Some(old_task) = old_map.remove(&uid) {
+                                    self.remove_task_from_indices(&old_task);
+                                }
+                        }
+                    }
+                }
+
+            new_map.insert(uid.clone(), task);
+            uids_to_add.push(uid);
         }
 
         // --- ADDED: Automatic cleanup for legacy history tasks mistakenly parsed as children ---
@@ -540,19 +567,6 @@ impl TaskStore {
         }
         // --- END ADDED ---
 
-        // Cleanup old calendars if tasks moved
-        for uid in &uids_to_add {
-            if let Some(old_href) = self.index.get(uid)
-                && old_href != &calendar_href
-            {
-                let old_href_clone = old_href.clone();
-                if let Some(old_map) = self.calendars.get_mut(&old_href_clone) {
-                    old_map.remove(uid);
-                }
-            }
-            self.index.insert(uid.clone(), calendar_href.clone());
-        }
-
         // Cleanup index for tasks that were in this calendar but are now gone
         if let Some(old_map) = self.calendars.get(&calendar_href) {
             for uid in old_map.keys() {
@@ -560,6 +574,11 @@ impl TaskStore {
                     self.index.remove(uid);
                 }
             }
+        }
+
+        // Insert new indices
+        for uid in uids_to_add {
+            self.index.insert(uid, calendar_href.clone());
         }
 
         self.calendars.insert(calendar_href, new_map);
