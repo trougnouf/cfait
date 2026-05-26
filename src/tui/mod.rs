@@ -31,6 +31,25 @@ use std::{
 };
 use tokio::sync::mpsc;
 
+fn prompt_password_for_tui(prompt: String) -> Result<String> {
+    print!("{}", rust_i18n::t!("tui_show_password_prompt"));
+    io::stdout().flush()?;
+
+    let mut choice = String::new();
+    io::stdin().read_line(&mut choice)?;
+
+    if choice.trim().eq_ignore_ascii_case("y") {
+        print!("{}", rust_i18n::t!("tui_password_visible_prompt"));
+        io::stdout().flush()?;
+
+        let mut password = String::new();
+        io::stdin().read_line(&mut password)?;
+        Ok(password.trim_end_matches(&['\r', '\n'][..]).to_string())
+    } else {
+        Ok(prompt_password(prompt)?)
+    }
+}
+
 pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     // --- 1. PREAMBLE & CONFIG ---
     let args: Vec<String> = env::args().collect();
@@ -106,7 +125,8 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                     io::stdin().read_line(&mut user)?;
                     new_config.username = user.trim().to_string();
 
-                    let pass = prompt_password(rust_i18n::t!("tui_password_prompt").to_string())?;
+                    let pass =
+                        prompt_password_for_tui(rust_i18n::t!("tui_password_prompt").to_string())?;
                     new_config.password = pass;
 
                     print!("{}", rust_i18n::t!("tui_insecure_ssl_prompt"));

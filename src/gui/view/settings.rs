@@ -857,10 +857,22 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .on_input(Message::ObUserChanged)
                     .padding(10),
                 text(rust_i18n::t!("password")),
-                text_input(&rust_i18n::t!("password"), &app.ob_pass)
-                    .on_input(Message::ObPassChanged)
-                    .secure(true)
-                    .padding(10),
+                row![
+                    text_input(&rust_i18n::t!("password"), &app.ob_pass)
+                        .on_input(Message::ObPassChanged)
+                        .secure(!app.ob_password_visible)
+                        .padding(10)
+                        .width(Length::Fill),
+                    button(
+                        icon::icon(if app.ob_password_visible { icon::EYE_CLOSED } else { icon::EYE })
+                            .size(20)
+                    )
+                    .style(button::text)
+                    .padding(10)
+                    .on_press(Message::ToggleObPasswordVisibility)
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
                 insecure_check,
                 save_connect_btn
             ]
