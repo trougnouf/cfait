@@ -46,7 +46,21 @@ jobs:
           fetch-depth: 0
 
       - name: Restore Keystore
-        run: echo "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" | base64 --decode > cfait-rolling.keystore
+        run: |
+          if [ -n "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" ]; then
+            echo "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" | base64 --decode > cfait-rolling.keystore
+          else
+            echo "Secrets not available (fork PR). Generating a temporary dummy keystore for the release build."
+            keytool -genkey -v \
+              -keystore cfait-rolling.keystore \
+              -alias cfait-rolling \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass dummypassword \
+              -keypass dummypassword \
+              -dname "CN=Cfait, OU=Cfait, O=Cfait, C=BE"
+          fi
 
       - name: Build Rust JNI Libs
         run: |
@@ -61,9 +75,9 @@ jobs:
       - name: Build Signed Android APK
         env:
           KEYSTORE_FILE: "${{ github.workspace }}/cfait-rolling.keystore"
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || 'dummypassword' }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || 'cfait-rolling' }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || 'dummypassword' }}
         run: |
           cd android
           chmod +x gradlew

@@ -83,21 +83,7 @@ jobs:
 
       - name: Restore Keystore
         if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          if [ -n "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" ]; then
-            echo "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" | base64 --decode > cfait-rolling.keystore
-          else
-            echo "Secrets not available (fork PR). Generating a temporary dummy keystore for the release build."
-            keytool -genkey -v \
-              -keystore cfait-rolling.keystore \
-              -alias cfait-rolling \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -storepass dummypassword \
-              -keypass dummypassword \
-              -dname "CN=Cfait, OU=Cfait, O=Cfait, C=BE"
-          fi
+        run: echo "${{ secrets.ANDROID_SIGNING_KEYSTORE_B64 }}" | base64 --decode > cfait-release.keystore
 
       - name: Build Rust JNI Libs
         run: |
@@ -112,16 +98,13 @@ jobs:
       - name: Build Android Artifacts (AAB & APK)
         if: startsWith(github.ref, 'refs/tags/')
         env:
-          KEYSTORE_FILE: "${{ github.workspace }}/cfait-rolling.keystore"
+          KEYSTORE_FILE: "${{ github.workspace }}/cfait-release.keystore"
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           cd android
           chmod +x gradlew
-          export KEYSTORE_PASSWORD="${KEYSTORE_PASSWORD:-dummypassword}"
-          export KEY_ALIAS="${KEY_ALIAS:-cfait-rolling}"
-          export KEY_PASSWORD="${KEY_PASSWORD:-dummypassword}"
           echo "Building AAB for Google Play..."
           ./gradlew bundleRelease --no-daemon
           echo "Building APK for F-Droid & direct download..."
