@@ -614,15 +614,15 @@ fun SettingsScreen(
                     Text(androidx.compose.ui.res.stringResource(R.string.hide_completed_and_canceled_tasks))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = autoRemind, onCheckedChange = { autoRemind = it })
+                    Text(androidx.compose.ui.res.stringResource(R.string.auto_remind_on_due_start_label))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = sortStandardByPriority, onCheckedChange = {
                         sortStandardByPriority = it
                         saveToDisk()
                     })
                     Text(androidx.compose.ui.res.stringResource(R.string.sort_standard_by_priority_label))
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = autoRemind, onCheckedChange = { autoRemind = it })
-                    Text(androidx.compose.ui.res.stringResource(R.string.auto_remind_on_due_start_label))
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                     Text(
