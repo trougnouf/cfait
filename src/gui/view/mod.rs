@@ -1372,35 +1372,6 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
 
     let mut search_row = row![].align_y(iced::Alignment::Center).spacing(5);
 
-    // Sort-by-priority toggle button
-    {
-        let sort_prio_color = if app.sort_standard_by_priority {
-            app.theme().extended_palette().primary.base.color
-        } else {
-            app.theme().extended_palette().background.base.text
-        };
-        let sort_prio_btn = iced::widget::button(
-            icon::icon(icon::SORT_PRIORITY).size(16).color(sort_prio_color),
-        )
-        .style(iced::widget::button::text)
-        .padding(6)
-        .on_press(Message::ToggleSortStandardByPriorityToggle);
-        let sort_prio_tooltip = if app.sort_standard_by_priority {
-            rust_i18n::t!("sort_standard_by_date").to_string()
-        } else {
-            rust_i18n::t!("sort_standard_by_priority").to_string()
-        };
-        search_row = search_row.push(
-            tooltip(
-                sort_prio_btn,
-                text(format!("{} (P)", sort_prio_tooltip)).size(12),
-                tooltip::Position::Bottom,
-            )
-            .style(tooltip_style)
-            .delay(Duration::from_millis(700)),
-        );
-    }
-
     let random_btn = iced::widget::button(icon::icon(app.random_icon).size(16))
         .style(iced::widget::button::text)
         .padding(6)

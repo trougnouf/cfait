@@ -1460,7 +1460,7 @@ pub async fn handle_key_event(
                 state.hide_completed = !state.hide_completed;
                 state.refresh_filtered_view();
             }
-            KeyCode::Char('p') => {
+            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 state.sort_standard_by_priority = !state.sort_standard_by_priority;
                 state.refresh_filtered_view();
                 state.message = if state.sort_standard_by_priority {

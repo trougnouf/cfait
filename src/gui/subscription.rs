@@ -180,6 +180,7 @@ fn handle_hotkey(
                     "s" => return Some(Message::SubmitTask),
                     "e" => return Some(Message::StartCreateWithDescription), // Fallback if not focused
                     "," => return Some(Message::OpenSettings),
+                    "p" => return Some(Message::ToggleSortStandardByPriorityToggle),
                     _ => {}
                 }
             } else if let keyboard::Key::Named(Named::Delete) = key.as_ref() {
@@ -224,7 +225,7 @@ fn handle_hotkey(
                     ("w", false) => Some(Message::ToggleQuickFilter),
                     ("r", false) => Some(Message::Refresh),
                     ("r", true) => Some(Message::JumpToRandomTask),
-                    ("p", false) => Some(Message::ToggleSortStandardByPriorityToggle),
+
                     ("/", false) => Some(Message::FocusSearch),
                     ("/", true) => Some(Message::OpenHelp(crate::help::HelpTab::Shortcuts)),
                     ("?", _) => Some(Message::OpenHelp(crate::help::HelpTab::Shortcuts)),
