@@ -627,7 +627,7 @@ fun CfaitNavHost(
                         val t = localTrash.toUIntOrNull() ?: 14u
                         api.saveConfig(
                             cfg.url, cfg.username, "", cfg.allowInsecure, cfg.hideCompleted,
-                            cfg.disabledCalendars, cfg.sortCutoffMonths, cfg.urgentDays, cfg.urgentPrio,
+                            cfg.disabledCalendars, cfg.sortCutoffMonths, cfg.sortStandardByPriority, cfg.urgentDays, cfg.urgentPrio,
                             cfg.defaultPriority, cfg.startGracePeriodDays, cfg.autoReminders,
                             cfg.defaultReminderTime, cfg.snoozeShort, cfg.createEventsForTasks,
                             deleteEvents, cfg.autoRefreshInterval,
