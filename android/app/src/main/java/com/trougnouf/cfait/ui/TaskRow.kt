@@ -318,7 +318,10 @@ fun TaskRow(
                         Text(label, fontSize = 10.sp, color = durColor, lineHeight = 10.sp)
                     }
 
-                    if (task.isRecurring) NfIcon(NfIcons.REPEAT, size = 10.sp, color = Color.Gray, lineHeight = 10.sp)
+                    if (task.isRecurring) {
+                        val rColor = if (task.isRelativeRecurrence) Color(0xFFAB47BC) else Color.Gray
+                        NfIcon(NfIcons.REPEAT, size = 10.sp, color = rColor, lineHeight = 10.sp)
+                    }
 
                     if (task.geo != null) {
                         IconButton(
@@ -467,7 +470,7 @@ fun TaskRow(
                         )
                     }
 
-                    if (task.isRecurring && !task.isDone && task.statusString != "Cancelled") {
+                    if (task.isRecurring && !task.isRelativeRecurrence && !task.isDone && task.statusString != "Cancelled") {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.action_complete_and_shift)) },
                             onClick = { expanded = false; onAction("complete_and_shift") },

@@ -451,6 +451,10 @@ pub fn compare_sortkeys(
 // Helper context used by hierarchy organization routines.
 // Bundles the children map, result vector and other parameters so recursive helpers
 impl Task {
+    pub fn is_relative_recurrence(&self) -> bool {
+        self.unmapped_properties.iter().any(|p| p.key == "X-CFAIT-RECUR-FROM-COMPLETION")
+    }
+
     /// Return the explicit COMPLETED date parsed from unmapped properties, if present.
     pub fn completion_date(&self) -> Option<DateTime<Utc>> {
         self.unmapped_properties
@@ -1079,7 +1083,7 @@ impl Task {
             return (updated, None);
         }
 
-        let is_relative = shift_schedule || base_task.unmapped_properties.iter().any(|p| p.key == "X-CFAIT-RECUR-FROM-COMPLETION");
+        let is_relative = shift_schedule || base_task.is_relative_recurrence();
 
         // Only perform full recycle/advance for recurring tasks when completing.
         if base_task.rrule.is_some() && target_status.is_done() {

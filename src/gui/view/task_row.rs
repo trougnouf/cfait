@@ -512,9 +512,14 @@ pub fn view_task_row<'a>(
                         );
                     }
                     if task.rrule.is_some() {
+                        let r_color = if task.is_relative_recurrence() {
+                            Color::from_rgb(0.67, 0.28, 0.74) // #ab47bc
+                        } else {
+                            Color::from_rgb(0.5, 0.5, 0.5)
+                        };
                         let recurrence_icon = icon::icon(icon::REPEAT)
                             .size(14)
-                            .color(Color::from_rgb(0.5, 0.5, 0.5));
+                            .color(r_color);
                         tags_row = tags_row.push(container(recurrence_icon).padding(0));
                     }
 
@@ -755,7 +760,7 @@ pub fn view_task_row<'a>(
                 if *action == TaskAction::ToggleDetails && !(has_info || has_time) {
                     continue;
                 }
-                if *action == TaskAction::CompleteAndShift && (task.rrule.is_none() || is_done_or_cancelled) {
+                if *action == TaskAction::CompleteAndShift && (task.rrule.is_none() || is_done_or_cancelled || task.is_relative_recurrence()) {
                     continue;
                 }
                 if *action == TaskAction::DeleteTree && !has_subtasks {

@@ -4541,6 +4541,7 @@ data class MobileTask(
     var `calendarHref`: kotlin.String,
     var `categories`: List<kotlin.String>,
     var `isRecurring`: kotlin.Boolean,
+    var `isRelativeRecurrence`: kotlin.Boolean,
     var `parentUid`: kotlin.String?,
     var `smartString`: kotlin.String,
     var `depth`: kotlin.UInt,
@@ -4597,6 +4598,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterUInt.read(buf),
@@ -4647,6 +4649,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterString.allocationSize(value.`calendarHref`) +
                 FfiConverterSequenceString.allocationSize(value.`categories`) +
                 FfiConverterBoolean.allocationSize(value.`isRecurring`) +
+                FfiConverterBoolean.allocationSize(value.`isRelativeRecurrence`) +
                 FfiConverterOptionalString.allocationSize(value.`parentUid`) +
                 FfiConverterString.allocationSize(value.`smartString`) +
                 FfiConverterUInt.allocationSize(value.`depth`) +
@@ -4699,6 +4702,7 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterString.write(value.`calendarHref`, buf)
         FfiConverterSequenceString.write(value.`categories`, buf)
         FfiConverterBoolean.write(value.`isRecurring`, buf)
+        FfiConverterBoolean.write(value.`isRelativeRecurrence`, buf)
         FfiConverterOptionalString.write(value.`parentUid`, buf)
         FfiConverterString.write(value.`smartString`, buf)
         FfiConverterUInt.write(value.`depth`, buf)

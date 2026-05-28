@@ -356,6 +356,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             if *action == TaskAction::ToggleDetails && !(has_info || has_time) {
                 return None;
             }
+            if *action == TaskAction::CompleteAndShift
+                && (task.rrule.is_none() || is_done_or_cancelled || task.is_relative_recurrence())
+            {
+                return None;
+            }
             if *action == TaskAction::Promote && task.parent_uid.is_none() {
                 return None;
             }

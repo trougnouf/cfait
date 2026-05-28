@@ -464,9 +464,14 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         ));
                     }
                     if !recur_str.is_empty() {
+                        let r_color = if t.is_relative_recurrence() {
+                            Color::Magenta
+                        } else {
+                            Color::DarkGray
+                        };
                         metadata_spans.push(Span::styled(
                             recur_str.to_string(),
-                            Style::default().fg(Color::Magenta),
+                            Style::default().fg(r_color),
                         ));
                     }
 
