@@ -1977,17 +1977,19 @@ impl TaskStore {
             if !is_suppressed && let Some(children) = map.get(&t.uid) {
                 for &child_idx in children {
                     let child_eff = resolve(child_idx, tasks, map, cache, visiting, default_prio);
-                    let ordering = Task::compare_components(
-                        child_eff.sort_rank,
-                        child_eff.effective_priority,
-                        &child_eff.effective_due,
-                        &child_eff.effective_dtstart,
-                        best.sort_rank,
-                        best.effective_priority,
-                        &best.effective_due,
-                        &best.effective_dtstart,
-                        default_prio,
-                    );
+                    let a = crate::model::item::SortKey {
+                        rank: child_eff.sort_rank,
+                        prio: child_eff.effective_priority,
+                        due: child_eff.effective_due.clone(),
+                        start: child_eff.effective_dtstart.clone(),
+                    };
+                    let b = crate::model::item::SortKey {
+                        rank: best.sort_rank,
+                        prio: best.effective_priority,
+                        due: best.effective_due.clone(),
+                        start: best.effective_dtstart.clone(),
+                    };
+                    let ordering = crate::model::item::compare_sortkeys(&a, &b, default_prio, false);
                     if ordering == std::cmp::Ordering::Less {
                         best = child_eff;
                     }

@@ -257,20 +257,30 @@ fun SettingsScreen(
         val maxRootsInt = cfg.maxDoneRoots.toUInt()
         val maxSubtasksInt = cfg.maxDoneSubtasks.toUInt()
 
-        api.saveConfig(
-            url, user, pass, insecure, hideCompleted,
-            disabledSet.toList(), sortInt, sortStandardByPriority,
-            daysInt, prioInt, defaultPrioInt, startGraceInt,
-            autoRemind, defTime, sShort,
-            createEventsForTasks, deleteEventsOnCompletion,
-            aRefresh,
-            trashInt,
-            maxRootsInt, maxSubtasksInt,
-            cfg.showOngoingNotifications,
-            cfg.showQuickFilter,
-            cfg.quickFilterTerm,
-            cfg.quickFilterIcon
+        val newCfg = cfg.copy(
+            url = url,
+            username = user,
+            password = pass,
+            allowInsecure = insecure,
+            hideCompleted = hideCompleted,
+            disabledCalendars = disabledSet.toList(),
+            sortCutoffMonths = sortInt,
+            sortStandardByPriority = sortStandardByPriority,
+            urgentDays = daysInt,
+            urgentPrio = prioInt,
+            defaultPriority = defaultPrioInt,
+            startGracePeriodDays = startGraceInt,
+            autoReminders = autoRemind,
+            defaultReminderTime = defTime,
+            snoozeShort = sShort,
+            createEventsForTasks = createEventsForTasks,
+            deleteEventsOnCompletion = deleteEventsOnCompletion,
+            autoRefreshInterval = aRefresh,
+            trashRetention = trashInt,
+            maxDoneRoots = maxRootsInt,
+            maxDoneSubtasks = maxSubtasksInt
         )
+        api.saveConfig(newCfg)
     }
 
     fun saveAndConnect() {

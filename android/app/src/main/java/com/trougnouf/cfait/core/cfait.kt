@@ -1198,31 +1198,7 @@ internal object UniffiLib {
 
     external fun uniffi_cfait_fn_method_cfaitmobile_save_config(
         `ptr`: Long,
-        `url`: RustBuffer.ByValue,
-        `user`: RustBuffer.ByValue,
-        `pass`: RustBuffer.ByValue,
-        `insecure`: Byte,
-        `hideCompleted`: Byte,
-        `disabledCalendars`: RustBuffer.ByValue,
-        `sortCutoffMonths`: RustBuffer.ByValue,
-        `sortStandardByPriority`: Byte,
-        `urgentDays`: Int,
-        `urgentPrio`: Byte,
-        `defaultPriority`: Byte,
-        `startGracePeriodDays`: Int,
-        `autoReminders`: Byte,
-        `defaultReminderTime`: RustBuffer.ByValue,
-        `snoozeShort`: Int,
-        `createEventsForTasks`: Byte,
-        `deleteEventsOnCompletion`: Byte,
-        `autoRefreshInterval`: Int,
-        `trashRetention`: Int,
-        `maxDoneRoots`: Int,
-        `maxDoneSubtasks`: Int,
-        `showOngoingNotifications`: Byte,
-        `showQuickFilter`: Byte,
-        `quickFilterTerm`: RustBuffer.ByValue,
-        `quickFilterIcon`: RustBuffer.ByValue,
+        `config`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
@@ -1708,7 +1684,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_remove_related_to() != 37228.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 60283.toShort()) {
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_save_config() != 24079.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_set_calendar_visibility() != 45711.toShort()) {
@@ -2449,33 +2425,7 @@ public interface CfaitMobileInterface {
         `relatedUid`: kotlin.String,
     )
 
-    fun `saveConfig`(
-        `url`: kotlin.String,
-        `user`: kotlin.String,
-        `pass`: kotlin.String,
-        `insecure`: kotlin.Boolean,
-        `hideCompleted`: kotlin.Boolean,
-        `disabledCalendars`: List<kotlin.String>,
-        `sortCutoffMonths`: kotlin.UInt?,
-        `sortStandardByPriority`: kotlin.Boolean,
-        `urgentDays`: kotlin.UInt,
-        `urgentPrio`: kotlin.UByte,
-        `defaultPriority`: kotlin.UByte,
-        `startGracePeriodDays`: kotlin.UInt,
-        `autoReminders`: kotlin.Boolean,
-        `defaultReminderTime`: kotlin.String,
-        `snoozeShort`: kotlin.UInt,
-        `createEventsForTasks`: kotlin.Boolean,
-        `deleteEventsOnCompletion`: kotlin.Boolean,
-        `autoRefreshInterval`: kotlin.UInt,
-        `trashRetention`: kotlin.UInt,
-        `maxDoneRoots`: kotlin.UInt,
-        `maxDoneSubtasks`: kotlin.UInt,
-        `showOngoingNotifications`: kotlin.Boolean,
-        `showQuickFilter`: kotlin.Boolean,
-        `quickFilterTerm`: kotlin.String,
-        `quickFilterIcon`: kotlin.String,
-    )
+    fun `saveConfig`(`config`: MobileConfig)
 
     fun `setCalendarVisibility`(
         `href`: kotlin.String,
@@ -3551,65 +3501,16 @@ open class CfaitMobile :
     )
 
     @Throws(MobileException::class)
-    override fun `saveConfig`(
-        `url`: kotlin.String,
-        `user`: kotlin.String,
-        `pass`: kotlin.String,
-        `insecure`: kotlin.Boolean,
-        `hideCompleted`: kotlin.Boolean,
-        `disabledCalendars`: List<kotlin.String>,
-        `sortCutoffMonths`: kotlin.UInt?,
-        `sortStandardByPriority`: kotlin.Boolean,
-        `urgentDays`: kotlin.UInt,
-        `urgentPrio`: kotlin.UByte,
-        `defaultPriority`: kotlin.UByte,
-        `startGracePeriodDays`: kotlin.UInt,
-        `autoReminders`: kotlin.Boolean,
-        `defaultReminderTime`: kotlin.String,
-        `snoozeShort`: kotlin.UInt,
-        `createEventsForTasks`: kotlin.Boolean,
-        `deleteEventsOnCompletion`: kotlin.Boolean,
-        `autoRefreshInterval`: kotlin.UInt,
-        `trashRetention`: kotlin.UInt,
-        `maxDoneRoots`: kotlin.UInt,
-        `maxDoneSubtasks`: kotlin.UInt,
-        `showOngoingNotifications`: kotlin.Boolean,
-        `showQuickFilter`: kotlin.Boolean,
-        `quickFilterTerm`: kotlin.String,
-        `quickFilterIcon`: kotlin.String,
-    ) = callWithHandle {
-        uniffiRustCallWithError(MobileException) { _status ->
-            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_save_config(
-                it,
-                FfiConverterString.lower(`url`),
-                FfiConverterString.lower(`user`),
-                FfiConverterString.lower(`pass`),
-                FfiConverterBoolean.lower(`insecure`),
-                FfiConverterBoolean.lower(`hideCompleted`),
-                FfiConverterSequenceString.lower(`disabledCalendars`),
-                FfiConverterOptionalUInt.lower(`sortCutoffMonths`),
-                FfiConverterBoolean.lower(`sortStandardByPriority`),
-                FfiConverterUInt.lower(`urgentDays`),
-                FfiConverterUByte.lower(`urgentPrio`),
-                FfiConverterUByte.lower(`defaultPriority`),
-                FfiConverterUInt.lower(`startGracePeriodDays`),
-                FfiConverterBoolean.lower(`autoReminders`),
-                FfiConverterString.lower(`defaultReminderTime`),
-                FfiConverterUInt.lower(`snoozeShort`),
-                FfiConverterBoolean.lower(`createEventsForTasks`),
-                FfiConverterBoolean.lower(`deleteEventsOnCompletion`),
-                FfiConverterUInt.lower(`autoRefreshInterval`),
-                FfiConverterUInt.lower(`trashRetention`),
-                FfiConverterUInt.lower(`maxDoneRoots`),
-                FfiConverterUInt.lower(`maxDoneSubtasks`),
-                FfiConverterBoolean.lower(`showOngoingNotifications`),
-                FfiConverterBoolean.lower(`showQuickFilter`),
-                FfiConverterString.lower(`quickFilterTerm`),
-                FfiConverterString.lower(`quickFilterIcon`),
-                _status,
-            )
+    override fun `saveConfig`(`config`: MobileConfig) =
+        callWithHandle {
+            uniffiRustCallWithError(MobileException) { _status ->
+                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_save_config(
+                    it,
+                    FfiConverterTypeMobileConfig.lower(`config`),
+                    _status,
+                )
+            }
         }
-    }
 
     @Throws(MobileException::class)
     override fun `setCalendarVisibility`(

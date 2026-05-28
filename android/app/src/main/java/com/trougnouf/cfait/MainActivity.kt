@@ -626,13 +626,17 @@ fun CfaitNavHost(
                         val s = localSubs.toUIntOrNull() ?: 5u
                         val t = localTrash.toUIntOrNull() ?: 14u
                         api.saveConfig(
-                            cfg.url, cfg.username, "", cfg.allowInsecure, cfg.hideCompleted,
-                            cfg.disabledCalendars, cfg.sortCutoffMonths, cfg.sortStandardByPriority, cfg.urgentDays, cfg.urgentPrio,
-                            cfg.defaultPriority, cfg.startGracePeriodDays, cfg.autoReminders,
-                            cfg.defaultReminderTime, cfg.snoozeShort, cfg.createEventsForTasks,
-                            deleteEvents, cfg.autoRefreshInterval,
-                            t, r, s, showOngoingNotifs,
-                            showQuickFilterAdv, quickFilterTermAdv, quickFilterIconAdv
+                            cfg.copy(
+                                password = "",
+                                trashRetention = t,
+                                maxDoneRoots = r,
+                                maxDoneSubtasks = s,
+                                deleteEventsOnCompletion = deleteEvents,
+                                showOngoingNotifications = showOngoingNotifs,
+                                showQuickFilter = showQuickFilterAdv,
+                                quickFilterTerm = quickFilterTermAdv,
+                                quickFilterIcon = quickFilterIconAdv
+                            )
                         )
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e

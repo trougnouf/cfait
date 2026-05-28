@@ -665,36 +665,6 @@ impl Task {
         5
     }
 
-    /// Compare component values used by the propagation algorithm.
-    /// This is a thin wrapper used to evaluate child/parent contributions when
-    /// computing propagation-selected tasks for multi-column UIs (e.g. randomness).
-    #[allow(clippy::too_many_arguments)]
-    pub fn compare_components(
-        rank_a: u8,
-        prio_a: u8,
-        due_a: &Option<DateType>,
-        start_a: &Option<DateType>,
-        rank_b: u8,
-        prio_b: u8,
-        due_b: &Option<DateType>,
-        start_b: &Option<DateType>,
-        default_prio: u8,
-    ) -> Ordering {
-        let a = SortKey {
-            rank: rank_a,
-            prio: prio_a,
-            due: due_a.clone(),
-            start: start_a.clone(),
-        };
-        let b = SortKey {
-            rank: rank_b,
-            prio: prio_b,
-            due: due_b.clone(),
-            start: start_b.clone(),
-        };
-        compare_sortkeys(&a, &b, default_prio, false)
-    }
-
     /// Compare two tasks using their effective fields (used by top-level sorting).
     pub fn compare_for_sort(
         &self,

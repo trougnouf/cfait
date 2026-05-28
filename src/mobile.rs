@@ -814,61 +814,34 @@ impl CfaitMobile {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn save_config(
-        &self,
-        url: String,
-        user: String,
-        pass: String,
-        insecure: bool,
-        hide_completed: bool,
-        disabled_calendars: Vec<String>,
-        sort_cutoff_months: Option<u32>,
-        sort_standard_by_priority: bool,
-        urgent_days: u32,
-        urgent_prio: u8,
-        default_priority: u8,
-        start_grace_period_days: u32,
-        auto_reminders: bool,
-        default_reminder_time: String,
-        snooze_short: u32,
-        create_events_for_tasks: bool,
-        delete_events_on_completion: bool,
-        auto_refresh_interval: u32,
-        trash_retention: u32,
-        max_done_roots: u32,
-        max_done_subtasks: u32,
-        show_ongoing_notifications: bool,
-        show_quick_filter: bool,
-        quick_filter_term: String,
-        quick_filter_icon: String,
-    ) -> Result<(), MobileError> {
+    pub fn save_config(&self, config: MobileConfig) -> Result<(), MobileError> {
         let mut c = load_mobile_config_with_credentials(self.ctx.as_ref());
-        c.url = url;
-        apply_mobile_credentials_update(&mut c, &user, &pass);
-        c.allow_insecure_certs = insecure;
-        c.hide_completed = hide_completed;
-        c.disabled_calendars = disabled_calendars;
-        c.sort_cutoff_months = sort_cutoff_months;
-        c.sort_standard_by_priority = sort_standard_by_priority;
-        c.urgent_days_horizon = urgent_days;
-        c.urgent_priority_threshold = urgent_prio;
-        c.default_priority = default_priority;
-        c.start_grace_period_days = start_grace_period_days;
-        c.auto_reminders = auto_reminders;
-        c.default_reminder_time = default_reminder_time;
-        c.snooze_short_mins = snooze_short;
-        c.create_events_for_tasks = create_events_for_tasks;
-        c.delete_events_on_completion = delete_events_on_completion;
-        c.auto_refresh_interval_mins = auto_refresh_interval;
-        c.trash_retention_days = trash_retention;
+        c.url = config.url;
+        apply_mobile_credentials_update(&mut c, &config.username, &config.password);
+        c.allow_insecure_certs = config.allow_insecure;
+        c.hide_completed = config.hide_completed;
+        c.tag_aliases = config.tag_aliases;
+        c.disabled_calendars = config.disabled_calendars;
+        c.sort_cutoff_months = config.sort_cutoff_months;
+        c.sort_standard_by_priority = config.sort_standard_by_priority;
+        c.urgent_days_horizon = config.urgent_days;
+        c.urgent_priority_threshold = config.urgent_prio;
+        c.default_priority = config.default_priority;
+        c.start_grace_period_days = config.start_grace_period_days;
+        c.auto_reminders = config.auto_reminders;
+        c.default_reminder_time = config.default_reminder_time;
+        c.snooze_short_mins = config.snooze_short;
+        c.create_events_for_tasks = config.create_events_for_tasks;
+        c.delete_events_on_completion = config.delete_events_on_completion;
+        c.auto_refresh_interval_mins = config.auto_refresh_interval;
+        c.trash_retention_days = config.trash_retention;
 
-        c.max_done_roots = max_done_roots as usize;
-        c.max_done_subtasks = max_done_subtasks as usize;
-        c.show_ongoing_notifications = show_ongoing_notifications;
-        c.show_quick_filter = show_quick_filter;
-        c.quick_filter_term = quick_filter_term;
-        c.quick_filter_icon = quick_filter_icon;
+        c.max_done_roots = config.max_done_roots as usize;
+        c.max_done_subtasks = config.max_done_subtasks as usize;
+        c.show_ongoing_notifications = config.show_ongoing_notifications;
+        c.show_quick_filter = config.show_quick_filter;
+        c.quick_filter_term = config.quick_filter_term;
+        c.quick_filter_icon = config.quick_filter_icon;
 
         c.save_with_credentials(self.ctx.as_ref())
             .map_err(MobileError::from)
