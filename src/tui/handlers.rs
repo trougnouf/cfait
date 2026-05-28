@@ -648,9 +648,9 @@ pub async fn handle_key_event(
                     update_alarms(state);
                     state.mode = InputMode::Normal;
                     state.reset_input();
-                    let _ = action_tx.try_send(Action::PersistBatch(vec![crate::journal::Action::Update(
-                        clone,
-                    )]));
+                    let _ = action_tx.try_send(Action::PersistBatch(vec![
+                        crate::journal::Action::Update(clone),
+                    ]));
                 }
                 state.mode = InputMode::Normal;
             }
@@ -670,7 +670,9 @@ pub async fn handle_key_event(
                 state.enter_char('\n');
             }
             // Save: Ctrl+S, Ctrl+D, F2
-            KeyCode::Char('s') | KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char('s') | KeyCode::Char('d')
+                if key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
                 save_description(state, action_tx);
                 return None;
             }
@@ -1792,9 +1794,11 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('e') => {
                 if let Some(t) = state.get_selected_task() {
-                    state.input_buffer = t.to_smart_string();
+                    let smart_string = t.to_smart_string();
+                    let uid = t.uid.clone();
+                    state.input_buffer = smart_string;
                     state.cursor_position = state.input_buffer.chars().count();
-                    state.editing_uid = Some(t.uid.clone());
+                    state.editing_uid = Some(uid);
                     state.mode = InputMode::Editing;
                 }
             }
@@ -1813,9 +1817,10 @@ pub async fn handle_key_event(
                                 t_mut.sequence += 1;
                                 let clone = t_mut.clone();
                                 state.refresh_filtered_view();
-                                let _ = action_tx.try_send(crate::tui::action::Action::PersistBatch(vec![
-                                    crate::journal::Action::Update(clone),
-                                ]));
+                                let _ =
+                                    action_tx.try_send(crate::tui::action::Action::PersistBatch(
+                                        vec![crate::journal::Action::Update(clone)],
+                                    ));
                             }
                             state.needs_redraw = true;
                             return None;
@@ -1858,9 +1863,9 @@ pub async fn handle_key_event(
                         state.refresh_filtered_view();
                         state.mode = InputMode::Normal;
                         state.reset_input();
-                        let _ = action_tx.try_send(Action::PersistBatch(vec![crate::journal::Action::Update(
-                            cloned,
-                        )]));
+                        let _ = action_tx.try_send(Action::PersistBatch(vec![
+                            crate::journal::Action::Update(cloned),
+                        ]));
                     }
                 } else {
                     state.message = rust_i18n::t!("error_failed_to_parse_time").to_string();
