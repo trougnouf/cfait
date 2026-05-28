@@ -38,6 +38,21 @@ fn dispatch_and_maintain_selection(app: &mut GuiApp, intent: AppIntent, focus_ui
         }
 }
 
+/// Cancel the focused task, then keep selection on the row below it instead of following the task after it re-sorts.
+fn cancel_and_select_next(app: &mut GuiApp, uid: String) {
+    let next_uid = app
+        .find_task_index_by_uid(&uid)
+        .and_then(|idx| app.get_task_at_index(idx + 1))
+        .map(|task| task.uid.clone());
+
+    dispatch_and_maintain_selection(app, AppIntent::CancelTask { uid: uid.clone() }, &uid);
+
+    if let Some(next_uid) = next_uid
+        && app.find_task_index_by_uid(&next_uid).is_some() {
+            app.selected_uid = Some(next_uid);
+        }
+}
+
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::InputChanged(action) => {
@@ -367,7 +382,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::CancelSelected => {
             if let Some(uid) = app.selected_uid.clone() {
-                dispatch_and_maintain_selection(app, AppIntent::CancelTask { uid: uid.clone() }, &uid);
+                cancel_and_select_next(app, uid);
             }
             Task::none()
         }
@@ -397,7 +412,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(uid) = app.get_task_at_index(index).map(|t| t.uid.clone()) {
                 app.selected_uid = Some(uid.clone());
                 if new_status == crate::model::TaskStatus::Cancelled {
-                    dispatch_and_maintain_selection(app, AppIntent::CancelTask { uid: uid.clone() }, &uid);
+                    cancel_and_select_next(app, uid);
                 } else if new_status.is_done() {
                     dispatch_and_maintain_selection(app, AppIntent::ToggleTask { uid: uid.clone() }, &uid);
                 }
