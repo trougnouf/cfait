@@ -21,6 +21,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Check formatting (rustfmt)
+        run: cargo fmt --all -- --check
+
       - name: Run linter (clippy)
         run: cargo clippy --all-features --all-targets -- -D warnings
 

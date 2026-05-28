@@ -1,0 +1,7 @@
+# This file contains the SHA-1 hashes of commits that only perform mass reformatting.
+# It is used to keep git blame clean and useful.
+#
+# To configure git locally to use this file, run:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# <insert-formatting-commit-hash-here-after-sweep>

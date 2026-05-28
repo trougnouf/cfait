@@ -1,0 +1,8 @@
+#!/bin/sh
+# Repo-local pre-commit hook to automatically format Rust code.
+#
+# To enable this hook:
+#   git config core.hooksPath .githooks
+
+echo "Formatting codebase with cargo fmt..."
+cargo fmt --all

@@ -17,9 +17,15 @@ Before submitting, please ensure your changes meet the following criteria:
 *   **Add Unit Tests** for any new logic where applicable.
 *   **Pass CI Checks.** The CI will fail if these commands don't pass locally:
     ```bash
+    cargo fmt --all -- --check
     cargo clippy --all-features --all-targets
     cargo test --all-features --all-targets
     ```
+  * Set `git config core.hooksPath .githooks` to automatically format the code before committing.
+  * Use `cargo fmt --all` and `cargo clippy --all-features --all-targets --fix --allow-dirty` to automatically fix formatting & most linting issues.
+  * Regenerate the Kotlin bindings if you make changes to `mobile.rs`:
+    * `cargo build --lib --features mobile`
+    * `cargo run --features mobile --bin uniffi-bindgen generate --library target/debug/libcfait.so --language kotlin --out-dir ./android/app/src/main/java --config uniffi.toml`
 
 ### Local Development
 
@@ -29,6 +35,6 @@ Before submitting, please ensure your changes meet the following criteria:
 
 ### Other ways to contribute
 
-*   **Testing:** Use the current development version of Cfait (e.g. `cfait-git` on Arch Linux) and report any bug before the next release.
+*   **Testing:** Use the current development version of Cfait (e.g. `cfait-git` on Arch Linux or the rolling release available on https://codeberg.org/trougnouf/cfait/releases ) and report any bug before the next release.
 *   **Documentation:** Could always be improved
-*   **Localization:** This isn't implemented yet as of when this document was written, but feel free to contact me s.t. I will recontact you when it's ready.
+*   **Localization:** https://translate.codeberg.org/projects/cfait
