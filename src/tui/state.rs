@@ -117,6 +117,8 @@ pub struct AppState {
 
     // Expanded Done Groups (keys are parent UIDs; empty string for root group)
     pub expanded_done_groups: HashSet<String>,
+
+    pub needs_redraw: bool,
 }
 
 impl Default for AppState {
@@ -213,6 +215,7 @@ impl AppState {
 
             // Track expanded completed groups (keys are parent UIDs, empty string for roots)
             expanded_done_groups: HashSet::new(),
+            needs_redraw: false,
         }
     }
 

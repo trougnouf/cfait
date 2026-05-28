@@ -409,6 +409,9 @@ pub struct Config {
     #[serde(default)]
     pub sidebar_is_hidden: bool,
 
+    #[serde(default)]
+    pub description_editor: String,
+
     // Logging level for both file and terminal output
     #[serde(default = "default_log_level")]
     pub log_level: LogLevel,
@@ -462,6 +465,7 @@ impl Default for Config {
             quick_filter_icon: default_quick_filter_icon(),
             show_quick_filter: true,
             sidebar_is_hidden: false,
+            description_editor: String::new(),
             log_level: default_log_level(),
         }
     }
@@ -779,6 +783,9 @@ impl Config {
             } else if trimmed.starts_with("sidebar_is_hidden =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Hide the left sidebar collections panel.");
+            } else if trimmed.starts_with("description_editor =") {
+                out.push_str(line);
+                out.push_str(" # String: Editor for task descriptions. Empty uses $VISUAL/$EDITOR. 'builtin' forces internal editor.");
             } else if trimmed.starts_with("show_priority_numbers =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Render priority numbers (!X) visually next to tags.");

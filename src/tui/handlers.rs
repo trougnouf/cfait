@@ -24,6 +24,219 @@ use tokio::sync::mpsc::Sender;
 use crate::store::{TaskListItem, select_weighted_random_index};
 use rust_i18n::t;
 
+fn run_external_editor(
+    initial_content: &str,
+    ctx: &dyn crate::context::AppContext,
+) -> Result<Option<String>, String> {
+    let config = Config::load(ctx).unwrap_or_default();
+    let mut editor_cmd = None;
+    if config.description_editor == "builtin" {
+        return Ok(None); // Fallback to builtin
+    } else if !config.description_editor.is_empty() {
+        editor_cmd = Some(config.description_editor.clone());
+    } else {
+        if let Ok(v) = std::env::var("VISUAL")
+            && !v.is_empty()
+        {
+            editor_cmd = Some(v);
+        }
+        if editor_cmd.is_none()
+            && let Ok(e) = std::env::var("EDITOR")
+            && !e.is_empty()
+        {
+            editor_cmd = Some(e);
+        }
+    }
+
+    if let Some(cmd) = editor_cmd {
+        let uuid = uuid::Uuid::new_v4();
+        let path = std::env::temp_dir().join(format!("cfait_desc_{}.md", uuid));
+        if std::fs::write(&path, initial_content.as_bytes()).is_ok() {
+            let _ =
+                crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
+            let _ = crossterm::terminal::disable_raw_mode();
+
+            #[cfg(target_os = "windows")]
+            let status = std::process::Command::new("cmd")
+                .arg("/C")
+                .arg(format!("{} \"{}\"", cmd, path.display()))
+                .status();
+
+            #[cfg(not(target_os = "windows"))]
+            let status = std::process::Command::new("sh")
+                .arg("-c")
+                .arg(format!("{} \"{}\"", cmd, path.display()))
+                .status();
+
+            let _ = crossterm::terminal::enable_raw_mode();
+            let _ = crossterm::execute!(
+                std::io::stdout(),
+                crossterm::terminal::EnterAlternateScreen,
+                crossterm::event::EnableMouseCapture,
+                crossterm::terminal::Clear(crossterm::terminal::ClearType::All)
+            );
+
+            let success = status.map(|s| s.success()).unwrap_or(false);
+
+            if success {
+                if let Ok(new_desc) = std::fs::read_to_string(&path) {
+                    let _ = std::fs::remove_file(&path);
+                    return Ok(Some(new_desc.trim_end().to_string()));
+                }
+            } else {
+                let _ = std::fs::remove_file(&path);
+                return Err(format!(
+                    "Failed to run editor '{}', falling back to builtin.",
+                    cmd
+                ));
+            }
+        } else {
+            return Err("Failed to create temp file for external editor.".to_string());
+        }
+    }
+
+    Ok(None)
+}
+
+fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
+    if state.creating_with_desc {
+        let desc_text = state.input_buffer.clone();
+        let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(&desc_text);
+
+        let (clean_input, new_aliases) =
+            crate::model::parser::extract_inline_aliases(&state.new_task_title);
+
+        if !new_aliases.is_empty() {
+            for (k, v) in &new_aliases {
+                state.tag_aliases.insert(k.clone(), v.clone());
+            }
+        }
+
+        let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+        let def_time =
+            chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
+        let mut parent = Task::new(&clean_input, &state.tag_aliases, def_time);
+        if !clean_desc.is_empty() {
+            if parent.description.is_empty() {
+                parent.description = clean_desc;
+            } else {
+                parent.description.push_str(&format!("\n\n{}", clean_desc));
+            }
+        }
+        parent.parent_uid = state.creating_child_of.clone();
+
+        let Some(target_href) = state
+            .active_cal_href
+            .clone()
+            .filter(|href| state.local_mode_enabled || !href.starts_with("local://"))
+            .or_else(|| {
+                state
+                    .get_filtered_calendars()
+                    .first()
+                    .map(|c| c.href.clone())
+            })
+        else {
+            state.message = if state.local_mode_enabled {
+                rust_i18n::t!("error_no_calendar_available").to_string()
+            } else {
+                rust_i18n::t!("error_no_remote_calendar").to_string()
+            };
+            state.creating_with_desc = false;
+            state.new_task_title.clear();
+            state.mode = InputMode::Normal;
+            state.reset_input();
+            state.creating_child_of = None;
+            return;
+        };
+        parent.calendar_href = target_href.clone();
+
+        let parent_uid = parent.uid.clone();
+        state.store.add_task(parent.clone());
+
+        tokio::spawn({
+            let tx = action_tx.clone();
+            async move {
+                let _ = tx
+                    .send(Action::PersistBatch(vec![crate::journal::Action::Create(
+                        parent,
+                    )]))
+                    .await;
+            }
+        });
+
+        for ext in extracted {
+            let mut sub = Task::new(&ext.raw_text, &state.tag_aliases, def_time);
+            sub.uid = ext.uid;
+            if !ext.description.is_empty() {
+                if sub.description.is_empty() {
+                    sub.description = ext.description;
+                } else {
+                    sub.description
+                        .push_str(&format!("\n\n{}", ext.description));
+                }
+            }
+            if ext.is_completed {
+                sub.status = crate::model::TaskStatus::Completed;
+                sub.set_completion_date(Some(chrono::Utc::now()));
+            }
+            sub.parent_uid = Some(ext.parent_uid.unwrap_or(parent_uid.clone()));
+            sub.dependencies = ext.dependencies;
+            sub.calendar_href = target_href.clone();
+
+            state.store.add_task(sub.clone());
+            tokio::spawn({
+                let tx = action_tx.clone();
+                async move {
+                    let _ = tx
+                        .send(Action::PersistBatch(vec![crate::journal::Action::Create(
+                            sub,
+                        )]))
+                        .await;
+                }
+            });
+        }
+
+        state.refresh_filtered_view();
+        update_alarms(state);
+        if let Some(idx) = state.find_task_index_by_uid(&parent_uid) {
+            state.list_state.select(Some(idx));
+        }
+
+        state.creating_with_desc = false;
+        state.new_task_title.clear();
+        state.mode = InputMode::Normal;
+        state.reset_input();
+        state.creating_child_of = None;
+    } else {
+        // Standard Edit
+        let target_uid: Option<String> = state
+            .editing_index
+            .and_then(|idx| state.get_task_at_index(idx).map(|t| t.uid.clone()));
+
+        if let Some(uid) = target_uid
+            && let Some((t, _)) = state.store.get_task_mut(&uid)
+        {
+            t.description = state.input_buffer.clone();
+            t.sequence += 1;
+            let clone = t.clone();
+            state.refresh_filtered_view();
+            state.mode = InputMode::Normal;
+            state.reset_input();
+            let tx = action_tx.clone();
+            tokio::spawn(async move {
+                let _ = tx
+                    .send(Action::PersistBatch(vec![crate::journal::Action::Update(
+                        clone,
+                    )]))
+                    .await;
+            });
+        }
+        state.mode = InputMode::Normal;
+        state.reset_input();
+    }
+}
+
 pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Option<String>) {
     // Ensure the [UNSYNCED] badge reflects the current journal state on every event
     state.unsynced_changes = !crate::journal::Journal::load(state.ctx.as_ref()).is_empty();
@@ -281,9 +494,27 @@ pub async fn handle_key_event(
                     state.new_task_title = state.input_buffer.clone();
                     state.input_buffer.clear();
                     state.cursor_position = 0;
-                    state.mode = InputMode::EditingDescription;
-                    state.message = rust_i18n::t!("edit_description_instructions").to_string();
-                    return None;
+
+                    match run_external_editor("", state.ctx.as_ref()) {
+                        Ok(Some(new_desc)) => {
+                            state.input_buffer = new_desc;
+                            save_description(state, action_tx);
+                            state.needs_redraw = true;
+                            return None;
+                        }
+                        Ok(None) => {
+                            state.mode = InputMode::EditingDescription;
+                            state.message =
+                                rust_i18n::t!("edit_description_instructions").to_string();
+                            return None;
+                        }
+                        Err(e) => {
+                            state.message = e;
+                            state.mode = InputMode::EditingDescription;
+                            state.needs_redraw = true;
+                            return None;
+                        }
+                    }
                 }
 
                 let (clean_input, new_aliases): (String, HashMap<String, Vec<String>>) =
@@ -465,153 +696,8 @@ pub async fn handle_key_event(
             }
             // Save: Ctrl+S
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                // Determine if Edit vs Create
-                if state.creating_with_desc {
-                    let desc_text = state.input_buffer.clone();
-                    let (clean_desc, extracted) =
-                        crate::model::extractor::extract_markdown_tasks(&desc_text);
-
-                    let (clean_input, new_aliases) =
-                        crate::model::parser::extract_inline_aliases(&state.new_task_title);
-
-                    // Optional: handle alias creation if any (abbreviated for length, similar to handle_submit)
-                    if !new_aliases.is_empty() {
-                        for (k, v) in &new_aliases {
-                            state.tag_aliases.insert(k.clone(), v.clone());
-                        }
-                    }
-
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                    let def_time =
-                        chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
-                            .ok();
-
-                    let mut parent = Task::new(&clean_input, &state.tag_aliases, def_time);
-                    if !clean_desc.is_empty() {
-                        if parent.description.is_empty() {
-                            parent.description = clean_desc;
-                        } else {
-                            parent.description.push_str(&format!("\n\n{}", clean_desc));
-                        }
-                    }
-                    parent.parent_uid = state.creating_child_of.clone();
-
-                    let Some(target_href) = state
-                        .active_cal_href
-                        .clone()
-                        .filter(|href| state.local_mode_enabled || !href.starts_with("local://"))
-                        .or_else(|| {
-                            state
-                                .get_filtered_calendars()
-                                .first()
-                                .map(|c| c.href.clone())
-                        })
-                    else {
-                        state.message = if state.local_mode_enabled {
-                            rust_i18n::t!("error_no_calendar_available").to_string()
-                        } else {
-                            rust_i18n::t!("error_no_remote_calendar").to_string()
-                        };
-                        state.creating_with_desc = false;
-                        state.new_task_title.clear();
-                        state.mode = InputMode::Normal;
-                        state.reset_input();
-                        state.creating_child_of = None;
-                        return None;
-                    };
-                    parent.calendar_href = target_href.clone();
-
-                    let parent_uid = parent.uid.clone();
-                    state.store.add_task(parent.clone());
-
-                    // Fire off background creation
-                    tokio::spawn({
-                        let tx = action_tx.clone();
-                        async move {
-                            let _ = tx
-                                .send(Action::PersistBatch(vec![crate::journal::Action::Create(
-                                    parent,
-                                )]))
-                                .await;
-                        }
-                    });
-
-                    // Fire off Subtasks
-                    for ext in extracted {
-                        let mut sub = Task::new(&ext.raw_text, &state.tag_aliases, def_time);
-                        sub.uid = ext.uid;
-                        if !ext.description.is_empty() {
-                            if sub.description.is_empty() {
-                                sub.description = ext.description;
-                            } else {
-                                sub.description
-                                    .push_str(&format!("\n\n{}", ext.description));
-                            }
-                        }
-                        if ext.is_completed {
-                            sub.status = crate::model::TaskStatus::Completed;
-                            sub.set_completion_date(Some(chrono::Utc::now()));
-                        }
-                        sub.parent_uid = Some(ext.parent_uid.unwrap_or(parent_uid.clone()));
-                        sub.dependencies = ext.dependencies;
-                        sub.calendar_href = target_href.clone();
-
-                        state.store.add_task(sub.clone());
-                        tokio::spawn({
-                            let tx = action_tx.clone();
-                            async move {
-                                let _ = tx
-                                    .send(Action::PersistBatch(vec![
-                                        crate::journal::Action::Create(sub),
-                                    ]))
-                                    .await;
-                            }
-                        });
-                    }
-
-                    state.refresh_filtered_view();
-
-                    // --- ADD THESE 3 LINES ---
-                    update_alarms(state);
-                    if let Some(idx) = state.find_task_index_by_uid(&parent_uid) {
-                        state.list_state.select(Some(idx));
-                    }
-                    // -------------------------
-
-                    state.creating_with_desc = false;
-                    state.new_task_title.clear();
-                    state.mode = InputMode::Normal;
-                    state.reset_input();
-                    state.creating_child_of = None;
-                    return None;
-                } else {
-                    // Standard Edit
-                    let target_uid: Option<String> = state
-                        .editing_index
-                        .and_then(|idx| state.get_task_at_index(idx).map(|t| t.uid.clone()));
-
-                    if let Some(uid) = target_uid
-                        && let Some((t, _)) = state.store.get_task_mut(&uid)
-                    {
-                        t.description = state.input_buffer.clone();
-                        t.sequence += 1;
-                        let clone = t.clone();
-                        state.refresh_filtered_view();
-                        state.mode = InputMode::Normal;
-                        state.reset_input();
-                        // Send via PersistBatch
-                        let tx = action_tx.clone();
-                        tokio::spawn(async move {
-                            let _ = tx
-                                .send(Action::PersistBatch(vec![crate::journal::Action::Update(
-                                    clone,
-                                )]))
-                                .await;
-                        });
-                    }
-                    state.mode = InputMode::Normal;
-                    state.reset_input();
-                }
+                save_description(state, action_tx);
+                return None;
             }
             // Cancel: Esc
             KeyCode::Esc => {
@@ -1737,16 +1823,50 @@ pub async fn handle_key_event(
                 if state.active_focus == Focus::Main
                     && let Some(t) = state.get_selected_task()
                 {
-                    // Load description into input buffer for manual editing
-                    state.input_buffer = t.description.clone();
-                    state.cursor_position = state.input_buffer.chars().count();
-
-                    // Reset BOTH scroll offsets (vertical + horizontal)
-                    state.edit_scroll_offset = 0;
-                    state.edit_scroll_x = 0;
-
-                    state.editing_index = state.list_state.selected();
-                    state.mode = InputMode::EditingDescription;
+                    let desc = t.description.clone();
+                    let uid = t.uid.clone();
+                    match run_external_editor(&desc, state.ctx.as_ref()) {
+                        Ok(Some(new_desc)) => {
+                            if new_desc != desc
+                                && let Some((t_mut, _)) = state.store.get_task_mut(&uid)
+                            {
+                                t_mut.description = new_desc;
+                                t_mut.sequence += 1;
+                                let clone = t_mut.clone();
+                                state.refresh_filtered_view();
+                                let tx = action_tx.clone();
+                                tokio::spawn(async move {
+                                    let _ = tx
+                                        .send(crate::tui::action::Action::PersistBatch(vec![
+                                            crate::journal::Action::Update(clone),
+                                        ]))
+                                        .await;
+                                });
+                            }
+                            state.needs_redraw = true;
+                            return None;
+                        }
+                        Ok(None) => {
+                            // Fallback to built-in editor
+                            state.input_buffer = desc.clone();
+                            state.cursor_position = state.input_buffer.chars().count();
+                            state.edit_scroll_offset = 0;
+                            state.edit_scroll_x = 0;
+                            state.editing_index = state.list_state.selected();
+                            state.mode = InputMode::EditingDescription;
+                        }
+                        Err(e) => {
+                            state.message = e;
+                            // Fallback to built-in editor
+                            state.input_buffer = desc.clone();
+                            state.cursor_position = state.input_buffer.chars().count();
+                            state.edit_scroll_offset = 0;
+                            state.edit_scroll_x = 0;
+                            state.editing_index = state.list_state.selected();
+                            state.mode = InputMode::EditingDescription;
+                            state.needs_redraw = true;
+                        }
+                    }
                 }
             }
             _ => {}

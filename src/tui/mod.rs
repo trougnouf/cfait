@@ -262,8 +262,6 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
     let (action_tx, action_rx) = mpsc::channel(100);
     let (event_tx, mut event_rx) = mpsc::channel(100);
 
-    let mut prev_mode = app_state.mode;
-
     // --- 4. NETWORK THREAD ---
     let network_config = network::NetworkActorConfig {
         url,
@@ -286,6 +284,16 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
         std::time::Duration::from_secs(cfg.auto_refresh_interval_mins as u64 * 60);
 
     loop {
+        if app_state.needs_redraw {
+            // Drawing a full-screen Clear widget forces Ratatui to completely wipe
+            // its internal previous-frame buffer, guaranteeing a 100% fresh redraw
+            // on the next call to terminal.draw().
+            let _ = terminal.draw(|f| {
+                f.render_widget(ratatui::widgets::Clear, f.area());
+            });
+            app_state.needs_redraw = false;
+        }
+
         terminal.draw(|f| draw(f, &mut app_state))?;
 
         // A. Network Events
@@ -467,16 +475,6 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                 }
                 _ => {}
             }
-        }
-
-        // Toggle mouse capture based on mode so user can natively select text
-        if app_state.mode != prev_mode {
-            if app_state.mode == InputMode::EditingDescription {
-                let _ = execute!(terminal.backend_mut(), DisableMouseCapture);
-            } else if prev_mode == InputMode::EditingDescription {
-                let _ = execute!(terminal.backend_mut(), EnableMouseCapture);
-            }
-            prev_mode = app_state.mode;
         }
     }
 
