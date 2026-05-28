@@ -634,6 +634,68 @@ fun SettingsScreen(
                     })
                     Text(androidx.compose.ui.res.stringResource(R.string.sort_standard_by_priority_label))
                 }
+                Text(
+                    androidx.compose.ui.res.stringResource(R.string.priority_rules),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                    Text(androidx.compose.ui.res.stringResource(R.string.due_within_days), modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = urgentDays,
+                        onValueChange = { urgentDays = it },
+                        modifier = Modifier.width(80.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                    Text(androidx.compose.ui.res.stringResource(R.string.priority_le), modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = urgentPrio,
+                        onValueChange = { urgentPrio = it },
+                        modifier = Modifier.width(80.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                    Text(androidx.compose.ui.res.stringResource(R.string.default_priority_label), modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = defaultPriority,
+                        onValueChange = { defaultPriority = it },
+                        modifier = Modifier.width(80.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+                Text(
+                    androidx.compose.ui.res.stringResource(R.string.sorting_timeframes),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                    Text(androidx.compose.ui.res.stringResource(R.string.start_grace_days), modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = startGracePeriodDays,
+                        onValueChange = { startGracePeriodDays = it },
+                        modifier = Modifier.width(80.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                    Text(androidx.compose.ui.res.stringResource(R.string.priority_cutoff_months), modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = sortMonths,
+                        onValueChange = { sortMonths = it },
+                        modifier = Modifier.width(80.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true
+                    )
+                }
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                     Text(
                         androidx.compose.ui.res.stringResource(R.string.default_time_label),
