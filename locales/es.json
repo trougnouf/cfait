@@ -499,7 +499,7 @@
     "tui_caldav_url_prompt": "Dirección del servidor (por ejemplo, https://cloud.example.com/remote.php/dav/): ",
     "tui_choice_prompt": "Opción [1]: ",
     "tui_config_saved": "Configuración guardada en: %{path}",
-    "tui_desc_editor_help": "Intro: salto de línea | Ctrl+S: guardar | Esc: cancelar",
+    "tui_desc_editor_help": "Intro: salto de línea | Ctrl+S/D o F2: guardar | Esc: cancelar",
     "tui_export_select_source": "Selecciona el calendario local de origen desde el que deseas exportar.",
     "tui_fallback_offline": "Volver al modo sin conexión (guardando los datos introducidos de todos modos).",
     "tui_help_actions": "Tab: cambiar | Arriba/Abajo: desplazar | Esc/?: cerrar",
