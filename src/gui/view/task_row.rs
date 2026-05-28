@@ -265,7 +265,8 @@ pub fn view_task_row<'a>(
                 || task.url.is_some()
                 || task.geo.is_some()
                 || task.time_spent_seconds > 0
-                || task.last_started_at.is_some();
+                || task.last_started_at.is_some()
+                || (app.show_priority_numbers && task.priority > 0);
 
             let main_text_col = responsive(move |size| {
                 let available_width = size.width;

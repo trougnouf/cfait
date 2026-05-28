@@ -222,6 +222,10 @@ fn default_refresh_interval() -> u32 {
 fn default_max_done_roots() -> usize {
     20
 }
+
+fn default_ui_scale() -> f32 {
+    1.0
+}
 fn default_max_done_subtasks() -> usize {
     5
 }
@@ -334,6 +338,8 @@ pub struct Config {
     pub strikethrough_completed: bool,
     #[serde(default = "default_true")]
     pub hide_fully_completed_tags: bool,
+    #[serde(default = "default_ui_scale")]
+    pub ui_scale: f32,
     #[serde(default = "default_cutoff")]
     pub sort_cutoff_months: Option<u32>,
     /// When `true`, rank-4 (standard tasks with a due date within the cutoff) are sorted
@@ -428,6 +434,7 @@ impl Default for Config {
             disabled_calendars: Vec::new(),
             hide_completed: false,
             hide_fully_completed_tags: true,
+            ui_scale: 1.0,
             sort_cutoff_months: Some(2),
             sort_standard_by_priority: false,
             tag_aliases: HashMap::new(),
@@ -693,6 +700,9 @@ impl Config {
             } else if trimmed.starts_with("hide_fully_completed_tags =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Hide tags in sidebar if all their tasks are completed.");
+            } else if trimmed.starts_with("ui_scale =") {
+                out.push_str(line);
+                out.push_str(" # Float: Global UI scale factor (0.5–3.0). Ctrl+/Ctrl-/scroll to change.");
             } else if trimmed.starts_with("theme =") {
                 out.push_str(line);
                 out.push_str(" # String: GUI Theme (RustyDark, Light, Dark, Dracula, Nord, etc).");

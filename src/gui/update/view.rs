@@ -38,15 +38,18 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ZoomIn => {
             // Increase scale by 10%, clamp at 300%
             app.ui_scale = (app.ui_scale + 0.1).min(3.0);
+            save_config(app);
             Task::none()
         }
         Message::ZoomOut => {
             // Decrease scale by 10%, clamp at 50%
             app.ui_scale = (app.ui_scale - 0.1).max(0.5);
+            save_config(app);
             Task::none()
         }
         Message::ZoomReset => {
             app.ui_scale = 1.0;
+            save_config(app);
             Task::none()
         }
 
