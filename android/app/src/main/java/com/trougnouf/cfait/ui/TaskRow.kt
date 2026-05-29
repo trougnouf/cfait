@@ -545,9 +545,14 @@ fun CompactTagRow(
     isSelected: Boolean,
     onClick: () -> Unit,
     icon: String = NfIcons.TAG,
-    onFocus: (() -> Unit)? = null
+    onFocus: (() -> Unit)? = null,
+    depth: Int = 0,
+    hasChildren: Boolean = false,
+    isExpanded: Boolean = false,
+    onToggleCollapse: (() -> Unit)? = null
 ) {
     val bg = if (isSelected) color.copy(alpha = 0.15f) else Color.Transparent
+    val indent = (depth * 12).dp
 
     Row(
         modifier =
@@ -559,10 +564,21 @@ fun CompactTagRow(
                 .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (indent > 0.dp) {
+            Spacer(Modifier.width(indent))
+        }
         NfIcon(icon, size = 14.sp, color = color)
         Spacer(Modifier.width(12.dp))
         Text(name, fontSize = 14.sp, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurface)
         if (count != null) Text("$count", fontSize = 12.sp, color = Color.Gray)
+
+        if (hasChildren && onToggleCollapse != null) {
+            Spacer(Modifier.width(8.dp))
+            IconButton(onClick = onToggleCollapse, modifier = Modifier.size(24.dp)) {
+                val collapseIcon = if (isExpanded) NfIcons.ARROW_DOWN else NfIcons.ARROW_RIGHT
+                NfIcon(collapseIcon, 14.sp, color = Color.Gray)
+            }
+        }
 
         if (onFocus != null) {
             Spacer(Modifier.width(8.dp))

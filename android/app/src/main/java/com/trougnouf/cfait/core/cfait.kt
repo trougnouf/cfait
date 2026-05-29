@@ -4014,6 +4014,7 @@ data class MobileConfig(
     var `defaultCalendar`: kotlin.String?,
     var `allowInsecure`: kotlin.Boolean,
     var `hideCompleted`: kotlin.Boolean,
+    var `hideAliasesInSidebar`: kotlin.Boolean,
     var `tagAliases`: Map<kotlin.String, List<kotlin.String>>,
     var `disabledCalendars`: List<kotlin.String>,
     var `sortCutoffMonths`: kotlin.UInt?,
@@ -4051,6 +4052,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterMapStringSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterOptionalUInt.read(buf),
@@ -4082,6 +4084,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterOptionalString.allocationSize(value.`defaultCalendar`) +
                 FfiConverterBoolean.allocationSize(value.`allowInsecure`) +
                 FfiConverterBoolean.allocationSize(value.`hideCompleted`) +
+                FfiConverterBoolean.allocationSize(value.`hideAliasesInSidebar`) +
                 FfiConverterMapStringSequenceString.allocationSize(value.`tagAliases`) +
                 FfiConverterSequenceString.allocationSize(value.`disabledCalendars`) +
                 FfiConverterOptionalUInt.allocationSize(value.`sortCutoffMonths`) +
@@ -4115,6 +4118,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterOptionalString.write(value.`defaultCalendar`, buf)
         FfiConverterBoolean.write(value.`allowInsecure`, buf)
         FfiConverterBoolean.write(value.`hideCompleted`, buf)
+        FfiConverterBoolean.write(value.`hideAliasesInSidebar`, buf)
         FfiConverterMapStringSequenceString.write(value.`tagAliases`, buf)
         FfiConverterSequenceString.write(value.`disabledCalendars`, buf)
         FfiConverterOptionalUInt.write(value.`sortCutoffMonths`, buf)
@@ -4145,6 +4149,8 @@ data class MobileFilterOptions(
     var `searchQuery`: kotlin.String,
     var `expandedGroups`: List<kotlin.String>,
     var `matchAllCategories`: kotlin.Boolean,
+    var `expandedTags`: List<kotlin.String>,
+    var `expandedLocations`: List<kotlin.String>,
 ) {
     companion object
 }
@@ -4160,6 +4166,8 @@ public object FfiConverterTypeMobileFilterOptions : FfiConverterRustBuffer<Mobil
             FfiConverterString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
         )
 
     override fun allocationSize(value: MobileFilterOptions) =
@@ -4168,7 +4176,9 @@ public object FfiConverterTypeMobileFilterOptions : FfiConverterRustBuffer<Mobil
                 FfiConverterSequenceString.allocationSize(value.`filterLocations`) +
                 FfiConverterString.allocationSize(value.`searchQuery`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedGroups`) +
-                FfiConverterBoolean.allocationSize(value.`matchAllCategories`)
+                FfiConverterBoolean.allocationSize(value.`matchAllCategories`) +
+                FfiConverterSequenceString.allocationSize(value.`expandedTags`) +
+                FfiConverterSequenceString.allocationSize(value.`expandedLocations`)
         )
 
     override fun write(
@@ -4180,6 +4190,8 @@ public object FfiConverterTypeMobileFilterOptions : FfiConverterRustBuffer<Mobil
         FfiConverterString.write(value.`searchQuery`, buf)
         FfiConverterSequenceString.write(value.`expandedGroups`, buf)
         FfiConverterBoolean.write(value.`matchAllCategories`, buf)
+        FfiConverterSequenceString.write(value.`expandedTags`, buf)
+        FfiConverterSequenceString.write(value.`expandedLocations`, buf)
     }
 }
 
@@ -4289,7 +4301,11 @@ public object FfiConverterTypeMobileHelpSection : FfiConverterRustBuffer<MobileH
 
 data class MobileLocation(
     var `name`: kotlin.String,
+    var `displayName`: kotlin.String,
     var `count`: kotlin.UInt,
+    var `depth`: kotlin.UInt,
+    var `hasChildren`: kotlin.Boolean,
+    var `isExpanded`: kotlin.Boolean,
 ) {
     companion object
 }
@@ -4301,13 +4317,21 @@ public object FfiConverterTypeMobileLocation : FfiConverterRustBuffer<MobileLoca
     override fun read(buf: ByteBuffer): MobileLocation =
         MobileLocation(
             FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
 
     override fun allocationSize(value: MobileLocation) =
         (
             FfiConverterString.allocationSize(value.`name`) +
-                FfiConverterUInt.allocationSize(value.`count`)
+                FfiConverterString.allocationSize(value.`displayName`) +
+                FfiConverterUInt.allocationSize(value.`count`) +
+                FfiConverterUInt.allocationSize(value.`depth`) +
+                FfiConverterBoolean.allocationSize(value.`hasChildren`) +
+                FfiConverterBoolean.allocationSize(value.`isExpanded`)
         )
 
     override fun write(
@@ -4315,7 +4339,11 @@ public object FfiConverterTypeMobileLocation : FfiConverterRustBuffer<MobileLoca
         buf: ByteBuffer,
     ) {
         FfiConverterString.write(value.`name`, buf)
+        FfiConverterString.write(value.`displayName`, buf)
         FfiConverterUInt.write(value.`count`, buf)
+        FfiConverterUInt.write(value.`depth`, buf)
+        FfiConverterBoolean.write(value.`hasChildren`, buf)
+        FfiConverterBoolean.write(value.`isExpanded`, buf)
     }
 }
 
@@ -4389,7 +4417,11 @@ public object FfiConverterTypeMobileSyntaxToken : FfiConverterRustBuffer<MobileS
 
 data class MobileTag(
     var `name`: kotlin.String,
+    var `displayName`: kotlin.String,
     var `count`: kotlin.UInt,
+    var `depth`: kotlin.UInt,
+    var `hasChildren`: kotlin.Boolean,
+    var `isExpanded`: kotlin.Boolean,
     var `isUncategorized`: kotlin.Boolean,
 ) {
     companion object
@@ -4402,14 +4434,22 @@ public object FfiConverterTypeMobileTag : FfiConverterRustBuffer<MobileTag> {
     override fun read(buf: ByteBuffer): MobileTag =
         MobileTag(
             FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
         )
 
     override fun allocationSize(value: MobileTag) =
         (
             FfiConverterString.allocationSize(value.`name`) +
+                FfiConverterString.allocationSize(value.`displayName`) +
                 FfiConverterUInt.allocationSize(value.`count`) +
+                FfiConverterUInt.allocationSize(value.`depth`) +
+                FfiConverterBoolean.allocationSize(value.`hasChildren`) +
+                FfiConverterBoolean.allocationSize(value.`isExpanded`) +
                 FfiConverterBoolean.allocationSize(value.`isUncategorized`)
         )
 
@@ -4418,7 +4458,11 @@ public object FfiConverterTypeMobileTag : FfiConverterRustBuffer<MobileTag> {
         buf: ByteBuffer,
     ) {
         FfiConverterString.write(value.`name`, buf)
+        FfiConverterString.write(value.`displayName`, buf)
         FfiConverterUInt.write(value.`count`, buf)
+        FfiConverterUInt.write(value.`depth`, buf)
+        FfiConverterBoolean.write(value.`hasChildren`, buf)
+        FfiConverterBoolean.write(value.`isExpanded`, buf)
         FfiConverterBoolean.write(value.`isUncategorized`, buf)
     }
 }
@@ -4713,6 +4757,8 @@ data class SessionState(
     var `activeCalendarHref`: kotlin.String?,
     var `matchAllCategories`: kotlin.Boolean,
     var `expandedDoneGroups`: List<kotlin.String>,
+    var `expandedTags`: List<kotlin.String>,
+    var `expandedLocations`: List<kotlin.String>,
 ) {
     companion object
 }
@@ -4729,6 +4775,8 @@ public object FfiConverterTypeSessionState : FfiConverterRustBuffer<SessionState
             FfiConverterOptionalString.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
         )
 
     override fun allocationSize(value: SessionState) =
@@ -4738,7 +4786,9 @@ public object FfiConverterTypeSessionState : FfiConverterRustBuffer<SessionState
                 FfiConverterSequenceString.allocationSize(value.`selectedLocations`) +
                 FfiConverterOptionalString.allocationSize(value.`activeCalendarHref`) +
                 FfiConverterBoolean.allocationSize(value.`matchAllCategories`) +
-                FfiConverterSequenceString.allocationSize(value.`expandedDoneGroups`)
+                FfiConverterSequenceString.allocationSize(value.`expandedDoneGroups`) +
+                FfiConverterSequenceString.allocationSize(value.`expandedTags`) +
+                FfiConverterSequenceString.allocationSize(value.`expandedLocations`)
         )
 
     override fun write(
@@ -4751,6 +4801,8 @@ public object FfiConverterTypeSessionState : FfiConverterRustBuffer<SessionState
         FfiConverterOptionalString.write(value.`activeCalendarHref`, buf)
         FfiConverterBoolean.write(value.`matchAllCategories`, buf)
         FfiConverterSequenceString.write(value.`expandedDoneGroups`, buf)
+        FfiConverterSequenceString.write(value.`expandedTags`, buf)
+        FfiConverterSequenceString.write(value.`expandedLocations`, buf)
     }
 }
 
@@ -4907,6 +4959,18 @@ sealed class AppIntent {
 
     data class ToggleDoneGroup(
         val `key`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class ToggleTagCollapse(
+        val `tag`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class ToggleLocationCollapse(
+        val `location`: kotlin.String,
     ) : AppIntent() {
         companion object
     }
@@ -5077,6 +5141,18 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
 
             27 -> {
                 AppIntent.ToggleDoneGroup(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            28 -> {
+                AppIntent.ToggleTagCollapse(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            29 -> {
+                AppIntent.ToggleLocationCollapse(
                     FfiConverterString.read(buf),
                 )
             }
@@ -5306,6 +5382,22 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
                         FfiConverterString.allocationSize(value.`key`)
                 )
             }
+
+            is AppIntent.ToggleTagCollapse -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`tag`)
+                )
+            }
+
+            is AppIntent.ToggleLocationCollapse -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`location`)
+                )
+            }
         }
 
     override fun write(
@@ -5475,6 +5567,18 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
             is AppIntent.ToggleDoneGroup -> {
                 buf.putInt(27)
                 FfiConverterString.write(value.`key`, buf)
+                Unit
+            }
+
+            is AppIntent.ToggleTagCollapse -> {
+                buf.putInt(28)
+                FfiConverterString.write(value.`tag`, buf)
+                Unit
+            }
+
+            is AppIntent.ToggleLocationCollapse -> {
+                buf.putInt(29)
+                FfiConverterString.write(value.`location`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

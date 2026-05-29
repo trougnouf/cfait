@@ -286,6 +286,7 @@
     "sort_standard_by_priority_label": "Sort regular tasks by priority over date",
     "hide_fully_completed_tags": "Hide tags containing only completed tasks",
     "hide_aliases_in_sidebar": "Hide shorthand aliases in the sidebar",
+    "hide_aliases_in_sidebar_tooltip": "If enabled, alias keys without subtags are hidden from the sidebar, so you only see their destination folders.",
     "ics_event_auto_created": "This event was automatically created by Cfait from a task.",
     "ics_event_auto_updated": "It will be automatically updated/overwritten when the task changes, and it might get deleted when the task is completed or canceled.",
     "any": "Any",

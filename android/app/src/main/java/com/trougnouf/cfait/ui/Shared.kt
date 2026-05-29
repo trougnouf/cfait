@@ -143,7 +143,8 @@ object NfIcons {
     val LINK_LOCK = get(0xf10ba)
     val PLAY = get(0xeb2c)
     val PAUSE = get(0xf04c)
-    val REPEAT = get(0xf0b6)
+    val REPEAT = get(0xf0b6) // nf-fa-repeat_alt
+    val REPEAT_VARIANT = get(0xf0547) // nf-md-repeat_variant
     val VISIBLE = get(0xea70)
     val HIDDEN = get(0xeae7)
     val WRITE_TARGET = get(0xf0cfb)

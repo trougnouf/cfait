@@ -241,6 +241,8 @@ fun HomeScreen(
     var filterLocations by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
     var matchAllCategories by rememberSaveable { mutableStateOf(true) }
     var expandedGroups by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
+    var expandedTags by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
+    var expandedLocations by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
@@ -333,7 +335,9 @@ fun HomeScreen(
                     filterLocations = filterLocations.toList(),
                     searchQuery = searchQuery,
                     expandedGroups = expandedGroups.toList(),
-                    matchAllCategories = matchAllCategories
+                    matchAllCategories = matchAllCategories,
+                    expandedTags = expandedTags.toList(),
+                    expandedLocations = expandedLocations.toList()
                 )
                 val viewData = api.getViewTasks(options)
                 onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, api.getConfig().tagAliases)
@@ -748,7 +752,8 @@ fun HomeScreen(
 
     LaunchedEffect(
         searchQuery, filterTags, filterLocations, isLoading,
-        calendars, refreshTick, expandedGroups, matchAllCategories
+        calendars, refreshTick, expandedGroups, expandedTags,
+        expandedLocations, matchAllCategories
     ) {
         updateTaskList()
     }
@@ -1212,7 +1217,16 @@ fun HomeScreen(
                                     onClick = {
                                         filterTags = if (isSelected) filterTags - targetKey else filterTags + targetKey
                                     },
-                                    onFocus = { filterTags = setOf(targetKey); scope.launch { drawerState.close() } }
+                                    onFocus = { filterTags = setOf(targetKey); scope.launch { drawerState.close() } },
+                                    depth = tag.depth.toInt(),
+                                    hasChildren = tag.hasChildren,
+                                    isExpanded = tag.isExpanded,
+                                    onToggleCollapse = {
+                                        expandedTags = if (expandedTags.contains(tag.name)) expandedTags - tag.name else expandedTags + tag.name
+                                        scope.launch {
+                                            api.dispatch(AppIntent.ToggleTagCollapse(tag.name))
+                                        }
+                                    }
                                 )
                             }
                         } else {
@@ -1231,6 +1245,15 @@ fun HomeScreen(
                                     icon = iconStr,
                                     onFocus = {
                                         filterLocations = setOf(loc.name); scope.launch { drawerState.close() }
+                                    },
+                                    depth = loc.depth.toInt(),
+                                    hasChildren = loc.hasChildren,
+                                    isExpanded = loc.isExpanded,
+                                    onToggleCollapse = {
+                                        expandedLocations = if (expandedLocations.contains(loc.name)) expandedLocations - loc.name else expandedLocations + loc.name
+                                        scope.launch {
+                                            api.dispatch(AppIntent.ToggleLocationCollapse(loc.name))
+                                        }
                                     }
                                 )
                             }

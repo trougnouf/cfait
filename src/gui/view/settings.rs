@@ -8,7 +8,7 @@ use crate::gui::state::{AppState, GuiApp};
 use crate::storage::LOCAL_CALENDAR_HREF;
 
 use iced::widget::{
-    MouseArea, Space, button, checkbox, column, container, row, scrollable, text, text_input,
+    MouseArea, Space, button, checkbox, column, container, row, scrollable, text, text_input, tooltip,
 };
 use iced::{Color, Element, Length, Theme};
 #[cfg(feature = "gui")]
@@ -352,9 +352,15 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     .label(rust_i18n::t!("hide_completed_and_canceled_tasks"))
                     .on_toggle(Message::ToggleHideCompleted),
                 hide_fully_ui,
-                checkbox::<Message, iced::Theme, iced::Renderer>(app.hide_aliases_in_sidebar)
-                    .label(rust_i18n::t!("hide_aliases_in_sidebar"))
-                    .on_toggle(Message::ToggleHideAliasesInSidebar),
+                tooltip(
+                    checkbox::<Message, iced::Theme, iced::Renderer>(app.hide_aliases_in_sidebar)
+                        .label(rust_i18n::t!("hide_aliases_in_sidebar"))
+                        .on_toggle(Message::ToggleHideAliasesInSidebar),
+                    text(rust_i18n::t!("hide_aliases_in_sidebar_tooltip")).size(12),
+                    tooltip::Position::Top
+                )
+                .style(crate::gui::view::tooltip_style)
+                .delay(std::time::Duration::from_millis(700)),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_priority_numbers)
                     .label(rust_i18n::t!("show_priority_numbers"))
                     .on_toggle(Message::SetShowPriorityNumbers),
