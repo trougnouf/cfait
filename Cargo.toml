@@ -1,6 +1,6 @@
 [package]
 name = "cfait"
-version = "1.0.2"
+version = "1.0.3"
 edition = "2024"
 description = "Powerful, fast and elegant task / TODO manager. (GUI & TUI, CalDAV & local)"
 license = "GPL-3.0-or-later"
@@ -185,7 +185,7 @@ pre-release-hook = ["python3", "scripts/prepare_release.py"]
 
 [package.metadata.android]
 # This must match (Major * 10000 + Minor * 100 + Patch)
-version_code = 10002
+version_code = 10003
 
 # --- Keyring ecosystem for secure password storage ---
 [dependencies.keyring-core]

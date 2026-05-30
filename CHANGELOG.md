@@ -1,5 +1,199 @@
 # Changelog
 
+## [1.0.3] - 2026-05-30
+
+### 🚀 Features
+
+- "complete and shift schedule" on recurrent tasks with shift+enter keyboard shortcut (TUI, GUI), add @after syntax as alternative to @every where CompleteAndShift is the default
+- Complete and shift schedule: test and Android feature parity
+- *(gui)* Add missing keyboard navigation when moving tasks
+- *(settings)* Allow password hide/show
+- *(gui)* Make context menu (right click / more actions) scrollable
+- *(sorting)* Sort standard tasks by priority (toggle with p)
+- *(gui)* Persist ui_scale between sessions
+- *(gui)* Improve selection behavior after task completion
+- Highlight relative recurrence and hide redundant shift action
+- *(tui)* Support external editors (EDITOR/VISUAL env variable or description_editor setting, https://github.com/trougnouf/cfait/issues/36 )
+- *(android)* Expose sorting and priority settings in UI
+- Implement collapsible tag/location trees in TUI/GUI with alias hiding and persistent state ( https://github.com/trougnouf/cfait/issues/37 )
+- *(android)* Implement collapsible tag/location trees in Android UI ( https://github.com/trougnouf/cfait/issues/37 )
+- Implement settings and alias synchronization over CalDAV ( https://codeberg.org/trougnouf/cfait/issues/21 )
+
+### 🐛 Bug Fixes
+
+- *(store)* Stop_task resets time tracking instead of accumulating
+- *(sync)* Deduplicate cross-collection uids and add android parent navigation
+- *(ci)* Build Android APKs originating from PRs with dummy signing key ( https://codeberg.org/trougnouf/cfait/pulls/68 )
+- *(ci)* Move dummy keystore fallback logic from release.yml to test_roll.yml
+- *(auth)* Ensure android returns config with credentials
+- *(gui)* Remove "All actions pinned" from right click menu
+- *(gui)* Move sort-by-priority to settings, change shortcut to Ctrl+P
+- *(android)* Move sort_standard_by_priority to end of Preferences section
+- *(android)* Add missing sortStandardByPriority param to saveConfig call
+- *(gui)* Keep selection reasonable when task marked complete
+- *(gui)* Show priority tag even without other metadata
+- Prevent offline description data loss and add terminal-safe save shortcuts
+- Prevent offline description data loss and add terminal-safe save shortcuts
+
+### 💼 Other
+
+- Translated using Weblate (Russian)
+
+Currently translated at 51.7% (273 of 528 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
+- Merge pull request 'Fix Czech translation' (#65) from MarrekNozka/cfait:master into master
+
+Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/65
+- Translated using Weblate (German)
+
+Currently translated at 85.6% (452 of 528 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
+- Translated using Weblate (Russian)
+
+Currently translated at 78.5% (415 of 528 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
+- Translated using Weblate (Russian)
+
+Currently translated at 91.6% (484 of 528 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
+- Add cfait-bin AUR package to docs
+- Merge pull request #34 from brandon-doornbos/cfait-bin
+
+Add cfait-bin AUR package to docs
+- Merge branch 'master' of https://codeberg.org/trougnouf/cfait
+- Merge pull request 'Fix Czech translation' (#66) from MarrekNozka/cfait:master into master
+
+Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/66
+- Merge branch 'master' of https://codeberg.org/trougnouf/cfait
+- Merge pull request 'fix(store): stop_task resets time tracking instead of accumulating' (#67) from MarrekNozka/cfait:fix/stop-task-reset into master
+
+Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/67
+- Remove tui feature
+- Merge branch 'master' into show-password-toggle
+- Merge branch 'master' into show-password-toggle
+- Merge pull request 'feat(settings): Allow password hide/show' (#69) from eltower/cfait:show-password-toggle into master
+
+Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/69
+- Merge branch 'master' into android-auth
+- Merge branch 'master' into android-auth
+- Merge pull request 'fix(auth): Ensure android returns config with credentials' (#68) from eltower/cfait:android-auth into master
+
+Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/68
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 100.0% (529 of 529 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (529 of 529 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Merge branch 'master' of https://codeberg.org/trougnouf/cfait
+- Merge pull request 'new feature: switch sorting by priority' (#70) from MarrekNozka/cfait:feature/switch-sorting-by-priority-or-date into master
+
+Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/70
+- Unify for also toggle task case
+- Merge pull request 'fix(gui): show priority tag even without other metadata' (#71) from MarrekNozka/cfait:fix/priority-hidden-without-metadata into master
+
+Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/71
+- Merge pull request 'feat(gui): persist ui_scale between sessions' (#72) from MarrekNozka/cfait:feature/persist-ui-scale into master
+
+Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/72
+- Merge branch 'master' into adjust-gui-selection-after-task-complete
+- Merge pull request 'fix(gui): Keep selection reasonable when task marked complete' (#73) from eltower/cfait:adjust-gui-selection-after-task-complete into master
+
+Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/73
+- Translated using Weblate (German)
+
+Currently translated at 100.0% (532 of 532 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (532 of 532 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+- Merge pull request 'feat(android): expose sorting and priority settings in UI' (#75) from MarrekNozka/cfait:feature/android-sorting-priority-settings into master
+
+Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/75
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 100.0% (532 of 532 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (532 of 532 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Translated using Weblate (Czech)
+
+Currently translated at 99.4% (529 of 532 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/cs/
+- Translated using Weblate (Chinese (Simplified Han script))
+
+Currently translated at 100.0% (534 of 534 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
+- Translated using Weblate (Spanish)
+
+Currently translated at 100.0% (534 of 534 strings)
+
+Translation: Cfait/Cfait
+Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
+- Merge remote-tracking branch 'refs/remotes/origin/master'
+
+### 🚜 Refactor
+
+- *(model)* Introduce CompareOptions struct for compare_with_cutoff
+- *(gui)* Centralized actions visibility logic
+- Disallow(clippy::too_many_arguments)
+
+### 📚 Documentation
+
+- *(readme)* Update sort toggle shortcut P → Ctrl+P, remove toolbar reference
+
+### ⚡ Performance
+
+- *(gui)* Defer tooltips, remove CursorMoved, use dynamic context menu placement
+- *(gui)* Defer tooltips, remove CursorMoved, use dynamic context menu placement (part 2)
+
+### 🎨 Styling
+
+- Use the same tree icons for tags and locations as in the tasks list
+
+### ⚙️ Miscellaneous Tasks
+
+- *(auth)* Regenerate kotlin bindings ( https://codeberg.org/trougnouf/cfait/pulls/68 )
+- *(android)* Regenerate cfait.kt bindings without ktlint formatting
+- Cleanup unused SORT_PRIORITY icon and apply ktlint
+- Enforce code formatting and add pre-commit hooks ( https://codeberg.org/trougnouf/cfait/issues/74 )
+- Workspace-wide cargo fmt sweep ( https://codeberg.org/trougnouf/cfait/issues/74 )
+- Register codebase formatting sweep in .git-blame-ignore-revs
+- Update Rust toolchain to 1.96.0
+- Cargo fmt --all
+- Fix Android compilation error
+- Cargo fmt --all
 ## [1.0.2] - 2026-05-22
 
 ### 🚀 Features
@@ -11,10 +205,10 @@
 - Remember and synchronize task trees collapsed status
 - *(android)* Merge calendar visibility toggles into collection editors ( https://codeberg.org/trougnouf/cfait/issues/62 )
 - *(android)* Log Kotlin-related crashes to cache/android_crash.txt ( https://codeberg.org/trougnouf/cfait/issues/63 )
+- *(i18n)* Add complete Czech translation
 - Set sub-tasks' implicit start datetime based on parent's (for e.g. is:ready filtering and random task selection)
 - Add ## and @@@ syntax to add tags and locations that remain in the title
 - *(gui)* Remember cursor position after deleting a task
-- *(i18n)* Add complete Czech translation
 
 ### 🐛 Bug Fixes
 
@@ -26,8 +220,9 @@
 - *(tui)* Store password to keyring during onboarding
 - *(gui,mobile)* Implement optimistic updates for remote calendar actions to prevent UI jitter ( https://codeberg.org/trougnouf/cfait/issues/62 )
 - *(mobile)* Prevent DST gap panics in implicit alarm evaluators
-- Hide collapsed sub-tasks which were picked up by the fallback routine for orphaned tasks (reported by @Shadowminx )
 - *(i18n)* Improve Czech translation terminology and add missing keys
+- *(i18n)* Improve Czech translation wording for sorting/priority terms
+- Hide collapsed sub-tasks which were picked up by the fallback routine for orphaned tasks (reported by @Shadowminx )
 - *(android)* Fix language switch on older (<13) Android versions ( https://github.com/trougnouf/cfait/issues/32 )
 
 ### 💼 Other
@@ -354,6 +549,7 @@ Updated by "Remove blank strings" add-on in Weblate.
 
 Translation: Cfait/Cfait
 Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/
+- Translation `location` words: `loc:` versus `geo:`
 - Translated using Weblate (Chinese (Simplified Han script))
 
 Currently translated at 100.0% (527 of 527 strings)
@@ -417,6 +613,7 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
 - Lint
 - Switch locales to 4-spaces
 - Fix Android compilation error
+- Release cfait version 1.0.2
 ## [1.0.1] - 2026-05-14
 
 ### 🚀 Features
