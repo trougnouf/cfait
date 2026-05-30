@@ -1,1 +1,1 @@
-Een krachtige, snelle, maar ook elegante takenlijst (CalDAV en local)
+Een krachtige, snelle, maar ook elegante takenlijst. (CalDAV en lokaal)
