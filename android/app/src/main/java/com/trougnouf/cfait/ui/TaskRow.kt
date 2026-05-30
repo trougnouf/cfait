@@ -549,7 +549,8 @@ fun CompactTagRow(
     depth: Int = 0,
     hasChildren: Boolean = false,
     isExpanded: Boolean = false,
-    onToggleCollapse: (() -> Unit)? = null
+    onToggleCollapse: (() -> Unit)? = null,
+    isTag: Boolean = true
 ) {
     val bg = if (isSelected) color.copy(alpha = 0.15f) else Color.Transparent
     val indent = (depth * 12).dp
@@ -602,10 +603,6 @@ fun CompactTagRow(
             IconButton(onClick = onFocus, modifier = Modifier.size(24.dp)) {
                 NfIcon(NfIcons.ARROW_RIGHT, 14.sp)
             }
-        }
-    }
-}
-
         }
     }
 }
