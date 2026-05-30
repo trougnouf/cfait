@@ -1581,6 +1581,10 @@ impl TaskStore {
                 .iter()
                 .copied()
                 .filter(|t| {
+                    if t.uid == "cfait-global-settings-v1" || t.summary.starts_with("⚙ Cfait Settings") {
+                        return false;
+                    }
+
                     // Status-based filtering
                     let has_status_filter = search_lower.contains("is:done")
                         || search_lower.contains("is:active")

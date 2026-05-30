@@ -45,6 +45,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.sort_standard_by_priority = config.sort_standard_by_priority;
             app.ui_scale = config.ui_scale;
             app.show_priority_numbers = config.show_priority_numbers;
+            app.sync_settings = config.sync_settings;
             app.current_theme = config.theme;
 
             app.quick_filter_term = config.quick_filter_term.clone();
@@ -505,6 +506,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.show_priority_numbers = val;
             save_config(app);
             refresh_filtered_tasks(app);
+            Task::none()
+        }
+        Message::SetSyncSettings(val) => {
+            app.sync_settings = val;
+            save_config(app);
             Task::none()
         }
         Message::SetLogLevel(level) => {

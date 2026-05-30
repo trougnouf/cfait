@@ -98,6 +98,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::SetQuickFilterTerm(_)
         | Message::SetQuickFilterIcon(_)
         | Message::SetLogLevel(_)
+        | Message::SetSyncSettings(_)
         | Message::AddRemoteCalendar
         | Message::RemoteCalendarNameChanged(_, _)
         | Message::SubmitRemoteCalendar(_)

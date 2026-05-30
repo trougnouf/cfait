@@ -921,6 +921,9 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .spacing(8)
                 .align_y(iced::Alignment::Center),
                 insecure_check,
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.sync_settings)
+                    .label(rust_i18n::t!("sync_settings"))
+                    .on_toggle(Message::SetSyncSettings),
                 save_connect_btn
             ]
             .spacing(15)

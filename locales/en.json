@@ -449,6 +449,7 @@
     "support_clear_filters": "Clear all filters / Show all collections",
     "support_isolate_calendar": "Isolate collection / Focus tag or location",
     "support_switch_sidebar_tab": "Switch sidebar tab (Calendars, Tags, Locations)",
+    "sync_settings": "Sync settings & aliases via CalDAV",
     "sync_conflict_412": "Conflict (412) on task '%{summary}'. Merge failed. Creating copy.",
     "sync_conflict_412_fallback": "Conflict (412-Fallback) on task '%{summary}'. Creating copy.",
     "sync_conflict_creation": "Creation conflict: Task '%{summary}' already exists on server. Mark as synced.",

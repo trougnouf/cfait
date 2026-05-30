@@ -349,6 +349,7 @@ pub struct MobileConfig {
     pub show_quick_filter: bool,
     pub quick_filter_term: String,
     pub quick_filter_icon: String,
+    pub sync_settings: bool,
 }
 
 #[derive(uniffi::Record)]
@@ -780,6 +781,7 @@ impl CfaitMobile {
             show_quick_filter: c.show_quick_filter,
             quick_filter_term: c.quick_filter_term,
             quick_filter_icon: c.quick_filter_icon,
+            sync_settings: c.sync_settings,
         }
     }
 
@@ -836,6 +838,7 @@ impl CfaitMobile {
 
     pub fn save_config(&self, config: MobileConfig) -> Result<(), MobileError> {
         let mut c = load_mobile_config_with_credentials(self.ctx.as_ref());
+        let old_c = c.clone();
         c.url = config.url;
         apply_mobile_credentials_update(&mut c, &config.username, &config.password);
         c.allow_insecure_certs = config.allow_insecure;
@@ -863,6 +866,9 @@ impl CfaitMobile {
         c.show_quick_filter = config.show_quick_filter;
         c.quick_filter_term = config.quick_filter_term;
         c.quick_filter_icon = config.quick_filter_icon;
+        c.sync_settings = config.sync_settings;
+
+        c.update_sync_timestamp_if_changed(&old_c);
 
         c.save_with_credentials(self.ctx.as_ref())
             .map_err(MobileError::from)
@@ -1414,7 +1420,7 @@ impl CfaitMobile {
     }
 
     pub async fn sync_journal(&self) -> Result<bool, MobileError> {
-        let (_warns, synced) = self
+        let (_warns, synced, _config_changed) = self
             .controller
             .sync_and_update_store()
             .await

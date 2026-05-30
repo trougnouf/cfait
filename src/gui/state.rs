@@ -219,6 +219,7 @@ pub struct GuiApp {
     pub ob_max_done_subtasks_input: String,
 
     pub show_priority_numbers: bool,
+    pub sync_settings: bool,
 
     // Logging level
     pub log_level: LogLevel,
@@ -468,6 +469,7 @@ impl Default for GuiApp {
             ob_max_done_roots_input: "20".to_string(),
             ob_max_done_subtasks_input: "5".to_string(),
             show_priority_numbers: true,
+            sync_settings: true,
             log_level: LogLevel::Info,
 
             force_ssd: {

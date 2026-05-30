@@ -4,6 +4,7 @@
 use crate::context::AppContext;
 use crate::storage::LocalStorage;
 use anyhow::{Error, Result};
+use chrono;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -431,6 +432,73 @@ pub struct Config {
     pub expanded_locations: Vec<String>,
     #[serde(default)]
     pub expanded_done_groups: Vec<String>,
+
+    #[serde(default = "default_true")]
+    pub sync_settings: bool,
+    #[serde(default)]
+    pub settings_updated_at: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct SyncableConfig {
+    #[serde(default)]
+    pub tag_aliases: HashMap<String, Vec<String>>,
+    #[serde(default)]
+    pub hide_completed: bool,
+    #[serde(default)]
+    pub hide_fully_completed_tags: bool,
+    #[serde(default)]
+    pub hide_aliases_in_sidebar: bool,
+    #[serde(default)]
+    pub sort_cutoff_months: Option<u32>,
+    #[serde(default)]
+    pub sort_standard_by_priority: bool,
+    #[serde(default = "default_urgent_days")]
+    pub urgent_days_horizon: u32,
+    #[serde(default = "default_urgent_prio")]
+    pub urgent_priority_threshold: u8,
+    #[serde(default = "default_priority")]
+    pub default_priority: u8,
+    #[serde(default = "default_start_grace_period")]
+    pub start_grace_period_days: u32,
+    #[serde(default = "default_auto_remind")]
+    pub auto_reminders: bool,
+    #[serde(default = "default_remind_time")]
+    pub default_reminder_time: String,
+    #[serde(default = "default_snooze_1")]
+    pub snooze_short_mins: u32,
+    #[serde(default = "default_snooze_2")]
+    pub snooze_long_mins: u32,
+    #[serde(default = "default_create_events")]
+    pub create_events_for_tasks: bool,
+    #[serde(default = "default_delete_events_on_completion")]
+    pub delete_events_on_completion: bool,
+    #[serde(default = "default_trash_retention")]
+    pub trash_retention_days: u32,
+    #[serde(default = "default_max_done_roots")]
+    pub max_done_roots: usize,
+    #[serde(default = "default_max_done_subtasks")]
+    pub max_done_subtasks: usize,
+    #[serde(default = "default_true")]
+    pub show_ongoing_notifications: bool,
+    #[serde(default = "default_true")]
+    pub show_priority_numbers: bool,
+    #[serde(default = "default_pinned_actions")]
+    pub pinned_actions: Vec<TaskAction>,
+    #[serde(default = "default_quick_filter_term")]
+    pub quick_filter_term: String,
+    #[serde(default = "default_quick_filter_icon")]
+    pub quick_filter_icon: String,
+    #[serde(default = "default_true")]
+    pub show_quick_filter: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct SettingsPayload {
+    #[serde(default)]
+    pub updated_at: i64,
+    #[serde(default)]
+    pub config: SyncableConfig,
 }
 
 impl Default for Config {
@@ -481,11 +549,77 @@ impl Default for Config {
             expanded_tags: Vec::new(),
             expanded_locations: Vec::new(),
             expanded_done_groups: Vec::new(),
+            sync_settings: true,
+            settings_updated_at: 0,
         }
     }
 }
 
 impl Config {
+    pub fn get_syncable(&self) -> SyncableConfig {
+        SyncableConfig {
+            tag_aliases: self.tag_aliases.clone(),
+            hide_completed: self.hide_completed,
+            hide_fully_completed_tags: self.hide_fully_completed_tags,
+            hide_aliases_in_sidebar: self.hide_aliases_in_sidebar,
+            sort_cutoff_months: self.sort_cutoff_months,
+            sort_standard_by_priority: self.sort_standard_by_priority,
+            urgent_days_horizon: self.urgent_days_horizon,
+            urgent_priority_threshold: self.urgent_priority_threshold,
+            default_priority: self.default_priority,
+            start_grace_period_days: self.start_grace_period_days,
+            auto_reminders: self.auto_reminders,
+            default_reminder_time: self.default_reminder_time.clone(),
+            snooze_short_mins: self.snooze_short_mins,
+            snooze_long_mins: self.snooze_long_mins,
+            create_events_for_tasks: self.create_events_for_tasks,
+            delete_events_on_completion: self.delete_events_on_completion,
+            trash_retention_days: self.trash_retention_days,
+            max_done_roots: self.max_done_roots,
+            max_done_subtasks: self.max_done_subtasks,
+            show_ongoing_notifications: self.show_ongoing_notifications,
+            show_priority_numbers: self.show_priority_numbers,
+            pinned_actions: self.pinned_actions.clone(),
+            quick_filter_term: self.quick_filter_term.clone(),
+            quick_filter_icon: self.quick_filter_icon.clone(),
+            show_quick_filter: self.show_quick_filter,
+        }
+    }
+
+    pub fn apply_syncable(&mut self, sync: SyncableConfig) {
+        self.tag_aliases = sync.tag_aliases;
+        self.hide_completed = sync.hide_completed;
+        self.hide_fully_completed_tags = sync.hide_fully_completed_tags;
+        self.hide_aliases_in_sidebar = sync.hide_aliases_in_sidebar;
+        self.sort_cutoff_months = sync.sort_cutoff_months;
+        self.sort_standard_by_priority = sync.sort_standard_by_priority;
+        self.urgent_days_horizon = sync.urgent_days_horizon;
+        self.urgent_priority_threshold = sync.urgent_priority_threshold;
+        self.default_priority = sync.default_priority;
+        self.start_grace_period_days = sync.start_grace_period_days;
+        self.auto_reminders = sync.auto_reminders;
+        self.default_reminder_time = sync.default_reminder_time;
+        self.snooze_short_mins = sync.snooze_short_mins;
+        self.snooze_long_mins = sync.snooze_long_mins;
+        self.create_events_for_tasks = sync.create_events_for_tasks;
+        self.delete_events_on_completion = sync.delete_events_on_completion;
+        self.trash_retention_days = sync.trash_retention_days;
+        self.max_done_roots = sync.max_done_roots;
+        self.max_done_subtasks = sync.max_done_subtasks;
+        self.show_ongoing_notifications = sync.show_ongoing_notifications;
+        self.show_priority_numbers = sync.show_priority_numbers;
+        self.pinned_actions = sync.pinned_actions;
+        self.quick_filter_term = sync.quick_filter_term;
+        self.quick_filter_icon = sync.quick_filter_icon;
+        self.show_quick_filter = sync.show_quick_filter;
+    }
+
+    pub fn update_sync_timestamp_if_changed(&mut self, old: &Config) {
+        if self.get_syncable() != old.get_syncable() {
+            self.settings_updated_at = chrono::Utc::now().timestamp();
+        }
+    }
+
     /// Load the configuration from disk using an explicit context.
     pub fn load(ctx: &dyn AppContext) -> Result<Self> {
         let path = ctx.get_config_file_path()?;
@@ -695,6 +829,11 @@ impl Config {
                 out.push_str(line);
                 out.push_str(
                     " # Boolean: Set true to bypass SSL verification (e.g. self-signed certs).",
+                );
+            } else if trimmed.starts_with("sync_settings =") {
+                out.push_str(line);
+                out.push_str(
+                    " # Boolean: If true, sync settings and aliases as a hidden task on the server.",
                 );
             } else if trimmed.starts_with("disabled_calendars =") {
                 out.push_str("# List of calendar HREFs (strings) to completely disable/ignore.\n");

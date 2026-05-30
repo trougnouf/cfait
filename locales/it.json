@@ -303,6 +303,7 @@
     "support_clear_filters": "Azzera tutti i filtri / Mostra tutto",
     "support_isolate_calendar": "Isola collezione / Focus tag o posizione",
     "support_switch_sidebar_tab": "Cambia scheda della barra laterale",
+    "sync_settings": "Sincronizza impostazioni e alias tramite CalDAV",
     "sync_error": "Errore di sincronizzazione: %{error}",
     "sync_failed_retry": "Sincronizzazione fallita. Clicca per riprovare.",
     "sync_interval_label": "Intervallo di sinc.:",

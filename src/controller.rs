@@ -9,6 +9,7 @@ use crate::model::Task;
 use crate::storage::{LocalCalendarRegistry, LocalStorage};
 use crate::store::TaskStore;
 use chrono::{DateTime, Utc};
+use serde_json;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -136,33 +137,139 @@ impl TaskController {
         Ok(())
     }
 
+    /// Synchronizes the configuration and aliases via a hidden CalDAV VTODO.
+    pub async fn sync_settings(&self) -> Result<bool, String> {
+        let mut config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+        if !config.sync_settings {
+            return Ok(false);
+        }
+
+        let settings_uid = "cfait-global-settings-v1";
+        let mut store = self.store.lock().await;
+        let existing_task = store.get_task_ref(settings_uid).cloned();
+
+        let local_syncable = config.get_syncable();
+        let local_payload = crate::config::SettingsPayload {
+            updated_at: config.settings_updated_at,
+            config: local_syncable,
+        };
+        let local_json = serde_json::to_string_pretty(&local_payload).unwrap_or_default();
+
+        let config_changed = false;
+
+        match existing_task {
+            Some(mut task) => {
+                if let Ok(remote_payload) = serde_json::from_str::<crate::config::SettingsPayload>(&task.description) {
+                    if remote_payload.updated_at > config.settings_updated_at {
+                        // Remote is newer! Sync down.
+                        config.apply_syncable(remote_payload.config.clone());
+                        config.settings_updated_at = remote_payload.updated_at;
+                        let _ = config.save(self.ctx.as_ref());
+
+                        let mut modified_tasks = Vec::new();
+                        for (key, values) in &remote_payload.config.tag_aliases {
+                            modified_tasks.extend(store.apply_alias_retroactively(key, values));
+                        }
+                        drop(store);
+
+                        if !modified_tasks.is_empty() {
+                            let actions = modified_tasks.into_iter().map(Action::Update).collect();
+                            let _ = self.persist_changes(actions).await;
+                        }
+
+                        return Ok(true);
+                    } else if config.settings_updated_at > remote_payload.updated_at {
+                        // Local is newer! Sync up.
+                        task.description = local_json;
+                        task.sequence += 1;
+                        store.update_or_add_task(task.clone());
+                        drop(store);
+                        let _ = self.persist_changes(vec![Action::Update(task)]).await;
+                    }
+                } else {
+                    // Invalid JSON in task, overwrite with local
+                    task.description = local_json;
+                    task.sequence += 1;
+                    store.update_or_add_task(task.clone());
+                    drop(store);
+                    let _ = self.persist_changes(vec![Action::Update(task)]).await;
+                }
+            }
+            None => {
+                // Task doesn't exist, deploy local settings upstream
+                let target_href = if let Some(def) = &config.default_calendar {
+                    if !def.starts_with("local://") {
+                        def.clone()
+                    } else {
+                        let cals = crate::cache::Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
+                        cals.into_iter().find(|c| !c.href.starts_with("local://")).map(|c| c.href).unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string())
+                    }
+                } else {
+                    let cals = crate::cache::Cache::load_calendars(self.ctx.as_ref()).unwrap_or_default();
+                    cals.into_iter().find(|c| !c.href.starts_with("local://")).map(|c| c.href).unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string())
+                };
+                let mut new_task = Task::new("⚙ Cfait Settings (Do not delete)", &std::collections::HashMap::new(), None);
+                new_task.uid = settings_uid.to_string();
+                new_task.status = crate::model::TaskStatus::Cancelled; // Hides it in standard clients
+                new_task.description = local_json;
+                new_task.categories.push("cfait-internal".to_string());
+                new_task.calendar_href = target_href;
+
+                store.add_task(new_task.clone());
+                drop(store);
+                let _ = self.persist_changes(vec![Action::Create(new_task)]).await;
+            }
+        }
+        Ok(config_changed)
+    }
+
     /// Synchronize the journal with the remote server and update the in-memory store
     /// with the resulting ETags and URLs.
-    pub async fn sync_and_update_store(&self) -> Result<(Vec<String>, Vec<Task>), String> {
+    pub async fn sync_and_update_store(&self) -> Result<(Vec<String>, Vec<Task>, bool), String> {
         let client_opt = self.client.lock().await.clone();
-        if let Some(client) = client_opt {
+        
+        let (warns, actual_synced) = if let Some(client) = client_opt {
             match client.sync_journal().await {
-                Ok((warns, synced)) => {
-                    let mut s = self.store.lock().await;
-                    let mut actual_synced = Vec::new();
-                    for sync_task in &synced {
-                        if let Some((existing, _)) = s.get_task_mut(&sync_task.uid) {
+                Ok((w, s)) => {
+                    let mut st = self.store.lock().await;
+                    let mut actual = Vec::new();
+                    let mut to_delete = Vec::new();
+
+                    for sync_task in &s {
+                        if sync_task.summary.starts_with("⚙ Cfait Settings") && sync_task.summary.ends_with("(Conflict Copy)") {
+                            to_delete.push(sync_task.clone());
+                            continue; // Prevent it from entering the store
+                        }
+
+                        if let Some((existing, _)) = st.get_task_mut(&sync_task.uid) {
                             existing.etag = sync_task.etag.clone();
                             existing.href = sync_task.href.clone();
-                            actual_synced.push(sync_task.clone());
+                            actual.push(sync_task.clone());
                         } else if sync_task.summary.ends_with("(Conflict Copy)") {
                             // Safe to resurrect because it is a new server-generated conflict resolution
-                            s.add_task(sync_task.clone());
-                            actual_synced.push(sync_task.clone());
+                            st.add_task(sync_task.clone());
+                            actual.push(sync_task.clone());
                         }
                     }
-                    Ok((warns, actual_synced))
+                    drop(st);
+
+                    if !to_delete.is_empty() {
+                        let actions = to_delete.into_iter().map(Action::Delete).collect();
+                        let _ = self.persist_changes(actions).await;
+                    }
+
+                    (w, actual)
                 }
-                Err(e) => Err(e),
+                Err(e) => return Err(e),
             }
         } else {
-            Ok((vec!["Offline: Changes queued.".to_string()], vec![]))
-        }
+            (vec!["Offline: Changes queued.".to_string()], vec![])
+        };
+
+        // Inject the settings synchronization cycle
+        let config_changed = self.sync_settings().await.unwrap_or(false);
+
+        Ok((warns, actual_synced, config_changed))
     }
 
     pub async fn create_task(&self, mut task: Task) -> Result<String, String> {

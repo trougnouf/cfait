@@ -4036,6 +4036,7 @@ data class MobileConfig(
     var `showQuickFilter`: kotlin.Boolean,
     var `quickFilterTerm`: kotlin.String,
     var `quickFilterIcon`: kotlin.String,
+    var `syncSettings`: kotlin.Boolean,
 ) {
     companion object
 }
@@ -4074,6 +4075,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterBoolean.read(buf),
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
         )
 
     override fun allocationSize(value: MobileConfig) =
@@ -4105,7 +4107,8 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterBoolean.allocationSize(value.`showOngoingNotifications`) +
                 FfiConverterBoolean.allocationSize(value.`showQuickFilter`) +
                 FfiConverterString.allocationSize(value.`quickFilterTerm`) +
-                FfiConverterString.allocationSize(value.`quickFilterIcon`)
+                FfiConverterString.allocationSize(value.`quickFilterIcon`) +
+                FfiConverterBoolean.allocationSize(value.`syncSettings`)
         )
 
     override fun write(
@@ -4140,6 +4143,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterBoolean.write(value.`showQuickFilter`, buf)
         FfiConverterString.write(value.`quickFilterTerm`, buf)
         FfiConverterString.write(value.`quickFilterIcon`, buf)
+        FfiConverterBoolean.write(value.`syncSettings`, buf)
     }
 }
 

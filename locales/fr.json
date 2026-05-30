@@ -409,6 +409,7 @@
     "support_clear_filters": "Effacer les filtres / Afficher toutes les collections",
     "support_isolate_calendar": "Isoler la collection / Focus sur tag ou lieu",
     "support_switch_sidebar_tab": "Changer d'onglet latéral (Calendriers, Tags, Lieux)",
+    "sync_settings": "Synchroniser les paramètres et alias via CalDAV",
     "sync_conflict_412": "Conflit (412) sur la tâche '%{summary}'. Échec de la fusion. Création d'une copie.",
     "sync_conflict_412_fallback": "Conflit (412-Secours) sur la tâche '%{summary}'. Création d'une copie.",
     "sync_conflict_creation": "Conflit de création : la tâche '%{summary}' existe déjà sur le serveur. Marquée comme synchronisée.",

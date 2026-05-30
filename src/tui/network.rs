@@ -296,11 +296,17 @@ pub async fn run_network_actor(
                     Ok(_) => {
                         let controller_clone = controller.clone();
                         let event_tx_clone = event_tx.clone();
+                        let ctx_clone = ctx.clone();
 
                         tokio::spawn(async move {
-                            if let Ok((_warns, synced_tasks)) =
+                            if let Ok((_warns, synced_tasks, config_changed)) =
                                 controller_clone.sync_and_update_store().await
                             {
+                                if config_changed
+                                    && let Ok(cfg) = crate::config::Config::load(ctx_clone.as_ref()) {
+                                        let _ = event_tx_clone.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;
+                                    }
+
                                 // Send TaskSynced events instead of TasksLoaded to update metadata
                                 // without overwriting the UI's optimistic state!
                                 for sync_task in synced_tasks {

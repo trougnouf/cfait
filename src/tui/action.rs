@@ -35,6 +35,7 @@ pub enum Action {
 
 #[derive(Debug)]
 pub enum AppEvent {
+    ConfigUpdated(Box<crate::config::Config>),
     CalendarsLoaded(Vec<CalendarListEntry>),
     TasksLoaded(Vec<(String, Vec<Task>)>),
     TaskSynced {

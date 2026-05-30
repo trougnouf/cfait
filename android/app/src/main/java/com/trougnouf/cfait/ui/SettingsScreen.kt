@@ -67,6 +67,7 @@ fun SettingsScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var insecure by remember { mutableStateOf(false) }
     var hideCompleted by remember { mutableStateOf(false) }
+    var syncSettings by remember { mutableStateOf(true) }
     var sortStandardByPriority by remember { mutableStateOf(false) }
     var sortMonths by remember { mutableStateOf("2") }
     var status by remember { mutableStateOf("") }
@@ -192,6 +193,7 @@ fun SettingsScreen(
         pass = cfg.password
         insecure = cfg.allowInsecure
         hideCompleted = cfg.hideCompleted
+        syncSettings = cfg.syncSettings
         sortStandardByPriority = cfg.sortStandardByPriority
         sortMonths = cfg.sortCutoffMonths?.toString() ?: ""
         aliases = cfg.tagAliases
@@ -263,6 +265,7 @@ fun SettingsScreen(
             password = pass,
             allowInsecure = insecure,
             hideCompleted = hideCompleted,
+            syncSettings = syncSettings,
             disabledCalendars = disabledSet.toList(),
             sortCutoffMonths = sortInt,
             sortStandardByPriority = sortStandardByPriority,
@@ -395,6 +398,13 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = insecure, onCheckedChange = { insecure = it })
                     Text(androidx.compose.ui.res.stringResource(R.string.allow_insecure_ssl))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = syncSettings, onCheckedChange = {
+                        syncSettings = it
+                        saveToDisk()
+                    })
+                    Text(androidx.compose.ui.res.stringResource(R.string.sync_settings))
                 }
                 Button(
                     onClick = { saveAndConnect() },

@@ -306,6 +306,25 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
                 }
             }
         }
+        AppEvent::ConfigUpdated(cfg) => {
+            state.tag_aliases = cfg.tag_aliases.clone();
+            state.hide_completed = cfg.hide_completed;
+            state.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
+            state.hide_aliases_in_sidebar = cfg.hide_aliases_in_sidebar;
+            state.sort_cutoff_months = cfg.sort_cutoff_months;
+            state.sort_standard_by_priority = cfg.sort_standard_by_priority;
+            state.urgent_days = cfg.urgent_days_horizon;
+            state.urgent_prio = cfg.urgent_priority_threshold;
+            state.default_priority = cfg.default_priority;
+            state.start_grace_period_days = cfg.start_grace_period_days;
+            state.snooze_short_mins = cfg.snooze_short_mins;
+            state.snooze_long_mins = cfg.snooze_long_mins;
+            state.show_priority_numbers = cfg.show_priority_numbers;
+            state.quick_filter_term = cfg.quick_filter_term.clone();
+            state.quick_filter_icon = cfg.quick_filter_icon.clone();
+            state.show_quick_filter = cfg.show_quick_filter;
+            state.refresh_filtered_view();
+        }
     }
 
     // Load priority rendering toggle directly from config when events arrive
@@ -531,7 +550,9 @@ pub async fn handle_key_event(
                         }
                     }
                     if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
+                        let old = cfg.clone();
                         cfg.tag_aliases = state.tag_aliases.clone();
+                        cfg.update_sync_timestamp_if_changed(&old);
                         let _ = cfg.save(state.ctx.as_ref());
                     }
                     let trimmed = clean_input.trim();
@@ -628,7 +649,9 @@ pub async fn handle_key_event(
                         }
                     }
                     if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
+                        let old = cfg.clone();
                         cfg.tag_aliases = state.tag_aliases.clone();
+                        cfg.update_sync_timestamp_if_changed(&old);
                         let _ = cfg.save(state.ctx.as_ref());
                     }
                 }

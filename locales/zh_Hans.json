@@ -445,6 +445,7 @@
     "support_clear_filters": "清除所有筛选 / 显示所有集合",
     "support_isolate_calendar": "隔离集合 / 聚焦标签或位置",
     "support_switch_sidebar_tab": "切换侧边栏标签页（日历、标签、位置）",
+    "sync_settings": "通过 CalDAV 同步设置和别名",
     "sync_completed_successfully": "同步已成功完成。",
     "sync_conflict_412": "任务“%{summary}”存在冲突（412）。合并失败。正在创建副本。",
     "sync_conflict_412_fallback": "任务“%{summary}”存在冲突（412-回退）。合并失败。正在创建副本。",

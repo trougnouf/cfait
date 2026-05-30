@@ -232,6 +232,7 @@ pub enum Message {
     CloseContextMenu,
     TogglePinnedAction(crate::config::TaskAction, bool),
     SetLogLevel(LogLevel),
+    SetSyncSettings(bool),
 
     // --- Advanced Settings ---
     ToggleAdvancedSettings(bool),
