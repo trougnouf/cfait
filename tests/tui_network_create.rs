@@ -196,6 +196,10 @@ END:VCALENDAR</cal:calendar-data>
     let (action_tx, action_rx) = mpsc::channel(10);
     let (event_tx, mut event_rx) = mpsc::channel(20);
 
+    let mut app_config = cfait::config::Config::default();
+    app_config.sync_settings = false;
+    app_config.save(ctx.as_ref()).unwrap();
+
     let config = NetworkActorConfig {
         url: url.clone(),
         user: "user".into(),

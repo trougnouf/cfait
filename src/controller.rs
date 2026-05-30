@@ -240,6 +240,10 @@ impl TaskController {
     /// Synchronize the journal with the remote server and update the in-memory store
     /// with the resulting ETags and URLs.
     pub async fn sync_and_update_store(&self) -> Result<(Vec<String>, Vec<Task>, bool), String> {
+        // Inject the settings synchronization cycle FIRST, so if it creates a settings task,
+        // it gets pushed to the journal before we upload the journal to the server!
+        let config_changed = self.sync_settings().await.unwrap_or(false);
+
         let client_opt = self.client.lock().await.clone();
 
         let (warns, actual_synced) = if let Some(client) = client_opt {
@@ -281,9 +285,6 @@ impl TaskController {
         } else {
             (vec!["Offline: Changes queued.".to_string()], vec![])
         };
-
-        // Inject the settings synchronization cycle
-        let config_changed = self.sync_settings().await.unwrap_or(false);
 
         Ok((warns, actual_synced, config_changed))
     }

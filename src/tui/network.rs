@@ -216,7 +216,10 @@ pub async fn run_network_actor(
 
             let client_container = Arc::new(tokio::sync::Mutex::new(Some(client.clone())));
             let controller = TaskController::new(store.clone(), client_container, ctx.clone());
-            if let Ok(true) = controller.sync_settings().await
+
+            // Trigger a full sync pass which handles settings first, then uploads any pending changes.
+            if let Ok((_warns, _synced, config_changed)) = controller.sync_and_update_store().await
+                && config_changed
                 && let Ok(cfg) = crate::config::Config::load(ctx.as_ref())
             {
                 let _ = event_tx.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;
@@ -386,7 +389,11 @@ pub async fn run_network_actor(
                             Arc::new(tokio::sync::Mutex::new(Some(client.clone())));
                         let controller =
                             TaskController::new(store.clone(), client_container, ctx.clone());
-                        if let Ok(true) = controller.sync_settings().await
+
+                        // Trigger a full sync pass which handles settings first, then uploads any pending changes.
+                        if let Ok((_warns, _synced, config_changed)) =
+                            controller.sync_and_update_store().await
+                            && config_changed
                             && let Ok(cfg) = crate::config::Config::load(ctx.as_ref())
                         {
                             let _ = event_tx.send(AppEvent::ConfigUpdated(Box::new(cfg))).await;

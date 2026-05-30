@@ -64,7 +64,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::UpdateClient(Some(
                     client.clone(),
                 )));
-                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);
             }
 
             if let Some(w) = warning {
