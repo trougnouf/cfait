@@ -156,6 +156,8 @@ pub enum Message {
     AliasKeyInput(String),
     AliasValueInput(String),
     AddAlias,
+    EditAlias(String, String),
+    CancelEditAlias,
     RemoveAlias(String),
     StartMoveTask(String),
     CancelMoveTask,

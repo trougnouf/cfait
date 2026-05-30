@@ -55,6 +55,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::AliasKeyInput(_)
         | Message::AliasValueInput(_)
         | Message::AddAlias
+        | Message::EditAlias(_, _)
+        | Message::CancelEditAlias
         | Message::RemoveAlias(_)
         | Message::ObSortMonthsChanged(_)
         | Message::ObUrgentDaysChanged(_)

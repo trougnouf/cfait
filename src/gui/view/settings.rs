@@ -588,21 +588,69 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
     };
 
     let aliases_ui: Element<_> = if is_settings {
-        let mut list_col = column![text(rust_i18n::t!("tag_aliases")).size(20)].spacing(10);
-        for (key, vals) in &app.tag_aliases {
+        let input_row = row![
+            text_input(&rust_i18n::t!("alias_key_label"), &app.alias_input_key)
+                .on_input(Message::AliasKeyInput)
+                .padding(5)
+                .width(Length::FillPortion(1)),
+            text_input(&rust_i18n::t!("alias_value_label"), &app.alias_input_values)
+                .on_input(Message::AliasValueInput)
+                .on_submit(Message::AddAlias)
+                .padding(5)
+                .width(Length::FillPortion(2)),
+            if app.editing_alias_key.is_some() {
+                row![
+                    button(icon::icon(icon::CHECK).size(14))
+                        .style(button::success)
+                        .padding(6)
+                        .on_press(Message::AddAlias),
+                    button(icon::icon(icon::CROSS).size(14))
+                        .style(button::danger)
+                        .padding(6)
+                        .on_press(Message::CancelEditAlias)
+                ].spacing(5)
+            } else {
+                row![
+                    button(text(rust_i18n::t!("add")))
+                        .padding(5)
+                        .on_press(Message::AddAlias)
+                ]
+            }
+        ]
+        .spacing(10)
+        .align_y(iced::Alignment::Center);
+
+        let mut list_col = column![text(rust_i18n::t!("tag_aliases")).size(20), input_row, iced::widget::rule::horizontal(1)].spacing(10);
+
+        let mut sorted_aliases: Vec<_> = app.tag_aliases.iter().collect();
+        sorted_aliases.sort_by_key(|(k, _)| k.to_string());
+
+        for (key, vals) in sorted_aliases {
             let val_str = vals.join(", ");
+            let is_editing_this = app.editing_alias_key.as_ref() == Some(key);
+
+            let key_text = text(if key.starts_with("@@") {
+                key.to_string()
+            } else {
+                format!("#{}", key)
+            })
+            .width(Length::FillPortion(1))
+            .wrapping(iced::widget::text::Wrapping::Glyph)
+            .style(if is_editing_this { |theme: &Theme| text::Style { color: Some(theme.extended_palette().primary.base.color) } } else { |_: &Theme| text::Style::default() });
+
+            let val_text = text(val_str.clone())
+                .width(Length::FillPortion(2))
+                .wrapping(iced::widget::text::Wrapping::Glyph)
+                .style(if is_editing_this { |theme: &Theme| text::Style { color: Some(theme.extended_palette().primary.base.color) } } else { |_: &Theme| text::Style::default() });
+
             let row_item = row![
-                text(if key.starts_with("@@") {
-                    key.to_string()
-                } else {
-                    format!("#{}", key)
-                })
-                .width(Length::FillPortion(1))
-                .wrapping(iced::widget::text::Wrapping::Glyph),
+                key_text,
                 text("->").width(Length::Fixed(20.0)),
-                text(val_str)
-                    .width(Length::FillPortion(2))
-                    .wrapping(iced::widget::text::Wrapping::Glyph),
+                val_text,
+                button(icon::icon(icon::EDIT).size(12))
+                    .style(button::secondary)
+                    .padding(5)
+                    .on_press(Message::EditAlias(key.clone(), val_str)),
                 button(icon::icon(icon::CROSS).size(12))
                     .style(button::danger)
                     .padding(5)
@@ -612,22 +660,9 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
             .align_y(iced::Alignment::Center);
             list_col = list_col.push(row_item);
         }
-        let input_row = row![
-            text_input(&rust_i18n::t!("alias_key_label"), &app.alias_input_key)
-                .on_input(Message::AliasKeyInput)
-                .padding(5)
-                .width(Length::FillPortion(1)),
-            text_input(&rust_i18n::t!("alias_value_label"), &app.alias_input_values)
-                .on_input(Message::AliasValueInput)
-                .padding(5)
-                .width(Length::FillPortion(2)),
-            button(text(rust_i18n::t!("add")))
-                .padding(5)
-                .on_press(Message::AddAlias)
-        ]
-        .spacing(10);
+
         let area =
-            container(column![list_col, iced::widget::rule::horizontal(1), input_row].spacing(15))
+            container(list_col)
                 .padding(10)
                 .style(|_| container::Style {
                     border: iced::Border {

@@ -265,6 +265,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.sidebar_is_hidden = cfg.sidebar_is_hidden;
             app.log_level = cfg.log_level;
             app.state = AppState::Settings;
+
+            app.editing_alias_key = None;
+            app.alias_input_key.clear();
+            app.alias_input_values.clear();
+
             Task::none()
         }
         Message::CancelSettings => {
@@ -272,6 +277,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.calendars.retain(|c| !c.href.starts_with("local://"));
             app.calendars.extend(app.local_cals_editing.clone());
             app.sort_calendars();
+
+            app.editing_alias_key = None;
+            app.alias_input_key.clear();
+            app.alias_input_values.clear();
 
             save_config(app);
             refresh_filtered_tasks(app);
@@ -300,6 +309,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.alias_input_values = v;
             Task::none()
         }
+        Message::EditAlias(key, vals) => {
+            app.editing_alias_key = Some(key.clone());
+            app.alias_input_key = if key.starts_with("@@") {
+                key
+            } else {
+                format!("#{}", key)
+            };
+            app.alias_input_values = vals;
+            Task::none()
+        }
+        Message::CancelEditAlias => {
+            app.editing_alias_key = None;
+            app.alias_input_key.clear();
+            app.alias_input_values.clear();
+            Task::none()
+        }
         Message::AddAlias => {
             if !app.alias_input_key.is_empty() && !app.alias_input_values.is_empty() {
                 let tags = crate::model::parser::parse_alias_values(&app.alias_input_values);
@@ -316,6 +341,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
                     match validate_alias_integrity(&key, &tags, &app.tag_aliases) {
                         Ok(_) => {
+                            // If we were editing and changed the key, remove the old one
+                            if let Some(old_key) = &app.editing_alias_key
+                                && old_key != &key {
+                                    app.tag_aliases.remove(old_key);
+                                }
+                            app.editing_alias_key = None;
+
                             app.tag_aliases.insert(key.clone(), tags.clone());
                             app.alias_input_key.clear();
                             app.alias_input_values.clear();
@@ -347,6 +379,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::RemoveAlias(key) => {
+            if app.editing_alias_key.as_ref() == Some(&key) {
+                app.editing_alias_key = None;
+                app.alias_input_key.clear();
+                app.alias_input_values.clear();
+            }
             app.tag_aliases.remove(&key);
             save_config(app);
             Task::none()

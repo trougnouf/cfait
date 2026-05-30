@@ -140,6 +140,7 @@ pub struct GuiApp {
     // Inputs - Settings (Aliases)
     pub alias_input_key: String,
     pub alias_input_values: String,
+    pub editing_alias_key: Option<String>,
     pub ob_trash_retention_input: String,
     pub trash_retention_days: u32,
 
@@ -416,6 +417,7 @@ impl Default for GuiApp {
             random_icon,
             alias_input_key: String::new(),
             alias_input_values: String::new(),
+            editing_alias_key: None,
             ob_trash_retention_input: "14".to_string(),
             trash_retention_days: 14,
 
