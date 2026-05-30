@@ -39,12 +39,9 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
         _ => {}
     }
 
-    // Track window metrics (Size and Cursor Position)
+    // Track window metrics
     subs.push(event::listen_with(|evt, _status, _window_id| match evt {
         iced::Event::Window(window::Event::Resized(size)) => Some(Message::WindowResized(size)),
-        iced::Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
-            Some(Message::CursorMoved(position))
-        }
         _ => None,
     }));
 

@@ -22,8 +22,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             Message::OpenContextMenu(_, _)
             | Message::CloseContextMenu
             | Message::Tick
-            | Message::WindowResized(_)
-            | Message::CursorMoved(_) => {}
+            | Message::WindowResized(_) => {}
             _ => {
                 app.active_context_menu = None;
             }
@@ -243,7 +242,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::TasksRefreshed(_)
         | Message::MigrationComplete(_) => network::handle(app, message),
 
-        Message::OpenContextMenu(..) | Message::CloseContextMenu | Message::CursorMoved(_) => {
+        Message::OpenContextMenu(..) | Message::CloseContextMenu => {
             view::handle(app, message)
         }
 

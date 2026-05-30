@@ -198,7 +198,6 @@ pub enum Message {
     CloseWindow,
     WindowResized(iced::Size),
     ResizeStart(ResizeDirection),
-    CursorMoved(iced::Point),
 
     // --- Settings Input Fields ---
     ObUrgentDaysChanged(String),

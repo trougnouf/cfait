@@ -143,14 +143,19 @@ pub fn view_task_row<'a>(
                         .size(14)
                         .color(Color::from_rgb(1.0, 0.4, 0.0));
 
-                    row_content = row_content.push(
-                        tooltip(
-                            container(bell_icon).padding(1),
-                            text(rust_i18n::t!("active_alarm")).size(12),
-                            tooltip::Position::Top,
-                        )
-                        .style(crate::gui::view::tooltip_style),
-                    );
+                    let content = container(bell_icon).padding(1);
+                    if is_selected {
+                        row_content = row_content.push(
+                            tooltip(
+                                content,
+                                text(rust_i18n::t!("active_alarm")).size(12),
+                                tooltip::Position::Top,
+                            )
+                            .style(crate::gui::view::tooltip_style),
+                        );
+                    } else {
+                        row_content = row_content.push(content);
+                    }
                 }
 
                 let is_future_start = task.is_future_start;
@@ -1036,14 +1041,18 @@ pub fn view_task_row<'a>(
                 }
             });
 
-            let status_btn_element: Element<'a, Message> = tooltip(
-                status_btn,
-                text(rust_i18n::t!("tooltip_toggle_space")).size(12),
-                tooltip::Position::Top,
-            )
-            .style(tooltip_style)
-            .delay(Duration::from_millis(700))
-            .into();
+            let status_btn_element: Element<'a, Message> = if is_selected {
+                tooltip(
+                    status_btn,
+                    text(rust_i18n::t!("tooltip_toggle_space")).size(12),
+                    tooltip::Position::Top,
+                )
+                .style(tooltip_style)
+                .delay(Duration::from_millis(700))
+                .into()
+            } else {
+                status_btn.into()
+            };
 
             let row_main = row![
                 indent,

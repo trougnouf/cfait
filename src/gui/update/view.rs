@@ -104,7 +104,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             handle(app, Message::ToggleHideCompleted(new_val))
         }
         Message::OpenContextMenu(uid, is_full) => {
-            app.active_context_menu = Some((uid, is_full, app.cursor_position));
+            let mut pt = iced::Point::new(app.current_window_size.width / 2.0, app.current_window_size.height / 2.0); // Fallback
+            if let Some(id) = app.task_ids.get(&uid)
+                && let Some(bounds) = crate::gui::view::focusable::get_focus_bounds(id) {
+                    pt = iced::Point::new(bounds.x + 50.0, bounds.y + (bounds.height / 2.0));
+                }
+            app.active_context_menu = Some((uid, is_full, pt));
             Task::none()
         }
         Message::CloseContextMenu => {
@@ -737,10 +742,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.sidebar_is_hidden = false;
                 save_config(app);
             }
-            Task::none()
-        }
-        Message::CursorMoved(position) => {
-            app.cursor_position = position;
             Task::none()
         }
         // Focus Handlers (No scrolling)
