@@ -1,0 +1,15 @@
+## [1.0.4] - 2026-05-30
+
+### 🚀 Features
+
+- *(gui)* Alias editing
+
+### 🐛 Bug Fixes
+
+- Propagate tag aliases and config updates on startup and refresh across all clients
+- Reorder controller logic to push settings changes upstream before journal sync
+- Fix initial settings and aliases sync by honoring remote payload when uninitialized
+
+### ⚙️ Miscellaneous Tasks
+
+- Improve CHANGELOG.md auto-generation

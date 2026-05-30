@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.4] - 2026-05-30
+
+### 🚀 Features
+
+- *(gui)* Alias editing
+
+### 🐛 Bug Fixes
+
+- Propagate tag aliases and config updates on startup and refresh across all clients
+- Reorder controller logic to push settings changes upstream before journal sync
+- Fix initial settings and aliases sync by honoring remote payload when uninitialized
+
+### ⚙️ Miscellaneous Tasks
+
+- Improve CHANGELOG.md auto-generation
 ## [1.0.3] - 2026-05-30
 
 ### 🚀 Features
@@ -37,131 +52,9 @@
 
 ### 💼 Other
 
-- Translated using Weblate (Russian)
-
-Currently translated at 51.7% (273 of 528 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Merge pull request 'Fix Czech translation' (#65) from MarrekNozka/cfait:master into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/65
-- Translated using Weblate (German)
-
-Currently translated at 85.6% (452 of 528 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
-- Translated using Weblate (Russian)
-
-Currently translated at 78.5% (415 of 528 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Translated using Weblate (Russian)
-
-Currently translated at 91.6% (484 of 528 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
 - Add cfait-bin AUR package to docs
-- Merge pull request #34 from brandon-doornbos/cfait-bin
-
-Add cfait-bin AUR package to docs
-- Merge branch 'master' of https://codeberg.org/trougnouf/cfait
-- Merge pull request 'Fix Czech translation' (#66) from MarrekNozka/cfait:master into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/66
-- Merge branch 'master' of https://codeberg.org/trougnouf/cfait
-- Merge pull request 'fix(store): stop_task resets time tracking instead of accumulating' (#67) from MarrekNozka/cfait:fix/stop-task-reset into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/67
 - Remove tui feature
-- Merge branch 'master' into show-password-toggle
-- Merge branch 'master' into show-password-toggle
-- Merge pull request 'feat(settings): Allow password hide/show' (#69) from eltower/cfait:show-password-toggle into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/69
-- Merge branch 'master' into android-auth
-- Merge branch 'master' into android-auth
-- Merge pull request 'fix(auth): Ensure android returns config with credentials' (#68) from eltower/cfait:android-auth into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/68
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (529 of 529 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (529 of 529 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Merge branch 'master' of https://codeberg.org/trougnouf/cfait
-- Merge pull request 'new feature: switch sorting by priority' (#70) from MarrekNozka/cfait:feature/switch-sorting-by-priority-or-date into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/70
 - Unify for also toggle task case
-- Merge pull request 'fix(gui): show priority tag even without other metadata' (#71) from MarrekNozka/cfait:fix/priority-hidden-without-metadata into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/71
-- Merge pull request 'feat(gui): persist ui_scale between sessions' (#72) from MarrekNozka/cfait:feature/persist-ui-scale into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/72
-- Merge branch 'master' into adjust-gui-selection-after-task-complete
-- Merge pull request 'fix(gui): Keep selection reasonable when task marked complete' (#73) from eltower/cfait:adjust-gui-selection-after-task-complete into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/73
-- Translated using Weblate (German)
-
-Currently translated at 100.0% (532 of 532 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (532 of 532 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Merge pull request 'feat(android): expose sorting and priority settings in UI' (#75) from MarrekNozka/cfait:feature/android-sorting-priority-settings into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/75
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (532 of 532 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (532 of 532 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Czech)
-
-Currently translated at 99.4% (529 of 532 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/cs/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (534 of 534 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (534 of 534 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
 
 ### 🚜 Refactor
 
@@ -184,16 +77,8 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(auth)* Regenerate kotlin bindings ( https://codeberg.org/trougnouf/cfait/pulls/68 )
-- *(android)* Regenerate cfait.kt bindings without ktlint formatting
-- Cleanup unused SORT_PRIORITY icon and apply ktlint
-- Enforce code formatting and add pre-commit hooks ( https://codeberg.org/trougnouf/cfait/issues/74 )
-- Workspace-wide cargo fmt sweep ( https://codeberg.org/trougnouf/cfait/issues/74 )
-- Register codebase formatting sweep in .git-blame-ignore-revs
 - Update Rust toolchain to 1.96.0
-- Cargo fmt --all
 - Fix Android compilation error
-- Cargo fmt --all
 ## [1.0.2] - 2026-05-22
 
 ### 🚀 Features
@@ -224,360 +109,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
 - *(i18n)* Improve Czech translation wording for sorting/priority terms
 - Hide collapsed sub-tasks which were picked up by the fallback routine for orphaned tasks (reported by @Shadowminx )
 - *(android)* Fix language switch on older (<13) Android versions ( https://github.com/trougnouf/cfait/issues/32 )
-
-### 💼 Other
-
-- Translated using Weblate (Dutch)
-
-Currently translated at 16.6% (81 of 486 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
-- Translated using Weblate (Dutch)
-
-Currently translated at 22.0% (107 of 486 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
-- Translated using Weblate (French)
-
-Currently translated at 100.0% (486 of 486 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (489 of 489 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (German)
-
-Currently translated at 100.0% (489 of 489 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (489 of 489 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Spanish)
-
-Currently translated at 94.9% (512 of 539 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Spanish)
-
-Currently translated at 95.9% (517 of 539 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (Spanish)
-
-Currently translated at 99.4% (537 of 540 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (540 of 540 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (French)
-
-Currently translated at 88.3% (480 of 543 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 88.9% (483 of 543 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 88.9% (483 of 543 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (German)
-
-Currently translated at 88.9% (483 of 543 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (543 of 543 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Italian)
-
-Currently translated at 65.9% (358 of 543 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
-- Translated using Weblate (Dutch)
-
-Currently translated at 19.1% (104 of 543 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
-- Translated using Weblate (Russian)
-
-Currently translated at 21.9% (119 of 543 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Translated using Weblate (Russian)
-
-Currently translated at 21.9% (119 of 543 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Translated using Weblate (Czech)
-
-Currently translated at 0.0% (0 of 543 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/cs/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (546 of 546 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Update translation files
-
-Updated by "Cleanup translation files" add-on in Weblate.
-
-Translation: Cfait/Android fastlane short description
-Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-short-description/
-- Update translation files
-
-Updated by "Cleanup translation files" add-on in Weblate.
-
-Translation: Cfait/Android fastlane long description
-Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-long-description/
-- Translated using Weblate (Russian)
-
-Currently translated at 24.5% (134 of 546 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 88.4% (483 of 546 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (German)
-
-Currently translated at 88.4% (483 of 546 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
-- Translated using Weblate (Italian)
-
-Currently translated at 65.5% (358 of 546 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
-- Translated using Weblate (Dutch)
-
-Currently translated at 19.0% (104 of 546 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
-- Translated using Weblate (Russian)
-
-Currently translated at 30.9% (169 of 546 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Translated using Weblate (Russian)
-
-Currently translated at 30.9% (169 of 546 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Translated using Weblate (Czech)
-
-Currently translated at 0.0% (0 of 546 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/cs/
-- Translated using Weblate (French)
-
-Currently translated at 100.0% (538 of 538 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (French)
-
-Currently translated at 100.0% (538 of 538 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (French)
-
-Currently translated at 100.0% (538 of 538 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 89.7% (483 of 538 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (German)
-
-Currently translated at 89.7% (483 of 538 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (538 of 538 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Italian)
-
-Currently translated at 66.5% (358 of 538 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
-- Translated using Weblate (Dutch)
-
-Currently translated at 19.3% (104 of 538 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
-- Translated using Weblate (Russian)
-
-Currently translated at 29.9% (161 of 538 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Translated using Weblate (Czech)
-
-Currently translated at 0.0% (0 of 538 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/cs/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (French)
-
-Currently translated at 91.7% (480 of 523 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (French)
-
-Currently translated at 92.1% (482 of 523 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (523 of 523 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Merge branch 'master' into wip-fix-android-credential-not-saved
-- Merge pull request 'Fix Android credential persistence when password field is left blank' (#59) from zerodegress/cfait:wip-fix-android-credential-not-saved into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/59
-- Translated using Weblate (French)
-
-Currently translated at 92.1% (482 of 523 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 81.4% (426 of 523 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (German)
-
-Currently translated at 81.4% (426 of 523 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
-- Translated using Weblate (Italian)
-
-Currently translated at 60.8% (318 of 523 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
-- Translated using Weblate (Dutch)
-
-Currently translated at 18.7% (98 of 523 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
-- Translated using Weblate (Russian)
-
-Currently translated at 29.2% (153 of 523 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Translated using Weblate (Czech)
-
-Currently translated at 0.0% (0 of 523 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/cs/
-- Update translation files
-
-Updated by "Remove blank strings" add-on in Weblate.
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/
-- Translation `location` words: `loc:` versus `geo:`
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (527 of 527 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (527 of 527 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Merge pull request 'Czech translation' (#64) from MarrekNozka/cfait:master into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/64
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (528 of 528 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (528 of 528 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
 
 ### 📚 Documentation
 
@@ -610,10 +141,8 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
 
 ### ⚙️ Miscellaneous Tasks
 
-- Lint
 - Switch locales to 4-spaces
 - Fix Android compilation error
-- Release cfait version 1.0.2
 ## [1.0.1] - 2026-05-14
 
 ### 🚀 Features
@@ -637,112 +166,7 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
 
 ### 💼 Other
 
-- Translated using Weblate (German)
-
-Currently translated at 99.7% (478 of 479 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
-- Translated using Weblate (French)
-
-Currently translated at 99.1% (475 of 479 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Italian)
-
-Currently translated at 75.1% (360 of 479 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
-- Translated using Weblate (Dutch)
-
-Currently translated at 6.0% (29 of 479 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
-- Translated using Weblate (Russian)
-
-Currently translated at 24.8% (119 of 479 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Translated using Weblate (Russian)
-
-Currently translated at 24.8% (119 of 479 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Translated using Weblate (Czech)
-
-Currently translated at 0.0% (0 of 479 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/cs/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (French)
-
-Currently translated at 98.7% (475 of 481 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 99.5% (479 of 481 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (German)
-
-Currently translated at 99.3% (478 of 481 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (481 of 481 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Italian)
-
-Currently translated at 74.8% (360 of 481 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
-- Translated using Weblate (Dutch)
-
-Currently translated at 6.0% (29 of 481 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
-- Translated using Weblate (Russian)
-
-Currently translated at 24.7% (119 of 481 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Translated using Weblate (Czech)
-
-Currently translated at 0.0% (0 of 481 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/cs/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (486 of 486 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
 - Fix stale unsynced state by triggering journal sync after local actions
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (486 of 486 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
 
 ### 🚜 Refactor
 
@@ -778,7 +202,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
 - Re-log some iced info messages
 - Bump cache/storage versions, fix config save race condition, and remove unsafe unwraps
 - Update libdav to v0.10.5 (breaking change) and other rust dependencies
-- Release cfait version 1.0.1
 ## [0.5.9] - 2026-05-05
 
 ### 🚀 Features
@@ -853,242 +276,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
 - Debounce toggling, add startup timeouts, strict error matching ( https://github.com/trougnouf/cfait/issues/25 )
 - *(flatpak)* Fix flatpak keyring using oo7
 
-### 💼 Other
-
-- Added translation using Weblate (Russian)
-- Added translation using Weblate (Russian)
-- Added translation using Weblate (Russian)
-- Translated using Weblate (Russian)
-
-Currently translated at 19.1% (75 of 391 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Translated using Weblate (Russian)
-
-Currently translated at 31.2% (122 of 391 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (French)
-
-Currently translated at 100.0% (391 of 391 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (391 of 391 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (391 of 391 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (French)
-
-Currently translated at 99.4% (390 of 392 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (392 of 392 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (German)
-
-Currently translated at 93.8% (368 of 392 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (392 of 392 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Italian)
-
-Currently translated at 93.8% (368 of 392 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
-- Translated using Weblate (Dutch)
-
-Currently translated at 7.6% (30 of 392 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
-- Translated using Weblate (Russian)
-
-Currently translated at 30.8% (121 of 392 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/ru/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (French)
-
-Currently translated at 99.7% (391 of 392 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Added translation using Weblate (Czech)
-- Added translation using Weblate (Czech)
-- Added translation using Weblate (Czech)
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (398 of 398 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (398 of 398 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Merge branch 'master' into master
-- Merge pull request '[FEATURE] add online only mode and some fixes' (#51) from d1diiego/cfait:master into master
-
-Reviewed-on: https://codeberg.org/trougnouf/cfait/pulls/51
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (399 of 399 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (399 of 399 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (French)
-
-Currently translated at 100.0% (400 of 400 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (400 of 400 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (400 of 400 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (404 of 404 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (404 of 404 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (404 of 404 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (French)
-
-Currently translated at 100.0% (423 of 423 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (423 of 423 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (423 of 423 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (423 of 423 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (Spanish)
-
-Currently translated at 94.7% (447 of 472 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Spanish)
-
-Currently translated at 99.5% (468 of 470 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (French)
-
-Currently translated at 89.5% (421 of 470 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (470 of 470 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (French)
-
-Currently translated at 100.0% (470 of 470 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Added translation using Weblate (French)
-- Translated using Weblate (French) - restore fr description by mrjoops
-
-Currently translated at 100.0% (1 of 1 strings)
-
-Translation: Cfait/Android fastlane long description
-Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-long-description/fr/
-- Translated using Weblate (French)
-
-Currently translated at 99.1% (475 of 479 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (479 of 479 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (479 of 479 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-
 ### 🚜 Refactor
 
 - Remove redundant Tokio runtime in GUI to fix UI thread blocking
@@ -1145,36 +332,23 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
 - Fix CI flatpak build
 - Fix CI flatpak build
 - Fix CI flatpak build
-- Lint
 - Remove PULL.md from repository
 - Fix CI rolling release upload
 - Fix CI per-commit upload
 - Ensure recurrence engine handles TZID parameter
 - Make storage more robust to manual local store changes
 - *(android)* Fix missing strings and icon compilation error
-- Lint
 - Fix failing test
 - Fix Android compilation issue, move hardcoded strings to en.json
 - Remove duplicate strings
 - Remove unused translated strings (previously removed duplicates)
 - Fix failed test
 - Update rust-i18n and iced_aw crates
-- Lint
-- Release cfait version 0.5.9
 ## [0.5.8] - 2026-04-10
 
 ### 🐛 Bug Fixes
 
 - *(gui)* Right click on a task no longer jumps to the top of the task list
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.5.8
-## [0.5.7] - 2026-04-09
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.5.7
 ## [rolling] - 2026-04-08
 
 ### 🚀 Features
@@ -1200,44 +374,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
 - *(gui)* Improve custom actions
 - *(android)* Correctly restore previous tab on startup (reported by CycyX )
 - *(android)* Remember write collection even shortly after startup
-
-### 💼 Other
-
-- Added translation using Weblate (Dutch)
-- Added translation using Weblate (Dutch)
-- Added translation using Weblate (Dutch)
-- Update translation files
-
-Updated by "Cleanup translation files" add-on in Weblate.
-
-Translation: Cfait/Android fastlane short description
-Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-short-description/
-- Translated using Weblate (Dutch)
-
-Currently translated at 7.6% (30 of 390 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/nl/
-- Translated using Weblate (Spanish)
-
-Currently translated at 100.0% (391 of 391 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Added translation using Weblate (Spanish)
-- Update translation files
-
-Updated by "Cleanup translation files" add-on in Weblate.
-
-Translation: Cfait/Android fastlane long description
-Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-long-description/
-- Merge remote-tracking branch 'refs/remotes/origin/master'
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 100.0% (391 of 391 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
 ## [0.5.6] - 2026-03-22
 
 ### 🚀 Features
@@ -1250,34 +386,14 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
 - *(android)* Fix Android crash when deleting a session
 - *(android)* Fix Manage collections settings misplacement
 
-### 💼 Other
-
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 96.3% (365 of 379 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 96.3% (368 of 382 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-
 ### ⚙️ Miscellaneous Tasks
 
 - *(android)* Move font size setting below manage collections
-- Release cfait version 0.5.6
 ## [0.5.5] - 2026-03-17
 
 ### 🐛 Bug Fixes
 
 - Handle local v4->v5 migration and test version handling ( https://github.com/trougnouf/cfait/issues/15 )
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.5.5
 ## [0.5.4] - 2026-03-14
 
 ### 🚀 Features
@@ -1291,34 +407,12 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
 - *(alarm)* Fix absolute time alarms (s.t. they are based on due date rather than now) and alarm recurrences ( https://github.com/trougnouf/cfait/issues/14 )
 - Ensure % completion does not spam the task list with 0% nor reset time spent
 
-### 💼 Other
-
-- Translated using Weblate (German)
-
-Currently translated at 98.1% (370 of 377 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/de/
-- Translated using Weblate (Spanish)
-
-Currently translated at 98.1% (370 of 377 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/es/
-- Translated using Weblate (Italian)
-
-Currently translated at 98.1% (370 of 377 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
-
 ### ⚙️ Miscellaneous Tasks
 
 - Fix Android compilation issues, bump local collection and cache version, update documentation
 - *(Android)* Re-run uniffi-bindgen
 - Fix unused variables warnings when generating Android bindings
 - Fix Android compilation error
-- Release cfait version 0.5.4
 ## [0.5.3] - 2026-03-14
 
 ### 🚀 Features
@@ -1341,7 +435,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
 
 - Fix rolling release message
 - Update Rust toolchain to 1.94.0
-- Release cfait version 0.5.3
 ## [0.5.2] - 2026-03-12
 
 ### 🚀 Features
@@ -1402,101 +495,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/it/
 - *(android)* Improve swipe collections navigation (17: create and jump to custom tab by selecting new write/viewable collection while focused on a different collection)
 - *(Windows)* Fix Windows compilation (notifications are fire-and-forget, not interactive)
 
-### 💼 Other
-
-- Translated using Weblate (French)
-
-Currently translated at 96.2% (312 of 324 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (French)
-
-Currently translated at 100.0% (324 of 324 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (French)
-
-Currently translated at 97.1% (335 of 345 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Added translation using Weblate (Chinese (Simplified Han script))
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 22.5% (80 of 355 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (French)
-
-Currently translated at 95.4% (339 of 355 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (English)
-
-Currently translated at 100.0% (378 of 378 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/en/
-- Translated using Weblate (French)
-
-Currently translated at 88.0% (333 of 378 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 40.9% (152 of 371 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 46.6% (173 of 371 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 55.2% (205 of 371 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (French)
-
-Currently translated at 98.6% (372 of 377 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/fr/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 71.8% (271 of 377 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Translated using Weblate (Chinese (Simplified Han script))
-
-Currently translated at 75.5% (285 of 377 strings)
-
-Translation: Cfait/Cfait
-Translate-URL: https://translate.codeberg.org/projects/cfait/cfait/zh_Hans/
-- Added translation using Weblate (French)
-- Translated using Weblate (French)
-
-Currently translated at 100.0% (1 of 1 strings)
-
-Translation: Cfait/Android fastlane short description
-Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-short-description/fr/
-- Update translation files
-
-Updated by "Cleanup translation files" add-on in Weblate.
-
-Translation: Cfait/Android fastlane short description
-Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-short-description/
-
 ### 🚜 Refactor
 
 - Fix sync issue w/ rapidly changing states and consolidate sync logic across clients
@@ -1537,12 +535,10 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 ### ⚙️ Miscellaneous Tasks
 
-- Cleanup duplicate strings
 - Fix tests
 - Fix Android compilation issues
 - Update test
 - *(android)* Reduce example task s.t. it fits in one line
-- Release cfait version 0.5.2
 ## [0.5.1] - 2026-02-25
 
 ### 🚀 Features
@@ -1646,12 +642,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### 🧪 Testing
 
 - Android rolling release is built only on successful tets
-
-### ⚙️ Miscellaneous Tasks
-
-- *(release)* Update flathub screenshots
-- *(release)* Bump version up due to accidental previously yanked v0.5.0
-- Release cfait version 0.5.1
 ## [0.4.9] - 2026-01-28
 
 ### 🚀 Features
@@ -1693,10 +683,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 - *(android)* Tighter task list layout ( proposed by busterkeaton )
 - *(android)* Fix spacing of loading/spinning icon
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.4.9
 ## [0.4.8] - 2026-01-20
 
 ### 🚀 Features
@@ -1736,7 +722,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 - *(android)* Bump min SDK to 28 (Android 9) due to uniffi v0.31 update
 - Move Cargo.lock update to every release and disable check
-- Release cfait version 0.4.8
 ## [0.4.7] - 2026-01-13
 
 ### 🚀 Features
@@ -1760,10 +745,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 - *(gui)* Improve tags list UI
 - *(gui)* Remove empty space between title bar and input bar
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.4.7
 ## [0.4.6] - 2026-01-11
 
 ### 🚀 Features
@@ -1809,7 +790,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 - *(flatpak)* Add changelog to future releases
 - *(flathub)* Add release notes, categories, keywords, controls
 - Update rust licenses
-- Release cfait version 0.4.6
 ## [0.4.5] - 2026-01-06
 
 ### 🚀 Features
@@ -1841,7 +821,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 - *(android)* Rename com.cfait to com.trougnouf.cfait
 - *(flathub)* Attempt auto-release
 - Fix prepare_release.py
-- Release cfait version 0.4.5
 - Fix flathub-release CI script
 ## [0.4.3] - 2026-01-05
 
@@ -1868,7 +847,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 - *(flathub)* Update cargo-sources.yml
 - *(flathub)* Fix linting issues
 - Prep for v0.4.3 release (last before com.cfait to com.trougnouf.cfait migration on Android)
-- Release cfait version 0.4.3
 ## [0.4.2] - 2026-01-03
 
 ### 🐛 Bug Fixes
@@ -1883,7 +861,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 - Update Flatpak manifest for v0.4.1 release
 - Set GUI as default command for Flatpak
-- Release cfait version 0.4.2
 ## [0.4.1] - 2026-01-03
 
 ### 🚀 Features
@@ -1918,7 +895,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 - Add 10" tablet screenshots, complete Cargo.toml exclude
 - Prepare for release v0.4.1
-- Release cfait version 0.4.1
 ## [0.4.0] - 2025-12-30
 
 ### 🚀 Features
@@ -1939,10 +915,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 - *(gui)* Show dependency tree even in search mode
 - *(calendar)* Event description <- put task description before managed event warning
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.4.0
 ## [0.3.14] - 2025-12-29
 
 ### 🚀 Features
@@ -1978,7 +950,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### ⚙️ Miscellaneous Tasks
 
 - Prepare for flathub release
-- Release cfait version 0.3.14
 ## [0.3.13] - 2025-12-28
 
 ### 🚀 Features
@@ -2017,9 +988,7 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 ### ⚙️ Miscellaneous Tasks
 
-- Lint
 - Rm strip and debug from Arch packages
-- Release cfait version 0.3.13
 ## [0.3.12] - 2025-12-24
 
 ### 🚀 Features
@@ -2038,8 +1007,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### ⚙️ Miscellaneous Tasks
 
 - Remove dead code
-- Lint
-- Release cfait version 0.3.12
 ## [0.3.11] - 2025-12-24
 
 ### 🚜 Refactor
@@ -2049,10 +1016,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### 🧪 Testing
 
 - Improve test coverage
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.3.11
 ## [0.3.10] - 2025-12-24
 
 ### 🐛 Bug Fixes
@@ -2063,10 +1026,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 - Fix README syntax error & minor update
 - Add Matrix chatroom to README
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.3.10
 ## [0.3.9] - 2025-12-23
 
 ### 🚀 Features
@@ -2084,10 +1043,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 - *(android)* Only show Move if there are multiple calendars
 - Add some random icons to the mix, include Android
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.3.9
 ## [0.3.8] - 2025-12-23
 
 ### 🚀 Features
@@ -2108,10 +1063,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### 🎨 Styling
 
 - Add location icons and color
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.3.8
 ## [0.3.7] - 2025-12-21
 
 ### 🚀 Features
@@ -2130,10 +1081,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### 📚 Documentation
 
 - Mention Baikal in README since it has been explicitly tested
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.3.7
 ## [0.3.6] - 2025-12-21
 
 ### 🚀 Features
@@ -2143,11 +1090,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### 📚 Documentation
 
 - *(android)* Published on F-Droid
-
-### ⚙️ Miscellaneous Tasks
-
-- Lint
-- Release cfait version 0.3.6
 ## [0.3.5] - 2025-12-20
 
 ### 🚀 Features
@@ -2163,10 +1105,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### 📚 Documentation
 
 - Add suggested CalDAV providers, TOC to the README
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.3.5
 ## [0.3.4] - 2025-12-19
 
 ### 🚀 Features
@@ -2181,8 +1119,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### ⚙️ Miscellaneous Tasks
 
 - *(skip)* Fix overeager app store inclusion in README
-- *(release)* Prepare for v0.3.4
-- Release cfait version 0.3.4
 ## [0.3.3] - 2025-12-19
 
 ### 🚀 Features
@@ -2210,16 +1146,18 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(fdroid)* Simplify screenshot names
 - Prepare for release v0.3.3
 - Disable signed commit
-- Release cfait version 0.3.3
 ## [0.3.2] - 2025-12-18
 
 ### 🐛 Bug Fixes
 
 - Don't include uniffi/mobile for TUI/GUI desktop builds
 - *(android)* Replace target_os = "android" with feature = "mobile"
+
+### 💼 Other
+
+- *(android)* Rm i686-linux-android
 
 ### 📚 Documentation
 
@@ -2228,15 +1166,8 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### ⚙️ Miscellaneous Tasks
 
 - *(android)* Generate static Android version number for F-Droid release
-- Release cfait version 0.3.2
 - Auto-generate changelogs (fastlane and CHANGELOG.md), backfill previous ones
 - Add Cargo.lock
-- *(android)* Rm i686-linux-android
-- *(fdroid)* Work on Reproducible Builds
-- *(fdroid)* Pin rust version for F-Droid build
-- *(fdroid)* Work on reproducible build (locked ndkVersion, RUSTFLAGS)
-- *(fdroid)* Strip dependenciesInfo
-- *(fdroid)* Set Android rust toolchain in rust_toolchain.toml
 ## [0.3.1] - 2025-12-17
 
 ### 🐛 Bug Fixes
@@ -2247,7 +1178,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### ⚙️ Miscellaneous Tasks
 
 - Prepare for 0.3.1
-- Release cfait version 0.3.1
 ## [0.3.0] - 2025-12-17
 
 ### 🚀 Features
@@ -2298,6 +1228,11 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 - *(android)* Add R8 rules for JNA/UniFFI
 - *(ci)* Use absolute path for keystore to fix signing
 
+### 💼 Other
+
+- *(release)* Add signed Android build pipeline and prepare for v0.3.0
+- *(refactor)* Centralize release logic in arch container and build in parallel
+
 ### 🚜 Refactor
 
 - *(core)* Deduplicate task logic and centralize path resolution
@@ -2330,15 +1265,9 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 ### ⚙️ Miscellaneous Tasks
 
-- Lint
-- Lint
 - *(android)* Update versions
-- Switch deb/generic-linux build from Arch to to Ubuntu 24.04 (glibc 2.39), update documentation
 - Update licenses
 - Fastlane stuff for Android release
-- *(release)* Add signed Android build pipeline and prepare for v0.3.0
-- Release cfait version 0.3.0
-- *(refactor)* Centralize release logic in arch container and build in parallel
 - *(android)* Update gradle to 9.2, build apk in next release
 ## [0.2.9] - 2025-12-08
 
@@ -2347,6 +1276,10 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 - *(sync)* Preserve recurring task exceptions written by other clients
 - *(gui)* Click on tag jumps to it
 - *(gui)* Help on hover
+
+### 💼 Other
+
+- *(forgejo)* Build once for different Linux releases
 
 ### ⚡ Performance
 
@@ -2363,9 +1296,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### ⚙️ Miscellaneous Tasks
 
 - Switch to iced 0.14.0 (dev->release)
-- *(forgejo)* Build once for different Linux releases
-- *(release)* Update readme and changelog for 0.2.9, add version / license to GUI help
-- Release cfait version 0.2.9
 ## [0.2.8] - 2025-12-08
 
 ### 🚀 Features
@@ -2391,10 +1321,7 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 ### ⚙️ Miscellaneous Tasks
 
-- Lint
 - Update CHANGELOG
-- Lint
-- Release cfait version 0.2.8
 ## [0.2.7] - 2025-12-06
 
 ### 🚀 Features
@@ -2435,14 +1362,7 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 ### ⚙️ Miscellaneous Tasks
 
-- *(release)* Update changelog for v0.2.6
-- *(release)* Update screenshots for v0.2.6
-- Release cfait version 0.2.6
 - Fix Cargo.toml (too many keywords)
-- Release cfait version 0.2.6
-- Lint
-- *(release)* Update readme and changelog for 0.2.7
-- Release cfait version 0.2.7
 ## [0.2.5] - 2025-12-04
 
 ### 🚀 Features
@@ -2461,11 +1381,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### 🎨 Styling
 
 - *(GUI)* Allow main content area to expand with window width
-
-### ⚙️ Miscellaneous Tasks
-
-- *(release)* Update changelog and screenshots for v0.2.5
-- Release cfait version 0.2.5
 ## [0.2.4] - 2025-12-03
 
 ### 🚀 Features
@@ -2473,21 +1388,13 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 - *(core)* Implement robust file locking with fs2, atomic journal processing, and isolated tests to prevent data corruption
 - *(ui)* Enable multiline task descriptions in GUI and TUI (Alt+Enter), fix visual corruption in TUI, and propagate sync errors
 
+### 💼 Other
+
+- *(release)* Add cmake and nasm to fix windows cross-compilation and fix shell script syntax
+
 ### 📚 Documentation
 
 - Move main mirror from github to codeberg
-
-### ⚙️ Miscellaneous Tasks
-
-- Add Codeberg Actions for testing and release builds
-- Add Rust toolchain to Codeberg
-- Lint
-- Use lld linker to fix OOM errors and install clippy component
-- Reduce memory usage by not compiling cargo-deb, 2-threads
-- Self-hosted runner
-- *(release)* Add cmake and nasm to fix windows cross-compilation and fix shell script syntax
-- *(release)* Update changelog for v0.2.4
-- Release cfait version 0.2.4
 ## [0.2.3] - 2025-12-01
 
 ### 🚀 Features
@@ -2513,9 +1420,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### ⚙️ Miscellaneous Tasks
 
 - Add licenses
-- Lint
-- *(release)* Update changelog
-- Release cfait version 0.2.3
 ## [0.2.2] - 2025-11-29
 
 ### 🐛 Bug Fixes
@@ -2528,9 +1432,7 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 ### ⚙️ Miscellaneous Tasks
 
-- Lint
 - Update changelog
-- Release cfait version 0.2.2
 ## [0.2.1] - 2025-11-29
 
 ### 🚀 Features
@@ -2554,9 +1456,7 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 
 ### ⚙️ Miscellaneous Tasks
 
-- Lint
 - Auto-add changelog to release notes
-- Release cfait version 0.2.1
 ## [0.2.0] - 2025-11-27
 
 ### 💼 Other
@@ -2577,8 +1477,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### ⚙️ Miscellaneous Tasks
 
 - Automate changelog with git-cliff
-- *(release)* Update changelog for v"${TAG}"
-- Release cfait version 0.2.0
 ## [0.1.9] - 2025-11-26
 
 ### 💼 Other
@@ -2595,16 +1493,11 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### 🎨 UI/UX Improvements
 
 - [GUI] remove "<" and ">" buttons (replaced w/ Link functionality)
-
-### ⚙️ Miscellaneous Tasks
-
-- Release cfait version 0.1.9
 ## [0.1.7] - 2025-11-25
 
 ### 💼 Other
 
 - Rename GUI window
-- Mention categories
 - Attempt Windows build (in next release)
 - Groundwork to support RFC 9253 (DEPENDS-ON) in model
 - Support RFC 9253 (DEPENDS-ON) in both TUI and GUI, and improve children dependency handling
@@ -2612,14 +1505,20 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 - Support aliases (set in the config file and/or in the GUI settings)
 - Add subtitle
 - Manually allow multiple RELATED-TO fields (not supported by icalendar library)
-- Add unit tests
-- Release 0.1.7
+
+### 📚 Documentation
+
+- Mention categories
 
 ### 🎨 UI/UX Improvements
 
 - [TUI] add space after [ ]
 - [TUI] support RFC 9253 (DEPENDS-ON)
 - [GUI] set window name in Linux only (fix Windows build?)
+
+### 🧪 Testing
+
+- Add unit tests
 ## [0.1.6] - 2025-11-24
 
 ### 💼 Other
@@ -2634,7 +1533,6 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 - Fix missing icon in opened application
 - Refactor GUI, add support for #categories
 - Refactor TUI
-- Add unit tests
 - Fix hide completed tasks in tab view, fix GUI save settings
 - Fix bug where completed tags remained selected but invisible / hiding all tasks. Add uncategorized tag
 - Fix TUI build error on CI, update screenshots
@@ -2644,6 +1542,10 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 - [GUI] add Tags (categories) view (pulling from all calendars), add settings to hide completed tasks
 - [TUI] Browse by category/tags, restore cache
 - [GUI] fix cutoff tags AND/OR text
+
+### 🧪 Testing
+
+- Add unit tests
 ## [0.1.5] - 2025-11-22
 
 ### 💼 Other
@@ -2670,8 +1572,11 @@ Translate-URL: https://translate.codeberg.org/projects/cfait/android-fastlane-sh
 ### 💼 Other
 
 - Add recurrence support, recurrence symbol, and expand relative dates
-- Add unit tests to model.rs
 - Add caching (fast inter-calendar switching)
+
+### 🧪 Testing
+
+- Add unit tests to model.rs
 ## [0.1.2] - 2025-11-21
 
 ### 💼 Other

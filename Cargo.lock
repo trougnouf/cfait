@@ -907,7 +907,7 @@ checksum = "6d43a04d8753f35258c91f8ec639f792891f748a1edbd759cf1dcea3382ad83c"
 
 [[package]]
 name = "cfait"
-version = "1.0.3"
+version = "1.0.4"
 dependencies = [
  "android-native-keyring-store",
  "android_logger",

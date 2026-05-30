@@ -78,6 +78,24 @@
   </requires>
 
   <releases>
+    <release version="1.0.4" date="2026-05-30">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>(gui) Alias editing</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>Propagate tag aliases and config updates on startup and refresh across all clients</li>
+          <li>Reorder controller logic to push settings changes upstream before journal sync</li>
+          <li>Fix initial settings and aliases sync by honoring remote payload when uninitialized</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>Improve CHANGELOG.md auto-generation</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.3" date="2026-05-30">
       <description>
         <p>Features:</p>
