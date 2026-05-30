@@ -242,9 +242,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::TasksRefreshed(_)
         | Message::MigrationComplete(_) => network::handle(app, message),
 
-        Message::OpenContextMenu(..) | Message::CloseContextMenu => {
-            view::handle(app, message)
-        }
+        Message::OpenContextMenu(..) | Message::CloseContextMenu => view::handle(app, message),
 
         Message::SnapToSelected { focus } => {
             if let Some(_uid) = &app.selected_uid {

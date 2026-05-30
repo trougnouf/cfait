@@ -641,15 +641,19 @@ pub fn view_task_row<'a>(
                     .style(|theme, status| action_style(theme, status, 0))
                     .padding(4)
                     .on_press(Message::ToggleTreeCollapse(task.uid.clone()));
-                actions = actions.push(
-                    tooltip(
-                        collapse_btn,
-                        text(tooltip_text).size(12),
-                        tooltip::Position::Top,
-                    )
-                    .style(crate::gui::view::tooltip_style)
-                    .delay(Duration::from_millis(700)),
-                );
+                if is_selected {
+                    actions = actions.push(
+                        tooltip(
+                            collapse_btn,
+                            text(tooltip_text).size(12),
+                            tooltip::Position::Top,
+                        )
+                        .style(crate::gui::view::tooltip_style)
+                        .delay(Duration::from_millis(700)),
+                    );
+                } else {
+                    actions = actions.push(collapse_btn);
+                }
             }
 
             if has_related || has_incoming_related {
@@ -681,71 +685,89 @@ pub fn view_task_row<'a>(
                         .style(|theme, status| action_style(theme, status, 0))
                         .padding(4)
                         .on_press(Message::AddDependency(task.uid.clone()));
-                    actions = actions.push(
-                        tooltip(
-                            block_btn,
-                            text(rust_i18n::t!(
-                                "yank_tooltip_block",
-                                target = task.summary.clone(),
-                                yanked = yanked_summary.clone()
-                            ))
-                            .size(12),
-                            tooltip::Position::Top,
-                        )
-                        .style(tooltip_style)
-                        .delay(Duration::from_millis(700)),
-                    );
+                    if is_selected {
+                        actions = actions.push(
+                            tooltip(
+                                block_btn,
+                                text(rust_i18n::t!(
+                                    "yank_tooltip_block",
+                                    target = task.summary.clone(),
+                                    yanked = yanked_summary.clone()
+                                ))
+                                .size(12),
+                                tooltip::Position::Top,
+                            )
+                            .style(tooltip_style)
+                            .delay(Duration::from_millis(700)),
+                        );
+                    } else {
+                        actions = actions.push(block_btn);
+                    }
+
                     let child_btn = button(icon::icon(icon::CHILD).size(14))
                         .style(|theme, status| action_style(theme, status, 0))
                         .padding(4)
                         .on_press(Message::MakeChild(task.uid.clone()));
-                    actions = actions.push(
-                        tooltip(
-                            child_btn,
-                            text(rust_i18n::t!(
-                                "yank_tooltip_child",
-                                target = task.summary.clone(),
-                                yanked = yanked_summary.clone()
-                            ))
-                            .size(12),
-                            tooltip::Position::Top,
-                        )
-                        .style(tooltip_style)
-                        .delay(Duration::from_millis(700)),
-                    );
+                    if is_selected {
+                        actions = actions.push(
+                            tooltip(
+                                child_btn,
+                                text(rust_i18n::t!(
+                                    "yank_tooltip_child",
+                                    target = task.summary.clone(),
+                                    yanked = yanked_summary.clone()
+                                ))
+                                .size(12),
+                                tooltip::Position::Top,
+                            )
+                            .style(tooltip_style)
+                            .delay(Duration::from_millis(700)),
+                        );
+                    } else {
+                        actions = actions.push(child_btn);
+                    }
+
                     let related_btn =
                         button(icon::icon(random_related_icon(&task.uid, yanked)).size(14))
                             .style(|theme, status| action_style(theme, status, 0))
                             .padding(4)
                             .on_press(Message::AddRelatedTo(task.uid.clone()));
-                    actions = actions.push(
-                        tooltip(
-                            related_btn,
-                            text(rust_i18n::t!(
-                                "related_to_tooltip",
-                                target = task.summary.clone(),
-                                yanked = yanked_summary.clone()
-                            ))
-                            .size(12),
-                            tooltip::Position::Top,
-                        )
-                        .style(tooltip_style)
-                        .delay(Duration::from_millis(700)),
-                    );
+                    if is_selected {
+                        actions = actions.push(
+                            tooltip(
+                                related_btn,
+                                text(rust_i18n::t!(
+                                    "related_to_tooltip",
+                                    target = task.summary.clone(),
+                                    yanked = yanked_summary.clone()
+                                ))
+                                .size(12),
+                                tooltip::Position::Top,
+                            )
+                            .style(tooltip_style)
+                            .delay(Duration::from_millis(700)),
+                        );
+                    } else {
+                        actions = actions.push(related_btn);
+                    }
                 } else {
                     let unlink_btn = button(icon::icon(icon::UNLINK).size(14))
                         .style(button::primary)
                         .padding(4)
                         .on_press(Message::EscapePressed);
-                    actions = actions.push(
-                        tooltip(
-                            unlink_btn,
-                            text(format!("{} (Esc)", rust_i18n::t!("unlink"))).size(12),
-                            tooltip::Position::Top,
-                        )
-                        .style(tooltip_style)
-                        .delay(Duration::from_millis(700)),
-                    );
+                    if is_selected {
+                        actions = actions.push(
+                            tooltip(
+                                unlink_btn,
+                                text(format!("{} (Esc)", rust_i18n::t!("unlink"))).size(12),
+                                tooltip::Position::Top,
+                            )
+                            .style(tooltip_style)
+                            .delay(Duration::from_millis(700)),
+                        );
+                    } else {
+                        actions = actions.push(unlink_btn);
+                    }
                 }
             }
 
@@ -758,22 +780,15 @@ pub fn view_task_row<'a>(
                     continue;
                 }
 
-                let mut label = action.label();
-                if *action == TaskAction::DuplicateTree && !has_subtasks {
-                    label = rust_i18n::t!("duplicate_single_task").to_string();
-                }
-
-                let (icon_element, msg, style_mode, tooltip_str): (
+                let (icon_element, msg, style_mode): (
                     Element<'a, Message>,
                     Message,
                     u8,
-                    String,
                 ) = match action {
                     TaskAction::CompleteAndShift => (
                         icon::icon(icon::REPEAT).size(14).into(),
                         Message::ToggleTaskShift(task.uid.clone()),
                         0,
-                        label.clone(),
                     ),
                     TaskAction::ToggleDetails => {
                         let mut icon_row = row![].spacing(2).align_y(iced::Alignment::Center);
@@ -785,23 +800,11 @@ pub fn view_task_row<'a>(
                             icon_row = icon_row
                                 .push(icon::icon(icon::TIMER_SETTINGS).size(14).line_height(1.0));
                         }
-                        let tooltip_text = if has_info && has_time {
-                            format!(
-                                "{} / {}",
-                                rust_i18n::t!("show_details"),
-                                rust_i18n::t!("help_metadata_manage_sessions")
-                            )
-                        } else if has_time {
-                            rust_i18n::t!("help_metadata_manage_sessions").to_string()
-                        } else {
-                            rust_i18n::t!("show_details").to_string()
-                        };
                         let style = if is_expanded { 3 } else { 0 };
                         (
                             icon_row.into(),
                             Message::ToggleDetails(task.uid.clone()),
                             style,
-                            tooltip_text,
                         )
                     }
                     TaskAction::ToggleTimer => {
@@ -810,21 +813,12 @@ pub fn view_task_row<'a>(
                                 icon::icon(icon::PAUSE).size(14).into(),
                                 Message::PauseTask(task.uid.clone()),
                                 0,
-                                rust_i18n::t!("pause_task").to_string(),
-                            )
-                        } else if is_paused {
-                            (
-                                icon::icon(icon::PLAY).size(14).into(),
-                                Message::StartTask(task.uid.clone()),
-                                0,
-                                rust_i18n::t!("resume_task").to_string(),
                             )
                         } else {
                             (
                                 icon::icon(icon::PLAY).size(14).into(),
                                 Message::StartTask(task.uid.clone()),
                                 0,
-                                rust_i18n::t!("start_task").to_string(),
                             )
                         }
                     }
@@ -832,7 +826,6 @@ pub fn view_task_row<'a>(
                         icon::icon(icon::DEBUG_STOP).size(14).into(),
                         Message::StopTask(task.uid.clone()),
                         0,
-                        rust_i18n::t!("stop_reset").to_string(),
                     ),
                     TaskAction::AddSession => {
                         let style = if app.adding_session_uid.as_deref() == Some(task.uid.as_str())
@@ -845,92 +838,77 @@ pub fn view_task_row<'a>(
                             icon::icon(icon::TIMER_PLUS).size(14).into(),
                             Message::StartAddSession(task.uid.clone()),
                             style,
-                            rust_i18n::t!("help_metadata_log_time").to_string(),
                         )
                     }
                     TaskAction::IncreasePriority => (
                         icon::icon(icon::PLUS).size(14).into(),
                         Message::ChangePriority(index, 1),
                         0,
-                        rust_i18n::t!("increase_priority").to_string(),
                     ),
                     TaskAction::DecreasePriority => (
                         icon::icon(icon::MINUS).size(14).into(),
                         Message::ChangePriority(index, -1),
                         0,
-                        rust_i18n::t!("menu_decrease_prio").to_string(),
                     ),
                     TaskAction::Edit => (
                         icon::icon(icon::EDIT).size(14).into(),
                         Message::EditTaskStart(index),
                         0,
-                        rust_i18n::t!("edit").to_string(),
                     ),
                     TaskAction::Yank => (
                         icon::icon(icon::LINK).size(14).into(),
                         Message::YankTask(task.uid.clone()),
                         0,
-                        rust_i18n::t!("yank_copy_id").to_string(),
                     ),
                     TaskAction::CreateSubtask => (
                         icon::icon(icon::CREATE_CHILD).size(14).into(),
                         Message::StartCreateChild(task.uid.clone()),
                         0,
-                        rust_i18n::t!("create_subtask").to_string(),
                     ),
                     TaskAction::DuplicateTree => (
                         icon::icon(icon::CLONE).size(14).into(),
                         Message::DuplicateTask(task.uid.clone()),
                         0,
-                        label.clone(),
                     ),
                     TaskAction::Promote => (
                         icon::icon(icon::ELEVATOR_UP).size(14).into(),
                         Message::RemoveParent(task.uid.clone()),
                         0,
-                        rust_i18n::t!("promote_remove_parent").to_string(),
                     ),
                     TaskAction::Move => (
                         icon::icon(icon::MOVE).size(14).into(),
                         Message::StartMoveTask(task.uid.clone()),
                         0,
-                        rust_i18n::t!("menu_move").to_string(),
                     ),
                     TaskAction::Cancel => (
                         icon::icon(icon::CROSS).size(14).into(),
                         Message::SetTaskStatus(index, crate::model::TaskStatus::Cancelled),
                         1,
-                        rust_i18n::t!("cancel").to_string(),
                     ),
                     TaskAction::Delete => (
                         icon::icon(icon::TRASH).size(14).into(),
                         Message::DeleteTask(index),
                         1,
-                        rust_i18n::t!("delete").to_string(),
                     ),
                     TaskAction::DeleteTree => (
                         icon::icon(icon::TRASH).size(14).into(),
                         Message::DeleteTaskTree(task.uid.clone()),
                         2,
-                        rust_i18n::t!("delete_task_tree").to_string(),
                     ),
                     TaskAction::OpenCoordinates => (
                         icon::icon(icon::MAP_LOCATION_DOT).size(14).into(),
                         Message::OpenCoordinates(task.uid.clone()),
                         0,
-                        rust_i18n::t!("open_coordinates").to_string(),
                     ),
                     TaskAction::OpenLocations => (
                         icon::icon(icon::MAP_MARKER_MULTIPLE).size(14).into(),
                         Message::OpenLocations(task.uid.clone()),
                         0,
-                        rust_i18n::t!("action_open_locations").to_string(),
                     ),
                     TaskAction::OpenUrl => (
                         icon::icon(icon::URL_CHECK).size(14).into(),
                         Message::OpenUrl(task.url.clone().unwrap()),
                         0,
-                        rust_i18n::t!("open_url").to_string(),
                     ),
                 };
 
@@ -939,11 +917,42 @@ pub fn view_task_row<'a>(
                     .style(move |theme, status| action_style(theme, status, style_mode_mapped))
                     .padding(4)
                     .on_press(msg);
-                actions = actions.push(
-                    tooltip(btn, text(tooltip_str).size(12), tooltip::Position::Top)
-                        .style(crate::gui::view::tooltip_style)
-                        .delay(std::time::Duration::from_millis(700)),
-                );
+
+                if is_selected {
+                    let mut label = action.label();
+                    if *action == TaskAction::DuplicateTree && !has_subtasks {
+                        label = rust_i18n::t!("duplicate_single_task").to_string();
+                    }
+                    if *action == TaskAction::ToggleDetails {
+                        label = if has_info && has_time {
+                            format!(
+                                "{} / {}",
+                                rust_i18n::t!("show_details"),
+                                rust_i18n::t!("help_metadata_manage_sessions")
+                            )
+                        } else if has_time {
+                            rust_i18n::t!("help_metadata_manage_sessions").to_string()
+                        } else {
+                            rust_i18n::t!("show_details").to_string()
+                        };
+                    } else if *action == TaskAction::ToggleTimer {
+                        label = if task.status == crate::model::TaskStatus::InProcess {
+                            rust_i18n::t!("pause_task").to_string()
+                        } else if is_paused {
+                            rust_i18n::t!("resume_task").to_string()
+                        } else {
+                            rust_i18n::t!("start_task").to_string()
+                        };
+                    }
+
+                    actions = actions.push(
+                        tooltip(btn, text(label).size(12), tooltip::Position::Top)
+                            .style(crate::gui::view::tooltip_style)
+                            .delay(std::time::Duration::from_millis(700)),
+                    );
+                } else {
+                    actions = actions.push(btn);
+                }
             }
 
             let is_context_menu_active =
