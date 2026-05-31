@@ -51,7 +51,7 @@ jobs:
           cp README.md LICENSE "cfait-linux-${CLEAN_VERSION}/"
           cp assets/cfait.desktop "cfait-linux-${CLEAN_VERSION}/"
           cp assets/cfait.svg "cfait-linux-${CLEAN_VERSION}/"
-          tar -czvf "dist/cfait-linux-${RAW_VERSION}.tar.gz" "cfait-linux-${CLEAN_VERSION}"
+          tar -cJvf "dist/cfait-linux-${RAW_VERSION}.tar.xz" "cfait-linux-${CLEAN_VERSION}"
 
       # Upload to runner storage (v3 for Forgejo compatibility)
       - name: Upload Linux Artifacts
@@ -209,6 +209,24 @@ jobs:
           chown -R builder:builder .
           su builder -c "makepkg --printsrcinfo > .SRCINFO"
 
+          # --- Prepare cfait-bin ---
+          LINUX_TAR="cfait-linux-${RAW_VERSION}.tar.xz"
+          if [ ! -f "$LINUX_TAR" ]; then
+            echo "Error: Linux tarball not found"
+            exit 1
+          fi
+
+          HASH_BIN=$(sha256sum "$LINUX_TAR" | awk '{print $1}')
+
+          cp ../packaging/arch-bin/PKGBUILD ./PKGBUILD_bin
+
+          sed -i "s/pkgver=.*/pkgver=${CLEAN_VER}/" PKGBUILD_bin
+          sed -i "s/'SKIP'/'$HASH_BIN'/" PKGBUILD_bin
+          NEW_SOURCE_URL_BIN="https://codeberg.org/trougnouf/cfait/releases/download/${RAW_VERSION}/${LINUX_TAR}"
+          sed -i "s|source=.*|source=(\"${NEW_SOURCE_URL_BIN}\")|" PKGBUILD_bin
+
+          su builder -c "makepkg -p PKGBUILD_bin --printsrcinfo > .SRCINFO_bin"
+
       # 7. Upload Everything (Atomic Release)
       - name: Upload to Codeberg Releases
         if: startsWith(github.ref, 'refs/tags/')
@@ -252,18 +270,31 @@ jobs:
           git config --global user.name "Cfait Bot (Benoit Brummer)"
           git config --global user.email "trougnouf@gmail.com"
 
+          # --- Push Source Package ---
           git clone ssh://aur@aur.archlinux.org/cfait.git aur-repo
-
           cp dist/PKGBUILD aur-repo/
           cp dist/.SRCINFO aur-repo/
-
           cd aur-repo
           git add PKGBUILD .SRCINFO
-
           if git diff --staged --quiet; then
-            echo "No changes to AUR files."
+            echo "No changes to AUR source files."
           else
             git commit -m "Update to ${{ github.ref_name }}"
             git push
             echo "🚀 Successfully pushed to AUR!"
+          fi
+          cd ..
+
+          # --- Push Bin Package ---
+          git clone ssh://aur@aur.archlinux.org/cfait-bin.git aur-repo-bin
+          cp dist/PKGBUILD_bin aur-repo-bin/PKGBUILD
+          cp dist/.SRCINFO_bin aur-repo-bin/.SRCINFO
+          cd aur-repo-bin
+          git add PKGBUILD .SRCINFO
+          if git diff --staged --quiet; then
+            echo "No changes to AUR bin files."
+          else
+            git commit -m "Update to ${{ github.ref_name }}"
+            git push
+            echo "🚀 Successfully pushed to AUR (bin)!"
           fi
