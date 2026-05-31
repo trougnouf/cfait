@@ -53,6 +53,33 @@ const HANDLED_KEYS: &[&str] = &[
 pub struct IcsAdapter;
 
 impl IcsAdapter {
+    fn fix_rrule_until(rrule: &str, is_time: bool) -> String {
+        let parts: Vec<&str> = rrule.split(';').collect();
+        let mut new_parts = Vec::new();
+        for part in parts {
+            if let Some(until_val) = part.strip_prefix("UNTIL=") {
+                if is_time {
+                    if until_val.len() == 8 && !until_val.contains('T') {
+                        new_parts.push(format!("UNTIL={}T235959Z", until_val));
+                    } else if until_val.contains('T') && !until_val.ends_with('Z') {
+                        new_parts.push(format!("UNTIL={}Z", until_val));
+                    } else {
+                        new_parts.push(part.to_string());
+                    }
+                } else {
+                    if let Some(t_idx) = until_val.find('T') {
+                        new_parts.push(format!("UNTIL={}", &until_val[..t_idx]));
+                    } else {
+                        new_parts.push(part.to_string());
+                    }
+                }
+            } else {
+                new_parts.push(part.to_string());
+            }
+        }
+        new_parts.join(";")
+    }
+
     pub fn to_ics(task: &Task) -> String {
         let mut todo = Todo::new();
         todo.add_property("UID", &task.uid);
@@ -107,7 +134,20 @@ impl IcsAdapter {
         let dtstart_is_time = emit_dtstart
             .as_ref()
             .map(|d| matches!(d, DateType::Specific(_)))
+            .or_else(|| {
+                emit_due
+                    .as_ref()
+                    .map(|d| matches!(d, DateType::Specific(_)))
+            })
             .unwrap_or(false);
+
+        let default_utc_time = if let Some(DateType::Specific(dt)) = &emit_dtstart {
+            dt.time()
+        } else if let Some(DateType::Specific(dt)) = &emit_due {
+            dt.time()
+        } else {
+            chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap()
+        };
 
         if let Some(dt) = &emit_dtstart {
             match dt {
@@ -190,24 +230,22 @@ impl IcsAdapter {
             todo.priority(prio.into());
         }
         if let Some(rrule) = &task.rrule {
-            let rrule_str: String = rrule.as_str().into();
-            todo.add_property("RRULE", &rrule_str);
+            let fixed_rrule = Self::fix_rrule_until(rrule, dtstart_is_time);
+            todo.add_property("RRULE", &fixed_rrule);
         }
 
         for ex in &task.exdates {
             let is_time = matches!(ex, DateType::Specific(_));
             if dtstart_is_time && !is_time {
-                let midnight = chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap();
-                let dt = ex.to_utc_with_default_time(midnight);
+                let date = ex.to_date_naive();
+                let dt = Utc.from_utc_datetime(&date.and_time(default_utc_time));
                 todo.append_multi_property(icalendar::Property::new(
                     "EXDATE",
                     dt.format("%Y%m%dT%H%M%SZ").to_string(),
                 ));
             } else if !dtstart_is_time && is_time {
-                let mut p = icalendar::Property::new(
-                    "EXDATE",
-                    ex.to_date_naive().format("%Y%m%d").to_string(),
-                );
+                let date = ex.to_date_naive();
+                let mut p = icalendar::Property::new("EXDATE", date.format("%Y%m%d").to_string());
                 p.add_parameter("VALUE", "DATE");
                 todo.append_multi_property(p);
             } else {
@@ -1356,40 +1394,71 @@ impl IcsAdapter {
         if let Some(url) = &task.url {
             event.add_property("URL", url);
         }
+        let is_time = matches!(start_dt, DateType::Specific(_));
+
+        let default_utc_time = match &start_dt {
+            DateType::Specific(dt) => dt.time(),
+            _ => chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        };
+
         if let Some(rrule) = &task.rrule {
             // Strip RRULE from events that represent a specific completed instance
             // so they don't incorrectly repeat on the calendar view.
             if task.status != TaskStatus::Completed {
-                event.add_property("RRULE", rrule);
+                let fixed_rrule = Self::fix_rrule_until(rrule, is_time);
+                event.add_property("RRULE", &fixed_rrule);
 
                 // --- FIX 6: Copy EXDATEs to the calendar event so skipped instances disappear ---
                 for ex in &task.exdates {
-                    match ex {
-                        DateType::AllDay(d) => {
-                            let mut p =
-                                icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
-                            p.add_parameter("VALUE", "DATE");
-                            event.append_multi_property(p);
-                        }
-                        DateType::Specific(dt) => {
-                            event.append_multi_property(icalendar::Property::new(
-                                "EXDATE",
-                                dt.format("%Y%m%dT%H%M%SZ").to_string(),
-                            ));
-                        }
-                        DateType::Month(y, m) => {
-                            let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
-                            let mut p =
-                                icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
-                            p.add_parameter("VALUE", "DATE");
-                            event.append_multi_property(p);
-                        }
-                        DateType::Year(y) => {
-                            let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
-                            let mut p =
-                                icalendar::Property::new("EXDATE", d.format("%Y%m%d").to_string());
-                            p.add_parameter("VALUE", "DATE");
-                            event.append_multi_property(p);
+                    let ex_is_time = matches!(ex, DateType::Specific(_));
+                    if is_time && !ex_is_time {
+                        let date = ex.to_date_naive();
+                        let dt = Utc.from_utc_datetime(&date.and_time(default_utc_time));
+                        event.append_multi_property(icalendar::Property::new(
+                            "EXDATE",
+                            dt.format("%Y%m%dT%H%M%SZ").to_string(),
+                        ));
+                    } else if !is_time && ex_is_time {
+                        let mut p = icalendar::Property::new(
+                            "EXDATE",
+                            ex.to_date_naive().format("%Y%m%d").to_string(),
+                        );
+                        p.add_parameter("VALUE", "DATE");
+                        event.append_multi_property(p);
+                    } else {
+                        match ex {
+                            DateType::AllDay(d) => {
+                                let mut p = icalendar::Property::new(
+                                    "EXDATE",
+                                    d.format("%Y%m%d").to_string(),
+                                );
+                                p.add_parameter("VALUE", "DATE");
+                                event.append_multi_property(p);
+                            }
+                            DateType::Specific(dt) => {
+                                event.append_multi_property(icalendar::Property::new(
+                                    "EXDATE",
+                                    dt.format("%Y%m%dT%H%M%SZ").to_string(),
+                                ));
+                            }
+                            DateType::Month(y, m) => {
+                                let d = NaiveDate::from_ymd_opt(*y, *m, 1).unwrap();
+                                let mut p = icalendar::Property::new(
+                                    "EXDATE",
+                                    d.format("%Y%m%d").to_string(),
+                                );
+                                p.add_parameter("VALUE", "DATE");
+                                event.append_multi_property(p);
+                            }
+                            DateType::Year(y) => {
+                                let d = NaiveDate::from_ymd_opt(*y, 1, 1).unwrap();
+                                let mut p = icalendar::Property::new(
+                                    "EXDATE",
+                                    d.format("%Y%m%d").to_string(),
+                                );
+                                p.add_parameter("VALUE", "DATE");
+                                event.append_multi_property(p);
+                            }
                         }
                     }
                 }

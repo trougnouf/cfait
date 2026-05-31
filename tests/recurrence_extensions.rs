@@ -410,6 +410,38 @@ fn test_syntax_highlighting_for_until() {
 }
 
 #[test]
+fn test_rfc5545_until_and_exdate_type_alignment() {
+    // According to RFC 5545, if DTSTART is a DATE-TIME, UNTIL and EXDATE must also be DATE-TIME.
+    // If DTSTART is a DATE, UNTIL and EXDATE must also be DATE.
+
+    // 1. Task with time (offset-aware)
+    let t1 = parse("Bouldering @2026-06-04 21:00 @daily until 2026-09-20 except 2026-04-09");
+    let ics1 = t1.to_ics();
+
+    assert!(
+        ics1.contains("UNTIL=20260920T235959Z"),
+        "UNTIL should be upgraded to datetime format to match DTSTART. Got:\n{}",
+        ics1
+    );
+    assert!(
+        ics1.contains("EXDATE:20260409T") && ics1.contains("Z"),
+        "EXDATE should be upgraded to datetime format to match DTSTART. Got:\n{}",
+        ics1
+    );
+
+    // 2. Task without time (offset-naive)
+    // Here we simulate an incorrectly formatted RRULE (e.g., from an external client)
+    let t2 = parse("Bouldering @2026-06-04 rec:FREQ=DAILY;UNTIL=20260920T150000Z");
+    let ics2 = t2.to_ics();
+
+    assert!(
+        ics2.contains("UNTIL=20260920") && !ics2.contains("UNTIL=20260920T"),
+        "UNTIL should be downgraded to date format to match DTSTART. Got:\n{}",
+        ics2
+    );
+}
+
+#[test]
 fn test_syntax_highlighting_for_except() {
     use cfait::model::parser::{SyntaxType, tokenize_smart_input};
 
