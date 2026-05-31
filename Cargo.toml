@@ -174,7 +174,7 @@ assets = [
 ]
 
 [[package.metadata.release.pre-release-replacements]]
-file = "packaging/arch/PKGBUILD"
+file = "packaging/arch/PKGBUILD-cfait"
 search = "pkgver=[0-9\\.]+"
 replace = "pkgver={{version}}"
 

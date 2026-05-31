@@ -198,7 +198,7 @@ jobs:
 
           HASH=$(sha256sum "cfait-source-${RAW_VERSION}.tar.gz" | awk '{print $1}')
 
-          cp ../packaging/arch/PKGBUILD .
+          cp ../packaging/arch/PKGBUILD-cfait ./PKGBUILD
 
           sed -i "s/pkgver=.*/pkgver=${CLEAN_VER}/" PKGBUILD
           sed -i "s/'SKIP'/'$HASH'/" PKGBUILD
@@ -218,7 +218,7 @@ jobs:
 
           HASH_BIN=$(sha256sum "$LINUX_TAR" | awk '{print $1}')
 
-          cp ../packaging/arch-bin/PKGBUILD ./PKGBUILD_bin
+          cp ../packaging/arch/PKGBUILD-cfait-bin ./PKGBUILD_bin
 
           sed -i "s/pkgver=.*/pkgver=${CLEAN_VER}/" PKGBUILD_bin
           sed -i "s/'SKIP'/'$HASH_BIN'/" PKGBUILD_bin

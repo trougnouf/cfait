@@ -140,14 +140,14 @@ jobs:
           echo "Calculated Hash: $HASH"
 
           # 2. Insert the Hash
-          sed -i "s/'SKIP'/'$HASH'/" packaging/arch/PKGBUILD
+          sed -i "s/'SKIP'/'$HASH'/" packaging/arch/PKGBUILD-cfait
 
           # 3. REPLACE CODEBERG URL WITH GITHUB URL
           # This swaps the 'url' variable in the PKGBUILD, which update the 'source' location
-          sed -i "s|https://codeberg.org/trougnouf/cfait|$GITHUB_REPO_URL|g" packaging/arch/PKGBUILD
+          sed -i "s|https://codeberg.org/trougnouf/cfait|$GITHUB_REPO_URL|g" packaging/arch/PKGBUILD-cfait
 
           # 4. Save artifact
-          cp packaging/arch/PKGBUILD PKGBUILD-github-release
+          cp packaging/arch/PKGBUILD-cfait PKGBUILD-github-release
 
       - name: Upload PKGBUILD to Release
         uses: softprops/action-gh-release@v1

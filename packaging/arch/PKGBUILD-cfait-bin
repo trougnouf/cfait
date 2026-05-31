@@ -1,4 +1,5 @@
-# Maintainer: Benoit Brummer (Trougnouf) <trougnouf@gmail.com>
+# Maintainer: Brandon Doornbos <b.doornbos at pm dot me>
+# Co-maintainer: Benoit Brummer (Trougnouf) <trougnouf@gmail.com>
 pkgname=cfait-bin
 pkgver=1.0.4
 pkgrel=1
@@ -34,7 +35,7 @@ conflicts=('cfait')
 
 package() {
     cd "cfait-linux-${pkgver}"
-    
+
     install -Dm755 cfait -t "${pkgdir}/usr/bin/"
     install -Dm755 cfait-gui -t "${pkgdir}/usr/bin/"
     install -Dm644 cfait.desktop -t "${pkgdir}/usr/share/applications/"
