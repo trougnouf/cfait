@@ -468,7 +468,9 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                             crate::config::TaskAction::Delete
                             | crate::config::TaskAction::DeleteTree => icon::TRASH,
                             crate::config::TaskAction::Yank => icon::LINK,
-                            crate::config::TaskAction::ExtractSubtasks => icon::CHECK_SQUARE,
+                            crate::config::TaskAction::ExtractSubtasks => {
+                                icon::get_extract_subtasks_icon()
+                            }
                             crate::config::TaskAction::CreateSubtask => icon::CREATE_CHILD,
                             crate::config::TaskAction::DuplicateTree => icon::CLONE,
                             crate::config::TaskAction::Promote => icon::ELEVATOR_UP,

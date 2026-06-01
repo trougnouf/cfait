@@ -477,7 +477,9 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     false,
                 ),
                 TaskAction::ExtractSubtasks => (
-                    icon::icon(icon::CHECK_SQUARE).size(14).into(),
+                    icon::icon(icon::get_extract_subtasks_icon())
+                        .size(14)
+                        .into(),
                     Message::ExtractSubtasks(uid.clone()),
                     false,
                 ),

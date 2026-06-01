@@ -27,6 +27,12 @@ pub fn icon<'a>(codepoint: char) -> Text<'a> {
     text(codepoint.to_string()).font(FONT)
 }
 
+pub fn get_extract_subtasks_icon() -> char {
+    let mut rng = fastrand::Rng::new();
+    let icons = [SHOVEL, BULLDOZER, PICKAXE, LANGUAGE_MARKDOWN_OUTLINE];
+    icons[rng.usize(..icons.len())]
+}
+
 pub fn parse_icon(s: &str) -> char {
     let s = s.trim();
     if s.chars().count() == 1 {
@@ -229,6 +235,12 @@ pub const ARROW_EXPAND_UP_FALLBACK: char = '^';
 // duplicating codepoints across the codebase.
 pub const VIRTUAL_EXPAND_DOWN: char = ARROW_EXPAND_DOWN;
 pub const VIRTUAL_EXPAND_UP: char = ARROW_EXPAND_UP;
+
+// Extract Subtasks Icons (random variation)
+pub const SHOVEL: char = '\u{f0710}'; // nf-md-shovel
+pub const BULLDOZER: char = '\u{f0b22}'; // nf-md-bulldozer
+pub const PICKAXE: char = '\u{f08b7}'; // nf-md-pickaxe
+pub const LANGUAGE_MARKDOWN_OUTLINE: char = '\u{f0f5b}'; // nf-md-language_markdown_outline
 
 // Tree Hierarchy Icons
 pub const FAMILY_TREE: char = '\u{f160e}'; // nf-md-family_tree

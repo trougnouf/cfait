@@ -163,6 +163,12 @@ object NfIcons {
     val ROCKET_OUTLINE = get(0xf13af)
     val ELEVATOR_UP = get(0xf12c1)
     val ESCALATOR_UP = get(0xf12bf)
+    // Extract Subtasks Icons (random variation)
+    val SHOVEL = get(0xf0710) // nf-md-shovel
+    val BULLDOZER = get(0xf0b22) // nf-md-bulldozer
+    val PICKAXE = get(0xf08b7) // nf-md-pickaxe
+    val LANGUAGE_MARKDOWN_OUTLINE = get(0xf0f5b) // nf-md-language_markdown_outline
+
     val ARROW_CIRCLE_UP = get(0xf0aa)
     val TRANSFER_UP = get(0xf0da3)
     val FLY = get(0xed43)
@@ -270,6 +276,16 @@ object NfIcons {
     val RELATED_FEMALE_FEMALE = get(0xf0a5a)
     val RELATED_MALE_MALE = get(0xf0a5e)
     val RELATED_MALE_FEMALE = get(0xf02e8)
+}
+
+fun getRandomExtractSubtasksIcon(): String {
+    val icons = listOf(
+        NfIcons.SHOVEL,
+        NfIcons.BULLDOZER,
+        NfIcons.PICKAXE,
+        NfIcons.LANGUAGE_MARKDOWN_OUTLINE,
+    )
+    return icons.random()
 }
 
 fun getRandomRelatedIcon(

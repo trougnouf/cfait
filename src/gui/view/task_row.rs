@@ -859,7 +859,9 @@ pub fn view_task_row<'a>(
                             0,
                         ),
                         TaskAction::ExtractSubtasks => (
-                            icon::icon(icon::CHECK_SQUARE).size(14).into(),
+                            icon::icon(icon::get_extract_subtasks_icon())
+                                .size(14)
+                                .into(),
                             Message::ExtractSubtasks(task.uid.clone()),
                             0,
                         ),

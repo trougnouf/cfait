@@ -460,7 +460,7 @@ fun TaskRow(
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.action_extract_subtasks)) },
                             onClick = { expanded = false; onAction("extract_subtasks") },
-                            leadingIcon = { NfIcon(NfIcons.CHECK_SQUARE, 16.sp) }
+                            leadingIcon = { NfIcon(getRandomExtractSubtasksIcon(), 16.sp) }
                         )
                     }
 
