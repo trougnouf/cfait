@@ -330,6 +330,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::KeyboardToggleDetails => {
+            if let Some(uid) = app.selected_uid.clone() {
+                return crate::gui::update::view::handle(app, Message::ToggleDetails(uid));
+            }
+            Task::none()
+        }
+
         Message::KeyboardDuplicateTask => {
             if let Some(selected) = app.selected_uid.clone() {
                 return handle(app, Message::DuplicateTask(selected));

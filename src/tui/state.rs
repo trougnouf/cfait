@@ -31,6 +31,7 @@ pub enum InputMode {
     RelationshipBrowsing,
     AddingSession,
     ManagingSessions,
+    ActionMenu,
     Help(crate::help::HelpTab),
 }
 
@@ -111,6 +112,12 @@ pub struct AppState {
     // Session management state (for quick-log and session editor)
     pub session_items: Vec<(usize, String)>,
     pub session_selection_state: ListState,
+
+    // Action menu state
+    pub available_actions: Vec<crate::config::TaskAction>,
+    pub action_menu_items: Vec<crate::config::TaskAction>,
+    pub action_selection_state: ListState,
+    pub action_filter: String,
 
     // Track unsynced status
     pub unsynced_changes: bool,
@@ -214,6 +221,11 @@ impl AppState {
             relationship_selection_state: ListState::default(),
             session_items: Vec::new(),
             session_selection_state: ListState::default(),
+
+            available_actions: Vec::new(),
+            action_menu_items: Vec::new(),
+            action_selection_state: ListState::default(),
+            action_filter: String::new(),
 
             unsynced_changes: false, // Default false
             alarm_actor_tx: None,

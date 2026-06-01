@@ -1191,6 +1191,50 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         f.render_widget(p, area);
     }
 
+    // Action menu popup
+    if state.mode == InputMode::ActionMenu {
+        let area = centered_rect(50, 60, f.area());
+        f.render_widget(Clear, area);
+
+        let items: Vec<ListItem> = state
+            .action_menu_items
+            .iter()
+            .map(|a| {
+                let mut label = a.label();
+                if *a == crate::config::TaskAction::ToggleDetails {
+                    label = rust_i18n::t!("help_metadata_jump_related").to_string();
+                } else if *a == crate::config::TaskAction::DuplicateTree
+                    && let Some(task) = state.get_selected_task()
+                    && !task.has_subtasks
+                {
+                    label = rust_i18n::t!("duplicate_single_task").to_string();
+                }
+                ListItem::new(label)
+            })
+            .collect();
+
+        let title = if state.action_filter.is_empty() {
+            format!(" {} ", rust_i18n::t!("actions"))
+        } else {
+            format!(
+                " {} (Filter: {}) ",
+                rust_i18n::t!("actions"),
+                state.action_filter
+            )
+        };
+
+        let popup = List::new(items)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(title)
+                    .border_style(Style::default().fg(Color::Yellow)),
+            )
+            .highlight_style(Style::default().bg(Color::Blue).fg(Color::White));
+
+        f.render_stateful_widget(popup, area, &mut state.action_selection_state);
+    }
+
     // Editing description popup
     if state.mode == InputMode::EditingDescription {
         let area = centered_rect(80, 70, f.area());

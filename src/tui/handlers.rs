@@ -24,6 +24,369 @@ use tokio::sync::mpsc::Sender;
 use crate::store::{TaskListItem, select_weighted_random_index};
 use rust_i18n::t;
 
+fn get_available_actions(state: &AppState, task: &Task) -> Vec<crate::config::TaskAction> {
+    use crate::config::TaskAction;
+    let mut actions = Vec::new();
+    let is_done_or_cancelled =
+        task.status.is_done() || task.status == crate::model::TaskStatus::Cancelled;
+    let is_paused = task.is_paused();
+
+    let has_info = !task.description.is_empty()
+        || !task.dependencies.is_empty()
+        || !task.related_to.is_empty()
+        || task.has_blocking_tasks
+        || task.has_related_tasks
+        || task.parent_uid.is_some();
+
+    for &action in TaskAction::ALL {
+        let available = match action {
+            TaskAction::Move => {
+                let count = state
+                    .calendars
+                    .iter()
+                    .filter(|c| !state.disabled_calendars.contains(&c.href))
+                    .count();
+                count > 1
+            }
+            TaskAction::OpenUrl => task.url.is_some(),
+            TaskAction::DeleteTree => task.has_subtasks,
+            TaskAction::OpenCoordinates => task.geo.is_some(),
+            TaskAction::OpenLocations => state.store.count_tree_locations(&task.uid) > 1,
+            TaskAction::ToggleDetails => has_info,
+            TaskAction::CompleteAndShift => {
+                task.rrule.is_some() && !is_done_or_cancelled && !task.is_relative_recurrence()
+            }
+            TaskAction::Promote => task.parent_uid.is_some(),
+            TaskAction::Yank => state.yanked_uid.is_none(),
+            TaskAction::StopTimer => {
+                task.status == crate::model::TaskStatus::InProcess || is_paused
+            }
+            TaskAction::ToggleTimer | TaskAction::AddSession | TaskAction::Cancel => {
+                !is_done_or_cancelled
+            }
+            _ => true,
+        };
+        if available {
+            actions.push(action);
+        }
+    }
+    actions
+}
+
+fn update_action_menu_filter(state: &mut AppState) {
+    let filter = state.action_filter.to_lowercase();
+    state.action_menu_items = state
+        .available_actions
+        .iter()
+        .copied()
+        .filter(|a| {
+            if filter.is_empty() {
+                return true;
+            }
+            let label = a.label().to_lowercase();
+            use crate::config::TaskAction::*;
+            let matches_alias = match a {
+                ToggleDetails => filter == "l" || filter == "rel",
+                CompleteAndShift => filter == "r" || filter == "rep" || filter == "repeat",
+                ToggleTimer => filter == "s" || filter == "start" || filter == "pause",
+                StopTimer => filter == "stop",
+                AddSession => filter == "t" || filter == "log",
+                IncreasePriority => filter == "+" || filter == "up",
+                DecreasePriority => filter == "-" || filter == "down",
+                Edit => filter == "e",
+                Yank => filter == "y" || filter == "copy",
+                CreateSubtask => filter == "c" || filter == "sub",
+                DuplicateTree => filter == "d" || filter == "dup",
+                Promote => filter == "<" || filter == "outdent",
+                Move => filter == "m",
+                Cancel => filter == "x",
+                Delete | DeleteTree => filter == "del" || filter == "rm",
+                OpenUrl => filter == "o" || filter == "url" || filter == "link",
+                OpenCoordinates | OpenLocations => filter == "g" || filter == "map",
+            };
+            label.contains(&filter) || matches_alias
+        })
+        .collect();
+    state.action_selection_state.select(Some(0));
+}
+
+fn open_action_menu(state: &mut AppState) {
+    if let Some(task) = state.get_selected_task() {
+        let actions = get_available_actions(state, task);
+        if !actions.is_empty() {
+            state.available_actions = actions.clone();
+            state.action_menu_items = actions;
+            state.action_selection_state.select(Some(0));
+            state.action_filter.clear();
+            state.mode = InputMode::ActionMenu;
+            state.message = format!(" {} ", rust_i18n::t!("actions"));
+        }
+    }
+}
+
+async fn execute_task_action(
+    state: &mut AppState,
+    action: crate::config::TaskAction,
+    task: &Task,
+    action_tx: &Sender<Action>,
+) {
+    use crate::config::TaskAction::*;
+    let uid = task.uid.clone();
+    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+    let mut intent = None;
+
+    match action {
+        OpenUrl => {
+            if let Some(url) = &task.url {
+                #[cfg(not(target_os = "android"))]
+                {
+                    let target_url = url.clone();
+                    std::thread::spawn(move || {
+                        #[cfg(target_os = "linux")]
+                        let _ = std::process::Command::new("xdg-open")
+                            .arg(target_url)
+                            .spawn();
+                        #[cfg(target_os = "windows")]
+                        let _ = std::process::Command::new("explorer")
+                            .arg(target_url)
+                            .spawn();
+                        #[cfg(target_os = "macos")]
+                        let _ = std::process::Command::new("open").arg(target_url).spawn();
+                    });
+                }
+                state.message = rust_i18n::t!("open_url").to_string();
+            }
+        }
+        OpenCoordinates => {
+            if let Some(geo) = &task.geo {
+                #[cfg(not(target_os = "android"))]
+                {
+                    let target_url = format!("geo:{}", geo);
+                    std::thread::spawn(move || {
+                        #[cfg(target_os = "linux")]
+                        let _ = std::process::Command::new("xdg-open")
+                            .arg(target_url)
+                            .spawn();
+                        #[cfg(target_os = "windows")]
+                        let _ = std::process::Command::new("explorer")
+                            .arg(target_url)
+                            .spawn();
+                        #[cfg(target_os = "macos")]
+                        let _ = std::process::Command::new("open").arg(target_url).spawn();
+                    });
+                }
+                state.message = rust_i18n::t!("open_coordinates").to_string();
+            }
+        }
+        OpenLocations => {
+            let waypoints = state.store.get_tree_waypoints(&uid);
+            let mut gpx_string = String::from(
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gpx version=\"1.1\" creator=\"Cfait\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n",
+            );
+            for (name, geo) in waypoints {
+                let parts: Vec<&str> = geo.split(',').collect();
+                if parts.len() >= 2 {
+                    let escaped_name = name
+                        .replace('&', "&amp;")
+                        .replace('<', "&lt;")
+                        .replace('>', "&gt;");
+                    gpx_string.push_str(&format!(
+                        "  <wpt lat=\"{}\" lon=\"{}\"><name>{}</name></wpt>\n",
+                        parts[0].trim(),
+                        parts[1].trim(),
+                        escaped_name
+                    ));
+                }
+            }
+            gpx_string.push_str("</gpx>");
+
+            if let Ok(cache_dir) = state.ctx.get_cache_dir() {
+                let path = cache_dir.join(format!("locations_{}.gpx", uuid::Uuid::new_v4()));
+                if std::fs::write(&path, gpx_string).is_ok() {
+                    #[cfg(not(target_os = "android"))]
+                    {
+                        let target = path.to_string_lossy().to_string();
+                        std::thread::spawn(move || {
+                            #[cfg(target_os = "linux")]
+                            let _ = std::process::Command::new("xdg-open").arg(target).spawn();
+                            #[cfg(target_os = "windows")]
+                            let _ = std::process::Command::new("explorer").arg(target).spawn();
+                            #[cfg(target_os = "macos")]
+                            let _ = std::process::Command::new("open").arg(target).spawn();
+                        });
+                    }
+                    state.message = rust_i18n::t!("action_open_locations").to_string();
+                } else {
+                    state.message = rust_i18n::t!("error_write_gpx").to_string();
+                }
+            }
+        }
+        ToggleDetails => {
+            let mut items = Vec::new();
+            for dep_uid in &task.dependencies {
+                let name = state
+                    .store
+                    .get_summary(dep_uid)
+                    .unwrap_or_else(|| "Unknown task".to_string());
+                let is_done = state.store.is_task_done(dep_uid).unwrap_or(false);
+                let check = if is_done { "[x]" } else { "[ ]" };
+                items.push((
+                    dep_uid.clone(),
+                    format!("⬆ {} {}", check, name),
+                    "dependency".to_string(),
+                ));
+            }
+            for related_uid in &task.related_to {
+                let name = state
+                    .store
+                    .get_summary(related_uid)
+                    .unwrap_or_else(|| "Unknown task".to_string());
+                items.push((
+                    related_uid.clone(),
+                    format!("→ {}", name),
+                    "related_to".to_string(),
+                ));
+            }
+            let incoming_related = state.store.get_tasks_related_to(&task.uid);
+            for (related_uid, related_name) in incoming_related {
+                items.push((
+                    related_uid.clone(),
+                    format!("← {}", related_name),
+                    "related_from".to_string(),
+                ));
+            }
+            let blocking_tasks = state.store.get_tasks_blocking(&task.uid);
+            for (blocking_uid, blocking_name) in blocking_tasks {
+                items.push((
+                    blocking_uid.clone(),
+                    format!("⬇ {}", blocking_name),
+                    "blocking".to_string(),
+                ));
+            }
+            if !items.is_empty() {
+                state.relationship_items = items;
+                state.relationship_selection_state.select(Some(0));
+                state.mode = InputMode::RelationshipBrowsing;
+                state.message =
+                    format!("{} (Del/x: Remove)", rust_i18n::t!("tui_select_task_jump"));
+            } else {
+                state.message = rust_i18n::t!("error_no_related_tasks").to_string();
+            }
+        }
+        CompleteAndShift => {
+            intent = Some(AppIntent::ToggleTaskShift { uid });
+        }
+        ToggleTimer => {
+            if task.status == crate::model::TaskStatus::InProcess {
+                intent = Some(AppIntent::PauseTask { uid });
+            } else {
+                intent = Some(AppIntent::StartTask { uid });
+            }
+        }
+        StopTimer => {
+            intent = Some(AppIntent::StopTask { uid });
+        }
+        AddSession => {
+            state.mode = InputMode::AddingSession;
+            state.reset_input();
+            state.message = format!(
+                "{} ({} 30m, yesterday 1h):",
+                rust_i18n::t!("tui_log_time_prompt", name = task.summary.clone()),
+                rust_i18n::t!("eg")
+            );
+        }
+        IncreasePriority => {
+            intent = Some(AppIntent::ChangePriority { uid, delta: 1 });
+        }
+        DecreasePriority => {
+            intent = Some(AppIntent::ChangePriority { uid, delta: -1 });
+        }
+        Edit => {
+            let smart_string = task.to_smart_string();
+            state.input_buffer = smart_string;
+            state.cursor_position = state.input_buffer.chars().count();
+            state.editing_uid = Some(uid);
+            state.mode = InputMode::Editing;
+        }
+        Yank => {
+            let summary = task.summary.clone();
+            let text = if task.description.is_empty() {
+                task.to_smart_string()
+            } else {
+                format!("{}\n\n{}", task.to_smart_string(), task.description)
+            };
+            state.yanked_uid = Some(uid);
+            use base64::Engine;
+            let b64 = base64::engine::general_purpose::STANDARD.encode(text);
+            print!("\x1b]52;c;{}\x07", b64);
+            use std::io::Write;
+            let _ = std::io::stdout().flush();
+            state.message = rust_i18n::t!("yanked_and_copied", summary = summary).to_string();
+        }
+        CreateSubtask => {
+            let mut initial_input = String::new();
+            for cat in &task.categories {
+                initial_input.push_str(&format!("#{} ", crate::model::parser::quote_value(cat)));
+            }
+            if let Some(loc) = &task.location {
+                initial_input.push_str(&format!("@@{} ", crate::model::parser::quote_value(loc)));
+            }
+            state.input_buffer = initial_input;
+            state.cursor_position = state.input_buffer.chars().count();
+            state.mode = InputMode::Creating;
+            state.creating_with_desc = false;
+            state.new_task_title.clear();
+            state.creating_child_of = Some(uid);
+            state.message = rust_i18n::t!("new_child_of", name = task.summary.clone()).to_string();
+        }
+        DuplicateTree => {
+            intent = Some(AppIntent::DuplicateTaskTree { uid });
+        }
+        Promote => {
+            intent = Some(AppIntent::RemoveParent { uid });
+        }
+        Move => {
+            let current_href = task.calendar_href.clone();
+            state.move_targets = state
+                .calendars
+                .iter()
+                .filter(|c| {
+                    c.href != current_href
+                        && !state.disabled_calendars.contains(&c.href)
+                        && c.href != crate::storage::LOCAL_TRASH_HREF
+                        && c.href != "local://recovery"
+                })
+                .cloned()
+                .collect();
+            if !state.move_targets.is_empty() {
+                state.move_selection_state.select(Some(0));
+                state.mode = InputMode::Moving;
+                state.message = rust_i18n::t!("tui_select_calendar_prompt").to_string();
+            }
+        }
+        Cancel => {
+            intent = Some(AppIntent::CancelTask { uid });
+        }
+        Delete => {
+            intent = Some(AppIntent::DeleteTask { uid });
+        }
+        DeleteTree => {
+            intent = Some(AppIntent::DeleteTaskTree { uid });
+        }
+    }
+
+    if let Some(i) = intent {
+        let actions = state.store.apply_task_intent(&i, &config);
+        state.refresh_filtered_view();
+        if !actions.is_empty() {
+            let tx = action_tx.clone();
+            tokio::spawn(async move {
+                let _ = tx.send(Action::PersistBatch(actions)).await;
+            });
+        }
+    }
+}
+
 fn run_external_editor(
     initial_content: &str,
     ctx: &dyn crate::context::AppContext,
@@ -901,6 +1264,53 @@ pub async fn handle_key_event(
             KeyCode::Up => state.previous(),
             KeyCode::PageDown => state.jump_forward(10),
             KeyCode::PageUp => state.jump_backward(10),
+            _ => {}
+        },
+        InputMode::ActionMenu => match key.code {
+            KeyCode::Esc => {
+                state.mode = InputMode::Normal;
+                state.action_filter.clear();
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                let len = state.action_menu_items.len();
+                if len > 0 {
+                    let current = state.action_selection_state.selected().unwrap_or(0);
+                    state
+                        .action_selection_state
+                        .select(Some((current + 1) % len));
+                }
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                let len = state.action_menu_items.len();
+                if len > 0 {
+                    let current = state.action_selection_state.selected().unwrap_or(0);
+                    state
+                        .action_selection_state
+                        .select(Some((current + len - 1) % len));
+                }
+            }
+            KeyCode::Backspace => {
+                if !state.action_filter.is_empty() {
+                    state.action_filter.pop();
+                    update_action_menu_filter(state);
+                } else {
+                    state.mode = InputMode::Normal;
+                }
+            }
+            KeyCode::Char(c) => {
+                state.action_filter.push(c);
+                update_action_menu_filter(state);
+            }
+            KeyCode::Enter => {
+                if let Some(idx) = state.action_selection_state.selected()
+                    && let Some(action) = state.action_menu_items.get(idx).copied()
+                    && let Some(task) = state.get_selected_task().cloned()
+                {
+                    state.mode = InputMode::Normal;
+                    state.action_filter.clear();
+                    execute_task_action(state, action, &task, action_tx).await;
+                }
+            }
             _ => {}
         },
         InputMode::Help(current_tab) => match key.code {
@@ -1833,7 +2243,10 @@ pub async fn handle_key_event(
                                 }
                                 return None;
                             }
-                            _ => {}
+                            TaskListItem::Task(_) => {
+                                open_action_menu(state);
+                                return None;
+                            }
                         }
                     }
                 } else if state.active_focus == Focus::Sidebar {

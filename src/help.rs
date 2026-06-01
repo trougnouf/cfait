@@ -452,7 +452,12 @@ pub fn get_shortcuts_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "L".to_string(),
-                    desc: "Browse / Remove relationships".to_string(),
+                    desc: "Browse relationships / Toggle details".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Enter".to_string(),
+                    desc: "Action Menu / Context Menu".to_string(),
                     example: "".to_string(),
                 },
             ],

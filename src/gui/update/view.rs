@@ -175,6 +175,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 return Task::none();
             }
 
+            if let Some(uid) = app.selected_uid.clone() {
+                return crate::gui::update::view::handle(app, Message::OpenContextMenu(uid, true));
+            }
+
             Task::none()
         }
         Message::SelectNextTask => {
