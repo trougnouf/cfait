@@ -1065,10 +1065,13 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 Focus::Sidebar => rust_i18n::t!("tui_sidebar_help").to_string(),
                 Focus::Main => {
                     if let Some(uid) = &state.yanked_uid {
-                        let summary = state
+                        let mut summary = state
                             .store
                             .get_summary(uid)
                             .unwrap_or_else(|| "Unknown".to_string());
+                        if state.yank_lock_active {
+                            summary.push_str(" \u{f10ba}");
+                        }
                         rust_i18n::t!(
                             "tui_yanked_help",
                             yanked_label = rust_i18n::t!("yanked_label"),
@@ -1122,14 +1125,13 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         let items: Vec<ListItem> = state
             .relationship_items
             .iter()
-            .map(|(_, display_name)| ListItem::new(display_name.as_str()))
+            .map(|(_, display_name, _)| ListItem::new(display_name.as_str()))
             .collect();
         let popup = List::new(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(format!(" {} ", rust_i18n::t!("jump_to_related_task"))),
-            )
+            .block(Block::default().borders(Borders::ALL).title(format!(
+                " {} (Del/x: Remove) ",
+                rust_i18n::t!("jump_to_related_task")
+            )))
             .highlight_style(Style::default().bg(Color::Blue).fg(Color::White));
         f.render_widget(Clear, area);
         f.render_stateful_widget(popup, area, &mut state.relationship_selection_state);

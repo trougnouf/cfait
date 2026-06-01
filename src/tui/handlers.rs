@@ -953,6 +953,7 @@ pub async fn handle_key_event(
                 let mut needs_refresh = false;
                 if state.yanked_uid.is_some() {
                     state.yanked_uid = None;
+                    state.yank_lock_active = false;
                     state.message = rust_i18n::t!("yank_cleared").to_string();
                 } else if !state.active_search_query.is_empty() {
                     state.active_search_query.clear();
@@ -1225,7 +1226,9 @@ pub async fn handle_key_event(
                     };
 
                     let actions = state.store.apply_task_intent(&intent, &config);
-                    state.yanked_uid = None;
+                    if !state.yank_lock_active {
+                        state.yanked_uid = None;
+                    }
                     state.refresh_filtered_view();
                     if !actions.is_empty() {
                         let tx = action_tx.clone();
@@ -1279,6 +1282,10 @@ pub async fn handle_key_event(
                         });
                     }
                 }
+            }
+            KeyCode::Char('Y') => {
+                state.yank_lock_active = !state.yank_lock_active;
+                state.needs_redraw = true;
             }
             KeyCode::Char('y') => {
                 if let Some(t) = state.get_selected_task() {
@@ -1428,7 +1435,9 @@ pub async fn handle_key_event(
                         };
 
                         let actions = state.store.apply_task_intent(&intent, &config);
-                        state.yanked_uid = None;
+                        if !state.yank_lock_active {
+                            state.yanked_uid = None;
+                        }
                         state.refresh_filtered_view();
                         if !actions.is_empty() {
                             let tx = action_tx.clone();
@@ -1459,7 +1468,9 @@ pub async fn handle_key_event(
                         };
 
                         let actions = state.store.apply_task_intent(&intent, &config);
-                        state.yanked_uid = None;
+                        if !state.yank_lock_active {
+                            state.yanked_uid = None;
+                        }
                         state.refresh_filtered_view();
                         if !actions.is_empty() {
                             let tx = action_tx.clone();
@@ -1657,7 +1668,11 @@ pub async fn handle_key_event(
                             .unwrap_or_else(|| "Unknown task".to_string());
                         let is_done = state.store.is_task_done(dep_uid).unwrap_or(false);
                         let check = if is_done { "[x]" } else { "[ ]" };
-                        items.push((dep_uid.clone(), format!("⬆ {} {}", check, name)));
+                        items.push((
+                            dep_uid.clone(),
+                            format!("⬆ {} {}", check, name),
+                            "dependency".to_string(),
+                        ));
                     }
 
                     // Add outgoing relations
@@ -1666,20 +1681,39 @@ pub async fn handle_key_event(
                             .store
                             .get_summary(related_uid)
                             .unwrap_or_else(|| "Unknown task".to_string());
-                        items.push((related_uid.clone(), format!("→ {}", name)));
+                        items.push((
+                            related_uid.clone(),
+                            format!("→ {}", name),
+                            "related_to".to_string(),
+                        ));
                     }
 
                     // Add incoming relations
                     let incoming_related = state.store.get_tasks_related_to(&task.uid);
                     for (related_uid, related_name) in incoming_related {
-                        items.push((related_uid.clone(), format!("← {}", related_name)));
+                        items.push((
+                            related_uid.clone(),
+                            format!("← {}", related_name),
+                            "related_from".to_string(),
+                        ));
+                    }
+
+                    // Add blocking (successors)
+                    let blocking_tasks = state.store.get_tasks_blocking(&task.uid);
+                    for (blocking_uid, blocking_name) in blocking_tasks {
+                        items.push((
+                            blocking_uid.clone(),
+                            format!("⬇ {}", blocking_name),
+                            "blocking".to_string(),
+                        ));
                     }
 
                     if !items.is_empty() {
                         state.relationship_items = items;
                         state.relationship_selection_state.select(Some(0));
                         state.mode = InputMode::RelationshipBrowsing;
-                        state.message = rust_i18n::t!("tui_select_task_jump").to_string();
+                        state.message =
+                            format!("{} (Del/x: Remove)", rust_i18n::t!("tui_select_task_jump"));
                     } else {
                         state.message = rust_i18n::t!("error_no_related_tasks").to_string();
                     }
@@ -2131,9 +2165,53 @@ pub async fn handle_key_event(
                     state.relationship_selection_state.select(Some(prev));
                 }
             }
+            KeyCode::Delete | KeyCode::Char('x') => {
+                if let Some(idx) = state.relationship_selection_state.selected()
+                    && let Some((target_uid, _, rel_type)) = state.relationship_items.get(idx)
+                    && let Some(curr_uid) = state.get_selected_task().map(|t| t.uid.clone())
+                {
+                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+                    let mut intent = None;
+
+                    if rel_type == "dependency" {
+                        intent = Some(AppIntent::RemoveDependency {
+                            uid: curr_uid.clone(),
+                            blocker_uid: target_uid.clone(),
+                        });
+                    } else if rel_type == "related_to" {
+                        intent = Some(AppIntent::RemoveRelatedTo {
+                            uid: curr_uid.clone(),
+                            related_uid: target_uid.clone(),
+                        });
+                    } else if rel_type == "related_from" {
+                        intent = Some(AppIntent::RemoveRelatedTo {
+                            uid: target_uid.clone(),
+                            related_uid: curr_uid.clone(),
+                        });
+                    } else if rel_type == "blocking" {
+                        intent = Some(AppIntent::RemoveDependency {
+                            uid: target_uid.clone(),
+                            blocker_uid: curr_uid.clone(),
+                        });
+                    }
+
+                    if let Some(i) = intent {
+                        let actions = state.store.apply_task_intent(&i, &config);
+                        state.refresh_filtered_view();
+                        if !actions.is_empty() {
+                            let tx = action_tx.clone();
+                            tokio::spawn(async move {
+                                let _ = tx.send(Action::PersistBatch(actions)).await;
+                            });
+                        }
+                    }
+                    state.mode = InputMode::Normal;
+                    state.message = String::new();
+                }
+            }
             KeyCode::Enter => {
                 if let Some(idx) = state.relationship_selection_state.selected()
-                    && let Some((target_uid, _)) = state.relationship_items.get(idx)
+                    && let Some((target_uid, _, _)) = state.relationship_items.get(idx)
                 {
                     // Jump to the target task
                     let target_uid = target_uid.clone();

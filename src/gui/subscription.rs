@@ -204,6 +204,7 @@ fn handle_hotkey(
                     ("s", true) => Some(Message::StopSelected),
                     ("x", false) => Some(Message::CancelSelected),
                     ("y", false) => Some(Message::YankSelected),
+                    ("y", true) => Some(Message::ToggleYankLock),
                     ("c", false) => Some(Message::KeyboardLinkChild),
                     ("c", true) => Some(Message::KeyboardCreateChild),
                     ("t", false) => Some(Message::KeyboardAddSession),

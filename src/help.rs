@@ -432,7 +432,17 @@ pub fn get_shortcuts_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "b / c / l".to_string(),
-                    desc: "Block / Child / Relate to Yanked".to_string(),
+                    desc: "Selected is Blocked by / Child of / Related to Yanked".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "C".to_string(),
+                    desc: "Create Subtask".to_string(),
+                    example: "".to_string(),
+                },
+                HelpItem {
+                    keys: "Y".to_string(),
+                    desc: "Toggle Yank Lock (keep yanked task)".to_string(),
                     example: "".to_string(),
                 },
                 HelpItem {
@@ -442,7 +452,7 @@ pub fn get_shortcuts_help() -> Vec<HelpSection> {
                 },
                 HelpItem {
                     keys: "L".to_string(),
-                    desc: rust_i18n::t!("help_metadata_jump_related").to_string(),
+                    desc: "Browse / Remove relationships".to_string(),
                     example: "".to_string(),
                 },
             ],

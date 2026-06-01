@@ -98,13 +98,14 @@ pub struct AppState {
     pub export_targets: Vec<CalendarListEntry>,
 
     pub yanked_uid: Option<String>,
+    pub yank_lock_active: bool,
     pub creating_child_of: Option<String>,
-    pub creating_with_desc: bool, // <-- NEW
-    pub new_task_title: String,   // <-- NEW
+    pub creating_with_desc: bool,
+    pub new_task_title: String,
     pub tag_aliases: HashMap<String, Vec<String>>,
 
     // Relationship browsing state
-    pub relationship_items: Vec<(String, String)>, // (uid, display_name)
+    pub relationship_items: Vec<(String, String, String)>, // (uid, display_name, rel_type)
     pub relationship_selection_state: ListState,
 
     // Session management state (for quick-log and session editor)
@@ -198,6 +199,7 @@ impl AppState {
             move_selection_state: ListState::default(),
             move_targets: Vec::new(),
             yanked_uid: None,
+            yank_lock_active: false,
             creating_child_of: None,
             creating_with_desc: false,
             new_task_title: String::new(),
