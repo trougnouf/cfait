@@ -10,32 +10,38 @@ use iced::mouse;
 use iced::{Element, Length, Rectangle, Size, Vector};
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::RwLock;
 
 /// Global registry mapping a textual representation of a widget `Id` -> its last-known bounds.
 /// We store the `Id` as a `String` (via Debug) because the concrete `Id` type may not be hashable
 /// in all versions; a string key is stable and sufficient for lookup here.
-static FOCUS_BOUNDS: Lazy<Mutex<HashMap<String, Rectangle>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
+static FOCUS_BOUNDS: Lazy<RwLock<HashMap<String, Rectangle>>> =
+    Lazy::new(|| RwLock::new(HashMap::new()));
 
 /// Clears the entire focus bounds registry.
 /// This should be called whenever the view is about to be rebuilt with a new set of items.
 pub fn clear_focus_bounds() {
-    let mut map = FOCUS_BOUNDS.lock().unwrap();
+    let mut map = FOCUS_BOUNDS.write().unwrap();
     map.clear();
 }
 
 /// Register the bounds for a focusable widget id.
 pub fn register_focus_bounds(id: &widget::Id, rect: Rectangle) {
     let key = format!("{:?}", id);
-    let mut map = FOCUS_BOUNDS.lock().unwrap();
+    {
+        let map = FOCUS_BOUNDS.read().unwrap();
+        if map.get(&key) == Some(&rect) {
+            return; // Fast-path: avoid unnecessary writes if bounds haven't changed
+        }
+    }
+    let mut map = FOCUS_BOUNDS.write().unwrap();
     map.insert(key, rect);
 }
 
 /// Retrieve the last registered bounds for a focusable widget id.
 pub fn get_focus_bounds(id: &widget::Id) -> Option<Rectangle> {
     let key = format!("{:?}", id);
-    let map = FOCUS_BOUNDS.lock().unwrap();
+    let map = FOCUS_BOUNDS.read().unwrap();
     map.get(&key).cloned()
 }
 
@@ -44,7 +50,7 @@ pub fn get_focus_bounds(id: &widget::Id) -> Option<Rectangle> {
 ///
 /// Note: returns a shallow clone of the internal HashMap. The Rectangle values are copied.
 pub fn get_all_focus_bounds() -> HashMap<String, Rectangle> {
-    let map = FOCUS_BOUNDS.lock().unwrap();
+    let map = FOCUS_BOUNDS.read().unwrap();
     map.clone()
 }
 
@@ -106,6 +112,12 @@ where
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
+        if let Some(id) = &self.id {
+            // Register bounds during draw to keep them perfectly synced
+            // after mouse scrolling or layout shifts.
+            register_focus_bounds(id, layout.bounds());
+        }
+
         self.content.as_widget().draw(
             &tree.children[0],
             renderer,
