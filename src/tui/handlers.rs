@@ -31,8 +31,7 @@ fn get_available_actions(state: &AppState, task: &Task) -> Vec<crate::config::Ta
         task.status.is_done() || task.status == crate::model::TaskStatus::Cancelled;
     let is_paused = task.is_paused();
 
-    let has_info = !task.description.is_empty()
-        || !task.dependencies.is_empty()
+    let has_relationships = !task.dependencies.is_empty()
         || !task.related_to.is_empty()
         || task.has_blocking_tasks
         || task.has_related_tasks
@@ -52,7 +51,7 @@ fn get_available_actions(state: &AppState, task: &Task) -> Vec<crate::config::Ta
             TaskAction::DeleteTree => task.has_subtasks,
             TaskAction::OpenCoordinates => task.geo.is_some(),
             TaskAction::OpenLocations => state.store.count_tree_locations(&task.uid) > 1,
-            TaskAction::ToggleDetails => has_info,
+            TaskAction::ToggleDetails => has_relationships,
             TaskAction::CompleteAndShift => {
                 task.rrule.is_some() && !is_done_or_cancelled && !task.is_relative_recurrence()
             }
@@ -225,6 +224,17 @@ async fn execute_task_action(
         }
         ToggleDetails => {
             let mut items = Vec::new();
+            if let Some(p_uid) = &task.parent_uid {
+                let name = state
+                    .store
+                    .get_summary(p_uid)
+                    .unwrap_or_else(|| "Unknown task".to_string());
+                items.push((
+                    p_uid.clone(),
+                    format!("↑ [Parent] {}", name),
+                    "parent".to_string(),
+                ));
+            }
             for dep_uid in &task.dependencies {
                 let name = state
                     .store
@@ -234,7 +244,7 @@ async fn execute_task_action(
                 let check = if is_done { "[x]" } else { "[ ]" };
                 items.push((
                     dep_uid.clone(),
-                    format!("⬆ {} {}", check, name),
+                    format!("⬆ [Blocked by] {} {}", check, name),
                     "dependency".to_string(),
                 ));
             }
@@ -245,7 +255,7 @@ async fn execute_task_action(
                     .unwrap_or_else(|| "Unknown task".to_string());
                 items.push((
                     related_uid.clone(),
-                    format!("→ {}", name),
+                    format!("→ [Related to] {}", name),
                     "related_to".to_string(),
                 ));
             }
@@ -253,7 +263,7 @@ async fn execute_task_action(
             for (related_uid, related_name) in incoming_related {
                 items.push((
                     related_uid.clone(),
-                    format!("← {}", related_name),
+                    format!("← [Related from] {}", related_name),
                     "related_from".to_string(),
                 ));
             }
@@ -261,7 +271,7 @@ async fn execute_task_action(
             for (blocking_uid, blocking_name) in blocking_tasks {
                 items.push((
                     blocking_uid.clone(),
-                    format!("⬇ {}", blocking_name),
+                    format!("⬇ [Blocking] {}", blocking_name),
                     "blocking".to_string(),
                 ));
             }
@@ -2124,6 +2134,19 @@ pub async fn handle_key_event(
                 if let Some(task) = state.get_selected_task() {
                     let mut items = Vec::new();
 
+                    // Add parent
+                    if let Some(p_uid) = &task.parent_uid {
+                        let name = state
+                            .store
+                            .get_summary(p_uid)
+                            .unwrap_or_else(|| "Unknown task".to_string());
+                        items.push((
+                            p_uid.clone(),
+                            format!("↑ [Parent] {}", name),
+                            "parent".to_string(),
+                        ));
+                    }
+
                     // Add blocked-by dependencies
                     for dep_uid in &task.dependencies {
                         let name = state
@@ -2134,7 +2157,7 @@ pub async fn handle_key_event(
                         let check = if is_done { "[x]" } else { "[ ]" };
                         items.push((
                             dep_uid.clone(),
-                            format!("⬆ {} {}", check, name),
+                            format!("⬆ [Blocked by] {} {}", check, name),
                             "dependency".to_string(),
                         ));
                     }
@@ -2147,7 +2170,7 @@ pub async fn handle_key_event(
                             .unwrap_or_else(|| "Unknown task".to_string());
                         items.push((
                             related_uid.clone(),
-                            format!("→ {}", name),
+                            format!("→ [Related to] {}", name),
                             "related_to".to_string(),
                         ));
                     }
@@ -2157,7 +2180,7 @@ pub async fn handle_key_event(
                     for (related_uid, related_name) in incoming_related {
                         items.push((
                             related_uid.clone(),
-                            format!("← {}", related_name),
+                            format!("← [Related from] {}", related_name),
                             "related_from".to_string(),
                         ));
                     }
@@ -2167,7 +2190,7 @@ pub async fn handle_key_event(
                     for (blocking_uid, blocking_name) in blocking_tasks {
                         items.push((
                             blocking_uid.clone(),
-                            format!("⬇ {}", blocking_name),
+                            format!("⬇ [Blocking] {}", blocking_name),
                             "blocking".to_string(),
                         ));
                     }
@@ -2659,6 +2682,10 @@ pub async fn handle_key_event(
                         intent = Some(AppIntent::RemoveDependency {
                             uid: target_uid.clone(),
                             blocker_uid: curr_uid.clone(),
+                        });
+                    } else if rel_type == "parent" {
+                        intent = Some(AppIntent::RemoveParent {
+                            uid: curr_uid.clone(),
                         });
                     }
 
