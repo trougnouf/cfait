@@ -282,14 +282,14 @@ pub enum AppTheme {
 
 impl AppTheme {
     pub fn is_dark(&self) -> bool {
-        match self {
+        !matches!(
+            self,
             AppTheme::Light
-            | AppTheme::SolarizedLight
-            | AppTheme::GruvboxLight
-            | AppTheme::CatppuccinLatte
-            | AppTheme::TokyoNightLight => false,
-            _ => true,
-        }
+                | AppTheme::SolarizedLight
+                | AppTheme::GruvboxLight
+                | AppTheme::CatppuccinLatte
+                | AppTheme::TokyoNightLight
+        )
     }
 }
 
