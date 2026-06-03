@@ -25,10 +25,10 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run linter (clippy)
-        run: cargo clippy --all-features --all-targets -- -D warnings
+        run: cargo clippy --all-features --all-targets --locked -- -D warnings
 
       - name: Run unit tests
-        run: cargo test --all-features --all-targets --verbose
+        run: cargo test --all-features --all-targets --locked --verbose
 
   # --- JOB 2: ROLLING ANDROID (Only on PUSH) ---
   rolling-android:
@@ -73,7 +73,7 @@ jobs:
             -t x86_64-linux-android \
             -o ./android/app/src/main/jniLibs \
             --platform 28 \
-            build --release --lib --features mobile
+            build --release --lib --features mobile --locked
 
       - name: Build Signed Android APK
         env:
@@ -106,14 +106,21 @@ jobs:
     container:
       image: local/arch-builder
       options: --privileged
+      volumes:
+        - cargo-registry:/usr/local/cargo/registry
+        - flatpak-builder-cache:/flatpak-cache
+        - flatpak-user-dir:/home/builder/.local/share/flatpak
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Generate cargo-sources.yml
         run: |
-          wget https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py
-          python3 flatpak-cargo-generator.py Cargo.lock -o cargo-sources.yml
+          mkdir -p /flatpak-cache
+          if [ ! -f /flatpak-cache/flatpak-cargo-generator.py ]; then
+            wget https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/master/cargo/flatpak-cargo-generator.py -O /flatpak-cache/flatpak-cargo-generator.py
+          fi
+          python3 /flatpak-cache/flatpak-cargo-generator.py Cargo.lock -o cargo-sources.yml
 
       - name: Prepare Manifest for Rolling
         run: |
@@ -129,9 +136,10 @@ jobs:
 
       - name: Build Flatpak Bundle
         run: |
-          chown -R builder:builder .
+          mkdir -p /flatpak-cache /home/builder/.local/share/flatpak
+          chown -R builder:builder . /flatpak-cache /home/builder/.local/share/flatpak
           su builder -c "flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo"
-          su builder -c "flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --repo=repo build-dir com.trougnouf.Cfait.yml"
+          su builder -c "flatpak-builder --user --disable-rofiles-fuse --install-deps-from=flathub --force-clean --state-dir=/flatpak-cache --repo=repo build-dir com.trougnouf.Cfait.yml"
           su builder -c "flatpak build-bundle repo cfait-rolling.flatpak com.trougnouf.Cfait"
 
       - name: Prepare Artifact
@@ -161,8 +169,7 @@ jobs:
 
       - name: Build Windows Binaries
         run: |
-          rustup target add x86_64-pc-windows-gnu
-          cargo build --release --target x86_64-pc-windows-gnu --features gui
+          cargo build --release --target x86_64-pc-windows-gnu --features gui --locked
 
       - name: Create Windows Archive
         run: |
