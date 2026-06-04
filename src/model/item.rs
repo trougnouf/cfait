@@ -366,6 +366,7 @@ pub struct SortKey {
     pub prio: u8,
     pub due: Option<DateType>,
     pub start: Option<DateType>,
+    pub is_overdue: bool,
 }
 
 /// Options to parameterize a comparison operation. Using a struct keeps the
@@ -417,7 +418,21 @@ pub fn compare_sortkeys(
         1 => norm_prio(a.prio)
             .cmp(&norm_prio(b.prio))
             .then_with(|| compare_dates(&a.due, &b.due)),
-        2 | 3 => compare_dates(&a.due, &b.due).then(norm_prio(a.prio).cmp(&norm_prio(b.prio))),
+        2 => {
+            b.is_overdue
+                .cmp(&a.is_overdue) // true comes first
+                .then_with(|| {
+                    if a.is_overdue && b.is_overdue {
+                        norm_prio(a.prio)
+                            .cmp(&norm_prio(b.prio))
+                            .then_with(|| compare_dates(&a.due, &b.due))
+                    } else {
+                        compare_dates(&a.due, &b.due)
+                            .then(norm_prio(a.prio).cmp(&norm_prio(b.prio)))
+                    }
+                })
+        }
+        3 => compare_dates(&a.due, &b.due).then(norm_prio(a.prio).cmp(&norm_prio(b.prio))),
         4 => {
             if sort_standard_by_priority {
                 // Merged group: priority first, then date (None sorts after Some).
@@ -698,12 +713,14 @@ impl Task {
             prio: self.effective_priority,
             due: self.effective_due.clone(),
             start: self.effective_dtstart.clone(),
+            is_overdue: self.is_overdue,
         };
         let b = SortKey {
             rank: other.sort_rank,
             prio: other.effective_priority,
             due: other.effective_due.clone(),
             start: other.effective_dtstart.clone(),
+            is_overdue: other.is_overdue,
         };
         compare_sortkeys(&a, &b, default_priority, sort_standard_by_priority)
             .then_with(|| self.summary.cmp(&other.summary))
@@ -733,12 +750,14 @@ impl Task {
             prio: self.priority,
             due: self.due.clone(),
             start: self.dtstart.clone(),
+            is_overdue: self.is_overdue,
         };
         let b = SortKey {
             rank: rank_other,
             prio: other.priority,
             due: other.due.clone(),
             start: other.dtstart.clone(),
+            is_overdue: other.is_overdue,
         };
         compare_sortkeys(
             &a,

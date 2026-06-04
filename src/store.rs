@@ -2085,7 +2085,7 @@ impl TaskStore {
                 .unwrap_or(false);
             t.is_implicitly_future = !t.is_future_start && check_is_effectively_future(t);
             t.is_overdue = t
-                .due
+                .effective_due
                 .as_ref()
                 .map(|d| !t.status.is_done() && d.to_comparison_time() < now)
                 .unwrap_or(false);
@@ -2151,12 +2151,14 @@ impl TaskStore {
                         prio: child_eff.effective_priority,
                         due: child_eff.effective_due.clone(),
                         start: child_eff.effective_dtstart.clone(),
+                        is_overdue: child_eff.is_overdue,
                     };
                     let b = crate::model::item::SortKey {
                         rank: best.sort_rank,
                         prio: best.effective_priority,
                         due: best.effective_due.clone(),
                         start: best.effective_dtstart.clone(),
+                        is_overdue: best.is_overdue,
                     };
                     let ordering =
                         crate::model::item::compare_sortkeys(&a, &b, default_prio, false);
