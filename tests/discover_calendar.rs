@@ -168,3 +168,112 @@ async fn test_discover_calendar_full_fallback_success() {
     mock_home_set.assert();
     mock_calendars.assert();
 }
+
+// Helper: mock a single-collection PROPFIND response carrying the given
+// supported-calendar-component-set and current-user-privilege-set bodies,
+// then return what get_supported_components() parsed out of it. Shared by the
+// privilege tests below to avoid repeating the mock-and-parse setup three times.
+async fn supported_components_for(privilege_set: &str, component_set: &str) -> (Vec<String>, bool) {
+    let mut server = Server::new_async().await;
+    let url = server.url();
+    let cal_path = "/dav/calendars/user/tasks/";
+
+    let body = format!(
+        r#"
+        <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
+            <d:response>
+                <d:href>{}</d:href>
+                <d:propstat>
+                    <d:prop>
+                        {}
+                        {}
+                    </d:prop>
+                    <d:status>HTTP/1.1 200 OK</d:status>
+                </d:propstat>
+            </d:response>
+        </d:multistatus>
+    "#,
+        cal_path, component_set, privilege_set
+    );
+
+    let mock = server
+        .mock("PROPFIND", cal_path)
+        .with_status(207)
+        .with_body(body)
+        .create_async()
+        .await;
+
+    let ctx = Arc::new(TestContext::new());
+    let client = RustyClient::new(ctx, &format!("{}{}", url, cal_path), "u", "p", false, None)
+        .expect("Client creation failed");
+
+    let result = client
+        .get_supported_components(cal_path)
+        .await
+        .expect("get_supported_components failed");
+
+    // Verify the PROPFIND request was actually made.
+    mock.assert();
+
+    result
+}
+
+const VTODO_COMPONENT_SET: &str = r#"
+    <c:supported-calendar-component-set>
+        <c:comp name="VEVENT"/>
+        <c:comp name="VTODO"/>
+    </c:supported-calendar-component-set>"#;
+
+// Regression test: servers such as Xandikos advertise write access via the
+// DAV:all aggregate privilege (RFC 3744 section 3.13) rather than an explicit
+// <write/> element. Such collections must be treated as writable, otherwise
+// they are dropped from discovery and no remote task lists appear.
+#[tokio::test]
+async fn test_supported_components_dav_all_is_writable() {
+    let privilege_set = r#"
+        <d:current-user-privilege-set>
+            <d:privilege><d:all/></d:privilege>
+        </d:current-user-privilege-set>"#;
+
+    let (components, can_write) =
+        supported_components_for(privilege_set, VTODO_COMPONENT_SET).await;
+
+    assert!(
+        can_write,
+        "DAV:all aggregate privilege must be treated as writable"
+    );
+    assert!(
+        components.iter().any(|c| c == "VTODO"),
+        "VTODO component should be parsed from the component set"
+    );
+}
+
+// A privilege set that grants only read access must keep can_write false so
+// genuinely read-only collections are still filtered out of discovery.
+#[tokio::test]
+async fn test_supported_components_read_only_is_not_writable() {
+    let privilege_set = r#"
+        <d:current-user-privilege-set>
+            <d:privilege><d:read/></d:privilege>
+        </d:current-user-privilege-set>"#;
+
+    let (_components, can_write) =
+        supported_components_for(privilege_set, VTODO_COMPONENT_SET).await;
+
+    assert!(
+        !can_write,
+        "a read-only privilege set must not be treated as writable"
+    );
+}
+
+// When the server advertises no current-user-privilege-set at all, the client
+// assumes the collection is writable rather than hiding it.
+#[tokio::test]
+async fn test_supported_components_absent_privilege_set_defaults_writable() {
+    let (_components, can_write) = supported_components_for("", VTODO_COMPONENT_SET).await;
+
+    assert!(
+        can_write,
+        "an absent privilege set should default to writable"
+    );
+}

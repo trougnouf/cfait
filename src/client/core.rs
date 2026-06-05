@@ -540,7 +540,10 @@ impl RustyClient {
                 if node.tag_name().name().eq_ignore_ascii_case("write")
                     || node.tag_name().name().eq_ignore_ascii_case("write-content")
                     || node.tag_name().name().eq_ignore_ascii_case("bind")
+                    || node.tag_name().name().eq_ignore_ascii_case("all")
                 {
+                    // DAV:all (RFC 3744 section 3.13) is the aggregate of all
+                    // privileges and therefore implies write access.
                     can_write = true;
                 }
             }
