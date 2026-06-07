@@ -367,8 +367,19 @@ pub fn view_task_row<'a>(
                             Color::BLACK
                         };
 
+                        let display_cat = if cat.contains('=') {
+                            cat.rsplit(':').next().unwrap_or(cat)
+                        } else {
+                            cat.as_str()
+                        };
+                        let label = if cat.contains('=') {
+                            display_cat.to_string()
+                        } else {
+                            format!("#{}", display_cat)
+                        };
+
                         tags_row = tags_row.push(
-                            button(text(format!("#{}", cat)).size(12).color(text_color))
+                            button(text(label).size(12).color(text_color))
                                 .style(move |_theme, status| {
                                     let base = button::Style {
                                         background: Some(bg_color.into()),

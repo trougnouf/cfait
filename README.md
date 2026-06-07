@@ -155,7 +155,7 @@ The clients are self-documenting; the most up-to-date documentation should be pr
 | **Start Date** | `^` / `start:` | When you plan to start (hides from "active" views until then). |
 | **Recurrence** | `@` / `rec:` | How often the task repeats. |
 | **Duration** | `~` / `est:` | Estimated time (`~30m`, `~1h`, `~1h-2h`). |
-| **Tag** | `#` | Categories. Use `:` for hierarchy (e.g. `#gardening:tree_planting`). |
+| **Tag** | `#` | Categories. Use `:` for hierarchy (e.g. `#gardening:tree_planting`). Supports grouping (`#tag{a,b}`) and attributes (`#tag:key=val`). |
 | **Location** | `@@` / `loc:` | Where the task happens. Supports hierarchy like tags (e.g. `@@home:office`, `@@store:aldi:downtown`). |
 | **Reminder** | `rem:` | Set an notification. (e.g. `rem:10m`, `rem:8am`, `rem:tomorrow 9:00`). |
 | **Calendar Event** | `+cal` / `-cal` | Override calendar event creation (per-task). `+cal` forces event creation, `-cal` prevents it. |

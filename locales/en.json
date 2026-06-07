@@ -269,6 +269,7 @@
     "help_org_done_percent": "Set partial completion percentage",
     "help_org_escape_special": "Escape special characters",
     "help_org_estimated_duration": "Estimated duration (single or range)",
+    "help_org_grouping": "Tag namespaces and key-value attributes",
     "help_org_location_hierarchy": "Location (use ':' for hierarchy)",
     "help_org_priority": "Priority high (1) to low (9)",
     "help_quick_start": "Quick Start",

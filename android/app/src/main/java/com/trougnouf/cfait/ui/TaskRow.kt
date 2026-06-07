@@ -363,8 +363,10 @@ fun TaskRow(
 
                     task.visibleCategories.forEach { tag ->
                         val bg = getTagColor(tag, isDark)
+                        val displayTag = if (tag.contains("=")) tag.substringAfterLast(":") else tag
+                        val prefix = if (tag.contains("=")) "" else "#"
                         Text(
-                            "#$tag",
+                            "$prefix$displayTag",
                             fontSize = 10.sp,
                             color = bg,
                             modifier = Modifier.padding(end = 2.dp),

@@ -235,10 +235,15 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             color_utils::generate_tui_color(&item.full_key, is_dark_theme);
                         let color =
                             Color::Rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8);
+                        let prefix = if item.display_name.contains('=') {
+                            ""
+                        } else {
+                            "#"
+                        };
                         let spans = vec![
                             Span::raw(indent),
                             Span::raw(format!("{} ", selected)),
-                            Span::styled("#", Style::default().fg(color)),
+                            Span::styled(prefix, Style::default().fg(color)),
                             Span::raw(format!(
                                 "{} ({}){}",
                                 item.display_name, item.count, tree_icon
@@ -607,8 +612,20 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         if !right_spans.is_empty() {
                             right_spans.push(Span::raw(" "));
                         }
+
+                        let display_cat = if cat.contains('=') {
+                            cat.rsplit(':').next().unwrap_or(cat)
+                        } else {
+                            cat.as_str()
+                        };
+                        let label = if cat.contains('=') {
+                            display_cat.to_string()
+                        } else {
+                            format!("#{}", display_cat)
+                        };
+
                         right_spans.push(Span::styled(
-                            format!("#{}", cat),
+                            label,
                             Style::default().fg(Color::Rgb(
                                 (r * 255.0) as u8,
                                 (g * 255.0) as u8,

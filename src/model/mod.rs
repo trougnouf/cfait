@@ -16,7 +16,7 @@ pub mod session;
 pub use item::{Alarm, AlarmTrigger, CalendarListEntry, DateType, RawProperty, Task, TaskStatus};
 
 // Re-export specific parser helpers used across the codebase.
-pub use parser::{extract_inline_aliases, validate_alias_integrity};
+pub use parser::{expand_braces, extract_inline_aliases, validate_alias_integrity};
 
 // Re-export extractor for markdown task extraction
 pub use extractor::{ExtractedTask, extract_markdown_tasks};

@@ -3,11 +3,22 @@
 /* Updated: Pass is_search = false to tokenizer calls in tests so highlighting logic treats these as input mode. */
 use cfait::model::{
     Task,
-    parser::{SyntaxType, tokenize_smart_input},
+    parser::{SyntaxType, expand_braces, tokenize_smart_input},
     validate_alias_integrity,
 };
 use chrono::{Duration, Local};
 use std::collections::HashMap;
+
+#[test]
+fn test_brace_expansion() {
+    let input = "gaming{genre={metroidvania, platform}, multiplayer{coop, online}}";
+    let expanded = expand_braces(input);
+    assert_eq!(expanded.len(), 4);
+    assert!(expanded.contains(&"gaming:genre=metroidvania".to_string()));
+    assert!(expanded.contains(&"gaming:genre=platform".to_string()));
+    assert!(expanded.contains(&"gaming:multiplayer:coop".to_string()));
+    assert!(expanded.contains(&"gaming:multiplayer:online".to_string()));
+}
 
 #[test]
 fn test_basic_parsing() {

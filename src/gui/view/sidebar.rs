@@ -385,8 +385,13 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                         } else {
                             app.theme().extended_palette().background.base.text
                         };
+                        let prefix = if item.display_name.contains('=') {
+                            ""
+                        } else {
+                            "#"
+                        };
                         rich_text![
-                            span("#").color(tag_color),
+                            span(prefix).color(tag_color),
                             span(format!("{} ({})", item.display_name, count)).color(text_color)
                         ]
                         .size(16)

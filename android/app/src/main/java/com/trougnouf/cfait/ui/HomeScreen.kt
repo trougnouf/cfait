@@ -1214,7 +1214,9 @@ fun HomeScreen(
                         } else if (sidebarTab == 1) {
                             items(tags) { tag ->
                                 val isUncat = tag.isUncategorized
-                                val displayName = if (isUncat) "Uncategorized" else "#${tag.name}"
+                                val rawDisplay = tag.displayName
+                                val displayTag = if (rawDisplay.contains("=")) rawDisplay else "#$rawDisplay"
+                                val displayName = if (isUncat) "Uncategorized" else displayTag
                                 val targetKey = if (isUncat) ":::uncategorized:::" else tag.name
                                 val isSelected = filterTags.contains(targetKey)
                                 val color = if (isUncat) Color.Gray else getTagColor(tag.name, isDark)

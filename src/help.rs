@@ -65,6 +65,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     example: "Plant tree #breathe #gardening:trees".to_string(),
                 },
                 HelpItem {
+                    keys: "#tag{a,b}".to_string(),
+                    desc: rust_i18n::t!("help_org_grouping").to_string(),
+                    example: "#gaming{solo,genre=rpg}".to_string(),
+                },
+                HelpItem {
                     keys: "@@location (or loc:)".to_string(),
                     desc: rust_i18n::t!("help_org_location_hierarchy").to_string(),
                     example: "Buy cookies @@aldi".to_string(),

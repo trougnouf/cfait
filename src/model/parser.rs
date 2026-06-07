@@ -730,12 +730,12 @@ fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
     let mut current = String::new();
     let mut start_idx = 0;
     let mut in_quote = false;
-    let mut in_brace = false;
+    let mut brace_depth: usize = 0;
     let mut escaped = false;
     let chars = input.char_indices().peekable();
 
     for (idx, c) in chars {
-        if current.is_empty() && !in_quote && !in_brace && !c.is_whitespace() {
+        if current.is_empty() && !in_quote && brace_depth == 0 && !c.is_whitespace() {
             start_idx = idx;
         }
         if escaped {
@@ -748,19 +748,19 @@ fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
                 escaped = true;
                 current.push('\\');
             }
-            '"' if !in_brace => {
+            '"' if brace_depth == 0 => {
                 in_quote = !in_quote;
                 current.push(c);
             }
             '{' if !in_quote => {
-                in_brace = true;
+                brace_depth += 1;
                 current.push(c);
             }
             '}' if !in_quote => {
-                in_brace = false;
+                brace_depth = brace_depth.saturating_sub(1);
                 current.push(c);
             }
-            ws if ws.is_whitespace() && !in_quote && !in_brace => {
+            ws if ws.is_whitespace() && !in_quote && brace_depth == 0 => {
                 if !current.is_empty() {
                     parts.push((start_idx, idx, current.clone()));
                     current.clear();
@@ -773,6 +773,121 @@ fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
         parts.push((start_idx, input.len(), current));
     }
     parts
+}
+
+pub fn expand_braces(input: &str) -> Vec<String> {
+    let mut results = Vec::new();
+    expand_braces_recursive("", input.trim(), &mut results);
+    results
+}
+
+fn split_by_comma_at_depth_zero(input: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0;
+    let mut last_idx = 0;
+    let mut in_quote = false;
+    let mut escaped = false;
+    for (i, c) in input.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if c == '\\' {
+            escaped = true;
+            continue;
+        }
+        if c == '"' {
+            in_quote = !in_quote;
+        }
+        if !in_quote {
+            if c == '{' {
+                depth += 1;
+            } else if c == '}' {
+                if depth > 0 {
+                    depth -= 1;
+                }
+            } else if c == ',' && depth == 0 {
+                parts.push(&input[last_idx..i]);
+                last_idx = i + c.len_utf8();
+            }
+        }
+    }
+    parts.push(&input[last_idx..]);
+    parts
+}
+
+fn expand_braces_recursive(prefix: &str, input: &str, results: &mut Vec<String>) {
+    let parts = split_by_comma_at_depth_zero(input);
+    for part in parts {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+
+        let mut brace_start = None;
+        let mut depth = 0;
+        let mut in_quote = false;
+        let mut escaped = false;
+        for (i, c) in part.char_indices() {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if c == '\\' {
+                escaped = true;
+                continue;
+            }
+            if c == '"' {
+                in_quote = !in_quote;
+            }
+            if !in_quote {
+                if c == '{' {
+                    if depth == 0 {
+                        brace_start = Some(i);
+                        break;
+                    }
+                    depth += 1;
+                } else if c == '}' && depth > 0 {
+                    depth -= 1;
+                }
+            }
+        }
+
+        if let Some(start) = brace_start
+            && part.ends_with('}')
+        {
+            let base = part[..start].trim();
+            let inner = &part[start + 1..part.len() - 1];
+
+            let new_prefix = if base.is_empty() {
+                prefix.to_string()
+            } else {
+                let sep = if base.ends_with('=')
+                    || base.ends_with(':')
+                    || prefix.is_empty()
+                    || prefix.ends_with(':')
+                {
+                    ""
+                } else {
+                    ":"
+                };
+                format!("{}{}{}", prefix, sep, base)
+            };
+
+            let pass_prefix = if new_prefix.is_empty() {
+                String::new()
+            } else if new_prefix.ends_with('=') || new_prefix.ends_with(':') {
+                new_prefix
+            } else {
+                format!("{}:", new_prefix)
+            };
+
+            expand_braces_recursive(&pass_prefix, inner, results);
+            continue;
+        }
+
+        results.push(format!("{}{}", prefix, part));
+    }
 }
 
 fn collect_alias_expansions(
@@ -2137,13 +2252,17 @@ pub fn apply_smart_input(
             }
         } else if token.starts_with('#') {
             let is_double = token.starts_with("##");
-            let cat = strip_quotes(token.trim_start_matches('#'));
-            if !cat.is_empty() {
-                if !task.categories.contains(&cat) {
-                    task.categories.push(cat.clone());
+            let cat_expr = token.trim_start_matches('#');
+            if !cat_expr.is_empty() {
+                let expanded_cats = expand_braces(cat_expr);
+                for cat in expanded_cats {
+                    let clean_cat = strip_quotes(&cat);
+                    if !clean_cat.is_empty() && !task.categories.contains(&clean_cat) {
+                        task.categories.push(clean_cat);
+                    }
                 }
                 if is_double {
-                    summary_words.push(cat);
+                    summary_words.push(strip_quotes(cat_expr));
                 }
             }
         } else if token.starts_with('!') && token.len() > 1 {
