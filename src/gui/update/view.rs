@@ -468,7 +468,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             {
                 app.session.selected_categories.remove(pos);
             } else {
-                app.session.selected_categories.push(cat);
+                app.session.selected_categories.push(cat.clone());
+                // Auto-expand when selecting
+                if !app.session.expanded_tags.contains(&cat) {
+                    crate::gui::update::common::dispatch_intent(
+                        app,
+                        crate::model::AppIntent::ToggleTagCollapse { tag: cat.clone() },
+                    );
+                    crate::gui::update::common::save_config(app);
+                }
             }
             refresh_filtered_tasks(app);
             Task::none()
@@ -487,7 +495,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if !app.session.expanded_locations.contains(&loc) {
                     crate::gui::update::common::dispatch_intent(
                         app,
-                        crate::model::AppIntent::ToggleLocationCollapse { location: loc.clone() },
+                        crate::model::AppIntent::ToggleLocationCollapse {
+                            location: loc.clone(),
+                        },
                     );
                     crate::gui::update::common::save_config(app);
                 }
