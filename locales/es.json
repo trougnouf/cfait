@@ -266,6 +266,7 @@
     "help_org_done_percent": "Establecer el porcentaje de finalización parcial",
     "help_org_escape_special": "Escapar caracteres especiales",
     "help_org_estimated_duration": "Duración estimada (única o rango)",
+    "help_org_grouping": "Espacios de nombres de etiquetas y atributos clave-valor",
     "help_org_inline_tags": "El doble prefijo (##, @@@) mantiene la palabra en el título",
     "help_org_location_hierarchy": "Ubicación (use ':' para jerarquía)",
     "help_org_priority": "Prioridad alta (1) a baja (9)",
