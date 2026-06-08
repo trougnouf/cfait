@@ -511,6 +511,7 @@ impl Task {
         self.unmapped_properties
             .iter()
             .find(|p| p.key == "LAST-MODIFIED")
+            .or_else(|| self.unmapped_properties.iter().find(|p| p.key == "DTSTAMP"))
             .and_then(|p| Self::parse_ics_datetime(p.value.trim()))
     }
 

@@ -29,7 +29,6 @@ const HANDLED_KEYS: &[&str] = &[
     "PERCENT-COMPLETE",
     "CATEGORIES",
     "RELATED-TO",
-    "DTSTAMP",
     "SEQUENCE",
     "PRODID",
     "VERSION",
@@ -319,6 +318,9 @@ impl IcsAdapter {
         }
 
         for raw in &task.unmapped_properties {
+            if raw.key == "DTSTAMP" {
+                continue;
+            }
             let mut prop = icalendar::Property::new(&raw.key, &raw.value);
             for (k, v) in &raw.params {
                 prop.add_parameter(k, v);

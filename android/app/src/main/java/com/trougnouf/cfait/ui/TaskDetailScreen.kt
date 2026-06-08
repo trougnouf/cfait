@@ -733,16 +733,18 @@ fun TaskDetailScreen(
                     val createdStr = formatIsoToLocal(task!!.createdDateIso!!)
                     dateStrs.add("${stringResource(R.string.created_label)}: $createdStr")
                 }
-                if (task!!.lastModifiedDateIso != null) {
+                if (task!!.lastModifiedDateIso != null && task!!.lastModifiedDateIso != task!!.createdDateIso) {
                     val modifiedStr = formatIsoToLocal(task!!.lastModifiedDateIso!!)
                     dateStrs.add("${stringResource(R.string.last_modified_label)}: $modifiedStr")
                 }
-                Text(
-                    text = dateStrs.joinToString("  |  "),
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 16.dp)
-                )
+                if (dateStrs.isNotEmpty()) {
+                    Text(
+                        text = dateStrs.joinToString("  |  "),
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+                }
             }
 
             Spacer(Modifier.height(24.dp))

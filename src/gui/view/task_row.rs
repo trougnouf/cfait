@@ -1521,7 +1521,10 @@ pub fn view_task_row<'a>(
                 }
 
                 let mut date_infos = Vec::new();
-                if let Some(created) = task.created_date() {
+                let created_opt = task.created_date();
+                let modified_opt = task.last_modified_date();
+
+                if let Some(created) = created_opt {
                     let local = created.with_timezone(&chrono::Local);
                     date_infos.push(format!(
                         "{}: {}",
@@ -1529,7 +1532,9 @@ pub fn view_task_row<'a>(
                         local.format("%Y-%m-%d %H:%M")
                     ));
                 }
-                if let Some(modified) = task.last_modified_date() {
+                if let Some(modified) = modified_opt
+                    && created_opt != Some(modified)
+                {
                     let local = modified.with_timezone(&chrono::Local);
                     date_infos.push(format!(
                         "{}: {}",
