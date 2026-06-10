@@ -4,7 +4,8 @@
 // DispatchIntent which routes to the TaskController.
 
 use crate::gui::message::Message;
-use crate::gui::state::{GuiApp, SidebarMode};
+use crate::gui::state::{Focus, GuiApp, SidebarMode};
+use crate::gui::subscription::ACTIVE_FOCUS;
 use crate::gui::update::common;
 use crate::model::AppIntent;
 use chrono::NaiveTime;
@@ -76,6 +77,10 @@ fn dispatch_and_select_next_row(app: &mut GuiApp, intent: AppIntent, uid: String
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::InputChanged(action) => {
+            app.active_focus = Focus::AddTaskInput;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::AddTaskInput;
+            }
             if let text_editor::Action::Edit(text_editor::Edit::Enter) = action {
                 return handle_submit(app);
             }
@@ -345,6 +350,35 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::KeyboardToggleTreeCollapse => {
+            if app.active_focus == crate::gui::state::Focus::Sidebar {
+                match app.sidebar_mode {
+                    SidebarMode::Calendars => {}
+                    SidebarMode::Categories => {
+                        let cats = &app.cached_categories;
+                        if let Some(cat) = cats.get(app.sidebar_selection_idx)
+                            && cat.has_children
+                        {
+                            return crate::gui::update::view::handle(
+                                app,
+                                Message::ToggleTagCollapse(cat.full_key.clone()),
+                            );
+                        }
+                    }
+                    SidebarMode::Locations => {
+                        let locs = &app.cached_locations;
+                        if let Some(loc) = locs.get(app.sidebar_selection_idx)
+                            && loc.has_children
+                        {
+                            return crate::gui::update::view::handle(
+                                app,
+                                Message::ToggleLocationCollapse(loc.full_key.clone()),
+                            );
+                        }
+                    }
+                }
+                return Task::none();
+            }
+
             if let Some(uid) = app.selected_uid.clone() {
                 return handle(app, Message::ToggleTreeCollapse(uid));
             }
@@ -572,6 +606,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
 
         Message::EscCaptured => {
+            app.active_focus = Focus::MainList;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::MainList;
+            }
             if app.editing_uid.is_some()
                 || app.creating_child_of.is_some()
                 || app.creating_with_desc
@@ -581,13 +619,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.editing_uid = None;
                 app.creating_child_of = None;
                 app.creating_with_desc = false;
-                common::scroll_to_selected_delayed(app, true)
-            } else {
-                common::scroll_to_selected_delayed(app, true)
             }
+            common::scroll_to_selected_delayed(app, false)
         }
 
         Message::EscapePressed => {
+            app.active_focus = Focus::MainList;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::MainList;
+            }
             let mut needs_refresh = false;
             let mut captured_action = false;
 

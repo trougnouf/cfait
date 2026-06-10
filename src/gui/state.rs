@@ -35,6 +35,15 @@ pub enum SidebarMode {
     Locations, // NEW
 }
 
+#[derive(PartialEq, Clone, Copy, Debug, Default)]
+pub enum Focus {
+    #[default]
+    MainList,
+    Sidebar,
+    SearchInput,
+    AddTaskInput,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum ResizeDirection {
     North,
@@ -80,6 +89,9 @@ pub struct GuiApp {
 
     // Track selected task for highlighting
     pub selected_uid: Option<String>,
+
+    pub active_focus: Focus,
+    pub sidebar_selection_idx: usize,
 
     // Preferences
     pub hide_completed: bool,
@@ -365,6 +377,9 @@ impl Default for GuiApp {
             yanked_uid: None,
             yank_lock_active: false,
             selected_uid: None,
+
+            active_focus: Focus::MainList,
+            sidebar_selection_idx: 0,
 
             hovered_tag_uid: None,
 

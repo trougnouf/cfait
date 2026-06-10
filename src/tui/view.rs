@@ -219,35 +219,43 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         "[ ]"
                     };
                     let indent = "  ".repeat(item.depth as usize);
-                    let tree_icon = if item.has_children {
-                        if item.is_expanded { " [-]" } else { " [+]" }
+                    let tree_icon_span = if item.has_children && !item.is_expanded {
+                        Span::styled(
+                            "[+]",
+                            Style::default().fg(if is_dark_theme {
+                                Color::Yellow
+                            } else {
+                                Color::Rgb(200, 100, 0)
+                            }),
+                        )
                     } else {
-                        ""
+                        Span::raw("")
                     };
 
                     if item.full_key == UNCATEGORIZED_ID {
-                        ListItem::new(Line::from(format!(
-                            "{}{} {} ({}){}",
-                            indent, selected, item.display_name, item.count, tree_icon
-                        )))
+                        let spans = vec![
+                            Span::raw(indent),
+                            Span::raw(selected),
+                            tree_icon_span,
+                            Span::raw(format!(" {} ({})", item.display_name, item.count)),
+                        ];
+                        ListItem::new(Line::from(spans))
                     } else {
                         let (r, g, b) =
                             color_utils::generate_tui_color(&item.full_key, is_dark_theme);
                         let color =
                             Color::Rgb((r * 255.0) as u8, (g * 255.0) as u8, (b * 255.0) as u8);
                         let prefix = if item.display_name.contains('=') {
-                            ""
+                            " "
                         } else {
-                            "#"
+                            " #"
                         };
                         let spans = vec![
                             Span::raw(indent),
-                            Span::raw(format!("{} ", selected)),
+                            Span::raw(selected),
+                            tree_icon_span,
                             Span::styled(prefix, Style::default().fg(color)),
-                            Span::raw(format!(
-                                "{} ({}){}",
-                                item.display_name, item.count, tree_icon
-                            )),
+                            Span::raw(format!("{} ({})", item.display_name, item.count)),
                         ];
                         ListItem::new(Line::from(spans))
                     }
@@ -280,26 +288,31 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         "[ ]"
                     };
                     let indent = "  ".repeat(item.depth as usize);
-                    let tree_icon = if item.has_children {
-                        if item.is_expanded { " [-]" } else { " [+]" }
+                    let tree_icon_span = if item.has_children && !item.is_expanded {
+                        Span::styled(
+                            "[+]",
+                            Style::default().fg(if is_dark_theme {
+                                Color::Yellow
+                            } else {
+                                Color::Rgb(200, 100, 0)
+                            }),
+                        )
                     } else {
-                        ""
+                        Span::raw("")
                     };
                     let spans = vec![
                         Span::raw(indent),
-                        Span::raw(format!("{} ", selected)),
+                        Span::raw(selected),
+                        tree_icon_span,
                         Span::styled(
-                            "@@",
+                            " @@",
                             Style::default().fg(if is_dark_theme {
                                 Color::LightCyan
                             } else {
                                 Color::Magenta
                             }),
                         ),
-                        Span::raw(format!(
-                            "{} ({}){}",
-                            item.display_name, item.count, tree_icon
-                        )),
+                        Span::raw(format!("{} ({})", item.display_name, item.count)),
                     ];
                     ListItem::new(Line::from(spans))
                 })
@@ -494,15 +507,33 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     } else {
                         "".to_string()
                     });
+
+                    let tree_indicator = if t.has_visible_subtasks && t.collapsed {
+                        Span::styled(
+                            "[+]",
+                            Style::default().fg(if is_dark_theme {
+                                Color::Yellow
+                            } else {
+                                Color::Rgb(200, 100, 0)
+                            }),
+                        )
+                    } else {
+                        Span::raw("")
+                    };
+
                     let prefix_bracket_l = Span::styled("[", bracket_style);
                     let prefix_inner = Span::styled(inner_char, base_style);
                     let prefix_bracket_r = Span::styled("]", bracket_style);
                     let prefix_blocked = Span::raw(if is_blocked { " [B] " } else { " " });
 
-                    let prefix_width = if state.active_cal_href.is_some() {
+                    let prefix_width = (if state.active_cal_href.is_some() {
                         t.depth * 2 + 6
                     } else {
                         6
+                    }) + if t.has_visible_subtasks && t.collapsed {
+                        3
+                    } else {
+                        0
                     };
 
                     // Build metadata spans
@@ -677,6 +708,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         prefix_bracket_l,
                         prefix_inner,
                         prefix_bracket_r,
+                        tree_indicator,
                         prefix_blocked,
                         Span::styled(display_title, base_style),
                     ];

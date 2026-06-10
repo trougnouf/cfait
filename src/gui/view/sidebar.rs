@@ -64,9 +64,12 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
     let list = column(
         visible_calendars
             .into_iter()
-            .map(|cal| {
+            .enumerate()
+            .map(|(i, cal)| {
                 let is_visible = !app.hidden_calendars.contains(&cal.href);
                 let is_target = app.active_cal_href.as_ref() == Some(&cal.href);
+                let is_kb_selected = app.active_focus == crate::gui::state::Focus::Sidebar
+                    && app.sidebar_selection_idx == i;
 
                 let cal_color = cal
                     .color
@@ -119,18 +122,47 @@ pub fn view_sidebar_calendars(app: &GuiApp) -> Element<'_, Message> {
                     .padding(10)
                     .on_press(Message::SelectCalendar(cal.href.clone()));
                 if is_target {
-                    label = label.style(|_theme: &Theme, _status| button::Style {
+                    label = label.style(move |_theme: &Theme, _status| button::Style {
                         text_color: Color::from_rgb(1.0, 0.6, 0.0),
                         background: Some(Color::from_rgba(1.0, 0.6, 0.0, 0.05).into()),
+                        border: if is_kb_selected {
+                            iced::Border {
+                                width: 1.0,
+                                color: Color::from_rgb(1.0, 0.6, 0.0),
+                                radius: 4.0.into(),
+                            }
+                        } else {
+                            iced::Border::default()
+                        },
                         ..button::Style::default()
                     });
                 } else if !is_visible {
-                    label = label.style(|_theme: &Theme, _status| button::Style {
+                    label = label.style(move |_theme: &Theme, _status| button::Style {
                         text_color: Color::from_rgb(0.5, 0.5, 0.5),
+                        border: if is_kb_selected {
+                            iced::Border {
+                                width: 1.0,
+                                color: Color::from_rgb(0.5, 0.5, 0.5),
+                                radius: 4.0.into(),
+                            }
+                        } else {
+                            iced::Border::default()
+                        },
                         ..button::Style::default()
                     });
                 } else {
-                    label = label.style(button::text);
+                    label = label.style(move |theme: &Theme, _status| button::Style {
+                        border: if is_kb_selected {
+                            iced::Border {
+                                width: 1.0,
+                                color: theme.extended_palette().primary.base.color,
+                                radius: 4.0.into(),
+                            }
+                        } else {
+                            iced::Border::default()
+                        },
+                        ..iced::widget::button::text(theme, _status)
+                    });
                 }
 
                 let focus_btn = button(icon::icon(icon::ARROW_RIGHT).size(14))
@@ -329,8 +361,11 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
         column(
             all_cats
                 .iter()
-                .map(|item| {
+                .enumerate()
+                .map(|(i, item)| {
                     let cat = &item.full_key;
+                    let is_kb_selected = app.active_focus == crate::gui::state::Focus::Sidebar
+                        && app.sidebar_selection_idx == i;
                     let count = item.count;
                     let is_hovered = app.hovered_tag_uid.as_ref() == Some(cat);
                     let is_selected = app.session.selected_categories.contains(cat);
@@ -404,8 +439,18 @@ pub fn view_sidebar_categories(app: &GuiApp) -> Element<'_, Message> {
                             .width(Length::Shrink)
                             .align_x(iced::alignment::Horizontal::Left),
                     )
-                    .style(button::text)
-                    .padding(0)
+                    .style(move |theme: &Theme, status| {
+                        let mut st = iced::widget::button::text(theme, status);
+                        if is_kb_selected {
+                            st.border = iced::Border {
+                                width: 1.0,
+                                color: theme.extended_palette().primary.base.color,
+                                radius: 4.0.into(),
+                            };
+                        }
+                        st
+                    })
+                    .padding(2)
                     .on_press(Message::CategoryToggled(cat_clone_toggle));
 
                     let focus_btn = button(icon::icon(icon::ARROW_RIGHT).size(14))
@@ -553,8 +598,11 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
         let list = column(
             all_locs
                 .iter()
-                .map(|item| {
+                .enumerate()
+                .map(|(i, item)| {
                     let loc = &item.full_key;
+                    let is_kb_selected = app.active_focus == crate::gui::state::Focus::Sidebar
+                        && app.sidebar_selection_idx == i;
                     let count = item.count;
                     let is_selected = app.session.selected_locations.contains(loc);
                     let loc_clone_toggle = loc.clone();
@@ -580,8 +628,18 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
                             .width(Length::Shrink)
                             .align_x(iced::alignment::Horizontal::Left),
                     )
-                    .style(button::text)
-                    .padding(0)
+                    .style(move |theme: &Theme, status| {
+                        let mut st = iced::widget::button::text(theme, status);
+                        if is_kb_selected {
+                            st.border = iced::Border {
+                                width: 1.0,
+                                color: theme.extended_palette().primary.base.color,
+                                radius: 4.0.into(),
+                            };
+                        }
+                        st
+                    })
+                    .padding(2)
                     .on_press(Message::LocationToggled(loc_clone_toggle));
 
                     let focus_btn = button(icon::icon(icon::ARROW_RIGHT).size(14))

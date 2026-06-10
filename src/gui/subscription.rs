@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Handles event subscriptions (keyboard, window) for the GUI.
 use crate::gui::message::Message;
-use crate::gui::state::{AppState, GuiApp, SidebarMode};
+use crate::gui::state::{AppState, Focus, GuiApp, SidebarMode};
 use iced::{Subscription, event, keyboard, window};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -10,6 +10,10 @@ pub static LAST_MOUSE_POS: once_cell::sync::Lazy<std::sync::RwLock<iced::Point>>
 
 // Tracks the Command/Ctrl modifier state statelessly so Mouse events can check it
 static CMD_HELD: AtomicBool = AtomicBool::new(false);
+
+// Tracks the current focus statelessly so keyboard event handlers can check it
+pub static ACTIVE_FOCUS: once_cell::sync::Lazy<std::sync::RwLock<Focus>> =
+    once_cell::sync::Lazy::new(|| std::sync::RwLock::new(Focus::default()));
 
 pub fn subscription(app: &GuiApp) -> Subscription<Message> {
     use iced::keyboard::key::Named;
@@ -24,7 +28,7 @@ pub fn subscription(app: &GuiApp) -> Subscription<Message> {
             if let keyboard::Event::KeyPressed { key, modifiers, .. } = event
                 && key == keyboard::Key::Named(Named::Tab)
             {
-                return Some(Message::TabPressed(modifiers.shift()));
+                return Some(Message::CycleFocus(!modifiers.shift()));
             }
             None
         }));
@@ -156,7 +160,7 @@ fn handle_hotkey(
                 return Some(Message::EscCaptured);
             }
             if *key == keyboard::Key::Named(Named::Tab) {
-                return Some(Message::TabPressed(modifiers.shift()));
+                return Some(Message::CycleFocus(!modifiers.shift()));
             }
             let is_cmd = modifiers.control() || modifiers.command();
             if is_cmd && let keyboard::Key::Character(s) = key.as_ref() {
@@ -164,6 +168,36 @@ fn handle_hotkey(
                     "s" => return Some(Message::SubmitTask),
                     "e" => return Some(Message::StartCreateWithDescription),
                     "," => return Some(Message::OpenSettings),
+                    _ => {}
+                }
+            }
+
+            // If we are definitely not in a text input, steal navigation keys back from Iced's Scrollables/Buttons
+            if let Ok(focus) = ACTIVE_FOCUS.read()
+                && (*focus == Focus::MainList || *focus == Focus::Sidebar)
+            {
+                match key.as_ref() {
+                    keyboard::Key::Named(Named::ArrowDown) => return Some(Message::SelectNext),
+                    keyboard::Key::Named(Named::ArrowUp) => return Some(Message::SelectPrev),
+                    keyboard::Key::Named(Named::ArrowRight) => return Some(Message::ArrowRight),
+                    keyboard::Key::Named(Named::ArrowLeft) => return Some(Message::ArrowLeft),
+                    keyboard::Key::Named(Named::Enter) => return Some(Message::EnterPressed),
+                    keyboard::Key::Named(Named::Space) => {
+                        if modifiers.shift() {
+                            return Some(Message::ToggleTaskShiftSelected);
+                        } else {
+                            return Some(Message::ToggleSelected);
+                        }
+                    }
+                    keyboard::Key::Character(s) => match s.to_lowercase().as_str() {
+                        "j" => return Some(Message::SelectNext),
+                        "k" => return Some(Message::SelectPrev),
+                        "1" => return Some(Message::SidebarModeChanged(SidebarMode::Calendars)),
+                        "2" => return Some(Message::SidebarModeChanged(SidebarMode::Categories)),
+                        "3" => return Some(Message::SidebarModeChanged(SidebarMode::Locations)),
+                        "*" => return Some(Message::ClearAllFilters),
+                        _ => {}
+                    },
                     _ => {}
                 }
             }
@@ -205,8 +239,8 @@ fn handle_hotkey(
                 let s_lower = s.to_lowercase();
                 // Match on lowercase char + shift state tuple for alphabetic keys
                 match (s_lower.as_ref(), modifiers.shift()) {
-                    ("j", false) => Some(Message::SelectNextTask),
-                    ("k", false) => Some(Message::SelectPrevTask),
+                    ("j", false) => Some(Message::SelectNext),
+                    ("k", false) => Some(Message::SelectPrev),
                     ("e", false) => Some(Message::EditSelected),
                     ("e", true) => Some(Message::EditSelectedDescription),
                     ("s", false) => Some(Message::ToggleActiveSelected),
@@ -252,8 +286,10 @@ fn handle_hotkey(
             }
 
             // 2. Handle Named keys
-            keyboard::Key::Named(Named::ArrowDown) => Some(Message::SelectNextTask),
-            keyboard::Key::Named(Named::ArrowUp) => Some(Message::SelectPrevTask),
+            keyboard::Key::Named(Named::ArrowDown) => Some(Message::SelectNext),
+            keyboard::Key::Named(Named::ArrowUp) => Some(Message::SelectPrev),
+            keyboard::Key::Named(Named::ArrowRight) => Some(Message::ArrowRight),
+            keyboard::Key::Named(Named::ArrowLeft) => Some(Message::ArrowLeft),
             keyboard::Key::Named(Named::PageDown) => Some(Message::SelectNextPage),
             keyboard::Key::Named(Named::PageUp) => Some(Message::SelectPrevPage),
             keyboard::Key::Named(Named::Enter) => Some(Message::EnterPressed),
@@ -269,7 +305,7 @@ fn handle_hotkey(
                 // Handled in is_cmd block for Ctrl+Delete, so here it's just Delete
                 Some(Message::DeleteSelected)
             }
-            keyboard::Key::Named(Named::Tab) => Some(Message::TabPressed(modifiers.shift())),
+            keyboard::Key::Named(Named::Tab) => Some(Message::CycleFocus(!modifiers.shift())),
 
             _ => None,
         }

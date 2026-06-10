@@ -173,8 +173,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CancelMoveTask
         | Message::TogglePin(_) => tasks::handle(app, message),
 
-        Message::TabPressed(_)
-        | Message::FocusInput
+        Message::FocusInput
         | Message::FocusSearch
         | Message::DismissError
         | Message::ToggleAllCalendars(_)
@@ -212,8 +211,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::WindowResized(_)
         | Message::JumpToTag(_)
         | Message::JumpToLocation(_)
-        | Message::SelectNextTask
-        | Message::SelectPrevTask
+        | Message::SelectNext
+        | Message::SelectPrev
         | Message::SelectNextPage
         | Message::SelectPrevPage
         | Message::EnterPressed
@@ -240,7 +239,12 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleSidebar
         | Message::ToggleTagCollapse(_)
         | Message::ToggleLocationCollapse(_)
-        | Message::MoveSelected => view::handle(app, message),
+        | Message::MoveSelected
+        | Message::CycleFocus(_)
+        | Message::ArrowRight
+        | Message::ArrowLeft
+        | Message::SidebarInteractSpace
+        | Message::SidebarInteractEnter => view::handle(app, message),
 
         Message::Refresh
         | Message::Loaded(_)

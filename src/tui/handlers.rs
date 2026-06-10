@@ -2278,8 +2278,19 @@ pub async fn handle_key_event(
                             if let Some(idx) = state.cal_state.selected()
                                 && let Some(c) = cats.get(idx)
                             {
+                                let c_clone = c.full_key.clone();
                                 state.selected_categories.clear();
-                                state.selected_categories.insert(c.full_key.clone());
+                                state.selected_categories.insert(c_clone.clone());
+
+                                if !state.expanded_tags.contains(&c_clone) {
+                                    state.expanded_tags.insert(c_clone);
+                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
+                                        cfg.expanded_tags =
+                                            state.expanded_tags.iter().cloned().collect();
+                                        let _ = cfg.save(state.ctx.as_ref());
+                                    }
+                                }
+
                                 state.refresh_filtered_view();
                             }
                         }
@@ -2289,8 +2300,19 @@ pub async fn handle_key_event(
                             if let Some(idx) = state.cal_state.selected()
                                 && let Some(l) = locs.get(idx)
                             {
+                                let l_clone = l.full_key.clone();
                                 state.selected_locations.clear();
-                                state.selected_locations.insert(l.full_key.clone());
+                                state.selected_locations.insert(l_clone.clone());
+
+                                if !state.expanded_locations.contains(&l_clone) {
+                                    state.expanded_locations.insert(l_clone);
+                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
+                                        cfg.expanded_locations =
+                                            state.expanded_locations.iter().cloned().collect();
+                                        let _ = cfg.save(state.ctx.as_ref());
+                                    }
+                                }
+
                                 state.refresh_filtered_view();
                             }
                         }

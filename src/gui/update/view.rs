@@ -2,7 +2,8 @@
 // Handles view/navigation-related messages in the GUI.
 use crate::gui::async_ops::*;
 use crate::gui::message::Message;
-use crate::gui::state::{AppState, GuiApp, ResizeDirection, SidebarMode};
+use crate::gui::state::{AppState, Focus, GuiApp, ResizeDirection, SidebarMode};
+use crate::gui::subscription::ACTIVE_FOCUS;
 use crate::gui::update::common::{
     refresh_filtered_tasks, save_config, scroll_to_selected, scroll_to_selected_delayed,
 };
@@ -15,6 +16,10 @@ use iced::{Task, window};
 pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
     match message {
         Message::TaskClick(index, uid) => {
+            app.active_focus = Focus::MainList;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::MainList;
+            }
             let now = std::time::Instant::now();
             let mut is_double = false;
 
@@ -68,6 +73,87 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if let Some(task) = app.get_task_at_index(next_idx) {
                 app.selected_uid = Some(task.uid.clone());
                 return scroll_to_selected(app, true);
+            }
+            Task::none()
+        }
+        Message::ArrowRight => {
+            if app.active_focus == crate::gui::state::Focus::Sidebar {
+                match app.sidebar_mode {
+                    SidebarMode::Calendars => {
+                        let cals = app.get_filtered_calendars();
+                        if let Some(cal) = cals.get(app.sidebar_selection_idx) {
+                            return handle(app, Message::IsolateCalendar(cal.href.clone()));
+                        }
+                    }
+                    SidebarMode::Categories => {
+                        let cats = &app.cached_categories;
+                        if let Some(cat) = cats.get(app.sidebar_selection_idx) {
+                            return handle(app, Message::FocusTag(cat.full_key.clone()));
+                        }
+                    }
+                    SidebarMode::Locations => {
+                        let locs = &app.cached_locations;
+                        if let Some(loc) = locs.get(app.sidebar_selection_idx) {
+                            return handle(app, Message::FocusLocation(loc.full_key.clone()));
+                        }
+                    }
+                }
+            }
+            Task::none()
+        }
+        Message::ArrowLeft => {
+            if app.active_focus == crate::gui::state::Focus::Sidebar {
+                return handle(app, Message::CycleFocus(true));
+            }
+            Task::none()
+        }
+        Message::SidebarInteractSpace => {
+            match app.sidebar_mode {
+                SidebarMode::Calendars => {
+                    let cals = app.get_filtered_calendars();
+                    if let Some(cal) = cals.get(app.sidebar_selection_idx) {
+                        let is_visible = !app.hidden_calendars.contains(&cal.href);
+                        return handle(
+                            app,
+                            Message::ToggleCalendarVisibility(cal.href.clone(), !is_visible),
+                        );
+                    }
+                }
+                SidebarMode::Categories => {
+                    let cats = &app.cached_categories;
+                    if let Some(cat) = cats.get(app.sidebar_selection_idx) {
+                        return handle(app, Message::CategoryToggled(cat.full_key.clone()));
+                    }
+                }
+                SidebarMode::Locations => {
+                    let locs = &app.cached_locations;
+                    if let Some(loc) = locs.get(app.sidebar_selection_idx) {
+                        return handle(app, Message::LocationToggled(loc.full_key.clone()));
+                    }
+                }
+            }
+            Task::none()
+        }
+        Message::SidebarInteractEnter => {
+            match app.sidebar_mode {
+                SidebarMode::Calendars => {
+                    let cals = app.get_filtered_calendars();
+                    if let Some(cal) = cals.get(app.sidebar_selection_idx) {
+                        return handle(app, Message::SelectCalendar(cal.href.clone()));
+                    }
+                }
+                SidebarMode::Categories => {
+                    let cats = &app.cached_categories;
+                    if let Some(cat) = cats.get(app.sidebar_selection_idx) {
+                        return handle(app, Message::CategoryToggled(cat.full_key.clone()));
+                    }
+                }
+                SidebarMode::Locations => {
+                    let locs = &app.cached_locations;
+                    if let Some(loc) = locs.get(app.sidebar_selection_idx) {
+                        return handle(app, Message::LocationToggled(loc.full_key.clone()));
+                    }
+                }
             }
             Task::none()
         }
@@ -155,21 +241,84 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        Message::TabPressed(shift_held) => {
+        Message::CycleFocus(forward) => {
             // Ignore Tab navigation if we are actively editing a description,
             // allowing the Tab character to be inserted in the description editor instead.
             if app.editing_uid.is_some() || app.creating_with_desc {
                 return Task::none();
             }
 
-            if shift_held {
-                operation::focus_previous()
+            let order = [
+                crate::gui::state::Focus::MainList,
+                crate::gui::state::Focus::Sidebar,
+                crate::gui::state::Focus::SearchInput,
+                crate::gui::state::Focus::AddTaskInput,
+            ];
+            let current_idx = order
+                .iter()
+                .position(|&f| f == app.active_focus)
+                .unwrap_or(0);
+            let next_idx = if forward {
+                (current_idx + 1) % order.len()
             } else {
-                operation::focus_next()
+                (current_idx + order.len() - 1) % order.len()
+            };
+            app.active_focus = order[next_idx];
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = order[next_idx];
+            }
+
+            match app.active_focus {
+                crate::gui::state::Focus::MainList => {
+                    let unfocus =
+                        iced::widget::operation::focus(iced::widget::Id::new("dummy_unfocus"));
+                    let scroll = crate::gui::update::common::scroll_to_selected(app, true);
+                    Task::batch(vec![unfocus, scroll])
+                }
+                crate::gui::state::Focus::Sidebar => {
+                    let unfocus =
+                        iced::widget::operation::focus(iced::widget::Id::new("dummy_unfocus"));
+                    let max = match app.sidebar_mode {
+                        SidebarMode::Calendars => app.get_filtered_calendars().len(),
+                        SidebarMode::Categories => app.cached_categories.len(),
+                        SidebarMode::Locations => app.cached_locations.len(),
+                    };
+                    if max > 0 {
+                        let y_offset = app.sidebar_selection_idx as f32
+                            / (max.saturating_sub(1)).max(1) as f32;
+                        let snap = iced::widget::operation::snap_to(
+                            app.sidebar_scrollable_id.clone(),
+                            iced::widget::scrollable::RelativeOffset {
+                                x: 0.0,
+                                y: y_offset,
+                            },
+                        );
+                        return Task::batch(vec![unfocus, snap]);
+                    }
+                    unfocus
+                }
+                crate::gui::state::Focus::SearchInput => {
+                    iced::widget::operation::focus("header_search_input")
+                }
+                crate::gui::state::Focus::AddTaskInput => {
+                    iced::widget::operation::focus("main_input")
+                }
             }
         }
-        Message::FocusInput => operation::focus("main_input"),
-        Message::FocusSearch => operation::focus("header_search_input"),
+        Message::FocusInput => {
+            app.active_focus = Focus::AddTaskInput;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::AddTaskInput;
+            }
+            operation::focus("main_input")
+        }
+        Message::FocusSearch => {
+            app.active_focus = Focus::SearchInput;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::SearchInput;
+            }
+            operation::focus("header_search_input")
+        }
         Message::EnterPressed => {
             if let Some(uid) = &app.moving_task_uid {
                 if let Some(idx) = app.find_task_index_by_uid(uid)
@@ -198,13 +347,38 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 return Task::none();
             }
 
+            if app.active_focus == crate::gui::state::Focus::Sidebar {
+                return handle(app, Message::SidebarInteractEnter);
+            }
+
             if let Some(uid) = app.selected_uid.clone() {
                 return crate::gui::update::view::handle(app, Message::OpenContextMenu(uid, true));
             }
 
             Task::none()
         }
-        Message::SelectNextTask => {
+        Message::SelectNext => {
+            if app.active_focus == crate::gui::state::Focus::Sidebar {
+                let max = match app.sidebar_mode {
+                    SidebarMode::Calendars => app.get_filtered_calendars().len(),
+                    SidebarMode::Categories => app.cached_categories.len(),
+                    SidebarMode::Locations => app.cached_locations.len(),
+                };
+                if max > 0 {
+                    app.sidebar_selection_idx = (app.sidebar_selection_idx + 1) % max;
+                    let y_offset =
+                        app.sidebar_selection_idx as f32 / (max.saturating_sub(1)).max(1) as f32;
+                    return iced::widget::operation::snap_to(
+                        app.sidebar_scrollable_id.clone(),
+                        iced::widget::scrollable::RelativeOffset {
+                            x: 0.0,
+                            y: y_offset,
+                        },
+                    );
+                }
+                return Task::none();
+            }
+
             if let Some(uid) = &app.moving_task_uid {
                 if let Some(idx) = app.find_task_index_by_uid(uid)
                     && let Some(task) = app.get_task_at_index(idx)
@@ -292,7 +466,32 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::SelectPrevTask => {
+        Message::SelectPrev => {
+            if app.active_focus == crate::gui::state::Focus::Sidebar {
+                let max = match app.sidebar_mode {
+                    SidebarMode::Calendars => app.get_filtered_calendars().len(),
+                    SidebarMode::Categories => app.cached_categories.len(),
+                    SidebarMode::Locations => app.cached_locations.len(),
+                };
+                if max > 0 {
+                    if app.sidebar_selection_idx == 0 {
+                        app.sidebar_selection_idx = max.saturating_sub(1);
+                    } else {
+                        app.sidebar_selection_idx -= 1;
+                    }
+                    let y_offset =
+                        app.sidebar_selection_idx as f32 / (max.saturating_sub(1)).max(1) as f32;
+                    return iced::widget::operation::snap_to(
+                        app.sidebar_scrollable_id.clone(),
+                        iced::widget::scrollable::RelativeOffset {
+                            x: 0.0,
+                            y: y_offset,
+                        },
+                    );
+                }
+                return Task::none();
+            }
+
             if app.moving_task_uid.is_some() {
                 app.move_target_idx = app.move_target_idx.saturating_sub(1);
 
@@ -386,6 +585,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::ToggleSelected => {
+            if app.active_focus == crate::gui::state::Focus::Sidebar {
+                return handle(app, Message::SidebarInteractSpace);
+            }
             if let Some(uid) = &app.selected_uid
                 && let Some(idx) = app.find_task_index_by_uid(uid)
             {
@@ -456,10 +658,19 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::SidebarModeChanged(mode) => {
             app.sidebar_mode = mode;
+            app.sidebar_selection_idx = 0;
+            app.active_focus = Focus::Sidebar;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::Sidebar;
+            }
             refresh_filtered_tasks(app);
             Task::none()
         }
         Message::CategoryToggled(cat) => {
+            app.active_focus = Focus::Sidebar;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::Sidebar;
+            }
             if let Some(pos) = app
                 .session
                 .selected_categories
@@ -482,6 +693,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::LocationToggled(loc) => {
+            app.active_focus = Focus::Sidebar;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::Sidebar;
+            }
             if let Some(pos) = app
                 .session
                 .selected_locations
@@ -582,6 +797,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             handle(app, Message::ToggleSortStandardByPriority(new_val))
         }
         Message::SelectCalendar(href) => {
+            app.active_focus = Focus::Sidebar;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::Sidebar;
+            }
             if app.sidebar_mode == SidebarMode::Categories {
                 app.sidebar_mode = SidebarMode::Calendars;
             }
@@ -628,6 +847,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SearchChanged(action) => {
+            app.active_focus = Focus::SearchInput;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::SearchInput;
+            }
             if let iced::widget::text_editor::Action::Edit(
                 iced::widget::text_editor::Edit::Insert('\t'),
             ) = &action
@@ -804,6 +1027,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.sidebar_mode = SidebarMode::Categories;
             app.session.selected_categories.clear();
             app.session.selected_categories.push(tag.clone());
+
+            if !app.session.expanded_tags.contains(&tag) {
+                crate::gui::update::common::dispatch_intent(
+                    app,
+                    crate::model::AppIntent::ToggleTagCollapse { tag: tag.clone() },
+                );
+                crate::gui::update::common::save_config(app);
+            }
+
             app.search_value = iced::widget::text_editor::Content::new();
             app.session.search_term.clear();
             refresh_filtered_tasks(app);
@@ -814,6 +1046,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.sidebar_mode = SidebarMode::Locations;
             app.session.selected_locations.clear();
             app.session.selected_locations.push(loc.clone());
+
+            if !app.session.expanded_locations.contains(&loc) {
+                crate::gui::update::common::dispatch_intent(
+                    app,
+                    crate::model::AppIntent::ToggleLocationCollapse {
+                        location: loc.clone(),
+                    },
+                );
+                crate::gui::update::common::save_config(app);
+            }
+
             app.search_value = iced::widget::text_editor::Content::new();
             app.session.search_term.clear();
             refresh_filtered_tasks(app);
@@ -826,6 +1069,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.sidebar_mode = SidebarMode::Categories;
             app.session.selected_categories.clear();
             app.session.selected_categories.push(tag.clone());
+
+            if !app.session.expanded_tags.contains(&tag) {
+                crate::gui::update::common::dispatch_intent(
+                    app,
+                    crate::model::AppIntent::ToggleTagCollapse { tag: tag.clone() },
+                );
+                crate::gui::update::common::save_config(app);
+            }
+
             app.search_value = iced::widget::text_editor::Content::new();
             app.session.search_term.clear();
             refresh_filtered_tasks(app);
@@ -852,6 +1104,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.sidebar_mode = SidebarMode::Locations;
             app.session.selected_locations.clear();
             app.session.selected_locations.push(loc.clone());
+
+            if !app.session.expanded_locations.contains(&loc) {
+                crate::gui::update::common::dispatch_intent(
+                    app,
+                    crate::model::AppIntent::ToggleLocationCollapse {
+                        location: loc.clone(),
+                    },
+                );
+                crate::gui::update::common::save_config(app);
+            }
+
             app.search_value = iced::widget::text_editor::Content::new();
             app.session.search_term.clear();
             refresh_filtered_tasks(app);
