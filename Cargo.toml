@@ -94,6 +94,8 @@ iced_aw = { version = "0.14", features = ["color_picker"], optional = true }
 rfd = { version = "0.17", optional = true, default-features = false, features = ["xdg-portal"] }
 fastrand = "2.3"
 once_cell = "1.18"
+# --- TRANSITIVE DEPENDENCY PINS (Optional, only for GUI) ---
+swash = { version = "=0.2.7", optional = true }
 
 [build-dependencies]
 winresource = "0.1" # (Keep existing)
