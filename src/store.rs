@@ -96,6 +96,16 @@ struct HierarchyContext<'a> {
     max_done_subtasks: usize,
 }
 
+pub struct HierarchyOptions<'a> {
+    pub default_priority: u8,
+    pub sort_standard_by_priority: bool,
+    pub expanded_groups: &'a HashSet<String>,
+    pub max_done_roots: usize,
+    pub max_done_subtasks: usize,
+    pub search_active: bool,
+    pub sort_preset: crate::config::SortPreset,
+}
+
 /// Organize tasks into a hierarchy with proper parent/child relationships and inject
 /// expand/collapse control items for large groups of completed tasks.
 /// This function handles:
@@ -105,13 +115,7 @@ struct HierarchyContext<'a> {
 /// - Injecting ExpandGroup/CollapseGroup items for truncated completed task groups
 pub fn organize_hierarchy(
     mut tasks: Vec<Task>,
-    default_priority: u8,
-    sort_standard_by_priority: bool,
-    expanded_groups: &HashSet<String>,
-    max_done_roots: usize,
-    max_done_subtasks: usize,
-    search_active: bool,
-    sort_preset: crate::config::SortPreset,
+    options: HierarchyOptions<'_>,
 ) -> Vec<TaskListItem> {
     let present_uids: HashSet<String> = tasks.iter().map(|t| t.uid.clone()).collect();
     let mut children_map: HashMap<String, Vec<Task>> = HashMap::new();
@@ -119,7 +123,12 @@ pub fn organize_hierarchy(
 
     // Sort by the canonical comparator before building hierarchy
     tasks.sort_by(|a, b| {
-        a.compare_for_sort(b, default_priority, sort_standard_by_priority, sort_preset)
+        a.compare_for_sort(
+            b,
+            options.default_priority,
+            options.sort_standard_by_priority,
+            options.sort_preset,
+        )
     });
 
     for mut task in tasks {
@@ -146,9 +155,9 @@ pub fn organize_hierarchy(
         children_map: &children_map,
         result: &mut result,
         visited_keys: &mut visited_keys,
-        expanded_groups,
-        search_active,
-        max_done_subtasks,
+        expanded_groups: options.expanded_groups,
+        search_active: options.search_active,
+        max_done_subtasks: options.max_done_subtasks,
     };
 
     fn mark_tree_as_visited(task: &Task, context: &mut HierarchyContext) {
@@ -296,7 +305,14 @@ pub fn organize_hierarchy(
         }
     }
 
-    process_group(roots, "".to_string(), max_done_roots, true, &mut context, 0);
+    process_group(
+        roots,
+        "".to_string(),
+        options.max_done_roots,
+        true,
+        &mut context,
+        0,
+    );
 
     // Catch any tasks that were missed due to cyclical parent_uid relationships
     let mut unvisited = Vec::new();
@@ -311,12 +327,17 @@ pub fn organize_hierarchy(
 
     if !unvisited.is_empty() {
         unvisited.sort_by(|a, b| {
-            a.compare_for_sort(b, default_priority, sort_standard_by_priority, sort_preset)
+            a.compare_for_sort(
+                b,
+                options.default_priority,
+                options.sort_standard_by_priority,
+                options.sort_preset,
+            )
         });
         process_group(
             unvisited,
             "".to_string(),
-            max_done_roots,
+            options.max_done_roots,
             true,
             &mut context,
             0,
@@ -2135,13 +2156,11 @@ impl TaskStore {
         // Resolve function used to compute the 'best' child result used in some UI heuristics.
         fn resolve(
             idx: usize,
-            tasks: &Vec<Task>,
+            tasks: &[Task],
             map: &HashMap<String, Vec<usize>>,
             cache: &mut HashMap<usize, Task>,
             visiting: &mut HashSet<usize>,
-            default_prio: u8,
-            sort_standard_by_priority: bool,
-            sort_preset: crate::config::SortPreset,
+            options: &FilterOptions,
         ) -> Task {
             if let Some(cached) = cache.get(&idx) {
                 return cached.clone();
@@ -2158,16 +2177,7 @@ impl TaskStore {
 
             if !is_suppressed && let Some(children) = map.get(&t.uid) {
                 for &child_idx in children {
-                    let child_eff = resolve(
-                        child_idx,
-                        tasks,
-                        map,
-                        cache,
-                        visiting,
-                        default_prio,
-                        sort_standard_by_priority,
-                        sort_preset,
-                    );
+                    let child_eff = resolve(child_idx, tasks, map, cache, visiting, options);
                     let a = crate::model::item::SortKey {
                         rank: child_eff.sort_rank,
                         prio: child_eff.effective_priority,
@@ -2185,9 +2195,9 @@ impl TaskStore {
                     let ordering = crate::model::item::compare_sortkeys(
                         &a,
                         &b,
-                        default_prio,
-                        sort_standard_by_priority,
-                        sort_preset,
+                        options.default_priority,
+                        options.sort_standard_by_priority,
+                        options.sort_preset,
                     );
                     if ordering == std::cmp::Ordering::Less {
                         best = child_eff;
@@ -2211,9 +2221,7 @@ impl TaskStore {
                     &map,
                     &mut cache,
                     &mut visiting,
-                    options.default_priority,
-                    options.sort_standard_by_priority,
-                    options.sort_preset,
+                    &options,
                 );
             }
         }
@@ -2236,13 +2244,15 @@ impl TaskStore {
         // Note: organize_hierarchy applies `compare_for_sort` internally before building the tree.
         let organized_items = organize_hierarchy(
             final_tasks_processed,
-            options.default_priority,
-            options.sort_standard_by_priority,
-            options.expanded_done_groups,
-            options.max_done_roots,
-            options.max_done_subtasks,
-            !options.search_term.is_empty(),
-            options.sort_preset,
+            HierarchyOptions {
+                default_priority: options.default_priority,
+                sort_standard_by_priority: options.sort_standard_by_priority,
+                expanded_groups: options.expanded_done_groups,
+                max_done_roots: options.max_done_roots,
+                max_done_subtasks: options.max_done_subtasks,
+                search_active: !options.search_term.is_empty(),
+                sort_preset: options.sort_preset,
+            },
         );
 
         FilterResult {
@@ -2540,13 +2550,15 @@ mod tests {
 
         let result = organize_hierarchy(
             tasks,
-            5,     // default_priority
-            false, // sort_standard_by_priority
-            &expanded_groups,
-            10,    // max_done_roots
-            10,    // max_done_subtasks
-            false, // search_active
-            crate::config::SortPreset::UrgentStartedDue,
+            HierarchyOptions {
+                default_priority: 5,
+                sort_standard_by_priority: false,
+                expanded_groups: &expanded_groups,
+                max_done_roots: 10,
+                max_done_subtasks: 10,
+                search_active: false,
+                sort_preset: crate::config::SortPreset::UrgentStartedDue,
+            },
         );
 
         // Extract task UIDs from the result
@@ -2586,13 +2598,15 @@ mod tests {
 
         let result = organize_hierarchy(
             tasks,
-            5,
-            false, // sort_standard_by_priority
-            &expanded_groups,
-            10,
-            1, // max_done_subtasks = 1, so only 1 done child shown, 1 hidden
-            false,
-            crate::config::SortPreset::UrgentStartedDue,
+            HierarchyOptions {
+                default_priority: 5,
+                sort_standard_by_priority: false,
+                expanded_groups: &expanded_groups,
+                max_done_roots: 10,
+                max_done_subtasks: 1, // max_done_subtasks = 1, so only 1 done child shown, 1 hidden
+                search_active: false,
+                sort_preset: crate::config::SortPreset::UrgentStartedDue,
+            },
         );
 
         let result_uids: Vec<String> = result
@@ -2633,13 +2647,15 @@ mod tests {
 
         let result = organize_hierarchy(
             tasks,
-            5,
-            false, // sort_standard_by_priority
-            &expanded_groups,
-            3, // max_done_roots = 3, so 2 shown (3-1), 3 hidden
-            10,
-            false,
-            crate::config::SortPreset::UrgentStartedDue,
+            HierarchyOptions {
+                default_priority: 5,
+                sort_standard_by_priority: false,
+                expanded_groups: &expanded_groups,
+                max_done_roots: 3, // max_done_roots = 3, so 2 shown (3-1), 3 hidden
+                max_done_subtasks: 10,
+                search_active: false,
+                sort_preset: crate::config::SortPreset::UrgentStartedDue,
+            },
         );
 
         let result_uids: Vec<String> = result

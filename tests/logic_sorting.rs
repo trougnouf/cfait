@@ -179,16 +179,18 @@ fn test_hierarchy_organization() {
     let tasks = vec![child.clone(), parent.clone()];
 
     // This function rebuilds the visual list (flattened tree)
-    // Updated signature includes expanded_done_groups, max_done_roots, max_done_subtasks.
+    // Updated signature uses HierarchyOptions.
     let organized = organize_hierarchy(
         tasks,
-        5,
-        false,
-        &HashSet::new(),
-        usize::MAX,
-        usize::MAX,
-        false,
-        SortPreset::default(),
+        cfait::store::HierarchyOptions {
+            default_priority: 5,
+            sort_standard_by_priority: false,
+            expanded_groups: &HashSet::new(),
+            max_done_roots: usize::MAX,
+            max_done_subtasks: usize::MAX,
+            search_active: false,
+            sort_preset: SortPreset::default(),
+        },
     );
 
     assert_eq!(organized.len(), 2);
