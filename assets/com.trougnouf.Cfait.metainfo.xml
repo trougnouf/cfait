@@ -78,6 +78,18 @@
   </requires>
 
   <releases>
+    <release version="1.0.7" date="2026-06-11">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>Sort overdue tasks by priority over due date (fixed)</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>(gui) Pin swash to v0.2.7 to prevent rendering bugs with iced</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.6" date="2026-06-10">
       <description>
         <p>Features:</p>

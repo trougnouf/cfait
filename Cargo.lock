@@ -922,7 +922,7 @@ checksum = "6d43a04d8753f35258c91f8ec639f792891f748a1edbd759cf1dcea3382ad83c"
 
 [[package]]
 name = "cfait"
-version = "1.0.6"
+version = "1.0.7"
 dependencies = [
  "android-native-keyring-store",
  "android_logger",
@@ -1314,7 +1314,7 @@ dependencies = [
  "rangemap",
  "rustc-hash 1.1.0",
  "self_cell",
- "skrifa",
+ "skrifa 0.37.0",
  "smol_str",
  "swash",
  "sys-locale",
@@ -1982,6 +1982,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "font-types"
+version = "0.11.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b38ad915f6dadd993ced50848a8291a543bd41ca62bc10740d5e64e2ab4cfd7"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
 name = "fontconfig-parser"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2440,7 +2449,7 @@ dependencies = [
  "bitflags 2.13.0",
  "bytemuck",
  "core_maths",
- "read-fonts",
+ "read-fonts 0.35.0",
  "smallvec",
 ]
 
@@ -5339,7 +5348,17 @@ checksum = "6717cf23b488adf64b9d711329542ba34de147df262370221940dfabc2c91358"
 dependencies = [
  "bytemuck",
  "core_maths",
- "font-types",
+ "font-types 0.10.1",
+]
+
+[[package]]
+name = "read-fonts"
+version = "0.37.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b634fabf032fab15307ffd272149b622260f55974d9fad689292a5d33df02e5"
+dependencies = [
+ "bytemuck",
+ "font-types 0.11.3",
 ]
 
 [[package]]
@@ -6110,7 +6129,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c31071dedf532758ecf3fed987cdb4bd9509f900e026ab684b4ecb81ea49841"
 dependencies = [
  "bytemuck",
- "read-fonts",
+ "read-fonts 0.35.0",
+]
+
+[[package]]
+name = "skrifa"
+version = "0.40.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fbdfe3d2475fbd7ddd1f3e5cf8288a30eb3e5f95832829570cd88115a7434ac"
+dependencies = [
+ "bytemuck",
+ "read-fonts 0.37.0",
 ]
 
 [[package]]
@@ -6338,7 +6367,7 @@ version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "842f3cd369c2ba38966204f983eaa5e54a8e84a7d7159ed36ade2b6c335aae64"
 dependencies = [
- "skrifa",
+ "skrifa 0.40.0",
  "yazi",
  "zeno",
 ]

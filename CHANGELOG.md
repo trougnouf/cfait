@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.7] - 2026-06-11
+
+### 🚀 Features
+
+- Sort overdue tasks by priority over due date (fixed)
+
+### 🐛 Bug Fixes
+
+- *(gui)* Pin swash to v0.2.7 to prevent rendering bugs with iced
 ## [1.0.6] - 2026-06-10
 
 ### 🚀 Features
