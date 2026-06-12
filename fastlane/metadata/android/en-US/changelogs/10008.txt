@@ -1,0 +1,10 @@
+## [1.0.8] - 2026-06-12
+
+### 🐛 Bug Fixes
+
+- *(tui)* Calculate input cursor position using visual unicode width for CJK support ( https://github.com/trougnouf/cfait/issues/39 )
+- *(gui)* Update ACTIVE_FOCUS state when focusing text inputs (avoids toggling tasks while editing)
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix TUI dependencies (lock time version)

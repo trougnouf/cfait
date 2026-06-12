@@ -78,6 +78,19 @@
   </requires>
 
   <releases>
+    <release version="1.0.8" date="2026-06-12">
+      <description>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>(tui) Calculate input cursor position using visual unicode width for CJK support ( https://github.com/trougnouf/cfait/issues/39 )</li>
+          <li>(gui) Update ACTIVE_FOCUS state when focusing text inputs (avoids toggling tasks while editing)</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>Fix TUI dependencies (lock time version)</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.7" date="2026-06-11">
       <description>
         <p>Features:</p>
