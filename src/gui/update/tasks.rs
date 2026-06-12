@@ -117,11 +117,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.input_value
                 .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
 
+            app.active_focus = Focus::AddTaskInput;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::AddTaskInput;
+            }
+
             iced::widget::operation::focus(iced::widget::Id::new("main_input"))
         }
 
         Message::StartCreateWithDescription => {
             app.creating_with_desc = true;
+
+            app.active_focus = Focus::AddTaskInput;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::AddTaskInput;
+            }
+
             if app.input_value.text().trim().is_empty() {
                 iced::widget::operation::focus(iced::widget::Id::new("main_input"))
             } else {
@@ -143,6 +154,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.description_value = text_editor::Content::with_text(&task_description);
                 app.editing_uid = Some(task_uid.clone());
                 app.selected_uid = Some(task_uid);
+
+                app.active_focus = Focus::AddTaskInput;
+                if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                    *focus = Focus::AddTaskInput;
+                }
 
                 return iced::widget::operation::focus(iced::widget::Id::new("main_input"));
             }
@@ -899,6 +915,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.adding_session_uid = Some(uid.clone());
             app.session_input = iced::widget::text_editor::Content::new();
             app.expanded_tasks.insert(uid.clone());
+
+            app.active_focus = Focus::AddTaskInput;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::AddTaskInput;
+            }
+
             iced::widget::operation::focus(iced::widget::Id::from(format!("session_input_{}", uid)))
         }
 
