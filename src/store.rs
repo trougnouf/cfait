@@ -54,7 +54,7 @@ use crate::config::Config;
 use crate::context::AppContext;
 use crate::journal::Action as JournalAction;
 use crate::model::{AppIntent, DateType, Task, TaskStatus};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use fastrand;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -1469,6 +1469,133 @@ impl TaskStore {
         } else {
             Vec::new()
         }
+    }
+
+    /// Retrieves the completion history stats (last 7 days, last 30 days) for a recurring task.
+    /// This utilizes the O(1) related_from index to find history snapshots rapidly.
+    pub fn get_completion_history_stats(&self, uid: &str) -> (u32, u32) {
+        let mut count_7 = 0;
+        let mut count_30 = 0;
+        let now = chrono::Utc::now();
+
+        if let Some(sources) = self.related_from_index.get(uid) {
+            for s_uid in sources {
+                if let Some(t) = self.get_task_ref(s_uid)
+                    && t.unmapped_properties
+                        .iter()
+                        .any(|p| p.key == "X-CFAIT-HISTORY-OF" && p.value == uid)
+                    && let Some(comp) = t.completion_date()
+                {
+                    let days = (now - comp).num_days();
+                    // Allow slight future drifts (e.g. timezone variations)
+                    if (-1..=7).contains(&days) {
+                        count_7 += 1;
+                    }
+                    if (-1..=30).contains(&days) {
+                        count_30 += 1;
+                    }
+                }
+            }
+        }
+        (count_7, count_30)
+    }
+
+    /// Calculates the current progress for a given goal definition.
+    pub fn calculate_goal_progress(&self, key: &str, goal: &crate::config::Goal) -> u32 {
+        let now = chrono::Utc::now();
+        let start_of_period = match goal.period {
+            crate::config::GoalPeriod::Daily => {
+                let local_now = chrono::Local::now();
+                crate::model::item::safe_local_to_utc(
+                    local_now.date_naive(),
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                )
+            }
+            crate::config::GoalPeriod::Weekly => {
+                let local_now = chrono::Local::now();
+                let days_from_monday = local_now.weekday().num_days_from_monday();
+                let monday =
+                    local_now.date_naive() - chrono::Duration::days(days_from_monday as i64);
+                crate::model::item::safe_local_to_utc(
+                    monday,
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                )
+            }
+            crate::config::GoalPeriod::Monthly => {
+                let local_now = chrono::Local::now();
+                let first_day =
+                    chrono::NaiveDate::from_ymd_opt(local_now.year(), local_now.month(), 1)
+                        .unwrap();
+                crate::model::item::safe_local_to_utc(
+                    first_day,
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                )
+            }
+            crate::config::GoalPeriod::Yearly => {
+                let local_now = chrono::Local::now();
+                let first_day = chrono::NaiveDate::from_ymd_opt(local_now.year(), 1, 1).unwrap();
+                crate::model::item::safe_local_to_utc(
+                    first_day,
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                )
+            }
+        };
+
+        let start_ts = start_of_period.timestamp();
+        let mut progress = 0;
+
+        let is_tag = key.starts_with('#');
+        let clean_key = if is_tag {
+            key.trim_start_matches('#')
+        } else if key.starts_with("@@") {
+            key.trim_start_matches("@@")
+        } else {
+            key
+        };
+
+        for map in self.calendars.values() {
+            for t in map.values() {
+                let matches = if is_tag {
+                    t.categories
+                        .iter()
+                        .any(|c| c == clean_key || c.starts_with(&format!("{}:", clean_key)))
+                } else {
+                    t.location.as_deref() == Some(clean_key)
+                        || t.location
+                            .as_deref()
+                            .unwrap_or("")
+                            .starts_with(&format!("{}:", clean_key))
+                };
+
+                if !matches {
+                    continue;
+                }
+
+                if goal.goal_type == crate::config::GoalType::Count {
+                    if t.status.is_done()
+                        && let Some(comp) = t.completion_date()
+                        && comp.timestamp() >= start_ts
+                    {
+                        progress += 1;
+                    }
+                } else if goal.goal_type == crate::config::GoalType::Duration {
+                    for session in &t.sessions {
+                        if session.end >= start_ts {
+                            let overlap_start = session.start.max(start_ts);
+                            if session.end > overlap_start {
+                                progress += (session.end - overlap_start) as u32 / 60;
+                            }
+                        }
+                    }
+                    if let Some(start) = t.last_started_at
+                        && start >= start_ts
+                    {
+                        progress += (now.timestamp() - start) as u32 / 60;
+                    }
+                }
+            }
+        }
+        progress
     }
 
     /// Rebuild both reverse indices (related_from_index and blocking_index).

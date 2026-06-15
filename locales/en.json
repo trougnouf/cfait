@@ -246,6 +246,23 @@
     },
     "go_to_location": "Go to location: @@%{loc}",
     "go_to_tag": "Go to tag: #%{tag}",
+    "goals": "Goals",
+    "goal_progress": "Progress: %{current} / %{target}",
+    "goal_type_count": "Count",
+    "goal_type_duration": "Duration (minutes)",
+    "goal_period_daily": "Daily",
+    "goal_period_weekly": "Weekly",
+    "goal_period_monthly": "Monthly",
+    "goal_period_yearly": "Yearly",
+    "habit_history": "History",
+    "habit_completed_7_days": {
+        "one": "Completed 1 time in the last 7 days",
+        "other": "Completed %{count} times in the last 7 days"
+    },
+    "habit_completed_30_days": {
+        "one": "Completed 1 time in the last 30 days",
+        "other": "Completed %{count} times in the last 30 days"
+    },
     "help": "Help",
     "help_about": "Help & about",
     "help_about_tab": " About ",

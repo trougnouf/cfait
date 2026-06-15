@@ -1520,6 +1520,41 @@ pub fn view_task_row<'a>(
                     }
                 }
 
+                if task.rrule.is_some() {
+                    let (c7, c30) = app.store.get_completion_history_stats(&task.uid);
+                    if c30 > 0 {
+                        details_col = details_col.push(Space::new().height(5.0));
+                        details_col = details_col.push(
+                            text(rust_i18n::t!("habit_history"))
+                                .size(12)
+                                .color(Color::from_rgb(0.6, 0.8, 0.8)),
+                        );
+
+                        let text7 = if c7 == 1 {
+                            rust_i18n::t!("habit_completed_7_days.one").to_string()
+                        } else {
+                            rust_i18n::t!("habit_completed_7_days.other", count = c7).to_string()
+                        };
+
+                        let text30 = if c30 == 1 {
+                            rust_i18n::t!("habit_completed_30_days.one").to_string()
+                        } else {
+                            rust_i18n::t!("habit_completed_30_days.other", count = c30).to_string()
+                        };
+
+                        details_col = details_col.push(
+                            text(format!("• {}", text7))
+                                .size(12)
+                                .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                        );
+                        details_col = details_col.push(
+                            text(format!("• {}", text30))
+                                .size(12)
+                                .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                        );
+                    }
+                }
+
                 let mut date_infos = Vec::new();
                 let created_opt = task.created_date();
                 let modified_opt = task.last_modified_date();

@@ -11,6 +11,29 @@ use std::fmt;
 use std::fs;
 use strum::EnumIter;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumIter)]
+#[serde(rename_all = "lowercase")]
+pub enum GoalType {
+    Count,
+    Duration,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumIter)]
+#[serde(rename_all = "lowercase")]
+pub enum GoalPeriod {
+    Daily,
+    Weekly,
+    Monthly,
+    Yearly,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Goal {
+    pub goal_type: GoalType,
+    pub target: u32,
+    pub period: GoalPeriod,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
 pub enum LogLevel {
     #[default]
@@ -482,6 +505,8 @@ pub struct Config {
     pub hidden_calendars: Vec<String>,
     #[serde(default)]
     pub tag_aliases: HashMap<String, Vec<String>>,
+    #[serde(default)]
+    pub goals: HashMap<String, Goal>,
 
     // UI State
     #[serde(default)]
@@ -501,6 +526,8 @@ pub struct Config {
 pub struct SyncableConfig {
     #[serde(default)]
     pub tag_aliases: HashMap<String, Vec<String>>,
+    #[serde(default)]
+    pub goals: HashMap<String, Goal>,
     #[serde(default)]
     pub hide_completed: bool,
     #[serde(default)]
@@ -612,6 +639,7 @@ impl Default for Config {
             expanded_done_groups: Vec::new(),
             sync_settings: true,
             settings_updated_at: 0,
+            goals: HashMap::new(),
         }
     }
 }
@@ -620,6 +648,7 @@ impl Config {
     pub fn get_syncable(&self) -> SyncableConfig {
         SyncableConfig {
             tag_aliases: self.tag_aliases.clone(),
+            goals: self.goals.clone(),
             hide_completed: self.hide_completed,
             hide_fully_completed_tags: self.hide_fully_completed_tags,
             hide_aliases_in_sidebar: self.hide_aliases_in_sidebar,
@@ -650,6 +679,7 @@ impl Config {
 
     pub fn apply_syncable(&mut self, sync: SyncableConfig) {
         self.tag_aliases = sync.tag_aliases;
+        self.goals = sync.goals;
         self.hide_completed = sync.hide_completed;
         self.hide_fully_completed_tags = sync.hide_fully_completed_tags;
         self.hide_aliases_in_sidebar = sync.hide_aliases_in_sidebar;
@@ -881,6 +911,13 @@ impl Config {
                 out.push_str("\n# --- Aliases (Global Templates) ---\n");
                 out.push_str("# Map shortcuts to sets of tags/locations/priorities.\n");
                 out.push_str("# Example: \"#gardening\" = [\"#fun\", \"@@home\"]\n");
+            } else if trimmed.starts_with("[goals]") {
+                out.push_str("\n# --- Goals & Habit Tracking ---\n");
+                out.push_str("# Set tracking goals for specific tags or locations.\n");
+                out.push_str("# Example: [goals.\"#reading\"]\n");
+                out.push_str("#          goal_type = \"count\" # or \"duration\"\n");
+                out.push_str("#          target = 5\n");
+                out.push_str("#          period = \"weekly\" # daily, weekly, monthly, yearly\n");
             }
 
             // -- Inline or Block Comments for specific keys --

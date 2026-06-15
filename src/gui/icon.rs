@@ -147,6 +147,7 @@ pub const GLOBEMODEL: char = '\u{f08e9}'; // nf-md-globe_model
 pub const MOON: char = '\u{f4ee}'; // nf-oct-moon
 
 // NEW
+pub const GOAL: char = '\u{f4de}'; // nf-oct-goal
 pub const BELL: char = '\u{f0f3}'; // nf-fa-bell
 pub const PALETTE_COLOR: char = '\u{e22b}'; // nf-fae-palette_color
 pub const HOURGLASS_START: char = '\u{f251}'; // nf-fa-hourglass_start

@@ -852,6 +852,30 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             details_md.push('\n');
         }
 
+        // --- History (for recurring tasks) ---
+        if task.rrule.is_some() {
+            let (c7, c30) = state.store.get_completion_history_stats(&task.uid);
+            if c30 > 0 {
+                details_md.push_str(&format!("### {}\n", t!("habit_history")));
+                if c7 == 1 {
+                    details_md.push_str(&format!("- {}\n", t!("habit_completed_7_days.one")));
+                } else {
+                    details_md.push_str(&format!(
+                        "- {}\n",
+                        t!("habit_completed_7_days.other", count = c7)
+                    ));
+                }
+                if c30 == 1 {
+                    details_md.push_str(&format!("- {}\n\n", t!("habit_completed_30_days.one")));
+                } else {
+                    details_md.push_str(&format!(
+                        "- {}\n\n",
+                        t!("habit_completed_30_days.other", count = c30)
+                    ));
+                }
+            }
+        }
+
         // --- Work Sessions (recent) ---
         if !task.sessions.is_empty() {
             let mut total_mins: i64 = 0;
