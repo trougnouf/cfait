@@ -157,14 +157,14 @@ pub struct GuiApp {
     pub alias_input_key: String,
     pub alias_input_values: String,
     pub editing_alias_key: Option<String>,
-    
+
     // Inputs - Settings (Goals)
     pub goal_input_key: String,
     pub goal_input_type: crate::config::GoalType,
     pub goal_input_target: String,
     pub goal_input_period: crate::config::GoalPeriod,
     pub editing_goal_key: Option<String>,
-    
+
     pub ob_trash_retention_input: String,
     pub trash_retention_days: u32,
 

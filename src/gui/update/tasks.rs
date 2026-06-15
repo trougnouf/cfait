@@ -1030,15 +1030,28 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         return Task::none();
     }
 
-    let (clean_input, new_aliases) = extract_inline_aliases(&text_to_submit);
+    let (clean_input_1, new_goals) = crate::model::parser::extract_inline_goals(&text_to_submit);
+    let (clean_input, new_aliases) = extract_inline_aliases(&clean_input_1);
 
     let mut retroactive_sync_batch = Vec::new();
+
+    let mut config_changed = false;
+    if !new_goals.is_empty() {
+        for (key, goal) in new_goals {
+            app.core_config.goals.insert(key, goal);
+        }
+        config_changed = true;
+    }
 
     if !new_aliases.is_empty() {
         for (key, tags) in new_aliases {
             app.tag_aliases.insert(key.clone(), tags.clone());
             retroactive_sync_batch.extend(apply_alias_retroactively(app, &key, &tags));
         }
+        config_changed = true;
+    }
+    
+    if config_changed {
         save_config(app);
     }
 

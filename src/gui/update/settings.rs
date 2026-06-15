@@ -441,27 +441,28 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::AddGoal => {
             let key = app.goal_input_key.trim().to_string();
             let target = app.goal_input_target.trim().parse::<u32>().unwrap_or(0);
-            
+
             if !key.is_empty() && target > 0 {
                 if let Some(old_key) = &app.editing_goal_key
-                    && old_key != &key {
-                        app.core_config.goals.remove(old_key);
-                    }
-                
+                    && old_key != &key
+                {
+                    app.core_config.goals.remove(old_key);
+                }
+
                 let goal = crate::config::Goal {
                     goal_type: app.goal_input_type,
                     target,
                     period: app.goal_input_period,
                 };
-                
+
                 app.core_config.goals.insert(key, goal);
-                
+
                 app.editing_goal_key = None;
                 app.goal_input_key.clear();
                 app.goal_input_target.clear();
                 app.goal_input_type = crate::config::GoalType::Count;
                 app.goal_input_period = crate::config::GoalPeriod::Weekly;
-                
+
                 save_config(app);
             }
             Task::none()

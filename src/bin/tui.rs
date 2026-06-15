@@ -376,12 +376,22 @@ async fn main() -> Result<()> {
                 chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
 
             // Allow ad-hoc alias definition via CLI
-            let (clean_input, new_aliases) = cfait::model::extract_inline_aliases(&input);
+            let (clean_input_1, new_goals) = cfait::model::extract_inline_goals(&input);
+            let (clean_input, new_aliases) = cfait::model::extract_inline_aliases(&clean_input_1);
+            
+            let mut config_changed = false;
+            if !new_goals.is_empty() {
+                config.goals.extend(new_goals);
+                config_changed = true;
+            }
             if !new_aliases.is_empty() {
                 for (k, v) in &new_aliases {
                     let _ = cfait::model::validate_alias_integrity(k, v, &config.tag_aliases);
                     config.tag_aliases.insert(k.clone(), v.clone());
                 }
+                config_changed = true;
+            }
+            if config_changed {
                 let _ = config.save_with_credentials(ctx.as_ref());
             }
 
@@ -521,12 +531,22 @@ async fn main() -> Result<()> {
             let mut changed = false;
 
             if !input.trim().is_empty() {
-                let (clean_input, new_aliases) = cfait::model::extract_inline_aliases(&input);
+                let (clean_input_1, new_goals) = cfait::model::extract_inline_goals(&input);
+                let (clean_input, new_aliases) = cfait::model::extract_inline_aliases(&clean_input_1);
+                
+                let mut config_changed = false;
+                if !new_goals.is_empty() {
+                    config.goals.extend(new_goals);
+                    config_changed = true;
+                }
                 if !new_aliases.is_empty() {
                     for (k, v) in &new_aliases {
                         let _ = cfait::model::validate_alias_integrity(k, v, &config.tag_aliases);
                         config.tag_aliases.insert(k.clone(), v.clone());
                     }
+                    config_changed = true;
+                }
+                if config_changed {
                     let _ = config.save_with_credentials(ctx.as_ref());
                 }
 

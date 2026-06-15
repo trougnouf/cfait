@@ -345,6 +345,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         crate::config::GoalPeriod::Daily => rust_i18n::t!("goal_period_daily"),
                         crate::config::GoalPeriod::Weekly => rust_i18n::t!("goal_period_weekly"),
                         crate::config::GoalPeriod::Monthly => rust_i18n::t!("goal_period_monthly"),
+                        crate::config::GoalPeriod::Quarterly => rust_i18n::t!("goal_period_quarterly"),
+                        crate::config::GoalPeriod::HalfYearly => rust_i18n::t!("goal_period_half_yearly"),
                         crate::config::GoalPeriod::Yearly => rust_i18n::t!("goal_period_yearly"),
                     };
 

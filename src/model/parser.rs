@@ -109,7 +109,7 @@ pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<Strin
                 }
             }
 
-            if is_valid {
+            if is_valid && !right.starts_with("goal:") {
                 let tags = parse_alias_values(right);
 
                 if !tags.is_empty() {
@@ -123,6 +123,85 @@ pub fn extract_inline_aliases(input: &str) -> (String, HashMap<String, Vec<Strin
         cleaned_words.push(token);
     }
     (cleaned_words.join(" "), new_aliases)
+}
+
+pub fn extract_inline_goals(input: &str) -> (String, HashMap<String, crate::config::Goal>) {
+    let parts = split_input_respecting_quotes(input);
+    let mut cleaned_words = Vec::new();
+    let mut new_goals = HashMap::new();
+
+    for (_, _, token) in parts {
+        if token.contains(":=")
+            && !token.starts_with('\\')
+            && let Some((left, right)) = token.split_once(":=")
+        {
+            let mut key = String::new();
+            let mut is_valid = false;
+
+            if left.starts_with('#') {
+                key = strip_quotes(left.trim_start_matches('#'));
+                is_valid = !key.is_empty();
+                key = format!("#{}", key);
+            } else if left.starts_with("@@") || left.to_lowercase().starts_with("loc:") {
+                let raw = if left.starts_with("@@") {
+                    left.trim_start_matches('@')
+                } else {
+                    &left[4..]
+                };
+                let clean = strip_quotes(raw);
+                if !clean.is_empty() {
+                    key = format!("@@{}", clean);
+                    is_valid = true;
+                }
+            }
+
+            if is_valid
+                && let Some(goal_str) = right.strip_prefix("goal:") {
+                    let goal_parts: Vec<&str> = goal_str.split(':').collect();
+                    if goal_parts.len() == 2 {
+                        let target_str = goal_parts[0];
+                        let period_str = goal_parts[1];
+
+                        let mut goal_type = crate::config::GoalType::Count;
+                        let target = if let Some(dur) = parse_duration(target_str) {
+                            if target_str.chars().any(|c| c.is_ascii_alphabetic()) {
+                                goal_type = crate::config::GoalType::Duration;
+                                dur
+                            } else {
+                                target_str.parse().unwrap_or(0)
+                            }
+                        } else {
+                            target_str.parse().unwrap_or(0)
+                        };
+
+                        let period = match period_str.to_lowercase().as_str() {
+                            "daily" | "d" => Some(crate::config::GoalPeriod::Daily),
+                            "weekly" | "w" => Some(crate::config::GoalPeriod::Weekly),
+                            "monthly" | "m" | "mo" => Some(crate::config::GoalPeriod::Monthly),
+                            "quarterly" | "q" => Some(crate::config::GoalPeriod::Quarterly),
+                            "semiannual" | "halfyearly" | "h" | "hy" => Some(crate::config::GoalPeriod::HalfYearly),
+                            "yearly" | "y" => Some(crate::config::GoalPeriod::Yearly),
+                            _ => None,
+                        };
+
+                        if target > 0 && period.is_some() {
+                            new_goals.insert(
+                                key,
+                                crate::config::Goal {
+                                    goal_type,
+                                    target,
+                                    period: period.unwrap(),
+                                },
+                            );
+                            cleaned_words.push(left.to_string());
+                            continue;
+                        }
+                    }
+                }
+        }
+        cleaned_words.push(token.to_string());
+    }
+    (cleaned_words.join(" "), new_goals)
 }
 
 pub fn is_valid_geo(val: &str) -> bool {

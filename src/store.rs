@@ -1480,8 +1480,12 @@ impl TaskStore {
     ) -> ((u32, u32, &'static str), (u32, u32, &'static str)) {
         let (days1, key1, days2, key2) = if rrule.contains("FREQ=YEARLY") {
             (1095, "window_3_years", 1825, "window_5_years")
-        } else if rrule.contains("FREQ=MONTHLY") {
+        } else if rrule.contains("FREQ=MONTHLY") && rrule.contains("INTERVAL=6") {
+            (365, "window_12_months", 1095, "window_3_years")
+        } else if rrule.contains("FREQ=MONTHLY") && rrule.contains("INTERVAL=3") {
             (180, "window_6_months", 365, "window_12_months")
+        } else if rrule.contains("FREQ=MONTHLY") {
+            (90, "window_3_months", 180, "window_6_months")
         } else if rrule.contains("FREQ=WEEKLY") {
             (28, "window_4_weeks", 84, "window_12_weeks")
         } else {
@@ -1540,6 +1544,26 @@ impl TaskStore {
                 let first_day =
                     chrono::NaiveDate::from_ymd_opt(local_now.year(), local_now.month(), 1)
                         .unwrap();
+                crate::model::item::safe_local_to_utc(
+                    first_day,
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                )
+            }
+            crate::config::GoalPeriod::Quarterly => {
+                let local_now = chrono::Local::now();
+                let q_month = ((local_now.month() - 1) / 3) * 3 + 1;
+                let first_day =
+                    chrono::NaiveDate::from_ymd_opt(local_now.year(), q_month, 1).unwrap();
+                crate::model::item::safe_local_to_utc(
+                    first_day,
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                )
+            }
+            crate::config::GoalPeriod::HalfYearly => {
+                let local_now = chrono::Local::now();
+                let h_month = ((local_now.month() - 1) / 6) * 6 + 1;
+                let first_day =
+                    chrono::NaiveDate::from_ymd_opt(local_now.year(), h_month, 1).unwrap();
                 crate::model::item::safe_local_to_utc(
                     first_day,
                     chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),

@@ -535,14 +535,35 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
         let desc_text = state.input_buffer.clone();
         let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(&desc_text);
 
+        let (clean_input_1, new_goals) =
+            crate::model::parser::extract_inline_goals(&state.new_task_title);
         let (clean_input, new_aliases) =
-            crate::model::parser::extract_inline_aliases(&state.new_task_title);
+            crate::model::parser::extract_inline_aliases(&clean_input_1);
+        
+        let mut config_changed = false;
+        
+        if !new_goals.is_empty() {
+            for (k, v) in new_goals {
+                state.goals.insert(k, v);
+            }
+            config_changed = true;
+        }
 
         if !new_aliases.is_empty() {
             for (k, v) in &new_aliases {
                 state.tag_aliases.insert(k.clone(), v.clone());
             }
+            config_changed = true;
         }
+        
+        if config_changed
+            && let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
+                let old = cfg.clone();
+                cfg.tag_aliases = state.tag_aliases.clone();
+                cfg.goals = state.goals.clone();
+                cfg.update_sync_timestamp_if_changed(&old);
+                let _ = cfg.save(state.ctx.as_ref());
+            }
 
         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
         let def_time =
@@ -972,32 +993,50 @@ pub async fn handle_key_event(
                     }
                 }
 
+                let (clean_input_1, new_goals) =
+                    crate::model::parser::extract_inline_goals(&state.input_buffer);
                 let (clean_input, new_aliases): (String, HashMap<String, Vec<String>>) =
-                    extract_inline_aliases(&state.input_buffer);
+                    extract_inline_aliases(&clean_input_1);
+
+                let mut config_changed = false;
+
+                if !new_goals.is_empty() {
+                    for (k, v) in new_goals {
+                        state.goals.insert(k, v);
+                    }
+                    config_changed = true;
+                }
 
                 if !new_aliases.is_empty() {
-                    for (key, tags) in new_aliases {
-                        if let Err(e) = validate_alias_integrity(&key, &tags, &state.tag_aliases) {
+                    for (key, tags) in &new_aliases {
+                        if let Err(e) = validate_alias_integrity(key, tags, &state.tag_aliases) {
                             state.message =
                                 rust_i18n::t!("error_general", error = e.to_string()).to_string();
                             return None;
                         }
 
                         state.tag_aliases.insert(key.clone(), tags.clone());
-                        let modified = state.store.apply_alias_retroactively(&key, &tags);
+                        let modified = state.store.apply_alias_retroactively(key, tags);
 
                         for t in modified {
                             let _ = action_tx.try_send(Action::PersistBatch(vec![
                                 crate::journal::Action::Update(t),
                             ]));
                         }
+                        config_changed = true;
                     }
-                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
+                }
+                
+                if config_changed
+                    && let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
                         let old = cfg.clone();
                         cfg.tag_aliases = state.tag_aliases.clone();
+                        cfg.goals = state.goals.clone();
                         cfg.update_sync_timestamp_if_changed(&old);
                         let _ = cfg.save(state.ctx.as_ref());
                     }
+                
+                if !new_aliases.is_empty() || config_changed {
                     let trimmed = clean_input.trim();
                     let is_alias_only = trimmed.is_empty()
                         || (!trimmed.contains(' ')
@@ -1073,8 +1112,20 @@ pub async fn handle_key_event(
         },
         InputMode::Editing => match key.code {
             KeyCode::Enter => {
+                let (clean_input_1, new_goals) =
+                    crate::model::parser::extract_inline_goals(&state.input_buffer);
                 let (clean_input, new_aliases): (String, HashMap<String, Vec<String>>) =
-                    extract_inline_aliases(&state.input_buffer);
+                    extract_inline_aliases(&clean_input_1);
+                
+                let mut config_changed = false;
+                
+                if !new_goals.is_empty() {
+                    for (k, v) in new_goals {
+                        state.goals.insert(k, v);
+                    }
+                    config_changed = true;
+                }
+
                 if !new_aliases.is_empty() {
                     for (k, v) in new_aliases {
                         if let Err(e) = validate_alias_integrity(&k, &v, &state.tag_aliases) {
@@ -1090,15 +1141,19 @@ pub async fn handle_key_event(
                                 crate::journal::Action::Update(mod_t),
                             ]));
                         }
+                        config_changed = true;
                     }
-                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
+                }
+                
+                if config_changed
+                    && let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
                         let old = cfg.clone();
                         cfg.tag_aliases = state.tag_aliases.clone();
+                        cfg.goals = state.goals.clone();
                         cfg.update_sync_timestamp_if_changed(&old);
                         let _ = cfg.save(state.ctx.as_ref());
                     }
-                }
-
+                
                 let target_uid: Option<String> = state.editing_uid.clone();
 
                 if let Some(uid) = target_uid

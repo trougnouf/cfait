@@ -1688,14 +1688,23 @@ impl CfaitMobile {
         #[cfg(target_os = "android")]
         log::debug!("add_task_smart: '{}'", input);
         let mut config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let (clean_input, new_aliases) = crate::model::extract_inline_aliases(&input);
+        let (clean_input_1, new_goals) = crate::model::extract_inline_goals(&input);
+        let (clean_input, new_aliases) = crate::model::extract_inline_aliases(&clean_input_1);
+        
+        let mut config_changed = false;
+        if !new_goals.is_empty() {
+            config.goals.extend(new_goals);
+            config_changed = true;
+        }
+        
         if !new_aliases.is_empty() {
             for (k, v) in &new_aliases {
                 crate::model::validate_alias_integrity(k, v, &config.tag_aliases)
                     .map_err(MobileError::from)?;
             }
             config.tag_aliases.extend(new_aliases.clone());
-            config.save(self.ctx.as_ref()).map_err(MobileError::from)?;
+            config_changed = true;
+            
             let mut store = self.controller.store.lock().await;
             let all_modified: Vec<_> = new_aliases
                 .iter()
@@ -1709,6 +1718,9 @@ impl CfaitMobile {
                         .await
                         .map_err(MobileError::from)?;
                 }
+            }
+            if config_changed {
+                config.save(self.ctx.as_ref()).map_err(MobileError::from)?;
             }
             let trimmed = clean_input.trim();
             if trimmed.is_empty()
@@ -1760,7 +1772,14 @@ impl CfaitMobile {
         log::debug!("add_task_with_description: '{}'", input);
 
         let mut config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let (clean_input, new_aliases) = crate::model::extract_inline_aliases(&input);
+        let (clean_input_1, new_goals) = crate::model::extract_inline_goals(&input);
+        let (clean_input, new_aliases) = crate::model::extract_inline_aliases(&clean_input_1);
+
+        let mut config_changed = false;
+        if !new_goals.is_empty() {
+            config.goals.extend(new_goals);
+            config_changed = true;
+        }
 
         if !new_aliases.is_empty() {
             for (k, v) in &new_aliases {
@@ -1768,8 +1787,8 @@ impl CfaitMobile {
                     .map_err(MobileError::from)?;
             }
             config.tag_aliases.extend(new_aliases.clone());
-            config.save(self.ctx.as_ref()).map_err(MobileError::from)?;
-
+            config_changed = true;
+            
             let mut store = self.controller.store.lock().await;
             let all_modified: Vec<_> = new_aliases
                 .iter()
@@ -1784,6 +1803,10 @@ impl CfaitMobile {
                         .await
                         .map_err(MobileError::from)?;
                 }
+            }
+            
+            if config_changed {
+                config.save(self.ctx.as_ref()).map_err(MobileError::from)?;
             }
 
             let trimmed = clean_input.trim();

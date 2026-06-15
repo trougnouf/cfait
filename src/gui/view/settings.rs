@@ -677,7 +677,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 } else {
                     |_: &Theme| text::Style::default()
                 });
-                
+
             let type_text = text(goal.goal_type.to_string())
                 .width(Length::FillPortion(2))
                 .style(if is_editing_this {
@@ -687,7 +687,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 } else {
                     |_: &Theme| text::Style::default()
                 });
-                
+
             let target_text = text(goal.target.to_string())
                 .width(Length::FillPortion(1))
                 .style(if is_editing_this {
@@ -697,7 +697,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 } else {
                     |_: &Theme| text::Style::default()
                 });
-                
+
             let period_text = text(goal.period.to_string())
                 .width(Length::FillPortion(2))
                 .style(if is_editing_this {

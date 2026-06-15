@@ -22,7 +22,7 @@ impl fmt::Display for GoalType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             GoalType::Count => write!(f, "Count"),
-            GoalType::Duration => write!(f, "Duration (minutes)"),
+            GoalType::Duration => write!(f, "Duration"),
         }
     }
 }
@@ -33,6 +33,8 @@ pub enum GoalPeriod {
     Daily,
     Weekly,
     Monthly,
+    Quarterly,
+    HalfYearly,
     Yearly,
 }
 
@@ -42,6 +44,8 @@ impl fmt::Display for GoalPeriod {
             GoalPeriod::Daily => write!(f, "Daily"),
             GoalPeriod::Weekly => write!(f, "Weekly"),
             GoalPeriod::Monthly => write!(f, "Monthly"),
+            GoalPeriod::Quarterly => write!(f, "Quarterly"),
+            GoalPeriod::HalfYearly => write!(f, "Semiannual"),
             GoalPeriod::Yearly => write!(f, "Yearly"),
         }
     }
