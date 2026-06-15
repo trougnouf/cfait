@@ -1495,6 +1495,7 @@ impl TaskStore {
         if let Some(sources) = self.related_from_index.get(uid) {
             for s_uid in sources {
                 if let Some(t) = self.get_task_ref(s_uid)
+                    && t.status == crate::model::TaskStatus::Completed
                     && t.unmapped_properties
                         .iter()
                         .any(|p| p.key == "X-CFAIT-HISTORY-OF" && p.value == uid)
@@ -1585,7 +1586,7 @@ impl TaskStore {
                 }
 
                 if goal.goal_type == crate::config::GoalType::Count {
-                    if t.status.is_done()
+                    if t.status == crate::model::TaskStatus::Completed
                         && let Some(comp) = t.completion_date()
                         && comp.timestamp() >= start_ts
                     {

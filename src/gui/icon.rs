@@ -148,9 +148,22 @@ pub const MOON: char = '\u{f4ee}'; // nf-oct-moon
 
 // NEW
 pub const GOAL_ICONS: &[char] = &[
-    '\u{ebf8}', '\u{f04fe}', '\u{f0a77}', '\u{f4de}', '\u{f11e}', '\u{f023c}', '\u{f140}', 
-    '\u{f05dd}', '\u{f08c9}', '\u{f295}', '\u{f1a04}', '\u{f029a}', '\u{f0873}', '\u{f0874}', 
-    '\u{f0875}', '\u{f0995}'
+    '\u{ebf8}',
+    '\u{f04fe}',
+    '\u{f0a77}',
+    '\u{f4de}',
+    '\u{f11e}',
+    '\u{f023c}',
+    '\u{f140}',
+    '\u{f05dd}',
+    '\u{f08c9}',
+    '\u{f295}',
+    '\u{f1a04}',
+    '\u{f029a}',
+    '\u{f0873}',
+    '\u{f0874}',
+    '\u{f0875}',
+    '\u{f0995}',
 ];
 pub const BELL: char = '\u{f0f3}'; // nf-fa-bell
 pub const PALETTE_COLOR: char = '\u{e22b}'; // nf-fae-palette_color

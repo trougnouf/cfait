@@ -18,6 +18,15 @@ pub enum GoalType {
     Duration,
 }
 
+impl fmt::Display for GoalType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GoalType::Count => write!(f, "Count"),
+            GoalType::Duration => write!(f, "Duration (minutes)"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumIter)]
 #[serde(rename_all = "lowercase")]
 pub enum GoalPeriod {
@@ -25,6 +34,17 @@ pub enum GoalPeriod {
     Weekly,
     Monthly,
     Yearly,
+}
+
+impl fmt::Display for GoalPeriod {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GoalPeriod::Daily => write!(f, "Daily"),
+            GoalPeriod::Weekly => write!(f, "Weekly"),
+            GoalPeriod::Monthly => write!(f, "Monthly"),
+            GoalPeriod::Yearly => write!(f, "Yearly"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

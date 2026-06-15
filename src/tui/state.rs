@@ -6,16 +6,29 @@ use crate::model::{CalendarListEntry, Task};
 use crate::store::{FilterOptions, TaskListItem, TaskStore};
 use crate::system::SystemEvent;
 use crate::tui::action::SidebarMode;
+use fastrand;
 use ratatui::widgets::ListState;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::mpsc; // Add import
-use fastrand;
 
 const GOAL_ICONS: &[char] = &[
-    '\u{ebf8}', '\u{f04fe}', '\u{f0a77}', '\u{f4de}', '\u{f11e}', '\u{f023c}', '\u{f140}', 
-    '\u{f05dd}', '\u{f08c9}', '\u{f295}', '\u{f1a04}', '\u{f029a}', '\u{f0873}', '\u{f0874}', 
-    '\u{f0875}', '\u{f0995}'
+    '\u{ebf8}',
+    '\u{f04fe}',
+    '\u{f0a77}',
+    '\u{f4de}',
+    '\u{f11e}',
+    '\u{f023c}',
+    '\u{f140}',
+    '\u{f05dd}',
+    '\u{f08c9}',
+    '\u{f295}',
+    '\u{f1a04}',
+    '\u{f029a}',
+    '\u{f0873}',
+    '\u{f0874}',
+    '\u{f0875}',
+    '\u{f0995}',
 ];
 
 #[derive(PartialEq, Clone, Copy)]

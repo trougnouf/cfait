@@ -607,6 +607,139 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         Space::new().width(0).into()
     };
 
+    let goals_ui: Element<_> = if is_settings {
+        let input_row = row![
+            text_input(&rust_i18n::t!("alias_key_label"), &app.goal_input_key)
+                .on_input(Message::GoalKeyInput)
+                .padding(5)
+                .width(Length::FillPortion(2)),
+            iced::widget::pick_list(
+                crate::config::GoalType::iter().collect::<Vec<_>>(),
+                Some(app.goal_input_type),
+                Message::GoalTypeChanged
+            )
+            .width(Length::FillPortion(2))
+            .padding(5),
+            text_input("Target", &app.goal_input_target)
+                .on_input(Message::GoalTargetInput)
+                .padding(5)
+                .width(Length::FillPortion(1)),
+            iced::widget::pick_list(
+                crate::config::GoalPeriod::iter().collect::<Vec<_>>(),
+                Some(app.goal_input_period),
+                Message::GoalPeriodChanged
+            )
+            .width(Length::FillPortion(2))
+            .padding(5),
+            if app.editing_goal_key.is_some() {
+                row![
+                    button(icon::icon(icon::CHECK).size(14))
+                        .style(button::success)
+                        .padding(6)
+                        .on_press(Message::AddGoal),
+                    button(icon::icon(icon::CROSS).size(14))
+                        .style(button::danger)
+                        .padding(6)
+                        .on_press(Message::CancelEditGoal)
+                ]
+                .spacing(5)
+            } else {
+                row![
+                    button(text(rust_i18n::t!("add")))
+                        .padding(5)
+                        .on_press(Message::AddGoal)
+                ]
+            }
+        ]
+        .spacing(10)
+        .align_y(iced::Alignment::Center);
+
+        let mut list_col = column![
+            text(rust_i18n::t!("goals")).size(20),
+            input_row,
+            iced::widget::rule::horizontal(1)
+        ]
+        .spacing(10);
+
+        let mut sorted_goals: Vec<_> = app.core_config.goals.iter().collect();
+        sorted_goals.sort_by_key(|(k, _)| k.to_string());
+
+        for (key, goal) in sorted_goals {
+            let is_editing_this = app.editing_goal_key.as_ref() == Some(key);
+
+            let key_text = text(key)
+                .width(Length::FillPortion(2))
+                .wrapping(iced::widget::text::Wrapping::Glyph)
+                .style(if is_editing_this {
+                    |theme: &Theme| text::Style {
+                        color: Some(theme.extended_palette().primary.base.color),
+                    }
+                } else {
+                    |_: &Theme| text::Style::default()
+                });
+                
+            let type_text = text(goal.goal_type.to_string())
+                .width(Length::FillPortion(2))
+                .style(if is_editing_this {
+                    |theme: &Theme| text::Style {
+                        color: Some(theme.extended_palette().primary.base.color),
+                    }
+                } else {
+                    |_: &Theme| text::Style::default()
+                });
+                
+            let target_text = text(goal.target.to_string())
+                .width(Length::FillPortion(1))
+                .style(if is_editing_this {
+                    |theme: &Theme| text::Style {
+                        color: Some(theme.extended_palette().primary.base.color),
+                    }
+                } else {
+                    |_: &Theme| text::Style::default()
+                });
+                
+            let period_text = text(goal.period.to_string())
+                .width(Length::FillPortion(2))
+                .style(if is_editing_this {
+                    |theme: &Theme| text::Style {
+                        color: Some(theme.extended_palette().primary.base.color),
+                    }
+                } else {
+                    |_: &Theme| text::Style::default()
+                });
+
+            let row_item = row![
+                key_text,
+                type_text,
+                target_text,
+                period_text,
+                button(icon::icon(icon::EDIT).size(12))
+                    .style(button::secondary)
+                    .padding(5)
+                    .on_press(Message::EditGoal(key.clone(), goal.clone())),
+                button(icon::icon(icon::CROSS).size(12))
+                    .style(button::danger)
+                    .padding(5)
+                    .on_press(Message::RemoveGoal(key.clone()))
+            ]
+            .spacing(10)
+            .align_y(iced::Alignment::Center);
+            list_col = list_col.push(row_item);
+        }
+
+        let area = container(list_col).padding(10).style(|_| container::Style {
+            border: iced::Border {
+                radius: 4.0.into(),
+                width: 1.0,
+                color: Color::from_rgb(0.3, 0.3, 0.3),
+            },
+            ..Default::default()
+        });
+        area.into()
+    } else {
+        Space::new().width(0).into()
+    };
+
     let aliases_ui: Element<_> = if is_settings {
         let input_row = row![
             text_input(&rust_i18n::t!("alias_key_label"), &app.alias_input_key)
@@ -1015,6 +1148,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
         local_cal_ui,
         notifications_ui,
         aliases_ui,
+        goals_ui,
         advanced_ui,
         // 3. Bottom Actions
         offline_button_or_space,

@@ -157,6 +157,14 @@ pub struct GuiApp {
     pub alias_input_key: String,
     pub alias_input_values: String,
     pub editing_alias_key: Option<String>,
+    
+    // Inputs - Settings (Goals)
+    pub goal_input_key: String,
+    pub goal_input_type: crate::config::GoalType,
+    pub goal_input_target: String,
+    pub goal_input_period: crate::config::GoalPeriod,
+    pub editing_goal_key: Option<String>,
+    
     pub ob_trash_retention_input: String,
     pub trash_retention_days: u32,
 
@@ -336,8 +344,8 @@ impl Default for GuiApp {
         // Pick initial random icon for the random-jump button
         let random_icon =
             crate::gui::icon::RANDOM_ICONS[rng.usize(..crate::gui::icon::RANDOM_ICONS.len())];
-            
-        let goal_icon = 
+
+        let goal_icon =
             crate::gui::icon::GOAL_ICONS[rng.usize(..crate::gui::icon::GOAL_ICONS.len())];
 
         // Select a random theme (excluding Random itself)
@@ -443,6 +451,11 @@ impl Default for GuiApp {
             alias_input_key: String::new(),
             alias_input_values: String::new(),
             editing_alias_key: None,
+            goal_input_key: String::new(),
+            goal_input_type: crate::config::GoalType::Count,
+            goal_input_target: String::new(),
+            goal_input_period: crate::config::GoalPeriod::Weekly,
+            editing_goal_key: None,
             ob_trash_retention_input: "14".to_string(),
             trash_retention_days: 14,
 

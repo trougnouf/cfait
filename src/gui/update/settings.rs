@@ -331,6 +331,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.editing_alias_key = None;
             app.alias_input_key.clear();
             app.alias_input_values.clear();
+
+            app.editing_goal_key = None;
+            app.goal_input_key.clear();
+            app.goal_input_target.clear();
+            app.goal_input_type = crate::config::GoalType::Count;
+            app.goal_input_period = crate::config::GoalPeriod::Weekly;
+
             Task::none()
         }
         Message::AddAlias => {
@@ -394,6 +401,78 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.alias_input_values.clear();
             }
             app.tag_aliases.remove(&key);
+            save_config(app);
+            Task::none()
+        }
+        Message::GoalKeyInput(v) => {
+            app.goal_input_key = v;
+            Task::none()
+        }
+        Message::GoalTargetInput(v) => {
+            if v.is_empty() || v.chars().all(|c| c.is_numeric()) {
+                app.goal_input_target = v;
+            }
+            Task::none()
+        }
+        Message::GoalTypeChanged(t) => {
+            app.goal_input_type = t;
+            Task::none()
+        }
+        Message::GoalPeriodChanged(p) => {
+            app.goal_input_period = p;
+            Task::none()
+        }
+        Message::EditGoal(key, goal) => {
+            app.editing_goal_key = Some(key.clone());
+            app.goal_input_key = key;
+            app.goal_input_type = goal.goal_type;
+            app.goal_input_target = goal.target.to_string();
+            app.goal_input_period = goal.period;
+            Task::none()
+        }
+        Message::CancelEditGoal => {
+            app.editing_goal_key = None;
+            app.goal_input_key.clear();
+            app.goal_input_target.clear();
+            app.goal_input_type = crate::config::GoalType::Count;
+            app.goal_input_period = crate::config::GoalPeriod::Weekly;
+            Task::none()
+        }
+        Message::AddGoal => {
+            let key = app.goal_input_key.trim().to_string();
+            let target = app.goal_input_target.trim().parse::<u32>().unwrap_or(0);
+            
+            if !key.is_empty() && target > 0 {
+                if let Some(old_key) = &app.editing_goal_key
+                    && old_key != &key {
+                        app.core_config.goals.remove(old_key);
+                    }
+                
+                let goal = crate::config::Goal {
+                    goal_type: app.goal_input_type,
+                    target,
+                    period: app.goal_input_period,
+                };
+                
+                app.core_config.goals.insert(key, goal);
+                
+                app.editing_goal_key = None;
+                app.goal_input_key.clear();
+                app.goal_input_target.clear();
+                app.goal_input_type = crate::config::GoalType::Count;
+                app.goal_input_period = crate::config::GoalPeriod::Weekly;
+                
+                save_config(app);
+            }
+            Task::none()
+        }
+        Message::RemoveGoal(key) => {
+            if app.editing_goal_key.as_ref() == Some(&key) {
+                app.editing_goal_key = None;
+                app.goal_input_key.clear();
+                app.goal_input_target.clear();
+            }
+            app.core_config.goals.remove(&key);
             save_config(app);
             Task::none()
         }

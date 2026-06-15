@@ -58,6 +58,14 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::EditAlias(_, _)
         | Message::CancelEditAlias
         | Message::RemoveAlias(_)
+        | Message::GoalKeyInput(_)
+        | Message::GoalTargetInput(_)
+        | Message::GoalTypeChanged(_)
+        | Message::GoalPeriodChanged(_)
+        | Message::AddGoal
+        | Message::EditGoal(_, _)
+        | Message::CancelEditGoal
+        | Message::RemoveGoal(_)
         | Message::ObSortMonthsChanged(_)
         | Message::ObUrgentDaysChanged(_)
         | Message::ObUrgentPrioChanged(_)

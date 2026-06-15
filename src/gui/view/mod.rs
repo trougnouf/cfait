@@ -1071,7 +1071,7 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     .delay(Duration::from_millis(700));
 
     let mut tabs = row![btn_cals, btn_tags, btn_locs].spacing(2);
-    
+
     if app.show_goals_tab {
         let btn_goals = tooltip(
             button(container(icon::icon(app.goal_icon).size(18)).center_x(Length::Fill))
@@ -1088,7 +1088,7 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         )
         .style(tooltip_style)
         .delay(Duration::from_millis(700));
-        
+
         tabs = tabs.push(btn_goals);
     }
 
