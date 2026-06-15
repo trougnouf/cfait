@@ -443,10 +443,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::AddGoal => {
             let mut key = app.goal_input_key.trim().to_string();
-            if !key.starts_with('#')
-                && !key.starts_with("@@")
-                && !key.to_lowercase().starts_with("loc:")
-            {
+            if key.to_lowercase().starts_with("loc:") {
+                key = format!("@@{}", key[4..].trim());
+            } else if !key.starts_with('#') && !key.starts_with("@@") {
                 key = format!("#{}", key);
             }
             let target_str = app.goal_input_target.trim();

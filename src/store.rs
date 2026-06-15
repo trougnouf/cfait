@@ -1715,12 +1715,13 @@ impl TaskStore {
                         && comp.timestamp() >= start_ts
                         && comp.timestamp() < end_ts
                         && task_time_in_period == 0
-                        && t.sessions.is_empty()
                     {
-                        if t.time_spent_seconds > 0 {
-                            task_time_in_period += (t.time_spent_seconds / 60) as u32;
-                        } else {
-                            task_time_in_period += t.estimated_duration.unwrap_or(default_dur);
+                        let total_tracked = (t.time_spent_seconds / 60) as u32;
+                        let est = t.estimated_duration.unwrap_or(default_dur);
+                        if est > total_tracked {
+                            task_time_in_period += est - total_tracked;
+                        } else if total_tracked == 0 {
+                            task_time_in_period += est;
                         }
                     }
 
