@@ -1717,7 +1717,7 @@ impl TaskStore {
                     {
                         let total_tracked = (t.time_spent_seconds / 60) as u32;
                         let est = t.estimated_duration.unwrap_or(default_dur);
-                        
+
                         // Grant credit for the remaining estimated time upon completion
                         if est > total_tracked {
                             task_time_in_period += est - total_tracked;
