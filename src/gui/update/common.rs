@@ -62,6 +62,12 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
         }
     }
 
+    let mut goals_progress = std::collections::HashMap::new();
+    for (key, goal) in &app.core_config.goals {
+        goals_progress.insert(key.clone(), app.store.calculate_goal_progress(key, goal));
+    }
+    app.cached_goals_progress = goals_progress;
+
     if let Some(tx) = &app.alarm_tx {
         let all_tasks: Vec<crate::model::Task> = app
             .store

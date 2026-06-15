@@ -154,6 +154,7 @@ pub struct AppState {
     pub expanded_locations: HashSet<String>,
 
     pub goals: HashMap<String, crate::config::Goal>,
+    pub cached_goals_progress: HashMap<String, u32>,
     pub needs_redraw: bool,
 }
 
@@ -266,6 +267,7 @@ impl AppState {
             expanded_tags: HashSet::new(),
             expanded_locations: HashSet::new(),
             goals: config.goals,
+            cached_goals_progress: HashMap::new(),
             needs_redraw: false,
         }
     }
@@ -361,6 +363,12 @@ impl AppState {
                 self.list_state.select(Some(current));
             }
         }
+
+        let mut goals_progress = HashMap::new();
+        for (key, goal) in &self.goals {
+            goals_progress.insert(key.clone(), self.store.calculate_goal_progress(key, goal));
+        }
+        self.cached_goals_progress = goals_progress;
     }
 
     pub fn get_selected_task(&self) -> Option<&Task> {

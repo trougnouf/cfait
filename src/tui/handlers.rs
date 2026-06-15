@@ -2421,7 +2421,28 @@ pub async fn handle_key_event(
                                 state.refresh_filtered_view();
                             }
                         }
-                        SidebarMode::Goals => {}
+                        SidebarMode::Goals => {
+                            let mut keys: Vec<_> = state.goals.keys().cloned().collect();
+                            keys.sort();
+                            if let Some(idx) = state.cal_state.selected()
+                                && let Some(key) = keys.get(idx)
+                            {
+                                if key.starts_with('#') {
+                                    state.sidebar_mode = SidebarMode::Categories;
+                                    state.selected_categories.clear();
+                                    state
+                                        .selected_categories
+                                        .insert(key.trim_start_matches('#').to_string());
+                                } else if key.starts_with("@@") {
+                                    state.sidebar_mode = SidebarMode::Locations;
+                                    state.selected_locations.clear();
+                                    state
+                                        .selected_locations
+                                        .insert(key.trim_start_matches("@@").to_string());
+                                }
+                                state.refresh_filtered_view();
+                            }
+                        }
                     }
                 } else if state.mode == InputMode::Editing {
                     state.move_cursor_right();

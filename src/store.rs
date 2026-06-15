@@ -1583,7 +1583,65 @@ impl TaskStore {
             }
         };
 
+        let end_of_period = match goal.period {
+            crate::config::GoalPeriod::Daily => start_of_period + chrono::Duration::days(1),
+            crate::config::GoalPeriod::Weekly => start_of_period + chrono::Duration::days(7),
+            crate::config::GoalPeriod::Monthly => {
+                let local_now = chrono::Local::now();
+                let next_m = if local_now.month() == 12 {
+                    1
+                } else {
+                    local_now.month() + 1
+                };
+                let next_y = if local_now.month() == 12 {
+                    local_now.year() + 1
+                } else {
+                    local_now.year()
+                };
+                crate::model::item::safe_local_to_utc(
+                    chrono::NaiveDate::from_ymd_opt(next_y, next_m, 1).unwrap(),
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                )
+            }
+            crate::config::GoalPeriod::Quarterly => {
+                let local_now = chrono::Local::now();
+                let q_month = ((local_now.month() - 1) / 3) * 3 + 1;
+                let next_m = q_month + 3;
+                let (next_y, next_m) = if next_m > 12 {
+                    (local_now.year() + 1, next_m - 12)
+                } else {
+                    (local_now.year(), next_m)
+                };
+                crate::model::item::safe_local_to_utc(
+                    chrono::NaiveDate::from_ymd_opt(next_y, next_m, 1).unwrap(),
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                )
+            }
+            crate::config::GoalPeriod::HalfYearly => {
+                let local_now = chrono::Local::now();
+                let h_month = ((local_now.month() - 1) / 6) * 6 + 1;
+                let next_m = h_month + 6;
+                let (next_y, next_m) = if next_m > 12 {
+                    (local_now.year() + 1, next_m - 12)
+                } else {
+                    (local_now.year(), next_m)
+                };
+                crate::model::item::safe_local_to_utc(
+                    chrono::NaiveDate::from_ymd_opt(next_y, next_m, 1).unwrap(),
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                )
+            }
+            crate::config::GoalPeriod::Yearly => {
+                let local_now = chrono::Local::now();
+                crate::model::item::safe_local_to_utc(
+                    chrono::NaiveDate::from_ymd_opt(local_now.year() + 1, 1, 1).unwrap(),
+                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+                )
+            }
+        };
+
         let start_ts = start_of_period.timestamp();
+        let end_ts = end_of_period.timestamp();
         let mut progress = 0;
 
         let is_tag = key.starts_with('#');
@@ -1617,7 +1675,7 @@ impl TaskStore {
                     let mut task_progress = 0;
                     if count_sessions {
                         for session in &t.sessions {
-                            if session.end >= start_ts {
+                            if session.end >= start_ts && session.start < end_ts {
                                 task_progress += 1;
                             }
                         }
@@ -1625,6 +1683,7 @@ impl TaskStore {
                     if t.status == crate::model::TaskStatus::Completed
                         && let Some(comp) = t.completion_date()
                         && comp.timestamp() >= start_ts
+                        && comp.timestamp() < end_ts
                         && task_progress == 0
                     {
                         task_progress += 1;
@@ -1633,24 +1692,28 @@ impl TaskStore {
                 } else if goal.goal_type == crate::config::GoalType::Duration {
                     let mut task_time_in_period = 0;
                     for session in &t.sessions {
-                        if session.end >= start_ts {
+                        if session.end >= start_ts && session.start < end_ts {
                             let overlap_start = session.start.max(start_ts);
-                            if session.end > overlap_start {
-                                task_time_in_period += (session.end - overlap_start) as u32 / 60;
+                            let overlap_end = session.end.min(end_ts);
+                            if overlap_end > overlap_start {
+                                task_time_in_period += (overlap_end - overlap_start) as u32 / 60;
                             }
                         }
                     }
                     if let Some(start) = t.last_started_at {
-                        let overlap_start = start.max(start_ts);
-                        let current_time = now.timestamp();
-                        if current_time > overlap_start {
-                            task_time_in_period += (current_time - overlap_start) as u32 / 60;
+                        let current_time = now.timestamp().min(end_ts);
+                        if current_time > start_ts {
+                            let overlap_start = start.max(start_ts);
+                            if current_time > overlap_start {
+                                task_time_in_period += (current_time - overlap_start) as u32 / 60;
+                            }
                         }
                     }
 
                     if t.status == crate::model::TaskStatus::Completed
                         && let Some(comp) = t.completion_date()
                         && comp.timestamp() >= start_ts
+                        && comp.timestamp() < end_ts
                         && task_time_in_period == 0
                         && t.sessions.is_empty()
                     {

@@ -501,7 +501,7 @@ pub struct Config {
     #[serde(default = "default_duration_goal_mins")]
     pub default_duration_goal_mins: u32,
 
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub sessions_count_as_completions: bool,
 
     #[serde(default = "default_max_done_roots")]
@@ -601,7 +601,7 @@ pub struct SyncableConfig {
     pub trash_retention_days: u32,
     #[serde(default = "default_duration_goal_mins")]
     pub default_duration_goal_mins: u32,
-    #[serde(default = "default_true")]
+    #[serde(default)]
     pub sessions_count_as_completions: bool,
     #[serde(default = "default_max_done_roots")]
     pub max_done_roots: usize,
@@ -666,7 +666,7 @@ impl Default for Config {
             auto_refresh_interval_mins: 30,
             trash_retention_days: 14,
             default_duration_goal_mins: 60,
-            sessions_count_as_completions: true,
+            sessions_count_as_completions: false,
             strikethrough_completed: false,
             max_done_roots: 20,
             max_done_subtasks: 5,

@@ -97,7 +97,25 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                             return handle(app, Message::FocusLocation(loc.full_key.clone()));
                         }
                     }
-                    SidebarMode::Goals => {}
+                    SidebarMode::Goals => {
+                        let mut keys: Vec<_> = app.core_config.goals.keys().cloned().collect();
+                        keys.sort();
+                        if let Some(key) = keys.get(app.sidebar_selection_idx) {
+                            if key.starts_with('#') {
+                                return handle(
+                                    app,
+                                    Message::FocusTag(key.trim_start_matches('#').to_string()),
+                                );
+                            } else if key.starts_with("@@") {
+                                return handle(
+                                    app,
+                                    Message::FocusLocation(
+                                        key.trim_start_matches("@@").to_string(),
+                                    ),
+                                );
+                            }
+                        }
+                    }
                 }
             }
             Task::none()
@@ -132,7 +150,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         return handle(app, Message::LocationToggled(loc.full_key.clone()));
                     }
                 }
-                SidebarMode::Goals => {}
+                SidebarMode::Goals => {
+                    let mut keys: Vec<_> = app.core_config.goals.keys().cloned().collect();
+                    keys.sort();
+                    if let Some(key) = keys.get(app.sidebar_selection_idx) {
+                        if key.starts_with('#') {
+                            return handle(
+                                app,
+                                Message::JumpToTag(key.trim_start_matches('#').to_string()),
+                            );
+                        } else if key.starts_with("@@") {
+                            return handle(
+                                app,
+                                Message::JumpToLocation(key.trim_start_matches("@@").to_string()),
+                            );
+                        }
+                    }
+                }
             }
             Task::none()
         }
@@ -156,7 +190,23 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                         return handle(app, Message::LocationToggled(loc.full_key.clone()));
                     }
                 }
-                SidebarMode::Goals => {}
+                SidebarMode::Goals => {
+                    let mut keys: Vec<_> = app.core_config.goals.keys().cloned().collect();
+                    keys.sort();
+                    if let Some(key) = keys.get(app.sidebar_selection_idx) {
+                        if key.starts_with('#') {
+                            return handle(
+                                app,
+                                Message::JumpToTag(key.trim_start_matches('#').to_string()),
+                            );
+                        } else if key.starts_with("@@") {
+                            return handle(
+                                app,
+                                Message::JumpToLocation(key.trim_start_matches("@@").to_string()),
+                            );
+                        }
+                    }
+                }
             }
             Task::none()
         }

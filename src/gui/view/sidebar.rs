@@ -738,7 +738,7 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
 
         for key in keys {
             let goal = &app.core_config.goals[key];
-            let progress = app.store.calculate_goal_progress(key, goal);
+            let progress = app.cached_goals_progress.get(key).copied().unwrap_or(0);
             let target = goal.target;
             let pct = if target > 0 {
                 (progress as f32 / target as f32).min(1.0)

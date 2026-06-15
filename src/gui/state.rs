@@ -116,6 +116,7 @@ pub struct GuiApp {
     pub quick_filter_icon: String,
     pub show_quick_filter: bool,
     pub show_goals_tab: bool,
+    pub cached_goals_progress: HashMap<String, u32>,
     pub sidebar_is_hidden: bool,
     pub ob_quick_filter_term_input: String,
     pub ob_quick_filter_icon_input: String,
@@ -418,6 +419,7 @@ impl Default for GuiApp {
             quick_filter_icon: "f0fa9".to_string(),
             show_quick_filter: true,
             show_goals_tab: true,
+            cached_goals_progress: HashMap::new(),
             sidebar_is_hidden: false,
             ob_quick_filter_term_input: "is:ready".to_string(),
             ob_quick_filter_icon_input: "f0fa9".to_string(),
@@ -463,7 +465,7 @@ impl Default for GuiApp {
             trash_retention_days: 14,
 
             ob_default_duration_goal_mins_input: "60".to_string(),
-            sessions_count_as_completions: true,
+            sessions_count_as_completions: false,
 
             loading: true,
             error_msg: None,

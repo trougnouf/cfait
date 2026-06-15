@@ -338,7 +338,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 keys.sort();
                 for key in keys {
                     let goal = &state.goals[key];
-                    let progress = state.store.calculate_goal_progress(key, goal);
+                    let progress = state.cached_goals_progress.get(key).copied().unwrap_or(0);
                     let target = goal.target;
 
                     let period_str = match goal.period {
