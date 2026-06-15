@@ -10,6 +10,13 @@ use ratatui::widgets::ListState;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::mpsc; // Add import
+use fastrand;
+
+const GOAL_ICONS: &[char] = &[
+    '\u{ebf8}', '\u{f04fe}', '\u{f0a77}', '\u{f4de}', '\u{f11e}', '\u{f023c}', '\u{f140}', 
+    '\u{f05dd}', '\u{f08c9}', '\u{f295}', '\u{f1a04}', '\u{f029a}', '\u{f0873}', '\u{f0874}', 
+    '\u{f0875}', '\u{f0995}'
+];
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum Focus {
@@ -72,6 +79,8 @@ pub struct AppState {
     pub quick_filter_term: String,
     pub quick_filter_icon: String,
     pub show_quick_filter: bool,
+    pub show_goals_tab: bool,
+    pub goal_icon: char,
 
     // Cached sidebar values (derived from the last filter result)
     pub cached_categories: Vec<crate::store::AggregateItem>,
@@ -189,6 +198,8 @@ impl AppState {
             quick_filter_term: "is:ready".to_string(),
             quick_filter_icon: "f0fa9".to_string(),
             show_quick_filter: true,
+            show_goals_tab: config.show_goals_tab,
+            goal_icon: GOAL_ICONS[fastrand::usize(..GOAL_ICONS.len())],
             sort_cutoff_months: Some(2),
             sort_standard_by_priority: false,
             theme: crate::config::AppTheme::default(),

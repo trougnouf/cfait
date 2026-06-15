@@ -235,6 +235,7 @@ pub enum Message {
     SetShowQuickFilter(bool),
     SetQuickFilterTerm(String),
     SetQuickFilterIcon(String),
+    SetShowGoalsTab(bool),
 
     // --- Context Menu ---
     OpenContextMenu(String, bool),

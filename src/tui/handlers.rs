@@ -741,6 +741,10 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
         AppEvent::ConfigUpdated(cfg) => {
             state.tag_aliases = cfg.tag_aliases.clone();
             state.goals = cfg.goals.clone();
+            state.show_goals_tab = cfg.show_goals_tab;
+            if !state.show_goals_tab && state.sidebar_mode == SidebarMode::Goals {
+                state.sidebar_mode = SidebarMode::Calendars;
+            }
             state.hide_completed = cfg.hide_completed;
             state.hide_fully_completed_tags = cfg.hide_fully_completed_tags;
             state.hide_aliases_in_sidebar = cfg.hide_aliases_in_sidebar;
@@ -767,6 +771,11 @@ pub fn handle_app_event(state: &mut AppState, event: AppEvent, default_cal: &Opt
         state.quick_filter_term = cfg.quick_filter_term.clone();
         state.quick_filter_icon = cfg.quick_filter_icon.clone();
         state.show_quick_filter = cfg.show_quick_filter;
+        state.show_goals_tab = cfg.show_goals_tab;
+        if !state.show_goals_tab && state.sidebar_mode == SidebarMode::Goals {
+            state.sidebar_mode = SidebarMode::Calendars;
+            state.needs_redraw = true;
+        }
     }
 }
 
@@ -2120,8 +2129,10 @@ pub async fn handle_key_event(
                 state.refresh_filtered_view();
             }
             KeyCode::Char('4') => {
-                state.sidebar_mode = SidebarMode::Goals;
-                state.refresh_filtered_view();
+                if state.show_goals_tab {
+                    state.sidebar_mode = SidebarMode::Goals;
+                    state.refresh_filtered_view();
+                }
             }
             KeyCode::Char('m') => {
                 state.match_all_categories = !state.match_all_categories;

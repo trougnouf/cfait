@@ -663,6 +663,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SidebarModeChanged(mode) => {
+            if mode == SidebarMode::Goals && !app.show_goals_tab {
+                return Task::none();
+            }
             app.sidebar_mode = mode;
             app.sidebar_selection_idx = 0;
             app.active_focus = Focus::Sidebar;

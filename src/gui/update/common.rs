@@ -121,6 +121,7 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.quick_filter_term = app.quick_filter_term.clone();
     cfg.quick_filter_icon = app.quick_filter_icon.clone();
     cfg.show_quick_filter = app.show_quick_filter;
+    cfg.show_goals_tab = app.show_goals_tab;
     cfg.sidebar_is_hidden = app.sidebar_is_hidden;
     cfg.log_level = app.log_level;
     cfg.sync_settings = app.sync_settings;

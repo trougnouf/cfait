@@ -490,6 +490,9 @@ pub struct Config {
     #[serde(default = "default_true")]
     pub show_quick_filter: bool,
 
+    #[serde(default = "default_true")]
+    pub show_goals_tab: bool,
+
     #[serde(default)]
     pub sidebar_is_hidden: bool,
 
@@ -578,6 +581,8 @@ pub struct SyncableConfig {
     pub quick_filter_icon: String,
     #[serde(default = "default_true")]
     pub show_quick_filter: bool,
+    #[serde(default = "default_true")]
+    pub show_goals_tab: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
@@ -631,6 +636,7 @@ impl Default for Config {
             quick_filter_term: default_quick_filter_term(),
             quick_filter_icon: default_quick_filter_icon(),
             show_quick_filter: true,
+            show_goals_tab: true,
             sidebar_is_hidden: false,
             description_editor: String::new(),
             log_level: default_log_level(),
@@ -674,6 +680,7 @@ impl Config {
             quick_filter_term: self.quick_filter_term.clone(),
             quick_filter_icon: self.quick_filter_icon.clone(),
             show_quick_filter: self.show_quick_filter,
+            show_goals_tab: self.show_goals_tab,
         }
     }
 
@@ -705,6 +712,7 @@ impl Config {
         self.quick_filter_term = sync.quick_filter_term;
         self.quick_filter_icon = sync.quick_filter_icon;
         self.show_quick_filter = sync.show_quick_filter;
+        self.show_goals_tab = sync.show_goals_tab;
     }
 
     pub fn update_sync_timestamp_if_changed(&mut self, old: &Config) {
@@ -1036,6 +1044,9 @@ impl Config {
             } else if trimmed.starts_with("show_quick_filter =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Display the quick filter button in the search bar.");
+            } else if trimmed.starts_with("show_goals_tab =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Display the Goals tab in the sidebar.");
             } else if trimmed.starts_with("sidebar_is_hidden =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Hide the left sidebar collections panel.");

@@ -1070,23 +1070,27 @@ fn view_sidebar(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     .style(tooltip_style)
     .delay(Duration::from_millis(700));
 
-    let btn_goals = tooltip(
-        button(container(icon::icon(icon::GOAL).size(18)).center_x(Length::Fill))
-            .padding(8)
-            .width(Length::Fill)
-            .style(if app.sidebar_mode == SidebarMode::Goals {
-                active_style
-            } else {
-                button::text
-            })
-            .on_press(Message::SidebarModeChanged(SidebarMode::Goals)),
-        text(format!("{} (4)", rust_i18n::t!("goals"))).size(12),
-        tooltip::Position::Bottom,
-    )
-    .style(tooltip_style)
-    .delay(Duration::from_millis(700));
-
-    let tabs = row![btn_cals, btn_tags, btn_locs, btn_goals].spacing(2);
+    let mut tabs = row![btn_cals, btn_tags, btn_locs].spacing(2);
+    
+    if app.show_goals_tab {
+        let btn_goals = tooltip(
+            button(container(icon::icon(app.goal_icon).size(18)).center_x(Length::Fill))
+                .padding(8)
+                .width(Length::Fill)
+                .style(if app.sidebar_mode == SidebarMode::Goals {
+                    active_style
+                } else {
+                    button::text
+                })
+                .on_press(Message::SidebarModeChanged(SidebarMode::Goals)),
+            text(format!("{} (4)", rust_i18n::t!("goals"))).size(12),
+            tooltip::Position::Bottom,
+        )
+        .style(tooltip_style)
+        .delay(Duration::from_millis(700));
+        
+        tabs = tabs.push(btn_goals);
+    }
 
     let content = match app.sidebar_mode {
         SidebarMode::Calendars => view_sidebar_calendars(app),

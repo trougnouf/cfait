@@ -722,7 +722,7 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
     if app.core_config.goals.is_empty() {
         col = col.push(
             container(
-                text("No goals configured in config.toml")
+                text(rust_i18n::t!("goals_empty"))
                     .size(12)
                     .color(Color::from_rgb(0.5, 0.5, 0.5)),
             )

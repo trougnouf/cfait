@@ -52,6 +52,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.quick_filter_term = config.quick_filter_term.clone();
             app.quick_filter_icon = config.quick_filter_icon.clone();
             app.show_quick_filter = config.show_quick_filter;
+            app.show_goals_tab = config.show_goals_tab;
+            if !app.show_goals_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
+                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+            }
             app.sidebar_is_hidden = config.sidebar_is_hidden;
             app.ob_quick_filter_term_input = config.quick_filter_term.clone();
             app.ob_quick_filter_icon_input = config.quick_filter_icon.clone();
@@ -275,6 +279,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         }
         Message::CancelSettings => {
             app.ob_password_visible = false;
+            if !app.show_goals_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
+                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+            }
             app.calendars.retain(|c| !c.href.starts_with("local://"));
             app.calendars.extend(app.local_cals_editing.clone());
             app.sort_calendars();
@@ -617,6 +624,15 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::SetShowQuickFilter(val) => {
             app.show_quick_filter = val;
             save_config(app);
+            Task::none()
+        }
+        Message::SetShowGoalsTab(val) => {
+            app.show_goals_tab = val;
+            if !val && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
+                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+            }
+            save_config(app);
+            crate::gui::update::common::refresh_filtered_tasks(app);
             Task::none()
         }
         Message::SetQuickFilterTerm(val) => {

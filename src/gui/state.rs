@@ -115,6 +115,7 @@ pub struct GuiApp {
     pub quick_filter_term: String,
     pub quick_filter_icon: String,
     pub show_quick_filter: bool,
+    pub show_goals_tab: bool,
     pub sidebar_is_hidden: bool,
     pub ob_quick_filter_term_input: String,
     pub ob_quick_filter_icon_input: String,
@@ -150,6 +151,7 @@ pub struct GuiApp {
     // UI Visuals
     pub location_tab_icon: char,
     pub random_icon: char, // NEW
+    pub goal_icon: char,
 
     // Inputs - Settings (Aliases)
     pub alias_input_key: String,
@@ -334,6 +336,9 @@ impl Default for GuiApp {
         // Pick initial random icon for the random-jump button
         let random_icon =
             crate::gui::icon::RANDOM_ICONS[rng.usize(..crate::gui::icon::RANDOM_ICONS.len())];
+            
+        let goal_icon = 
+            crate::gui::icon::GOAL_ICONS[rng.usize(..crate::gui::icon::GOAL_ICONS.len())];
 
         // Select a random theme (excluding Random itself)
         let themes: Vec<AppTheme> = AppTheme::iter()
@@ -401,6 +406,7 @@ impl Default for GuiApp {
             quick_filter_term: "is:ready".to_string(),
             quick_filter_icon: "f0fa9".to_string(),
             show_quick_filter: true,
+            show_goals_tab: true,
             sidebar_is_hidden: false,
             ob_quick_filter_term_input: "is:ready".to_string(),
             ob_quick_filter_icon_input: "f0fa9".to_string(),
@@ -433,6 +439,7 @@ impl Default for GuiApp {
 
             location_tab_icon,
             random_icon,
+            goal_icon,
             alias_input_key: String::new(),
             alias_input_values: String::new(),
             editing_alias_key: None,

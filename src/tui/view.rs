@@ -330,7 +330,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             let mut items: Vec<ListItem> = Vec::new();
             if state.goals.is_empty() {
                 items.push(ListItem::new(Line::from(Span::styled(
-                    "No goals configured.",
+                    rust_i18n::t!("goals_empty").to_string(),
                     Style::default().fg(Color::DarkGray),
                 ))));
             } else {
@@ -383,7 +383,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 }
             }
             (
-                format!(" \u{f4de} {}", rust_i18n::t!("goals")).to_string(),
+                format!(" {} {}", state.goal_icon, rust_i18n::t!("goals")).to_string(),
                 items,
             )
         }
