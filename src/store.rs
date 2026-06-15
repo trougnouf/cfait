@@ -54,7 +54,7 @@ use crate::config::Config;
 use crate::context::AppContext;
 use crate::journal::Action as JournalAction;
 use crate::model::{AppIntent, DateType, Task, TaskStatus};
-use chrono::{DateTime, Datelike, Utc};
+use chrono::{DateTime, Utc};
 use fastrand;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -1523,127 +1523,9 @@ impl TaskStore {
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
         let default_dur = config.default_duration_goal_mins;
         let count_sessions = config.sessions_count_as_completions;
-
         let now = chrono::Utc::now();
-        let start_of_period = match goal.period {
-            crate::config::GoalPeriod::Daily => {
-                let local_now = chrono::Local::now();
-                crate::model::item::safe_local_to_utc(
-                    local_now.date_naive(),
-                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-                )
-            }
-            crate::config::GoalPeriod::Weekly => {
-                let local_now = chrono::Local::now();
-                let days_from_monday = local_now.weekday().num_days_from_monday();
-                let monday =
-                    local_now.date_naive() - chrono::Duration::days(days_from_monday as i64);
-                crate::model::item::safe_local_to_utc(
-                    monday,
-                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-                )
-            }
-            crate::config::GoalPeriod::Monthly => {
-                let local_now = chrono::Local::now();
-                let first_day =
-                    chrono::NaiveDate::from_ymd_opt(local_now.year(), local_now.month(), 1)
-                        .unwrap();
-                crate::model::item::safe_local_to_utc(
-                    first_day,
-                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-                )
-            }
-            crate::config::GoalPeriod::Quarterly => {
-                let local_now = chrono::Local::now();
-                let q_month = ((local_now.month() - 1) / 3) * 3 + 1;
-                let first_day =
-                    chrono::NaiveDate::from_ymd_opt(local_now.year(), q_month, 1).unwrap();
-                crate::model::item::safe_local_to_utc(
-                    first_day,
-                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-                )
-            }
-            crate::config::GoalPeriod::HalfYearly => {
-                let local_now = chrono::Local::now();
-                let h_month = ((local_now.month() - 1) / 6) * 6 + 1;
-                let first_day =
-                    chrono::NaiveDate::from_ymd_opt(local_now.year(), h_month, 1).unwrap();
-                crate::model::item::safe_local_to_utc(
-                    first_day,
-                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-                )
-            }
-            crate::config::GoalPeriod::Yearly => {
-                let local_now = chrono::Local::now();
-                let first_day = chrono::NaiveDate::from_ymd_opt(local_now.year(), 1, 1).unwrap();
-                crate::model::item::safe_local_to_utc(
-                    first_day,
-                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-                )
-            }
-        };
-
-        let end_of_period = match goal.period {
-            crate::config::GoalPeriod::Daily => start_of_period + chrono::Duration::days(1),
-            crate::config::GoalPeriod::Weekly => start_of_period + chrono::Duration::days(7),
-            crate::config::GoalPeriod::Monthly => {
-                let local_now = chrono::Local::now();
-                let next_m = if local_now.month() == 12 {
-                    1
-                } else {
-                    local_now.month() + 1
-                };
-                let next_y = if local_now.month() == 12 {
-                    local_now.year() + 1
-                } else {
-                    local_now.year()
-                };
-                crate::model::item::safe_local_to_utc(
-                    chrono::NaiveDate::from_ymd_opt(next_y, next_m, 1).unwrap(),
-                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-                )
-            }
-            crate::config::GoalPeriod::Quarterly => {
-                let local_now = chrono::Local::now();
-                let q_month = ((local_now.month() - 1) / 3) * 3 + 1;
-                let next_m = q_month + 3;
-                let (next_y, next_m) = if next_m > 12 {
-                    (local_now.year() + 1, next_m - 12)
-                } else {
-                    (local_now.year(), next_m)
-                };
-                crate::model::item::safe_local_to_utc(
-                    chrono::NaiveDate::from_ymd_opt(next_y, next_m, 1).unwrap(),
-                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-                )
-            }
-            crate::config::GoalPeriod::HalfYearly => {
-                let local_now = chrono::Local::now();
-                let h_month = ((local_now.month() - 1) / 6) * 6 + 1;
-                let next_m = h_month + 6;
-                let (next_y, next_m) = if next_m > 12 {
-                    (local_now.year() + 1, next_m - 12)
-                } else {
-                    (local_now.year(), next_m)
-                };
-                crate::model::item::safe_local_to_utc(
-                    chrono::NaiveDate::from_ymd_opt(next_y, next_m, 1).unwrap(),
-                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-                )
-            }
-            crate::config::GoalPeriod::Yearly => {
-                let local_now = chrono::Local::now();
-                crate::model::item::safe_local_to_utc(
-                    chrono::NaiveDate::from_ymd_opt(local_now.year() + 1, 1, 1).unwrap(),
-                    chrono::NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
-                )
-            }
-        };
-
-        let start_ts = start_of_period.timestamp();
-        let end_ts = end_of_period.timestamp();
+        let (start_ts, end_ts) = goal.interval.get_period_bounds(now);
         let mut progress = 0;
-
         let is_tag = key.starts_with('#');
         let clean_key = if is_tag {
             key.trim_start_matches('#')
@@ -2779,6 +2661,7 @@ mod tests {
             raw_alarms: vec![],
             raw_components: vec![],
             create_event: None,
+            goal: None,
             // Transient fields
             is_blocked: false,
             is_implicitly_blocked: false,

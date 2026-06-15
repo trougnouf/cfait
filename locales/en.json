@@ -257,6 +257,10 @@
     "goal_period_quarterly": "Quarterly",
     "goal_period_half_yearly": "Semiannual",
     "goal_period_yearly": "Yearly",
+    "interval_unit_days": "Days",
+    "interval_unit_weeks": "Weeks",
+    "interval_unit_months": "Months",
+    "interval_unit_years": "Years",
     "habit_history": "History",
     "habit_completed_in_past": {
         "one": "Completed 1 time in the past %{window}",

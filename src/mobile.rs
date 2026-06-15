@@ -319,6 +319,7 @@ pub struct MobileViewData {
     pub tasks: Vec<MobileTask>,
     pub tags: Vec<MobileTag>,
     pub locations: Vec<MobileLocation>,
+    pub goals: Vec<MobileGoalProgress>,
 }
 
 #[derive(uniffi::Record)]
@@ -336,20 +337,33 @@ pub enum MobileGoalType {
 }
 
 #[derive(uniffi::Enum)]
-pub enum MobileGoalPeriod {
-    Daily,
-    Weekly,
-    Monthly,
-    Quarterly,
-    HalfYearly,
-    Yearly,
+pub enum MobileIntervalUnit {
+    Days,
+    Weeks,
+    Months,
+    Years,
+}
+
+#[derive(uniffi::Record)]
+pub struct MobileInterval {
+    pub amount: u32,
+    pub unit: MobileIntervalUnit,
 }
 
 #[derive(uniffi::Record)]
 pub struct MobileGoal {
     pub goal_type: MobileGoalType,
     pub target: u32,
-    pub period: MobileGoalPeriod,
+    pub interval: MobileInterval,
+}
+
+#[derive(uniffi::Record)]
+pub struct MobileGoalProgress {
+    pub key: String,
+    pub progress_str: String,
+    pub target_str: String,
+    pub period_str: String,
+    pub pct: f32,
 }
 
 #[derive(uniffi::Record)]
@@ -835,20 +849,21 @@ impl CfaitMobile {
                         crate::config::GoalType::Count => MobileGoalType::Count,
                         crate::config::GoalType::Duration => MobileGoalType::Duration,
                     };
-                    let mp = match v.period {
-                        crate::config::GoalPeriod::Daily => MobileGoalPeriod::Daily,
-                        crate::config::GoalPeriod::Weekly => MobileGoalPeriod::Weekly,
-                        crate::config::GoalPeriod::Monthly => MobileGoalPeriod::Monthly,
-                        crate::config::GoalPeriod::Quarterly => MobileGoalPeriod::Quarterly,
-                        crate::config::GoalPeriod::HalfYearly => MobileGoalPeriod::HalfYearly,
-                        crate::config::GoalPeriod::Yearly => MobileGoalPeriod::Yearly,
+                    let m_unit = match v.interval.unit {
+                        crate::config::IntervalUnit::Days => MobileIntervalUnit::Days,
+                        crate::config::IntervalUnit::Weeks => MobileIntervalUnit::Weeks,
+                        crate::config::IntervalUnit::Months => MobileIntervalUnit::Months,
+                        crate::config::IntervalUnit::Years => MobileIntervalUnit::Years,
                     };
                     (
                         k,
                         MobileGoal {
                             goal_type: mt,
                             target: v.target,
-                            period: mp,
+                            interval: MobileInterval {
+                                amount: v.interval.amount,
+                                unit: m_unit,
+                            },
                         },
                     )
                 })
@@ -951,20 +966,21 @@ impl CfaitMobile {
                     MobileGoalType::Count => crate::config::GoalType::Count,
                     MobileGoalType::Duration => crate::config::GoalType::Duration,
                 };
-                let p = match v.period {
-                    MobileGoalPeriod::Daily => crate::config::GoalPeriod::Daily,
-                    MobileGoalPeriod::Weekly => crate::config::GoalPeriod::Weekly,
-                    MobileGoalPeriod::Monthly => crate::config::GoalPeriod::Monthly,
-                    MobileGoalPeriod::Quarterly => crate::config::GoalPeriod::Quarterly,
-                    MobileGoalPeriod::HalfYearly => crate::config::GoalPeriod::HalfYearly,
-                    MobileGoalPeriod::Yearly => crate::config::GoalPeriod::Yearly,
+                let p = match v.interval.unit {
+                    MobileIntervalUnit::Days => crate::config::IntervalUnit::Days,
+                    MobileIntervalUnit::Weeks => crate::config::IntervalUnit::Weeks,
+                    MobileIntervalUnit::Months => crate::config::IntervalUnit::Months,
+                    MobileIntervalUnit::Years => crate::config::IntervalUnit::Years,
                 };
                 (
                     k,
                     crate::config::Goal {
                         goal_type: t,
                         target: v.target,
-                        period: p,
+                        interval: crate::config::Interval {
+                            amount: v.interval.amount,
+                            unit: p,
+                        },
                     },
                 )
             })
@@ -1661,10 +1677,31 @@ impl CfaitMobile {
             })
             .collect();
 
+        let mut evaluated_goals = Vec::new();
+        for (key, goal) in &config.goals {
+            let progress = store.calculate_goal_progress(key, goal);
+            let (progress_str, target_str) =
+                crate::model::parser::format_goal_duration(progress, goal.target);
+            let pct = if goal.target > 0 {
+                (progress as f32 / goal.target as f32).min(1.0)
+            } else {
+                0.0
+            };
+
+            evaluated_goals.push(MobileGoalProgress {
+                key: key.clone(),
+                progress_str,
+                target_str,
+                period_str: goal.interval.format_short(),
+                pct,
+            });
+        }
+
         MobileViewData {
             tasks,
             tags,
             locations,
+            goals: evaluated_goals,
         }
     }
 

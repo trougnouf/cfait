@@ -191,6 +191,7 @@ fun CfaitNavHost(
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
     var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
     var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) }
+    var viewGoals by remember { mutableStateOf<List<com.trougnouf.cfait.core.MobileGoalProgress>>(emptyList()) }
     var aliases by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
     var defaultCalHref by remember { mutableStateOf<String?>(null) }
     var hasUnsynced by remember { mutableStateOf(false) }
@@ -504,11 +505,12 @@ fun CfaitNavHost(
                 tags = tags,
                 locations = locations,
                 aliases = aliases,
-                onUpdateViewData = { newTasks, newTags, newLocs, newAliases ->
+                onUpdateViewData = { newTasks, newTags, newLocs, newAliases, newGoals ->
                     tasks = newTasks
                     tags = newTags
                     locations = newLocs
                     aliases = newAliases
+                    viewGoals = newGoals
                 },
                 defaultCalHref = defaultCalHref,
                 defaultPriority = defaultPriority, // Pass it here
@@ -523,6 +525,7 @@ fun CfaitNavHost(
                 tabAutoHide = tabAutoHide, // <-- ADD THIS LINE
                 listStates = listStates,
                 goals = goals,
+                viewGoals = viewGoals,
                 showGoalsTab = showGoalsTab,
                 defaultDurationGoalMins = defaultDurationGoalMins,
                 sessionsCountAsCompletions = sessionsCountAsCompletions,

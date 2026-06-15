@@ -110,7 +110,7 @@ fun HomeScreen(
     tags: List<MobileTag>,
     locations: List<MobileLocation>,
     aliases: Map<String, List<String>>,
-    onUpdateViewData: (List<MobileTask>, List<MobileTag>, List<MobileLocation>, Map<String, List<String>>) -> Unit,
+    onUpdateViewData: (List<MobileTask>, List<MobileTag>, List<MobileLocation>, Map<String, List<String>>, List<com.trougnouf.cfait.core.MobileGoalProgress>) -> Unit,
     defaultCalHref: String?,
     defaultPriority: Int,
     isLoading: Boolean,
@@ -124,6 +124,7 @@ fun HomeScreen(
     tabAutoHide: Boolean = true,
     listStates: SnapshotStateMap<String, LazyListState>,
     goals: Map<String, com.trougnouf.cfait.core.MobileGoal>,
+    viewGoals: List<com.trougnouf.cfait.core.MobileGoalProgress>,
     showGoalsTab: Boolean,
     defaultDurationGoalMins: Int,
     sessionsCountAsCompletions: Boolean,
@@ -348,7 +349,7 @@ fun HomeScreen(
                     expandedLocations = expandedLocations.toList()
                 )
                 val viewData = api.getViewTasks(options)
-                onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, api.getConfig().tagAliases)
+                onUpdateViewData(viewData.tasks, viewData.tags, viewData.locations, api.getConfig().tagAliases, viewData.goals)
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
             }
@@ -1285,48 +1286,27 @@ fun HomeScreen(
                                 )
                             }
                         } else if (sidebarTab == 3) {
-                            if (goals.isEmpty()) {
+                            if (viewGoals.isEmpty()) {
                                 item {
                                     Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
                                         Text(stringResource(R.string.goals_empty), fontSize = 13.sp, color = Color.Gray, textAlign = TextAlign.Center)
                                     }
                                 }
                             } else {
-                                val sortedKeys = goals.keys.sorted()
-                                items(sortedKeys) { key ->
-                                    val goal = goals[key]!!
-                                    val progress = calculateGoalProgress(key, goal, tasks, sessionsCountAsCompletions, defaultDurationGoalMins)
-                                    val target = goal.target.toInt()
-                                    val pct = if (target > 0) (progress.toFloat() / target).coerceAtMost(1f) else 0f
-
-                                    val periodStr = when(goal.period) {
-                                        MobileGoalPeriod.DAILY -> stringResource(R.string.goal_period_daily)
-                                        MobileGoalPeriod.WEEKLY -> stringResource(R.string.goal_period_weekly)
-                                        MobileGoalPeriod.MONTHLY -> stringResource(R.string.goal_period_monthly)
-                                        MobileGoalPeriod.QUARTERLY -> stringResource(R.string.goal_period_quarterly)
-                                        MobileGoalPeriod.HALF_YEARLY -> stringResource(R.string.goal_period_half_yearly)
-                                        MobileGoalPeriod.YEARLY -> stringResource(R.string.goal_period_yearly)
-                                    }
-
-                                    val (cStr, tStr) = if (goal.goalType == MobileGoalType.DURATION) {
-                                        formatGoalDuration(progress, target)
-                                    } else {
-                                        Pair(progress.toString(), target.toString())
-                                    }
-
-                                    val progText = stringResource(R.string.goal_progress, cStr, tStr)
-
-                                    val isTag = key.startsWith("#")
+                                val sortedGoals = viewGoals.sortedBy { it.key }
+                                items(sortedGoals) { goal ->
+                                    val progText = stringResource(R.string.goal_progress, goal.progressStr, goal.targetStr)
+                                    val isTag = goal.key.startsWith("#")
 
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
                                                 if (isTag) {
-                                                    filterTags = setOf(key.removePrefix("#"))
+                                                    filterTags = setOf(goal.key.removePrefix("#"))
                                                     sidebarTab = 1
-                                                } else if (key.startsWith("@@")) {
-                                                    filterLocations = setOf(key.removePrefix("@@"))
+                                                } else if (goal.key.startsWith("@@")) {
+                                                    filterLocations = setOf(goal.key.removePrefix("@@"))
                                                     sidebarTab = 2
                                                 }
                                             }
@@ -1334,10 +1314,10 @@ fun HomeScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text("$key ($periodStr)", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                            Text("${goal.key} (${goal.periodStr})", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                                             Spacer(Modifier.height(4.dp))
                                             Box(modifier = Modifier.fillMaxWidth().height(6.dp).background(Color.DarkGray, RoundedCornerShape(3.dp))) {
-                                                Box(modifier = Modifier.fillMaxWidth(pct).fillMaxHeight().background(if (pct >= 1f) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp)))
+                                                Box(modifier = Modifier.fillMaxWidth(goal.pct).fillMaxHeight().background(if (goal.pct >= 1f) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp)))
                                             }
                                             Spacer(Modifier.height(4.dp))
                                             Text(progText, fontSize = 12.sp, color = Color.Gray)
@@ -1345,10 +1325,10 @@ fun HomeScreen(
                                         Spacer(Modifier.width(12.dp))
                                         IconButton(onClick = {
                                             if (isTag) {
-                                                filterTags = setOf(key.removePrefix("#"))
+                                                filterTags = setOf(goal.key.removePrefix("#"))
                                                 scope.launch { drawerState.close() }
-                                            } else if (key.startsWith("@@")) {
-                                                filterLocations = setOf(key.removePrefix("@@"))
+                                            } else if (goal.key.startsWith("@@")) {
+                                                filterLocations = setOf(goal.key.removePrefix("@@"))
                                                 scope.launch { drawerState.close() }
                                             }
                                         }) {

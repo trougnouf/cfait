@@ -1055,6 +1055,26 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         save_config(app);
     }
 
+    let trimmed = clean_input.trim();
+    if trimmed.is_empty()
+        || (!trimmed.contains(' ')
+            && (trimmed.contains(":=") || trimmed.to_lowercase().starts_with("loc:")))
+            && app.editing_uid.is_none()
+    {
+        app.input_value = text_editor::Content::new();
+        refresh_filtered_tasks(app);
+        if !retroactive_sync_batch.is_empty() {
+            let actions: Vec<_> = retroactive_sync_batch
+                .into_iter()
+                .map(crate::journal::Action::Update)
+                .collect();
+            if let Some(tx) = &app.bg_tx {
+                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
+            }
+        }
+        return Task::none();
+    }
+
     if clean_input.starts_with('#')
         && !clean_input.trim().contains(' ')
         && app.editing_uid.is_none()

@@ -61,7 +61,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::GoalKeyInput(_)
         | Message::GoalTargetInput(_)
         | Message::GoalTypeChanged(_)
-        | Message::GoalPeriodChanged(_)
+        | Message::GoalAmountChanged(_)
+        | Message::GoalUnitChanged(_)
         | Message::AddGoal
         | Message::EditGoal(_, _)
         | Message::CancelEditGoal

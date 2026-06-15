@@ -641,10 +641,14 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 .on_input(Message::GoalTargetInput)
                 .padding(5)
                 .width(Length::FillPortion(1)),
+            text_input("Amount", &app.goal_input_amount)
+                .on_input(Message::GoalAmountChanged)
+                .padding(5)
+                .width(Length::FillPortion(1)),
             iced::widget::pick_list(
-                crate::config::GoalPeriod::iter().collect::<Vec<_>>(),
-                Some(app.goal_input_period),
-                Message::GoalPeriodChanged
+                crate::config::IntervalUnit::iter().collect::<Vec<_>>(),
+                Some(app.goal_input_unit),
+                Message::GoalUnitChanged
             )
             .width(Length::FillPortion(2))
             .padding(5),
@@ -715,7 +719,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                     |_: &Theme| text::Style::default()
                 });
 
-            let period_text = text(goal.period.to_string())
+            let period_text = text(goal.interval.format_short())
                 .width(Length::FillPortion(2))
                 .style(if is_editing_this {
                     |theme: &Theme| text::Style {

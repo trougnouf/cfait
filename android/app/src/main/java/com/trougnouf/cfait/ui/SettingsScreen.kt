@@ -40,7 +40,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.trougnouf.cfait.R
 import com.trougnouf.cfait.core.CfaitMobile
 import com.trougnouf.cfait.core.MobileGoalType
-import com.trougnouf.cfait.core.MobileGoalPeriod
 import com.trougnouf.cfait.core.MobileCalendar
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -118,7 +117,8 @@ fun SettingsScreen(
     var goalInputKey by remember { mutableStateOf("") }
     var goalInputTarget by remember { mutableStateOf("") }
     var goalInputType by remember { mutableStateOf(MobileGoalType.COUNT) }
-    var goalInputPeriod by remember { mutableStateOf(MobileGoalPeriod.WEEKLY) }
+    var goalInputAmount by remember { mutableStateOf("1") }
+    var goalInputUnit by remember { mutableStateOf(com.trougnouf.cfait.core.MobileIntervalUnit.WEEKS) }
     var editingGoalKey by remember { mutableStateOf<String?>(null) }
     
     var allCalendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
@@ -1134,15 +1134,15 @@ fun SettingsScreen(
                 val goal = goals[key]!!
                 val isEditingThis = editingGoalKey == key
                 
-                val periodStr = when(goal.period) {
-                    MobileGoalPeriod.DAILY -> stringResource(R.string.goal_period_daily)
-                    MobileGoalPeriod.WEEKLY -> stringResource(R.string.goal_period_weekly)
-                    MobileGoalPeriod.MONTHLY -> stringResource(R.string.goal_period_monthly)
-                    MobileGoalPeriod.QUARTERLY -> stringResource(R.string.goal_period_quarterly)
-                    MobileGoalPeriod.HALF_YEARLY -> stringResource(R.string.goal_period_half_yearly)
-                    MobileGoalPeriod.YEARLY -> stringResource(R.string.goal_period_yearly)
-                }
                 val typeStr = if (goal.goalType == MobileGoalType.DURATION) stringResource(R.string.goal_type_duration) else stringResource(R.string.goal_type_count)
+                
+                val unitStr = when(goal.interval.unit) {
+                    com.trougnouf.cfait.core.MobileIntervalUnit.DAYS -> "d"
+                    com.trougnouf.cfait.core.MobileIntervalUnit.WEEKS -> "w"
+                    com.trougnouf.cfait.core.MobileIntervalUnit.MONTHS -> "mo"
+                    com.trougnouf.cfait.core.MobileIntervalUnit.YEARS -> "y"
+                }
+                val periodStr = if (goal.interval.amount == 1u) "/$unitStr" else "/${goal.interval.amount}$unitStr"
 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                     Text(
@@ -1160,7 +1160,8 @@ fun SettingsScreen(
                         goalInputKey = key
                         goalInputTarget = goal.target.toString()
                         goalInputType = goal.goalType
-                        goalInputPeriod = goal.period
+                        goalInputAmount = goal.interval.amount.toString()
+                        goalInputUnit = goal.interval.unit
                     }) { NfIcon(NfIcons.EDIT, 16.sp, MaterialTheme.colorScheme.secondary) }
 
                     IconButton(onClick = {
@@ -1203,21 +1204,27 @@ fun SettingsScreen(
                             value = goalInputTarget,
                             onValueChange = { goalInputTarget = it },
                             label = { Text("Target") },
+                            modifier = Modifier.weight(1.5f),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = goalInputAmount,
+                            onValueChange = { goalInputAmount = it },
+                            label = { Text("Amount") },
                             modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true
                         )
                         DropdownPicker(
-                            label = "Period",
-                            selected = goalInputPeriod,
+                            label = "Unit",
+                            selected = goalInputUnit,
                             options = listOf(
-                                MobileGoalPeriod.DAILY to stringResource(R.string.goal_period_daily),
-                                MobileGoalPeriod.WEEKLY to stringResource(R.string.goal_period_weekly),
-                                MobileGoalPeriod.MONTHLY to stringResource(R.string.goal_period_monthly),
-                                MobileGoalPeriod.QUARTERLY to stringResource(R.string.goal_period_quarterly),
-                                MobileGoalPeriod.HALF_YEARLY to stringResource(R.string.goal_period_half_yearly),
-                                MobileGoalPeriod.YEARLY to stringResource(R.string.goal_period_yearly)
+                                com.trougnouf.cfait.core.MobileIntervalUnit.DAYS to stringResource(R.string.interval_unit_days),
+                                com.trougnouf.cfait.core.MobileIntervalUnit.WEEKS to stringResource(R.string.interval_unit_weeks),
+                                com.trougnouf.cfait.core.MobileIntervalUnit.MONTHS to stringResource(R.string.interval_unit_months),
+                                com.trougnouf.cfait.core.MobileIntervalUnit.YEARS to stringResource(R.string.interval_unit_years)
                             ),
-                            onSelect = { goalInputPeriod = it },
+                            onSelect = { goalInputUnit = it },
                             modifier = Modifier.weight(1.5f).padding(top = 8.dp)
                         )
                         if (editingGoalKey != null) {
@@ -1236,11 +1243,13 @@ fun SettingsScreen(
                                     if (targetVal > 0) {
                                         val newGoals = goals.toMutableMap()
                                         if (editingGoalKey != safeKey) newGoals.remove(editingGoalKey)
-                                        newGoals[safeKey] = com.trougnouf.cfait.core.MobileGoal(goalInputType, targetVal.toUInt(), goalInputPeriod)
+                                        val amt = goalInputAmount.toUIntOrNull()?.coerceAtLeast(1u) ?: 1u
+                                        newGoals[safeKey] = com.trougnouf.cfait.core.MobileGoal(goalInputType, targetVal.toUInt(), com.trougnouf.cfait.core.MobileInterval(amt, goalInputUnit))
                                         goals = newGoals
                                         editingGoalKey = null
                                         goalInputKey = ""
                                         goalInputTarget = ""
+                                        goalInputAmount = "1"
                                         saveToDisk()
                                     }
                                 }
@@ -1250,6 +1259,7 @@ fun SettingsScreen(
                                 editingGoalKey = null
                                 goalInputKey = ""
                                 goalInputTarget = ""
+                                goalInputAmount = "1"
                             }) { NfIcon(NfIcons.CROSS, 20.sp, MaterialTheme.colorScheme.error) }
                         } else {
                             IconButton(onClick = {
@@ -1266,10 +1276,12 @@ fun SettingsScreen(
 
                                     if (targetVal > 0) {
                                         val newGoals = goals.toMutableMap()
-                                        newGoals[safeKey] = com.trougnouf.cfait.core.MobileGoal(goalInputType, targetVal.toUInt(), goalInputPeriod)
+                                        val amt = goalInputAmount.toUIntOrNull()?.coerceAtLeast(1u) ?: 1u
+                                        newGoals[safeKey] = com.trougnouf.cfait.core.MobileGoal(goalInputType, targetVal.toUInt(), com.trougnouf.cfait.core.MobileInterval(amt, goalInputUnit))
                                         goals = newGoals
                                         goalInputKey = ""
                                         goalInputTarget = ""
+                                        goalInputAmount = "1"
                                         saveToDisk()
                                     }
                                 }

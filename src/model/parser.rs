@@ -156,7 +156,11 @@ pub fn extract_inline_goals(input: &str) -> (String, HashMap<String, crate::conf
             }
 
             if is_valid && let Some(goal_str) = right.strip_prefix("goal:") {
-                let goal_parts: Vec<&str> = goal_str.split(':').collect();
+                let goal_parts: Vec<&str> = if goal_str.contains('/') {
+                    goal_str.split('/').collect()
+                } else {
+                    goal_str.split(':').collect()
+                };
                 if goal_parts.len() == 2 {
                     let target_str = goal_parts[0];
                     let period_str = goal_parts[1];
@@ -169,27 +173,36 @@ pub fn extract_inline_goals(input: &str) -> (String, HashMap<String, crate::conf
                         target_str.parse().unwrap_or(0)
                     };
 
-                    let period = match period_str.to_lowercase().as_str() {
-                        "daily" | "d" => Some(crate::config::GoalPeriod::Daily),
-                        "weekly" | "w" => Some(crate::config::GoalPeriod::Weekly),
-                        "monthly" | "m" | "mo" => Some(crate::config::GoalPeriod::Monthly),
-                        "quarterly" | "q" => Some(crate::config::GoalPeriod::Quarterly),
-                        "semiannual" | "halfyearly" | "h" | "hy" => {
-                            Some(crate::config::GoalPeriod::HalfYearly)
+                    let (mut amount, unit, _) = parse_amount_and_unit(period_str, None, false)
+                        .unwrap_or((1, period_str.to_string(), 0));
+                    let interval_unit = match unit.to_lowercase().as_str() {
+                        "d" | "day" | "days" | "daily" => crate::config::IntervalUnit::Days,
+                        "w" | "week" | "weeks" | "weekly" => crate::config::IntervalUnit::Weeks,
+                        "m" | "mo" | "month" | "months" | "monthly" => {
+                            crate::config::IntervalUnit::Months
                         }
-                        "yearly" | "y" => Some(crate::config::GoalPeriod::Yearly),
-                        _ => None,
+                        "q" | "quarter" | "quarterly" => {
+                            amount *= 3;
+                            crate::config::IntervalUnit::Months
+                        }
+                        "h" | "hy" | "halfyearly" | "semiannual" => {
+                            amount *= 6;
+                            crate::config::IntervalUnit::Months
+                        }
+                        "y" | "year" | "years" | "yearly" => crate::config::IntervalUnit::Years,
+                        _ => crate::config::IntervalUnit::Weeks,
                     };
 
-                    if target > 0
-                        && let Some(p) = period
-                    {
+                    if target > 0 {
                         new_goals.insert(
                             key,
                             crate::config::Goal {
                                 goal_type,
                                 target,
-                                period: p,
+                                interval: crate::config::Interval {
+                                    amount,
+                                    unit: interval_unit,
+                                },
                             },
                         );
                         cleaned_words.push(left.to_string());
@@ -1071,7 +1084,7 @@ fn is_date_unit_short(s: &str) -> bool {
             | "years"
     )
 }
-fn parse_amount_and_unit(
+pub fn parse_amount_and_unit(
     first: &str,
     second: Option<&str>,
     strict_unit: bool,
@@ -2735,6 +2748,57 @@ pub fn apply_smart_input(
                         finalize_date_token(d, &stream, i + temp_consumed, &mut temp_consumed);
                     task.due = Some(dt);
                     consumed = temp_consumed;
+                } else {
+                    summary_words.push(unescape(token));
+                }
+            } else {
+                summary_words.push(unescape(token));
+            }
+        } else if let Some(val) = token_lower.strip_prefix("goal:") {
+            let parts: Vec<&str> = if val.contains('/') {
+                val.split('/').collect()
+            } else {
+                val.split(':').collect()
+            };
+            if parts.len() == 2 {
+                let target_str = parts[0];
+                let period_str = parts[1];
+                let mut goal_type = crate::config::GoalType::Count;
+                let target = if let Some(dur) = parse_duration(target_str) {
+                    goal_type = crate::config::GoalType::Duration;
+                    dur
+                } else {
+                    target_str.parse().unwrap_or(0)
+                };
+                let (mut amount, unit, _) = parse_amount_and_unit(period_str, None, false)
+                    .unwrap_or((1, period_str.to_string(), 0));
+                let interval_unit = match unit.to_lowercase().as_str() {
+                    "d" | "day" | "days" | "daily" => crate::config::IntervalUnit::Days,
+                    "w" | "week" | "weeks" | "weekly" => crate::config::IntervalUnit::Weeks,
+                    "m" | "mo" | "month" | "months" | "monthly" => {
+                        crate::config::IntervalUnit::Months
+                    }
+                    "q" | "quarter" | "quarterly" => {
+                        amount *= 3;
+                        crate::config::IntervalUnit::Months
+                    }
+                    "h" | "hy" | "halfyearly" | "semiannual" => {
+                        amount *= 6;
+                        crate::config::IntervalUnit::Months
+                    }
+                    "y" | "year" | "years" | "yearly" => crate::config::IntervalUnit::Years,
+                    _ => crate::config::IntervalUnit::Weeks,
+                };
+                if target > 0 {
+                    task.goal = Some(crate::config::Goal {
+                        goal_type,
+                        target,
+                        interval: crate::config::Interval {
+                            amount,
+                            unit: interval_unit,
+                        },
+                    });
+                    consumed = 1;
                 } else {
                     summary_words.push(unescape(token));
                 }

@@ -330,6 +330,9 @@ pub struct Task {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub create_event: Option<bool>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub goal: Option<crate::config::Goal>,
+
     // Transient UI/runtime fields (not serialized)
     #[serde(skip)]
     pub is_blocked: bool,
@@ -604,6 +607,7 @@ impl Task {
             raw_alarms: Vec::new(),
             raw_components: Vec::new(),
             create_event: None,
+            goal: None,
             is_blocked: false,
             is_implicitly_blocked: false,
             is_implicitly_future: false,

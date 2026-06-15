@@ -341,20 +341,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     let progress = state.cached_goals_progress.get(key).copied().unwrap_or(0);
                     let target = goal.target;
 
-                    let period_str = match goal.period {
-                        crate::config::GoalPeriod::Daily => rust_i18n::t!("goal_period_daily"),
-                        crate::config::GoalPeriod::Weekly => rust_i18n::t!("goal_period_weekly"),
-                        crate::config::GoalPeriod::Monthly => rust_i18n::t!("goal_period_monthly"),
-                        crate::config::GoalPeriod::Quarterly => {
-                            rust_i18n::t!("goal_period_quarterly")
-                        }
-                        crate::config::GoalPeriod::HalfYearly => {
-                            rust_i18n::t!("goal_period_half_yearly")
-                        }
-                        crate::config::GoalPeriod::Yearly => rust_i18n::t!("goal_period_yearly"),
-                    };
-
-                    let title = format!("{} ({})", key, period_str);
+                    let title =
+                        format!("{} ({}/{})", key, goal.target, goal.interval.format_short());
 
                     let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration
                     {

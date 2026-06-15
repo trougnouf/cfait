@@ -309,6 +309,27 @@ impl IcsAdapter {
             todo.add_property("X-CFAIT-PINNED", "TRUE");
         }
 
+        if let Some(goal) = &task.goal {
+            let type_str = if goal.goal_type == crate::config::GoalType::Duration {
+                "duration"
+            } else {
+                "count"
+            };
+            let unit_str = match goal.interval.unit {
+                crate::config::IntervalUnit::Days => "d",
+                crate::config::IntervalUnit::Weeks => "w",
+                crate::config::IntervalUnit::Months => "m",
+                crate::config::IntervalUnit::Years => "y",
+            };
+            todo.add_property(
+                "X-CFAIT-GOAL",
+                format!(
+                    "{}:{}/{}{}",
+                    type_str, goal.target, goal.interval.amount, unit_str
+                ),
+            );
+        }
+
         // Emit time-tracking properties (if present)
         if task.time_spent_seconds > 0 {
             todo.add_property("X-TIME-SPENT", task.time_spent_seconds.to_string());
@@ -538,6 +559,39 @@ impl IcsAdapter {
         let pinned = get_prop("X-CFAIT-PINNED")
             .map(|v| v.trim().to_uppercase() == "TRUE")
             .unwrap_or(false);
+
+        let mut goal = None;
+        if let Some(prop) = todo.properties().get("X-CFAIT-GOAL")
+            && let Some((t_str, rest)) = prop.value().split_once(':')
+            && let Some((target_str, interval_str)) = rest.split_once('/')
+        {
+            let goal_type = if t_str == "duration" {
+                crate::config::GoalType::Duration
+            } else {
+                crate::config::GoalType::Count
+            };
+            let target = target_str.parse().unwrap_or(0);
+            let (amount, unit, _) = crate::model::parser::parse_amount_and_unit(
+                interval_str,
+                None,
+                false,
+            )
+            .unwrap_or((1, "w".to_string(), 0));
+            let interval_unit = match unit.as_str() {
+                "d" | "day" | "days" => crate::config::IntervalUnit::Days,
+                "m" | "mo" | "month" | "months" => crate::config::IntervalUnit::Months,
+                "y" | "year" | "years" => crate::config::IntervalUnit::Years,
+                _ => crate::config::IntervalUnit::Weeks,
+            };
+            goal = Some(crate::config::Goal {
+                goal_type,
+                target,
+                interval: crate::config::Interval {
+                    amount,
+                    unit: interval_unit,
+                },
+            });
+        }
 
         let fuzzy_due = get_prop("X-CFAIT-FUZZY-DUE");
         let fuzzy_start = get_prop("X-CFAIT-FUZZY-START");
@@ -982,6 +1036,7 @@ impl IcsAdapter {
             raw_alarms: Vec::new(),
             raw_components,
             create_event,
+            goal,
             is_blocked: false,
             is_implicitly_blocked: false,
             is_implicitly_future: false,

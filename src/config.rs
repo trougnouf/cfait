@@ -29,33 +29,172 @@ impl fmt::Display for GoalType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, EnumIter)]
 #[serde(rename_all = "lowercase")]
-pub enum GoalPeriod {
-    Daily,
-    Weekly,
-    Monthly,
-    Quarterly,
-    HalfYearly,
-    Yearly,
+pub enum IntervalUnit {
+    Days,
+    Weeks,
+    Months,
+    Years,
 }
 
-impl fmt::Display for GoalPeriod {
+impl fmt::Display for IntervalUnit {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            GoalPeriod::Daily => write!(f, "Daily"),
-            GoalPeriod::Weekly => write!(f, "Weekly"),
-            GoalPeriod::Monthly => write!(f, "Monthly"),
-            GoalPeriod::Quarterly => write!(f, "Quarterly"),
-            GoalPeriod::HalfYearly => write!(f, "Semiannual"),
-            GoalPeriod::Yearly => write!(f, "Yearly"),
+            IntervalUnit::Days => write!(f, "Days"),
+            IntervalUnit::Weeks => write!(f, "Weeks"),
+            IntervalUnit::Months => write!(f, "Months"),
+            IntervalUnit::Years => write!(f, "Years"),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Interval {
+    pub amount: u32,
+    pub unit: IntervalUnit,
+}
+
+impl Interval {
+    pub fn get_period_bounds(&self, now: chrono::DateTime<chrono::Utc>) -> (i64, i64) {
+        use chrono::{Datelike, NaiveDate, NaiveTime};
+        let local_now = now.with_timezone(&chrono::Local).date_naive();
+
+        let start_date = match self.unit {
+            IntervalUnit::Days => {
+                let epoch_days =
+                    (local_now - NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()).num_days();
+                let cycle = (epoch_days / self.amount as i64) * self.amount as i64;
+                NaiveDate::from_ymd_opt(1970, 1, 1).unwrap() + chrono::Duration::days(cycle)
+            }
+            IntervalUnit::Weeks => {
+                let days_since =
+                    (local_now - NaiveDate::from_ymd_opt(1970, 1, 5).unwrap()).num_days();
+                let weeks = if days_since >= 0 {
+                    days_since / 7
+                } else {
+                    (days_since - 6) / 7
+                };
+                let cycle = (weeks / self.amount as i64) * self.amount as i64;
+                NaiveDate::from_ymd_opt(1970, 1, 5).unwrap() + chrono::Duration::days(cycle * 7)
+            }
+            IntervalUnit::Months => {
+                let months = (local_now.year() - 1970) * 12 + local_now.month0() as i32;
+                let cycle = (months / self.amount as i32) * self.amount as i32;
+                let y = 1970 + cycle / 12;
+                let m = (cycle % 12) as u32 + 1;
+                NaiveDate::from_ymd_opt(y, m, 1).unwrap()
+            }
+            IntervalUnit::Years => {
+                let years = local_now.year() - 1970;
+                let cycle = (years / self.amount as i32) * self.amount as i32;
+                NaiveDate::from_ymd_opt(1970 + cycle, 1, 1).unwrap()
+            }
+        };
+
+        let end_date = match self.unit {
+            IntervalUnit::Days => start_date + chrono::Duration::days(self.amount as i64),
+            IntervalUnit::Weeks => start_date + chrono::Duration::days((self.amount * 7) as i64),
+            IntervalUnit::Months => {
+                let m = start_date.month0() + self.amount;
+                let y = start_date.year() + (m / 12) as i32;
+                NaiveDate::from_ymd_opt(y, (m % 12) + 1, 1).unwrap()
+            }
+            IntervalUnit::Years => {
+                NaiveDate::from_ymd_opt(start_date.year() + self.amount as i32, 1, 1).unwrap()
+            }
+        };
+
+        let start_ts = crate::model::item::safe_local_to_utc(
+            start_date,
+            NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        )
+        .timestamp();
+        let end_ts = crate::model::item::safe_local_to_utc(
+            end_date,
+            NaiveTime::from_hms_opt(0, 0, 0).unwrap(),
+        )
+        .timestamp();
+        (start_ts, end_ts)
+    }
+
+    pub fn format_short(&self) -> String {
+        let unit_str = match self.unit {
+            IntervalUnit::Days => "d",
+            IntervalUnit::Weeks => "w",
+            IntervalUnit::Months => "mo",
+            IntervalUnit::Years => "y",
+        };
+        if self.amount == 1 {
+            unit_str.to_string()
+        } else {
+            format!("{}{}", self.amount, unit_str)
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Goal {
     pub goal_type: GoalType,
     pub target: u32,
-    pub period: GoalPeriod,
+    pub interval: Interval,
+}
+
+impl<'de> Deserialize<'de> for Goal {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum GoalFormat {
+            Modern {
+                goal_type: GoalType,
+                target: u32,
+                interval: Interval,
+            },
+            Legacy {
+                goal_type: GoalType,
+                target: u32,
+                period: String,
+            },
+        }
+        match GoalFormat::deserialize(deserializer)? {
+            GoalFormat::Modern {
+                goal_type,
+                target,
+                interval,
+            } => Ok(Goal {
+                goal_type,
+                target,
+                interval,
+            }),
+            GoalFormat::Legacy {
+                goal_type,
+                target,
+                period,
+            } => {
+                let mut amount = 1;
+                let unit = match period.to_lowercase().as_str() {
+                    "daily" => IntervalUnit::Days,
+                    "monthly" => IntervalUnit::Months,
+                    "quarterly" => {
+                        amount = 3;
+                        IntervalUnit::Months
+                    }
+                    "halfyearly" | "semiannual" => {
+                        amount = 6;
+                        IntervalUnit::Months
+                    }
+                    "yearly" => IntervalUnit::Years,
+                    _ => IntervalUnit::Weeks,
+                };
+                Ok(Goal {
+                    goal_type,
+                    target,
+                    interval: Interval { amount, unit },
+                })
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]

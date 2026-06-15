@@ -338,8 +338,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.editing_goal_key = None;
             app.goal_input_key.clear();
             app.goal_input_target.clear();
+            app.goal_input_amount = "1".to_string();
             app.goal_input_type = crate::config::GoalType::Count;
-            app.goal_input_period = crate::config::GoalPeriod::Weekly;
+            app.goal_input_unit = crate::config::IntervalUnit::Weeks;
 
             Task::none()
         }
@@ -421,8 +422,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.goal_input_type = t;
             Task::none()
         }
-        Message::GoalPeriodChanged(p) => {
-            app.goal_input_period = p;
+        Message::GoalAmountChanged(v) => {
+            if v.is_empty() || v.chars().all(|c| c.is_numeric()) {
+                app.goal_input_amount = v;
+            }
+            Task::none()
+        }
+        Message::GoalUnitChanged(u) => {
+            app.goal_input_unit = u;
             Task::none()
         }
         Message::EditGoal(key, goal) => {
@@ -430,15 +437,17 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.goal_input_key = key;
             app.goal_input_type = goal.goal_type;
             app.goal_input_target = goal.target.to_string();
-            app.goal_input_period = goal.period;
+            app.goal_input_amount = goal.interval.amount.to_string();
+            app.goal_input_unit = goal.interval.unit;
             Task::none()
         }
         Message::CancelEditGoal => {
             app.editing_goal_key = None;
             app.goal_input_key.clear();
             app.goal_input_target.clear();
+            app.goal_input_amount = "1".to_string();
             app.goal_input_type = crate::config::GoalType::Count;
-            app.goal_input_period = crate::config::GoalPeriod::Weekly;
+            app.goal_input_unit = crate::config::IntervalUnit::Weeks;
             Task::none()
         }
         Message::AddGoal => {
@@ -466,10 +475,14 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                     app.core_config.goals.remove(old_key);
                 }
 
+                let amount = app.goal_input_amount.parse().unwrap_or(1).max(1);
                 let goal = crate::config::Goal {
                     goal_type: app.goal_input_type,
                     target,
-                    period: app.goal_input_period,
+                    interval: crate::config::Interval {
+                        amount,
+                        unit: app.goal_input_unit,
+                    },
                 };
 
                 app.core_config.goals.insert(key, goal);
@@ -479,8 +492,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.editing_goal_key = None;
                 app.goal_input_key.clear();
                 app.goal_input_target.clear();
+                app.goal_input_amount = "1".to_string();
                 app.goal_input_type = crate::config::GoalType::Count;
-                app.goal_input_period = crate::config::GoalPeriod::Weekly;
+                app.goal_input_unit = crate::config::IntervalUnit::Weeks;
 
                 save_config(app);
             }

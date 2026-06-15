@@ -57,6 +57,56 @@ impl TaskDisplay for Task {
     }
 
     fn format_duration_short(&self) -> String {
+        if let Some(goal) = &self.goal {
+            let (start_ts, end_ts) = goal.interval.get_period_bounds(chrono::Utc::now());
+            let mut current = 0;
+            if goal.goal_type == crate::config::GoalType::Count
+                && self.status == TaskStatus::Completed
+                && let Some(c) = self.completion_date()
+                && c.timestamp() >= start_ts
+                && c.timestamp() < end_ts
+            {
+                current += 1;
+            } else if goal.goal_type == crate::config::GoalType::Duration {
+                for session in &self.sessions {
+                    if session.end >= start_ts && session.start < end_ts {
+                        let overlap_start = session.start.max(start_ts);
+                        let overlap_end = session.end.min(end_ts);
+                        if overlap_end > overlap_start {
+                            current += (overlap_end - overlap_start) as u32 / 60;
+                        }
+                    }
+                }
+                if let Some(start) = self.last_started_at {
+                    let now_ts = Utc::now().timestamp().min(end_ts);
+                    if now_ts > start_ts {
+                        let overlap_start = start.max(start_ts);
+                        if now_ts > overlap_start {
+                            current += (now_ts - overlap_start) as u32 / 60;
+                        }
+                    }
+                }
+                if self.status == TaskStatus::Completed
+                    && let Some(c) = self.completion_date()
+                    && c.timestamp() >= start_ts
+                    && c.timestamp() < end_ts
+                {
+                    let total_tracked = (self.time_spent_seconds / 60) as u32;
+                    let est = self.estimated_duration.unwrap_or(60);
+                    if est > total_tracked {
+                        current += est - total_tracked;
+                    }
+                }
+            }
+            let (c_str, t_str) = crate::model::parser::format_goal_duration(current, goal.target);
+            return format!(
+                "[ {} / {} per {} ]",
+                c_str,
+                t_str,
+                goal.interval.format_short()
+            );
+        }
+
         // Calculate actual spent time (stored + current session)
         let now_ts = Utc::now().timestamp();
         let current_session = self
@@ -267,6 +317,19 @@ impl TaskDisplay for Task {
 
         if self.pinned {
             s.push_str(" +pin");
+        }
+
+        if let Some(goal) = &self.goal {
+            let type_str = if goal.goal_type == crate::config::GoalType::Duration {
+                crate::model::parser::format_duration_compact(goal.target)
+            } else {
+                goal.target.to_string()
+            };
+            s.push_str(&format!(
+                " goal:{}/{}",
+                type_str,
+                goal.interval.format_short()
+            ));
         }
 
         // Output completion date if present

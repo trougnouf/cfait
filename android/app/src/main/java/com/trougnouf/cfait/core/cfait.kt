@@ -2110,6 +2110,26 @@ public object FfiConverterLong : FfiConverter<Long, Long> {
 /**
  * @suppress
  */
+public object FfiConverterFloat : FfiConverter<Float, Float> {
+    override fun lift(value: Float): Float = value
+
+    override fun read(buf: ByteBuffer): Float = buf.getFloat()
+
+    override fun lower(value: Float): Float = value
+
+    override fun allocationSize(value: Float) = 4UL
+
+    override fun write(
+        value: Float,
+        buf: ByteBuffer,
+    ) {
+        buf.putFloat(value)
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterBoolean : FfiConverter<Boolean, Byte> {
     override fun lift(value: Byte): Boolean = value.toInt() != 0
 
@@ -4284,7 +4304,7 @@ public object FfiConverterTypeMobileFilterOptions : FfiConverterRustBuffer<Mobil
 data class MobileGoal(
     var `goalType`: MobileGoalType,
     var `target`: kotlin.UInt,
-    var `period`: MobileGoalPeriod,
+    var `interval`: MobileInterval,
 ) {
     companion object
 }
@@ -4297,14 +4317,14 @@ public object FfiConverterTypeMobileGoal : FfiConverterRustBuffer<MobileGoal> {
         MobileGoal(
             FfiConverterTypeMobileGoalType.read(buf),
             FfiConverterUInt.read(buf),
-            FfiConverterTypeMobileGoalPeriod.read(buf),
+            FfiConverterTypeMobileInterval.read(buf),
         )
 
     override fun allocationSize(value: MobileGoal) =
         (
             FfiConverterTypeMobileGoalType.allocationSize(value.`goalType`) +
                 FfiConverterUInt.allocationSize(value.`target`) +
-                FfiConverterTypeMobileGoalPeriod.allocationSize(value.`period`)
+                FfiConverterTypeMobileInterval.allocationSize(value.`interval`)
         )
 
     override fun write(
@@ -4313,7 +4333,51 @@ public object FfiConverterTypeMobileGoal : FfiConverterRustBuffer<MobileGoal> {
     ) {
         FfiConverterTypeMobileGoalType.write(value.`goalType`, buf)
         FfiConverterUInt.write(value.`target`, buf)
-        FfiConverterTypeMobileGoalPeriod.write(value.`period`, buf)
+        FfiConverterTypeMobileInterval.write(value.`interval`, buf)
+    }
+}
+
+data class MobileGoalProgress(
+    var `key`: kotlin.String,
+    var `progressStr`: kotlin.String,
+    var `targetStr`: kotlin.String,
+    var `periodStr`: kotlin.String,
+    var `pct`: kotlin.Float,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileGoalProgress : FfiConverterRustBuffer<MobileGoalProgress> {
+    override fun read(buf: ByteBuffer): MobileGoalProgress =
+        MobileGoalProgress(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterFloat.read(buf),
+        )
+
+    override fun allocationSize(value: MobileGoalProgress) =
+        (
+            FfiConverterString.allocationSize(value.`key`) +
+                FfiConverterString.allocationSize(value.`progressStr`) +
+                FfiConverterString.allocationSize(value.`targetStr`) +
+                FfiConverterString.allocationSize(value.`periodStr`) +
+                FfiConverterFloat.allocationSize(value.`pct`)
+        )
+
+    override fun write(
+        value: MobileGoalProgress,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`key`, buf)
+        FfiConverterString.write(value.`progressStr`, buf)
+        FfiConverterString.write(value.`targetStr`, buf)
+        FfiConverterString.write(value.`periodStr`, buf)
+        FfiConverterFloat.write(value.`pct`, buf)
     }
 }
 
@@ -4418,6 +4482,38 @@ public object FfiConverterTypeMobileHelpSection : FfiConverterRustBuffer<MobileH
     ) {
         FfiConverterString.write(value.`title`, buf)
         FfiConverterSequenceTypeMobileHelpItem.write(value.`items`, buf)
+    }
+}
+
+data class MobileInterval(
+    var `amount`: kotlin.UInt,
+    var `unit`: MobileIntervalUnit,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileInterval : FfiConverterRustBuffer<MobileInterval> {
+    override fun read(buf: ByteBuffer): MobileInterval =
+        MobileInterval(
+            FfiConverterUInt.read(buf),
+            FfiConverterTypeMobileIntervalUnit.read(buf),
+        )
+
+    override fun allocationSize(value: MobileInterval) =
+        (
+            FfiConverterUInt.allocationSize(value.`amount`) +
+                FfiConverterTypeMobileIntervalUnit.allocationSize(value.`unit`)
+        )
+
+    override fun write(
+        value: MobileInterval,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterUInt.write(value.`amount`, buf)
+        FfiConverterTypeMobileIntervalUnit.write(value.`unit`, buf)
     }
 }
 
@@ -4821,6 +4917,7 @@ data class MobileViewData(
     var `tasks`: List<MobileTask>,
     var `tags`: List<MobileTag>,
     var `locations`: List<MobileLocation>,
+    var `goals`: List<MobileGoalProgress>,
 ) {
     companion object
 }
@@ -4834,13 +4931,15 @@ public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileView
             FfiConverterSequenceTypeMobileTask.read(buf),
             FfiConverterSequenceTypeMobileTag.read(buf),
             FfiConverterSequenceTypeMobileLocation.read(buf),
+            FfiConverterSequenceTypeMobileGoalProgress.read(buf),
         )
 
     override fun allocationSize(value: MobileViewData) =
         (
             FfiConverterSequenceTypeMobileTask.allocationSize(value.`tasks`) +
                 FfiConverterSequenceTypeMobileTag.allocationSize(value.`tags`) +
-                FfiConverterSequenceTypeMobileLocation.allocationSize(value.`locations`)
+                FfiConverterSequenceTypeMobileLocation.allocationSize(value.`locations`) +
+                FfiConverterSequenceTypeMobileGoalProgress.allocationSize(value.`goals`)
         )
 
     override fun write(
@@ -4850,6 +4949,7 @@ public object FfiConverterTypeMobileViewData : FfiConverterRustBuffer<MobileView
         FfiConverterSequenceTypeMobileTask.write(value.`tasks`, buf)
         FfiConverterSequenceTypeMobileTag.write(value.`tags`, buf)
         FfiConverterSequenceTypeMobileLocation.write(value.`locations`, buf)
+        FfiConverterSequenceTypeMobileGoalProgress.write(value.`goals`, buf)
     }
 }
 
@@ -5816,39 +5916,6 @@ public object FfiConverterTypeMobileError : FfiConverterRustBuffer<MobileExcepti
     }
 }
 
-enum class MobileGoalPeriod {
-    DAILY,
-    WEEKLY,
-    MONTHLY,
-    QUARTERLY,
-    HALF_YEARLY,
-    YEARLY,
-    ;
-
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeMobileGoalPeriod : FfiConverterRustBuffer<MobileGoalPeriod> {
-    override fun read(buf: ByteBuffer) =
-        try {
-            MobileGoalPeriod.values()[buf.getInt() - 1]
-        } catch (e: IndexOutOfBoundsException) {
-            throw RuntimeException("invalid enum value, something is very wrong!!", e)
-        }
-
-    override fun allocationSize(value: MobileGoalPeriod) = 4UL
-
-    override fun write(
-        value: MobileGoalPeriod,
-        buf: ByteBuffer,
-    ) {
-        buf.putInt(value.ordinal + 1)
-    }
-}
-
 enum class MobileGoalType {
     COUNT,
     DURATION,
@@ -5872,6 +5939,37 @@ public object FfiConverterTypeMobileGoalType : FfiConverterRustBuffer<MobileGoal
 
     override fun write(
         value: MobileGoalType,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+enum class MobileIntervalUnit {
+    DAYS,
+    WEEKS,
+    MONTHS,
+    YEARS,
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileIntervalUnit : FfiConverterRustBuffer<MobileIntervalUnit> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            MobileIntervalUnit.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: MobileIntervalUnit) = 4UL
+
+    override fun write(
+        value: MobileIntervalUnit,
         buf: ByteBuffer,
     ) {
         buf.putInt(value.ordinal + 1)
@@ -6161,6 +6259,34 @@ public object FfiConverterSequenceTypeMobileCalendar : FfiConverterRustBuffer<Li
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileCalendar.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeMobileGoalProgress : FfiConverterRustBuffer<List<MobileGoalProgress>> {
+    override fun read(buf: ByteBuffer): List<MobileGoalProgress> {
+        val len = buf.getInt()
+        return List<MobileGoalProgress>(len) {
+            FfiConverterTypeMobileGoalProgress.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<MobileGoalProgress>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeMobileGoalProgress.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<MobileGoalProgress>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeMobileGoalProgress.write(it, buf)
         }
     }
 }

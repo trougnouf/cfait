@@ -1034,20 +1034,16 @@ pub async fn handle_key_event(
                     let _ = cfg.save(state.ctx.as_ref());
                 }
 
-                if !new_aliases.is_empty() || config_changed {
-                    let trimmed = clean_input.trim();
-                    let is_alias_only = trimmed.is_empty()
-                        || (!trimmed.contains(' ')
-                            && (trimmed.starts_with('#')
-                                || trimmed.starts_with("@@")
-                                || trimmed.to_lowercase().starts_with("loc:")));
+                let trimmed = clean_input.trim();
+                let is_alias_only = trimmed.is_empty()
+                    || (!trimmed.contains(' ')
+                        && (trimmed.contains(":=") || trimmed.to_lowercase().starts_with("loc:")));
 
-                    if is_alias_only {
-                        state.mode = InputMode::Normal;
-                        state.reset_input();
-                        state.message = rust_i18n::t!("alias_updated").to_string();
-                        return None;
-                    }
+                if is_alias_only {
+                    state.mode = InputMode::Normal;
+                    state.reset_input();
+                    state.message = rust_i18n::t!("alias_updated").to_string();
+                    return None;
                 }
 
                 let target_href = state

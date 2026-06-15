@@ -395,6 +395,15 @@ async fn main() -> Result<()> {
                 let _ = config.save_with_credentials(ctx.as_ref());
             }
 
+            let trimmed = clean_input.trim();
+            if trimmed.is_empty()
+                || (!trimmed.contains(' ')
+                    && (trimmed.contains(":=") || trimmed.to_lowercase().starts_with("loc:")))
+            {
+                println!("Goal or alias updated successfully.");
+                return Ok(());
+            }
+
             let mut task = Task::new(&clean_input, &config.tag_aliases, def_time);
             if let Some(d) = desc_text {
                 task.description = d;
