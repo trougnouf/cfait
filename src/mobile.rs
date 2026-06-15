@@ -827,21 +827,32 @@ impl CfaitMobile {
             quick_filter_term: c.quick_filter_term,
             quick_filter_icon: c.quick_filter_icon,
             sync_settings: c.sync_settings,
-            goals: c.goals.into_iter().map(|(k, v)| {
-                let mt = match v.goal_type {
-                    crate::config::GoalType::Count => MobileGoalType::Count,
-                    crate::config::GoalType::Duration => MobileGoalType::Duration,
-                };
-                let mp = match v.period {
-                    crate::config::GoalPeriod::Daily => MobileGoalPeriod::Daily,
-                    crate::config::GoalPeriod::Weekly => MobileGoalPeriod::Weekly,
-                    crate::config::GoalPeriod::Monthly => MobileGoalPeriod::Monthly,
-                    crate::config::GoalPeriod::Quarterly => MobileGoalPeriod::Quarterly,
-                    crate::config::GoalPeriod::HalfYearly => MobileGoalPeriod::HalfYearly,
-                    crate::config::GoalPeriod::Yearly => MobileGoalPeriod::Yearly,
-                };
-                (k, MobileGoal { goal_type: mt, target: v.target, period: mp })
-            }).collect(),
+            goals: c
+                .goals
+                .into_iter()
+                .map(|(k, v)| {
+                    let mt = match v.goal_type {
+                        crate::config::GoalType::Count => MobileGoalType::Count,
+                        crate::config::GoalType::Duration => MobileGoalType::Duration,
+                    };
+                    let mp = match v.period {
+                        crate::config::GoalPeriod::Daily => MobileGoalPeriod::Daily,
+                        crate::config::GoalPeriod::Weekly => MobileGoalPeriod::Weekly,
+                        crate::config::GoalPeriod::Monthly => MobileGoalPeriod::Monthly,
+                        crate::config::GoalPeriod::Quarterly => MobileGoalPeriod::Quarterly,
+                        crate::config::GoalPeriod::HalfYearly => MobileGoalPeriod::HalfYearly,
+                        crate::config::GoalPeriod::Yearly => MobileGoalPeriod::Yearly,
+                    };
+                    (
+                        k,
+                        MobileGoal {
+                            goal_type: mt,
+                            target: v.target,
+                            period: mp,
+                        },
+                    )
+                })
+                .collect(),
             default_duration_goal_mins: c.default_duration_goal_mins,
             sessions_count_as_completions: c.sessions_count_as_completions,
             show_goals_tab: c.show_goals_tab,
@@ -932,21 +943,32 @@ impl CfaitMobile {
         c.quick_filter_icon = config.quick_filter_icon;
         c.sync_settings = config.sync_settings;
 
-        c.goals = config.goals.into_iter().map(|(k, v)| {
-            let t = match v.goal_type {
-                MobileGoalType::Count => crate::config::GoalType::Count,
-                MobileGoalType::Duration => crate::config::GoalType::Duration,
-            };
-            let p = match v.period {
-                MobileGoalPeriod::Daily => crate::config::GoalPeriod::Daily,
-                MobileGoalPeriod::Weekly => crate::config::GoalPeriod::Weekly,
-                MobileGoalPeriod::Monthly => crate::config::GoalPeriod::Monthly,
-                MobileGoalPeriod::Quarterly => crate::config::GoalPeriod::Quarterly,
-                MobileGoalPeriod::HalfYearly => crate::config::GoalPeriod::HalfYearly,
-                MobileGoalPeriod::Yearly => crate::config::GoalPeriod::Yearly,
-            };
-            (k, crate::config::Goal { goal_type: t, target: v.target, period: p })
-        }).collect();
+        c.goals = config
+            .goals
+            .into_iter()
+            .map(|(k, v)| {
+                let t = match v.goal_type {
+                    MobileGoalType::Count => crate::config::GoalType::Count,
+                    MobileGoalType::Duration => crate::config::GoalType::Duration,
+                };
+                let p = match v.period {
+                    MobileGoalPeriod::Daily => crate::config::GoalPeriod::Daily,
+                    MobileGoalPeriod::Weekly => crate::config::GoalPeriod::Weekly,
+                    MobileGoalPeriod::Monthly => crate::config::GoalPeriod::Monthly,
+                    MobileGoalPeriod::Quarterly => crate::config::GoalPeriod::Quarterly,
+                    MobileGoalPeriod::HalfYearly => crate::config::GoalPeriod::HalfYearly,
+                    MobileGoalPeriod::Yearly => crate::config::GoalPeriod::Yearly,
+                };
+                (
+                    k,
+                    crate::config::Goal {
+                        goal_type: t,
+                        target: v.target,
+                        period: p,
+                    },
+                )
+            })
+            .collect();
         c.default_duration_goal_mins = config.default_duration_goal_mins;
         c.sessions_count_as_completions = config.sessions_count_as_completions;
         c.show_goals_tab = config.show_goals_tab;

@@ -1714,14 +1714,13 @@ impl TaskStore {
                         && let Some(comp) = t.completion_date()
                         && comp.timestamp() >= start_ts
                         && comp.timestamp() < end_ts
-                        && task_time_in_period == 0
                     {
                         let total_tracked = (t.time_spent_seconds / 60) as u32;
                         let est = t.estimated_duration.unwrap_or(default_dur);
+                        
+                        // Grant credit for the remaining estimated time upon completion
                         if est > total_tracked {
                             task_time_in_period += est - total_tracked;
-                        } else if total_tracked == 0 {
-                            task_time_in_period += est;
                         }
                     }
 

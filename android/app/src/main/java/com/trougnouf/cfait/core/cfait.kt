@@ -4100,6 +4100,10 @@ data class MobileConfig(
     var `quickFilterTerm`: kotlin.String,
     var `quickFilterIcon`: kotlin.String,
     var `syncSettings`: kotlin.Boolean,
+    var `goals`: Map<kotlin.String, MobileGoal>,
+    var `defaultDurationGoalMins`: kotlin.UInt,
+    var `sessionsCountAsCompletions`: kotlin.Boolean,
+    var `showGoalsTab`: kotlin.Boolean,
 ) {
     companion object
 }
@@ -4140,6 +4144,10 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterMapStringTypeMobileGoal.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
         )
 
     override fun allocationSize(value: MobileConfig) =
@@ -4173,7 +4181,11 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterBoolean.allocationSize(value.`showQuickFilter`) +
                 FfiConverterString.allocationSize(value.`quickFilterTerm`) +
                 FfiConverterString.allocationSize(value.`quickFilterIcon`) +
-                FfiConverterBoolean.allocationSize(value.`syncSettings`)
+                FfiConverterBoolean.allocationSize(value.`syncSettings`) +
+                FfiConverterMapStringTypeMobileGoal.allocationSize(value.`goals`) +
+                FfiConverterUInt.allocationSize(value.`defaultDurationGoalMins`) +
+                FfiConverterBoolean.allocationSize(value.`sessionsCountAsCompletions`) +
+                FfiConverterBoolean.allocationSize(value.`showGoalsTab`)
         )
 
     override fun write(
@@ -4210,6 +4222,10 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterString.write(value.`quickFilterTerm`, buf)
         FfiConverterString.write(value.`quickFilterIcon`, buf)
         FfiConverterBoolean.write(value.`syncSettings`, buf)
+        FfiConverterMapStringTypeMobileGoal.write(value.`goals`, buf)
+        FfiConverterUInt.write(value.`defaultDurationGoalMins`, buf)
+        FfiConverterBoolean.write(value.`sessionsCountAsCompletions`, buf)
+        FfiConverterBoolean.write(value.`showGoalsTab`, buf)
     }
 }
 
@@ -4262,6 +4278,42 @@ public object FfiConverterTypeMobileFilterOptions : FfiConverterRustBuffer<Mobil
         FfiConverterBoolean.write(value.`matchAllCategories`, buf)
         FfiConverterSequenceString.write(value.`expandedTags`, buf)
         FfiConverterSequenceString.write(value.`expandedLocations`, buf)
+    }
+}
+
+data class MobileGoal(
+    var `goalType`: MobileGoalType,
+    var `target`: kotlin.UInt,
+    var `period`: MobileGoalPeriod,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileGoal : FfiConverterRustBuffer<MobileGoal> {
+    override fun read(buf: ByteBuffer): MobileGoal =
+        MobileGoal(
+            FfiConverterTypeMobileGoalType.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterTypeMobileGoalPeriod.read(buf),
+        )
+
+    override fun allocationSize(value: MobileGoal) =
+        (
+            FfiConverterTypeMobileGoalType.allocationSize(value.`goalType`) +
+                FfiConverterUInt.allocationSize(value.`target`) +
+                FfiConverterTypeMobileGoalPeriod.allocationSize(value.`period`)
+        )
+
+    override fun write(
+        value: MobileGoal,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeMobileGoalType.write(value.`goalType`, buf)
+        FfiConverterUInt.write(value.`target`, buf)
+        FfiConverterTypeMobileGoalPeriod.write(value.`period`, buf)
     }
 }
 
@@ -5764,6 +5816,68 @@ public object FfiConverterTypeMobileError : FfiConverterRustBuffer<MobileExcepti
     }
 }
 
+enum class MobileGoalPeriod {
+    DAILY,
+    WEEKLY,
+    MONTHLY,
+    QUARTERLY,
+    HALF_YEARLY,
+    YEARLY,
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileGoalPeriod : FfiConverterRustBuffer<MobileGoalPeriod> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            MobileGoalPeriod.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: MobileGoalPeriod) = 4UL
+
+    override fun write(
+        value: MobileGoalPeriod,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+enum class MobileGoalType {
+    COUNT,
+    DURATION,
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMobileGoalType : FfiConverterRustBuffer<MobileGoalType> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            MobileGoalType.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: MobileGoalType) = 4UL
+
+    override fun write(
+        value: MobileGoalType,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
 enum class MobileSyntaxType {
     TEXT,
     PRIORITY,
@@ -6299,6 +6413,47 @@ public object FfiConverterSequenceTypeMobileWorkSession : FfiConverterRustBuffer
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMobileWorkSession.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterMapStringTypeMobileGoal : FfiConverterRustBuffer<Map<kotlin.String, MobileGoal>> {
+    override fun read(buf: ByteBuffer): Map<kotlin.String, MobileGoal> {
+        val len = buf.getInt()
+        return buildMap<kotlin.String, MobileGoal>(len) {
+            repeat(len) {
+                val k = FfiConverterString.read(buf)
+                val v = FfiConverterTypeMobileGoal.read(buf)
+                this[k] = v
+            }
+        }
+    }
+
+    override fun allocationSize(value: Map<kotlin.String, MobileGoal>): ULong {
+        val spaceForMapSize = 4UL
+        val spaceForChildren =
+            value
+                .map { (k, v) ->
+                    FfiConverterString.allocationSize(k) +
+                        FfiConverterTypeMobileGoal.allocationSize(v)
+                }.sum()
+        return spaceForMapSize + spaceForChildren
+    }
+
+    override fun write(
+        value: Map<kotlin.String, MobileGoal>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        // The parens on `(k, v)` here ensure we're calling the right method,
+        // which is important for compatibility with older android devices.
+        // Ref https://blog.danlew.net/2017/03/16/kotlin-puzzler-whose-line-is-it-anyways/
+        value.forEach { (k, v) ->
+            FfiConverterString.write(k, buf)
+            FfiConverterTypeMobileGoal.write(v, buf)
         }
     }
 }
