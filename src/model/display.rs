@@ -99,12 +99,7 @@ impl TaskDisplay for Task {
                 }
             }
             let (c_str, t_str) = crate::model::parser::format_goal_duration(current, goal.target);
-            return format!(
-                "[ {} / {} per {} ]",
-                c_str,
-                t_str,
-                goal.interval.format_short()
-            );
+            return format!("[ {} / {}/{} ]", c_str, t_str, goal.interval.format_short());
         }
 
         // Calculate actual spent time (stored + current session)
@@ -116,36 +111,34 @@ impl TaskDisplay for Task {
         let total_seconds = self.time_spent_seconds + current_session;
         let total_mins = (total_seconds / 60) as u32;
 
-        let est_str = if let Some(min) = self.estimated_duration {
-            if let Some(max) = self.estimated_duration_max
-                && max > min
-            {
-                format!(
-                    "~{}-{}",
-                    crate::model::parser::format_duration_compact(min),
-                    crate::model::parser::format_duration_compact(max)
-                )
+        let combined_time_str = if let Some(min) = self.estimated_duration {
+            let max = self.estimated_duration_max.unwrap_or(min).max(min);
+            if total_mins > 0 || self.last_started_at.is_some() {
+                let (c_str, max_str) = crate::model::parser::format_goal_duration(total_mins, max);
+                let est_display = if max > min {
+                    let (_, min_str) = crate::model::parser::format_goal_duration(total_mins, min);
+                    format!("~{}-{}", min_str, max_str)
+                } else {
+                    format!("~{}", max_str)
+                };
+                format!("{} / {}", c_str, est_display)
             } else {
-                format!("~{}", crate::model::parser::format_duration_compact(min))
+                if max > min {
+                    format!(
+                        "~{}-{}",
+                        crate::model::parser::format_duration_compact(min),
+                        crate::model::parser::format_duration_compact(max)
+                    )
+                } else {
+                    format!("~{}", crate::model::parser::format_duration_compact(min))
+                }
             }
         } else {
-            String::new()
-        };
-
-        let time_str = if total_mins > 0 || self.last_started_at.is_some() {
-            if !est_str.is_empty() {
-                format!(
-                    "{} / {}",
-                    crate::model::parser::format_duration_compact(total_mins),
-                    est_str
-                )
+            if total_mins > 0 || self.last_started_at.is_some() {
+                crate::model::parser::format_duration_compact(total_mins)
             } else {
-                crate::model::parser::format_duration_compact(total_mins).to_string()
+                String::new()
             }
-        } else if !est_str.is_empty() {
-            est_str.to_string()
-        } else {
-            String::new()
         };
 
         // Only display percentage if the task is actively actionable (not completed/cancelled)
@@ -159,12 +152,12 @@ impl TaskDisplay for Task {
             String::new()
         };
 
-        if !pc_str.is_empty() && !time_str.is_empty() {
-            format!("[{}] | {}", pc_str, time_str)
+        if !pc_str.is_empty() && !combined_time_str.is_empty() {
+            format!("[{}] | {}", pc_str, combined_time_str)
         } else if !pc_str.is_empty() {
             format!("[{}]", pc_str)
-        } else if !time_str.is_empty() {
-            format!("[{}]", time_str)
+        } else if !combined_time_str.is_empty() {
+            format!("[{}]", combined_time_str)
         } else {
             String::new()
         }

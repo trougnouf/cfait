@@ -746,19 +746,19 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
                 0.0
             };
 
-            let title = text(format!(
-                "{} ({}/{})",
-                key,
-                goal.target,
-                goal.interval.format_short()
-            ))
-            .size(14);
-
             let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration {
                 crate::model::parser::format_goal_duration(progress, target)
             } else {
                 (progress.to_string(), target.to_string())
             };
+
+            let title = text(format!(
+                "{} ({}/{})",
+                key,
+                tar_str,
+                goal.interval.format_short()
+            ))
+            .size(14);
 
             let prog_text = text(rust_i18n::t!(
                 "goal_progress",

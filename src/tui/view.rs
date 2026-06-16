@@ -341,15 +341,14 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     let progress = state.cached_goals_progress.get(key).copied().unwrap_or(0);
                     let target = goal.target;
 
-                    let title =
-                        format!("{} ({}/{})", key, goal.target, goal.interval.format_short());
-
                     let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration
                     {
                         crate::model::parser::format_goal_duration(progress, target)
                     } else {
                         (progress.to_string(), target.to_string())
                     };
+
+                    let title = format!("{} ({}/{})", key, tar_str, goal.interval.format_short());
 
                     let prog_text =
                         rust_i18n::t!("goal_progress", current = cur_str, target = tar_str)

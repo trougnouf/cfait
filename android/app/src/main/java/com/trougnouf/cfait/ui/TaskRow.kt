@@ -291,18 +291,32 @@ fun TaskRow(
                     val showPc = !task.isDone && pc != null && pc > 0u
 
                     if (liveDurationMins > 0 || task.durationMins != null || task.lastStartedAt != null || showPc) {
-                        val spentStr = if (liveDurationMins > 0 || task.lastStartedAt != null) formatDuration(
-                            liveDurationMins.toUInt(),
-                            isEstimate = false
-                        ) else ""
-                        val estStr = if (task.durationMins != null) {
-                            formatDuration(task.durationMins!!, task.durationMaxMins, isEstimate = true)
-                        } else ""
-
-                        val timeLabel = when {
-                            spentStr.isNotEmpty() && estStr.isNotEmpty() -> "$spentStr / $estStr"
-                            spentStr.isNotEmpty() -> spentStr
-                            else -> estStr
+                        val timeLabel = if (task.durationMins != null) {
+                            val min = task.durationMins!!.toInt()
+                            val max = task.durationMaxMins?.toInt()?.coerceAtLeast(min) ?: min
+                            
+                            if (liveDurationMins > 0 || task.lastStartedAt != null) {
+                                val (cStr, maxStr) = formatPairedDuration(liveDurationMins, max)
+                                val estDisplay = if (max > min) {
+                                    val (_, minStr) = formatPairedDuration(liveDurationMins, min)
+                                    "~$minStr-$maxStr"
+                                } else {
+                                    "~$maxStr"
+                                }
+                                "$cStr / $estDisplay"
+                            } else {
+                                if (max > min) {
+                                    "~${formatDuration(min.toUInt())}-${formatDuration(max.toUInt())}"
+                                } else {
+                                    "~${formatDuration(min.toUInt())}"
+                                }
+                            }
+                        } else {
+                            if (liveDurationMins > 0 || task.lastStartedAt != null) {
+                                formatDuration(liveDurationMins.toUInt())
+                            } else {
+                                ""
+                            }
                         }
 
                         val pcStr = if (showPc) "${pc}%" else ""

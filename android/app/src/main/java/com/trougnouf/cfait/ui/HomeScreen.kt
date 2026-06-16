@@ -1313,7 +1313,7 @@ fun HomeScreen(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text("${goal.key} (${goal.periodStr})", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                            Text("${goal.key} (${goal.targetStr}/${goal.periodStr})", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                                             Spacer(Modifier.height(4.dp))
                                             Box(modifier = Modifier.fillMaxWidth().height(6.dp).background(Color.DarkGray, RoundedCornerShape(3.dp))) {
                                                 Box(modifier = Modifier.fillMaxWidth(goal.pct).fillMaxHeight().background(if (goal.pct >= 1f) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp)))

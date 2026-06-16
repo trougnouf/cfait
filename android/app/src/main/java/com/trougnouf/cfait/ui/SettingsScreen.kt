@@ -1152,13 +1152,24 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1.5f)
                     )
                     Text(typeStr, modifier = Modifier.weight(1f), fontSize = 12.sp)
-                    Text(goal.target.toString(), modifier = Modifier.weight(0.5f), fontSize = 12.sp)
+                    
+                    val targetDisplay = if (goal.goalType == MobileGoalType.DURATION) {
+                        formatDuration(goal.target.toUInt())
+                    } else {
+                        goal.target.toString()
+                    }
+                    
+                    Text(targetDisplay, modifier = Modifier.weight(0.5f), fontSize = 12.sp)
                     Text(periodStr, modifier = Modifier.weight(1f), fontSize = 12.sp)
                     
                     IconButton(onClick = {
                         editingGoalKey = key
                         goalInputKey = key
-                        goalInputTarget = goal.target.toString()
+                        goalInputTarget = if (goal.goalType == MobileGoalType.DURATION) {
+                            formatDuration(goal.target.toUInt())
+                        } else {
+                            goal.target.toString()
+                        }
                         goalInputType = goal.goalType
                         goalInputAmount = goal.interval.amount.toString()
                         goalInputUnit = goal.interval.unit

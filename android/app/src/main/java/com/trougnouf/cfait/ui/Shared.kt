@@ -422,6 +422,32 @@ fun formatDuration(
     }
 }
 
+fun formatPairedDuration(spentMins: Int, targetMins: Int): Pair<String, String> {
+    val (cStr, tStr) = if (targetMins > 0 && targetMins % 1440 == 0) {
+        val t = targetMins / 1440
+        val c = spentMins.toFloat() / 1440f
+        val formattedC = "%.1fd".format(java.util.Locale.US, c).replace(".0d", "d")
+        Pair(formattedC, "${t}d")
+    } else if (targetMins > 0 && targetMins % 60 == 0) {
+        val t = targetMins / 60
+        val c = spentMins.toFloat() / 60f
+        val formattedC = "%.1fh".format(java.util.Locale.US, c).replace(".0h", "h")
+        Pair(formattedC, "${t}h")
+    } else {
+        Pair("${spentMins}m", "${targetMins}m")
+    }
+
+    val cSuffix = cStr.filter { it.isLetter() }
+    val tSuffix = tStr.filter { it.isLetter() }
+
+    return if (cSuffix == tSuffix && cSuffix.isNotEmpty()) {
+        val stripped = cStr.removeSuffix(cSuffix)
+        Pair(stripped, tStr)
+    } else {
+        if (spentMins == 0) Pair("0", tStr) else Pair(cStr, tStr)
+    }
+}
+
 private val timeFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
 

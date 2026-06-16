@@ -163,7 +163,7 @@ pub fn extract_inline_goals(input: &str) -> (String, HashMap<String, crate::conf
                 };
                 if goal_parts.len() == 2 {
                     let target_str = goal_parts[0];
-                    let period_str = goal_parts[1];
+                    let period_str = goal_parts[1].trim_start_matches('@');
 
                     let mut goal_type = crate::config::GoalType::Count;
                     let target = if let Some(dur) = parse_duration(target_str) {
@@ -2762,7 +2762,7 @@ pub fn apply_smart_input(
             };
             if parts.len() == 2 {
                 let target_str = parts[0];
-                let period_str = parts[1];
+                let period_str = parts[1].trim_start_matches('@');
                 let mut goal_type = crate::config::GoalType::Count;
                 let target = if let Some(dur) = parse_duration(target_str) {
                     goal_type = crate::config::GoalType::Duration;

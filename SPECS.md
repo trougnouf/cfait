@@ -1,0 +1,294 @@
+# Cfait Specifications & Developer Guidelines
+
+> **⚠️ INSTRUCTIONS FOR DEVELOPERS AND CONTRIBUTORS:**
+> This document is the ultimate source of truth for Cfait's behavior, data model, and architecture.
+> 1. **Core-First & DRY:** Business logic, filtering, parsing, and data manipulation MUST live in the Rust core (`src/model`, `src/store.rs`, `src/controller.rs`). UIs (TUI, GUI, Mobile, CLI) must remain as thin as possible and act only as rendering/routing layers.
+> 2. **Performance is Critical:** The UI must never lag, even with 100,000+ tasks. Avoid unnecessary cloning (use `&Task` references in filter pipelines). Rely on `TaskStore` indices for O(1) lookups.
+> 3. **Keep this updated:** Update this document whenever introducing a new feature, syntax token, setting, or architectural shift. Keep it concise, behavioral, and accurate.
+
+---
+
+## 1. Core Architecture & Persistence
+
+Cfait is an offline-first task manager that seamlessly synchronizes with CalDAV servers and local file storage.
+
+### 1.1. Data Flow & Synchronization
+*   **TaskStore (In-Memory):** The single source of truth for the active session. Contains tasks grouped by calendar HREF. Maintains O(1) HashMaps for UID lookups, blocking relationships, and parent-child hierarchies.
+*   **Journal (Offline Queue):** All mutations (`Create`, `Update`, `Delete`, `Move`) append to `journal.json` immediately. UIs update optimistically.
+*   **TaskController:** Orchestrates all updates. Receives `AppIntent`s from the UIs, applies them to the `TaskStore`, writes to the `Journal`, and signals the background worker.
+*   **Background Sync:** 
+    *   *Desktop (GUI/CLI daemon):* A background worker reads the Journal and pushes changes via `RustyClient`.
+    *   *Android:* Handled via `WorkManager`. `PeriodicSyncWorker` runs based on `auto_refresh_interval_mins` (min 15 mins). Foreground manual syncs trigger immediate updates.
+*   **Settings Sync:** User configuration and aliases sync across devices via a hidden `VTODO` task with UID `cfait-global-settings-v1` (status `CANCELLED`, category `cfait-internal`).
+*   **Conflict & Error Handling:** 
+    *   `412 Precondition Failed` (ETag mismatch): Performs a local 3-way merge. If unmergeable, a "Conflict Copy" is generated.
+    *   **Fatal Server Errors (e.g., 400, 403, 415):** The problematic task is rescued into a local `local://recovery` calendar to prevent data loss or sync loop lockups, with the error appended to its description.
+
+### 1.2. The Task Entity (`VTODO` Mapping)
+Tasks map strictly to iCalendar `VTODO` components (RFC 5545). Non-standard metadata is stored via `X-CFAIT-` properties.
+*   **Status:** `NeedsAction` (Pending), `InProcess` (Timer running), `Completed`, `Cancelled`.
+*   **Dates (`DateType`):** Start (`DTSTART`) and Due (`DUE`). Supported variants:
+    *   *Specific:* Exact DateTime (UTC).
+    *   *All-Day:* NaiveDate.
+    *   *Fuzzy:* Month/Year precision (stored as All-Day with `X-CFAIT-FUZZY-DUE`/`START` properties).
+*   **Hierarchy:** `RELATED-TO` establishes the `parent_uid`.
+*   **Dependencies:** `RELATED-TO;RELTYPE=DEPENDS-ON` establishes blocking relationships. `RELTYPE=SIBLING` establishes related tasks.
+*   **Time Tracking:** Logged via `X-TIME-SPENT` (total seconds), `X-LAST-START` (unix timestamp), and `X-CFAIT-SESSION` (WorkSessions holding Unix start/end timestamps).
+*   **System Entities:** Local trash uses `local://trash`. Items here are soft-deleted and pruned based on `trash_retention_days`.
+
+### 1.3. System Integrations
+*   **Keyring:** Passwords are never stored in plaintext `config.toml`. They are vaulted via OS keyrings: Windows Credential Manager, macOS Keychain, Linux Secret Portal (oo7) or Keyutils, Android Keystore.
+*   **Logging:** Outputs to `cache/cfait.log` (rotating `cfait.old.log`). Terminal stderr logging is enabled for CLI/GUI, but disabled for TUI to prevent screen tearing. Android uses dual logging (File + Logcat).
+*   **Crash Reporting (Android):** An `UncaughtExceptionHandler` writes panics to `cache/android_crash.txt`.
+
+---
+
+## 2. Smart Syntax & Parsing
+Evaluated instantly during text input. Supported across all clients.
+
+### 2.1. Tokens
+| Token | Meaning | Example |
+| :--- | :--- | :--- |
+| `!1` .. `!9` | Priority (1 is highest/most urgent). | `!1` |
+| `@` or `due:` | Due date. | `@tomorrow`, `@2025-12-31`, `@fri 2pm` |
+| `^` or `start:` | Start date. | `^next week` |
+| `^@` | Sets *both* Start and Due dates. | `^@tomorrow 9am` |
+| `~` or `est:` | Estimated duration (supports ranges). | `~30m`, `~1h-2h` |
+| `#` | Tag/Category (Supports brace expansion). | `#work`, `#project{sub1,sub2}` |
+| `@@` or `loc:`| Location. | `@@office` |
+| `url:` / `[[ ]]`| Attach URL. | `url:https://example.com` |
+| `geo:` | Geo-coordinates. | `geo:50.1,4.2`, `geo:here` (Mobile: Fetches GPS) |
+| `desc:` | Append text to the description. | `desc:"Buy milk"` or `desc:{...}` |
+| `rem:` | Reminder / Alarm. | `rem:10m`, `rem:in 1h`, `rem:8pm`, `rem:next friday` |
+| `done:` | Mark completed / Set percentage. | `done:2024-01-01`, `done:50%` |
+| `spent:` | Log time spent manually. | `spent:1h` |
+| `rec:` or `@` | Recurrence (`RRULE`). | `@daily`, `rec:every 2 weeks` |
+| `until` | End date for recurrence. | `@daily until 2025-12-31` |
+| `except` | Exclusion dates (`EXDATE`). | `@daily except sat,sun` |
+| `+cal` / `-cal` | Force/prevent companion Calendar Event. | `+cal` |
+| `+pin` / `-pin` | Pin task to the top of the list. | `+pin` |
+| `goal:` | Goal tracking target. | `goal:5/w`, `goal:2h/daily` |
+
+*Rules:* 
+* Double prefixes (`##tag`, `@@@loc`) apply metadata but *keep* the word in the display title.
+* Use `\` to escape special characters (e.g., `\#not-a-tag`).
+
+### 2.2. Aliases (Macros)
+Users can define reusable shortcuts that expand into multiple tags, locations, or priorities.
+*   *Syntax:* `#gardening := #home:outside, @@garden, !4`
+*   Aliases are resolved retroactively across the database upon creation/edit. Cycle detection is strictly enforced (max depth 10).
+
+### 2.3. Markdown Subtask Extraction
+If a task's description contains a Markdown list, Cfait extracts those lines into distinct child tasks via the "Extract Subtasks" action or `Ctrl+E`.
+*   **Hierarchy:** Child tasks nest based on indentation level.
+*   **Parallel Tasks:** Unnumbered lists (`- [ ]`) create independent sibling tasks.
+*   **Sequential Dependencies:** Numbered lists (`1. [ ]`, `2. [ ]`) create `DEPENDS-ON` blocking relationships (Task 2 is blocked by Task 1).
+
+---
+
+## 3. Searching, Filtering, and Sorting
+
+### 3.1. Search Operators & Primitives
+The search bar supports a boolean recursive-descent parser.
+*   **Logic:** Implicit `AND` (space), `OR` (`|`), `NOT` (`-`), and Grouping `()`.
+*   **Primitives:**
+    *   *State:* `is:done`, `is:active`, `is:started` / `is:ongoing`, `is:blocked`.
+    *   *Actionable:* `is:ready` (Excludes completed tasks, explicitly/implicitly blocked tasks, and tasks starting in the future. `InProcess` bypasses this).
+    *   *Comparison:* `~<30m` (duration < 30m), `!<4` (priority < 4).
+    *   *Dates:* `@<today` (Overdue), `^>1w` (Starts in > 1 week).
+
+### 3.2. Multi-Stage Sorting Algorithm
+Tasks sort deterministically by rank (0 to 9), then by Overdue -> Priority -> Due Date -> Start Date -> Summary.
+*   **Rank 0:** Pinned (`+pin`).
+*   **Ranks 1-3 (Urgent/Started/Due Soon):** Order dictated by `sort_preset` (e.g., Urgent > Started > Due Soon).
+*   **Rank 4 (Actionable):** Due date `<=` `sort_cutoff_months`.
+*   **Rank 5 (Deferred):** No due date, or `>` `sort_cutoff_months`.
+*   **Rank 6 (Blocked):** Has unresolved dependencies or parent is blocked.
+*   **Rank 7 (Future):** Start date is > `start_grace_period_days`.
+*   **Rank 8 (Completed):** Done or Cancelled.
+*   **Rank 9 (Trash):** In `local://trash`.
+
+*Rule:* If `sort_standard_by_priority` is enabled, Ranks 4 and 5 merge and sort by numeric Priority first, then Date.
+
+---
+
+## 4. Core Business Workflows
+
+### 4.1. The "Yank" Relationship System
+Instead of drag-and-drop, Cfait uses a robust "Yank" (Clipboard) system for hierarchy management.
+1.  **Yank (`y` / Action Menu):** Copies the selected task's UID to an internal "Yanked" state. UI displays a persistent banner.
+2.  **Relate:** Select a *target* task and execute:
+    *   `c` (Child): Target becomes a subtask (child) of Yanked.
+    *   `b` (Block): Target becomes blocked by Yanked.
+    *   `l` (Link): Target becomes related (sibling) to Yanked.
+3.  **Clear (`Esc`):** Clears yank state. (`Y` locks the yanked state for multiple relations).
+
+### 4.2. Recurrence Recycling & DST Safety
+When completing a recurring task:
+1.  Running timers commit to `time_spent_seconds`.
+2.  A **History Snapshot** is generated (`X-CFAIT-HISTORY-OF: parent_uid`) with the completion date. This snapshot is non-recurring and retains no alarms.
+3.  Master task dates advance to the next occurrence based on the `RRULE`.
+4.  *DST Rule:* Absolute alarms advance using Local Naive time math. (A 9:00 AM alarm stays 9:00 AM across DST shifts).
+5.  *Relative Recurrence:* If `@after 1w` (or Shift+Complete), the master task's base date temporarily shifts to `now` before advancing.
+6.  *Completed* subtasks/descendants of the recurring task reset to `NeedsAction`.
+
+### 4.3. Virtualization & Truncation (Completed Groups)
+*   If completed subtasks exceed `max_done_subtasks` (or roots exceed `max_done_roots`), the Model injects a **Virtual Expand/Collapse Row** into the flattened task list.
+*   Selecting this virtual row toggles visibility of the hidden completed items. State is saved in `expanded_done_groups`.
+
+### 4.4. Companion Events (Calendar Integration)
+If `create_events_for_tasks` is enabled or `+cal` is used:
+*   Generates `.ics` `VEVENT` files and `PUT`s them alongside the `VTODO`.
+*   Start/Due ranges > 1 day apart split into `-start` and `-due` events.
+*   WorkSessions emit as distinct events (`-session-0`).
+*   `EXDATE`s sync to the event so skipped instances disappear from the user's agenda.
+*   *Android Note:* Handled reliably via `CalendarSyncWorker` (WorkManager).
+
+### 4.5. Goals & Habit Tracking
+Users map tracking goals to tags/locations (e.g., `#reading := goal:2h/w`).
+*   **Progress:** Calculated dynamically by summing `WorkSession` overlaps and completion dates within the calendar interval.
+*   **Implicit Credit:** If a task with an `estimated_duration` is completed *without* explicitly running a timer, the remaining estimated time is granted instantly as goal progress. Logging a session fulfills "Count" goals if `sessions_count_as_completions` is true.
+
+### 4.6. Alarms & Reminders
+*   **AlarmIndex:** Optimized cache `alarm_index.json` stores upcoming triggers.
+*   **Implicit:** Auto-generated alarms for Due / Start dates (if `auto_reminders` is true).
+*   **Snoozing:** Snoozing acknowledges the original alarm and creates a new absolute alarm linked via `RELATED-TO;RELTYPE=SNOOZE`.
+*   *Android Implementation:* Uses `AlarmManager.setExactAndAllowWhileIdle`. When an alarm fires, an `AlarmWorker` posts a Notification. Notification Actions (Snooze, Done, Pause) are handled via `NotificationActionReceiver` which delegates back to a unique `WorkManager` request to prevent background ANRs.
+
+---
+
+## 5. UI Layout & Platform Specifics
+
+### 5.1. Desktop Graphical User Interface (GUI)
+*Powered by `iced`. Optimized for mouse & keyboard.*
+*   **Layout:** 3-pane layout (Sidebar, Main List, Markdown Details Pane).
+*   **Window:** Client-Side Decorations (Custom frameless window, resize grips) unless `--force-ssd` is passed.
+*   **Zooming:** Global scale via `Ctrl++`, `Ctrl+-`, and `Ctrl+ScrollWheel`. Middle-click resets.
+*   **Mouse Interactions:**
+    *   *Single Click:* Select row.
+    *   *Double Click:* Triggers `EditTaskStart` (focus title input).
+    *   *Right Click:* Opens **Full Context Menu** at cursor coordinates.
+    *   *Ellipsis (`...`) Click:* Opens **Partial Context Menu** anchored to the button (shows unpinned actions).
+*   **Modals:** Hovering overlays with dimmed backdrops (Move Task, ICS Import, Alarm Notification).
+
+### 5.2. Terminal Interface (TUI)
+*Powered by `ratatui`. Keyboard-only paradigm.*
+*   **Layout:** 2-Pane (Sidebar 20%, Main List 80%). Details view shares vertical space with Main List.
+*   **Modals/Popups:** Instead of context menus, pressing `Enter` on a task opens a centered **Action Menu** popup with fuzzy filtering. 
+*   **Relationship Browser (`L`):** Popup listing Parents, Children, Blockers, Successors, and Siblings for quick jump navigation.
+*   **Session Manager (`T`):** Popup to view/delete `WorkSession` records.
+*   **External Editor:** Pressing `E` launches `$VISUAL`/`$EDITOR` (suspending the TUI), falling back to the built-in modal if empty.
+
+### 5.3. Mobile Interface (Android)
+*Powered by Jetpack Compose. Touch-optimized.*
+*   **Layout:** 
+    *   *Top Bar:* Search toggle, Quick Filter, Random Jump, Settings.
+    *   *Tabs:* Desktop "Sidebar" is translated into horizontal `HorizontalPager` tabs. Pull-to-refresh triggers manual sync.
+    *   *Navigation Drawer:* Swipe from the left edge to switch between Calendars, Tags, Locations, Goals view modes. (Swipe logic uses custom pointer interception to avoid conflicting with tab paging).
+*   **Task List Rendering:** `LazyColumn`. Real-time relative duration formatting via coroutines (`liveDurationMins`). Real-time syntax highlighting in input via `VisualTransformation`.
+*   **Task Details:** Tapping a task navigates to a dedicated `TaskDetailScreen`.
+*   **Context Menu:** Long-pressing a row opens the full Dropdown Menu.
+*   **Location Integration (`geo:here`):** If a user types `geo:here`, the UI requests permissions and invokes `LocationManager.getCurrentLocation`. If it fails within 5s, falls back to the last known location.
+*   **Notifications:** 
+    *   *Ongoing Tasks:* Generate a persistent, swipable notification with a live Chronometer and "Pause"/"Done" actions.
+    *   *Alarms:* High-priority. Includes inline "Snooze Custom" via `RemoteInput` text reply.
+*   **Intents:** Intercepts `ACTION_VIEW` for `.ics` files to launch the Import Screen.
+*   **Debug Export:** UI includes an advanced option to generate a zip of `cache/`, `data/`, `config/`, and `android_crash.txt`, sharing it via `ACTION_SEND`.
+
+---
+
+## 6. Keyboard Shortcuts (GUI & TUI)
+
+*   **Navigation:** `j`/`k` or `Up`/`Down` (Select), `Tab` (Cycle focus between Sidebar, List, Input). `1..4` (Switch Sidebar tabs).
+*   **Main Actions:** 
+    *   `Space`: Toggle Done/NeedsAction.
+    *   `Shift+Space`: Complete & Shift recurrence (Relative advance).
+    *   `s`: Start/Pause timer.
+    *   `S`: Stop/Reset timer.
+    *   `x`: Cancel task.
+    *   `+` / `-`: Increase/Decrease priority.
+    *   `e`: Edit title. `Ctrl+E` (or `E` in TUI): Edit description (Markdown).
+    *   `Delete`: Move to trash. `Ctrl+Delete`: Delete entire tree.
+    *   `t`: Log time session manually.
+*   **Tree/Relationships:** 
+    *   `z`: Fold/Unfold tree.
+    *   `>` / `.` : Demote (Indent / Make child of previous).
+    *   `<` / `,` : Promote (Outdent / Remove parent).
+    *   `L` : Open relationship browser.
+*   **App Actions:** 
+    *   `/`: Focus search.
+    *   `a`: Focus add task.
+    *   `w`: Toggle Quick Filter.
+    *   `m`: Toggle Match AND/OR logic for sidebar tags.
+    *   `H`: Toggle Hide Completed.
+    *   `*`: Clear all filters.
+    *   `Shift+R`: Jump to random actionable task (weighted by priority).
+    *   `Ctrl+,`: Settings.
+
+---
+
+## 7. Command Line Interface (CLI)
+Used for headless automation, scripting, and piping. Operates directly on the `TaskStore`.
+
+*   `cfait add <task...>`: Smart input task creation. Flags: `-c <href>`, `--desc <text>`, `-n` (queue to journal, don't wait for network sync).
+*   `cfait edit <uid> <task...>`: Edits metadata using smart syntax. Flags: `--clear-due`, `--clear-start`, `--clear-tags`, `--clear-loc`.
+*   `cfait list [--all] [--json] [-c <id>]`: Outputs task tree.
+*   `cfait search <query> [--all] [--json] [-c <id>]`: Searches and outputs tasks.
+*   `cfait view <uid> [--json]`: Outputs detailed task info.
+*   `cfait start|pause|toggle|done|complete|delete <uid>`: State mutation commands.
+*   `cfait export [--collection <id>]`: Dumps collection as standard ICS to stdout.
+*   `cfait import <file.ics> [--collection <id>]`: Parses and imports ICS to store.
+*   `cfait sync`: Foreground network sync.
+*   `cfait daemon`: Runs a continuous background sync loop based on `auto_refresh_interval_mins`. Acquires a cross-process lock to prevent overlapping syncs with UIs.
+*   `cfait collection list|create|edit`: Manages CalDAV collections.
+
+---
+
+## 8. Configuration (`config.toml`)
+All persistent state and settings live here. Unrecognized TOML keys must not be dropped during serialization.
+
+**Connection & Sync:**
+*   `url`, `username`: CalDAV credentials. *(Password vaulted in OS Keyring).*
+*   `allow_insecure_certs`: Boolean.
+*   `sync_settings`: Boolean. Enables the `cfait-global-settings-v1` hidden VTODO sync.
+*   `auto_refresh_interval_mins`: Integer. Daemon sync loop interval.
+*   `trash_retention_days`: Integer. Days before `local://trash` items are permanently purged. (0 = disable trash).
+
+**UI & Behavior:**
+*   `default_calendar`: String HREF.
+*   `enable_local_mode`: Boolean. Allow offline `local://` collections.
+*   `hide_completed`, `hide_fully_completed_tags`, `hide_aliases_in_sidebar`: Booleans.
+*   `strikethrough_completed`: Boolean. Line-through styling for done tasks.
+*   `ui_scale`: Float (0.5-3.0). Global zoom.
+*   `theme`: Enum (RustyDark, Light, Dracula, Nord, Catppuccin variants, etc.).
+*   `language`: String (`en`, `fr`). None = system locale.
+*   `description_editor`: String. CLI command for TUI description editing. `builtin` forces internal UI editor.
+*   `show_ongoing_notifications`, `show_priority_numbers`, `sidebar_is_hidden`, `show_goals_tab`: Booleans.
+*   `pinned_actions`: Array of `TaskAction` enums. Dictates buttons pinned directly to GUI task rows.
+
+**Sorting & Limits:**
+*   `sort_preset`: Enum (`UrgentStartedDue`, `UrgentDueStarted`, `StartedUrgentDue`).
+*   `sort_cutoff_months`: Integer/None. Rank 4 vs 5 divider.
+*   `sort_standard_by_priority`: Boolean. Merge ranks 4/5.
+*   `urgent_days_horizon`: Integer. Tasks due within X days are "Urgent" (Rank 1-3).
+*   `urgent_priority_threshold`: Integer (1-9). Priorities <= X are "Urgent".
+*   `default_priority`: Integer (1-9). Maps `!0` to this.
+*   `start_grace_period_days`: Integer. Show future tasks X days before they start (Rank 7).
+*   `max_done_roots`, `max_done_subtasks`: Integers. Triggers Virtual Expand/Collapse rows.
+
+**Data & Events:**
+*   `create_events_for_tasks`, `delete_events_on_completion`: Booleans for VEVENT generation.
+*   `default_duration_goal_mins`: Integer. Implicit duration credit for checked-off tasks without an estimate.
+*   `sessions_count_as_completions`: Boolean. Logging time counts towards `Count` goals.
+
+**Reminders:**
+*   `auto_reminders`: Boolean. Implicit alarms for Due/Start.
+*   `default_reminder_time`: String (HH:MM). Default time for all-day date alarms.
+*   `snooze_short_mins`, `snooze_long_mins`: Integers for quick snooze preset buttons.
+
+**Quick Filters & State:**
+*   `quick_filter_term`, `quick_filter_icon`, `show_quick_filter`: Quick filter button settings.
+*   `hidden_calendars`, `disabled_calendars`: Arrays of HREFs.
+*   `expanded_tags`, `expanded_locations`, `expanded_done_groups`: Arrays mapping visual tree expansion states.
+*   `tag_aliases`: HashMap of Alias Key -> Array of Tags/Locations.
+*   `goals`: HashMap of Goal Key -> Goal Object.
