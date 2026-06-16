@@ -257,7 +257,7 @@
     "goal_type_count": "Contar",
     "goal_type_duration": "Duración",
     "goals": "Objetivos",
-    "goals_empty": "Sin objetivos configurados. Defínelos mediante smart input (entrada inteligente) (por ejemplo, #tag:=goal:3:weekly).",
+    "goals_empty": "No hay objetivos configurados. Defínalos mediante entrada inteligente (por ejemplo, #chore:=goal:1:weekly o #gaming:=goal:6h:monthly) o en la configuración.",
     "habit_completed_in_past": {
         "one": "Completado una vez en el último %{window}",
         "other": "Completado %{count} veces en los últimos %{window}"
