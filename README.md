@@ -1,8 +1,7 @@
 ![Cfait -- Take control of your TODO list](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_featureGraphic_(hardcoded_text).svg)
 
 <p align="center">
-  <strong>Cfait is a powerful, fast and elegant task manager. (CalDAV and local, GUI, TUI, and Android clients)
-</strong>
+  <strong>A fast and powerful, offline-first task manager for your terminal, desktop, and phone.</strong>
 </p>
 
 <p align="center">
@@ -15,477 +14,64 @@
 
 ---
 
-**Cfait** is a task manager / TODO list for people who want speed, efficiency, and ownership of their data.
+**Cfait** is built for people who want keyboard-centric efficiency.
 
-It connects to any standard **CalDAV** server (Radicale, Xandikos, Baikal, Nextcloud, iCloud, etc.) so your tasks aren't locked inside a proprietary walled garden. It's written in **Rust**, meaning it starts instantly and handles large lists without stuttering.
+You can use it comfortably from the command line (TUI), on your desktop (GUI), or on the go with the native Android app. Because it is built entirely **offline-first**, you can manage your tasks perfectly without ever connecting to a server. 
 
-You can use it comfortably from the command line (TUI), on your desktop (GUI), or on the go with the native Android app. It's built "offline-first," so you can keep working without an internet connection and Cfait will sync your changes the next time you go online.
+If you *do* want to sync your tasks across devices, Cfait connects seamlessly to any standard **CalDAV** server (Nextcloud, Radicale, Baikal, ...) without locking your data inside a proprietary walled garden. Backed by a shared Rust core, it starts instantly and handles thousands of tasks without stuttering.
 
-<strong>Table of contents</strong>
+### ✨ Highlights
 
-- [✨ features](#features)
-- [📸 screenshots](#screenshots)
-- [🚀 installation](#installation)
-  - [🐧 Linux](#linux)
-  - [📱 Android](#android)
-  - [🪟 Windows](#windows)
-  - [🍎 MacOS](#macos)
-  - [⚙️ From source (Rust)](#from-source-rust)
-- [⌨️ Smart input syntax](#smart-input-syntax)
-- [🔍 Search & filtering](#search--filtering)
-- [📊 Task sorting](#task-sorting)
-- [📅 Calendar events for tasks](#calendar-events-for-tasks)
-- [💾 Export & backup](#export-backup)
-- [🎮 Keybindings and TUI configuration](#tui-keybindings)
-- [🤗 Support](#support)
-- [🪩 Mirrors](#mirrors)
-- [🛡️ Privacy policy](#privacy-policy)
-- [⚖️ License](#license)
-- [☁️ CalDAV providers](#caldav-providers)
+* ⚡ **Think it, type it:** No clicking through menus. Type `Buy green tea @tomorrow !1 @@dharma_city` to create a high-priority task, due tomorrow, at a specific location.
+* 🧠 **Deep organization:** Go beyond flat lists with hierarchical tags (`#gardening:blackcurrant`), blocking dependencies, and parent/child task trees.
+* ⏱️ **Time & goals:** Start/pause tasks to track time spent. Set estimated durations (`~2h`) or recurring habit goals (`#reading:=goal:5/w`).
+* 🪄 **Dynamic aliases:** Define shortcuts on the fly. Typing `#hiking:=#exercise,@@outside` applies the alias instantly and saves it for future use.
 
-</details>
-
-<a name="features"></a>
-## ✨ features
-
-*   **Smart Input:** Type your tasks naturally. `Buy cookies @tomorrow @@bakery !1` is parsed instantly into a high-priority task due tomorrow at the bakery.
-*   **Hierarchical Tags & Locations:** Organize deeply with tags like `#dev:cfait` or `#cooking:cookies`, and locations like `@@home:office` or `@@store:aldi:downtown`.
-*   **Dependencies:** Block tasks until others are done. You can create parent/child tasks or loose dependencies <small>(RFC9253)</small> (or manually block with `#blocked`).
-*   **Recurrence:** Powerful repetition rules for habits and recurrent tasks.
-*   **Inline Aliases:** Define shortcuts on the fly; typing `#gardening:=#fun,@@home` or `@@aldi:=#groceries,#shopping` applies the alias immediately and saves it for future use (retroactive).
-*   **Time Tracking & Progress:** Start and pause tasks to automatically track the time spent. By combining this with an estimated duration (`~2h`), Cfait automatically calculates and visualizes your progress (e.g. `[1h / ~2h]`).
-*   **Cross-Platform:** Runs on Linux, Android, Windows, and MacOS.
-
-<a name="screenshots"></a>
-## 📸 screenshots
+### 📸 Glimpse
 
 | Desktop (GUI & TUI) | Mobile (Android) |
 | :---: | :---: |
-| ![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.2_screenshot_(GUI).png)<br>The Graphical Interface in v0.5.2 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small><br><br>![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.0_screenshot_(TUI).png)<br>The Terminal Interface in v0.5.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small> | ![Cfait Android Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.2_screenshot_(Android).png)<br>The Android client in v0.5.2 <small>([history and more](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(Android)))</small> |
+| ![Cfait GUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.2_screenshot_(GUI).png)<br>The Graphical Interface in v0.5.2 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(GUI)))</small><br><br>![Cfait TUI Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.0_screenshot_(TUI).png)<br>The Terminal Interface in v0.5.0 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(TUI)))</small> | ![Cfait Android Screenshot](https://commons.wikimedia.org/wiki/Special:FilePath/Cfait_task_manager_v0.5.2_screenshot_(Android).png)<br>The Android client in v0.5.2 <small>([history](https://commons.wikimedia.org/wiki/Category:Screenshots_of_Cfait_(Android)))</small> |
 
-<a name="installation"></a>
-## 🚀 installation
+### 📖 Documentation & usage
 
-## Configuration
-Self-documenting config file. See also: https://codeberg.org/trougnouf/cfait/wiki/Configuration
+Cfait is designed to keep you in flow. Instead of a massive wiki, **the app is entirely self-documenting.**
 
-<a name="linux"></a>
-### 🐧 Linux
-*   **Flatpak:** Available on [Flathub](https://flathub.org/apps/com.trougnouf.Cfait)
-*   **Arch Linux (AUR):** `yay -S cfait` (or `cfait-git`, `cfait-bin`)
-*   **Debian/Ubuntu/Mint:** Download the `.deb` file from the [releases page](https://codeberg.org/trougnouf/cfait/releases). (Req. Ubuntu 24.04+ / Mint 22+ / Debian 13+)
-*   **Generic:** Download the pre-compiled `.tar.gz` binary tarball from the [releases page](https://codeberg.org/trougnouf/cfait/releases). (Req. `glibc 2.39`, e.g. Fedora 40+)
+* **Everyday usage:** Press `?` (in the TUI/GUI) or navigate to the Help tab (Android) to open the interactive syntax guide and keyboard shortcut cheat sheet.
+* **Configuration:** The CLI/TUI configuration file (`~/.config/cfait/config.toml`) is completely self-documenting. Open it in any text editor to see all available options, headless daemon setup, and UI tweaks.
+* **Under the hood:** Want to see the exact sorting algorithms, how we handle CalDAV merge conflicts, or how our Markdown subtask extraction works? Read our [SPECS.md](./SPECS.md) — it is the ultimate, up-to-date source of truth for Cfait's architecture.
 
-<a name="android"></a>
-### 📱 Android
-*   **<a href="https://f-droid.org/packages/com.trougnouf.cfait/">F-Droid</a>**
-*   **<a href="https://play.google.com/store/apps/details?id=com.trougnouf.cfait">Google Play</a>**
-*   **APK:** Download the latest universal APK from the [releases page](https://codeberg.org/trougnouf/cfait/releases).
+### 🚀 Installation
 
-<a name="windows"></a>
-### 🪟 Windows
-*   Download the `.zip` archive from the [releases page](https://codeberg.org/trougnouf/cfait/releases). Contains both `cfait.exe` (TUI) and `cfait-gui.exe` (GUI).
+We offer both **Stable** and **Rolling** releases. We highly encourage users to try the rolling release to get the latest features and report bugs! 
 
-<a name="macos"></a>
-### 🍎 MacOS
-*   Download pre-compiled binaries provided by Martin Stut on https://static.stut.de/cfait-macos/
+*(Note: On our Codeberg releases page, the "Rolling" tag stays pinned at the very top. To find the latest stable version, scroll past it and click "Downloads" on the numbered release).*
 
-<a name="from-source-rust"></a>
-### ⚙️ From Source (Rust)
+* **🐧 Linux:** Available on [Flathub](https://flathub.org/apps/com.trougnouf.Cfait), the AUR (`yay -S cfait`), or via `.deb` / `.tar.gz` on our [Releases page](https://codeberg.org/trougnouf/cfait/releases).
+* **📱 Android:** Get it on [F-Droid](https://f-droid.org/packages/com.trougnouf.cfait/), [Google Play](https://play.google.com/store/apps/details?id=com.trougnouf.cfait), or download the APK.
+* **🪟 Windows:** Check the [Releases page](https://codeberg.org/trougnouf/cfait/releases) for binaries.
+* **🍎 MacOS:** Download pre-compiled binaries provided by Martin Stut on https://static.stut.de/cfait-macos/
+* **⚙️ Rust (Cargo):** `cargo install cfait` (TUI) or `cargo install cfait --features gui --bin cfait-gui` (GUI).
 
-#### Desktop (TUI/GUI)
-Requires Rust (latest stable version recommended).
+### ☁️ CalDAV providers
 
-Cfait should compile and pull dependencies automatically on most systems as long as `cargo` (rust) is installed. A Vulkan driver is recommended for hardware acceleration. A keyring (s.a. `kwallet` or `gnome-keyring`) is needed to save the CalDAV password. `xdg-desktop-portal` (optional) is needed by the file picker (to import/export a local collection) on Linux. For a precise list of dependencies, refer to [packaging/arch/PKGBUILD-cfait](packaging/arch/PKGBUILD-cfait).
+You can use the default `Local` collection entirely offline. But if you want to sync, Cfait works with standard CalDAV servers. We recommend:
+* **Self-hosted:** [Radicale](https://radicale.org/) (lightweight and feature-complete, runs on anything including Raspberry Pi) or [Nextcloud](https://nextcloud.com/).
+* **Free & managed:** [Disroot](https://disroot.org/) offers a privacy-focused platform with free nextcloud-based CalDAV access.
 
-```bash
-# Install TUI only
-cargo install cfait
+### 🛡️ Privacy Policy
 
-# Install GUI
-cargo install cfait --features gui --bin cfait-gui
-```
-Replace `cfait` with `.` to build locally.
-Add `--debug` to build in debug mode. (Much faster compilation, much slower execution.)
+Cfait does not collect data; data is stored on your device and on your CalDAV server.
 
-#### Android
-Requires [Android NDK](https://developer.android.com/ndk/downloads) and [cargo-ndk](https://github.com/bbqsrc/cargo-ndk).
+### 🤗 Community & support
 
-```bash
-# Set up Android NDK environment variables
-export ANDROID_NDK_HOME=/path/to/android-ndk
-export ANDROID_NDK_ROOT=/path/to/android-ndk
+Have a question, found a bug, or want to contribute?
+* **🗨️ Chat:** Join us on Matrix at [#Cfait:matrix.org](https://matrix.to/#/#Cfait:matrix.org).
+* **🐛 Bugs / ✨ Features:** [Open an issue on Codeberg](https://codeberg.org/trougnouf/cfait/issues).
+* **🛠️ Contribute code:** Check out our [CONTRIBUTING.md](./CONTRIBUTING.md) to get started!
+* **🌐 Translate:** Help translate Cfait into your language on [Codeberg Translate](https://translate.codeberg.org/projects/cfait/).
 
-# Build native libraries for Android architectures (these are the release libs that go into the APK)
-cargo ndk -t aarch64-linux-android -t x86_64-linux-android \
-  -o ./android/app/src/main/jniLibs build --release --lib --features mobile
-
-# Build a host (local) library for UniFFI bindgen to read
-# NOTE: The UniFFI metadata extractor can fail on release builds that are stripped or
-# use aggressive LTO. To reliably generate Kotlin bindings, build the host library in
-# debug mode and let uniffi-bindgen read `target/debug/libcfait.so`.
-cargo build --lib --features mobile
-
-# Generate Kotlin bindings using the host/debug library
-# This does NOT change the Android release libs you built above (those are still packaged
-# into the APK). The debug host library is used only locally so bindgen can extract metadata.
-cargo run --features mobile --bin uniffi-bindgen generate \
-  --library target/debug/libcfait.so \
-  --language kotlin --out-dir ./android/app/src/main/java --config uniffi.toml
-
-# Build APK using Gradle (packages the release native libraries built earlier)
-cd android
-./gradlew assembleRelease
-```
-
-The APK will be in `android/app/build/outputs/apk/release/`.
-
-<a name="smart-input-syntax"></a>
-## ⌨️ smart input syntax
-
-You don't need to click through menus to set the due/start date, length, priority, recurrence, tags, location,... Just type.
-
-The clients are self-documenting; the most up-to-date documentation should be provided in the built-in help.
-
-### Basics
-| Property | Syntax | Description |
-| :--- | :--- | :--- |
-| **Priority** | `!1` | 1 is highest (critical), 9 is lowest. 5 is normal. |
-| **Due Date** | `@` / `due:` | When the task must be finished. |
-| **Start Date** | `^` / `start:` | When you plan to start (hides from "active" views until then). |
-| **Recurrence** | `@` / `rec:` | How often the task repeats. |
-| **Duration** | `~` / `est:` | Estimated time (`~30m`, `~1h`, `~1h-2h`). |
-| **Tag** | `#` | Categories. Use `:` for hierarchy (e.g. `#gardening:tree_planting`). Supports grouping (`#tag{a,b}`) and attributes (`#tag:key=val`). |
-| **Location** | `@@` / `loc:` | Where the task happens. Supports hierarchy like tags (e.g. `@@home:office`, `@@store:aldi:downtown`). |
-| **Reminder** | `rem:` | Set an notification. (e.g. `rem:10m`, `rem:8am`, `rem:tomorrow 9:00`). |
-| **Calendar Event** | `+cal` / `-cal` | Override calendar event creation (per-task). `+cal` forces event creation, `-cal` prevents it. |
-| **Pin** | `+pin` / `-pin` | Pin task to top of list (overrides normal sorting). |
-
-You can also type url: (e.g. `url:https://trougnouf.com`), geo: (e.g. `geo:53.046070,-121.105264` or `geo:50.13139° N, 4.50080° E`. Android: `geo:here`), and desc: (e.g. `desc:"a description"` or `desc:{une description}`)
-
-**Escaping:** If you need to use special characters literally in your task summary (like `#`, `@`, `!`), prefix them with a backslash: `\#not-a-tag \@not-a-date`.
-
-### Date & Time Formats
-You can use absolute ISO dates or natural language relative offsets.
-*   **Keywords:** `today`, `tomorrow`
-*   **Absolute Formats:** Supports full dates (`@2025-12-31`), unhyphenated basic format (`@20251231`), and **abbreviated months or years** (`@2026-06`, `@2026`).
-    *   **Sorting Logic:** Due dates (`@`) with a month or year level sort to the **end** of that period (e.g., June 30th). Start dates (`^`) sort to the **beginning** (e.g., June 1st).
-    *   **Calendar Integration:** If enabled, fuzzy dates create calendar events that span the **entire month or year**.
-*   **Offsets:** `1d` (days), `1w` (weeks), `1mo` (months), `1y` (years).
-    *   `@2d` = Due in 2 days.
-    *   `^1w` = Start in 1 week.
-    *   `^@tomorrow` = Start and Due tomorrow.
-    *   The word "in" is optional: `@2 weeks` works the same as `@in 2 weeks`
-*   **Weekdays:** `@friday`, `@monday`, etc. (or with "next": `@next friday`)
-    *   Both forms work identically - they always go to the **next** occurrence of that weekday
-*   **Next period:** `@next week`, `@next month`, `@next year`
-    *   Goes to the next occurrence of that time period
-
-### Recurrence
-Recurrence rules determine when the next task is created after you complete the current one.
-*   **Presets:** `@daily`, `@weekly`, `@monthly`, `@yearly`.
-*   **Custom:** `@every X unit`.
-    *   `@every 3 days`
-    *   `@every 2 weeks`
-*   **Specific weekdays:** `@every <weekday>` or `@every <weekday1>,<weekday2>,...`
-    *   `@every monday` (every Monday)
-    *   `@every monday,wednesday,friday` (Mon/Wed/Fri)
-    *   `@every tue,thu` (Tuesday and Thursday)
-    *   Supports short (`mo,tu`), abbreviated (`mon,tue`), or full names (`monday,tuesday`)
-*   **Auto-dates:** If you specify recurrence without any dates, both start and due dates are automatically set to the first occurrence.
-    *   `Morning routine @daily` → starts and is due today, repeats daily
-    *   `Yoga class @every monday` → starts and is due next Monday, repeats weekly
-    *   For `@daily`, `@weekly`, etc., the first occurrence is today
-    *   For `@every monday`, `@every monday,wednesday,friday`, etc., the first occurrence is the next matching day
-*   **End Date:** `until <date>` - Sets an end date for the recurrence (RRULE UNTIL). The end date is **inclusive** (the task will occur on that date).
-    *   `@daily until 2025-12-31` (repeats daily until December 31st)
-    *   `@every 2 weeks until 2026-06-30` (repeats every 2 weeks until June 30th)
-*   **Exception Dates:** `except <value>` - Skips specific occurrences.
-    *   **Specific dates:** `@weekly except 2025-01-20` (skips January 20th)
-    *   **Comma-separated dates:** `@daily except 2025-12-25,2026-01-01` (skips multiple dates)
-    *   **Weekdays:** `@daily except mo,tue` or `@daily except monday,tuesday` or `@daily except saturdays,sundays`
-    *   **Months:** `@monthly except oct,nov,dec` or `@weekly except march` (excludes entire months)
-    *   **Mixed:** `@monthly except oct,november,dec,january` (short and long forms work together)
-
-### Duration Units
-Supported units for `~` duration estimates: `m` (minutes), `h` (hours), `d` (days), `w` (weeks), `mo` (months), `y` (years).
-You can specify a single point estimate or a range.
-*   `~15m` (15 minutes)
-*   `~30m-1h` (Range: 30 to 60 minutes)
-*   `~1.5h` (1 hour 30 minutes)
-
-### Reminders
-Set alarms to notify you about tasks. Reminders can be **relative** (recalculated when due date changes) or **absolute** (fixed time).
-*   **Relative (to due date):** `rem:10m` = 10 minutes before due date, `rem:1h` = 1 hour before due date
-    *   These automatically adjust if you change the task's due date
-*   **Relative (from now):** `rem:in 5m` = 5 minutes from now, `rem:in 2h` = 2 hours from now
-    *   Set as absolute time when task is created (doesn't adjust with due date)
-*   **Next occurrence:** `rem:next friday` = Next Friday at default time, `rem:next week` = 7 days from now
-    *   Set as absolute time at the next occurrence (doesn't adjust with due date)
-*   **Absolute (fixed time):** `rem:8am` = Today (2025-01-15) at 8am, `rem:2025-01-20 9am` = January 20th at 9am
-    *   These stay at the specified time regardless of due date changes
-*   **Date + Time:** `rem:2025-12-31 10:00` (Absolute: specific date and time)
-
-### Examples
-> `"Buy cookies !1 @2025-01-16 #shopping rem:2025-01-16 8am"`
->
-> `"Exercise @daily ~30m #health rem:8am"`
->
-> `"Update server certificates @2025-12-31 ^2025-12-01 @every 2 years rem:1w"` (Due Dec 31, start working on it 1 month prior, reminder 1 week before)
->
-> `"Water plants @every 3 days until 2025-06-30"` (Every 3 days until end of June)
->
-> `"Water plants @@home @monthly except oct,nov,dec,jan,feb,mar"` (Monthly watering, skip winter months)
->
-> `"Practice handstands @daily except saturdays,sundays"` (Daily practice, weekdays only)
->
-> `"Yoga class @every tue,thu until 2025-12-31"` (Tue/Thu classes until end of year)
->
-> `"Gardening @saturday @weekly except march"` (Saturday gardening, skip March entirely)
->
-> `"Plant plum tree #tree_planting !3 ~2h"` and `"#tree_planting:=#gardening,@@home"`
->
-> `Bouldering @@Charleroi:Maniak @every 23 days until 2026-09-20 @in 23 days`
-> 
-> `Sweep the floor @weekly #chore @@home` 
-
-The syntax highlighting should visually let you know whether your statements are valid.
-
-### Aliases (Templates)
-Define global shortcuts using `:=`. Aliases can inject tags, locations, priorities, or other properties. This applies to the past, present, and future tasks. (It may take some time to update all affected tasks.)
-
-**Tag Aliases:**
-*   **Define:** `#tree_planting:=#gardening,@@home,!3`
-*   **Use:** Typing `Plant plum tree #tree_planting ~1h` expands to:
-    *   Tags: `#tree_planting #gardening`
-    *   Location: "home"
-    *   Priority: 3
-
-**Location Aliases:**
-*   **Define:** `@@aldi:=#groceries,#shopping` or `loc:aldi:=#groceries,#shopping`
-*   **Use:** Typing `Buy milk @@aldi` expands to:
-    *   Location: "aldi"
-    *   Tags: `#groceries #shopping`
-
-**Hierarchical Aliases:**
-Both tags and locations support hierarchy. Child locations/tags automatically inherit parent aliases.
-*   `#gardening:tree_planting` → matches both `#gardening:tree_planting` and parent `#gardening` aliases
-*   `@@store:aldi:downtown` → matches `@@store:aldi:downtown`, `@@store:aldi`, and parent `@@store` aliases
-
-**Note:** If your alias contains spaces, `"`quote it`"` or `{`put it between brockets`}`, e.g. `#"tree planting":=#gardening` or `@@"somewhere else":=#location`. You can define aliases inline while creating tasks, as standalone statements, or in the Settings.
-
-<a name="search--filtering"></a>
-## 🔍 Search & Filtering
-
-The search bar isn't just for text. You can use operators (`<`, `>`, `<=`, `>=`) to filter your list precisely.
-
-### Status Filters
-*   **`is:ready`** - Shows only actionable tasks right now (not completed/cancelled, start date passed or not set, or blocked)
-*   **`is:blocked`** - Shows only blocked tasks (blocked by dependencies or `#blocked` tag - excluded from urgent/due soon/started bins)
-*   `is:done` / `is:active` / `is:started`
-*   Combine with other filters: `is:ready #work`, `is:ready ~<1h`
-
-### Priority Filters (`!`)
-*   `!<2` (Priority 1 only - Critical)
-*   `!>=5` (Normal or lower priority)
-
-### Date Filters (`@` / `^`)
-Date filters support **relative dates** for both due (`@`) and start (`^`) dates, plus a **"not set" operator** (`!`):
-
-*   **Overdue/Past:**
-    *   `@<today` (Overdue tasks)
-    *   `^<today` (Started before today)
-*   **Future:**
-    *   `@>tomorrow` (Due after tomorrow)
-    *   `^>1w` (Start more than 1 week from now)
-*   **Relative dates:**
-    *   `@<=2d` (Due within the next 2 days)
-    *   `^<5d` (Start within the next 5 days)
-*   **"Not Set" operator** (trailing `!`):
-    *   `@<today!` (Overdue OR no due date)
-    *   `^>1w!` (Start later than 1 week OR no start date)
-    *   `@<=2025-12-31!` (Due before Dec 31 OR no due date)
-
-### Duration Filters (`~`)
-*   `~<30m` (Matches tasks where the *minimum* duration is < 30m. Matches `~15m-45m` because 15 < 30).
-*   `~>2h` (Matches tasks where the *maximum* duration is > 2h. Matches `~1h-3h` because 3 > 2).
-*   `~30m` (Matches if 30m falls within the task's estimated range).
-
-### Tag Filters
-*   `#gardening` (Contains this tag)
-*   `#work:project` (Matches tag or any sub-tag like `#work:project:urgent`)
-
-### Location Filters
-*   `@@home` (Matches location field)
-*   `@@store:aldi` (Matches location or any sub-location like `@@store:aldi:downtown`)
-
-## Logical Combination (Boolean Search)
-You can combine multiple filters using boolean logic (AND, OR, NOT) and group them with parentheses `()`.
-
-*   **AND (Implicit):** Separating terms with a space requires both to match. 
-    *   `is:ready #gardening` (Actionable AND has gardening tag)
-*   **OR (`|`):** Use a pipe character to match either condition.
-    *   `@@aldi | #groceries` (Has either aldi location OR groceries tag)
-*   **NOT (`-`):** Prefix a term with a dash to exclude it.
-    *   `-is:done` (Excludes completed tasks)
-    *   `-#blocked` (Excludes the blocked tag)
-
-**Complex Examples:**
-> `(#work | #school) -is:done`
-> (Tasks tagged work or school that are not done)
-
-> `is:ready !<4 ~<1h (#gardening | @@home)`
-> (Actionable, high-priority tasks under an hour, located at home or tagged gardening)
-
-*Tip: If your search or sidebar filters result in an empty list while you still have tasks in your database, the search/filter icons will turn red to warn you that your filters are hiding everything.*
-
-<a name="task-sorting"></a>
-## 📊 Task Sorting
-
-Cfait organizes tasks in the following order:
-
-1. **🔴 Urgent tasks** (priority ≤ 1 by default)
-2. **⏰ Due soon** (due today or tomorrow by default)
-3. **▶️ Started tasks** (status: in-process) - Sorted by due date, then priority
-4. **📅 Standard tasks** (within sorting cutoff) - Sorted by due date, then priority
-5. **📋 Remaining tasks** (outside cutoff or no date) - Sorted by priority, then name
-6. **🔮 Future tasks** (start date not yet reached)
-7. **✅ Done/Cancelled** - Completed or cancelled tasks
-
-**Within each rank:** Tasks sort by priority → due date → name (except ranks 2, 3 & 4 which sort by due date first).
-
-**Notes:**
-- Priority 0 (unset) is treated as priority 5 (medium)
-- Future start dates move tasks to rank 6, even if they have urgent priority
-- Thresholds for "urgent", "due soon", and "cutoff" are configurable in settings
-- Tasks can be pinned to the top using `+pin` in smart input (overrides sorting)
-
-### 🔀 Sort by Priority (toggle)
-
-Press **`Ctrl+P`** (TUI/GUI) to switch between two sorting modes for the standard and remaining task groups (ranks 4 & 5). The toggle can also be set permanently via `sort_standard_by_priority = true` in `~/.config/cfait/config.toml`. The sort order within ranks 1-3 can be customized via `sort_preset` in settings.
-
-| Mode | Standard tasks (rank 4) | Remaining tasks (rank 5) |
-| :--- | :--- | :--- |
-| **Date-first** *(default)* | Sorted by due date, then priority | Sorted by priority, then name |
-| **Priority-first** | Ranks 4 & 5 **merged** — sorted by priority, then due date (tasks without a date follow tasks of the same priority that have one), then name |
-
-The setting is saved in the config file and persists across restarts.
-
-<a name="calendar-events-for-tasks"></a>
-## 📅 calendar events for tasks
-
-Cfait can automatically create calendar events (VEVENT) for tasks with dates, making them visible in any CalDAV calendar app.
-
-**Enable:** 
-- **GUI/Android:** Toggle "Create calendar events for tasks with dates" in Settings
-- **TUI:** Add `create_events_for_tasks = true` to `~/.config/cfait/config.toml`
-
-When you toggle this setting on, events will be retroactively created for all existing tasks with start and/or due dates.
-
-**Per-Task Control:** Use `+cal` to force enable or `-cal` to disable for specific tasks:
-```
-Playing Terraforming Mars ^tomorrow 2pm ~4h +cal
-Very private task @tomorrow -cal
-```
-
-**Behavior:**
-- Creates/updates events when tasks have dates
-- Events are always deleted (or moved) when tasks are deleted (or moved)
-- Optional: Delete events when tasks are completed or cancelled (toggle in Settings, default: keep)
-
-**Events Cleanup:**
-- Use the "Delete all calendar events" button in the GUI or Android Settings to remove all auto-generated events
-
-<a name="export-backup"></a>
-## 💾 CLI, Export & Background Daemon
-
-Cfait includes a CLI for background syncing, and exporting.
-
-**Background Sync Daemon:**
-Run `cfait daemon` to automatically sync in the background at your configured interval without needing to keep a UI open.
-
-Export your local tasks to standard `.ics` (iCalendar) format for backup or sharing with other applications.
-
-**Export**:
-
-TUI:
-
-```bash
-# Export to file
-cfait export > backup.ics
-
-# View export content
-cfait export
-
-# Pipe to other tools
-cfait export | grep 'SUMMARY'
-```
-
-GUI:
-1. Open Settings (gear icon)
-2. Scroll to "Data Management" section
-3. Click "Export Local Tasks (.ics)"
-4. Choose save location in file dialog
-
-Android:
-1. Open Settings
-2. Scroll to "Data Management" section  
-3. Tap "Export Local Tasks (.ics)"
-4. Choose where to save/share (Google Drive, Email, Files, etc.)
-
-The exported `.ics` files can be imported into any CalDAV-compatible application.
-
-<a name="tui-keybindings"></a>
-## 🎮 TUI Keybindings
-
-If you are using the Terminal interface (or the GUI), here are the essentials (*Press `?` inside the app or click on ⌨ for the full help menu.*).
-
-**Navigation & Views**
-*   `Tab`: Switch focus (Tasks ↔ Sidebar)
-*   `j` / `k`: Move selection Down / Up
-*   `1` / `2` / `3`: Switch Sidebar (Calendars / Tags / Locations)
-*   `/`: Search tasks
-
-**Task Management**
-*   `a`: **Add** task
-*   `e` / `E`: **Edit** title / **Edit** description
-*   `Space`: Toggle **Done** status
-*   `s`: Toggle **Start / Pause**
-*   `S`: **Stop** (Reset to Needs Action)
-*   `x`: **Cancel** task
-*   `Delete`: **Delete** task
-*   `R`: **Random Jump** (weighted random, ignores completed/cancelled tasks)
-
-**Organization & Hierarchy**
-*   `y`: **Yank** task ID (Copy)
-*   `b`: Mark selection as **Blocked** by yanked task
-*   `c`: Make selection a **Child** of yanked task
-*   `l`: **Link** selection as **Related** to yanked task
-*   `>` / `<`: Indent / Outdent (visual depth)
-*   `+` / `-`: Adjust Priority
-
-**Sidebar Actions**
-*   `Enter`: Toggle filter / Select calendar
-*   `Space`: Toggle visibility (show/hide layer)
-*   `*`: Isolate (hide all others)
-
-**View Toggles**
-*   `p`: Toggle **sort by priority** (merges standard & remaining task groups into one priority-ordered list)
-
-**Note:** The sidebar shows hierarchical tags and locations. For example, if you have tasks with `#work:project:urgent` and `#work:meeting`, they'll be organized under the `#work` parent in the sidebar.
-
-**TUI Local Mode:** The TUI shows local/offline calendars by default. To hide them and only allow creating tasks in remote calendars, add this to `~/.config/cfait/config.toml`:
-
-```toml
-enable_local_mode = false
-```
-
-The GUI also supports `/` for search and `a` for adding tasks.
-
-<a name="support"></a>
-## 🤗 Support
-
-If you enjoy using Cfait, consider supporting the developper:
+If Cfait helps you stay on top of your life, consider supporting development:
 
 *   💳 **Liberapay:** [https://liberapay.com/trougnouf](https://liberapay.com/trougnouf)
 *   💳 **Ko-fi:** [https://ko-fi.com/trougnouf](https://ko-fi.com/trougnouf)
@@ -494,44 +80,6 @@ If you enjoy using Cfait, consider supporting the developper:
 *   Ł **Litecoin:** `ltc1qv0xcmeuve080j7ad2cj2sd9d22kgqmlxfxvhmg`
 *   Ξ **Ethereum:** `0x0A5281F3B6f609aeb9D71D7ED7acbEc5d00687CB`
 
-<a name="mirrors"></a>
-## 🪩 Mirrors
-
-*   **[Codeberg](https://codeberg.org/trougnouf/cfait)** (Primary with Linux, Android, and cross-compiled Windows builds)
-*   **[GitHub](https://github.com/trougnouf/cfait)** (Mirror with Linux and native Windows builds)
-*   **[GitLab](https://gitlab.com/trougnouf/cfait)** (Mirror)
-
-<a name="privacy-policy"></a>
-## 🛡️ Privacy Policy
-
-Cfait does not collect data; data is stored on your device and on your CalDAV server.
-
-<a name="license"></a>
-## ⚖️ License
-GPL3
-
-<a name="caldav-providers"></a>
-## ☁️ CalDAV Providers
-
-Cfait works with any standard CalDAV server. If you don't have one yet, here are some suggestions:
-
-**Self-Hosted**
-*   **[Radicale](https://radicale.org/):** One of the easiest, lightweight solution to host on a Raspberry Pi or VPS.
-  * When connecting to a radicale server, do not include your username in the URL.
-*   **[Nextcloud](https://nextcloud.com/):** A popular full-suite option (files, contacts, and calendars).
-
-**Free & Managed**
-*   **[Disroot](https://disroot.org/):** A privacy-focused platform providing a free Nextcloud account.
-    *   *How to connect:* After signing up, set `https://cloud.disroot.org/remote.php/dav` as the server URL. Use the [calendar web-interface](https://cloud.disroot.org/apps/calendar) to create a "New calendar with task list" or the [tasks web-interface](https://cloud.disroot.org/apps/tasks/collections/all) to create new tasks-only collections,
-
-You can also use the `Local` calendar entirely offline (and there is the possibility to migrate to and synchronize with a CalDAV server at a later time).
-
-Note that Open-Xchange-based servers (such as mailbox.org) are not supported because they only support a subset of the CalDAV standard.
-
-## 💬 Community & Support
-
-Have a question, found a bug, a great idea, or just want to chat?
-
-*   **🗨️ Chat:** on [#Cfait:matrix.org](https://matrix.to/#/#Cfait:matrix.org).
-*   **🐛 Report a Bug / ✨ Request a Feature:** [Open an issue on Codeberg](https://codeberg.org/trougnouf/cfait/issues) (or [Github](https://github.com/trougnouf/cfait/issues)).
-*   **🌐 Translate:** Help translate Cfait on [Codeberg Translate](https://translate.codeberg.org/projects/cfait/).
+<p align="center">
+  <small>Released under the <strong>GPL-3.0 License</strong></small>
+</p>
