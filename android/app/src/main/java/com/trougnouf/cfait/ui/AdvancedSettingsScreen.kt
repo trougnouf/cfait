@@ -194,6 +194,14 @@ fun AdvancedSettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
+                Switch(
+                    checked = showGoalsTab,
+                    onCheckedChange = onShowGoalsTabChange
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.show_goals_tab))
+            }
             OutlinedTextField(
                 value = defaultDurationGoalMins,
                 onValueChange = onDefaultDurationGoalMinsChange,
@@ -232,14 +240,6 @@ fun AdvancedSettingsScreen(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.quick_filter_show_button))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                Switch(
-                    checked = showGoalsTab,
-                    onCheckedChange = onShowGoalsTabChange
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.show_goals_tab))
             }
             OutlinedTextField(
                 value = quickFilterTerm,

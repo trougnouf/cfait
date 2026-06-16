@@ -1048,7 +1048,7 @@ fun HomeScreen(
                             }
                         }
                         HorizontalDivider()
-                    } else {
+                    } else if (sidebarTab == 2) {
                         val isAllLocsSelected = filterLocations.isEmpty()
                         val iconStr = if (isAllLocsSelected) NfIcons.MAP else NfIcons.MAP_MARKER_MULTIPLE
 

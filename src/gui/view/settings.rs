@@ -571,9 +571,6 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_quick_filter)
                     .label(rust_i18n::t!("quick_filter_show_button"))
                     .on_toggle(Message::SetShowQuickFilter),
-                checkbox::<Message, iced::Theme, iced::Renderer>(app.show_goals_tab)
-                    .label(rust_i18n::t!("show_goals_tab"))
-                    .on_toggle(Message::SetShowGoalsTab),
                 row![
                     text(rust_i18n::t!("quick_filter_search_term")).width(Length::Fixed(150.0)),
                     text_input("is:ready", &app.ob_quick_filter_term_input)
@@ -677,6 +674,10 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
 
         let mut list_col = column![
             text(rust_i18n::t!("goals")).size(20),
+            checkbox::<Message, iced::Theme, iced::Renderer>(app.show_goals_tab)
+                .label(rust_i18n::t!("show_goals_tab"))
+                .on_toggle(Message::SetShowGoalsTab),
+            Space::new().height(5),
             input_row,
             iced::widget::rule::horizontal(1)
         ]

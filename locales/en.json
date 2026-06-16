@@ -247,7 +247,7 @@
     "go_to_location": "Go to location: @@%{loc}",
     "go_to_tag": "Go to tag: #%{tag}",
     "goals": "Goals",
-    "goals_empty": "No goals configured. Define them via smart input (e.g. #chore:=goal:1:weekly or #gaming:=goal:6h:monthly) or in the settings.",
+    "goals_empty": "No goals configured. Define them via smart input (e.g. #chore:=goal:1:weekly or #gaming:=goal:6h:monthly) or in the settings. You can also hide this tab in the advanced settings.",
     "goal_progress": "Progress: %{current} / %{target}",
     "goal_type_count": "Count",
     "goal_type_duration": "Duration",
