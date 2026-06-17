@@ -694,7 +694,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
         ));
 
         let menu_container = container(menu_scrollable)
-            .width(Length::Fixed(180.0))
+            .width(Length::Fixed(190.0))
             .max_height(max_available_height)
             .padding(4)
             .style(|theme: &Theme| {
@@ -716,7 +716,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             });
 
         // Position the menu exactly by the mouse
-        let menu_width = 180.0;
+        let menu_width = 190.0;
         let estimated_menu_height = (num_items as f32 * 34.0 + 8.0).min(max_available_height);
 
         let mut top_padding = pt.y;
