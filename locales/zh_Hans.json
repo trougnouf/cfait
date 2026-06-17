@@ -253,7 +253,7 @@
     "goal_type_count": "计数",
     "goal_type_duration": "时长",
     "goals": "目标",
-    "goals_empty": "未配置目标。您可以通过智能输入（例如 #chore:=goal:1:weekly 或 #gaming:=goal:6h:monthly）或在设置中定义目标。您也可以在高级设置中隐藏此标签页。",
+    "goals_empty": "未配置目标。您可以通过智能输入（例如 #chore:=goal:1/week 或 #gaming:=goal:6h/month）或在设置中定义目标。您也可以在高级设置中隐藏此标签页。",
     "habit_completed_in_past": {
         "one": "在过去 %{window} 内已完成 1 次",
         "other": "在过去 %{window} 内已完成 %{count} 次"
