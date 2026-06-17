@@ -665,7 +665,10 @@ pub fn view_task_row<'a>(
                 let collapse_btn = button(icon::icon(icon_char).size(14).color(tree_color))
                     .style(|theme, status| action_style(theme, status, 0))
                     .padding(4)
-                    .on_press(Message::ToggleTreeCollapse(task.uid.clone()));
+                    .on_press(Message::SetTreeCollapse(
+                        task.uid.clone(),
+                        !is_tree_collapsed,
+                    ));
                 if is_selected {
                     actions = actions.push(
                         tooltip(

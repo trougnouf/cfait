@@ -705,6 +705,7 @@ async fn main() -> Result<()> {
             let expanded_done_groups: HashSet<String> = HashSet::new();
             let expanded_tags: HashSet<String> = HashSet::new();
             let expanded_locations: HashSet<String> = HashSet::new();
+            let search_collapsed_tasks: HashSet<String> = HashSet::new();
 
             let res = store.filter(FilterOptions {
                 active_cal_href: target_href.as_deref(),
@@ -732,6 +733,7 @@ async fn main() -> Result<()> {
                 max_done_roots: usize::MAX,
                 max_done_subtasks: usize::MAX,
                 tag_aliases: &config.tag_aliases,
+                search_collapsed_tasks: &search_collapsed_tasks,
             });
 
             if as_json {

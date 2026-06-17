@@ -739,14 +739,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.session.selected_categories.remove(pos);
             } else {
                 app.session.selected_categories.push(cat.clone());
-                // Auto-expand when selecting
-                if !app.session.expanded_tags.contains(&cat) {
-                    crate::gui::update::common::dispatch_intent(
-                        app,
-                        crate::model::AppIntent::ToggleTagCollapse { tag: cat.clone() },
-                    );
-                    crate::gui::update::common::save_config(app);
-                }
             }
             refresh_filtered_tasks(app);
             Task::none()
@@ -765,16 +757,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.session.selected_locations.remove(pos);
             } else {
                 app.session.selected_locations.push(loc.clone());
-                // Auto-expand when selecting
-                if !app.session.expanded_locations.contains(&loc) {
-                    crate::gui::update::common::dispatch_intent(
-                        app,
-                        crate::model::AppIntent::ToggleLocationCollapse {
-                            location: loc.clone(),
-                        },
-                    );
-                    crate::gui::update::common::save_config(app);
-                }
             }
             refresh_filtered_tasks(app);
             Task::none()
@@ -793,6 +775,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.session.selected_categories.clear();
             app.session.selected_locations.clear();
             app.session.search_term.clear();
+            app.session.search_collapsed_tasks.clear();
             if !app.search_value.text().is_empty() {
                 app.search_value = iced::widget::text_editor::Content::new();
             }
@@ -918,6 +901,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             app.search_value.perform(action);
             app.session.search_term = app.search_value.text();
+            if app.session.search_term.is_empty() {
+                app.session.search_collapsed_tasks.clear();
+            }
 
             app.search_debounce_version = app.search_debounce_version.wrapping_add(1);
             let version = app.search_debounce_version;
@@ -940,6 +926,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
         Message::ClearSearch => {
             app.search_value = iced::widget::text_editor::Content::new();
             app.session.search_term.clear();
+            app.session.search_collapsed_tasks.clear();
             refresh_filtered_tasks(app);
             Task::none()
         }
@@ -1087,16 +1074,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.session.selected_categories.clear();
             app.session.selected_categories.push(tag.clone());
 
-            if !app.session.expanded_tags.contains(&tag) {
-                crate::gui::update::common::dispatch_intent(
-                    app,
-                    crate::model::AppIntent::ToggleTagCollapse { tag: tag.clone() },
-                );
-                crate::gui::update::common::save_config(app);
-            }
-
             app.search_value = iced::widget::text_editor::Content::new();
             app.session.search_term.clear();
+            app.session.search_collapsed_tasks.clear();
             refresh_filtered_tasks(app);
             // DO NOT scroll sidebar here, as user just clicked the arrow
             Task::none()
@@ -1106,18 +1086,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.session.selected_locations.clear();
             app.session.selected_locations.push(loc.clone());
 
-            if !app.session.expanded_locations.contains(&loc) {
-                crate::gui::update::common::dispatch_intent(
-                    app,
-                    crate::model::AppIntent::ToggleLocationCollapse {
-                        location: loc.clone(),
-                    },
-                );
-                crate::gui::update::common::save_config(app);
-            }
-
             app.search_value = iced::widget::text_editor::Content::new();
             app.session.search_term.clear();
+            app.session.search_collapsed_tasks.clear();
             refresh_filtered_tasks(app);
             // DO NOT scroll sidebar here
             Task::none()
@@ -1129,16 +1100,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.session.selected_categories.clear();
             app.session.selected_categories.push(tag.clone());
 
-            if !app.session.expanded_tags.contains(&tag) {
-                crate::gui::update::common::dispatch_intent(
-                    app,
-                    crate::model::AppIntent::ToggleTagCollapse { tag: tag.clone() },
-                );
-                crate::gui::update::common::save_config(app);
-            }
-
             app.search_value = iced::widget::text_editor::Content::new();
             app.session.search_term.clear();
+            app.session.search_collapsed_tasks.clear();
             refresh_filtered_tasks(app);
 
             // Auto-scroll logic is kept for JumpTo...
@@ -1164,18 +1128,9 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.session.selected_locations.clear();
             app.session.selected_locations.push(loc.clone());
 
-            if !app.session.expanded_locations.contains(&loc) {
-                crate::gui::update::common::dispatch_intent(
-                    app,
-                    crate::model::AppIntent::ToggleLocationCollapse {
-                        location: loc.clone(),
-                    },
-                );
-                crate::gui::update::common::save_config(app);
-            }
-
             app.search_value = iced::widget::text_editor::Content::new();
             app.session.search_term.clear();
+            app.session.search_collapsed_tasks.clear();
             refresh_filtered_tasks(app);
 
             let all_locs = &app.cached_locations;
@@ -1214,6 +1169,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if !app.search_value.text().is_empty() {
                     app.search_value = iced::widget::text_editor::Content::new();
                     app.session.search_term.clear();
+                    app.session.search_collapsed_tasks.clear();
                     needs_refresh = true;
                 }
                 if !app.session.selected_categories.is_empty() {

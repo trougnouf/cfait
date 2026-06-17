@@ -146,6 +146,7 @@ pub enum Message {
     SwitchHelpTab(bool),
     ToggleDoneGroup(String),
     ToggleTreeCollapse(String),
+    SetTreeCollapse(String, bool),
     ToggleTagCollapse(String),
     ToggleLocationCollapse(String),
     ToggleHelpSection(String),

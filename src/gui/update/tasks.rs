@@ -229,6 +229,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             common::dispatch_intent(app, AppIntent::ToggleTreeCollapse { uid });
             Task::none()
         }
+        Message::SetTreeCollapse(uid, collapsed) => {
+            common::dispatch_intent(app, AppIntent::SetTreeCollapse { uid, collapsed });
+            Task::none()
+        }
         Message::ToggleHelpSection(title) => {
             if app.help_expanded_sections.contains(&title) {
                 app.help_expanded_sections.remove(&title);
@@ -396,8 +400,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 return Task::none();
             }
 
-            if let Some(uid) = app.selected_uid.clone() {
-                return handle(app, Message::ToggleTreeCollapse(uid));
+            if let Some(uid) = app.selected_uid.clone()
+                && let Some(idx) = app.find_task_index_by_uid(&uid)
+                && let Some(task) = app.get_task_at_index(idx)
+            {
+                return handle(app, Message::SetTreeCollapse(uid, !task.collapsed));
             }
             Task::none()
         }

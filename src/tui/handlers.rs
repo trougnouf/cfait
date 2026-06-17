@@ -1349,6 +1349,7 @@ pub async fn handle_key_event(
                     state.selected_categories.clear();
                     state.selected_categories.insert(tag);
                     state.active_search_query.clear();
+                    state.search_collapsed_tasks.clear();
                 } else if (state.input_buffer.starts_with("@@")
                     || state.input_buffer.starts_with("loc:"))
                     && !state.input_buffer.contains(' ')
@@ -1364,6 +1365,7 @@ pub async fn handle_key_event(
                     state.selected_locations.clear();
                     state.selected_locations.insert(loc);
                     state.active_search_query.clear();
+                    state.search_collapsed_tasks.clear();
                 } else {
                     state.active_search_query = state.input_buffer.clone();
                 }
@@ -1374,16 +1376,23 @@ pub async fn handle_key_event(
             }
             KeyCode::Esc => {
                 state.active_search_query.clear();
+                state.search_collapsed_tasks.clear();
                 state.mode = InputMode::Normal;
                 state.reset_input();
                 state.refresh_filtered_view();
             }
             KeyCode::Char(c) => {
                 state.enter_char(c);
+                if state.input_buffer.is_empty() {
+                    state.search_collapsed_tasks.clear();
+                }
                 state.refresh_filtered_view();
             }
             KeyCode::Backspace => {
                 state.delete_char();
+                if state.input_buffer.is_empty() {
+                    state.search_collapsed_tasks.clear();
+                }
                 state.refresh_filtered_view();
             }
             KeyCode::Left => state.move_cursor_left(),
@@ -1495,6 +1504,7 @@ pub async fn handle_key_event(
                     state.message = rust_i18n::t!("yank_cleared").to_string();
                 } else if !state.active_search_query.is_empty() {
                     state.active_search_query.clear();
+                    state.search_collapsed_tasks.clear();
                     needs_refresh = true;
                 } else if !state.selected_categories.is_empty() {
                     state.selected_categories.clear();
@@ -2156,9 +2166,26 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('z') => {
                 if state.active_focus == Focus::Main {
-                    if let Some(uid) = state.get_selected_task().map(|t| t.uid.clone()) {
+                    if let Some(task) = state.get_selected_task() {
+                        let uid = task.uid.clone();
+                        let new_state = !task.collapsed;
+
+                        // TUI custom state logic
+                        let is_searching = state.mode == InputMode::Searching
+                            || !state.active_search_query.is_empty();
+                        if is_searching {
+                            if new_state {
+                                state.search_collapsed_tasks.insert(uid.clone());
+                            } else {
+                                state.search_collapsed_tasks.remove(&uid);
+                            }
+                        }
+
                         let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                        let intent = AppIntent::ToggleTreeCollapse { uid: uid.clone() };
+                        let intent = AppIntent::SetTreeCollapse {
+                            uid: uid.clone(),
+                            collapsed: new_state,
+                        };
                         let actions = state.store.apply_task_intent(&intent, &config);
                         state.refresh_filtered_view();
                         if !actions.is_empty() {
@@ -2382,16 +2409,6 @@ pub async fn handle_key_event(
                                 let c_clone = c.full_key.clone();
                                 state.selected_categories.clear();
                                 state.selected_categories.insert(c_clone.clone());
-
-                                if !state.expanded_tags.contains(&c_clone) {
-                                    state.expanded_tags.insert(c_clone);
-                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                        cfg.expanded_tags =
-                                            state.expanded_tags.iter().cloned().collect();
-                                        let _ = cfg.save(state.ctx.as_ref());
-                                    }
-                                }
-
                                 state.refresh_filtered_view();
                             }
                         }
@@ -2404,16 +2421,6 @@ pub async fn handle_key_event(
                                 let l_clone = l.full_key.clone();
                                 state.selected_locations.clear();
                                 state.selected_locations.insert(l_clone.clone());
-
-                                if !state.expanded_locations.contains(&l_clone) {
-                                    state.expanded_locations.insert(l_clone);
-                                    if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                        cfg.expanded_locations =
-                                            state.expanded_locations.iter().cloned().collect();
-                                        let _ = cfg.save(state.ctx.as_ref());
-                                    }
-                                }
-
                                 state.refresh_filtered_view();
                             }
                         }
@@ -2507,15 +2514,6 @@ pub async fn handle_key_event(
                                     state.selected_categories.remove(&c_clone);
                                 } else {
                                     state.selected_categories.insert(c_clone.clone());
-                                    // Auto-expand when selecting
-                                    if !state.expanded_tags.contains(&c_clone) {
-                                        state.expanded_tags.insert(c_clone);
-                                        if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                            cfg.expanded_tags =
-                                                state.expanded_tags.iter().cloned().collect();
-                                            let _ = cfg.save(state.ctx.as_ref());
-                                        }
-                                    }
                                 }
                                 state.refresh_filtered_view();
                             }
@@ -2531,15 +2529,6 @@ pub async fn handle_key_event(
                                     state.selected_locations.remove(&l_clone);
                                 } else {
                                     state.selected_locations.insert(l_clone.clone());
-                                    // Auto-expand when selecting
-                                    if !state.expanded_locations.contains(&l_clone) {
-                                        state.expanded_locations.insert(l_clone);
-                                        if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
-                                            cfg.expanded_locations =
-                                                state.expanded_locations.iter().cloned().collect();
-                                            let _ = cfg.save(state.ctx.as_ref());
-                                        }
-                                    }
                                 }
                                 state.refresh_filtered_view();
                             }

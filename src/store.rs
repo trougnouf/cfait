@@ -94,6 +94,7 @@ struct HierarchyContext<'a> {
     expanded_groups: &'a HashSet<String>,
     search_active: bool,
     max_done_subtasks: usize,
+    search_collapsed_tasks: &'a HashSet<String>,
 }
 
 pub struct HierarchyOptions<'a> {
@@ -104,6 +105,7 @@ pub struct HierarchyOptions<'a> {
     pub max_done_subtasks: usize,
     pub search_active: bool,
     pub sort_preset: crate::config::SortPreset,
+    pub search_collapsed_tasks: &'a HashSet<String>,
 }
 
 /// Organize tasks into a hierarchy with proper parent/child relationships and inject
@@ -158,6 +160,7 @@ pub fn organize_hierarchy(
         expanded_groups: options.expanded_groups,
         search_active: options.search_active,
         max_done_subtasks: options.max_done_subtasks,
+        search_collapsed_tasks: options.search_collapsed_tasks,
     };
 
     fn mark_tree_as_visited(task: &Task, context: &mut HierarchyContext) {
@@ -245,18 +248,22 @@ pub fn organize_hierarchy(
         }
         context.visited_keys.insert(visit_key.clone());
 
+        let force_expand =
+            context.search_active && !context.search_collapsed_tasks.contains(&task.uid);
+        let effectively_collapsed = task.collapsed && !force_expand;
+
         let mut t = task.clone();
         t.depth = depth;
 
         // --- THE FIX ---
         // Only show the tree icon if children survived the current filters
         t.has_visible_subtasks = context.children_map.contains_key(&task.uid);
+        t.collapsed = effectively_collapsed; // UI will see the effective state!
         // ---------------
 
         context.result.push(TaskListItem::Task(Box::new(t)));
 
-        // If the user manually folded this tree, truncate children iteration (unless searching)
-        if task.collapsed && !context.search_active {
+        if effectively_collapsed {
             if let Some(children) = context.children_map.get(&task.uid) {
                 for child in children {
                     mark_tree_as_visited(child, context);
@@ -453,6 +460,7 @@ pub struct FilterOptions<'a> {
     pub max_done_roots: usize,
     pub max_done_subtasks: usize,
     pub tag_aliases: &'a HashMap<String, Vec<String>>,
+    pub search_collapsed_tasks: &'a HashSet<String>,
 }
 
 impl TaskStore {
@@ -2026,8 +2034,27 @@ impl TaskStore {
         let build_aggregates = |counts: HashMap<String, u32>,
                                 display_names: HashMap<String, String>,
                                 expanded_set: &HashSet<String>,
+                                selected_set: &HashSet<String>,
                                 is_location: bool|
          -> Vec<AggregateItem> {
+            let mut forced_expanded = HashSet::new();
+            for sel in selected_set {
+                let clean_sel = if is_location {
+                    sel.strip_prefix("@@").unwrap_or(sel)
+                } else {
+                    sel.strip_prefix("#").unwrap_or(sel)
+                };
+                let parts: Vec<&str> = clean_sel.split(':').collect();
+                let mut current = String::new();
+                for part in parts {
+                    if !current.is_empty() {
+                        current.push(':');
+                    }
+                    current.push_str(part);
+                    forced_expanded.insert(current.clone());
+                }
+            }
+
             let mut sorted_keys: Vec<String> = counts.keys().cloned().collect();
             sorted_keys.sort();
 
@@ -2083,7 +2110,7 @@ impl TaskStore {
                         ancestor.push(':');
                     }
                     ancestor.push_str(part);
-                    if !expanded_set.contains(&ancestor) {
+                    if !expanded_set.contains(&ancestor) && !forced_expanded.contains(&ancestor) {
                         visible = false;
                         break;
                     }
@@ -2096,7 +2123,7 @@ impl TaskStore {
                         count,
                         depth,
                         has_children,
-                        is_expanded: expanded_set.contains(key),
+                        is_expanded: expanded_set.contains(key) || forced_expanded.contains(key),
                     });
                 }
             }
@@ -2108,6 +2135,7 @@ impl TaskStore {
             cat_active_counts,
             cat_display_names,
             options.expanded_tags,
+            options.selected_categories,
             false,
         );
 
@@ -2116,6 +2144,7 @@ impl TaskStore {
             loc_active_counts,
             empty_names,
             options.expanded_locations,
+            options.selected_locations,
             true,
         );
 
@@ -2394,6 +2423,7 @@ impl TaskStore {
                 max_done_subtasks: options.max_done_subtasks,
                 search_active: !options.search_term.is_empty(),
                 sort_preset: options.sort_preset,
+                search_collapsed_tasks: options.search_collapsed_tasks,
             },
         );
 
@@ -2614,6 +2644,30 @@ impl TaskStore {
                     actions.push(JournalAction::Update(updated));
                 }
             }
+            AppIntent::SetTreeCollapse { uid, collapsed } => {
+                let mut is_parent = false;
+                for map in self.calendars.values() {
+                    for t in map.values() {
+                        if t.parent_uid.as_ref() == Some(uid) {
+                            is_parent = true;
+                            break;
+                        }
+                    }
+                    if is_parent {
+                        break;
+                    }
+                }
+
+                if let Some((task, _)) = self.get_task_mut(uid)
+                    && (is_parent || task.collapsed)
+                    && task.collapsed != *collapsed
+                {
+                    task.collapsed = *collapsed;
+                    task.sequence += 1;
+                    let updated = task.clone();
+                    actions.push(JournalAction::Update(updated));
+                }
+            }
             _ => {} // Ignore session intents
         }
         actions
@@ -2701,6 +2755,7 @@ mod tests {
                 max_done_subtasks: 10,
                 search_active: false,
                 sort_preset: crate::config::SortPreset::UrgentStartedDue,
+                search_collapsed_tasks: &HashSet::new(),
             },
         );
 
@@ -2749,6 +2804,7 @@ mod tests {
                 max_done_subtasks: 1, // max_done_subtasks = 1, so only 1 done child shown, 1 hidden
                 search_active: false,
                 sort_preset: crate::config::SortPreset::UrgentStartedDue,
+                search_collapsed_tasks: &HashSet::new(),
             },
         );
 
@@ -2798,6 +2854,7 @@ mod tests {
                 max_done_subtasks: 10,
                 search_active: false,
                 sort_preset: crate::config::SortPreset::UrgentStartedDue,
+                search_collapsed_tasks: &HashSet::new(),
             },
         );
 

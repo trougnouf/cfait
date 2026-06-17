@@ -4124,6 +4124,9 @@ data class MobileConfig(
     var `defaultDurationGoalMins`: kotlin.UInt,
     var `sessionsCountAsCompletions`: kotlin.Boolean,
     var `showGoalsTab`: kotlin.Boolean,
+    var `expandedTags`: List<kotlin.String>,
+    var `expandedLocations`: List<kotlin.String>,
+    var `expandedDoneGroups`: List<kotlin.String>,
 ) {
     companion object
 }
@@ -4168,6 +4171,9 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterUInt.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
         )
 
     override fun allocationSize(value: MobileConfig) =
@@ -4205,7 +4211,10 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterMapStringTypeMobileGoal.allocationSize(value.`goals`) +
                 FfiConverterUInt.allocationSize(value.`defaultDurationGoalMins`) +
                 FfiConverterBoolean.allocationSize(value.`sessionsCountAsCompletions`) +
-                FfiConverterBoolean.allocationSize(value.`showGoalsTab`)
+                FfiConverterBoolean.allocationSize(value.`showGoalsTab`) +
+                FfiConverterSequenceString.allocationSize(value.`expandedTags`) +
+                FfiConverterSequenceString.allocationSize(value.`expandedLocations`) +
+                FfiConverterSequenceString.allocationSize(value.`expandedDoneGroups`)
         )
 
     override fun write(
@@ -4246,6 +4255,9 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterUInt.write(value.`defaultDurationGoalMins`, buf)
         FfiConverterBoolean.write(value.`sessionsCountAsCompletions`, buf)
         FfiConverterBoolean.write(value.`showGoalsTab`, buf)
+        FfiConverterSequenceString.write(value.`expandedTags`, buf)
+        FfiConverterSequenceString.write(value.`expandedLocations`, buf)
+        FfiConverterSequenceString.write(value.`expandedDoneGroups`, buf)
     }
 }
 
@@ -4997,6 +5009,7 @@ data class SessionState(
     var `expandedDoneGroups`: List<kotlin.String>,
     var `expandedTags`: List<kotlin.String>,
     var `expandedLocations`: List<kotlin.String>,
+    var `searchCollapsedTasks`: List<kotlin.String>,
 ) {
     companion object
 }
@@ -5015,6 +5028,7 @@ public object FfiConverterTypeSessionState : FfiConverterRustBuffer<SessionState
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
+            FfiConverterSequenceString.read(buf),
         )
 
     override fun allocationSize(value: SessionState) =
@@ -5026,7 +5040,8 @@ public object FfiConverterTypeSessionState : FfiConverterRustBuffer<SessionState
                 FfiConverterBoolean.allocationSize(value.`matchAllCategories`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedDoneGroups`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedTags`) +
-                FfiConverterSequenceString.allocationSize(value.`expandedLocations`)
+                FfiConverterSequenceString.allocationSize(value.`expandedLocations`) +
+                FfiConverterSequenceString.allocationSize(value.`searchCollapsedTasks`)
         )
 
     override fun write(
@@ -5041,6 +5056,7 @@ public object FfiConverterTypeSessionState : FfiConverterRustBuffer<SessionState
         FfiConverterSequenceString.write(value.`expandedDoneGroups`, buf)
         FfiConverterSequenceString.write(value.`expandedTags`, buf)
         FfiConverterSequenceString.write(value.`expandedLocations`, buf)
+        FfiConverterSequenceString.write(value.`searchCollapsedTasks`, buf)
     }
 }
 
@@ -5197,6 +5213,13 @@ sealed class AppIntent {
 
     data class ToggleTreeCollapse(
         val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
+    data class SetTreeCollapse(
+        val `uid`: kotlin.String,
+        val `collapsed`: kotlin.Boolean,
     ) : AppIntent() {
         companion object
     }
@@ -5390,18 +5413,25 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
             }
 
             28 -> {
+                AppIntent.SetTreeCollapse(
+                    FfiConverterString.read(buf),
+                    FfiConverterBoolean.read(buf),
+                )
+            }
+
+            29 -> {
                 AppIntent.ToggleDoneGroup(
                     FfiConverterString.read(buf),
                 )
             }
 
-            29 -> {
+            30 -> {
                 AppIntent.ToggleTagCollapse(
                     FfiConverterString.read(buf),
                 )
             }
 
-            30 -> {
+            31 -> {
                 AppIntent.ToggleLocationCollapse(
                     FfiConverterString.read(buf),
                 )
@@ -5633,6 +5663,15 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
                 )
             }
 
+            is AppIntent.SetTreeCollapse -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`) +
+                        FfiConverterBoolean.allocationSize(value.`collapsed`)
+                )
+            }
+
             is AppIntent.ToggleDoneGroup -> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
@@ -5828,20 +5867,27 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
                 Unit
             }
 
-            is AppIntent.ToggleDoneGroup -> {
+            is AppIntent.SetTreeCollapse -> {
                 buf.putInt(28)
+                FfiConverterString.write(value.`uid`, buf)
+                FfiConverterBoolean.write(value.`collapsed`, buf)
+                Unit
+            }
+
+            is AppIntent.ToggleDoneGroup -> {
+                buf.putInt(29)
                 FfiConverterString.write(value.`key`, buf)
                 Unit
             }
 
             is AppIntent.ToggleTagCollapse -> {
-                buf.putInt(29)
+                buf.putInt(30)
                 FfiConverterString.write(value.`tag`, buf)
                 Unit
             }
 
             is AppIntent.ToggleLocationCollapse -> {
-                buf.putInt(30)
+                buf.putInt(31)
                 FfiConverterString.write(value.`location`, buf)
                 Unit
             }

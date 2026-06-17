@@ -152,6 +152,7 @@ pub struct AppState {
     pub expanded_done_groups: HashSet<String>,
     pub expanded_tags: HashSet<String>,
     pub expanded_locations: HashSet<String>,
+    pub search_collapsed_tasks: HashSet<String>,
 
     pub goals: HashMap<String, crate::config::Goal>,
     pub cached_goals_progress: HashMap<String, u32>,
@@ -266,6 +267,7 @@ impl AppState {
             expanded_done_groups: HashSet::new(),
             expanded_tags: HashSet::new(),
             expanded_locations: HashSet::new(),
+            search_collapsed_tasks: HashSet::new(),
             goals: config.goals,
             cached_goals_progress: HashMap::new(),
             needs_redraw: false,
@@ -346,6 +348,7 @@ impl AppState {
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
             tag_aliases: &config.tag_aliases,
+            search_collapsed_tasks: &self.search_collapsed_tasks,
         });
 
         self.tasks = filter_res.items;

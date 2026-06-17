@@ -190,6 +190,7 @@ fn test_hierarchy_organization() {
             max_done_subtasks: usize::MAX,
             search_active: false,
             sort_preset: SortPreset::default(),
+            search_collapsed_tasks: &HashSet::new(),
         },
     );
 

@@ -248,9 +248,24 @@ fun HomeScreen(
     var filterTags by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
     var filterLocations by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
     var matchAllCategories by rememberSaveable { mutableStateOf(true) }
-    var expandedGroups by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
-    var expandedTags by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
-    var expandedLocations by rememberSaveable { mutableStateOf<Set<String>>(emptySet()) }
+    var expandedGroups by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var expandedTags by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var expandedLocations by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var hasInitializedExpansions by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        if (!hasInitializedExpansions) {
+            try {
+                val cfg = api.getConfig()
+                expandedTags = cfg.expandedTags.toSet()
+                expandedLocations = cfg.expandedLocations.toSet()
+                expandedGroups = cfg.expandedDoneGroups.toSet()
+                hasInitializedExpansions = true
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    }
 
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
@@ -627,7 +642,7 @@ fun HomeScreen(
                     "block" -> if (yankedUid != null) AppIntent.AddDependency(task.uid, yankedUid!!) else null
                     "child" -> if (yankedUid != null) AppIntent.MakeChild(task.uid, yankedUid!!) else null
                     "related" -> if (yankedUid != null) AppIntent.AddRelatedTo(task.uid, yankedUid!!) else null
-                    "toggle_collapse" -> AppIntent.ToggleTreeCollapse(task.uid)
+                    "toggle_collapse" -> AppIntent.SetTreeCollapse(task.uid, !task.isCollapsed)
                     else -> null
                 }
 

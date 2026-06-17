@@ -18,6 +18,7 @@ pub struct SessionState {
     pub expanded_done_groups: Vec<String>,
     pub expanded_tags: Vec<String>,
     pub expanded_locations: Vec<String>,
+    pub search_collapsed_tasks: Vec<String>,
 }
 
 impl SessionState {
@@ -41,6 +42,8 @@ impl SessionState {
             self.expanded_done_groups.iter().cloned().collect();
         let expanded_tags: HashSet<String> = self.expanded_tags.iter().cloned().collect();
         let expanded_locations: HashSet<String> = self.expanded_locations.iter().cloned().collect();
+        let search_collapsed_tasks: HashSet<String> =
+            self.search_collapsed_tasks.iter().cloned().collect();
 
         store.filter(FilterOptions {
             active_cal_href: None, // Logic handled by hidden_calendars
@@ -68,13 +71,21 @@ impl SessionState {
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
             tag_aliases: &config.tag_aliases,
+            search_collapsed_tasks: &search_collapsed_tasks,
         })
     }
 
     /// Applies session-specific intents to modify the view filters.
     pub fn apply_session_intent(&mut self, intent: &AppIntent) {
         match intent {
-            AppIntent::SetSearchTerm { term } => self.search_term = term.clone(),
+            AppIntent::SetSearchTerm { term } => {
+                if self.search_term != *term {
+                    self.search_term = term.clone();
+                    if term.is_empty() {
+                        self.search_collapsed_tasks.clear();
+                    }
+                }
+            }
             AppIntent::ToggleTagFilter { tag } => {
                 if let Some(pos) = self.selected_categories.iter().position(|x| x == tag) {
                     self.selected_categories.remove(pos);
@@ -93,6 +104,7 @@ impl SessionState {
                 self.search_term.clear();
                 self.selected_categories.clear();
                 self.selected_locations.clear();
+                self.search_collapsed_tasks.clear();
             }
             AppIntent::ToggleMatchAllCategories => {
                 self.match_all_categories = !self.match_all_categories
@@ -121,6 +133,17 @@ impl SessionState {
                     self.expanded_locations.remove(pos);
                 } else {
                     self.expanded_locations.push(location.clone());
+                }
+            }
+            AppIntent::SetTreeCollapse { uid, collapsed } if !self.search_term.is_empty() => {
+                if *collapsed {
+                    if !self.search_collapsed_tasks.contains(uid) {
+                        self.search_collapsed_tasks.push(uid.clone());
+                    }
+                } else {
+                    if let Some(pos) = self.search_collapsed_tasks.iter().position(|x| x == uid) {
+                        self.search_collapsed_tasks.remove(pos);
+                    }
                 }
             }
             _ => {} // Ignore task-specific intents
@@ -160,6 +183,7 @@ pub enum AppIntent {
     ClearTagFilters,
     ClearLocationFilters,
     ToggleTreeCollapse { uid: String },
+    SetTreeCollapse { uid: String, collapsed: bool },
     ToggleDoneGroup { key: String },
     ToggleTagCollapse { tag: String },
     ToggleLocationCollapse { location: String },

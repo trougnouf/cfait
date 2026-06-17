@@ -402,6 +402,9 @@ pub struct MobileConfig {
     pub default_duration_goal_mins: u32,
     pub sessions_count_as_completions: bool,
     pub show_goals_tab: bool,
+    pub expanded_tags: Vec<String>,
+    pub expanded_locations: Vec<String>,
+    pub expanded_done_groups: Vec<String>,
 }
 
 #[derive(uniffi::Record)]
@@ -871,6 +874,9 @@ impl CfaitMobile {
             default_duration_goal_mins: c.default_duration_goal_mins,
             sessions_count_as_completions: c.sessions_count_as_completions,
             show_goals_tab: c.show_goals_tab,
+            expanded_tags: c.expanded_tags,
+            expanded_locations: c.expanded_locations,
+            expanded_done_groups: c.expanded_done_groups,
         }
     }
 
@@ -988,6 +994,10 @@ impl CfaitMobile {
         c.default_duration_goal_mins = config.default_duration_goal_mins;
         c.sessions_count_as_completions = config.sessions_count_as_completions;
         c.show_goals_tab = config.show_goals_tab;
+
+        c.expanded_tags = config.expanded_tags;
+        c.expanded_locations = config.expanded_locations;
+        c.expanded_done_groups = config.expanded_done_groups;
 
         c.update_sync_timestamp_if_changed(&old_c);
 
@@ -1602,6 +1612,7 @@ impl CfaitMobile {
         let expanded_tags_set: HashSet<String> = options.expanded_tags.into_iter().collect();
         let expanded_locations_set: HashSet<String> =
             options.expanded_locations.into_iter().collect();
+        let search_collapsed_set: HashSet<String> = HashSet::new();
 
         let cutoff_date = config
             .sort_cutoff_months
@@ -1632,6 +1643,7 @@ impl CfaitMobile {
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
             tag_aliases: &config.tag_aliases,
+            search_collapsed_tasks: &search_collapsed_set,
         });
 
         let tasks = filtered
@@ -1787,6 +1799,7 @@ impl CfaitMobile {
             max_done_roots: config.max_done_roots,
             max_done_subtasks: config.max_done_subtasks,
             tag_aliases: &config.tag_aliases,
+            search_collapsed_tasks: &HashSet::new(),
         });
         let filtered: Vec<crate::model::Task> = filter_res
             .items

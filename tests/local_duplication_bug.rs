@@ -78,6 +78,7 @@ fn test_reproduce_android_local_revert_bug() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
+        search_collapsed_tasks: &HashSet::new(),
     });
 
     let visible_task = filter_res

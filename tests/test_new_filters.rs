@@ -180,6 +180,7 @@ fn test_is_ready_filters_future_start_dates() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
+        search_collapsed_tasks: &HashSet::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -263,6 +264,7 @@ fn test_is_ready_filters_blocked_tasks() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
+        search_collapsed_tasks: &HashSet::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -352,6 +354,7 @@ fn test_is_ready_combines_with_other_filters() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
+        search_collapsed_tasks: &HashSet::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -428,6 +431,7 @@ fn test_is_ready_filters_implicitly_future_tasks() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
+        search_collapsed_tasks: &HashSet::new(),
     };
 
     let filtered = store.filter(options).items;
@@ -487,6 +491,7 @@ fn test_is_ready_filters_implicitly_future_tasks() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
+        search_collapsed_tasks: &HashSet::new(),
     };
 
     let all_tasks = store.filter(options_all).items;

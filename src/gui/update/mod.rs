@@ -184,7 +184,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::KeyboardToggleDetails
         | Message::StartMoveTask(_)
         | Message::CancelMoveTask
-        | Message::TogglePin(_) => tasks::handle(app, message),
+        | Message::TogglePin(_)
+        | Message::SetTreeCollapse(_, _) => tasks::handle(app, message),
 
         Message::FocusInput
         | Message::FocusSearch

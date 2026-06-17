@@ -58,6 +58,7 @@ fn test_filter_by_tag() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
+        search_collapsed_tasks: &HashSet::new(),
     });
     let results = filter_res.items;
 
@@ -109,6 +110,7 @@ fn test_filter_hierarchical_tags() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
+        search_collapsed_tasks: &HashSet::new(),
     });
     let results = filter_res.items;
 
@@ -166,6 +168,7 @@ fn test_hide_hidden_calendars() {
         max_done_roots: usize::MAX,
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
+        search_collapsed_tasks: &HashSet::new(),
     });
     let results = filter_res.items;
 
