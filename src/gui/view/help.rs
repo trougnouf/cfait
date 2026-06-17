@@ -504,7 +504,7 @@ fn donation_row<'a>(
         .style(iced::widget::button::text);
 
     if is_copy {
-        btn = btn.on_press(Message::YankSelected);
+        btn = btn.on_press(Message::CopyToClipboard(value.to_string()));
     } else {
         btn = btn.on_press(Message::OpenUrl(value.to_string()));
     }

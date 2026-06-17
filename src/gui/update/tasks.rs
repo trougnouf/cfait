@@ -558,6 +558,8 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::batch(tasks)
         }
 
+        Message::CopyToClipboard(text) => Task::batch(vec![iced::clipboard::write(text)]),
+
         Message::TogglePin(uid) => {
             common::dispatch_intent(app, AppIntent::TogglePin { uid });
             Task::none()

@@ -151,6 +151,7 @@ pub enum Message {
     ToggleHelpSection(String),
 
     // --- Navigation & Actions ---
+    CopyToClipboard(String),
     ExtractSubtasks(String),
     TogglePin(String),
     YankTask(String),
