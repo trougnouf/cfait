@@ -268,7 +268,7 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "#tag:=goal:X/period".to_string(),
                     desc: rust_i18n::t!("help_goals_count").to_string(),
-                    example: "#reading:=goal:5/w".to_string(),
+                    example: "#reading:=goal:5/w, goal:daily".to_string(),
                 },
                 HelpItem {
                     keys: "@@loc:=goal:dur/period".to_string(),

@@ -206,14 +206,24 @@ pub fn extract_inline_goals(input: &str) -> (String, HashMap<String, crate::conf
             }
 
             if is_valid && let Some(goal_str) = right.strip_prefix("goal:") {
-                let goal_parts: Vec<&str> = if goal_str.contains('/') {
-                    goal_str.split('/').collect()
+                let (target_str, period_str) = if let Some(idx) = goal_str.find('/') {
+                    (&goal_str[..idx], &goal_str[idx + 1..])
+                } else if let Some(idx) = goal_str.find(':') {
+                    (&goal_str[..idx], &goal_str[idx + 1..])
                 } else {
-                    goal_str.split(':').collect()
+                    let lower = goal_str.to_lowercase();
+                    if matches!(
+                        lower.as_str(),
+                        "daily" | "weekly" | "monthly" | "yearly" | "d" | "w" | "mo" | "y"
+                    ) {
+                        ("1", goal_str)
+                    } else {
+                        ("", "")
+                    }
                 };
-                if goal_parts.len() == 2 {
-                    let target_str = goal_parts[0];
-                    let period_str = goal_parts[1].trim_start_matches('@');
+
+                if !target_str.is_empty() && !period_str.is_empty() {
+                    let period_str = period_str.trim_start_matches('@');
 
                     let mut goal_type = crate::config::GoalType::Count;
                     let target = if let Some(dur) = parse_duration(target_str) {
@@ -2807,14 +2817,22 @@ pub fn apply_smart_input(
                 summary_words.push(unescape(token));
             }
         } else if let Some(val) = token_lower.strip_prefix("goal:") {
-            let parts: Vec<&str> = if val.contains('/') {
-                val.split('/').collect()
+            let (target_str, period_str) = if let Some(idx) = val.find('/') {
+                (&val[..idx], &val[idx + 1..])
+            } else if let Some(idx) = val.find(':') {
+                (&val[..idx], &val[idx + 1..])
             } else {
-                val.split(':').collect()
+                if matches!(
+                    val,
+                    "daily" | "weekly" | "monthly" | "yearly" | "d" | "w" | "mo" | "y"
+                ) {
+                    ("1", val)
+                } else {
+                    ("", "")
+                }
             };
-            if parts.len() == 2 {
-                let target_str = parts[0];
-                let period_str = parts[1].trim_start_matches('@');
+            if !target_str.is_empty() && !period_str.is_empty() {
+                let period_str = period_str.trim_start_matches('@');
                 let mut goal_type = crate::config::GoalType::Count;
                 let target = if let Some(dur) = parse_duration(target_str) {
                     goal_type = crate::config::GoalType::Duration;

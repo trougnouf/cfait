@@ -1716,7 +1716,10 @@ impl CfaitMobile {
         if config.show_task_goals_in_sidebar {
             let now = chrono::Utc::now();
             let mut task_goals = Vec::new();
-            for map in store.calendars.values() {
+            for (href, map) in store.calendars.iter() {
+                if hidden.contains(href) {
+                    continue;
+                }
                 for t in map.values() {
                     if let Some(goal) = &t.goal {
                         let progress = t.calculate_local_goal_progress(

@@ -71,7 +71,10 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     let mut task_goals = Vec::new();
     if config.show_task_goals_in_sidebar {
         let now = chrono::Utc::now();
-        for map in app.store.calendars.values() {
+        for (href, map) in app.store.calendars.iter() {
+            if app.hidden_calendars.contains(href) || app.disabled_calendars.contains(href) {
+                continue;
+            }
             for t in map.values() {
                 if let Some(goal) = &t.goal {
                     let progress = t.calculate_local_goal_progress(

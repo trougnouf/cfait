@@ -68,7 +68,7 @@ Evaluated instantly during text input. Supported across all clients.
 | `except` | Exclusion dates (`EXDATE`). | `@daily except sat,sun` |
 | `+cal` / `-cal` | Force/prevent companion Calendar Event. | `+cal` |
 | `+pin` / `-pin` | Pin task to the top of the list. | `+pin` |
-| `goal:` | Goal tracking target. | `goal:5/w`, `goal:2h/daily` |
+| `goal:` | Goal tracking target. | `goal:5/w`, `goal:2h/daily`, `goal:weekly` |
 
 *Rules:* 
 * Double prefixes (`##tag`, `@@@loc`) apply metadata but *keep* the word in the display title.
