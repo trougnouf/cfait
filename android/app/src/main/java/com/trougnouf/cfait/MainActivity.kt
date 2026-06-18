@@ -634,6 +634,7 @@ fun CfaitNavHost(
                 defaultDurationGoalMins = defaultDurationGoalMinsAdv,
                 sessionsCountAsCompletions = sessionsCountAsCompletionsAdv,
                 showGoalsTab = showGoalsTabAdv,
+                showTaskGoalsInSidebar = showTaskGoalsInSidebarAdv,
                 tabPosition = tabPosition,
                 tabAutoHide = tabAutoHide,
                 onTabPositionChange = onTabPositionChange,
