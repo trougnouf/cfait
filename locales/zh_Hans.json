@@ -161,7 +161,7 @@
     "display_limits": "显示限制",
     "done": "完成",
     "due_within_days": "到期日期（天数）：",
-    "duplicate_single_task": "复制任务",
+    "duplicate_single_task": "复制",
     "duplicate_task": "复制任务树",
     "edit": "编辑",
     "edit_description_instructions": "写备注或子任务（- [ ]）。按 Ctrl+S 保存。",
