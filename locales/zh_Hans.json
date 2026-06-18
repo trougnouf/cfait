@@ -466,6 +466,7 @@
     "show_ongoing_notifications_explain": "当任务正在进行时，显示带有计时器的通知。",
     "show_ongoing_notifications_label": "显示正在进行的任务通知",
     "show_priority_numbers": "显示优先级编号 (!X)",
+    "show_task_goals_in_sidebar": "在侧栏中显示特定任务的目标",
     "snooze": "暂停…",
     "snooze_custom_title": "自定义",
     "snooze_hint": "暂停（例如 15 分钟、1 小时）",
