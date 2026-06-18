@@ -68,6 +68,25 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
     }
     app.cached_goals_progress = goals_progress;
 
+    let mut task_goals = Vec::new();
+    if config.show_task_goals_in_sidebar {
+        let now = chrono::Utc::now();
+        for map in app.store.calendars.values() {
+            for t in map.values() {
+                if let Some(goal) = &t.goal {
+                    let progress = t.calculate_local_goal_progress(
+                        now,
+                        config.default_duration_goal_mins,
+                        config.sessions_count_as_completions,
+                    );
+                    task_goals.push((t.uid.clone(), t.summary.clone(), goal.clone(), progress));
+                }
+            }
+        }
+    }
+    task_goals.sort_by(|a, b| a.1.cmp(&b.1));
+    app.cached_task_goals = task_goals;
+
     if let Some(tx) = &app.alarm_tx {
         let all_tasks: Vec<crate::model::Task> = app
             .store

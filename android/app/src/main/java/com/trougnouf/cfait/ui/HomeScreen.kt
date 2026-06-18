@@ -1319,6 +1319,12 @@ fun HomeScreen(
                                 items(sortedGoals) { goal ->
                                     val progText = stringResource(R.string.goal_progress, goal.progressStr, goal.targetStr)
                                     val isTag = goal.key.startsWith("#")
+                                    val isTask = goal.key.startsWith("task:")
+                                    val displayTitle = if (isTask) {
+                                        goal.periodStr // Rust populates this with "Summary - period"
+                                    } else {
+                                        "${goal.key} (${goal.targetStr}/${goal.periodStr})"
+                                    }
 
                                     Row(
                                         modifier = Modifier
@@ -1330,13 +1336,18 @@ fun HomeScreen(
                                                 } else if (goal.key.startsWith("@@")) {
                                                     filterLocations = setOf(goal.key.removePrefix("@@"))
                                                     sidebarTab = 2
+                                                } else if (isTask) {
+                                                    scope.launch {
+                                                        drawerState.close()
+                                                        onTaskClick(goal.key.removePrefix("task:"))
+                                                    }
                                                 }
                                             }
                                             .padding(horizontal = 12.dp, vertical = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
-                                            Text("${goal.key} (${goal.targetStr}/${goal.periodStr})", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                            Text(displayTitle, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                                             Spacer(Modifier.height(4.dp))
                                             Box(modifier = Modifier.fillMaxWidth().height(6.dp).background(Color.DarkGray, RoundedCornerShape(3.dp))) {
                                                 Box(modifier = Modifier.fillMaxWidth(goal.pct).fillMaxHeight().background(if (goal.pct >= 1f) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp)))
@@ -1352,6 +1363,11 @@ fun HomeScreen(
                                             } else if (goal.key.startsWith("@@")) {
                                                 filterLocations = setOf(goal.key.removePrefix("@@"))
                                                 scope.launch { drawerState.close() }
+                                            } else if (isTask) {
+                                                scope.launch {
+                                                    drawerState.close()
+                                                    onTaskClick(goal.key.removePrefix("task:"))
+                                                }
                                             }
                                         }) {
                                             NfIcon(NfIcons.ARROW_RIGHT, 14.sp)

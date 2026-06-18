@@ -528,6 +528,70 @@ impl Task {
             })
     }
 
+    pub fn calculate_local_goal_progress(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+        default_dur: u32,
+        count_sessions: bool,
+    ) -> u32 {
+        if let Some(goal) = &self.goal {
+            let (start_ts, end_ts) = goal.interval.get_period_bounds(now);
+            let mut current = 0;
+
+            if goal.goal_type == crate::config::GoalType::Count {
+                let mut task_progress = 0;
+                if count_sessions {
+                    for session in &self.sessions {
+                        if session.end >= start_ts && session.start < end_ts {
+                            task_progress += 1;
+                        }
+                    }
+                }
+                if self.status == TaskStatus::Completed
+                    && let Some(c) = self.completion_date()
+                    && c.timestamp() >= start_ts
+                    && c.timestamp() < end_ts
+                    && task_progress == 0
+                {
+                    task_progress += 1;
+                }
+                current += task_progress;
+            } else if goal.goal_type == crate::config::GoalType::Duration {
+                for session in &self.sessions {
+                    if session.end >= start_ts && session.start < end_ts {
+                        let overlap_start = session.start.max(start_ts);
+                        let overlap_end = session.end.min(end_ts);
+                        if overlap_end > overlap_start {
+                            current += (overlap_end - overlap_start) as u32 / 60;
+                        }
+                    }
+                }
+                if let Some(start) = self.last_started_at {
+                    let now_ts = now.timestamp().min(end_ts);
+                    if now_ts > start_ts {
+                        let overlap_start = start.max(start_ts);
+                        if now_ts > overlap_start {
+                            current += (now_ts - overlap_start) as u32 / 60;
+                        }
+                    }
+                }
+                if self.status == TaskStatus::Completed
+                    && let Some(c) = self.completion_date()
+                    && c.timestamp() >= start_ts
+                    && c.timestamp() < end_ts
+                {
+                    let total_tracked = (self.time_spent_seconds / 60) as u32;
+                    let est = self.estimated_duration.unwrap_or(default_dur);
+                    if est > total_tracked {
+                        current += est - total_tracked;
+                    }
+                }
+            }
+            return current;
+        }
+        0
+    }
+
     /// Set (or clear) the COMPLETED date property and ensure status aligns.
     pub fn set_completion_date(&mut self, dt: Option<DateTime<Utc>>) {
         // Remove existing COMPLETED prop

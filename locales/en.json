@@ -477,6 +477,7 @@
     "show_ongoing_notifications_label": "Show ongoing task notifications",
     "show_priority_numbers": "Show priority numbers (!X)",
     "show_goals_tab": "Show Goals tab in sidebar",
+    "show_task_goals_in_sidebar": "Show task-specific goals in sidebar",
     "snooze": "Snooze…",
     "snooze_custom_title": "Custom",
     "snooze_hint": "Snooze (e.g. 15m, 1h)",

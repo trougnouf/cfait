@@ -769,6 +769,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             crate::gui::update::common::refresh_filtered_tasks(app);
             Task::none()
         }
+        Message::SetShowTaskGoalsInSidebar(val) => {
+            app.core_config.show_task_goals_in_sidebar = val;
+            save_config(app);
+            crate::gui::update::common::refresh_filtered_tasks(app);
+            Task::none()
+        }
         Message::SetQuickFilterTerm(val) => {
             app.ob_quick_filter_term_input = val.clone();
             app.quick_filter_term = val;

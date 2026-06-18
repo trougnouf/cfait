@@ -1723,7 +1723,9 @@ pub async fn handle_key_event(
                 {
                     let mut keys: Vec<_> = state.goals.keys().cloned().collect();
                     keys.sort();
-                    if let Some(key) = keys.get(idx) {
+                    if idx < keys.len()
+                        && let Some(key) = keys.get(idx)
+                    {
                         state.goals.remove(key);
                         if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
                             let old = cfg.clone();
@@ -1796,7 +1798,9 @@ pub async fn handle_key_event(
                 {
                     let mut keys: Vec<_> = state.goals.keys().cloned().collect();
                     keys.sort();
-                    if let Some(key) = keys.get(idx) {
+                    if idx < keys.len()
+                        && let Some(key) = keys.get(idx)
+                    {
                         state.goals.remove(key);
                         if let Ok(mut cfg) = Config::load(state.ctx.as_ref()) {
                             let old = cfg.clone();
@@ -2442,23 +2446,53 @@ pub async fn handle_key_event(
                         SidebarMode::Goals => {
                             let mut keys: Vec<_> = state.goals.keys().cloned().collect();
                             keys.sort();
-                            if let Some(idx) = state.cal_state.selected()
-                                && let Some(key) = keys.get(idx)
-                            {
-                                if key.starts_with('#') {
-                                    state.sidebar_mode = SidebarMode::Categories;
-                                    state.selected_categories.clear();
-                                    state
-                                        .selected_categories
-                                        .insert(key.trim_start_matches('#').to_string());
-                                } else if key.starts_with("@@") {
-                                    state.sidebar_mode = SidebarMode::Locations;
-                                    state.selected_locations.clear();
-                                    state
-                                        .selected_locations
-                                        .insert(key.trim_start_matches("@@").to_string());
+                            if let Some(idx) = state.cal_state.selected() {
+                                if idx < keys.len() {
+                                    let key = &keys[idx];
+                                    if key.starts_with('#') {
+                                        state.sidebar_mode = SidebarMode::Categories;
+                                        state.selected_categories.clear();
+                                        state
+                                            .selected_categories
+                                            .insert(key.trim_start_matches('#').to_string());
+                                    } else if key.starts_with("@@") {
+                                        state.sidebar_mode = SidebarMode::Locations;
+                                        state.selected_locations.clear();
+                                        state
+                                            .selected_locations
+                                            .insert(key.trim_start_matches("@@").to_string());
+                                    }
+                                    state.refresh_filtered_view();
+                                } else {
+                                    let task_idx = idx - keys.len();
+                                    if let Some(task_goal) = state.cached_task_goals.get(task_idx) {
+                                        let target_uid = task_goal.0.clone();
+                                        if let Some(href) =
+                                            state.store.index.get(&target_uid).cloned()
+                                        {
+                                            state.active_search_query.clear();
+                                            state.selected_categories.clear();
+                                            state.selected_locations.clear();
+
+                                            if state.active_cal_href.as_ref() != Some(&href) {
+                                                state.active_cal_href = Some(href.clone());
+                                                state.hidden_calendars.remove(&href);
+                                            }
+
+                                            state.refresh_filtered_view();
+
+                                            if let Some(t_idx) =
+                                                state.find_task_index_by_uid(&target_uid)
+                                            {
+                                                state.list_state.select(Some(t_idx));
+                                            }
+
+                                            state.mode = InputMode::Normal;
+                                            state.message =
+                                                rust_i18n::t!("jumped_to_task").to_string();
+                                        }
+                                    }
                                 }
-                                state.refresh_filtered_view();
                             }
                         }
                     }

@@ -40,6 +40,7 @@ fun AdvancedSettingsScreen(
     defaultDurationGoalMins: String,
     sessionsCountAsCompletions: Boolean,
     showGoalsTab: Boolean,
+    showTaskGoalsInSidebar: Boolean,
     tabPosition: String,
     tabAutoHide: Boolean,
     onTabPositionChange: (String) -> Unit,
@@ -55,6 +56,7 @@ fun AdvancedSettingsScreen(
     onDefaultDurationGoalMinsChange: (String) -> Unit,
     onSessionsCountAsCompletionsChange: (Boolean) -> Unit,
     onShowGoalsTabChange: (Boolean) -> Unit,
+    onShowTaskGoalsInSidebarChange: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -194,13 +196,21 @@ fun AdvancedSettingsScreen(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Switch(
                     checked = showGoalsTab,
                     onCheckedChange = onShowGoalsTabChange
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(stringResource(R.string.show_goals_tab))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 16.dp)) {
+                Switch(
+                    checked = showTaskGoalsInSidebar,
+                    onCheckedChange = onShowTaskGoalsInSidebarChange
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.show_task_goals_in_sidebar))
             }
             OutlinedTextField(
                 value = defaultDurationGoalMins,

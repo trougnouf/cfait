@@ -149,7 +149,9 @@ If `create_events_for_tasks` is enabled or `+cal` is used:
 *   *Android Note:* Handled reliably via `CalendarSyncWorker` (WorkManager).
 
 ### 4.5. Goals & Habit Tracking
-Users map tracking goals to tags/locations (e.g., `#reading := goal:2h/w`).
+Goals act as quotas or habits and can be applied globally or locally.
+*   **Global Goals:** Mapped to tags/locations using aliases (e.g., `#reading := goal:2h/w`). They appear in the Goals sidebar tab.
+*   **Task-Specific Goals:** Defined directly on a task (e.g., `Read book goal:2h/w`). They replace the task's duration badge with a progress tracker. If `show_task_goals_in_sidebar` is true, they also appear under the Goals tab.
 *   **Progress:** Calculated dynamically by summing `WorkSession` overlaps and completion dates within the calendar interval.
 *   **Implicit Credit:** If a task with an `estimated_duration` is completed *without* explicitly running a timer, the remaining estimated time is granted instantly as goal progress. Logging a session fulfills "Count" goals if `sessions_count_as_completions` is true.
 
@@ -267,7 +269,7 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 *   `theme`: Enum (RustyDark, Light, Dracula, Nord, Catppuccin variants, etc.).
 *   `language`: String (`en`, `fr`). None = system locale.
 *   `description_editor`: String. CLI command for TUI description editing. `builtin` forces internal UI editor.
-*   `show_ongoing_notifications`, `show_priority_numbers`, `sidebar_is_hidden`, `show_goals_tab`: Booleans.
+*   `show_ongoing_notifications`, `show_priority_numbers`, `sidebar_is_hidden`, `show_goals_tab`, `show_task_goals_in_sidebar`: Booleans.
 *   `pinned_actions`: Array of `TaskAction` enums. Dictates buttons pinned directly to GUI task rows.
 
 **Sorting & Limits:**

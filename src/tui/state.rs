@@ -156,6 +156,7 @@ pub struct AppState {
 
     pub goals: HashMap<String, crate::config::Goal>,
     pub cached_goals_progress: HashMap<String, u32>,
+    pub cached_task_goals: Vec<(String, String, crate::config::Goal, u32)>,
     pub needs_redraw: bool,
 }
 
@@ -270,6 +271,7 @@ impl AppState {
             search_collapsed_tasks: HashSet::new(),
             goals: config.goals,
             cached_goals_progress: HashMap::new(),
+            cached_task_goals: Vec::new(),
             needs_redraw: false,
         }
     }
@@ -372,6 +374,25 @@ impl AppState {
             goals_progress.insert(key.clone(), self.store.calculate_goal_progress(key, goal));
         }
         self.cached_goals_progress = goals_progress;
+
+        let mut task_goals = Vec::new();
+        if config.show_task_goals_in_sidebar {
+            let now = chrono::Utc::now();
+            for map in self.store.calendars.values() {
+                for t in map.values() {
+                    if let Some(goal) = &t.goal {
+                        let progress = t.calculate_local_goal_progress(
+                            now,
+                            config.default_duration_goal_mins,
+                            config.sessions_count_as_completions,
+                        );
+                        task_goals.push((t.uid.clone(), t.summary.clone(), goal.clone(), progress));
+                    }
+                }
+            }
+        }
+        task_goals.sort_by(|a, b| a.1.cmp(&b.1));
+        self.cached_task_goals = task_goals;
     }
 
     pub fn get_selected_task(&self) -> Option<&Task> {

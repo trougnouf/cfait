@@ -328,7 +328,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
         SidebarMode::Goals => {
             let mut items: Vec<ListItem> = Vec::new();
-            if state.goals.is_empty() {
+            if state.goals.is_empty() && state.cached_task_goals.is_empty() {
                 items.push(ListItem::new(Line::from(Span::styled(
                     rust_i18n::t!("goals_empty").to_string(),
                     Style::default().fg(Color::DarkGray),
@@ -373,6 +373,52 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         Line::from(Span::styled(
                             title,
                             Style::default().add_modifier(Modifier::BOLD),
+                        )),
+                        Line::from(vec![
+                            Span::styled(bar, Style::default().fg(color)),
+                            Span::raw(format!(" {}", prog_text)),
+                        ]),
+                        Line::from(""), // spacing
+                    ]);
+                    items.push(ListItem::new(text));
+                }
+
+                for (_, summary, goal, progress) in &state.cached_task_goals {
+                    let target = goal.target;
+                    let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration
+                    {
+                        crate::model::parser::format_goal_duration(*progress, target)
+                    } else {
+                        (progress.to_string(), target.to_string())
+                    };
+
+                    let title =
+                        format!("{} ({}/{})", summary, tar_str, goal.interval.format_short());
+                    let prog_text =
+                        rust_i18n::t!("goal_progress", current = cur_str, target = tar_str)
+                            .to_string();
+
+                    let pct = if target > 0 {
+                        (*progress as f32 / target as f32).min(1.0)
+                    } else {
+                        0.0
+                    };
+                    let bar_len = 10;
+                    let filled = (pct * bar_len as f32).round() as usize;
+                    let bar = format!("[{}{}]", "=".repeat(filled), " ".repeat(bar_len - filled));
+
+                    let color = if pct >= 1.0 {
+                        Color::Green
+                    } else {
+                        Color::Yellow
+                    };
+
+                    let text = Text::from(vec![
+                        Line::from(Span::styled(
+                            title,
+                            Style::default()
+                                .add_modifier(Modifier::BOLD)
+                                .fg(Color::Cyan),
                         )),
                         Line::from(vec![
                             Span::styled(bar, Style::default().fg(color)),

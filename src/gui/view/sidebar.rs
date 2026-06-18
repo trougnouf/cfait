@@ -719,7 +719,7 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
 pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
     let mut col = column![].spacing(10);
 
-    if app.core_config.goals.is_empty() {
+    if app.core_config.goals.is_empty() && app.cached_task_goals.is_empty() {
         col = col.push(
             container(
                 column![
@@ -836,6 +836,87 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
             let goal_row = row![content_btn, delete_btn].align_y(iced::Alignment::Center);
 
             col = col.push(goal_row);
+        }
+
+        for (uid, summary, goal, progress) in &app.cached_task_goals {
+            let target = goal.target;
+            let pct = if target > 0 {
+                (*progress as f32 / target as f32).min(1.0)
+            } else {
+                0.0
+            };
+
+            let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration {
+                crate::model::parser::format_goal_duration(*progress, target)
+            } else {
+                (progress.to_string(), target.to_string())
+            };
+
+            let title = text(format!(
+                "{} ({}/{})",
+                summary,
+                tar_str,
+                goal.interval.format_short()
+            ))
+            .size(14);
+
+            let prog_text = text(rust_i18n::t!(
+                "goal_progress",
+                current = cur_str,
+                target = tar_str
+            ))
+            .size(12)
+            .color(Color::from_rgb(0.6, 0.6, 0.6));
+
+            let bar_bg = container(Space::new().width(Length::Fill).height(6.0)).style(|_| {
+                container::Style {
+                    background: Some(Color::from_rgb(0.2, 0.2, 0.2).into()),
+                    border: iced::Border {
+                        radius: 3.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }
+            });
+
+            let fg_portion = (pct * 1000.0).clamp(0.0, 1000.0) as u16;
+            let bg_portion = 1000 - fg_portion;
+
+            let bar_fg =
+                container(Space::new().height(6.0)).style(move |theme: &Theme| container::Style {
+                    background: Some(if pct >= 1.0 {
+                        Color::from_rgb(0.2, 0.8, 0.2).into()
+                    } else {
+                        theme.extended_palette().primary.base.color.into()
+                    }),
+                    border: iced::Border {
+                        radius: 3.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                });
+
+            let bar_row = if fg_portion == 0 {
+                row![Space::new().width(Length::Fill)]
+            } else if bg_portion == 0 {
+                row![bar_fg.width(Length::Fill)]
+            } else {
+                row![
+                    bar_fg.width(Length::FillPortion(fg_portion)),
+                    Space::new().width(Length::FillPortion(bg_portion))
+                ]
+            };
+
+            let bar_container = iced::widget::stack![bar_bg, bar_row];
+
+            let content_btn = button(column![title, bar_container, prog_text].spacing(4))
+                .style(button::text)
+                .width(Length::Fill)
+                .padding(8)
+                .on_press(Message::JumpToTask(uid.clone()));
+
+            // Task goals do not have a delete button in the sidebar (must be edited on the task)
+            col = col.push(row![content_btn].align_y(iced::Alignment::Center));
         }
     }
 

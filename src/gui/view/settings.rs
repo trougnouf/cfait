@@ -571,6 +571,11 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_quick_filter)
                     .label(rust_i18n::t!("quick_filter_show_button"))
                     .on_toggle(Message::SetShowQuickFilter),
+                checkbox::<Message, iced::Theme, iced::Renderer>(
+                    app.core_config.show_task_goals_in_sidebar
+                )
+                .label("Show task-specific goals in the sidebar")
+                .on_toggle(Message::SetShowTaskGoalsInSidebar),
                 row![
                     text(rust_i18n::t!("quick_filter_search_term")).width(Length::Fixed(150.0)),
                     text_input("is:ready", &app.ob_quick_filter_term_input)

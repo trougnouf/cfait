@@ -4124,6 +4124,7 @@ data class MobileConfig(
     var `defaultDurationGoalMins`: kotlin.UInt,
     var `sessionsCountAsCompletions`: kotlin.Boolean,
     var `showGoalsTab`: kotlin.Boolean,
+    var `showTaskGoalsInSidebar`: kotlin.Boolean,
     var `expandedTags`: List<kotlin.String>,
     var `expandedLocations`: List<kotlin.String>,
     var `expandedDoneGroups`: List<kotlin.String>,
@@ -4171,6 +4172,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
             FfiConverterUInt.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterSequenceString.read(buf),
@@ -4212,6 +4214,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
                 FfiConverterUInt.allocationSize(value.`defaultDurationGoalMins`) +
                 FfiConverterBoolean.allocationSize(value.`sessionsCountAsCompletions`) +
                 FfiConverterBoolean.allocationSize(value.`showGoalsTab`) +
+                FfiConverterBoolean.allocationSize(value.`showTaskGoalsInSidebar`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedTags`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedLocations`) +
                 FfiConverterSequenceString.allocationSize(value.`expandedDoneGroups`)
@@ -4255,6 +4258,7 @@ public object FfiConverterTypeMobileConfig : FfiConverterRustBuffer<MobileConfig
         FfiConverterUInt.write(value.`defaultDurationGoalMins`, buf)
         FfiConverterBoolean.write(value.`sessionsCountAsCompletions`, buf)
         FfiConverterBoolean.write(value.`showGoalsTab`, buf)
+        FfiConverterBoolean.write(value.`showTaskGoalsInSidebar`, buf)
         FfiConverterSequenceString.write(value.`expandedTags`, buf)
         FfiConverterSequenceString.write(value.`expandedLocations`, buf)
         FfiConverterSequenceString.write(value.`expandedDoneGroups`, buf)
@@ -6039,6 +6043,7 @@ enum class MobileSyntaxType {
     PIN,
     FILTER,
     OPERATOR,
+    GOAL,
     ;
 
     companion object

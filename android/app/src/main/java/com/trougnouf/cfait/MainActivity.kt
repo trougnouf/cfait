@@ -188,6 +188,7 @@ fun CfaitNavHost(
     var defaultDurationGoalMins by remember { mutableIntStateOf(60) }
     var sessionsCountAsCompletions by remember { mutableStateOf(false) }
     var showGoalsTab by remember { mutableStateOf(true) }
+    var showTaskGoalsInSidebar by remember { mutableStateOf(true) }
     var tasks by remember { mutableStateOf<List<MobileTask>>(emptyList()) }
     var tags by remember { mutableStateOf<List<MobileTag>>(emptyList()) }
     var locations by remember { mutableStateOf<List<MobileLocation>>(emptyList()) }
@@ -319,6 +320,7 @@ fun CfaitNavHost(
                 defaultDurationGoalMins = config.defaultDurationGoalMins.toInt()
                 sessionsCountAsCompletions = config.sessionsCountAsCompletions
                 showGoalsTab = config.showGoalsTab
+                showTaskGoalsInSidebar = config.showTaskGoalsInSidebar
                 hasUnsynced = api.hasUnsyncedChanges()
                 showQuickFilter = config.showQuickFilter
                 quickFilterTerm = config.quickFilterTerm
@@ -593,6 +595,7 @@ fun CfaitNavHost(
             var defaultDurationGoalMinsAdv by remember { mutableStateOf(defaultDurationGoalMins.toString()) }
             var sessionsCountAsCompletionsAdv by remember { mutableStateOf(sessionsCountAsCompletions) }
             var showGoalsTabAdv by remember { mutableStateOf(showGoalsTab) }
+            var showTaskGoalsInSidebarAdv by remember { mutableStateOf(showTaskGoalsInSidebar) }
 
             LaunchedEffect(Unit) {
                 try {
@@ -608,6 +611,7 @@ fun CfaitNavHost(
                     defaultDurationGoalMinsAdv = cfg.defaultDurationGoalMins.toString()
                     sessionsCountAsCompletionsAdv = cfg.sessionsCountAsCompletions
                     showGoalsTabAdv = cfg.showGoalsTab
+                    showTaskGoalsInSidebarAdv = cfg.showTaskGoalsInSidebar
                 } catch (e: Exception) {
                     if (e is CancellationException) throw e
                     // ignore
@@ -645,6 +649,7 @@ fun CfaitNavHost(
                 onDefaultDurationGoalMinsChange = { defaultDurationGoalMinsAdv = it },
                 onSessionsCountAsCompletionsChange = { sessionsCountAsCompletionsAdv = it },
                 onShowGoalsTabChange = { showGoalsTabAdv = it },
+                onShowTaskGoalsInSidebarChange = { showTaskGoalsInSidebarAdv = it },
                 onBack = {
                     // Save on exit
                     try {
@@ -666,7 +671,8 @@ fun CfaitNavHost(
                                 quickFilterIcon = quickFilterIconAdv,
                                 defaultDurationGoalMins = dur,
                                 sessionsCountAsCompletions = sessionsCountAsCompletionsAdv,
-                                showGoalsTab = showGoalsTabAdv
+                                showGoalsTab = showGoalsTabAdv,
+                                showTaskGoalsInSidebar = showTaskGoalsInSidebarAdv
                             )
                         )
                     } catch (e: Exception) {

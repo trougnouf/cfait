@@ -404,6 +404,7 @@ pub struct MobileConfig {
     pub default_duration_goal_mins: u32,
     pub sessions_count_as_completions: bool,
     pub show_goals_tab: bool,
+    pub show_task_goals_in_sidebar: bool,
     pub expanded_tags: Vec<String>,
     pub expanded_locations: Vec<String>,
     pub expanded_done_groups: Vec<String>,
@@ -876,6 +877,7 @@ impl CfaitMobile {
             default_duration_goal_mins: c.default_duration_goal_mins,
             sessions_count_as_completions: c.sessions_count_as_completions,
             show_goals_tab: c.show_goals_tab,
+            show_task_goals_in_sidebar: c.show_task_goals_in_sidebar,
             expanded_tags: c.expanded_tags,
             expanded_locations: c.expanded_locations,
             expanded_done_groups: c.expanded_done_groups,
@@ -1709,6 +1711,39 @@ impl CfaitMobile {
                 period_str: goal.interval.format_short(),
                 pct,
             });
+        }
+
+        if config.show_task_goals_in_sidebar {
+            let now = chrono::Utc::now();
+            let mut task_goals = Vec::new();
+            for map in store.calendars.values() {
+                for t in map.values() {
+                    if let Some(goal) = &t.goal {
+                        let progress = t.calculate_local_goal_progress(
+                            now,
+                            config.default_duration_goal_mins,
+                            config.sessions_count_as_completions,
+                        );
+                        let (progress_str, target_str) =
+                            crate::model::parser::format_goal_duration(progress, goal.target);
+                        let pct = if goal.target > 0 {
+                            (progress as f32 / goal.target as f32).min(1.0)
+                        } else {
+                            0.0
+                        };
+                        task_goals.push(MobileGoalProgress {
+                            key: format!("task:{}", t.uid), // special prefix for UI to know it's a task jump
+                            progress_str,
+                            target_str,
+                            period_str: format!("{} - {}", t.summary, goal.interval.format_short()),
+                            pct,
+                        });
+                    }
+                }
+            }
+            // Sort task goals alphabetically by the period_str (which now contains the summary)
+            task_goals.sort_by(|a, b| a.period_str.cmp(&b.period_str));
+            evaluated_goals.extend(task_goals);
         }
 
         MobileViewData {
