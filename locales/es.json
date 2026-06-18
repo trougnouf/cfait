@@ -466,6 +466,7 @@
     "show_ongoing_notifications_explain": "Mostrar una notificación con un temporizador cuando una tarea esté en curso.",
     "show_ongoing_notifications_label": "Mostrar notificaciones de tareas en curso",
     "show_priority_numbers": "Mostrar prioridad numérica asignada (!X)",
+    "show_task_goals_in_sidebar": "Objetivos de las tarea en barra lateral",
     "snooze": "Posponer…",
     "snooze_custom_title": "Personalizado",
     "snooze_hint": "Posponer (ej. 15m, 1h)",
