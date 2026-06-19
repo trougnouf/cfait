@@ -1332,10 +1332,10 @@ fun HomeScreen(
                                             .clickable {
                                                 if (isTag) {
                                                     filterTags = setOf(goal.key.removePrefix("#"))
-                                                    sidebarTab = 1
+                                                    scope.launch { drawerState.close() }
                                                 } else if (goal.key.startsWith("@@")) {
                                                     filterLocations = setOf(goal.key.removePrefix("@@"))
-                                                    sidebarTab = 2
+                                                    scope.launch { drawerState.close() }
                                                 } else if (isTask) {
                                                     scope.launch {
                                                         drawerState.close()
@@ -1355,37 +1355,23 @@ fun HomeScreen(
                                             Spacer(Modifier.height(4.dp))
                                             Text(progText, fontSize = 12.sp, color = Color.Gray)
                                         }
-                                        Spacer(Modifier.width(12.dp))
-                                        IconButton(onClick = {
-                                            if (isTag) {
-                                                filterTags = setOf(goal.key.removePrefix("#"))
-                                                scope.launch { drawerState.close() }
-                                            } else if (goal.key.startsWith("@@")) {
-                                                filterLocations = setOf(goal.key.removePrefix("@@"))
-                                                scope.launch { drawerState.close() }
-                                            } else if (isTask) {
-                                                scope.launch {
-                                                    drawerState.close()
-                                                    onTaskClick(goal.key.removePrefix("task:"))
+                                        if (!isTask) {
+                                            Spacer(Modifier.width(12.dp))
+                                            IconButton(onClick = {
+                                                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                    try {
+                                                        val cfg = api.getConfig()
+                                                        val newGoals = cfg.goals.toMutableMap()
+                                                        newGoals.remove(goal.key)
+                                                        api.saveConfig(cfg.copy(goals = newGoals))
+                                                        onDataChanged()
+                                                    } catch (e: Exception) {
+                                                        if (e is CancellationException) throw e
+                                                    }
                                                 }
+                                            }) {
+                                                NfIcon(NfIcons.CROSS, 14.sp, MaterialTheme.colorScheme.error)
                                             }
-                                        }) {
-                                            NfIcon(NfIcons.ARROW_RIGHT, 14.sp)
-                                        }
-                                        IconButton(onClick = {
-                                            scope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                                try {
-                                                    val cfg = api.getConfig()
-                                                    val newGoals = cfg.goals.toMutableMap()
-                                                    newGoals.remove(goal.key)
-                                                    api.saveConfig(cfg.copy(goals = newGoals))
-                                                    onDataChanged()
-                                                } catch (e: Exception) {
-                                                    if (e is CancellationException) throw e
-                                                }
-                                            }
-                                        }) {
-                                            NfIcon(NfIcons.CROSS, 14.sp, MaterialTheme.colorScheme.error)
                                         }
                                     }
                                     HorizontalDivider()
