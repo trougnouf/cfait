@@ -38,6 +38,7 @@ const HANDLED_KEYS: &[&str] = &[
     "URL",
     "GEO",
     "X-CFAIT-CREATE-EVENT",
+    "X-CFAIT-GOAL",
     "X-TIME-SPENT",
     "X-LAST-START",
     "X-CFAIT-SESSION",
