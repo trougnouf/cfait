@@ -497,6 +497,32 @@ fun TaskDetailScreen(
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
             }
 
+            if (task!!.rruleHistoryStat != null || task!!.goalTargetStr != null || task!!.goalHistory.isNotEmpty()) {
+                Text(
+                    stringResource(R.string.habit_history),
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+
+                if (task!!.rruleHistoryStat != null) {
+                    Text("• ${task!!.rruleHistoryStat}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                if (task!!.goalTargetStr != null) {
+                    Text("- Target: ${task!!.goalTargetStr}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("- Progress: ${task!!.goalProgressStr}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+
+                if (task!!.goalHistory.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) {
+                        Text("- Past: ", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        HeatmapRow(task!!.goalHistory)
+                    }
+                }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+            }
+
             // --- Work Sessions Block ---
             var showAddSession by remember { mutableStateOf(false) }
             var sessionInput by remember { mutableStateOf("") }
