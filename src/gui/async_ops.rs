@@ -168,7 +168,7 @@ pub fn spawn_background_worker(
                             if config_changed {
                                 let ctx_ref = ctx.clone();
                                 if let Ok(cfg) = tokio::task::spawn_blocking(move || Config::load_with_credentials(ctx_ref.as_ref())).await.unwrap() {
-                                    let _ = ui_tx.send(crate::gui::message::Message::ConfigLoaded(Ok(Box::new(cfg)))).await;
+                                    let _ = ui_tx.send(crate::gui::message::Message::ConfigUpdated(Box::new(cfg))).await;
                                 }
                             }
                         }

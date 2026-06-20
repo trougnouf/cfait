@@ -1046,8 +1046,16 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
 
     let mut config_changed = false;
     if !new_goals.is_empty() {
+        let old_config = app.core_config.clone();
         for (key, goal) in new_goals {
             app.core_config.goals.insert(key, goal);
+        }
+        app.core_config
+            .update_sync_timestamp_if_changed(&old_config);
+        if app.core_config.settings_updated_at != old_config.settings_updated_at
+            && let Some(tx) = &app.bg_tx
+        {
+            let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);
         }
         config_changed = true;
     }

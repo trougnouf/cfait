@@ -146,16 +146,39 @@ impl TaskController {
 
         let settings_uid = "cfait-global-settings-v1";
         let mut store = self.store.lock().await;
-        let existing_task = store.get_task_ref(settings_uid).cloned();
+        let mut existing_task = store.get_task_ref(settings_uid).cloned();
+
+        // The background worker uses an isolated TaskStore which might be stale.
+        // We must check the disk Cache to guarantee we see settings freshly downloaded by the GUI.
+        if let Ok(cals) = crate::cache::Cache::load_calendars(self.ctx.as_ref()) {
+            for cal in cals {
+                if let Ok((tasks, _)) = crate::cache::Cache::load(self.ctx.as_ref(), &cal.href)
+                    && let Some(t) = tasks.into_iter().find(|t| t.uid == settings_uid)
+                    && (existing_task.is_none()
+                        || existing_task.as_ref().unwrap().etag != t.etag
+                        || existing_task.as_ref().unwrap().sequence < t.sequence)
+                {
+                    existing_task = Some(t);
+                }
+            }
+        }
 
         let local_syncable = config.get_syncable();
         let config_changed = false;
 
         match existing_task {
             Some(mut task) => {
-                if let Ok(remote_payload) =
-                    serde_json::from_str::<crate::config::SettingsPayload>(&task.description)
-                {
+                let parsed_payload =
+                    serde_json::from_str::<crate::config::SettingsPayload>(&task.description);
+                if parsed_payload.is_err() {
+                    log::warn!(
+                        "Settings sync failed: Invalid JSON in settings task. Overwriting with local. Error: {:?}. Raw description: {}",
+                        parsed_payload.as_ref().err(),
+                        task.description
+                    );
+                }
+
+                if let Ok(remote_payload) = parsed_payload {
                     if remote_payload.updated_at > config.settings_updated_at
                         || (config.settings_updated_at == 0
                             && remote_payload.config != local_syncable)
@@ -195,7 +218,10 @@ impl TaskController {
                             actions.push(Action::Update(task));
                             let _ = self.persist_changes(actions).await;
                         } else {
+                            // Ensure the isolated store caches the latest task
+                            store.update_or_add_task(task.clone());
                             drop(store);
+
                             if !modified_tasks.is_empty() {
                                 let actions =
                                     modified_tasks.into_iter().map(Action::Update).collect();
@@ -293,9 +319,9 @@ impl TaskController {
     /// Synchronize the journal with the remote server and update the in-memory store
     /// with the resulting ETags and URLs.
     pub async fn sync_and_update_store(&self) -> Result<(Vec<String>, Vec<Task>, bool), String> {
-        // Inject the settings synchronization cycle FIRST, so if it creates a settings task,
+        // 1. Inject the settings synchronization cycle FIRST, so if it creates a settings task,
         // it gets pushed to the journal before we upload the journal to the server!
-        let config_changed = self.sync_settings().await.unwrap_or(false);
+        let mut config_changed = self.sync_settings().await.unwrap_or(false);
 
         let client_opt = self.client.lock().await.clone();
 
@@ -322,6 +348,10 @@ impl TaskController {
                             // Safe to resurrect because it is a new server-generated conflict resolution
                             st.add_task(sync_task.clone());
                             actual.push(sync_task.clone());
+                        } else {
+                            // Catch-all: Ensure entirely new tasks fetched from server (like settings) enter the store
+                            st.add_task(sync_task.clone());
+                            actual.push(sync_task.clone());
                         }
                     }
                     drop(st);
@@ -338,6 +368,12 @@ impl TaskController {
         } else {
             (vec!["Offline: Changes queued.".to_string()], vec![])
         };
+
+        // 2. Run settings synchronization AGAIN so we instantly pick up any remote changes
+        // downloaded during the sync_journal pass.
+        if self.sync_settings().await.unwrap_or(false) {
+            config_changed = true;
+        }
 
         Ok((warns, actual_synced, config_changed))
     }

@@ -163,6 +163,84 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 Message::Loaded(res.map_err(|e| e.to_string()))
             })
         }
+        Message::ConfigUpdated(config_box) => {
+            let config = *config_box;
+            app.core_config = config.clone();
+
+            app.hidden_calendars = config.hidden_calendars.clone().into_iter().collect();
+            app.disabled_calendars = config.disabled_calendars.clone().into_iter().collect();
+            app.sort_cutoff_months = config.sort_cutoff_months;
+            app.tag_aliases = config.tag_aliases.clone();
+            app.hide_completed = config.hide_completed;
+            app.hide_fully_completed_tags = config.hide_fully_completed_tags;
+            app.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;
+            app.sort_standard_by_priority = config.sort_standard_by_priority;
+            app.sort_preset = config.sort_preset;
+            app.ui_scale = config.ui_scale;
+            app.show_priority_numbers = config.show_priority_numbers;
+            app.sync_settings = config.sync_settings;
+            app.current_theme = config.theme;
+
+            app.quick_filter_term = config.quick_filter_term.clone();
+            app.quick_filter_icon = config.quick_filter_icon.clone();
+            app.show_quick_filter = config.show_quick_filter;
+            app.show_goals_tab = config.show_goals_tab;
+            if !app.show_goals_tab && app.sidebar_mode == crate::gui::state::SidebarMode::Goals {
+                app.sidebar_mode = crate::gui::state::SidebarMode::Calendars;
+            }
+            app.sidebar_is_hidden = config.sidebar_is_hidden;
+
+            app.urgent_days = config.urgent_days_horizon;
+            app.urgent_prio = config.urgent_priority_threshold;
+            app.default_priority = config.default_priority;
+            app.start_grace_period_days = config.start_grace_period_days;
+
+            app.auto_reminders = config.auto_reminders;
+            app.default_reminder_time = config.default_reminder_time.clone();
+            app.snooze_short_mins = config.snooze_short_mins;
+            app.create_events_for_tasks = config.create_events_for_tasks;
+            app.delete_events_on_completion = config.delete_events_on_completion;
+            app.snooze_long_mins = config.snooze_long_mins;
+            app.auto_refresh_interval_mins = config.auto_refresh_interval_mins;
+            app.strikethrough_completed = config.strikethrough_completed;
+            app.trash_retention_days = config.trash_retention_days;
+
+            app.sessions_count_as_completions = config.sessions_count_as_completions;
+
+            app.session.expanded_tags = config.expanded_tags.clone();
+            app.session.expanded_locations = config.expanded_locations.clone();
+            app.session.expanded_done_groups = config.expanded_done_groups.clone();
+
+            app.pinned_actions = config.pinned_actions.clone();
+
+            app.ob_sort_months_input = match config.sort_cutoff_months {
+                Some(m) => m.to_string(),
+                None => "".to_string(),
+            };
+            app.ob_urgent_days_input = app.urgent_days.to_string();
+            app.ob_urgent_prio_input = app.urgent_prio.to_string();
+            app.ob_default_priority_input = app.default_priority.to_string();
+            app.ob_start_grace_input = app.start_grace_period_days.to_string();
+            app.ob_snooze_short_input =
+                crate::model::parser::format_duration_compact(config.snooze_short_mins);
+            app.ob_snooze_long_input =
+                crate::model::parser::format_duration_compact(config.snooze_long_mins);
+            app.ob_auto_refresh_input =
+                crate::model::parser::format_duration_compact(config.auto_refresh_interval_mins);
+            app.ob_trash_retention_input = config.trash_retention_days.to_string();
+            app.ob_default_duration_goal_mins_input = config.default_duration_goal_mins.to_string();
+            app.ob_max_done_roots_input = config.max_done_roots.to_string();
+            app.ob_max_done_subtasks_input = config.max_done_subtasks.to_string();
+            app.ob_quick_filter_term_input = config.quick_filter_term.clone();
+            app.ob_quick_filter_icon_input = config.quick_filter_icon.clone();
+            app.log_level = config.log_level;
+            crate::system::set_log_level(config.log_level.to_level_filter());
+
+            // Refresh UI without full reload
+            refresh_filtered_tasks(app);
+            Task::none()
+        }
+
         Message::ConfigLoaded(Err(e)) => {
             app.state = AppState::Onboarding;
             if !e.contains("Config file not found") {
@@ -489,6 +567,12 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.core_config
                     .update_sync_timestamp_if_changed(&old_config);
 
+                if app.core_config.settings_updated_at != old_config.settings_updated_at
+                    && let Some(tx) = &app.bg_tx
+                {
+                    let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);
+                }
+
                 app.editing_goal_key = None;
                 app.goal_input_key.clear();
                 app.goal_input_target.clear();
@@ -510,6 +594,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.core_config.goals.remove(&key);
             app.core_config
                 .update_sync_timestamp_if_changed(&old_config);
+
+            if app.core_config.settings_updated_at != old_config.settings_updated_at
+                && let Some(tx) = &app.bg_tx
+            {
+                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);
+            }
+
             save_config(app);
             Task::none()
         }

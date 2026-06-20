@@ -239,6 +239,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             refresh_filtered_tasks(app);
             app.loading = false;
 
+            if let Some(tx) = &app.bg_tx {
+                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);
+            }
+
             // FIXED: Do not steal focus after background sync completes
             scroll_to_selected(app, false)
         }
@@ -254,6 +258,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.last_sync_failed = false;
             Journal::apply_to_tasks(app.ctx.as_ref(), &mut tasks, &href);
             app.store.insert(href.clone(), tasks);
+
+            if let Some(tx) = &app.bg_tx {
+                let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);
+            }
 
             if app.active_cal_href.as_deref() == Some(&href) {
                 refresh_filtered_tasks(app);

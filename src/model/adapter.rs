@@ -518,9 +518,71 @@ impl IcsAdapter {
             todo.properties().get(key).map(|p| p.value().to_string())
         };
 
+        let unescape_ics = |s: &str| -> String {
+            let mut out = String::with_capacity(s.len());
+            let mut chars = s.chars();
+            while let Some(c) = chars.next() {
+                if c == '\\' {
+                    match chars.next() {
+                        Some('n') | Some('N') => out.push('\n'),
+                        Some(',') => out.push(','),
+                        Some(';') => out.push(';'),
+                        Some('\\') => out.push('\\'),
+                        Some(other) => {
+                            out.push('\\');
+                            out.push(other);
+                        }
+                        None => out.push('\\'),
+                    }
+                } else {
+                    out.push(c);
+                }
+            }
+            out
+        };
+
+        let split_ics_list = |s: &str| -> Vec<String> {
+            let mut items = Vec::new();
+            let mut current = String::new();
+            let mut chars = s.chars();
+            while let Some(c) = chars.next() {
+                if c == '\\' {
+                    if let Some(next) = chars.next() {
+                        if next == 'n' || next == 'N' {
+                            current.push('\n');
+                        } else if next == ',' {
+                            current.push(',');
+                        } else if next == ';' {
+                            current.push(';');
+                        } else if next == '\\' {
+                            current.push('\\');
+                        } else {
+                            current.push('\\');
+                            current.push(next);
+                        }
+                    } else {
+                        current.push('\\');
+                    }
+                } else if c == ',' {
+                    items.push(current.trim().to_string());
+                    current.clear();
+                } else {
+                    current.push(c);
+                }
+            }
+            if !current.trim().is_empty() {
+                items.push(current.trim().to_string());
+            }
+            items
+        };
+
         let uid = get_prop("UID").unwrap_or_default();
-        let summary = get_prop("SUMMARY").unwrap_or_default();
-        let description = get_prop("DESCRIPTION").unwrap_or_default();
+        let summary = get_prop("SUMMARY")
+            .map(|s| unescape_ics(&s))
+            .unwrap_or_default();
+        let description = get_prop("DESCRIPTION")
+            .map(|s| unescape_ics(&s))
+            .unwrap_or_default();
 
         let status = if let Some(val) = get_prop("STATUS") {
             match val.trim().to_uppercase().as_str() {
@@ -542,8 +604,8 @@ impl IcsAdapter {
             .unwrap_or(0);
         let percent_complete = get_prop("PERCENT-COMPLETE").and_then(|v| v.parse::<u8>().ok());
 
-        let location = get_prop("LOCATION");
-        let url = get_prop("URL");
+        let location = get_prop("LOCATION").map(|s| unescape_ics(&s));
+        let url = get_prop("URL").map(|s| unescape_ics(&s));
         let geo = get_prop("GEO").map(|s| s.replace(';', ","));
 
         let create_event =
@@ -763,23 +825,11 @@ impl IcsAdapter {
         let mut categories = Vec::new();
         if let Some(multi_props) = todo.multi_properties().get("CATEGORIES") {
             for prop in multi_props {
-                let parts: Vec<String> = prop
-                    .value()
-                    .split(',')
-                    .map(|s: &str| s.trim().to_string())
-                    .filter(|s: &String| !s.is_empty())
-                    .collect();
-                categories.extend(parts);
+                categories.extend(split_ics_list(prop.value()));
             }
         }
         if let Some(prop) = todo.properties().get("CATEGORIES") {
-            let parts: Vec<String> = prop
-                .value()
-                .split(',')
-                .map(|s: &str| s.trim().to_string())
-                .filter(|s: &String| !s.is_empty())
-                .collect();
-            categories.extend(parts);
+            categories.extend(split_ics_list(prop.value()));
         }
         categories.sort();
         categories.dedup();

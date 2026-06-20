@@ -159,10 +159,16 @@ pub fn save_config(app: &mut GuiApp) -> Config {
     cfg.expanded_done_groups = app.session.expanded_done_groups.clone();
 
     // BUMP TIMESTAMP IF CHANGED
+    let old_timestamp = cfg.settings_updated_at;
     cfg.update_sync_timestamp_if_changed(&app.core_config);
+    let timestamp_changed = cfg.settings_updated_at != old_timestamp;
 
     // Cache the updated config in memory
     app.core_config = cfg.clone();
+
+    if timestamp_changed && let Some(tx) = &app.bg_tx {
+        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);
+    }
 
     // --- ASYNC SAVE FIX ---
     let ctx_clone = app.ctx.clone();
