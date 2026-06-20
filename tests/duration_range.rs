@@ -458,7 +458,7 @@ fn test_format_duration_short_range() {
     t.estimated_duration = Some(30);
     t.estimated_duration_max = Some(60);
 
-    let formatted = t.format_duration_short();
+    let formatted = t.format_duration_short(None);
 
     assert_eq!(formatted, "[~30m-1h]");
 }
@@ -470,7 +470,7 @@ fn test_format_duration_short_single() {
     t.estimated_duration = Some(30);
     t.estimated_duration_max = None;
 
-    let formatted = t.format_duration_short();
+    let formatted = t.format_duration_short(None);
 
     assert_eq!(formatted, "[~30m]");
 }
@@ -480,7 +480,7 @@ fn test_format_duration_short_none() {
     // format_duration_short should be empty when no duration
     let t = parse("Task");
 
-    let formatted = t.format_duration_short();
+    let formatted = t.format_duration_short(None);
 
     assert_eq!(formatted, "");
 }

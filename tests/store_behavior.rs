@@ -601,7 +601,7 @@ fn test_task_display_logic() {
 
     assert_eq!(task.checkbox_symbol(), "[ ]");
     assert!(!task.is_paused());
-    assert_eq!(task.format_duration_short(), "");
+    assert_eq!(task.format_duration_short(None), "");
 
     task.status = TaskStatus::InProcess;
     assert_eq!(task.checkbox_symbol(), "[▶]");
@@ -616,7 +616,7 @@ fn test_task_display_logic() {
     task.time_spent_seconds = 3600;
     assert!(task.is_paused());
     assert_eq!(task.checkbox_symbol(), "[‖]");
-    assert!(task.format_duration_short().contains("1h"));
+    assert!(task.format_duration_short(None).contains("1h"));
 }
 
 #[test]
