@@ -1009,11 +1009,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     .with_timezone(&chrono::Local);
                 let dur = (session.end - session.start) / 60;
                 session_lines.push(format!(
-                    "- {} {}-{} *({}m)*",
+                    "- {} {}-{} *({})*",
                     s_dt.format("%Y-%m-%d"),
                     s_dt.format("%H:%M"),
                     e_dt.format("%H:%M"),
-                    dur
+                    crate::model::parser::format_duration_human(dur as u32)
                 ));
             }
             details_md.push_str(&format!(

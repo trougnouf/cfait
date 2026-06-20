@@ -155,7 +155,13 @@ Goals act as quotas or habits and can be applied globally or locally.
 *   **Progress:** Calculated dynamically by summing `WorkSession` overlaps and completion dates within the calendar interval.
 *   **Implicit Credit:** If a task with an `estimated_duration` is completed *without* explicitly running a timer, the remaining estimated time is granted instantly as goal progress. Logging a session fulfills "Count" goals if `sessions_count_as_completions` is true.
 
-### 4.6. Alarms & Reminders
+### 4.6. Permanent / Continuous Tasks
+Tasks tagged with `#permanent` act as endless trackers. When checked off (Completed), they do not change status. Instead:
+1. If a timer is running, it is committed as a work session.
+2. If no timer is running, a session is logged using the task's `estimated_duration` (or the default goal duration).
+3. The task remains in `NeedsAction` state.
+
+### 4.7. Alarms & Reminders
 *   **AlarmIndex:** Optimized cache `alarm_index.json` stores upcoming triggers.
 *   **Implicit:** Auto-generated alarms for Due / Start dates (if `auto_reminders` is true).
 *   **Snoozing:** Snoozing acknowledges the original alarm and creates a new absolute alarm linked via `RELATED-TO;RELTYPE=SNOOZE`.

@@ -855,6 +855,45 @@ impl TaskStore {
     ) -> Option<(Task, Option<Task>, Vec<Task>)> {
         let mut task_copy = self.get_task_ref(uid)?.clone();
         task_copy.sequence += 1;
+
+        let is_permanent = task_copy
+            .categories
+            .iter()
+            .any(|c| c.eq_ignore_ascii_case("permanent"));
+
+        if is_permanent && status == TaskStatus::Completed {
+            let mut duration_to_log = 0;
+            if let Some(start_ts) = task_copy.last_started_at {
+                let now = Utc::now().timestamp();
+                if now > start_ts {
+                    duration_to_log = (now - start_ts) as u64;
+                }
+                task_copy.last_started_at = None;
+            } else {
+                let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
+                let est = task_copy
+                    .estimated_duration
+                    .unwrap_or(config.default_duration_goal_mins);
+                duration_to_log = (est as u64) * 60;
+            }
+
+            if duration_to_log > 0 {
+                let end = Utc::now().timestamp();
+                let start = end.saturating_sub(duration_to_log as i64);
+                let session = crate::model::item::WorkSession { start, end };
+                task_copy.add_session(session);
+            }
+
+            task_copy.status = TaskStatus::NeedsAction;
+            task_copy.percent_complete = None;
+            task_copy
+                .unmapped_properties
+                .retain(|p| p.key.to_uppercase() != "COMPLETED");
+
+            self.update_or_add_task(task_copy.clone());
+            return Some((task_copy, None, vec![]));
+        }
+
         // If the task is recurring and we are completing it we may need to reset children
         let should_reset_children = task_copy.rrule.is_some() && status.is_done();
 

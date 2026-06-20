@@ -473,6 +473,33 @@ fun formatDuration(
     }
 }
 
+fun formatDurationHuman(mins: Long): String {
+    if (mins == 0L) return "0m"
+    val parts = mutableListOf<String>()
+    var rem = mins
+    val y = rem / 525600; if (y > 0) { parts.add("${y}y"); rem %= 525600 }
+    val mo = rem / 43200; if (mo > 0) { parts.add("${mo}mo"); rem %= 43200 }
+    val w = rem / 10080; if (w > 0) { parts.add("${w}w"); rem %= 10080 }
+    val d = rem / 1440; if (d > 0) { parts.add("${d}d"); rem %= 1440 }
+    val h = rem / 60; if (h > 0) { parts.add("${h}h"); rem %= 60 }
+    if (rem > 0 || parts.isEmpty()) { parts.add("${rem}m") }
+    return parts.joinToString(" ")
+}
+
+fun randomSessionExample(): String {
+    val weekdays = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "yesterday")
+    val durations = listOf("30m", "1h", "2h", "6h")
+    val timeRanges = listOf("14:00-15:30")
+    val weekday = weekdays.random()
+    val duration = durations.random()
+    val timeRange = timeRanges.random()
+    return when ((Math.random() * 3).toInt()) {
+        0 -> "$weekday $duration"
+        1 -> duration
+        else -> timeRange
+    }
+}
+
 fun formatPairedDuration(spentMins: Int, targetMins: Int): Pair<String, String> {
     val (cStr, tStr) = if (targetMins > 0 && targetMins % 1440 == 0) {
         val t = targetMins / 1440

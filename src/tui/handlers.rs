@@ -24,6 +24,33 @@ use tokio::sync::mpsc::Sender;
 use crate::store::{TaskListItem, select_weighted_random_index};
 use rust_i18n::t;
 
+/// Generate a random example for session logging syntax
+fn random_session_example() -> String {
+    const WEEKDAYS: &[&str] = &[
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+        "yesterday",
+    ];
+    const DURATIONS: &[&str] = &["30m", "1h", "2h", "6h"];
+    const TIME_RANGES: &[&str] = &["14:00-15:30"];
+
+    let weekday = WEEKDAYS[fastrand::usize(..WEEKDAYS.len())];
+    let duration = DURATIONS[fastrand::usize(..DURATIONS.len())];
+    let time_range = TIME_RANGES[fastrand::usize(..TIME_RANGES.len())];
+
+    // Generate different formats with equal probability
+    match fastrand::usize(..3) {
+        0 => format!("{} {}", weekday, duration),
+        1 => duration.to_string(),
+        _ => time_range.to_string(),
+    }
+}
+
 fn get_available_actions(state: &AppState, task: &Task) -> Vec<crate::config::TaskAction> {
     use crate::config::TaskAction;
     let mut actions = Vec::new();
@@ -304,9 +331,10 @@ async fn execute_task_action(
             state.mode = InputMode::AddingSession;
             state.reset_input();
             state.message = format!(
-                "{} ({} 30m, yesterday 1h):",
+                "{} ({} {}):",
                 rust_i18n::t!("tui_log_time_prompt", name = task.summary.clone()),
-                rust_i18n::t!("eg")
+                rust_i18n::t!("eg"),
+                random_session_example()
             );
         }
         IncreasePriority => {
@@ -1578,9 +1606,10 @@ pub async fn handle_key_event(
                     state.mode = InputMode::AddingSession;
                     state.reset_input();
                     state.message = format!(
-                        "{} ({} 30m, yesterday 1h):",
+                        "{} ({} {}):",
                         t!("tui_log_time_prompt", name = summary),
-                        t!("eg")
+                        t!("eg"),
+                        random_session_example()
                     );
                 }
             }
@@ -1598,11 +1627,11 @@ pub async fn handle_key_event(
                             .with_timezone(&chrono::Local);
                         let dur = (session.end - session.start) / 60;
                         let display = format!(
-                            "{} {}-{} ({}m)",
+                            "{} {}-{} ({})",
                             s_dt.format("%Y-%m-%d"),
                             s_dt.format("%H:%M"),
                             e_dt.format("%H:%M"),
-                            dur
+                            crate::model::parser::format_duration_human(dur as u32)
                         );
                         items.push((i, display));
                     }

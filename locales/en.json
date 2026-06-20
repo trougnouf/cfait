@@ -305,6 +305,8 @@
     "help_goals": "Goals & Habit Tracking",
     "help_goals_count": "Set a count goal for a tag or location",
     "help_goals_duration": "Set a duration goal for a tag or location",
+    "help_org_permanent": "Permanent task (logs time instead of completing)",
+    "help_log_time_syntax": "Log work sessions (supports day, time, and duration)",
     "help_org_priority": "Priority high (1) to low (9)",
     "help_quick_start": "Quick Start",
     "help_recurrence_custom_intervals": "Custom intervals",

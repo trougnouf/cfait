@@ -1522,6 +1522,45 @@ pub fn format_goal_duration(current_mins: u32, target_mins: u32) -> (String, Str
     }
 }
 
+pub fn format_duration_human(mins: u32) -> String {
+    if mins == 0 {
+        return "0m".to_string();
+    }
+    let mut parts = Vec::new();
+    let mut remaining = mins;
+
+    let years = remaining / 525600;
+    if years > 0 {
+        parts.push(format!("{}y", years));
+        remaining %= 525600;
+    }
+    let months = remaining / 43200;
+    if months > 0 {
+        parts.push(format!("{}mo", months));
+        remaining %= 43200;
+    }
+    let weeks = remaining / 10080;
+    if weeks > 0 {
+        parts.push(format!("{}w", weeks));
+        remaining %= 10080;
+    }
+    let days = remaining / 1440;
+    if days > 0 {
+        parts.push(format!("{}d", days));
+        remaining %= 1440;
+    }
+    let hours = remaining / 60;
+    if hours > 0 {
+        parts.push(format!("{}h", hours));
+        remaining %= 60;
+    }
+    if remaining > 0 || parts.is_empty() {
+        parts.push(format!("{}m", remaining));
+    }
+
+    parts.join(" ")
+}
+
 pub fn format_duration_compact(mins: u32) -> String {
     if mins == 0 {
         return "".to_string();
@@ -3033,6 +3072,22 @@ pub fn parse_session_input(input: &str) -> Option<crate::model::item::WorkSessio
             target_date = now.date_naive();
         } else if lower == "yesterday" {
             target_date = now.date_naive() - chrono::Duration::days(1);
+        } else if let Some(code) = parse_weekday_code(&lower) {
+            let target_wd = match code {
+                "MO" => chrono::Weekday::Mon,
+                "TU" => chrono::Weekday::Tue,
+                "WE" => chrono::Weekday::Wed,
+                "TH" => chrono::Weekday::Thu,
+                "FR" => chrono::Weekday::Fri,
+                "SA" => chrono::Weekday::Sat,
+                "SU" => chrono::Weekday::Sun,
+                _ => chrono::Weekday::Mon,
+            };
+            let mut d = now.date_naive();
+            while d.weekday() != target_wd {
+                d -= chrono::Duration::days(1);
+            }
+            target_date = d;
         } else if let Ok(d) = chrono::NaiveDate::parse_from_str(&lower, "%Y-%m-%d") {
             target_date = d;
         } else if lower.contains('-') && lower.split('-').count() == 2 {

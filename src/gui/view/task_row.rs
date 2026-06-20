@@ -10,6 +10,7 @@ use crate::gui::view::focusable::focusable;
 
 use crate::model::display::random_related_icon;
 use chrono::Utc;
+use fastrand;
 use rust_i18n::t;
 use std::time::Duration;
 
@@ -20,6 +21,34 @@ use iced::widget::{
 use iced::{Color, Element, Length, Theme};
 
 // Helper inside the file to provide generic action styles
+
+/// Generate a random example for session logging syntax
+fn random_session_example() -> String {
+    const WEEKDAYS: &[&str] = &[
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+        "yesterday",
+    ];
+    const DURATIONS: &[&str] = &["30m", "1h", "2h", "6h"];
+    const TIME_RANGES: &[&str] = &["14:00-15:30"];
+
+    let weekday = WEEKDAYS[fastrand::usize(..WEEKDAYS.len())];
+    let duration = DURATIONS[fastrand::usize(..DURATIONS.len())];
+    let time_range = TIME_RANGES[fastrand::usize(..TIME_RANGES.len())];
+
+    // Generate different formats with equal probability
+    match fastrand::usize(..3) {
+        0 => format!("{} {}", weekday, duration),
+        1 => duration.to_string(),
+        _ => time_range.to_string(),
+    }
+}
+
 pub fn action_style(theme: &Theme, status: button::Status, style_mode: u8) -> button::Style {
     let palette = theme.extended_palette();
     let base = button::Style {
@@ -1451,7 +1480,11 @@ pub fn view_task_row<'a>(
                                 "session_input_{}",
                                 task.uid
                             )))
-                            .placeholder(format!("{} 30m, yesterday 2h, 14:00-15:30", t!("eg")))
+                            .placeholder(format!(
+                                "{} {}, 14:00-15:30",
+                                t!("eg"),
+                                random_session_example()
+                            ))
                             .on_action(Message::SessionInputChanged)
                             .height(Length::Fixed(32.0))
                             .highlight_with::<crate::gui::view::syntax::SessionHighlighter>(
@@ -1511,9 +1544,12 @@ pub fn view_task_row<'a>(
                                     .size(12)
                                     .color(Color::from_rgb(0.7, 0.7, 0.7)),
                                 Space::new().width(Length::Fixed(6.0)),
-                                text(format!("({}m)", dur))
-                                    .size(12)
-                                    .color(Color::from_rgb(0.5, 0.5, 0.5)),
+                                text(format!(
+                                    "({})",
+                                    crate::model::parser::format_duration_human(dur as u32)
+                                ))
+                                .size(12)
+                                .color(Color::from_rgb(0.5, 0.5, 0.5)),
                                 Space::new().width(Length::Fill),
                                 del_btn
                             ]

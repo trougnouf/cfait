@@ -529,7 +529,7 @@ fun TaskDetailScreen(
                     OutlinedTextField(
                         value = sessionInput,
                         onValueChange = { sessionInput = it },
-                        placeholder = { Text(stringResource(R.string.eg_log_time_placeholder)) },
+                        placeholder = { Text("${com.trougnouf.cfait.ui.randomSessionExample()}") },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
@@ -604,7 +604,7 @@ fun TaskDetailScreen(
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        "(${durMins}m)",
+                        "(${com.trougnouf.cfait.ui.formatDurationHuman(durMins)})",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.weight(1f)

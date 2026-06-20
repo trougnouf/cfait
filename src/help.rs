@@ -256,9 +256,14 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     example: "done:25%".to_string(),
                 },
                 HelpItem {
-                    keys: "spent:".to_string(),
-                    desc: "Log time already spent on a task".to_string(),
-                    example: "spent:1h, spent:30m".to_string(),
+                    keys: "spent: (or t / Shift+T)".to_string(),
+                    desc: rust_i18n::t!("help_log_time_syntax").to_string(),
+                    example: "spent:30m, spent:thursday 1h, spent:14:00-15:30".to_string(),
+                },
+                HelpItem {
+                    keys: "#permanent".to_string(),
+                    desc: rust_i18n::t!("help_org_permanent").to_string(),
+                    example: "Practice guitar ~30m #permanent".to_string(),
                 },
             ],
         },
