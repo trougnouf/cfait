@@ -649,7 +649,7 @@ fn task_to_mobile(t: &Task, store: &TaskStore) -> MobileTask {
         let progress = store.calculate_goal_progress(&format!("task:{}", t.uid), goal);
         let (c_str, t_str) = crate::model::parser::format_goal_duration(progress, goal.target);
         goal_progress_str = Some(c_str);
-        goal_target_str = Some(t_str);
+        goal_target_str = Some(goal.format_target_display(&t_str));
     }
 
     if let Some(goal) = t.get_effective_goal() {
@@ -1756,8 +1756,8 @@ impl CfaitMobile {
             evaluated_goals.push(MobileGoalProgress {
                 key: key.clone(),
                 progress_str,
-                target_str,
-                period_str: goal.interval.format_short(),
+                target_str: target_str.clone(),
+                period_str: goal.format_target_display(&target_str),
                 pct,
                 history,
             });
@@ -1792,8 +1792,12 @@ impl CfaitMobile {
                         task_goals.push(MobileGoalProgress {
                             key: format!("task:{}", t.uid), // special prefix for UI to know it's a task jump
                             progress_str,
-                            target_str,
-                            period_str: format!("{} - {}", t.summary, goal.interval.format_short()),
+                            target_str: target_str.clone(),
+                            period_str: format!(
+                                "{} - {}",
+                                t.summary,
+                                goal.format_target_display(&target_str)
+                            ),
                             pct,
                             history,
                         });

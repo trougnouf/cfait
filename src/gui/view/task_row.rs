@@ -1631,9 +1631,8 @@ pub fn view_task_row<'a>(
 
                         details_col = details_col.push(
                             text(format!(
-                                "- Target: {}/{}",
-                                tar_str,
-                                goal.interval.format_short()
+                                "- Target: {}",
+                                goal.format_target_display(&tar_str)
                             ))
                             .size(12)
                             .color(Color::from_rgb(0.7, 0.7, 0.7)),

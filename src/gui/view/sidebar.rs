@@ -791,13 +791,8 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
                 (progress.to_string(), target.to_string())
             };
 
-            let title = text(format!(
-                "{} ({}/{})",
-                key,
-                tar_str,
-                goal.interval.format_short()
-            ))
-            .size(14);
+            let target_display = goal.format_target_display(&tar_str);
+            let title = text(format!("{} ({})", key, target_display)).size(14);
 
             let prog_text = text(rust_i18n::t!(
                 "goal_progress",
@@ -898,13 +893,8 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
                 (progress.to_string(), target.to_string())
             };
 
-            let title = text(format!(
-                "{} ({}/{})",
-                summary,
-                tar_str,
-                goal.interval.format_short()
-            ))
-            .size(14);
+            let target_display = goal.format_target_display(&tar_str);
+            let title = text(format!("{} ({})", summary, target_display)).size(14);
 
             let prog_text = text(rust_i18n::t!(
                 "goal_progress",

@@ -283,6 +283,8 @@ fun HomeScreen(
     var isCreateExpanded by rememberSaveable { mutableStateOf(false) }
     var showExportSourceDialog by remember { mutableStateOf(false) }
     var showExportDestDialog by remember { mutableStateOf(false) }
+    var sessionTaskUid by remember { mutableStateOf<String?>(null) }
+    var sessionInputText by remember { mutableStateOf("") }
     var exportSourceHref by remember { mutableStateOf<String?>(null) }
 
     var yankedUid by rememberSaveable { mutableStateOf<String?>(null) }
@@ -601,6 +603,7 @@ fun HomeScreen(
             return
         }
         if (action == "move") { taskToMove = task; return }
+        if (action == "add_session") { sessionTaskUid = task.uid; return }
         if (action == "create_child") {
             creatingChildUid = task.uid
             yankedUid = null
@@ -959,6 +962,46 @@ fun HomeScreen(
                     showExportSourceDialog = false
                 }) { Text(stringResource(R.string.cancel)) }
             },
+        )
+    }
+
+    if (sessionTaskUid != null) {
+        AlertDialog(
+            onDismissRequest = { sessionTaskUid = null; sessionInputText = "" },
+            title = { Text(stringResource(R.string.help_metadata_log_time)) },
+            text = {
+                OutlinedTextField(
+                    value = sessionInputText,
+                    onValueChange = { sessionInputText = it },
+                    placeholder = { Text(com.trougnouf.cfait.ui.randomSessionExample(), color = Color.Gray) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val uid = sessionTaskUid!!
+                    val input = sessionInputText
+                    sessionTaskUid = null
+                    sessionInputText = ""
+                    scope.launch {
+                        try {
+                            api.addSession(uid, input)
+                            updateTaskList()
+                            onDataChanged()
+                            triggerBackgroundSync(context, api)
+                        } catch (e: Exception) {
+                            if (e is CancellationException) throw e
+                            Toast.makeText(context, e.message, Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }) { Text(stringResource(R.string.add)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { sessionTaskUid = null; sessionInputText = "" }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
         )
     }
 

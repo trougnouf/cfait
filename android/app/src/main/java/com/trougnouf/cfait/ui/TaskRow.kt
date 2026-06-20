@@ -480,6 +480,14 @@ fun TaskRow(
                         )
                     }
 
+                    if (!task.isDone && task.statusString != "Cancelled") {
+                        DropdownMenuItem(
+                            text = { Text(androidx.compose.ui.res.stringResource(R.string.help_metadata_log_time)) },
+                            onClick = { expanded = false; onAction("add_session") },
+                            leadingIcon = { NfIcon(NfIcons.TIMER_PLUS, 16.sp) }
+                        )
+                    }
+
                     DropdownMenuItem(
                         text = { Text(androidx.compose.ui.res.stringResource(R.string.create_subtask)) },
                         onClick = { expanded = false; onAction("create_child") },

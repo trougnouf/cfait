@@ -352,7 +352,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         (progress.to_string(), target.to_string())
                     };
 
-                    let title = format!("{} ({})", key, goal.interval.format_short());
+                    let target_display = goal.format_target_display(&tar_str);
+                    let title = format!("{} ({})", key, target_display);
                     let pct = if target > 0 {
                         (progress as f32 / target as f32).clamp(0.0, 1.0)
                     } else {
@@ -404,7 +405,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         (progress.to_string(), target.to_string())
                     };
 
-                    let title = format!("{} ({})", summary, goal.interval.format_short());
+                    let target_display = goal.format_target_display(&tar_str);
+                    let title = format!("{} ({})", summary, target_display);
                     let pct = if target > 0 {
                         (*progress as f32 / target as f32).clamp(0.0, 1.0)
                     } else {
@@ -1016,11 +1018,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     (progress.to_string(), goal.target.to_string())
                 };
 
-                details_md.push_str(&format!(
-                    "- Target: {}/{}\n",
-                    tar_str,
-                    goal.interval.format_short()
-                ));
+                let target_display = goal.format_target_display(&tar_str);
+                details_md.push_str(&format!("- Target: {}\n", target_display));
                 details_md.push_str(&format!("- Progress: {}\n", cur_str));
             }
 

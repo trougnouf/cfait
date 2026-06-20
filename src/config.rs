@@ -164,6 +164,21 @@ pub struct Goal {
     pub interval: Interval,
 }
 
+impl Goal {
+    pub fn format_target_display(&self, target_str: &str) -> String {
+        if target_str == "1" && self.interval.amount == 1 {
+            match self.interval.unit {
+                IntervalUnit::Days => rust_i18n::t!("goal_period_daily").to_string(),
+                IntervalUnit::Weeks => rust_i18n::t!("goal_period_weekly").to_string(),
+                IntervalUnit::Months => rust_i18n::t!("goal_period_monthly").to_string(),
+                IntervalUnit::Years => rust_i18n::t!("goal_period_yearly").to_string(),
+            }
+        } else {
+            format!("{}/{}", target_str, self.interval.format_short())
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for Goal {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
