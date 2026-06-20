@@ -1980,6 +1980,8 @@ pub fn apply_smart_input(
     task.location = None;
     task.url = None;
     task.geo = None;
+    task.create_event = None;
+    task.goal = None;
     task.categories.clear();
     task.alarms.clear();
     task.exdates.clear();
