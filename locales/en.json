@@ -584,6 +584,8 @@
     },
     "tui_testing_connection": "Testing connection...",
     "tui_username_prompt": "Username: ",
+    "tui_view_details_help": " j/k, ↑/↓: Scroll | Esc: Close ",
+    "view_details": "View details",
     "tui_warning_save_config": "Warning: could not save config file: %{error}",
     "tui_welcome_no_config": "Welcome to Cfait (TUI). No configuration file found.",
     "tui_yanked_help": "%{yanked_label} '%{summary}' — b:Block c:Child l:Link (Esc:Clear)",

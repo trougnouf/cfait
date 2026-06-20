@@ -152,7 +152,8 @@ If `create_events_for_tasks` is enabled or `+cal` is used:
 Goals act as quotas or habits and can be applied globally or locally.
 *   **Global Goals:** Mapped to tags/locations using aliases (e.g., `#reading := goal:2h/w`). They appear in the Goals sidebar tab.
 *   **Task-Specific Goals:** Defined directly on a task (e.g., `Read book goal:2h/w`). They replace the task's duration badge with a progress tracker. If `show_task_goals_in_sidebar` is true, they also appear under the Goals tab.
-*   **Progress:** Calculated dynamically by summing `WorkSession` overlaps and completion dates within the calendar interval.
+*   **Progress & Heatmaps:** Progress is calculated dynamically by summing `WorkSession` overlaps and completion dates within the calendar interval. The last 7 intervals are evaluated and rendered as a Heatmap sparkline (e.g., `■■□■■■□`) across all UI clients.
+*   **Effective Goals:** Recurring tasks (`RRULE`) inherently generate a `1/period` count goal automatically to feed the Heatmap renderer, even if no explicit `goal:` token is set.
 *   **Implicit Credit:** If a task with an `estimated_duration` is completed *without* explicitly running a timer, the remaining estimated time is granted instantly as goal progress. Logging a session fulfills "Count" goals if `sessions_count_as_completions` is true.
 
 ### 4.6. Permanent / Continuous Tasks
@@ -185,9 +186,9 @@ Tasks tagged with `#permanent` act as endless trackers. When checked off (Comple
 
 ### 5.2. Terminal Interface (TUI)
 *Powered by `ratatui`. Keyboard-only paradigm.*
-*   **Layout:** 2-Pane (Sidebar 20%, Main List 80%). Details view shares vertical space with Main List.
+*   **Layout:** 2-Pane (Sidebar 20%, Main List 80%). Details view shares vertical space with Main List. Press `Shift+Up/Down` to scroll the active details pane without losing focus on the list.
 *   **Modals/Popups:** Instead of context menus, pressing `Enter` on a task opens a centered **Action Menu** popup with fuzzy filtering. 
-*   **Relationship Browser (`L`):** Popup listing Parents, Children, Blockers, Successors, and Siblings for quick jump navigation.
+*   **Details Viewer (`L`):** Unified popup containing the full markdown description, History/Heatmaps, WorkSessions, and relationships (Parents, Children, Blockers, Successors, Siblings) for quick jump navigation.
 *   **Session Manager (`T`):** Popup to view/delete `WorkSession` records.
 *   **External Editor:** Pressing `E` launches `$VISUAL`/`$EDITOR` (suspending the TUI), falling back to the built-in modal if empty.
 

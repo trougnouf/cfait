@@ -44,6 +44,7 @@ pub enum InputMode {
     Searching,
     Editing,
     EditingDescription,
+    ViewingDetails,
     Moving,
     SelectingExportSource,
     Exporting,
@@ -114,6 +115,7 @@ pub struct AppState {
     pub cursor_position: usize,
     pub edit_scroll_offset: u16,
     pub edit_scroll_x: u16,
+    pub details_scroll: u16,
     pub editing_uid: Option<String>,
     pub move_selection_state: ListState,
     pub move_targets: Vec<CalendarListEntry>,
@@ -155,8 +157,8 @@ pub struct AppState {
     pub search_collapsed_tasks: HashSet<String>,
 
     pub goals: HashMap<String, crate::config::Goal>,
-    pub cached_goals_progress: HashMap<String, u32>,
-    pub cached_task_goals: Vec<(String, String, crate::config::Goal, u32)>,
+    pub cached_goals_progress: HashMap<String, (u32, Vec<f32>)>,
+    pub cached_task_goals: Vec<(String, String, crate::config::Goal, u32, Vec<f32>)>,
     pub needs_redraw: bool,
 }
 
@@ -235,6 +237,7 @@ impl AppState {
             cursor_position: 0,
             edit_scroll_offset: 0,
             edit_scroll_x: 0,
+            details_scroll: 0,
             editing_uid: None,
             move_selection_state: ListState::default(),
             move_targets: Vec::new(),
@@ -371,25 +374,39 @@ impl AppState {
 
         let mut goals_progress = HashMap::new();
         for (key, goal) in &self.goals {
-            goals_progress.insert(key.clone(), self.store.calculate_goal_progress(key, goal));
+            let prog = self.store.calculate_goal_progress(key, goal);
+            let history = self.store.calculate_goal_history(key, goal, 7);
+            goals_progress.insert(key.clone(), (prog, history));
         }
         self.cached_goals_progress = goals_progress;
 
         let mut task_goals = Vec::new();
         if config.show_task_goals_in_sidebar {
-            let now = chrono::Utc::now();
             for (href, map) in self.store.calendars.iter() {
                 if self.hidden_calendars.contains(href) || self.disabled_calendars.contains(href) {
                     continue;
                 }
                 for t in map.values() {
+                    if t.unmapped_properties
+                        .iter()
+                        .any(|p| p.key == "X-CFAIT-HISTORY-OF")
+                    {
+                        continue;
+                    }
                     if let Some(goal) = &t.goal {
-                        let progress = t.calculate_local_goal_progress(
-                            now,
-                            config.default_duration_goal_mins,
-                            config.sessions_count_as_completions,
-                        );
-                        task_goals.push((t.uid.clone(), t.summary.clone(), goal.clone(), progress));
+                        let progress = self
+                            .store
+                            .calculate_goal_progress(&format!("task:{}", t.uid), goal);
+                        let history =
+                            self.store
+                                .calculate_goal_history(&format!("task:{}", t.uid), goal, 7);
+                        task_goals.push((
+                            t.uid.clone(),
+                            t.summary.clone(),
+                            goal.clone(),
+                            progress,
+                            history,
+                        ));
                     }
                 }
             }
@@ -508,6 +525,7 @@ impl AppState {
                     None => 0,
                 };
                 self.list_state.select(Some(i));
+                self.details_scroll = 0;
             }
             Focus::Sidebar => {
                 let len = self.get_sidebar_len();
@@ -545,6 +563,7 @@ impl AppState {
                     None => 0,
                 };
                 self.list_state.select(Some(i));
+                self.details_scroll = 0;
             }
             Focus::Sidebar => {
                 let len = self.get_sidebar_len();
@@ -572,6 +591,7 @@ impl AppState {
                     let current = self.list_state.selected().unwrap_or(0);
                     self.list_state
                         .select(Some((current + step).min(self.tasks.len() - 1)));
+                    self.details_scroll = 0;
                 }
             }
             Focus::Sidebar => {
@@ -589,6 +609,7 @@ impl AppState {
                 if !self.tasks.is_empty() {
                     let current = self.list_state.selected().unwrap_or(0);
                     self.list_state.select(Some(current.saturating_sub(step)));
+                    self.details_scroll = 0;
                 }
             }
             Focus::Sidebar => {

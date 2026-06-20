@@ -54,20 +54,46 @@ pub struct Interval {
 }
 
 impl Interval {
-    pub fn get_period_bounds(&self, now: chrono::DateTime<chrono::Utc>) -> (i64, i64) {
+    pub fn get_period_bounds(&self, now: chrono::DateTime<chrono::Utc>, offset: i32) -> (i64, i64) {
         use chrono::{Datelike, NaiveDate, NaiveTime};
         let local_now = now.with_timezone(&chrono::Local).date_naive();
+
+        let reference_date = match self.unit {
+            IntervalUnit::Days => {
+                local_now + chrono::Duration::days((offset * self.amount as i32) as i64)
+            }
+            IntervalUnit::Weeks => {
+                local_now + chrono::Duration::days((offset * self.amount as i32 * 7) as i64)
+            }
+            IntervalUnit::Months => {
+                let mut m = local_now.month0() as i32 + offset * self.amount as i32;
+                let mut y = local_now.year();
+                while m < 0 {
+                    m += 12;
+                    y -= 1;
+                }
+                while m > 11 {
+                    m -= 12;
+                    y += 1;
+                }
+                NaiveDate::from_ymd_opt(y, (m as u32) + 1, 1).unwrap_or(local_now)
+            }
+            IntervalUnit::Years => {
+                NaiveDate::from_ymd_opt(local_now.year() + offset * self.amount as i32, 1, 1)
+                    .unwrap_or(local_now)
+            }
+        };
 
         let start_date = match self.unit {
             IntervalUnit::Days => {
                 let epoch_days =
-                    (local_now - NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()).num_days();
+                    (reference_date - NaiveDate::from_ymd_opt(1970, 1, 1).unwrap()).num_days();
                 let cycle = (epoch_days / self.amount as i64) * self.amount as i64;
                 NaiveDate::from_ymd_opt(1970, 1, 1).unwrap() + chrono::Duration::days(cycle)
             }
             IntervalUnit::Weeks => {
                 let days_since =
-                    (local_now - NaiveDate::from_ymd_opt(1970, 1, 5).unwrap()).num_days();
+                    (reference_date - NaiveDate::from_ymd_opt(1970, 1, 5).unwrap()).num_days();
                 let weeks = if days_since >= 0 {
                     days_since / 7
                 } else {
@@ -77,14 +103,14 @@ impl Interval {
                 NaiveDate::from_ymd_opt(1970, 1, 5).unwrap() + chrono::Duration::days(cycle * 7)
             }
             IntervalUnit::Months => {
-                let months = (local_now.year() - 1970) * 12 + local_now.month0() as i32;
+                let months = (reference_date.year() - 1970) * 12 + reference_date.month0() as i32;
                 let cycle = (months / self.amount as i32) * self.amount as i32;
                 let y = 1970 + cycle / 12;
                 let m = (cycle % 12) as u32 + 1;
                 NaiveDate::from_ymd_opt(y, m, 1).unwrap()
             }
             IntervalUnit::Years => {
-                let years = local_now.year() - 1970;
+                let years = reference_date.year() - 1970;
                 let cycle = (years / self.amount as i32) * self.amount as i32;
                 NaiveDate::from_ymd_opt(1970 + cycle, 1, 1).unwrap()
             }

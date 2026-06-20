@@ -1353,7 +1353,11 @@ fun HomeScreen(
                                                 Box(modifier = Modifier.fillMaxWidth(goal.pct).fillMaxHeight().background(if (goal.pct >= 1f) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary, RoundedCornerShape(3.dp)))
                                             }
                                             Spacer(Modifier.height(4.dp))
-                                            Text(progText, fontSize = 12.sp, color = Color.Gray)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(progText, fontSize = 12.sp, color = Color.Gray)
+                                                Spacer(Modifier.weight(1f))
+                                                HeatmapRow(goal.history)
+                                            }
                                         }
                                         if (!isTask) {
                                             Spacer(Modifier.width(12.dp))

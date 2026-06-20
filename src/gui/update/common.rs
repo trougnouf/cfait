@@ -64,25 +64,39 @@ pub fn refresh_filtered_tasks(app: &mut GuiApp) {
 
     let mut goals_progress = std::collections::HashMap::new();
     for (key, goal) in &app.core_config.goals {
-        goals_progress.insert(key.clone(), app.store.calculate_goal_progress(key, goal));
+        let prog = app.store.calculate_goal_progress(key, goal);
+        let history = app.store.calculate_goal_history(key, goal, 7);
+        goals_progress.insert(key.clone(), (prog, history));
     }
     app.cached_goals_progress = goals_progress;
 
     let mut task_goals = Vec::new();
     if config.show_task_goals_in_sidebar {
-        let now = chrono::Utc::now();
         for (href, map) in app.store.calendars.iter() {
             if app.hidden_calendars.contains(href) || app.disabled_calendars.contains(href) {
                 continue;
             }
             for t in map.values() {
+                if t.unmapped_properties
+                    .iter()
+                    .any(|p| p.key == "X-CFAIT-HISTORY-OF")
+                {
+                    continue;
+                }
                 if let Some(goal) = &t.goal {
-                    let progress = t.calculate_local_goal_progress(
-                        now,
-                        config.default_duration_goal_mins,
-                        config.sessions_count_as_completions,
-                    );
-                    task_goals.push((t.uid.clone(), t.summary.clone(), goal.clone(), progress));
+                    let progress = app
+                        .store
+                        .calculate_goal_progress(&format!("task:{}", t.uid), goal);
+                    let history =
+                        app.store
+                            .calculate_goal_history(&format!("task:{}", t.uid), goal, 7);
+                    task_goals.push((
+                        t.uid.clone(),
+                        t.summary.clone(),
+                        goal.clone(),
+                        progress,
+                        history,
+                    ));
                 }
             }
         }

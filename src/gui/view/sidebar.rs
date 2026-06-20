@@ -715,6 +715,41 @@ pub fn view_sidebar_locations(app: &GuiApp) -> Element<'_, Message> {
     column![header, list_content].spacing(0).into()
 }
 
+fn build_heatmap_row<'a>(history: &[f32], theme: &Theme) -> Element<'a, Message> {
+    let mut heatmap_row = row![].spacing(2);
+    for &pct in history {
+        let color = if pct >= 1.0 {
+            Color::from_rgb(0.2, 0.75, 0.2) // Success Green
+        } else if pct > 0.0 {
+            let mut p = theme.extended_palette().primary.base.color;
+            p.a = 0.6; // Dimmed primary color
+            p
+        } else {
+            // Dark gray base
+            Color::from_rgb(0.25, 0.25, 0.25)
+        };
+
+        let block = container(Space::new().width(6).height(6)).style(move |_| container::Style {
+            background: Some(color.into()),
+            border: iced::Border {
+                radius: 2.0.into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        heatmap_row = heatmap_row.push(block);
+    }
+
+    tooltip(
+        heatmap_row,
+        text("Consistency (Past 7 periods)").size(12),
+        tooltip::Position::Bottom,
+    )
+    .style(crate::gui::view::tooltip_style)
+    .delay(std::time::Duration::from_millis(500))
+    .into()
+}
+
 // --- GOALS ---
 pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
     let mut col = column![].spacing(10);
@@ -738,7 +773,11 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
 
         for key in keys {
             let goal = &app.core_config.goals[key];
-            let progress = app.cached_goals_progress.get(key).copied().unwrap_or(0);
+            let (progress, history) = app
+                .cached_goals_progress
+                .get(key)
+                .cloned()
+                .unwrap_or((0, Vec::new()));
             let target = goal.target;
             let pct = if target > 0 {
                 (progress as f32 / target as f32).min(1.0)
@@ -768,6 +807,13 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
             .size(12)
             .color(Color::from_rgb(0.6, 0.6, 0.6));
 
+            let prog_row = row![
+                prog_text,
+                Space::new().width(Length::Fill),
+                build_heatmap_row(&history, &app.theme())
+            ]
+            .align_y(iced::Alignment::Center);
+
             let bar_bg = container(Space::new().width(Length::Fill).height(6.0)).style(|_| {
                 container::Style {
                     background: Some(Color::from_rgb(0.2, 0.2, 0.2).into()),
@@ -809,7 +855,7 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
 
             let bar_container = iced::widget::stack![bar_bg, bar_row];
 
-            let content_btn = button(column![title, bar_container, prog_text].spacing(4))
+            let content_btn = button(column![title, bar_container, prog_row].spacing(4))
                 .style(button::text)
                 .width(Length::Fill)
                 .padding(8);
@@ -838,7 +884,7 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
             col = col.push(goal_row);
         }
 
-        for (uid, summary, goal, progress) in &app.cached_task_goals {
+        for (uid, summary, goal, progress, history) in &app.cached_task_goals {
             let target = goal.target;
             let pct = if target > 0 {
                 (*progress as f32 / target as f32).min(1.0)
@@ -868,6 +914,13 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
             .size(12)
             .color(Color::from_rgb(0.6, 0.6, 0.6));
 
+            let prog_row = row![
+                prog_text,
+                Space::new().width(Length::Fill),
+                build_heatmap_row(history, &app.theme())
+            ]
+            .align_y(iced::Alignment::Center);
+
             let bar_bg = container(Space::new().width(Length::Fill).height(6.0)).style(|_| {
                 container::Style {
                     background: Some(Color::from_rgb(0.2, 0.2, 0.2).into()),
@@ -909,7 +962,7 @@ pub fn view_sidebar_goals(app: &GuiApp) -> Element<'_, Message> {
 
             let bar_container = iced::widget::stack![bar_bg, bar_row];
 
-            let content_btn = button(column![title, bar_container, prog_text].spacing(4))
+            let content_btn = button(column![title, bar_container, prog_row].spacing(4))
                 .style(button::text)
                 .width(Length::Fill)
                 .padding(8)

@@ -4359,6 +4359,7 @@ data class MobileGoalProgress(
     var `targetStr`: kotlin.String,
     var `periodStr`: kotlin.String,
     var `pct`: kotlin.Float,
+    var `history`: List<kotlin.Float>,
 ) {
     companion object
 }
@@ -4374,6 +4375,7 @@ public object FfiConverterTypeMobileGoalProgress : FfiConverterRustBuffer<Mobile
             FfiConverterString.read(buf),
             FfiConverterString.read(buf),
             FfiConverterFloat.read(buf),
+            FfiConverterSequenceFloat.read(buf),
         )
 
     override fun allocationSize(value: MobileGoalProgress) =
@@ -4382,7 +4384,8 @@ public object FfiConverterTypeMobileGoalProgress : FfiConverterRustBuffer<Mobile
                 FfiConverterString.allocationSize(value.`progressStr`) +
                 FfiConverterString.allocationSize(value.`targetStr`) +
                 FfiConverterString.allocationSize(value.`periodStr`) +
-                FfiConverterFloat.allocationSize(value.`pct`)
+                FfiConverterFloat.allocationSize(value.`pct`) +
+                FfiConverterSequenceFloat.allocationSize(value.`history`)
         )
 
     override fun write(
@@ -4394,6 +4397,7 @@ public object FfiConverterTypeMobileGoalProgress : FfiConverterRustBuffer<Mobile
         FfiConverterString.write(value.`targetStr`, buf)
         FfiConverterString.write(value.`periodStr`, buf)
         FfiConverterFloat.write(value.`pct`, buf)
+        FfiConverterSequenceFloat.write(value.`history`, buf)
     }
 }
 
@@ -4751,6 +4755,11 @@ data class MobileTask(
     var `hasExtractableSubtasks`: kotlin.Boolean,
     var `createdDateIso`: kotlin.String?,
     var `lastModifiedDateIso`: kotlin.String?,
+    var `goalProgressStr`: kotlin.String?,
+    var `goalTargetStr`: kotlin.String?,
+    var `goalHistory`: List<kotlin.Float>,
+    var `rruleHistoryCount`: kotlin.UInt,
+    var `rruleHistoryWindow`: kotlin.String,
     var `visibleCategories`: List<kotlin.String>,
     var `visibleLocation`: kotlin.String?,
 ) {
@@ -4812,6 +4821,11 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalString.read(buf),
             FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterSequenceFloat.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterString.read(buf),
             FfiConverterSequenceString.read(buf),
             FfiConverterOptionalString.read(buf),
         )
@@ -4867,6 +4881,11 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
                 FfiConverterBoolean.allocationSize(value.`hasExtractableSubtasks`) +
                 FfiConverterOptionalString.allocationSize(value.`createdDateIso`) +
                 FfiConverterOptionalString.allocationSize(value.`lastModifiedDateIso`) +
+                FfiConverterOptionalString.allocationSize(value.`goalProgressStr`) +
+                FfiConverterOptionalString.allocationSize(value.`goalTargetStr`) +
+                FfiConverterSequenceFloat.allocationSize(value.`goalHistory`) +
+                FfiConverterUInt.allocationSize(value.`rruleHistoryCount`) +
+                FfiConverterString.allocationSize(value.`rruleHistoryWindow`) +
                 FfiConverterSequenceString.allocationSize(value.`visibleCategories`) +
                 FfiConverterOptionalString.allocationSize(value.`visibleLocation`)
         )
@@ -4924,6 +4943,11 @@ public object FfiConverterTypeMobileTask : FfiConverterRustBuffer<MobileTask> {
         FfiConverterBoolean.write(value.`hasExtractableSubtasks`, buf)
         FfiConverterOptionalString.write(value.`createdDateIso`, buf)
         FfiConverterOptionalString.write(value.`lastModifiedDateIso`, buf)
+        FfiConverterOptionalString.write(value.`goalProgressStr`, buf)
+        FfiConverterOptionalString.write(value.`goalTargetStr`, buf)
+        FfiConverterSequenceFloat.write(value.`goalHistory`, buf)
+        FfiConverterUInt.write(value.`rruleHistoryCount`, buf)
+        FfiConverterString.write(value.`rruleHistoryWindow`, buf)
         FfiConverterSequenceString.write(value.`visibleCategories`, buf)
         FfiConverterOptionalString.write(value.`visibleLocation`, buf)
     }
@@ -6226,6 +6250,34 @@ public object FfiConverterOptionalTypeMobileTask : FfiConverterRustBuffer<Mobile
         } else {
             buf.put(1)
             FfiConverterTypeMobileTask.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceFloat : FfiConverterRustBuffer<List<kotlin.Float>> {
+    override fun read(buf: ByteBuffer): List<kotlin.Float> {
+        val len = buf.getInt()
+        return List<kotlin.Float>(len) {
+            FfiConverterFloat.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<kotlin.Float>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterFloat.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<kotlin.Float>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterFloat.write(it, buf)
         }
     }
 }

@@ -494,6 +494,41 @@ fun TaskRow(
                         )
                     }
 
+                    if (task.rruleHistoryCount > 0u || task.goalTargetStr != null || task.goalHistory.isNotEmpty()) {
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                        Text(
+                            androidx.compose.ui.res.stringResource(R.string.habit_history),
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+
+                        if (task.rruleHistoryCount > 0u) {
+                            val ctx = androidx.compose.ui.platform.LocalContext.current
+                            val windowResId = ctx.resources.getIdentifier(task.rruleHistoryWindow, "string", ctx.packageName)
+                            val windowStr = if (windowResId != 0) androidx.compose.ui.res.stringResource(windowResId) else "7 days"
+                            val textStat = if (task.rruleHistoryCount == 1u) {
+                                androidx.compose.ui.res.stringResource(R.string.habit_completed_in_past_one, windowStr)
+                            } else {
+                                androidx.compose.ui.res.stringResource(R.string.habit_completed_in_past_other, task.rruleHistoryCount.toInt(), windowStr)
+                            }
+                            Text("• $textStat", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+
+                        if (task.goalTargetStr != null) {
+                            Text("- Target: ${task.goalTargetStr}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("- Progress: ${task.goalProgressStr}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+
+                        if (task.goalHistory.isNotEmpty()) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp, bottom = 4.dp)) {
+                                Text("- Past: ", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                HeatmapRow(task.goalHistory)
+                            }
+                        }
+                    }
+
                     if (task.isRecurring && !task.isRelativeRecurrence && !task.isDone && task.statusString != "Cancelled") {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.action_complete_and_shift)) },

@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.Font
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.OffsetMapping
@@ -400,6 +402,24 @@ fun parseHexColor(hex: String): Color =
     } catch (e: Exception) {
         Color.Gray
     }
+
+@Composable
+fun HeatmapRow(history: List<Float>) {
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+        for (pct in history) {
+            val color = when {
+                pct >= 1.0f -> Color(0xFF4CAF50) // Green
+                pct > 0f -> Color(0xFFFFB300) // Yellow
+                else -> Color.DarkGray
+            }
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .background(color, RoundedCornerShape(1.dp))
+            )
+        }
+    }
+}
 
 fun getTagColor(tag: String, isDark: Boolean): Color {
     val hash = tag.hashCode()

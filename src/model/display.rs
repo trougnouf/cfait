@@ -5,7 +5,7 @@ use chrono::Utc; // Import Utc for live calculation
 
 pub trait TaskDisplay {
     fn to_smart_string(&self) -> String;
-    fn format_duration_short(&self) -> String;
+    fn format_duration_short(&self, store: Option<&crate::store::TaskStore>) -> String;
     fn checkbox_symbol(&self) -> &'static str;
     fn is_paused(&self) -> bool;
 }
@@ -56,12 +56,15 @@ impl TaskDisplay for Task {
         }
     }
 
-    fn format_duration_short(&self) -> String {
+    fn format_duration_short(&self, store: Option<&crate::store::TaskStore>) -> String {
         if let Some(goal) = &self.goal {
-            // TaskDisplay trait lacks AppContext, so we fallback to generic defaults for implicit credits
-            let current = self.calculate_local_goal_progress(chrono::Utc::now(), 60, false);
+            let current = if let Some(s) = store {
+                s.calculate_goal_progress(&format!("task:{}", self.uid), goal)
+            } else {
+                0 // Fallback if store is not provided
+            };
             let (c_str, t_str) = crate::model::parser::format_goal_duration(current, goal.target);
-            return format!("[ {} / {}/{} ]", c_str, t_str, goal.interval.format_short());
+            return format!("[ {} / {}/{}]", c_str, t_str, goal.interval.format_short());
         }
 
         // Calculate actual spent time (stored + current session)

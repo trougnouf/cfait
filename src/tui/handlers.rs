@@ -58,11 +58,18 @@ fn get_available_actions(state: &AppState, task: &Task) -> Vec<crate::config::Ta
         task.status.is_done() || task.status == crate::model::TaskStatus::Cancelled;
     let is_paused = task.is_paused();
 
-    let has_relationships = !task.dependencies.is_empty()
+    let has_info = !task.description.is_empty()
+        || !task.dependencies.is_empty()
         || !task.related_to.is_empty()
         || task.has_blocking_tasks
         || task.has_related_tasks
-        || task.parent_uid.is_some();
+        || task.parent_uid.is_some()
+        || !task.sessions.is_empty()
+        || task.time_spent_seconds > 0
+        || task.created_date().is_some()
+        || task.last_modified_date().is_some()
+        || task.goal.is_some()
+        || task.rrule.is_some();
 
     for &action in TaskAction::ALL {
         let available = match action {
@@ -78,7 +85,7 @@ fn get_available_actions(state: &AppState, task: &Task) -> Vec<crate::config::Ta
             TaskAction::DeleteTree => task.has_subtasks,
             TaskAction::OpenCoordinates => task.geo.is_some(),
             TaskAction::OpenLocations => state.store.count_tree_locations(&task.uid) > 1,
-            TaskAction::ToggleDetails => has_relationships,
+            TaskAction::ToggleDetails => has_info,
             TaskAction::CompleteAndShift => {
                 task.rrule.is_some() && !is_done_or_cancelled && !task.is_relative_recurrence()
             }
@@ -114,7 +121,7 @@ fn update_action_menu_filter(state: &mut AppState) {
             let label = a.label().to_lowercase();
             use crate::config::TaskAction::*;
             let matches_alias = match a {
-                ToggleDetails => filter == "l" || filter == "rel",
+                ToggleDetails => filter == "l" || filter == "details",
                 CompleteAndShift => filter == "r" || filter == "rep" || filter == "repeat",
                 ToggleTimer => filter == "s" || filter == "start" || filter == "pause",
                 StopTimer => filter == "stop",
@@ -252,67 +259,9 @@ async fn execute_task_action(
             }
         }
         ToggleDetails => {
-            let mut items = Vec::new();
-            if let Some(p_uid) = &task.parent_uid {
-                let name = state
-                    .store
-                    .get_summary(p_uid)
-                    .unwrap_or_else(|| "Unknown task".to_string());
-                items.push((
-                    p_uid.clone(),
-                    format!("↑ [Parent] {}", name),
-                    "parent".to_string(),
-                ));
-            }
-            for dep_uid in &task.dependencies {
-                let name = state
-                    .store
-                    .get_summary(dep_uid)
-                    .unwrap_or_else(|| "Unknown task".to_string());
-                let is_done = state.store.is_task_done(dep_uid).unwrap_or(false);
-                let check = if is_done { "[x]" } else { "[ ]" };
-                items.push((
-                    dep_uid.clone(),
-                    format!("⬆ [Blocked by] {} {}", check, name),
-                    "dependency".to_string(),
-                ));
-            }
-            for related_uid in &task.related_to {
-                let name = state
-                    .store
-                    .get_summary(related_uid)
-                    .unwrap_or_else(|| "Unknown task".to_string());
-                items.push((
-                    related_uid.clone(),
-                    format!("→ [Related to] {}", name),
-                    "related_to".to_string(),
-                ));
-            }
-            let incoming_related = state.store.get_tasks_related_to(&task.uid);
-            for (related_uid, related_name) in incoming_related {
-                items.push((
-                    related_uid.clone(),
-                    format!("← [Related from] {}", related_name),
-                    "related_from".to_string(),
-                ));
-            }
-            let blocking_tasks = state.store.get_tasks_blocking(&task.uid);
-            for (blocking_uid, blocking_name) in blocking_tasks {
-                items.push((
-                    blocking_uid.clone(),
-                    format!("⬇ [Blocking] {}", blocking_name),
-                    "blocking".to_string(),
-                ));
-            }
-            if !items.is_empty() {
-                state.relationship_items = items;
-                state.relationship_selection_state.select(Some(0));
-                state.mode = InputMode::RelationshipBrowsing;
-                state.message =
-                    format!("{} (Del/x: Remove)", rust_i18n::t!("tui_select_task_jump"));
-            } else {
-                state.message = rust_i18n::t!("error_no_related_tasks").to_string();
-            }
+            state.mode = InputMode::ViewingDetails;
+            state.details_scroll = 0;
+            state.message = rust_i18n::t!("tui_view_details_help").to_string();
         }
         CompleteAndShift => {
             intent = Some(AppIntent::ToggleTaskShift { uid });
@@ -1446,6 +1395,25 @@ pub async fn handle_key_event(
             KeyCode::PageUp => state.jump_backward(10),
             _ => {}
         },
+        InputMode::ViewingDetails => match key.code {
+            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+                state.mode = InputMode::Normal;
+                state.message = String::new();
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                state.details_scroll = state.details_scroll.saturating_add(1);
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                state.details_scroll = state.details_scroll.saturating_sub(1);
+            }
+            KeyCode::PageDown => {
+                state.details_scroll = state.details_scroll.saturating_add(10);
+            }
+            KeyCode::PageUp => {
+                state.details_scroll = state.details_scroll.saturating_sub(10);
+            }
+            _ => {}
+        },
         InputMode::ActionMenu => match key.code {
             KeyCode::Esc => {
                 state.mode = InputMode::Normal;
@@ -1556,6 +1524,12 @@ pub async fn handle_key_event(
                 if needs_refresh {
                     state.refresh_filtered_view();
                 }
+            }
+            KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                state.details_scroll = state.details_scroll.saturating_add(1);
+            }
+            KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                state.details_scroll = state.details_scroll.saturating_sub(1);
             }
             KeyCode::Char('?') => {
                 state.mode = InputMode::Help(crate::help::HelpTab::Shortcuts);

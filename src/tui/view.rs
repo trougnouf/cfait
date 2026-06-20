@@ -338,7 +338,11 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                 keys.sort();
                 for key in keys {
                     let goal = &state.goals[key];
-                    let progress = state.cached_goals_progress.get(key).copied().unwrap_or(0);
+                    let (progress, history) = state
+                        .cached_goals_progress
+                        .get(key)
+                        .cloned()
+                        .unwrap_or((0, Vec::new()));
                     let target = goal.target;
 
                     let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration
@@ -348,20 +352,15 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         (progress.to_string(), target.to_string())
                     };
 
-                    let title = format!("{} ({}/{})", key, tar_str, goal.interval.format_short());
-
-                    let prog_text =
-                        rust_i18n::t!("goal_progress", current = cur_str, target = tar_str)
-                            .to_string();
-
+                    let title = format!("{} ({})", key, goal.interval.format_short());
                     let pct = if target > 0 {
-                        (progress as f32 / target as f32).min(1.0)
+                        (progress as f32 / target as f32).clamp(0.0, 1.0)
                     } else {
                         0.0
                     };
-                    let bar_len = 10;
+                    let bar_len = 5;
                     let filled = (pct * bar_len as f32).round() as usize;
-                    let bar = format!("[{}{}]", "=".repeat(filled), " ".repeat(bar_len - filled));
+                    let bar = format!("[{}{}]", "■".repeat(filled), " ".repeat(bar_len - filled));
 
                     let color = if pct >= 1.0 {
                         Color::Green
@@ -369,21 +368,34 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         Color::Yellow
                     };
 
+                    let mut spans = vec![
+                        Span::styled(bar, Style::default().fg(color)),
+                        Span::raw(format!(" {}/{} ", cur_str, tar_str)),
+                    ];
+
+                    for &h_pct in &history {
+                        let h_color = if h_pct >= 1.0 {
+                            Color::Green
+                        } else if h_pct > 0.0 {
+                            Color::Yellow
+                        } else {
+                            Color::DarkGray
+                        };
+                        spans.push(Span::styled("■", Style::default().fg(h_color)));
+                    }
+
                     let text = Text::from(vec![
                         Line::from(Span::styled(
                             title,
                             Style::default().add_modifier(Modifier::BOLD),
                         )),
-                        Line::from(vec![
-                            Span::styled(bar, Style::default().fg(color)),
-                            Span::raw(format!(" {}", prog_text)),
-                        ]),
+                        Line::from(spans),
                         Line::from(""), // spacing
                     ]);
                     items.push(ListItem::new(text));
                 }
 
-                for (_, summary, goal, progress) in &state.cached_task_goals {
+                for (_, summary, goal, progress, history) in &state.cached_task_goals {
                     let target = goal.target;
                     let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration
                     {
@@ -392,26 +404,37 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         (progress.to_string(), target.to_string())
                     };
 
-                    let title =
-                        format!("{} ({}/{})", summary, tar_str, goal.interval.format_short());
-                    let prog_text =
-                        rust_i18n::t!("goal_progress", current = cur_str, target = tar_str)
-                            .to_string();
-
+                    let title = format!("{} ({})", summary, goal.interval.format_short());
                     let pct = if target > 0 {
-                        (*progress as f32 / target as f32).min(1.0)
+                        (*progress as f32 / target as f32).clamp(0.0, 1.0)
                     } else {
                         0.0
                     };
-                    let bar_len = 10;
+                    let bar_len = 5;
                     let filled = (pct * bar_len as f32).round() as usize;
-                    let bar = format!("[{}{}]", "=".repeat(filled), " ".repeat(bar_len - filled));
+                    let bar = format!("[{}{}]", "■".repeat(filled), " ".repeat(bar_len - filled));
 
                     let color = if pct >= 1.0 {
                         Color::Green
                     } else {
                         Color::Yellow
                     };
+
+                    let mut spans = vec![
+                        Span::styled(bar, Style::default().fg(color)),
+                        Span::raw(format!(" {}/{} ", cur_str, tar_str)),
+                    ];
+
+                    for &h_pct in history {
+                        let h_color = if h_pct >= 1.0 {
+                            Color::Green
+                        } else if h_pct > 0.0 {
+                            Color::Yellow
+                        } else {
+                            Color::DarkGray
+                        };
+                        spans.push(Span::styled("■", Style::default().fg(h_color)));
+                    }
 
                     let text = Text::from(vec![
                         Line::from(Span::styled(
@@ -420,10 +443,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                                 .add_modifier(Modifier::BOLD)
                                 .fg(Color::Cyan),
                         )),
-                        Line::from(vec![
-                            Span::styled(bar, Style::default().fg(color)),
-                            Span::raw(format!(" {}", prog_text)),
-                        ]),
+                        Line::from(spans),
                         Line::from(""), // spacing
                     ]);
                     items.push(ListItem::new(text));
@@ -606,7 +626,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         (String::new(), Style::default())
                     };
 
-                    let dur_str = t.format_duration_short();
+                    let dur_str = t.format_duration_short(Some(&state.store));
                     let recur_str = if t.rrule.is_some() { " (R)" } else { "" };
 
                     // Prefix indentation + checkbox
@@ -961,37 +981,68 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         }
 
         // --- History (for recurring tasks) ---
-        if let Some(rrule) = &task.rrule {
-            let (stat1, stat2) = state.store.get_completion_history_stats(&task.uid, rrule);
-            let (c1, _, k1) = stat1;
-            let (c2, _, k2) = stat2;
-            if c2 > 0 {
-                details_md.push_str(&format!("### {}\n", t!("habit_history")));
-                let w1 = rust_i18n::t!(k1).to_string();
-                if c1 == 1 {
-                    details_md.push_str(&format!(
-                        "- {}\n",
-                        t!("habit_completed_in_past.one", window = w1)
-                    ));
-                } else {
-                    details_md.push_str(&format!(
-                        "- {}\n",
-                        t!("habit_completed_in_past.other", count = c1, window = w1)
-                    ));
-                }
-                let w2 = rust_i18n::t!(k2).to_string();
-                if c2 == 1 {
-                    details_md.push_str(&format!(
-                        "- {}\n\n",
-                        t!("habit_completed_in_past.one", window = w2)
-                    ));
-                } else {
-                    details_md.push_str(&format!(
-                        "- {}\n\n",
-                        t!("habit_completed_in_past.other", count = c2, window = w2)
-                    ));
+        let effective_goal = task.get_effective_goal();
+        let has_rrule = task.rrule.is_some();
+        let has_goal = task.goal.is_some();
+
+        if has_rrule || has_goal {
+            details_md.push_str(&format!("### {}\n", t!("habit_history")));
+
+            if let Some(rrule) = &task.rrule {
+                let (count, _, key) = state.store.get_completion_history_stats(&task.uid, rrule);
+                if count > 0 {
+                    let w1 = rust_i18n::t!(key).to_string();
+                    if count == 1 {
+                        details_md.push_str(&format!(
+                            "- {}\n",
+                            t!("habit_completed_in_past.one", window = w1)
+                        ));
+                    } else {
+                        details_md.push_str(&format!(
+                            "- {}\n",
+                            t!("habit_completed_in_past.other", count = count, window = w1)
+                        ));
+                    }
                 }
             }
+
+            if let Some(goal) = &task.goal {
+                let progress = state
+                    .store
+                    .calculate_goal_progress(&format!("task:{}", task.uid), goal);
+                let (cur_str, tar_str) = if goal.goal_type == crate::config::GoalType::Duration {
+                    crate::model::parser::format_goal_duration(progress, goal.target)
+                } else {
+                    (progress.to_string(), goal.target.to_string())
+                };
+
+                details_md.push_str(&format!(
+                    "- Target: {}/{}\n",
+                    tar_str,
+                    goal.interval.format_short()
+                ));
+                details_md.push_str(&format!("- Progress: {}\n", cur_str));
+            }
+
+            if let Some(goal) = &effective_goal {
+                let history =
+                    state
+                        .store
+                        .calculate_goal_history(&format!("task:{}", task.uid), goal, 7);
+                let mut heatmap_str = String::new();
+                for pct in history {
+                    if pct >= 1.0 {
+                        heatmap_str.push('🟩');
+                    } else if pct > 0.0 {
+                        heatmap_str.push('🟨');
+                    } else {
+                        heatmap_str.push('⬛');
+                    }
+                }
+                details_md.push_str(&format!("- Past: {}\n", heatmap_str));
+            }
+
+            details_md.push('\n');
         }
 
         // --- Work Sessions (recent) ---
@@ -1148,7 +1199,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .border_style(Style::default().fg(Color::Blue));
         let p = Paragraph::new(md_text)
             .block(details_block)
-            .wrap(Wrap { trim: true });
+            .wrap(Wrap { trim: true })
+            .scroll((state.details_scroll, 0));
         f.render_widget(p, main_chunks[1]);
     } else {
         let p = Paragraph::new(rust_i18n::t!("editing")).block(
@@ -1508,6 +1560,26 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         f.render_widget(p, area);
     }
 
+    // Viewing Details popup
+    if state.mode == InputMode::ViewingDetails {
+        let area = centered_rect(80, 80, f.area());
+        f.render_widget(Clear, area);
+        let md_text = tui_markdown::from_str(&details_md);
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(format!(" {} ", rust_i18n::t!("details")))
+            .border_style(Style::default().fg(if is_dark_theme {
+                Color::Yellow
+            } else {
+                Color::Rgb(200, 100, 0)
+            }));
+        let p = Paragraph::new(md_text)
+            .block(block)
+            .wrap(Wrap { trim: true })
+            .scroll((state.details_scroll, 0));
+        f.render_widget(p, area);
+    }
+
     // Action menu popup
     if state.mode == InputMode::ActionMenu {
         let area = centered_rect(50, 60, f.area());
@@ -1519,7 +1591,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .map(|a| {
                 let mut label = a.label();
                 if *a == crate::config::TaskAction::ToggleDetails {
-                    label = rust_i18n::t!("help_metadata_jump_related").to_string();
+                    label = rust_i18n::t!("view_details").to_string();
                 } else if *a == crate::config::TaskAction::DuplicateTree
                     && let Some(task) = state.get_selected_task()
                     && !task.has_subtasks

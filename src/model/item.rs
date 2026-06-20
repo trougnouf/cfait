@@ -467,6 +467,39 @@ pub fn compare_sortkeys(
 // Helper context used by hierarchy organization routines.
 // Bundles the children map, result vector and other parameters so recursive helpers
 impl Task {
+    pub fn get_effective_goal(&self) -> Option<crate::config::Goal> {
+        if let Some(g) = &self.goal {
+            return Some(g.clone());
+        }
+        if let Some(rrule) = &self.rrule {
+            let mut freq = "";
+            let mut interval = 1;
+            for part in rrule.split(';') {
+                if let Some(v) = part.strip_prefix("FREQ=") {
+                    freq = v;
+                } else if let Some(v) = part.strip_prefix("INTERVAL=") {
+                    interval = v.parse().unwrap_or(1);
+                }
+            }
+            let unit = match freq {
+                "DAILY" => crate::config::IntervalUnit::Days,
+                "WEEKLY" => crate::config::IntervalUnit::Weeks,
+                "MONTHLY" => crate::config::IntervalUnit::Months,
+                "YEARLY" => crate::config::IntervalUnit::Years,
+                _ => return None,
+            };
+            return Some(crate::config::Goal {
+                goal_type: crate::config::GoalType::Count,
+                target: 1,
+                interval: crate::config::Interval {
+                    amount: interval,
+                    unit,
+                },
+            });
+        }
+        None
+    }
+
     pub fn has_extractable_subtasks(&self) -> bool {
         crate::model::extractor::has_extractable_subtasks(&self.description)
     }
@@ -526,70 +559,6 @@ impl Task {
                         .map(|ndt| Utc.from_utc_datetime(&ndt))
                 })
             })
-    }
-
-    pub fn calculate_local_goal_progress(
-        &self,
-        now: chrono::DateTime<chrono::Utc>,
-        default_dur: u32,
-        count_sessions: bool,
-    ) -> u32 {
-        if let Some(goal) = &self.goal {
-            let (start_ts, end_ts) = goal.interval.get_period_bounds(now);
-            let mut current = 0;
-
-            if goal.goal_type == crate::config::GoalType::Count {
-                let mut task_progress = 0;
-                if count_sessions {
-                    for session in &self.sessions {
-                        if session.end >= start_ts && session.start < end_ts {
-                            task_progress += 1;
-                        }
-                    }
-                }
-                if self.status == TaskStatus::Completed
-                    && let Some(c) = self.completion_date()
-                    && c.timestamp() >= start_ts
-                    && c.timestamp() < end_ts
-                    && task_progress == 0
-                {
-                    task_progress += 1;
-                }
-                current += task_progress;
-            } else if goal.goal_type == crate::config::GoalType::Duration {
-                for session in &self.sessions {
-                    if session.end >= start_ts && session.start < end_ts {
-                        let overlap_start = session.start.max(start_ts);
-                        let overlap_end = session.end.min(end_ts);
-                        if overlap_end > overlap_start {
-                            current += (overlap_end - overlap_start) as u32 / 60;
-                        }
-                    }
-                }
-                if let Some(start) = self.last_started_at {
-                    let now_ts = now.timestamp().min(end_ts);
-                    if now_ts > start_ts {
-                        let overlap_start = start.max(start_ts);
-                        if now_ts > overlap_start {
-                            current += (now_ts - overlap_start) as u32 / 60;
-                        }
-                    }
-                }
-                if self.status == TaskStatus::Completed
-                    && let Some(c) = self.completion_date()
-                    && c.timestamp() >= start_ts
-                    && c.timestamp() < end_ts
-                {
-                    let total_tracked = (self.time_spent_seconds / 60) as u32;
-                    let est = self.estimated_duration.unwrap_or(default_dur);
-                    if est > total_tracked {
-                        current += est - total_tracked;
-                    }
-                }
-            }
-            return current;
-        }
-        0
     }
 
     /// Set (or clear) the COMPLETED date property and ensure status aligns.
@@ -1354,8 +1323,8 @@ impl Task {
         crate::model::TaskDisplay::to_smart_string(self)
     }
 
-    pub fn format_duration_short(&self) -> String {
-        crate::model::TaskDisplay::format_duration_short(self)
+    pub fn format_duration_short(&self, store: Option<&crate::store::TaskStore>) -> String {
+        crate::model::TaskDisplay::format_duration_short(self, store)
     }
 
     pub fn checkbox_symbol(&self) -> &'static str {

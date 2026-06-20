@@ -1520,27 +1520,22 @@ impl TaskStore {
 
     /// Retrieves the completion history stats for a recurring task, using dynamically
     /// scaled windows based on the task's recurrence frequency.
-    pub fn get_completion_history_stats(
-        &self,
-        uid: &str,
-        rrule: &str,
-    ) -> ((u32, u32, &'static str), (u32, u32, &'static str)) {
-        let (days1, key1, days2, key2) = if rrule.contains("FREQ=YEARLY") {
-            (1095, "window_3_years", 1825, "window_5_years")
+    pub fn get_completion_history_stats(&self, uid: &str, rrule: &str) -> (u32, u32, &'static str) {
+        let (days, key) = if rrule.contains("FREQ=YEARLY") {
+            (1825, "window_5_years")
         } else if rrule.contains("FREQ=MONTHLY") && rrule.contains("INTERVAL=6") {
-            (365, "window_12_months", 1095, "window_3_years")
+            (1095, "window_3_years")
         } else if rrule.contains("FREQ=MONTHLY") && rrule.contains("INTERVAL=3") {
-            (180, "window_6_months", 365, "window_12_months")
+            (365, "window_12_months")
         } else if rrule.contains("FREQ=MONTHLY") {
-            (90, "window_3_months", 180, "window_6_months")
+            (180, "window_6_months")
         } else if rrule.contains("FREQ=WEEKLY") {
-            (28, "window_4_weeks", 84, "window_12_weeks")
+            (84, "window_12_weeks")
         } else {
-            (7, "window_7_days", 30, "window_30_days")
+            (30, "window_30_days")
         };
 
-        let mut count1 = 0;
-        let mut count2 = 0;
+        let mut count = 0;
         let now = chrono::Utc::now();
 
         if let Some(sources) = self.related_from_index.get(uid) {
@@ -1553,31 +1548,36 @@ impl TaskStore {
                     && let Some(comp) = t.completion_date()
                 {
                     let days_diff = (now - comp).num_days();
-                    if (-1..=days1 as i64).contains(&days_diff) {
-                        count1 += 1;
-                    }
-                    if (-1..=days2 as i64).contains(&days_diff) {
-                        count2 += 1;
+                    if (-1..=days as i64).contains(&days_diff) {
+                        count += 1;
                     }
                 }
             }
         }
-        ((count1, days1, key1), (count2, days2, key2))
+        (count, days, key)
     }
 
-    /// Calculates the current progress for a given goal definition.
-    pub fn calculate_goal_progress(&self, key: &str, goal: &crate::config::Goal) -> u32 {
+    /// Helper to evaluate goal bounds universally
+    pub fn calculate_goal_progress_for_bounds(
+        &self,
+        key: &str,
+        goal: &crate::config::Goal,
+        start_ts: i64,
+        end_ts: i64,
+    ) -> u32 {
         let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
         let default_dur = config.default_duration_goal_mins;
         let count_sessions = config.sessions_count_as_completions;
         let now = chrono::Utc::now();
-        let (start_ts, end_ts) = goal.interval.get_period_bounds(now);
         let mut progress = 0;
         let is_tag = key.starts_with('#');
+        let is_task = key.starts_with("task:");
         let clean_key = if is_tag {
             key.trim_start_matches('#')
         } else if key.starts_with("@@") {
             key.trim_start_matches("@@")
+        } else if is_task {
+            key.trim_start_matches("task:")
         } else {
             key
         };
@@ -1588,6 +1588,11 @@ impl TaskStore {
                     t.categories
                         .iter()
                         .any(|c| c == clean_key || c.starts_with(&format!("{}:", clean_key)))
+                } else if is_task {
+                    t.uid == clean_key
+                        || t.unmapped_properties
+                            .iter()
+                            .any(|p| p.key == "X-CFAIT-HISTORY-OF" && p.value == clean_key)
                 } else {
                     t.location.as_deref() == Some(clean_key)
                         || t.location
@@ -1647,7 +1652,6 @@ impl TaskStore {
                         let total_tracked = (t.time_spent_seconds / 60) as u32;
                         let est = t.estimated_duration.unwrap_or(default_dur);
 
-                        // Grant credit for the remaining estimated time upon completion
                         if est > total_tracked {
                             task_time_in_period += est - total_tracked;
                         }
@@ -1658,6 +1662,36 @@ impl TaskStore {
             }
         }
         progress
+    }
+
+    /// Calculates the current progress for a given goal definition.
+    pub fn calculate_goal_progress(&self, key: &str, goal: &crate::config::Goal) -> u32 {
+        let now = chrono::Utc::now();
+        let (start_ts, end_ts) = goal.interval.get_period_bounds(now, 0);
+        self.calculate_goal_progress_for_bounds(key, goal, start_ts, end_ts)
+    }
+
+    /// Calculates a historical array of completion percentages over the last N periods.
+    pub fn calculate_goal_history(
+        &self,
+        key: &str,
+        goal: &crate::config::Goal,
+        periods: u32,
+    ) -> Vec<f32> {
+        let now = chrono::Utc::now();
+        let mut history = Vec::with_capacity(periods as usize);
+        let start_offset = -(periods as i32) + 1;
+        for offset in start_offset..=0 {
+            let (start_ts, end_ts) = goal.interval.get_period_bounds(now, offset);
+            let prog = self.calculate_goal_progress_for_bounds(key, goal, start_ts, end_ts);
+            let pct = if goal.target > 0 {
+                (prog as f32 / goal.target as f32).clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            history.push(pct);
+        }
+        history
     }
 
     /// Rebuild both reverse indices (related_from_index and blocking_index).

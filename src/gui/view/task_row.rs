@@ -1582,41 +1582,88 @@ pub fn view_task_row<'a>(
                     }
                 }
 
-                if let Some(rrule) = &task.rrule {
-                    let (stat1, stat2) = app.store.get_completion_history_stats(&task.uid, rrule);
-                    let (c1, _, k1) = stat1;
-                    let (c2, _, k2) = stat2;
-                    if c2 > 0 {
-                        details_col = details_col.push(Space::new().height(5.0));
+                let effective_goal = task.get_effective_goal();
+                let has_rrule = task.rrule.is_some();
+                let has_goal = task.goal.is_some();
+
+                if has_rrule || has_goal {
+                    details_col = details_col.push(Space::new().height(5.0));
+                    details_col = details_col.push(
+                        text(rust_i18n::t!("habit_history"))
+                            .size(12)
+                            .color(Color::from_rgb(0.6, 0.8, 0.8)),
+                    );
+
+                    if let Some(rrule) = &task.rrule {
+                        let (count, _, key) =
+                            app.store.get_completion_history_stats(&task.uid, rrule);
+                        if count > 0 {
+                            let window_str = rust_i18n::t!(key).to_string();
+                            let text_stat = if count == 1 {
+                                rust_i18n::t!("habit_completed_in_past.one", window = window_str)
+                                    .to_string()
+                            } else {
+                                rust_i18n::t!(
+                                    "habit_completed_in_past.other",
+                                    count = count,
+                                    window = window_str
+                                )
+                                .to_string()
+                            };
+                            details_col = details_col.push(
+                                text(format!("• {}", text_stat))
+                                    .size(12)
+                                    .color(Color::from_rgb(0.7, 0.7, 0.7)),
+                            );
+                        }
+                    }
+
+                    if let Some(goal) = &task.goal {
+                        let progress = app
+                            .store
+                            .calculate_goal_progress(&format!("task:{}", task.uid), goal);
+                        let (cur_str, tar_str) =
+                            if goal.goal_type == crate::config::GoalType::Duration {
+                                crate::model::parser::format_goal_duration(progress, goal.target)
+                            } else {
+                                (progress.to_string(), goal.target.to_string())
+                            };
+
                         details_col = details_col.push(
-                            text(rust_i18n::t!("habit_history"))
-                                .size(12)
-                                .color(Color::from_rgb(0.6, 0.8, 0.8)),
+                            text(format!(
+                                "- Target: {}/{}",
+                                tar_str,
+                                goal.interval.format_short()
+                            ))
+                            .size(12)
+                            .color(Color::from_rgb(0.7, 0.7, 0.7)),
                         );
-
-                        let w1 = rust_i18n::t!(k1).to_string();
-                        let text1 = if c1 == 1 {
-                            rust_i18n::t!("habit_completed_in_past.one", window = w1).to_string()
-                        } else {
-                            rust_i18n::t!("habit_completed_in_past.other", count = c1, window = w1)
-                                .to_string()
-                        };
-
-                        let w2 = rust_i18n::t!(k2).to_string();
-                        let text2 = if c2 == 1 {
-                            rust_i18n::t!("habit_completed_in_past.one", window = w2).to_string()
-                        } else {
-                            rust_i18n::t!("habit_completed_in_past.other", count = c2, window = w2)
-                                .to_string()
-                        };
-
                         details_col = details_col.push(
-                            text(format!("• {}", text1))
+                            text(format!("- Progress: {}", cur_str))
                                 .size(12)
                                 .color(Color::from_rgb(0.7, 0.7, 0.7)),
                         );
+                    }
+
+                    if let Some(goal) = &effective_goal {
+                        let history = app.store.calculate_goal_history(
+                            &format!("task:{}", task.uid),
+                            goal,
+                            7,
+                        );
+                        let mut heatmap_str = String::new();
+                        for pct in history {
+                            if pct >= 1.0 {
+                                heatmap_str.push('🟩');
+                            } else if pct > 0.0 {
+                                heatmap_str.push('🟨');
+                            } else {
+                                heatmap_str.push('⬛');
+                            }
+                        }
+
                         details_col = details_col.push(
-                            text(format!("• {}", text2))
+                            text(format!("- Past: {}", heatmap_str))
                                 .size(12)
                                 .color(Color::from_rgb(0.7, 0.7, 0.7)),
                         );
