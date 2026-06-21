@@ -494,6 +494,8 @@
     "server_connection": "Conexión al servidor",
     "sessions_count_as_completions": "Las sesiones de tiempo cuentan como objetivos completados",
     "settings": "Ajustes",
+    "settings_urgent_definition": "¿Qué hace que una tarea sea «urgente»?",
+    "settings_urgent_explain": "Las tareas que cumplan cualquiera de las dos reglas pasarán a la parte superior de tu lista.",
     "short_label": "Posponer (corto):",
     "show": "Mostrar",
     "show_all": "Mostrar todo",
