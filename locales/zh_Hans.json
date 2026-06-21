@@ -281,7 +281,6 @@
     "help_advanced_prompt": "如需使用高级语法（重复、别名、地理位置）或键盘快捷键，请打开交互式 TUI 或 GUI 并按“?”。",
     "help_goals": "目标和习惯跟踪",
     "help_goals_global": "通过别名为标签或位置设置全局目标",
-    "help_goals_implicit": "重复任务会自动生成计数目标",
     "help_goals_implicit_desc": "重复任务在其详情中显示完成历史记录，充当隐式目标",
     "help_goals_implicit_example": "带有 @daily 的任务会自动跟踪其 7 个周期的历史记录",
     "help_goals_task": "直接在单个任务上设置目标",

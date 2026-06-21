@@ -1916,16 +1916,47 @@ fun HomeScreen(
                                             )
                                         }),
                                     )
-                                    Spacer(Modifier.width(8.dp))
+                                    Spacer(Modifier.width(4.dp))
+
+                                    // 1. Expand/Collapse Description Button
                                     IconButton(
                                         onClick = { isCreateExpanded = !isCreateExpanded },
-                                        modifier = Modifier.size(48.dp)
+                                        modifier = Modifier.size(40.dp)
                                     ) {
                                         NfIcon(
                                             if (isCreateExpanded) NfIcons.ARROW_DOWN else NfIcons.DETAILED_TRIANGLE,
                                             20.sp,
                                             MaterialTheme.colorScheme.primary
                                         )
+                                    }
+
+                                    // 2. Dedicated Save/Submit Button
+                                    val canSave = newTaskText.isNotBlank()
+                                    IconButton(
+                                        onClick = {
+                                            if (canSave) {
+                                                handleAddTaskWithGeo(newTaskText, newDescriptionText)
+                                            }
+                                        },
+                                        enabled = canSave,
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        // Solid background box for emphasis when ready to save
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .background(
+                                                    if (canSave) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                                    RoundedCornerShape(10.dp)
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            NfIcon(
+                                                NfIcons.ARROW_UP,
+                                                18.sp,
+                                                if (canSave) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                            )
+                                        }
                                     }
                                 }
                             }
