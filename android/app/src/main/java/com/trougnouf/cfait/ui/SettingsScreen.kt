@@ -77,7 +77,7 @@ fun SettingsScreen(
     var allCalendars by remember { mutableStateOf<List<MobileCalendar>>(emptyList()) }
     var disabledSet by remember { mutableStateOf<Set<String>>(emptySet()) }
     var autoRemind by remember { mutableStateOf(true) }
-    var defTime by remember { mutableStateOf("09:00") }
+    var defTime by remember { mutableStateOf("08:00") }
     var autoRefresh by remember { mutableStateOf("30m") }
     var createEventsForTasks by remember { mutableStateOf(false) }
 

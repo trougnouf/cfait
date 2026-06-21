@@ -506,7 +506,7 @@ impl Default for GuiApp {
 
             language: None,
             auto_reminders: true,
-            default_reminder_time: "09:00".to_string(),
+            default_reminder_time: "08:00".to_string(),
             snooze_short_mins: 60,
             snooze_long_mins: 1440,
             create_events_for_tasks: false,
