@@ -42,12 +42,15 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "!1..9".to_string(),
                     desc: rust_i18n::t!("help_org_priority").to_string(),
-                    example: "Buy cat food !1".to_string(),
+                    example: format!("{} !1", rust_i18n::t!("example_buy_cat_food")),
                 },
                 HelpItem {
                     keys: "@date (or due:)".to_string(),
                     desc: rust_i18n::t!("help_timeline_due_date").to_string(),
-                    example: "Meeting @tomorrow, due:2025-01-01".to_string(),
+                    example: format!(
+                        "{} @tomorrow, due:2025-01-01",
+                        rust_i18n::t!("example_meeting")
+                    ),
                 },
                 HelpItem {
                     keys: "^date (or start:)".to_string(),
@@ -62,7 +65,10 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "#tag".to_string(),
                     desc: rust_i18n::t!("help_org_add_category").to_string(),
-                    example: "Plant tree #breathe #gardening:trees".to_string(),
+                    example: format!(
+                        "{} #breathe #gardening:trees",
+                        rust_i18n::t!("example_plant_tree")
+                    ),
                 },
                 HelpItem {
                     keys: "#tag{a,b}".to_string(),
@@ -72,17 +78,21 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "@@location (or loc:)".to_string(),
                     desc: rust_i18n::t!("help_org_location_hierarchy").to_string(),
-                    example: "Buy cookies @@aldi".to_string(),
+                    example: format!("{} @@aldi", rust_i18n::t!("example_buy_cookies")),
                 },
                 HelpItem {
                     keys: "##tag, @@@loc".to_string(),
                     desc: rust_i18n::t!("help_org_inline_tags").to_string(),
-                    example: "Apply ##CDV suggestions @@@Office".to_string(),
+                    example: rust_i18n::t!("example_apply_inline_tags").to_string(),
                 },
                 HelpItem {
                     keys: "~duration (or est:duration)".to_string(),
                     desc: rust_i18n::t!("help_org_estimated_duration").to_string(),
-                    example: "Exercise ~30m, Read a book ~1h-2h".to_string(),
+                    example: format!(
+                        "{} ~30m, {} ~1h-2h",
+                        rust_i18n::t!("example_exercise"),
+                        rust_i18n::t!("example_read_book")
+                    ),
                 },
             ],
         },
@@ -91,22 +101,22 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
             items: vec![
                 HelpItem {
                     keys: "m, h, d, w, mo, y".to_string(),
-                    desc: "Valid time units for duration or offsets".to_string(),
+                    desc: rust_i18n::t!("help_timeline_units_desc").to_string(),
                     example: "15m, 2h, 3d, 1w, 6mo, 1y".to_string(),
                 },
                 HelpItem {
-                    keys: "Offsets".to_string(),
-                    desc: "Relative offset from today".to_string(),
+                    keys: rust_i18n::t!("help_key_offsets").to_string(),
+                    desc: rust_i18n::t!("help_timeline_offsets_desc").to_string(),
                     example: "@1d, ^2w, @3mo, ...".to_string(),
                 },
                 HelpItem {
-                    keys: "Weekdays".to_string(),
+                    keys: rust_i18n::t!("help_key_weekdays").to_string(),
                     desc: rust_i18n::t!("help_timeline_weekdays").to_string(),
                     example: "@friday, @fri, @mon".to_string(),
                 },
                 HelpItem {
-                    keys: "Dates".to_string(),
-                    desc: "Absolute dates and months/years".to_string(),
+                    keys: rust_i18n::t!("help_key_dates").to_string(),
+                    desc: rust_i18n::t!("help_timeline_dates_desc").to_string(),
                     example: "@2025-10-31, @2026-05, @2027".to_string(),
                 },
             ],
@@ -116,7 +126,7 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
             items: vec![
                 HelpItem {
                     keys: "@after X".to_string(),
-                    desc: "Relative recurrence (shifts based on completion)".to_string(),
+                    desc: rust_i18n::t!("help_recurrence_relative_desc").to_string(),
                     example: "@after 1w, @after 2mo".to_string(),
                 },
                 HelpItem {
@@ -147,12 +157,12 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
             items: vec![
                 HelpItem {
                     keys: "rem:10m".to_string(),
-                    desc: "Relative to due/start".to_string(),
+                    desc: rust_i18n::t!("help_reminder_relative_due_desc").to_string(),
                     example: "rem:15m, rem:2h".to_string(),
                 },
                 HelpItem {
                     keys: "rem:in 5m".to_string(),
-                    desc: "Relative from *now* (becomes an absolute time)".to_string(),
+                    desc: rust_i18n::t!("help_reminder_relative_now_desc").to_string(),
                     example: "rem:in 2h".to_string(),
                 },
                 HelpItem {
@@ -178,17 +188,22 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "desc:".to_string(),
                     desc: rust_i18n::t!("help_metadata_append_description").to_string(),
-                    example: "desc:\"Call back\" or desc:{Call back}".to_string(),
+                    example: format!(
+                        "desc:\"{}\" {} desc:{{{}}}",
+                        rust_i18n::t!("example_call_back"),
+                        rust_i18n::t!("or"),
+                        rust_i18n::t!("example_call_back")
+                    ),
                 },
                 HelpItem {
                     keys: "+cal / -cal".to_string(),
                     desc: rust_i18n::t!("help_metadata_force_calendar").to_string(),
-                    example: "Task @tomorrow +cal".to_string(),
+                    example: format!("{} @tomorrow +cal", rust_i18n::t!("example_task")),
                 },
                 HelpItem {
                     keys: "+pin / -pin".to_string(),
                     desc: rust_i18n::t!("help_metadata_pin_task").to_string(),
-                    example: "Important task +pin".to_string(),
+                    example: format!("{} +pin", rust_i18n::t!("example_important_task")),
                 },
             ],
         },
@@ -198,7 +213,7 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "text".to_string(),
                     desc: rust_i18n::t!("help_search_matches").to_string(),
-                    example: "buy cat food".to_string(),
+                    example: rust_i18n::t!("example_buy_cat_food").to_string(),
                 },
                 HelpItem {
                     keys: "is:ready".to_string(),
@@ -232,12 +247,12 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
             items: vec![
                 HelpItem {
                     keys: "#a:=#b,#c".to_string(),
-                    desc: "Define tag alias (supports tags, loc, and priority)".to_string(),
+                    desc: rust_i18n::t!("help_org_alias_tag_desc").to_string(),
                     example: "#gardening:=#home:outside,@@garden,!4".to_string(),
                 },
                 HelpItem {
                     keys: "@@a:=#b,@@c".to_string(),
-                    desc: "Define location alias (inherits tags & priority too)".to_string(),
+                    desc: rust_i18n::t!("help_org_alias_loc_desc").to_string(),
                     example: "@@aldi:=#groceries,@@shops:supermarkets".to_string(),
                 },
                 HelpItem {
@@ -263,7 +278,10 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "#permanent".to_string(),
                     desc: rust_i18n::t!("help_org_permanent").to_string(),
-                    example: "Develop photos ~30m-3h #permanent".to_string(),
+                    example: format!(
+                        "{} ~30m-3h #permanent",
+                        rust_i18n::t!("example_develop_photos")
+                    ),
                 },
             ],
         },
@@ -273,7 +291,11 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "goal:val/period".to_string(),
                     desc: rust_i18n::t!("help_goals_task").to_string(),
-                    example: "Develop photos goal:4/mo, Exercise ~1h goal:2h/w".to_string(),
+                    example: format!(
+                        "{} goal:4/mo, {} ~1h goal:2h/w",
+                        rust_i18n::t!("example_develop_photos"),
+                        rust_i18n::t!("example_exercise")
+                    ),
                 },
                 HelpItem {
                     keys: "#tag:=goal:val/period".to_string(),
@@ -281,45 +303,59 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                     example: "#read:book:=goal:5/y, @@outside:=goal:2h/d".to_string(),
                 },
                 HelpItem {
-                    keys: "Count vs Duration".to_string(),
+                    keys: rust_i18n::t!("help_key_count_vs_duration").to_string(),
                     desc: rust_i18n::t!("help_goals_types").to_string(),
-                    example: "goal:weekly or goal:1/w (1 instance/week), goal:30m/d (30 mins/day)"
-                        .to_string(),
+                    example: format!(
+                        "goal:weekly {} goal:1/w ({}), goal:30m/d ({})",
+                        rust_i18n::t!("or"),
+                        rust_i18n::t!("example_1_instance_week"),
+                        rust_i18n::t!("example_30_mins_day")
+                    ),
                 },
                 HelpItem {
-                    keys: "Implicit goals".to_string(),
-                    desc: rust_i18n::t!("help_goals_implicit").to_string(),
-                    example: "Recurring tasks (@daily) inherently act as goals".to_string(),
+                    keys: rust_i18n::t!("help_key_implicit_goals").to_string(),
+                    desc: rust_i18n::t!("help_goals_implicit_desc").to_string(),
+                    example: rust_i18n::t!("help_goals_implicit_example").to_string(),
                 },
             ],
         },
         HelpSection {
-            title: format!("Description & Sub-tasks (inside {})", '\u{f01c6}'),
+            title: format!(
+                "{} (inside {})",
+                rust_i18n::t!("help_md_title"),
+                '\u{f01c6}'
+            ),
             items: vec![
                 HelpItem {
                     keys: "text".to_string(),
-                    desc: "Unindented text is added to the main description".to_string(),
-                    example: "Remember to feed the cat".to_string(),
+                    desc: rust_i18n::t!("help_md_text_desc").to_string(),
+                    example: rust_i18n::t!("example_remember_cat").to_string(),
                 },
                 HelpItem {
                     keys: "- [ ]".to_string(),
-                    desc: "Create a sub-task (mention - [x] to mark as completed)".to_string(),
-                    example: "- [ ] Buy cookies @tomorrow !1".to_string(),
+                    desc: rust_i18n::t!("help_md_subtask_desc").to_string(),
+                    example: format!(
+                        "- [ ] {} @tomorrow !1",
+                        rust_i18n::t!("example_buy_cookies")
+                    ),
                 },
                 HelpItem {
                     keys: "1. [ ]".to_string(),
-                    desc: "Numbered dependency (2 depends on 1)".to_string(),
-                    example: "2. [ ] Phase 2 (blocked by 1)".to_string(),
+                    desc: rust_i18n::t!("help_md_numbered_desc").to_string(),
+                    example: format!(
+                        "2. [ ] {} ({})",
+                        rust_i18n::t!("example_phase_2"),
+                        rust_i18n::t!("example_blocked_by_1")
+                    ),
                 },
                 HelpItem {
                     keys: "  (indent)".to_string(),
-                    desc: "Notes for the sub-task above".to_string(),
-                    example: "  White chocolate chips cookies with marzipan".to_string(),
+                    desc: rust_i18n::t!("help_md_notes_desc").to_string(),
+                    example: format!("  {}", rust_i18n::t!("example_notes_cookies")),
                 },
                 HelpItem {
-                    keys: "Inheritance".to_string(),
-                    desc: "Sub-tasks inherit tags, location, and priority from their parent"
-                        .to_string(),
+                    keys: rust_i18n::t!("help_md_inherit_key").to_string(),
+                    desc: rust_i18n::t!("help_md_inherit_desc").to_string(),
                     example: "".to_string(),
                 },
             ],
