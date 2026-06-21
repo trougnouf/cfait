@@ -269,6 +269,7 @@
     "help_goals_global": "通过别名为标签或位置设置全局目标",
     "help_goals_implicit": "重复任务会自动生成计数目标",
     "help_goals_task": "直接在单个任务上设置目标",
+    "help_goals_types": "跟踪实例/完成（计数）或花费时间（时长）",
     "help_keyboard_create_desc": "创建带有描述的任务",
     "help_keyboard_move_selection": "向下/向上移动选择",
     "help_keyboard_scroll_page": "向下/向上滚动页面",
