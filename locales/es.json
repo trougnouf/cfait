@@ -280,8 +280,6 @@
     "help_about_tab": " Acerca de ",
     "help_advanced_prompt": "Para consultar la sintaxis avanzada (recurrencia, alias, ubicaciones geográficas) o los atajos de teclado, abre la interfaz interactiva TUI o GUI y pulsa «?».",
     "help_goals": "Seguimiento de objetivos y hábitos",
-    "help_goals_count": "Establecer un objetivo de recuento para una etiqueta o ubicación",
-    "help_goals_duration": "Establecer un objetivo de duración para una etiqueta o ubicación",
     "help_goals_global": "Definir un objetivo general para una etiqueta o zona mediante alias",
     "help_goals_implicit_desc": "Las tareas recurrentes muestran su historial de cumplimiento en los detalles, sirviendo como metas implícitas",
     "help_goals_implicit_example": "Las tareas con @daily registran automáticamente su historial de 7 períodos",

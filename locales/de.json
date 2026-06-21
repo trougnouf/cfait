@@ -264,8 +264,6 @@
     "help_about_tab": " Über ",
     "help_advanced_prompt": "Für fortgeschrittene Syntax (Wiederholung, Alias, Geo-Lokation) oder Tastaturabkürzungen, öffne das interactive TUI oder GUI und drücke '?'.",
     "help_goals": "Ziel- & Gewohnheits-Verfolgung",
-    "help_goals_count": "Setze ein Anzahl-Ziel für eine Markierung oder einen Ort",
-    "help_goals_duration": "Setze ein Zeitdauer-Ziel für eine Markierung oder einen Ort",
     "help_keyboard_create_desc": "Erstelle Aufgabe mit Beschreibung",
     "help_keyboard_move_selection": "Auswahl hoch / runter bewegen",
     "help_keyboard_scroll_page": "Seite hoch / runter scrollen",
