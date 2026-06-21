@@ -2,7 +2,7 @@
     "about_chat": "Chat: %{url}",
     "about_license": "GPL-3.0 licentie",
     "about_repository": "Repository: %{url}",
-    "about_title": "Cfait Taakbeheerder",
+    "about_title": "Cfait",
     "about_version": "Versie %{version}",
     "action_complete_and_shift": "Planning afmaken en verplaatsen",
     "action_open_locations": "Locaties openen (GPX)",

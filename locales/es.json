@@ -2,7 +2,7 @@
     "about_chat": "Chat: %{url}",
     "about_license": "Licencia GPL-3.0",
     "about_repository": "Repositorio: %{url}",
-    "about_title": "Administrador de tareas de Cfait",
+    "about_title": "Cfait",
     "about_version": "Versión %{version}",
     "action_complete_and_shift": "Horario completo y de turnos",
     "action_extract_subtasks": "Extraer subtareas de Markdown",

@@ -2,7 +2,7 @@
     "about_chat": "Chat: %{url}",
     "about_license": "GPL-3.0 license",
     "about_repository": "Repository: %{url}",
-    "about_title": "Cfait Task Manager",
+    "about_title": "Cfait",
     "about_version": "Version %{version}",
     "action_complete_and_shift": "Complete & shift schedule",
     "action_extract_subtasks": "Extract markdown subtasks",

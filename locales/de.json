@@ -2,7 +2,7 @@
     "about_chat": "Chat: %{url}",
     "about_license": "GPL-3.0 Lizenz",
     "about_repository": "Repository: %{url}",
-    "about_title": "Cfait Aufgaben-Manager",
+    "about_title": "Cfait",
     "about_version": "Version %{version}",
     "action_complete_and_shift": "Fertig und neu planen",
     "action_extract_subtasks": "Markdown-Teilaufgaben extrahieren",

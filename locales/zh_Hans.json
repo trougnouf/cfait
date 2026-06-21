@@ -2,7 +2,7 @@
     "about_chat": "聊天：%{url}",
     "about_license": "GPL-3.0 许可",
     "about_repository": "仓库：%{url}",
-    "about_title": "Cfait 任务管理器",
+    "about_title": "Cfait",
     "about_version": "版本 %{version}",
     "action_complete_and_shift": "完成并轮班时间表",
     "action_extract_subtasks": "提取 Markdown 子任务",
