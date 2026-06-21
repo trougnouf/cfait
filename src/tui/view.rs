@@ -1230,7 +1230,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         | InputMode::Editing
         | InputMode::Searching
         | InputMode::EditingDescription
-        | InputMode::AddingSession => {
+        | InputMode::AddingSession
+        | InputMode::EditingSession(_, _) => {
             // Determine input title and color. If filters are the culprit, make search show red.
             let (mut title_str, prefix, color) = match state.mode {
                 InputMode::Searching => {
@@ -1279,6 +1280,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     }
                 }
                 InputMode::AddingSession => (" Log Time ".to_string(), "> ", Color::Green),
+                InputMode::EditingSession(_, _) => (" Edit Time ".to_string(), "> ", Color::Yellow),
                 _ => (
                     format!(" {} ", rust_i18n::t!("mode_create")),
                     "> ",
@@ -1524,11 +1526,12 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
             .map(|(_, display_name)| ListItem::new(display_name.as_str()))
             .collect();
         let popup = List::new(items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(format!(" {} ", t!("tui_manage_sessions_title"))),
-            )
+            .block(Block::default().borders(Borders::ALL).title(format!(
+                " {} (e/Enter: {}, Del/x: {}) ",
+                t!("tui_manage_sessions_title"),
+                t!("edit"),
+                t!("delete")
+            )))
             .highlight_style(Style::default().bg(Color::Blue));
         f.render_widget(Clear, area);
         f.render_stateful_widget(popup, area, &mut state.session_selection_state);

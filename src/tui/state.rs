@@ -37,7 +37,7 @@ pub enum Focus {
     Main,
 }
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone)]
 pub enum InputMode {
     Normal,
     Creating,
@@ -52,6 +52,7 @@ pub enum InputMode {
     RelationshipBrowsing,
     AddingSession,
     ManagingSessions,
+    EditingSession(String, usize),
     ActionMenu,
     Help(crate::help::HelpTab),
 }

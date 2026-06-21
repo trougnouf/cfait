@@ -142,6 +142,7 @@ pub struct GuiApp {
 
     // Session UI state
     pub adding_session_uid: Option<String>,
+    pub editing_session_idx: Option<usize>,
     pub session_input: iced::widget::text_editor::Content,
     pub show_all_sessions: HashSet<String>,
 
@@ -446,6 +447,7 @@ impl Default for GuiApp {
 
             // Session UI defaults
             adding_session_uid: None,
+            editing_session_idx: None,
             session_input: iced::widget::text_editor::Content::new(),
             show_all_sessions: HashSet::new(),
 

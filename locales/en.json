@@ -455,6 +455,7 @@
     "new_child_of": "New child of '%{name}'…",
     "new_task_prompt": "New Task...",
     "no_locations": "No locations configured. Define them via smart input using the @@ prefix (e.g. @@parc or @@home:garden).",
+    "no_sessions_recorded": "No sessions recorded.",
     "no_tags_found": "No tags configured. Define them via smart input using the # prefix (e.g. #gardening or #dev:cfait).",
     "notes_create_subtasks_placeholder": "Write notes here, or create subtasks:\n- [ ] Subtask 1 @tomorrow\n- [x] Completed task done:today\n\nUse numbers for dependencies:\n1. [ ] First step\n2. [ ] Second step (blocked by 1)",
     "notes_placeholder": "Notes…",
@@ -617,6 +618,13 @@
     "tui_help_actions": "Tab: switch | Up/Dn: scroll | Esc/?: close",
     "tui_insecure_ssl_prompt": "Allow insecure SSL certificates? (y/N): ",
     "tui_main_help": "?:Help q:Quit Tab:Side a:Add e:Edit E:Details Spc:Done Del:Del y:Yank /:Find z:Fold",
+    "tui_log_time_prompt": "Log time for %{name}",
+    "tui_manage_sessions_title": "Manage sessions",
+    "tui_manage_sessions_prompt": "Select a session to edit or delete.",
+    "tui_older_sessions_hidden": {
+        "one": "... and 1 more (Press Shift+T to manage)",
+        "other": "... and %{count} more (Press Shift+T to manage)"
+    },
     "tui_mode_caldav": "[1] Connect to CalDAV Server (Radicale, Nextcloud, etc.)",
     "tui_mode_offline": "[2] Offline Mode (Local tasks only)",
     "tui_password_prompt": "Password: ",

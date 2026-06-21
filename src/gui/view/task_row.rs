@@ -1529,6 +1529,15 @@ pub fn view_task_row<'a>(
                         let date_str = s_dt.format("%Y-%m-%d").to_string();
                         let time_str = format!("{}-{}", s_dt.format("%H:%M"), e_dt.format("%H:%M"));
 
+                        let edit_btn = button(
+                            icon::icon(icon::EDIT)
+                                .size(10)
+                                .color(Color::from_rgb(0.5, 0.5, 0.8)),
+                        )
+                        .style(button::text)
+                        .padding(2)
+                        .on_press(Message::StartEditSession(task.uid.clone(), idx));
+
                         let del_btn = button(
                             icon::icon(icon::CROSS)
                                 .size(10)
@@ -1550,7 +1559,9 @@ pub fn view_task_row<'a>(
                                 ))
                                 .size(12)
                                 .color(Color::from_rgb(0.5, 0.5, 0.5)),
-                                Space::new().width(Length::Fill),
+                                Space::new().width(Length::Fixed(10.0)),
+                                edit_btn,
+                                Space::new().width(Length::Fixed(8.0)),
                                 del_btn
                             ]
                             .spacing(0)

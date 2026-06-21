@@ -174,6 +174,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ToggleTreeCollapse(_)
         | Message::ToggleHelpSection(_)
         | Message::StartAddSession(_)
+        | Message::StartEditSession(_, _)
         | Message::SessionInputChanged(_)
         | Message::SubmitSession
         | Message::CancelAddSession

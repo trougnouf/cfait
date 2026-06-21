@@ -791,6 +791,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_duplicate_task_tree(): Int
 
+    external fun uniffi_cfait_checksum_method_cfaitmobile_edit_session(): Int
+
     external fun uniffi_cfait_checksum_method_cfaitmobile_export_local_ics(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_export_locations_gpx(): Int
@@ -1034,6 +1036,13 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_duplicate_task_tree(
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_edit_session(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+        `index`: Int,
+        `input`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_export_local_ics(
@@ -1603,6 +1612,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_duplicate_task_tree() != 29876) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_edit_session() != 59641) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_export_local_ics() != 13372) {
@@ -2379,6 +2391,12 @@ public interface CfaitMobileInterface {
 
     suspend fun `duplicateTaskTree`(`uid`: kotlin.String)
 
+    suspend fun `editSession`(
+        `uid`: kotlin.String,
+        `index`: kotlin.UInt,
+        `input`: kotlin.String,
+    )
+
     fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String
 
     fun `exportLocationsGpx`(`uid`: kotlin.String): kotlin.String
@@ -3062,6 +3080,30 @@ open class CfaitMobile :
             // Error FFI converter
             MobileException.ErrorHandler,
         )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `editSession`(
+        `uid`: kotlin.String,
+        `index`: kotlin.UInt,
+        `input`: kotlin.String,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_edit_session(
+                uniffiHandle,
+                FfiConverterString.lower(`uid`),
+                FfiConverterUInt.lower(`index`),
+                FfiConverterString.lower(`input`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        MobileException.ErrorHandler,
+    )
 
     @Throws(MobileException::class)
     override fun `exportLocalIcs`(`calendarHref`: kotlin.String): kotlin.String =

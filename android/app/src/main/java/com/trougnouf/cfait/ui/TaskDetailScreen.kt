@@ -527,6 +527,8 @@ fun TaskDetailScreen(
             var showAddSession by remember { mutableStateOf(false) }
             var sessionInput by remember { mutableStateOf("") }
             var showAllSessions by remember { mutableStateOf(false) }
+            var editingSessionIdx by remember { mutableStateOf<Int?>(null) }
+            var editSessionInput by remember { mutableStateOf("") }
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp),
@@ -608,54 +610,103 @@ fun TaskDetailScreen(
                 // Convert reversed index back to absolute index for deletion
                 val absoluteIdx = task!!.sessions.size - 1 - revIdx
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-                ) {
-                    val startDt = java.time.Instant.ofEpochMilli(session.startMs)
-                        .atZone(java.time.ZoneId.systemDefault())
-                    val endDt = java.time.Instant.ofEpochMilli(session.endMs)
-                        .atZone(java.time.ZoneId.systemDefault())
-                    val formatterDate = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
-                    val formatterTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
-                    val durMins = (session.endMs - session.startMs) / 60000
-
-                    val dateStr = startDt.format(formatterDate)
-                    val timeRange = "${startDt.format(formatterTime)}-${endDt.format(formatterTime)}"
-
-                    Text(
-                        "$dateStr $timeRange",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "(${com.trougnouf.cfait.ui.formatDurationHuman(durMins)})",
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    IconButton(
-                        onClick = {
-                            scope.launch {
-                                try {
-                                    api.deleteSession(uid, absoluteIdx.toUInt())
-                                    reload()
-                                    triggerBackgroundSync(context, api)
-                                } catch (e: Exception) {
-                                    if (e is CancellationException) throw e
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        context.getString(R.string.error_deleting_session, e.message ?: ""),
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                if (editingSessionIdx == absoluteIdx) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = editSessionInput,
+                            onValueChange = { editSessionInput = it },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                        IconButton(
+                            onClick = {
+                                if (editSessionInput.isNotBlank()) {
+                                    scope.launch {
+                                        try {
+                                            api.editSession(uid, absoluteIdx.toUInt(), editSessionInput)
+                                            editingSessionIdx = null
+                                            reload()
+                                            triggerBackgroundSync(context, api)
+                                        } catch (e: Exception) {
+                                            if (e !is CancellationException) {
+                                                android.widget.Toast.makeText(context, e.message ?: "", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        },
-                        modifier = Modifier.size(24.dp)
+                        ) { NfIcon(NfIcons.CHECK, 16.sp, MaterialTheme.colorScheme.primary) }
+                        IconButton(onClick = { editingSessionIdx = null }) {
+                            NfIcon(NfIcons.CROSS, 16.sp, MaterialTheme.colorScheme.error)
+                        }
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
                     ) {
-                        NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
+                        val startDt = java.time.Instant.ofEpochMilli(session.startMs)
+                            .atZone(java.time.ZoneId.systemDefault())
+                        val endDt = java.time.Instant.ofEpochMilli(session.endMs)
+                            .atZone(java.time.ZoneId.systemDefault())
+                        val formatterDate = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                        val formatterTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+                        val durMins = (session.endMs - session.startMs) / 60000
+
+                        val dateStr = startDt.format(formatterDate)
+                        val timeRange = "${startDt.format(formatterTime)}-${endDt.format(formatterTime)}"
+
+                        Text(
+                            "$dateStr $timeRange",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "(${com.trougnouf.cfait.ui.formatDurationHuman(durMins)})",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+
+                        IconButton(
+                            onClick = {
+                                val sDt = java.time.Instant.ofEpochMilli(session.startMs).atZone(java.time.ZoneId.systemDefault())
+                                val eDt = java.time.Instant.ofEpochMilli(session.endMs).atZone(java.time.ZoneId.systemDefault())
+                                val formatterDate = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
+                                val formatterTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+                                editSessionInput = "${sDt.format(formatterDate)} ${sDt.format(formatterTime)}-${eDt.format(formatterTime)}"
+                                editingSessionIdx = absoluteIdx
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            NfIcon(NfIcons.EDIT, 12.sp, MaterialTheme.colorScheme.secondary)
+                        }
+
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    try {
+                                        api.deleteSession(uid, absoluteIdx.toUInt())
+                                        reload()
+                                        triggerBackgroundSync(context, api)
+                                    } catch (e: Exception) {
+                                        if (e is CancellationException) throw e
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            context.getString(R.string.error_deleting_session, e.message ?: ""),
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            NfIcon(NfIcons.CROSS, 12.sp, MaterialTheme.colorScheme.error)
+                        }
                     }
                 }
             }

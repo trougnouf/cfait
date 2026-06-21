@@ -966,6 +966,39 @@ impl CfaitMobile {
         }
     }
 
+    pub async fn edit_session(
+        &self,
+        uid: String,
+        index: u32,
+        input: String,
+    ) -> Result<(), MobileError> {
+        if let Some(session) = crate::model::parser::parse_session_input(&input) {
+            let mut store = self.controller.store.lock().await;
+            if let Some((task, _)) = store.get_task_mut(&uid) {
+                let idx = index as usize;
+                task.remove_session(idx);
+                task.add_session(session);
+                task.sequence += 1;
+                let cloned = task.clone();
+                drop(store);
+                self.controller
+                    .update_task(cloned)
+                    .await
+                    .map_err(MobileError::from)?;
+                self.rebuild_alarm_index().await;
+                Ok(())
+            } else {
+                Err(MobileError::from(
+                    rust_i18n::t!("error_task_not_found").to_string(),
+                ))
+            }
+        } else {
+            Err(MobileError::from(
+                rust_i18n::t!("error_format", msg = "Invalid time format").to_string(),
+            ))
+        }
+    }
+
     pub async fn delete_session(&self, uid: String, index: u32) -> Result<(), MobileError> {
         let mut store = self.controller.store.lock().await;
         if let Some((task, _)) = store.get_task_mut(&uid) {

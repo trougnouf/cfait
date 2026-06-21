@@ -83,6 +83,7 @@ pub enum Message {
     KeyboardLinkChild,
     KeyboardCreateChild,
     StartAddSession(String),
+    StartEditSession(String, usize),
     SessionInputChanged(iced::widget::text_editor::Action),
     SubmitSession,
     CancelAddSession,

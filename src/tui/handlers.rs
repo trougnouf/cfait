@@ -2754,6 +2754,64 @@ pub async fn handle_key_event(
                     });
                 }
             }
+            KeyCode::Char('e') | KeyCode::Enter => {
+                if let Some(idx) = state.session_selection_state.selected()
+                    && let Some(&(real_idx, _)) = state.session_items.get(idx)
+                    && let Some(task) = state.get_selected_task()
+                    && let Some(session) = task.sessions.get(real_idx)
+                {
+                    let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
+                        .unwrap()
+                        .with_timezone(&chrono::Local);
+                    let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
+                        .unwrap()
+                        .with_timezone(&chrono::Local);
+                    let prefill = format!(
+                        "{} {}-{}",
+                        s_dt.format("%Y-%m-%d"),
+                        s_dt.format("%H:%M"),
+                        e_dt.format("%H:%M")
+                    );
+
+                    let uid = task.uid.clone();
+                    state.input_buffer = prefill;
+                    state.cursor_position = state.input_buffer.chars().count();
+                    state.mode = InputMode::EditingSession(uid, real_idx);
+                    state.message = rust_i18n::t!("edit").to_string();
+                }
+            }
+            _ => {}
+        },
+
+        InputMode::EditingSession(ref uid, idx) => match key.code {
+            KeyCode::Enter => {
+                let input = state.input_buffer.clone();
+                if let Some(session) = crate::model::parser::parse_session_input(&input) {
+                    let uid_clone = uid.clone();
+                    if let Some((t_mut, _)) = state.store.get_task_mut(&uid_clone) {
+                        t_mut.remove_session(idx);
+                        t_mut.add_session(session);
+                        t_mut.sequence += 1;
+                        let cloned = t_mut.clone();
+                        state.refresh_filtered_view();
+                        state.mode = InputMode::Normal;
+                        state.reset_input();
+                        let _ = action_tx.try_send(Action::PersistBatch(vec![
+                            crate::journal::Action::Update(cloned),
+                        ]));
+                    }
+                } else {
+                    state.message = rust_i18n::t!("error_failed_to_parse_time").to_string();
+                }
+            }
+            KeyCode::Esc => {
+                state.mode = InputMode::Normal;
+                state.reset_input();
+            }
+            KeyCode::Char(c) => state.enter_char(c),
+            KeyCode::Backspace => state.delete_char(),
+            KeyCode::Left => state.move_cursor_left(),
+            KeyCode::Right => state.move_cursor_right(),
             _ => {}
         },
 

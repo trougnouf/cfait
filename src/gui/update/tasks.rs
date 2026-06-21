@@ -923,6 +923,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
 
         Message::StartAddSession(uid) => {
             app.adding_session_uid = Some(uid.clone());
+            app.editing_session_idx = None;
             app.session_input = iced::widget::text_editor::Content::new();
             app.expanded_tasks.insert(uid.clone());
 
@@ -950,8 +951,43 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::StartEditSession(uid, idx) => {
+            app.adding_session_uid = Some(uid.clone());
+            app.editing_session_idx = Some(idx);
+            app.expanded_tasks.insert(uid.clone());
+
+            if let Some(task) = app.store.get_task_ref(&uid)
+                && let Some(session) = task.sessions.get(idx)
+            {
+                let s_dt = chrono::DateTime::from_timestamp(session.start, 0)
+                    .unwrap()
+                    .with_timezone(&chrono::Local);
+                let e_dt = chrono::DateTime::from_timestamp(session.end, 0)
+                    .unwrap()
+                    .with_timezone(&chrono::Local);
+                let prefill = format!(
+                    "{} {}-{}",
+                    s_dt.format("%Y-%m-%d"),
+                    s_dt.format("%H:%M"),
+                    e_dt.format("%H:%M")
+                );
+                app.session_input = iced::widget::text_editor::Content::with_text(&prefill);
+                app.session_input
+                    .perform(iced::widget::text_editor::Action::Move(
+                        iced::widget::text_editor::Motion::DocumentEnd,
+                    ));
+            }
+
+            app.active_focus = Focus::AddTaskInput;
+            if let Ok(mut focus) = ACTIVE_FOCUS.write() {
+                *focus = Focus::AddTaskInput;
+            }
+            iced::widget::operation::focus(iced::widget::Id::from(format!("session_input_{}", uid)))
+        }
+
         Message::CancelAddSession => {
             app.adding_session_uid = None;
+            app.editing_session_idx = None;
             app.session_input = iced::widget::text_editor::Content::new();
             Task::none()
         }
@@ -963,11 +999,16 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 if let Some(session) = crate::model::parser::parse_session_input(&input_text)
                     && let Some((t_mut, _)) = app.store.get_task_mut(&uid)
                 {
+                    if let Some(idx) = app.editing_session_idx {
+                        t_mut.remove_session(idx);
+                    }
+
                     t_mut.add_session(session);
                     t_mut.sequence += 1;
                     let cloned = t_mut.clone();
 
                     app.adding_session_uid = None;
+                    app.editing_session_idx = None;
                     app.session_input = iced::widget::text_editor::Content::new();
                     common::refresh_filtered_tasks(app);
 
