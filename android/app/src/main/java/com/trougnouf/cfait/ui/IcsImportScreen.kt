@@ -88,7 +88,10 @@ fun IcsImportScreen(
                 val currentTaskCount = taskCount
                 if (currentTaskCount != null) {
                     Text(
-                        stringResource(R.string.found_tasks_to_import, currentTaskCount),
+                        com.trougnouf.cfait.ui.resolvePluralMap(
+                            stringResource(R.string.found_tasks_to_import, currentTaskCount),
+                            currentTaskCount
+                        ),
                         color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }

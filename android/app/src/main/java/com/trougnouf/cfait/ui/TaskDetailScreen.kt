@@ -717,11 +717,17 @@ fun TaskDetailScreen(
                     contentPadding = PaddingValues(0.dp),
                     modifier = Modifier.height(24.dp)
                 ) {
+                    val count = task!!.sessions.size - 3
+                    val toggleText = if (showAllSessions) {
+                        stringResource(R.string.show_less)
+                    } else {
+                        com.trougnouf.cfait.ui.resolvePluralMap(
+                            stringResource(R.string.show_older_sessions, count),
+                            count
+                        )
+                    }
                     Text(
-                        if (showAllSessions) stringResource(R.string.show_less) else stringResource(
-                            R.string.show_older_sessions,
-                            task!!.sessions.size - 3
-                        ),
+                        toggleText,
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.secondary
                     )
