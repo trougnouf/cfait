@@ -50,7 +50,7 @@ Evaluated instantly during text input. Supported across all clients.
 | Token | Meaning | Example |
 | :--- | :--- | :--- |
 | `!1` .. `!9` | Priority (1 is highest/most urgent). | `!1` |
-| `@` or `due:` | Due date. | `@tomorrow`, `@2025-12-31`, `@fri 2pm` |
+| `@` or `due:` | Due date. | `@now`, `@tomorrow`, `@2025-12-31`, `@fri 2pm` |
 | `^` or `start:` | Start date. | `^next week` |
 | `^@` | Sets *both* Start and Due dates. | `^@tomorrow 9am` |
 | `~` or `est:` | Estimated duration (supports ranges). | `~30m`, `~1h-2h` |
@@ -60,7 +60,7 @@ Evaluated instantly during text input. Supported across all clients.
 | `geo:` | Geo-coordinates. | `geo:50.1,4.2`, `geo:here` (Mobile: Fetches GPS) |
 | `desc:` | Append text to the description. | `desc:"Buy milk"` or `desc:{...}` |
 | `rem:` | Reminder / Alarm. | `rem:10m`, `rem:in 1h`, `rem:8pm`, `rem:next friday` |
-| `done:` | Mark completed / Set percentage. | `done:2024-01-01`, `done:50%` |
+| `done:` | Mark completed / Set percentage. | `done:now`, `done:yesterday`, `done:50%` |
 | `spent:` | Log time spent manually. | `spent:1h` |
 | `rec:` or `@` | Recurrence (`RRULE`). | `@daily`, `rec:every 2 weeks` |
 | `@after` | Relative recurrence (shifts from completion). | `@after 1w`, `@after 2mo` |

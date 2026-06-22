@@ -1629,6 +1629,9 @@ fn parse_smart_date(val: &str) -> Option<DateType> {
     // Existing natural language logic...
     let now = Local::now().date_naive();
     let lower = val.to_lowercase();
+    if lower == "now" {
+        return Some(DateType::Specific(Utc::now()));
+    }
     if lower == "today" {
         return Some(DateType::AllDay(now));
     }

@@ -263,7 +263,7 @@ pub fn get_syntax_help() -> Vec<HelpSection> {
                 HelpItem {
                     keys: "done:date".to_string(),
                     desc: rust_i18n::t!("help_org_done").to_string(),
-                    example: "done:2024-01-01 15:30".to_string(),
+                    example: "done:now, done:yesterday, done:2024-01-01 15:30".to_string(),
                 },
                 HelpItem {
                     keys: "done:X%".to_string(),
