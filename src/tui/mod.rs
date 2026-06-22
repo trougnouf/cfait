@@ -359,6 +359,9 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                 AlarmMessage::FocusTask(_t_uid) => {
                     // Ignored in TUI, terminal interfaces typically don't process OS notification clicks efficiently
                 }
+                AlarmMessage::TriggerSync => {
+                    let _ = action_tx.try_send(crate::tui::action::Action::Refresh);
+                }
             }
         }
 
@@ -441,9 +444,20 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
                         }
                     }
                 } else if let Some(store_alarm) = store_task.alarms.iter().find(|a| a.uid == *a_uid)
-                    && store_alarm.acknowledged.is_none()
                 {
-                    keep = true;
+                    if store_alarm.acknowledged.is_some() {
+                        keep = false;
+                    } else {
+                        keep = store_alarm.trigger
+                            == active_task
+                                .alarms
+                                .iter()
+                                .find(|a| a.uid == *a_uid)
+                                .unwrap()
+                                .trigger;
+                    }
+                } else {
+                    keep = false;
                 }
             }
             if !keep {

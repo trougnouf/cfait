@@ -19,6 +19,7 @@ use tokio::time::{Duration, Instant, sleep_until};
 pub enum AlarmMessage {
     Fire(String, String), // TaskUID, AlarmUID
     FocusTask(String),    // TaskUID
+    TriggerSync,          // Tells the UI to initiate a background sync
 }
 
 // New enum to control the actor
@@ -419,11 +420,13 @@ pub fn spawn_alarm_actor(
         let mut fired_history: HashMap<String, i64> = HashMap::new();
         // Start muted
         let mut alarms_enabled = false;
+        let mut last_sync_request = Instant::now() - Duration::from_secs(60);
 
         loop {
             let now = Utc::now();
             let mut next_wake_ts: Option<i64> = None;
             let mut active_alarm_keys = HashSet::new();
+            let mut ready_to_fire = Vec::new();
 
             // Only check for alarms if enabled
             if alarms_enabled {
@@ -524,95 +527,17 @@ pub fn spawn_alarm_actor(
                         let timestamp = trigger_dt.timestamp();
 
                         if timestamp <= now.timestamp() {
-                            // Check history
-                            // Grace period 24h
                             if (now.timestamp() - timestamp) < 86400
                                 && !fired_history.contains_key(&history_key)
                             {
-                                fired_history.insert(history_key.clone(), now.timestamp());
-
-                                // 1. Notify UI (Skip for implicit to avoid lookup failure crash in UI)
-                                if !is_implicit && let Some(ui_tx) = &ui_sender {
-                                    let _ = ui_tx
-                                        .send(AlarmMessage::Fire(
-                                            task.uid.clone(),
-                                            alarm.uid.clone(),
-                                        ))
-                                        .await;
-                                }
-
-                                // 2. OS Notification
-                                let summary = task.summary.clone();
-                                let body = alarm
-                                    .description
-                                    .clone()
-                                    .unwrap_or_else(|| rust_i18n::t!("reminder").to_string());
-
-                                #[cfg(all(
-                                    unix,
-                                    not(target_os = "macos"),
-                                    not(target_os = "android")
-                                ))]
-                                let ui_tx_clone = ui_sender.clone();
-
-                                #[cfg(all(
-                                    unix,
-                                    not(target_os = "macos"),
-                                    not(target_os = "android")
-                                ))]
-                                let task_uid_clone = task.uid.clone();
-
-                                std::thread::spawn(move || {
-                                    let mut n = Notification::new();
-                                    n.summary(&summary)
-                                        .body(&body)
-                                        .appname("Cfait")
-                                        .action("default", "Open");
-
-                                    // On Linux/BSD, we get a handle and can wait for actions.
-                                    #[cfg(all(
-                                        unix,
-                                        not(target_os = "macos"),
-                                        not(target_os = "android")
-                                    ))]
-                                    match n.show() {
-                                        Ok(handle) => {
-                                            handle.wait_for_action(move |action| {
-                                                if action == "default"
-                                                    && let Some(tx) = &ui_tx_clone
-                                                {
-                                                    let _ = tx.try_send(AlarmMessage::FocusTask(
-                                                        task_uid_clone.clone(),
-                                                    ));
-                                                }
-                                            });
-                                        }
-                                        Err(e) => log::error!(
-                                            "Failed to show system notification (DBus/daemon issue?): {}",
-                                            e
-                                        ),
-                                    }
-
-                                    // On windows, macos, and android we can't wait for actions.
-                                    // The notification will still appear, but clicking it will not
-                                    // focus the app window via this code path.
-                                    #[cfg(any(
-                                        target_os = "windows",
-                                        target_os = "macos",
-                                        target_os = "android"
-                                    ))]
-                                    {
-                                        if let Err(e) = n.show() {
-                                            log::error!(
-                                                "Failed to show system notification: {}",
-                                                e
-                                            );
-                                        }
-                                    }
-                                });
+                                ready_to_fire.push((
+                                    task.clone(),
+                                    alarm.clone(),
+                                    is_implicit,
+                                    history_key.clone(),
+                                ));
                             }
                         } else {
-                            // Future alarm
                             match next_wake_ts {
                                 None => next_wake_ts = Some(timestamp),
                                 Some(t) if timestamp < t => next_wake_ts = Some(timestamp),
@@ -622,14 +547,93 @@ pub fn spawn_alarm_actor(
                     }
                 }
 
-                // Cleanup history
                 fired_history.retain(|k, _| active_alarm_keys.contains(k));
             }
 
-            // Wait logic
+            if !ready_to_fire.is_empty() {
+                // Try to sync before firing
+                if last_sync_request.elapsed() > Duration::from_secs(15) {
+                    if let Some(ui_tx) = &ui_sender {
+                        let _ = ui_tx.send(AlarmMessage::TriggerSync).await;
+                    }
+                    last_sync_request = Instant::now();
+
+                    // Wait up to 3 seconds for an UpdateTasks event
+                    let timeout_deadline = Instant::now() + Duration::from_secs(3);
+                    tokio::select! {
+                        msg = rx.recv() => {
+                            match msg {
+                                Some(SystemEvent::UpdateTasks(new_list)) => { tasks = new_list; }
+                                Some(SystemEvent::EnableAlarms) => { alarms_enabled = true; }
+                                None => break,
+                            }
+                            continue; // Re-evaluate ready_to_fire with updated tasks
+                        }
+                        _ = sleep_until(timeout_deadline) => {
+                            // Timeout reached, proceed to fire
+                        }
+                    }
+                }
+
+                for (task, alarm, is_implicit, history_key) in ready_to_fire {
+                    fired_history.insert(history_key.clone(), now.timestamp());
+
+                    if !is_implicit && let Some(ui_tx) = &ui_sender {
+                        let _ = ui_tx
+                            .send(AlarmMessage::Fire(task.uid.clone(), alarm.uid.clone()))
+                            .await;
+                    }
+
+                    let summary = task.summary.clone();
+                    let body = alarm
+                        .description
+                        .clone()
+                        .unwrap_or_else(|| rust_i18n::t!("reminder").to_string());
+
+                    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "android")))]
+                    let ui_tx_clone = ui_sender.clone();
+                    #[cfg(all(unix, not(target_os = "macos"), not(target_os = "android")))]
+                    let task_uid_clone = task.uid.clone();
+
+                    std::thread::spawn(move || {
+                        let mut n = Notification::new();
+                        n.summary(&summary)
+                            .body(&body)
+                            .appname("Cfait")
+                            .action("default", "Open");
+
+                        #[cfg(all(unix, not(target_os = "macos"), not(target_os = "android")))]
+                        match n.show() {
+                            Ok(handle) => {
+                                handle.wait_for_action(move |action| {
+                                    if action == "default"
+                                        && let Some(tx) = &ui_tx_clone
+                                    {
+                                        let _ = tx.try_send(AlarmMessage::FocusTask(
+                                            task_uid_clone.clone(),
+                                        ));
+                                    }
+                                });
+                            }
+                            Err(e) => log::error!("Failed to show system notification: {}", e),
+                        }
+
+                        #[cfg(any(
+                            target_os = "windows",
+                            target_os = "macos",
+                            target_os = "android"
+                        ))]
+                        {
+                            if let Err(e) = n.show() {
+                                log::error!("Failed to show system notification: {}", e);
+                            }
+                        }
+                    });
+                }
+                continue; // Re-evaluate after firing to get next_wake_ts correct
+            }
+
             if let Some(target_ts) = next_wake_ts {
-                // If disabled, we don't sleep until a deadline, we just wait for a message
-                // but if enabled, we sleep until next alarm OR message
                 if !alarms_enabled {
                     match rx.recv().await {
                         Some(SystemEvent::UpdateTasks(new_list)) => {
@@ -642,22 +646,47 @@ pub fn spawn_alarm_actor(
                     }
                 } else {
                     let seconds_until = target_ts - now.timestamp();
-                    let duration = Duration::from_secs(seconds_until.max(0) as u64);
-                    let deadline = Instant::now() + duration;
 
-                    tokio::select! {
-                        _ = sleep_until(deadline) => {}
-                        msg = rx.recv() => {
-                            match msg {
-                                Some(SystemEvent::UpdateTasks(new_list)) => { tasks = new_list; }
-                                Some(SystemEvent::EnableAlarms) => { alarms_enabled = true; }
-                                None => break,
+                    if seconds_until > 15 {
+                        let sync_ts = target_ts - 15;
+                        let duration =
+                            Duration::from_secs((sync_ts - now.timestamp()).max(0) as u64);
+                        let deadline = Instant::now() + duration;
+
+                        tokio::select! {
+                            _ = sleep_until(deadline) => {
+                                if last_sync_request.elapsed() > Duration::from_secs(15) {
+                                    if let Some(ui_tx) = &ui_sender {
+                                        let _ = ui_tx.send(AlarmMessage::TriggerSync).await;
+                                    }
+                                    last_sync_request = Instant::now();
+                                }
+                            }
+                            msg = rx.recv() => {
+                                match msg {
+                                    Some(SystemEvent::UpdateTasks(new_list)) => { tasks = new_list; }
+                                    Some(SystemEvent::EnableAlarms) => { alarms_enabled = true; }
+                                    None => break,
+                                }
+                            }
+                        }
+                    } else {
+                        let duration = Duration::from_secs(seconds_until.max(0) as u64);
+                        let deadline = Instant::now() + duration;
+
+                        tokio::select! {
+                            _ = sleep_until(deadline) => {}
+                            msg = rx.recv() => {
+                                match msg {
+                                    Some(SystemEvent::UpdateTasks(new_list)) => { tasks = new_list; }
+                                    Some(SystemEvent::EnableAlarms) => { alarms_enabled = true; }
+                                    None => break,
+                                }
                             }
                         }
                     }
                 }
             } else {
-                // No future alarms or disabled, just wait for message
                 match rx.recv().await {
                     Some(SystemEvent::UpdateTasks(new_list)) => {
                         tasks = new_list;

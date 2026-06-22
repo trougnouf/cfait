@@ -166,7 +166,8 @@ Tasks tagged with `#permanent` act as endless trackers. When checked off (Comple
 *   **AlarmIndex:** Optimized cache `alarm_index.json` stores upcoming triggers.
 *   **Implicit:** Auto-generated alarms for Due / Start dates (if `auto_reminders` is true).
 *   **Snoozing:** Snoozing acknowledges the original alarm and creates a new absolute alarm linked via `RELATED-TO;RELTYPE=SNOOZE`.
-*   *Android Implementation:* Uses `AlarmManager.setExactAndAllowWhileIdle`. When an alarm fires, an `AlarmWorker` posts a Notification. Notification Actions (Snooze, Done, Pause) are handled via `NotificationActionReceiver` which delegates back to a unique `WorkManager` request to prevent background ANRs.
+*   **Just-In-Time (JIT) Sync:** To prevent phantom alarms across devices, clients must attempt a synchronous network fetch immediately prior to firing an alarm (or within a 15-second pre-fire window). If the task was completed, canceled, or the alarm's trigger time was advanced (via recurrence) on another device, the local alarm is pruned before notifying the user.
+*   *Android Implementation:* Uses `AlarmManager.setExactAndAllowWhileIdle`. When an alarm fires, an `AlarmWorker` executes a foreground `api.sync()` before posting a Notification. Notification Actions (Snooze, Done, Pause) are handled via `NotificationActionReceiver` which delegates back to a unique `WorkManager` request to prevent background ANRs.
 
 ---
 

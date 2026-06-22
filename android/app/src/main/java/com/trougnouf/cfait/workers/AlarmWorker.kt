@@ -33,6 +33,13 @@ class AlarmWorker(
             val app = context.applicationContext as CfaitApplication
             val api = app.api
 
+            // Try to sync first to check if alarms were dismissed elsewhere!
+            try {
+                api.sync()
+            } catch (e: Exception) {
+                Log.w("CfaitAlarmWorker", "Pre-alarm sync failed: ${e.message}")
+            }
+
             val config = api.getConfig()
             val firing = api.getFiringAlarms()
 

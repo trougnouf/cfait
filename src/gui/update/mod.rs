@@ -328,6 +328,12 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
                 AlarmMessage::FocusTask(task_uid) => {
                     return Task::done(Message::JumpToTask(task_uid.clone()));
                 }
+                AlarmMessage::TriggerSync => {
+                    if let Some(tx) = &app.bg_tx {
+                        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::SyncNow);
+                    }
+                    return Task::none();
+                }
             }
             if triggered {
                 Task::done(Message::Refresh)
@@ -391,6 +397,9 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             } else if let Some(store_alarm) = store_task.alarms.iter().find(|a| a.uid == alarm.uid)
             {
                 if store_alarm.acknowledged.is_some() {
+                    return false;
+                }
+                if store_alarm.trigger != alarm.trigger {
                     return false;
                 }
             } else {

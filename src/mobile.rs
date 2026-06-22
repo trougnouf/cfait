@@ -2671,6 +2671,23 @@ impl CfaitMobile {
                 if alarm.acknowledged.is_some() {
                     return false;
                 }
+                let now = chrono::Utc::now();
+                let trigger_dt = match alarm.trigger {
+                    crate::model::AlarmTrigger::Absolute(dt) => dt,
+                    crate::model::AlarmTrigger::Relative(mins) => {
+                        let anchor = if let Some(crate::model::DateType::Specific(d)) = task.due {
+                            d
+                        } else if let Some(crate::model::DateType::Specific(s)) = task.dtstart {
+                            s
+                        } else {
+                            return false;
+                        };
+                        anchor + chrono::Duration::minutes(mins as i64)
+                    }
+                };
+                if trigger_dt > now + chrono::Duration::minutes(5) {
+                    return false;
+                }
             } else if a_uid.starts_with("implicit_") {
                 let parts: Vec<&str> = a_uid.split('|').collect();
                 if parts.len() >= 2 {
