@@ -1,58 +1,58 @@
-<b>Take control of your TODO list.</b>
+<b>掌控您的待办事项列表。</b>
 <br><br>
-Cfait is designed for speed and stability using Rust, it puts you in control of your data with a local-first approach that syncs seamlessly across your devices.
+Cfait 使用 Rust 语言编写，专为速度和稳定性而设计，采用本地优先的方式，让您掌控自己的数据，并在您的设备间无缝同步。
 <br><br>
-<b>Why Cfait?</b>
+<b>为什么选择 Cfait？</b>
 <ul>
-  <li><b>Open Source & Cross-Platform:</b> Use Cfait on Android, Linux, and Windows. Your tasks adhere to open standards (CalDAV and iCalendar), not walled gardens.</li>
-  <li><b>Syncs Everywhere:</b> Fully compatible with Nextcloud, iCloud, Radicale, Xandikos, and other standard CalDAV servers.</li>
-  <li><b>Offline First:</b> Optimistic UI updates mean you never wait for a server response. Use the persistent "Local" calendar for offline tasks and migrate them to a server later.</li>
-  <li><b>Smart Input:</b> Add tasks naturally. Typing "Buy cat food !1 @tomorrow @@grocery_store ~15m" automatically sets the priority, due date, location and duration.</li>
+  <li><b>开源且跨平台：</b> Cfait 可在 Android、Linux 和 Windows 上使用。您的任务遵循开放标准（CalDAV 和 iCalendar），而非封闭生态。</li>
+  <li><b>到处同步：</b> 完全兼容 Nextcloud、iCloud、Radicale、Xandikos 和其他标准 CalDAV 服务器。</li>
+  <li><b>离线优先：</b> 乐观 UI 更新意味着您无需等待服务器响应。使用持久的“本地”日历处理离线任务，稍后再将其迁移到服务器。</li>
+  <li><b>智能输入：</b> 自然地添加任务。输入“Buy cat food !1 @tomorrow @@grocery_store ~15m”会自动设置优先级、截止日期、地点和时长。</li>
 </ul>
 <br>
-<b>Productivity Features</b>
+<b>生产力功能</b>
 <ul>
-  <li><b>GTD Workflow:</b> Mark tasks as Needs Action, In Process (&gt;), Cancelled (x), or Done.</li>
-  <li><b>Hierarchy:</b> Create sub-tasks, promote children, and organize nested lists.</li>
-  <li><b>Dependencies:</b> Link tasks using "Blocked-by" or "Child-of" logic (RFC 9253).</li>
-  <li><b>Tags & Aliases:</b> Organize with hierarchical tags (e.g., #work:backend). Create inline aliases (e.g., #shed:=#home_improvement and @home_improvement:=@@home) for rapid filing.</li>
-  <li><b>Sane Sorting:</b> Tasks are sorted by Status &gt; Start Date &gt; Due Date &gt; Priority.</li>
+  <li><b>GTD 工作流：</b> 将任务标记为“需要操作”、“进行中 (>)”、“已取消 (x)”或“已完成”。</li>
+  <li><b>层级结构：</b> 创建子任务、提升子任务级别并组织嵌套列表。</li>
+  <li><b>依赖关系：</b> 使用“受阻于”或“子任务”逻辑（RFC 9253）链接任务。</li>
+  <li><b>标签和别名：</b> 使用层级标签进行组织（例如，#work:backend）。创建内联别名（例如，#shed:=#home_improvement 和 @home_improvement:=@@home）以便快速归类。</li>
+  <li><b>合理排序：</b> 任务按“状态”>“开始日期”>“截止日期”>“优先级”排序。</li>
 </ul>
 <br>
-<b>Smart Syntax Guide</b>
+<b>智能语法指南</b>
 <br>
-When adding or editing a task, use these shortcuts:
+在添加或编辑任务时，使用以下快捷语法：
 <ul>
-  <li><b>!1 to !9:</b> Set Priority (1 is Critical, 9 is Low).</li>
-  <li><b>@date:</b> Set Due Date (e.g., @tomorrow, @2025-12-31, @2w, @in two weeks).</li>
-  <li><b>^date:</b> Set Start Date (hides task until date).</li>
-  <li><b>~duration:</b> Estimate time (e.g., ~30m, ~2h).</li>
-  <li><b>@every X:</b> Set Recurrence (e.g., @daily, @every 2 weeks).</li>
-  <li><b>@@loc:</b> Set Location (e.g., @@home, @@"hardware store").</li>
-  <li><b>url:http://perdu.com:</b> Attach a URL.</li>
+  <li><b>!1 到 !9：</b> 设置优先级（1 为紧急，9 为低）。</li>
+  <li><b>@date：</b> 设置截止日期（例如，@tomorrow、@2025-12-31、@2w、@in two weeks）。</li>
+  <li><b>^date：</b> 设置开始日期（在此日期之前隐藏任务）。</li>
+  <li><b>~duration：</b> 预估时间（例如，~30m、~2h）。</li>
+  <li><b>@every X：</b> 设置重复（例如，@daily、@every 2 weeks）。</li>
+  <li><b>@@loc：</b> 设置位置（例如，@@home、@@"hardware store"）。</li>
+  <li><b>url:http://perdu.com：</b> 附加 URL。</li>
 </ul>
 <br>
-<b>Advanced Search</b>
+<b>高级搜索</b>
 <br>
-Find exactly what you need with powerful filters:
+利用强大的筛选器精准查找所需内容：
 <ul>
-  <li><b>is:active</b> / <b>is:done:</b> Filter by status.</li>
-  <li><b>~&lt;30m:</b> Find tasks taking less than 30 minutes.</li>
-  <li><b>!&lt;3:</b> Find high-priority tasks.</li>
-  <li><b>@&lt;today:</b> Find overdue tasks.</li>
-  <li><b>@@home:</b> Find tasks at a specific location.</li>
+  <li><b>is:active</b> / <b>is:done：</b> 按状态筛选。</li>
+  <li><b>~&lt;30m：</b> 查找耗时少于 30 分钟的任务。</li>
+  <li><b>!&lt;3：</b> 查找高优先级任务。</li>
+  <li><b>@&lt;today：</b> 查找逾期任务。</li>
+  <li><b>@@home：</b> 查找位于特定位置的任务。</li>
 </ul>
 <br>
-<b>Support the Developer</b>
+<b>支持开发者</b>
 <br>
-If you enjoy using Cfait, please consider supporting its developer:
+如果您喜欢使用 Cfait，请考虑支持其开发者：
 <ul>
-  <li>💳 <b>Liberapay:</b> https://liberapay.com/trougnouf</li>
-  <li>🏦₿ Other payment details are available within the app's "Help & About" screen or on the project website.</li>
+  <li>💳 <b>Liberapay：</b> https://liberapay.com/trougnouf</li>
+  <li>🏦₿ 其他支付详情可在应用的“帮助和关于”屏幕或项目网站上查看。</li>
 </ul>
 <br>
-<b>Community & Source</b>
+<b>社区和源代码</b>
 <br>
-Cfait is developed by Benoit Brummer (Trougnouf) and released under the GPL3 License.
+Cfait 由 Benoit Brummer（Trougnouf）开发，并根据 GPL3 许可发布。
 <br><br>
-Source code, desktop versions, and issue tracking available at: https://codeberg.org/trougnouf/cfait
+源代码、桌面版本和问题跟踪请访问：https://codeberg.org/trougnouf/cfait
