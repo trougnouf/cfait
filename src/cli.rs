@@ -186,7 +186,7 @@ pub fn print_help(binary_name: &str) {
                 "{} collection edit <href> --name <name> [--color #hex]",
                 binary_name
             ),
-            "Edit a remote CalDAV collection.".to_string(),
+            rust_i18n::t!("cli_desc_collection_edit").to_string(),
         );
         println!();
     }

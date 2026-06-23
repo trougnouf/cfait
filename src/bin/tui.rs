@@ -9,7 +9,7 @@
 // Note: This file intentionally mirrors the project's existing controller/store
 // APIs and uses the app context for config/data paths.
 
-rust_i18n::i18n!("../locales", fallback = "en");
+rust_i18n::i18n!("locales", fallback = "en");
 
 use anyhow::Result;
 use cfait::context::{AppContext, StandardContext};
@@ -409,7 +409,7 @@ async fn main() -> Result<()> {
                 || (!trimmed.contains(' ')
                     && (trimmed.contains(":=") || trimmed.to_lowercase().starts_with("loc:")))
             {
-                println!("Goal or alias updated successfully.");
+                println!("{}", rust_i18n::t!("goal_or_alias_updated"));
                 return Ok(());
             }
 
@@ -679,7 +679,10 @@ async fn main() -> Result<()> {
                     .persist_changes(actions)
                     .await
                     .map_err(|e| anyhow::anyhow!(e))?;
-                println!("Task '{}' updated successfully.", partial_uid);
+                println!(
+                    "{}",
+                    rust_i18n::t!("task_updated_successfully", uid = partial_uid)
+                );
 
                 let (effective_no_wait, is_auto) = get_sync_strategy(no_wait, wait, &ctx);
 
@@ -696,7 +699,10 @@ async fn main() -> Result<()> {
                     println!("{}", rust_i18n::t!("cli_action_queued"));
                 }
             } else {
-                println!("No changes made to task '{}'.", partial_uid);
+                println!(
+                    "{}",
+                    rust_i18n::t!("task_no_changes_made", uid = partial_uid)
+                );
             }
             return Ok(());
         }
@@ -1027,7 +1033,10 @@ async fn main() -> Result<()> {
             }
 
             if args.len() < 4 {
-                eprintln!("Usage: {} collection [list|create|edit] ...", binary_name);
+                eprintln!(
+                    "{}",
+                    rust_i18n::t!("cli_usage_collection", binary_name = binary_name)
+                );
                 std::process::exit(1);
             }
             let sub = &args[2];
@@ -1056,9 +1065,11 @@ async fn main() -> Result<()> {
                         color = Some(args[5].as_str());
                     }
                     match client.create_calendar(name, color).await {
-                        Ok(href) => println!("Created collection: {}", href),
+                        Ok(href) => {
+                            println!("{}", rust_i18n::t!("collection_created_href", href = href))
+                        }
                         Err(e) => {
-                            eprintln!("Error creating collection: {}", e);
+                            eprintln!("{}", rust_i18n::t!("error_creating_collection", error = e));
                             std::process::exit(1);
                         }
                     }
@@ -1081,19 +1092,25 @@ async fn main() -> Result<()> {
                     }
                     if let Some(n) = name {
                         match client.update_calendar(href, n, color).await {
-                            Ok(_) => println!("Updated collection: {}", href),
+                            Ok(_) => println!(
+                                "{}",
+                                rust_i18n::t!("collection_updated_href", href = href)
+                            ),
                             Err(e) => {
-                                eprintln!("Error updating collection: {}", e);
+                                eprintln!(
+                                    "{}",
+                                    rust_i18n::t!("error_updating_collection", error = e)
+                                );
                                 std::process::exit(1);
                             }
                         }
                     } else {
-                        eprintln!("--name is required when editing");
+                        eprintln!("{}", rust_i18n::t!("error_name_required"));
                         std::process::exit(1);
                     }
                 }
                 _ => {
-                    eprintln!("Unknown collection command");
+                    eprintln!("{}", rust_i18n::t!("error_unknown_collection_command"));
                     std::process::exit(1);
                 }
             }

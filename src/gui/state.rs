@@ -2,8 +2,6 @@
 // File: ./src/gui/state.rs
 // Manages the application state for the GUI (Iced).
 
-rust_i18n::i18n!("../locales", fallback = "en");
-
 use crate::client::RustyClient;
 use crate::config::{AppTheme, Config, LogLevel};
 use crate::context::AppContext;

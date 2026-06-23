@@ -366,7 +366,10 @@ impl TaskController {
                 Err(e) => return Err(e),
             }
         } else {
-            (vec!["Offline: Changes queued.".to_string()], vec![])
+            (
+                vec![rust_i18n::t!("offline_changes_queued").to_string()],
+                vec![],
+            )
         };
 
         // 2. Run settings synchronization AGAIN so we instantly pick up any remote changes

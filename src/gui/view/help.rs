@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! GUI view component for displaying the help screen.
 
-rust_i18n::i18n!("../locales", fallback = "en");
-
 use crate::gui::message::Message;
 use crate::gui::state::{AppState, GuiApp};
 use crate::help::HelpTab;

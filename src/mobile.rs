@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Mobile bindings and FFI interface for the Rust core.
 
-rust_i18n::i18n!("../locales", fallback = "en");
-
 use crate::alarm_index::AlarmIndex;
 use crate::cache::Cache;
 use crate::client::RustyClient;

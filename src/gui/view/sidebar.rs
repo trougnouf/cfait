@@ -2,8 +2,6 @@
 // File: ./src/gui/view/sidebar.rs
 // Renders the sidebar (calendars, tags, locations) for the GUI.
 
-rust_i18n::i18n!("../locales", fallback = "en");
-
 use super::tooltip_style;
 use crate::color_utils;
 use crate::gui::icon;

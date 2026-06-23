@@ -4,8 +4,6 @@
 Entry point and setup for the GUI application.
 */
 
-rust_i18n::i18n!("../locales", fallback = "en");
-
 pub mod async_ops;
 pub mod icon;
 pub mod message;

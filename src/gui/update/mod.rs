@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // File: ./src/gui/update/mod.rs
 
-rust_i18n::i18n!("../locales", fallback = "en");
-
 pub mod common;
 pub mod network;
 pub mod settings;

@@ -797,10 +797,11 @@ impl RustyClient {
         }
 
         if let Some(merged) = three_way_merge(base_task, local_task, &server_task) {
-            let msg = format!(
-                "Conflict (412) on '{}' resolved via 3-way merge.",
-                local_task.summary
-            );
+            let msg = rust_i18n::t!(
+                "sync_conflict_resolved",
+                summary = local_task.summary.clone()
+            )
+            .to_string();
             return Some((Action::Update(merged), msg));
         }
 

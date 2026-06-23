@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Renders the settings and onboarding screens.
 
-rust_i18n::i18n!("../locales", fallback = "en");
-
 use crate::cache::Cache;
 
 use crate::gui::async_ops::*;
@@ -977,10 +975,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             )
         }
         Message::ExportSaved(Ok(path)) => {
-            app.error_msg = Some(format!(
-                "Exported to: {:?}",
-                path.file_name().unwrap_or_default()
-            ));
+            app.error_msg = Some(
+                rust_i18n::t!(
+                    "export_success",
+                    file = path.file_name().unwrap_or_default().to_string_lossy()
+                )
+                .to_string(),
+            );
             Task::none()
         }
         Message::ExportSaved(Err(e)) => {
