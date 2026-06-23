@@ -3,6 +3,30 @@
 use crate::model::Task;
 use std::collections::HashSet;
 
+/// A generic set-based 3-way merge for lists.
+/// Formula: (Local U Server) \ (Deleted by Local) \ (Deleted by Server)
+/// We use `PartialEq` and `Vec::contains` because N is very small (tags, deps) and some types lack `Hash`.
+fn merge_lists<T: Clone + PartialEq>(base: &[T], local: &[T], server: &[T]) -> Vec<T> {
+    let mut result = Vec::new();
+    let mut union = Vec::new();
+
+    for item in local.iter().chain(server.iter()) {
+        if !union.contains(item) {
+            union.push(item.clone());
+        }
+    }
+
+    let deleted_by_local = |item: &T| base.contains(item) && !local.contains(item);
+    let deleted_by_server = |item: &T| base.contains(item) && !server.contains(item);
+
+    for item in union {
+        if !deleted_by_local(&item) && !deleted_by_server(&item) {
+            result.push(item);
+        }
+    }
+    result
+}
+
 /// Performs a 3-way merge between a base state, a local modification, and a server state.
 /// Returns Some(merged_task) if successful, or None if a hard conflict exists.
 pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task> {
@@ -75,6 +99,7 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         };
     }
 
+    // Standard properties
     merge_field!(summary);
     merge_field!(description);
     merge_field!(status);
@@ -89,11 +114,27 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
     merge_field!(url);
     merge_field!(geo);
     merge_field!(create_event);
-    merge_field!(alarms);
-    merge_field!(exdates);
     merge_field!(collapsed);
     merge_field!(pinned);
     merge_field!(goal);
+    merge_field!(last_started_at);
+    merge_field!(parent_uid);
+
+    // List properties (Set-based 3-way merge to handle deletions correctly)
+    merged.categories = merge_lists(&base.categories, &local.categories, &server.categories);
+    merged.categories.sort();
+
+    merged.dependencies = merge_lists(
+        &base.dependencies,
+        &local.dependencies,
+        &server.dependencies,
+    );
+    merged.related_to = merge_lists(&base.related_to, &local.related_to, &server.related_to);
+    merged.exdates = merge_lists(&base.exdates, &local.exdates, &server.exdates);
+
+    merged.sessions = merge_lists(&base.sessions, &local.sessions, &server.sessions);
+    merged.sessions.sort_by_key(|s| s.start);
+
     // Smart merge for time tracking (accumulate offline time from both clients)
     if local.time_spent_seconds != base.time_spent_seconds
         || server.time_spent_seconds != base.time_spent_seconds
@@ -107,32 +148,107 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         merged.time_spent_seconds = base.time_spent_seconds + local_diff + server_diff;
     }
 
-    // Smart merge for sessions (union both lists)
-    if local.sessions != base.sessions || server.sessions != base.sessions {
-        let mut all_sessions = server.sessions.clone();
-        for local_session in &local.sessions {
-            if !all_sessions.contains(local_session) {
-                all_sessions.push(local_session.clone());
-            }
-        }
-        all_sessions.sort_by_key(|s| s.start);
-        merged.sessions = all_sessions;
+    // Smart merge for Alarms (UID-based merge to handle `acknowledged` timing discrepancies safely)
+    let mut merged_alarms = Vec::new();
+    let mut all_alarm_uids = HashSet::new();
+    for a in &base.alarms {
+        all_alarm_uids.insert(&a.uid);
+    }
+    for a in &local.alarms {
+        all_alarm_uids.insert(&a.uid);
+    }
+    for a in &server.alarms {
+        all_alarm_uids.insert(&a.uid);
     }
 
-    merge_field!(last_started_at);
+    for uid in all_alarm_uids {
+        let b = base.alarms.iter().find(|a| &a.uid == uid);
+        let l = local.alarms.iter().find(|a| &a.uid == uid);
+        let s = server.alarms.iter().find(|a| &a.uid == uid);
 
-    if local.categories != base.categories {
-        let mut new_cats = server.categories.clone();
-        for cat in &local.categories {
-            if !new_cats.contains(cat) {
-                new_cats.push(cat.clone());
+        let resolved = match (l, b, s) {
+            (Some(lv), Some(bv), Some(sv)) => {
+                if lv == bv {
+                    Some(sv.clone())
+                } else if sv == bv {
+                    Some(lv.clone())
+                } else if lv == sv {
+                    Some(sv.clone())
+                } else {
+                    // Both modified.
+                    let mut merged_alarm = sv.clone();
+                    // Safely merge `acknowledged` by taking the earliest timestamp
+                    if lv.acknowledged != bv.acknowledged && sv.acknowledged != bv.acknowledged {
+                        merged_alarm.acknowledged = match (lv.acknowledged, sv.acknowledged) {
+                            (Some(lt), Some(st)) => Some(lt.min(st)),
+                            (Some(lt), None) => Some(lt),
+                            (None, Some(st)) => Some(st),
+                            (None, None) => None,
+                        };
+                    } else if lv.acknowledged != bv.acknowledged {
+                        merged_alarm.acknowledged = lv.acknowledged;
+                    }
+
+                    // Check if any other core fields differ
+                    let mut test_lv = lv.clone();
+                    let mut test_sv = sv.clone();
+                    test_lv.acknowledged = None;
+                    test_sv.acknowledged = None;
+                    if test_lv != test_sv {
+                        return None; // Hard conflict on trigger/description/etc.
+                    }
+                    Some(merged_alarm)
+                }
             }
-        }
-        new_cats.sort();
-        new_cats.dedup();
-        merged.categories = new_cats;
-    }
+            (Some(lv), None, None) => Some(lv.clone()),
+            (None, None, Some(sv)) => Some(sv.clone()),
+            (None, Some(_), None) => None, // Deleted on both
+            (None, Some(bv), Some(sv)) => {
+                if sv == bv {
+                    None
+                } else {
+                    return None; /* Deleted locally, modified server */
+                }
+            }
+            (Some(lv), Some(bv), None) => {
+                if lv == bv {
+                    None
+                } else {
+                    return None; /* Modified locally, deleted server */
+                }
+            }
+            (Some(lv), None, Some(sv)) => {
+                // Highly unlikely: same UID generated concurrently. Try to merge safely.
+                if lv == sv {
+                    Some(sv.clone())
+                } else {
+                    let mut merged_alarm = sv.clone();
+                    merged_alarm.acknowledged = match (lv.acknowledged, sv.acknowledged) {
+                        (Some(lt), Some(st)) => Some(lt.min(st)),
+                        (Some(lt), None) => Some(lt),
+                        (None, Some(st)) => Some(st),
+                        (None, None) => None,
+                    };
+                    let mut test_lv = lv.clone();
+                    let mut test_sv = sv.clone();
+                    test_lv.acknowledged = None;
+                    test_sv.acknowledged = None;
+                    if test_lv != test_sv {
+                        return None;
+                    }
+                    Some(merged_alarm)
+                }
+            }
+            _ => None,
+        };
 
+        if let Some(a) = resolved {
+            merged_alarms.push(a);
+        }
+    }
+    merged.alarms = merged_alarms;
+
+    // Unmapped properties
     if local.unmapped_properties != base.unmapped_properties {
         let mut merged_props = Vec::new();
         let mut all_keys = HashSet::new();
@@ -180,17 +296,6 @@ pub fn three_way_merge(base: &Task, local: &Task, server: &Task) -> Option<Task>
         }
         merged_props.sort_unstable_by(|a, b| a.key.cmp(&b.key).then(a.value.cmp(&b.value)));
         merged.unmapped_properties = merged_props;
-    }
-
-    merge_field!(parent_uid);
-    if local.dependencies != base.dependencies {
-        let mut new_deps = server.dependencies.clone();
-        for dep in &local.dependencies {
-            if !new_deps.contains(dep) {
-                new_deps.push(dep.clone());
-            }
-        }
-        merged.dependencies = new_deps;
     }
 
     Some(merged)
