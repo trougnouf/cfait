@@ -51,8 +51,8 @@ pub fn init_logging(ctx: &dyn AppContext, enable_stderr: bool, level: Option<log
         let _ = std::fs::rename(&log_path, &old_log_path);
     }
 
-    // Use Info as default if no level specified
-    let level = level.unwrap_or(log::LevelFilter::Info);
+    // Use Warn as default if no level specified (matches Config default)
+    let level = level.unwrap_or(log::LevelFilter::Warn);
 
     // Silence noisy third-party crates (like iced logging raw icon pixels)
     // Mute the noisy UI crates, but DO NOT mute rustls (needed for TLS debugging)

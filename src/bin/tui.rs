@@ -221,7 +221,12 @@ async fn main() -> Result<()> {
     // If command is empty, we are launching the interactive TUI.
     // It is ONLY safe to use stderr if we are NOT in the interactive TUI.
     let is_interactive_tui = command.is_empty();
-    cfait::system::init_logging(ctx.as_ref(), !is_interactive_tui, None);
+    let config = cfait::config::Config::load(ctx.as_ref()).unwrap_or_default();
+    cfait::system::init_logging(
+        ctx.as_ref(),
+        !is_interactive_tui,
+        Some(config.log_level.to_level_filter()),
+    );
     cfait::system::init_keyring(); // <-- ADD THIS LINE
 
     if command.starts_with('-') || command == "help" {

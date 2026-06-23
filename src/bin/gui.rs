@@ -59,8 +59,9 @@ fn main() -> iced::Result {
     let ctx: std::sync::Arc<dyn cfait::context::AppContext> =
         std::sync::Arc::new(cfait::context::StandardContext::new(override_root.clone()));
 
+    let config = cfait::config::Config::load(ctx.as_ref()).unwrap_or_default();
     // Initialize logging - enable stderr for GUI since it's safe
-    cfait::system::init_logging(ctx.as_ref(), true, None);
+    cfait::system::init_logging(ctx.as_ref(), true, Some(config.log_level.to_level_filter()));
 
     // Handle help flag
     if args.iter().any(|arg| arg == "--help" || arg == "-h") {

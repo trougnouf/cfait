@@ -769,7 +769,12 @@ impl CfaitMobile {
         let ctx: Arc<dyn AppContext> =
             Arc::new(StandardContext::new(Some(PathBuf::from(android_files_dir))));
 
-        crate::system::init_logging(ctx.as_ref(), false, None);
+        let config = crate::config::Config::load(ctx.as_ref()).unwrap_or_default();
+        crate::system::init_logging(
+            ctx.as_ref(),
+            false,
+            Some(config.log_level.to_level_filter()),
+        );
         crate::system::init_keyring();
 
         let store = Arc::new(Mutex::new(TaskStore::new(ctx.clone())));
