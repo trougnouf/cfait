@@ -525,7 +525,7 @@ fn default_duration_goal_mins() -> u32 {
 }
 
 fn default_log_level() -> LogLevel {
-    LogLevel::Info
+    LogLevel::Warn
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, EnumIter)]
