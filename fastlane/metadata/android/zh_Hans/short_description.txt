@@ -1,1 +1,1 @@
-Powerful, fast and elegant TODO / task manager. (CalDAV and local)
+强大、快速且优雅的待办事项/任务管理器。（CalDAV 和本地）
