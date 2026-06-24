@@ -1,1 +1,1 @@
-Güçlü, hızlı ve zarif bir yapılacaklar / görevler yöneticisi. (Yerelde ve CalDAV'da çalışır)
+Güçlü, hızlı ve zarif bir yapılacaklar / görevler yöneticisi. (Hem CalDAV'da hem de yerelde kullanabilirsin.)
