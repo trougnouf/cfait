@@ -78,6 +78,103 @@
   </requires>
 
   <releases>
+    <release version="1.0.9" date="2026-06-25">
+      <description>
+        <p>Features:</p>
+        <ul>
+          <li>(goals) Add data engine and details pane for habit tracking ( https://github.com/trougnouf/cfait/issues/41 )</li>
+          <li>(goals) Implement dynamic timeframe windows for habit tracking and add Goals tab</li>
+          <li>(goals) Add show_goals_tab</li>
+          <li>(gui) Add goal manager to the GUI settings and rm cancelled occurrences from goals count</li>
+          <li>(goals) Add inline goal parsing from smart input bar</li>
+          <li>(goals) Add smart duration formatting, implicit progression settings, and quick delete actions</li>
+          <li>(goals) Sync timestamps for goals, auto-prefix keys, enable TUI goal navigation</li>
+          <li>(goals) Android/Kotlin implementation</li>
+          <li>(goals) Replace GoalPeriod with flexible interval system for goal tracking</li>
+          <li>(goals) Update goal syntax to use / spearator</li>
+          <li>Align codebase with SPECS: pinned sort, GUI shortcut tooltips, Ctrl+E docs</li>
+          <li>Implement transient sidebar auto-expansion and manual task tree collapse in searches, ensure Android feature parity ( https://github.com/trougnouf/cfait/issues/42 )</li>
+          <li>(gui) Exit settings using the escape key</li>
+          <li>Add syntax highlighting for single-task goal:</li>
+          <li>Show task-specific goals in sidebar (optional)</li>
+          <li>Add goal:weekly syntax and hide task-specific goals from hidden collection</li>
+          <li>(android) Support deleting goals in goals tab, move some settings to more (advanced) settings</li>
+          <li>Add #permanent tasks, weekday time logging, and human-friendly duration formatting</li>
+          <li>(goals) Implement heatmap ( https://github.com/trougnouf/cfait/issues/41 )</li>
+          <li>Improve goal formatting (all clients), add log time action (Android)</li>
+          <li>(goals) Ignore trash collection</li>
+          <li>Replace priority cutoff (months) with priority cutoff (days) and default to 30-days, document the sorting settings</li>
+          <li>(android) Split save/expand button in task input bar</li>
+          <li>(goals) Time sessions editor</li>
+          <li>(cli) Support parent (-p)</li>
+          <li>(gui) Add settings and help buttons when sidebar is hidden</li>
+          <li>Implement JIT sync to prevent phantom alarms across devices</li>
+          <li>(parser) Implement done:now</li>
+          <li>(merge) Apply set-based 3-way merge for list fields and smart alarm merging (avoids conflict copies)</li>
+          <li>(goals) Apply set log level to all clients</li>
+        </ul>
+        <p>Bug Fixes:</p>
+        <ul>
+          <li>(goals) Fix parser typo, add documentation, UI polish</li>
+          <li>(goals) Implicit duration math, help docs</li>
+          <li>(goals) Duration goal top-up logic</li>
+          <li>Android build</li>
+          <li>(goals) Refine goals setting placement, localized empty message, and android tab headers</li>
+          <li>(goals) Prevent empty task creation on Android</li>
+          <li>(gui) Use stateless handlers for settings and onboarding hotkey subscriptions</li>
+          <li>Fix index out of bounds panic in merge_assignment_tokens by reordering bounds check</li>
+          <li>Fix TUI task creation with metadata-only inputs by falling back to raw input as summary</li>
+          <li>(android) Unify goal row click behavior and hide delete button for task goals</li>
+          <li>(merge) Add missing fields to 3-way merge and fix unmapped_properties merge logic</li>
+          <li>(parser) Reset create_event and goal in apply_smart_input</li>
+          <li>Fix settings (and aliases, goals) synchronization</li>
+          <li>(cli) Fetch all affected calendars during sync and daemon operations to ensure the local cache is fully updated</li>
+          <li>Syntax highlight hours range (e.g. `^@16:20-17:20`)</li>
+        </ul>
+        <p>Documentation:</p>
+        <ul>
+          <li>(goals) Show both count and duration examples, mention settings</li>
+          <li>Update README and CONTRIBUTING</li>
+          <li>(specs) Add @after in tokens table</li>
+          <li>Fix copy address in support</li>
+          <li>Update goal syntax example</li>
+          <li>Rm settings keyboard shortcut from TUI help ( https://github.com/trougnouf/cfait/issues/43 )</li>
+          <li>(help) Clarify goals usage</li>
+          <li>(i18n) Make examples localizable</li>
+          <li>(i18n) French translations</li>
+          <li>Add built-in examples when tags and/or locations are empty</li>
+          <li>(i18n) Remove unused strings</li>
+          <li>(i18n) Fix CLI path and make hardcoded strings localizable</li>
+        </ul>
+        <p>Performance:</p>
+        <ul>
+          <li>(goal) Cache goal progress, fix date boundaries, wire keyboard navigation</li>
+          <li>(client) Replace REPORT with unbounded blind DELETEs and skip cleanup for new tasks</li>
+        </ul>
+        <p>Styling:</p>
+        <ul>
+          <li>(gui) Increase right click menu width slightly</li>
+          <li>(android) Move goal and tag alias editor from advanced settings to the main settings screen</li>
+          <li>(android) Conditionally show save button iff description editor is expanded</li>
+        </ul>
+        <p>Miscellaneous Tasks:</p>
+        <ul>
+          <li>(gui) Set a single constant for the menu width</li>
+          <li>Update README test badge</li>
+          <li>Fix Android compilation issue</li>
+          <li>Fix tests</li>
+          <li>Fix Android build error</li>
+          <li>(android) Move per-task heatmap to TaskDetailScreen ( https://github.com/trougnouf/cfait/issues/41 )</li>
+          <li>(android) Correct goal interval formatting</li>
+          <li>(android) Correct goal interval formatting</li>
+          <li>(i18n) Remove "Task Manager" from about_title</li>
+          <li>Update rust dependencies</li>
+          <li>(android) Fix i18n pluralization</li>
+          <li>Set default reminder time to 08:00</li>
+          <li>Change default log level from info to warn</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.8" date="2026-06-12">
       <description>
         <p>Bug Fixes:</p>

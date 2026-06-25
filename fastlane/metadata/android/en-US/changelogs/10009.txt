@@ -1,0 +1,94 @@
+## [1.0.9] - 2026-06-25
+
+### 🚀 Features
+
+- *(goals)* Add data engine and details pane for habit tracking ( https://github.com/trougnouf/cfait/issues/41 )
+- *(goals)* Implement dynamic timeframe windows for habit tracking and add Goals tab
+- *(goals)* Add show_goals_tab
+- *(gui)* Add goal manager to the GUI settings and rm cancelled occurrences from goals count
+- *(goals)* Add inline goal parsing from smart input bar
+- *(goals)* Add smart duration formatting, implicit progression settings, and quick delete actions
+- *(goals)* Sync timestamps for goals, auto-prefix keys, enable TUI goal navigation
+- *(goals)* Android/Kotlin implementation
+- *(goals)* Replace GoalPeriod with flexible interval system for goal tracking
+- *(goals)* Update goal syntax to use / spearator
+- Align codebase with SPECS: pinned sort, GUI shortcut tooltips, Ctrl+E docs
+- Implement transient sidebar auto-expansion and manual task tree collapse in searches, ensure Android feature parity ( https://github.com/trougnouf/cfait/issues/42 )
+- *(gui)* Exit settings using the escape key
+- Add syntax highlighting for single-task goal:
+- Show task-specific goals in sidebar (optional)
+- Add goal:weekly syntax and hide task-specific goals from hidden collection
+- *(android)* Support deleting goals in goals tab, move some settings to more (advanced) settings
+- Add #permanent tasks, weekday time logging, and human-friendly duration formatting
+- *(goals)* Implement heatmap ( https://github.com/trougnouf/cfait/issues/41 )
+- Improve goal formatting (all clients), add log time action (Android)
+- *(goals)* Ignore trash collection
+- Replace priority cutoff (months) with priority cutoff (days) and default to 30-days, document the sorting settings
+- *(android)* Split save/expand button in task input bar
+- *(goals)* Time sessions editor
+- *(cli)* Support parent (-p)
+- *(gui)* Add settings and help buttons when sidebar is hidden
+- Implement JIT sync to prevent phantom alarms across devices
+- *(parser)* Implement done:now
+- *(merge)* Apply set-based 3-way merge for list fields and smart alarm merging (avoids conflict copies)
+- *(goals)* Apply set log level to all clients
+
+### 🐛 Bug Fixes
+
+- *(goals)* Fix parser typo, add documentation, UI polish
+- *(goals)* Implicit duration math, help docs
+- *(goals)* Duration goal top-up logic
+- Android build
+- *(goals)* Refine goals setting placement, localized empty message, and android tab headers
+- *(goals)* Prevent empty task creation on Android
+- *(gui)* Use stateless handlers for settings and onboarding hotkey subscriptions
+- Fix index out of bounds panic in merge_assignment_tokens by reordering bounds check
+- Fix TUI task creation with metadata-only inputs by falling back to raw input as summary
+- *(android)* Unify goal row click behavior and hide delete button for task goals
+- *(merge)* Add missing fields to 3-way merge and fix unmapped_properties merge logic
+- *(parser)* Reset create_event and goal in apply_smart_input
+- Fix settings (and aliases, goals) synchronization
+- *(cli)* Fetch all affected calendars during sync and daemon operations to ensure the local cache is fully updated
+- Syntax highlight hours range (e.g. `^@16:20-17:20`)
+
+### 📚 Documentation
+
+- *(goals)* Show both count and duration examples, mention settings
+- Update README and CONTRIBUTING
+- *(specs)* Add @after in tokens table
+- Fix copy address in support
+- Update goal syntax example
+- Rm settings keyboard shortcut from TUI help ( https://github.com/trougnouf/cfait/issues/43 )
+- *(help)* Clarify goals usage
+- *(i18n)* Make examples localizable
+- *(i18n)* French translations
+- Add built-in examples when tags and/or locations are empty
+- *(i18n)* Remove unused strings
+- *(i18n)* Fix CLI path and make hardcoded strings localizable
+
+### ⚡ Performance
+
+- *(goal)* Cache goal progress, fix date boundaries, wire keyboard navigation
+- *(client)* Replace REPORT with unbounded blind DELETEs and skip cleanup for new tasks
+
+### 🎨 Styling
+
+- *(gui)* Increase right click menu width slightly
+- *(android)* Move goal and tag alias editor from advanced settings to the main settings screen
+- *(android)* Conditionally show save button iff description editor is expanded
+
+### ⚙️ Miscellaneous Tasks
+
+- *(gui)* Set a single constant for the menu width
+- Update README test badge
+- Fix Android compilation issue
+- Fix tests
+- Fix Android build error
+- *(android)* Move per-task heatmap to TaskDetailScreen ( https://github.com/trougnouf/cfait/issues/41 )
+- *(android)* Correct goal interval formatting
+- *(android)* Correct goal interval formatting
+- *(i18n)* Remove "Task Manager" from about_title
+- Update rust dependencies
+- *(android)* Fix i18n pluralization
+- Set default reminder time to 08:00
+- Change default log level from info to warn
