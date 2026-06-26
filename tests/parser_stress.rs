@@ -476,3 +476,55 @@ fn test_until_except_round_trip() {
     assert!(smart3.contains("except 2025-01-20"));
     assert!(smart3.contains("except 2025-02-15"));
 }
+
+#[test]
+fn test_translation_integrity_and_collisions() {
+    // This test verifies that localized tokens don't have:
+    // 1. Intra-locale collisions (same alias for multiple tokens)
+    // 2. Spaces in aliases (which would break whitespace-split tokenizer)
+    // 3. Cross-type collisions (prefix shadowing exact token)
+
+    // We test this by examining the actual built lexicon which uses rust_i18n internally
+    use cfait::model::parser::LEXICON;
+    use std::collections::HashSet;
+
+    // Access the current lexicon (built with current locale)
+    let lex_guard = LEXICON.read().unwrap();
+    let lex = &*lex_guard;
+
+    // Check exact tokens for spaces
+    for alias in lex.exact.keys() {
+        assert!(
+            !alias.contains(' '),
+            "Exact token '{}' contains a space! Multi-word tokens are unsupported.",
+            alias
+        );
+    }
+
+    // Check prefix tokens for spaces
+    for (alias, _) in &lex.prefixes {
+        assert!(
+            !alias.contains(' '),
+            "Prefix token '{}' contains a space!",
+            alias
+        );
+    }
+
+    // Check for cross-type collisions (prefix that matches an exact token)
+    for (prefix, p_token) in &lex.prefixes {
+        if let Some(e_token) = lex.exact.get(prefix.as_str()) {
+            panic!(
+                "Cross-type collision! '{}' is both a prefix ({:?}) and an exact token ({:?}). Prefix will shadow the exact token.",
+                prefix, p_token, e_token
+            );
+        }
+    }
+
+    // Check for duplicate prefixes (same prefix string used for different tokens)
+    let mut seen_prefixes = HashSet::new();
+    for (prefix, _) in &lex.prefixes {
+        if !seen_prefixes.insert(prefix.clone()) {
+            panic!("Duplicate prefix token: '{}'", prefix);
+        }
+    }
+}

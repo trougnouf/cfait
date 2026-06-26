@@ -46,6 +46,11 @@ Tasks map strictly to iCalendar `VTODO` components (RFC 5545). Non-standard meta
 ## 2. Smart Syntax & Parsing
 Evaluated instantly during text input. Supported across all clients.
 
+### 2.0. Localization & Canonical Storage
+*   **Canonical Storage:** The internal data model and `Task::to_smart_string()` MUST always output canonical English/ISO tokens (e.g., `due:`, `@2025-01-01`, `~30m`). This ensures CalDAV sync works seamlessly across devices even if one device is in French and another in English.
+*   **Dual-Input Parser:** The parser accepts *both* localized terms AND English canonical terms. This prevents breaking muscle memory for existing users and keeps headless CLI scripts language-agnostic.
+*   **Lexicon Cache:** `src/model/parser.rs` uses an `RwLock<ParserLexicon>` to cache valid tokens (O(1) lookups) built from the `rust_i18n` JSON files on startup.
+
 ### 2.1. Tokens
 | Token | Meaning | Example |
 | :--- | :--- | :--- |

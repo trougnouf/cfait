@@ -438,6 +438,7 @@ pub fn set_locale_with_fallback(locale: &str) {
     } else {
         rust_i18n::set_locale(locale);
     }
+    crate::model::parser::rebuild_lexicon();
 }
 
 pub fn init_locale(ctx: &dyn crate::context::AppContext) {
@@ -449,6 +450,8 @@ pub fn init_locale(ctx: &dyn crate::context::AppContext) {
         set_locale_with_fallback(&lang);
     } else if let Some(sys_lang) = sys_locale::get_locale() {
         set_locale_with_fallback(&sys_lang);
+    } else {
+        crate::model::parser::rebuild_lexicon();
     }
 }
 

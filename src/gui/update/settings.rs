@@ -735,11 +735,13 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             };
             app.language = lang_opt.clone();
 
-            // Apply immediately to rust_i18n
+            // Apply immediately to rust_i18n and rebuild parser lexicon
             if let Some(ref l) = lang_opt {
-                rust_i18n::set_locale(l);
+                crate::config::set_locale_with_fallback(l);
             } else if let Some(sys_lang) = sys_locale::get_locale() {
-                rust_i18n::set_locale(sys_lang.split('-').next().unwrap_or("en"));
+                crate::config::set_locale_with_fallback(&sys_lang);
+            } else {
+                crate::model::parser::rebuild_lexicon();
             }
 
             // Also save the selection into the persistent Config so it's cross-platform.

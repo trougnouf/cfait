@@ -16,7 +16,7 @@
 // (e.g. #tag, @date, is:done) and substring matching.
 
 use crate::model::item::{Task, TaskStatus};
-use chrono::{Duration, Local, NaiveDate};
+use chrono::NaiveDate;
 
 #[derive(Debug, Clone)]
 enum SearchExpr {
@@ -269,12 +269,19 @@ impl Task {
         };
         let part_lower = part_unquoted.to_lowercase();
 
+        let lex_guard = crate::model::parser::LEXICON.read().unwrap();
+        let lex = &*lex_guard;
+
+        let pref_match = lex.match_prefix(&part_lower);
+        let rem = pref_match.map(|(_, _, r)| r).unwrap_or(part_lower.as_str());
+        let pref = pref_match.map(|(_, p, _)| p);
+
         // --- Location Filter (@@loc or loc:loc) ---
-        if part_lower.starts_with("@@") || part_lower.starts_with("loc:") {
+        if part_lower.starts_with("@@") || pref == Some(crate::model::parser::PrefixToken::Loc) {
             let loc_query = if part_lower.starts_with("@@") {
                 part_lower.trim_start_matches('@')
             } else {
-                part_lower.strip_prefix("loc:").unwrap_or("")
+                rem
             };
             if let Some(t_loc) = &self.location {
                 return t_loc.to_lowercase().contains(loc_query);
@@ -284,55 +291,46 @@ impl Task {
         }
 
         // --- Duration Filter (~30m, ~<1h, ~>2h) ---
-        if part_lower.starts_with('~') {
-            let (op, val_str) = if let Some(stripped) = part_lower.strip_prefix("~<=") {
-                ("<=", stripped)
-            } else if let Some(stripped) = part_lower.strip_prefix("~>=") {
-                (">=", stripped)
-            } else if let Some(stripped) = part_lower.strip_prefix("~<") {
-                ("<", stripped)
-            } else if let Some(stripped) = part_lower.strip_prefix("~>") {
-                (">", stripped)
-            } else if let Some(stripped) = part_lower.strip_prefix('~') {
-                ("=", stripped)
+        if part_lower.starts_with('~') || pref == Some(crate::model::parser::PrefixToken::Duration)
+        {
+            let content = if part_lower.starts_with('~') {
+                part_lower.strip_prefix('~').unwrap()
             } else {
-                ("", "")
+                rem
             };
 
-            if !op.is_empty() {
-                let mins = if let Some(n) = val_str.strip_suffix('m') {
-                    n.parse::<u32>().ok()
-                } else if let Some(n) = val_str.strip_suffix('h') {
-                    n.parse::<u32>().ok().map(|h| h * 60)
-                } else if let Some(n) = val_str.strip_suffix('d') {
-                    n.parse::<u32>().ok().map(|d| d * 1440)
-                } else if let Some(n) = val_str.strip_suffix('w') {
-                    n.parse::<u32>().ok().map(|w| w * 10080)
-                } else if let Some(n) = val_str.strip_suffix("mo") {
-                    n.parse::<u32>().ok().map(|m| m * 43200)
-                } else if let Some(n) = val_str.strip_suffix('y') {
-                    n.parse::<u32>().ok().map(|y| y * 525600)
-                } else {
-                    None
-                };
+            let (op, val_str) = if let Some(stripped) = content.strip_prefix("<=") {
+                ("<=", stripped)
+            } else if let Some(stripped) = content.strip_prefix(">=") {
+                (">=", stripped)
+            } else if let Some(stripped) = content.strip_prefix('<') {
+                ("<", stripped)
+            } else if let Some(stripped) = content.strip_prefix('>') {
+                (">", stripped)
+            } else if let Some(stripped) = content.strip_prefix('=') {
+                ("=", stripped)
+            } else {
+                ("=", content)
+            };
 
-                if let Some(target) = mins {
-                    let t_min = self.estimated_duration.unwrap_or(0);
-                    let t_max = self.estimated_duration_max.unwrap_or(t_min);
+            if !op.is_empty()
+                && let Some(target) = crate::model::parser::parse_duration_with_lex(val_str, lex)
+            {
+                let t_min = self.estimated_duration.unwrap_or(0);
+                let t_max = self.estimated_duration_max.unwrap_or(t_min);
 
-                    if self.estimated_duration.is_none() {
-                        return false;
-                    }
-
-                    let ok = match op {
-                        "<" => t_min < target,
-                        ">" => t_max > target,
-                        "<=" => t_min <= target,
-                        ">=" => t_max >= target,
-                        _ => target >= t_min && target <= t_max,
-                    };
-                    return ok;
+                if self.estimated_duration.is_none() {
+                    return false;
                 }
+
+                let ok = match op {
+                    "<" => t_min < target,
+                    ">" => t_max > target,
+                    "<=" => t_min <= target,
+                    ">=" => t_max >= target,
+                    _ => target >= t_min && target <= t_max,
+                };
+                return ok;
             }
             // Fall through to text match if parsing failed
         }
@@ -369,94 +367,77 @@ impl Task {
         }
 
         // --- Date Filters (@due, ^start) ---
-        let check_date_filter =
-            |prefix_char: char, alt_prefix: &str, task_date: Option<NaiveDate>| -> Option<bool> {
-                if !part_lower.starts_with(prefix_char) && !part_lower.starts_with(alt_prefix) {
-                    return None;
-                }
+        let check_date_filter = |target_pref: crate::model::parser::PrefixToken,
+                                 prefix_char: char,
+                                 task_date: Option<NaiveDate>|
+         -> Option<bool> {
+            if pref != Some(target_pref) && !part_lower.starts_with(prefix_char) {
+                return None;
+            }
 
-                let raw_val = part_lower
-                    .strip_prefix(alt_prefix)
-                    .or_else(|| part_lower.strip_prefix(prefix_char))
-                    .unwrap_or("");
+            let raw_val = if pref == Some(target_pref) {
+                rem
+            } else {
+                part_lower.strip_prefix(prefix_char).unwrap_or("")
+            };
 
-                let (val_str_full, include_none) = if let Some(stripped) = raw_val.strip_suffix('!')
-                {
-                    (stripped, true)
-                } else {
-                    (raw_val, false)
-                };
+            let (val_str_full, include_none) = if let Some(stripped) = raw_val.strip_suffix('!') {
+                (stripped, true)
+            } else {
+                (raw_val, false)
+            };
 
-                let (op, date_str) = if let Some(s) = val_str_full.strip_prefix("<=") {
-                    ("<=", s)
-                } else if let Some(s) = val_str_full.strip_prefix(">=") {
-                    (">=", s)
-                } else if let Some(s) = val_str_full.strip_prefix('<') {
-                    ("<", s)
-                } else if let Some(s) = val_str_full.strip_prefix('>') {
-                    (">", s)
-                } else {
-                    ("=", val_str_full)
-                };
+            let (op, date_str) = if let Some(s) = val_str_full.strip_prefix("<=") {
+                ("<=", s)
+            } else if let Some(s) = val_str_full.strip_prefix(">=") {
+                (">=", s)
+            } else if let Some(s) = val_str_full.strip_prefix('<') {
+                ("<", s)
+            } else if let Some(s) = val_str_full.strip_prefix('>') {
+                (">", s)
+            } else {
+                ("=", val_str_full)
+            };
 
-                let now = Local::now().date_naive();
+            let target_date = crate::model::parser::parse_smart_date_with_lex(date_str, lex)
+                .map(|d| d.to_date_naive());
 
-                let target_date = if date_str == "today" {
-                    Some(now)
-                } else if date_str == "tomorrow" {
-                    Some(now + Duration::days(1))
-                } else if date_str == "yesterday" {
-                    Some(now - Duration::days(1))
-                } else if let Ok(date) = NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
-                    Some(date)
-                } else {
-                    let offset = if let Some(n) = date_str.strip_suffix('d') {
-                        n.parse::<i64>().ok()
-                    } else if let Some(n) = date_str.strip_suffix('w') {
-                        n.parse::<i64>().ok().map(|w| w * 7)
-                    } else if let Some(n) = date_str.strip_suffix("mo") {
-                        n.parse::<i64>().ok().map(|m| m * 30)
-                    } else if let Some(n) = date_str.strip_suffix('y') {
-                        n.parse::<i64>().ok().map(|y| y * 365)
-                    } else {
-                        None
-                    };
-                    offset.map(|days| now + Duration::days(days))
-                };
-
-                if let Some(target) = target_date {
-                    match task_date {
-                        Some(t_date) => {
-                            let ok = match op {
-                                "<" => t_date < target,
-                                ">" => t_date > target,
-                                "<=" => t_date <= target,
-                                ">=" => t_date >= target,
-                                _ => t_date == target,
-                            };
-                            return Some(ok);
-                        }
-                        None => {
-                            if include_none {
-                                return Some(true);
-                            } else {
-                                return Some(false);
-                            }
+            if let Some(target) = target_date {
+                match task_date {
+                    Some(t_date) => {
+                        let ok = match op {
+                            "<" => t_date < target,
+                            ">" => t_date > target,
+                            "<=" => t_date <= target,
+                            ">=" => t_date >= target,
+                            _ => t_date == target,
+                        };
+                        return Some(ok);
+                    }
+                    None => {
+                        if include_none {
+                            return Some(true);
+                        } else {
+                            return Some(false);
                         }
                     }
                 }
-                None
-            };
+            }
+            None
+        };
 
         // Start Date
         let t_start = self.dtstart.as_ref().map(|d| d.to_date_naive());
-        if let Some(passed) = check_date_filter('^', "start:", t_start) {
+        if let Some(passed) =
+            check_date_filter(crate::model::parser::PrefixToken::Start, '^', t_start)
+        {
             return passed;
         }
 
         // Due Date
         let t_due = self.due.as_ref().map(|d| d.to_date_naive());
-        if let Some(passed) = check_date_filter('@', "due:", t_due) {
+        if let Some(passed) = check_date_filter(crate::model::parser::PrefixToken::Due, '@', t_due)
+        {
             return passed;
         }
 
