@@ -26,19 +26,54 @@ enum SearchExpr {
     Not(Box<SearchExpr>),
 }
 
+pub struct Query {
+    expr: SearchExpr,
+    pub is_done_loc: String,
+    pub is_active_loc: String,
+    pub is_started_loc: String,
+    pub is_ongoing_loc: String,
+    pub is_ready_loc: String,
+    pub is_blocked_loc: String,
+}
+
+impl Query {
+    pub fn new(query: &str) -> Self {
+        let tokens = tokenize_query(query);
+        let mut parser = Parser::new(tokens);
+        Self {
+            expr: parser.parse(),
+            is_done_loc: rust_i18n::t!("search_is_done").to_lowercase(),
+            is_active_loc: rust_i18n::t!("search_is_active").to_lowercase(),
+            is_started_loc: rust_i18n::t!("search_is_started").to_lowercase(),
+            is_ongoing_loc: rust_i18n::t!("search_is_ongoing").to_lowercase(),
+            is_ready_loc: rust_i18n::t!("search_is_ready").to_lowercase(),
+            is_blocked_loc: rust_i18n::t!("search_is_blocked").to_lowercase(),
+        }
+    }
+
+    pub fn matches(&self, task: &Task, lex: &crate::model::parser::ParserLexicon) -> bool {
+        self.expr.matches(task, self, lex)
+    }
+}
+
 impl SearchExpr {
-    fn matches(&self, task: &Task) -> bool {
+    fn matches(
+        &self,
+        task: &Task,
+        query: &Query,
+        lex: &crate::model::parser::ParserLexicon,
+    ) -> bool {
         match self {
             SearchExpr::Term(s) => {
                 if s.is_empty() {
                     true
                 } else {
-                    task.matches_primitive(s)
+                    task.matches_primitive(s, query, lex)
                 }
             }
-            SearchExpr::And(a, b) => a.matches(task) && b.matches(task),
-            SearchExpr::Or(a, b) => a.matches(task) || b.matches(task),
-            SearchExpr::Not(a) => !a.matches(task),
+            SearchExpr::And(a, b) => a.matches(task, query, lex) && b.matches(task, query, lex),
+            SearchExpr::Or(a, b) => a.matches(task, query, lex) || b.matches(task, query, lex),
+            SearchExpr::Not(a) => !a.matches(task, query, lex),
         }
     }
 }
@@ -245,16 +280,19 @@ impl Task {
             return true;
         }
 
-        let tokens = tokenize_query(query);
-        let mut parser = Parser::new(tokens);
-        let expr = parser.parse();
-
-        expr.matches(self)
+        let q = Query::new(query);
+        let lex_guard = crate::model::parser::LEXICON.read().unwrap();
+        q.matches(self, &lex_guard)
     }
 
     /// Evaluates a single primitive search term (e.g., "#tag", "is:done", or "text").
     /// Returns true if the task matches this specific term.
-    fn matches_primitive(&self, part: &str) -> bool {
+    fn matches_primitive(
+        &self,
+        part: &str,
+        query: &Query,
+        lex: &crate::model::parser::ParserLexicon,
+    ) -> bool {
         if part.is_empty() {
             return true;
         }
@@ -268,9 +306,6 @@ impl Task {
             part
         };
         let part_lower = part_unquoted.to_lowercase();
-
-        let lex_guard = crate::model::parser::LEXICON.read().unwrap();
-        let lex = &*lex_guard;
 
         let pref_match = lex.match_prefix(&part_lower);
         let rem = pref_match.map(|(_, _, r)| r).unwrap_or(part_lower.as_str());
@@ -450,25 +485,23 @@ impl Task {
         }
 
         // --- Status Filters ---
-        if part_lower == "is:done" || part_lower == rust_i18n::t!("search_is_done").to_lowercase() {
+        if part_lower == "is:done" || part_lower == query.is_done_loc {
             return self.status.is_done();
         }
         if part_lower == "is:started"
             || part_lower == "is:ongoing"
-            || part_lower == rust_i18n::t!("search_is_started").to_lowercase()
-            || part_lower == rust_i18n::t!("search_is_ongoing").to_lowercase()
+            || part_lower == query.is_started_loc
+            || part_lower == query.is_ongoing_loc
         {
             return self.status == TaskStatus::InProcess;
         }
-        if part_lower == "is:active"
-            || part_lower == rust_i18n::t!("search_is_active").to_lowercase()
-        {
+        if part_lower == "is:active" || part_lower == query.is_active_loc {
             return !self.status.is_done();
         }
         if part_lower == "is:ready"
             || part_lower == "is:blocked"
-            || part_lower == rust_i18n::t!("search_is_ready").to_lowercase()
-            || part_lower == rust_i18n::t!("search_is_blocked").to_lowercase()
+            || part_lower == query.is_ready_loc
+            || part_lower == query.is_blocked_loc
         {
             // "ready/blocked" states are computed transiently in store.filter()
             // but for simple text matching here we mostly ignore them or treat as valid.
