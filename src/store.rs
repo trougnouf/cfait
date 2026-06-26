@@ -1793,19 +1793,28 @@ impl TaskStore {
 
         let search_lower = options.search_term.to_lowercase();
 
-        let is_ready_mode =
-            search_lower.contains("is:ready") || search_lower.contains(&lex.search_is_ready);
-        let is_blocked_mode =
-            search_lower.contains("is:blocked") || search_lower.contains(&lex.search_is_blocked);
+        let mut is_ready_mode = false;
+        let mut is_blocked_mode = false;
+        let mut has_status_filter = false;
 
-        let has_status_filter = search_lower.contains("is:done")
-            || search_lower.contains("is:active")
-            || search_lower.contains("is:started")
-            || search_lower.contains("is:ongoing")
-            || search_lower.contains(&lex.search_is_done)
-            || search_lower.contains(&lex.search_is_active)
-            || search_lower.contains(&lex.search_is_started)
-            || search_lower.contains(&lex.search_is_ongoing);
+        for word in search_lower.split_whitespace() {
+            let w = word.trim_start_matches('-'); // Support negated status searches
+            if w == "is:ready" || w == lex.search_is_ready {
+                is_ready_mode = true;
+            } else if w == "is:blocked" || w == lex.search_is_blocked {
+                is_blocked_mode = true;
+            } else if w == "is:done"
+                || w == lex.search_is_done
+                || w == "is:active"
+                || w == lex.search_is_active
+                || w == "is:started"
+                || w == lex.search_is_started
+                || w == "is:ongoing"
+                || w == lex.search_is_ongoing
+            {
+                has_status_filter = true;
+            }
+        }
 
         let now = Utc::now();
 
