@@ -61,7 +61,7 @@ Evaluated instantly during text input. Supported across all clients.
 | `~` or `est:` | Estimated duration (supports ranges). | `~30m`, `~1h-2h` |
 | `#` | Tag/Category (Supports brace expansion). | `#work`, `#project{sub1,sub2}` |
 | `@@` or `loc:`| Location. | `@@office` |
-| `url:` / `[[ ]]`| Attach URL. | `url:https://example.com` |
+| `url:` / `[[ ]]`| Attach URL or Wiki-link. | `url:https://example.com`, `[[Master plan]]`, `[[Master plan|Alias]]` |
 | `geo:` | Geo-coordinates. | `geo:50.1,4.2`, `geo:here` (Mobile: Fetches GPS) |
 | `desc:` | Append text to the description. | `desc:"Buy milk"` or `desc:{...}` |
 | `rem:` | Reminder / Alarm. | `rem:10m`, `rem:in 1h`, `rem:8pm`, `rem:next friday` |
@@ -278,6 +278,7 @@ All persistent state and settings live here. Unrecognized TOML keys must not be 
 *   `enable_local_mode`: Boolean. Allow offline `local://` collections.
 *   `hide_completed`, `hide_fully_completed_tags`, `hide_aliases_in_sidebar`: Booleans.
 *   `strikethrough_completed`: Boolean. Line-through styling for done tasks.
+*   `show_inline_descriptions`: Boolean. Previews up to 3 lines of the description in the list.
 *   `ui_scale`: Float (0.5-3.0). Global zoom.
 *   `theme`: Enum (RustyDark, Light, Dracula, Nord, Catppuccin variants, etc.).
 *   `language`: String (`en`, `fr`). None = system locale.

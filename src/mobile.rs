@@ -112,6 +112,7 @@ pub enum MobileSyntaxType {
     Filter,
     Operator,
     Goal,
+    WikiLink,
 }
 
 impl From<SyntaxType> for MobileSyntaxType {
@@ -134,6 +135,7 @@ impl From<SyntaxType> for MobileSyntaxType {
             SyntaxType::Filter => MobileSyntaxType::Filter,
             SyntaxType::Operator => MobileSyntaxType::Operator,
             SyntaxType::Goal => MobileSyntaxType::Goal,
+            SyntaxType::WikiLink => MobileSyntaxType::WikiLink,
         }
     }
 }

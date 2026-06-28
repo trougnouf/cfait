@@ -637,6 +637,8 @@ pub struct Config {
     pub hide_fully_completed_tags: bool,
     #[serde(default = "default_true")]
     pub hide_aliases_in_sidebar: bool,
+    #[serde(default = "default_true")]
+    pub show_inline_descriptions: bool,
     #[serde(default = "default_ui_scale")]
     pub ui_scale: f32,
     #[serde(default = "default_cutoff")]
@@ -765,6 +767,8 @@ pub struct SyncableConfig {
     pub hide_fully_completed_tags: bool,
     #[serde(default)]
     pub hide_aliases_in_sidebar: bool,
+    #[serde(default = "default_true")]
+    pub show_inline_descriptions: bool,
     #[serde(default)]
     pub sort_cutoff_days: Option<u32>,
     #[serde(default)]
@@ -842,6 +846,7 @@ impl Default for Config {
             hide_completed: false,
             hide_fully_completed_tags: true,
             hide_aliases_in_sidebar: true,
+            show_inline_descriptions: true,
             ui_scale: 1.0,
             sort_cutoff_days: Some(30),
             sort_standard_by_priority: false,
@@ -895,6 +900,7 @@ impl Config {
             hide_completed: self.hide_completed,
             hide_fully_completed_tags: self.hide_fully_completed_tags,
             hide_aliases_in_sidebar: self.hide_aliases_in_sidebar,
+            show_inline_descriptions: self.show_inline_descriptions,
             sort_cutoff_days: self.sort_cutoff_days,
             sort_standard_by_priority: self.sort_standard_by_priority,
             sort_preset: self.sort_preset,
@@ -930,6 +936,7 @@ impl Config {
         self.hide_completed = sync.hide_completed;
         self.hide_fully_completed_tags = sync.hide_fully_completed_tags;
         self.hide_aliases_in_sidebar = sync.hide_aliases_in_sidebar;
+        self.show_inline_descriptions = sync.show_inline_descriptions;
         self.sort_cutoff_days = sync.sort_cutoff_days;
         self.sort_standard_by_priority = sync.sort_standard_by_priority;
         self.sort_preset = sync.sort_preset;
@@ -1211,6 +1218,9 @@ impl Config {
             } else if trimmed.starts_with("hide_aliases_in_sidebar =") {
                 out.push_str(line);
                 out.push_str(" # Boolean: Hide shorthand aliases from the sidebar (showing only their targets).");
+            } else if trimmed.starts_with("show_inline_descriptions =") {
+                out.push_str(line);
+                out.push_str(" # Boolean: Previews up to 3 lines of the description in the list.");
             } else if trimmed.starts_with("ui_scale =") {
                 out.push_str(line);
                 out.push_str(

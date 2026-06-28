@@ -116,7 +116,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::RemoteCalendarNameChanged(_, _)
         | Message::SubmitRemoteCalendar(_)
         | Message::RemoteCalendarUpdated(_, _)
-        | Message::RemoteCalendarCreated(_, _) => settings::handle(app, message),
+        | Message::RemoteCalendarCreated(_, _)
+        | Message::SetShowInlineDescriptions(_) => settings::handle(app, message),
 
         Message::InputChanged(_)
         | Message::DescriptionChanged(_)
@@ -259,7 +260,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::ArrowRight
         | Message::ArrowLeft
         | Message::SidebarInteractSpace
-        | Message::SidebarInteractEnter => view::handle(app, message),
+        | Message::SidebarInteractEnter
+        | Message::OpenWikiLink(_) => view::handle(app, message),
 
         Message::Refresh
         | Message::Loaded(_)

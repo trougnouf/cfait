@@ -122,6 +122,8 @@ pub enum Message {
     ToggleSidebar,
 
     // --- View & Filter ---
+    OpenWikiLink(String),
+    SetShowInlineDescriptions(bool),
     ToggleChildLock,
     ToggleYankLock,
     SetMinDuration(Option<u32>),

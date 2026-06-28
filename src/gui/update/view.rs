@@ -126,6 +126,45 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::OpenWikiLink(title) => {
+            let title_lower = title.to_lowercase();
+            let mut found_uid = None;
+            for map in app.store.calendars.values() {
+                if let Some(t) = map
+                    .values()
+                    .find(|t| t.summary.to_lowercase() == title_lower)
+                {
+                    found_uid = Some(t.uid.clone());
+                    break;
+                }
+            }
+            if let Some(uid) = found_uid {
+                handle(app, Message::JumpToTask(uid))
+            } else {
+                let config = crate::config::Config::load(app.ctx.as_ref()).unwrap_or_default();
+                let def_time =
+                    chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+                let mut new_task = crate::model::Task::new(&title, &app.tag_aliases, def_time);
+
+                let target_href = app
+                    .active_cal_href
+                    .clone()
+                    .unwrap_or_else(|| crate::storage::LOCAL_CALENDAR_HREF.to_string());
+                new_task.calendar_href = target_href.clone();
+
+                let uid = new_task.uid.clone();
+                app.store.add_task(new_task.clone());
+                crate::gui::update::common::refresh_filtered_tasks(app);
+
+                if let Some(tx) = &app.bg_tx {
+                    let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(vec![
+                        crate::journal::Action::Create(new_task),
+                    ]));
+                }
+
+                handle(app, Message::JumpToTask(uid))
+            }
+        }
         Message::SidebarInteractSpace => {
             match app.sidebar_mode {
                 SidebarMode::Calendars => {

@@ -40,6 +40,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.hide_completed = config.hide_completed;
             app.hide_fully_completed_tags = config.hide_fully_completed_tags;
             app.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;
+            app.show_inline_descriptions = config.show_inline_descriptions;
             app.sort_standard_by_priority = config.sort_standard_by_priority;
             app.sort_preset = config.sort_preset;
             app.ui_scale = config.ui_scale;
@@ -172,6 +173,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.hide_completed = config.hide_completed;
             app.hide_fully_completed_tags = config.hide_fully_completed_tags;
             app.hide_aliases_in_sidebar = config.hide_aliases_in_sidebar;
+            app.show_inline_descriptions = config.show_inline_descriptions;
             app.sort_standard_by_priority = config.sort_standard_by_priority;
             app.sort_preset = config.sort_preset;
             app.ui_scale = config.ui_scale;
@@ -778,6 +780,11 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             save_config(app);
             refresh_filtered_tasks(app);
             Task::none()
+        }
+        Message::SetShowInlineDescriptions(val) => {
+            app.show_inline_descriptions = val;
+            save_config(app);
+            Task::none() // Doesn't affect sorting/filtering, UI will just redraw
         }
         Message::SetSyncSettings(val) => {
             app.sync_settings = val;

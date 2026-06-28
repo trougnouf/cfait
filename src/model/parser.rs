@@ -376,6 +376,7 @@ pub enum SyntaxType {
     Tag,
     Location,
     Url,
+    WikiLink, // [[Page Name]] or [[Page Name|Alias]]
     Geo,
     Description,
     Reminder,
@@ -1140,10 +1141,15 @@ pub fn tokenize_smart_input(input: &str, is_search_query: bool) -> Vec<SyntaxTok
         if matched_kind.is_none() {
             if word.starts_with("@@") || pref == Some(PrefixToken::Loc) {
                 matched_kind = Some(SyntaxType::Location);
-            } else if pref == Some(PrefixToken::Url)
-                || (word.starts_with("[[") && word.ends_with("]]"))
-            {
+            } else if pref == Some(PrefixToken::Url) {
                 matched_kind = Some(SyntaxType::Url);
+            } else if word.starts_with("[[") && word.ends_with("]]") {
+                let inner = &word[2..word.len() - 2];
+                if inner.starts_with("http://") || inner.starts_with("https://") {
+                    matched_kind = Some(SyntaxType::Url);
+                } else {
+                    matched_kind = Some(SyntaxType::WikiLink);
+                }
             } else if word_lower == "+cal" || word_lower == "-cal" {
                 matched_kind = Some(SyntaxType::Calendar);
             } else if word_lower == "+pin" || word_lower == "-pin" {
@@ -1287,11 +1293,17 @@ fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
     let mut start_idx = 0;
     let mut in_quote = false;
     let mut brace_depth: usize = 0;
+    let mut bracket_depth: usize = 0;
     let mut escaped = false;
     let chars = input.char_indices().peekable();
 
     for (idx, c) in chars {
-        if current.is_empty() && !in_quote && brace_depth == 0 && !c.is_whitespace() {
+        if current.is_empty()
+            && !in_quote
+            && brace_depth == 0
+            && bracket_depth == 0
+            && !c.is_whitespace()
+        {
             start_idx = idx;
         }
         if escaped {
@@ -1304,19 +1316,27 @@ fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
                 escaped = true;
                 current.push('\\');
             }
-            '"' if brace_depth == 0 => {
+            '"' if brace_depth == 0 && bracket_depth == 0 => {
                 in_quote = !in_quote;
                 current.push(c);
             }
-            '{' if !in_quote => {
+            '{' if !in_quote && bracket_depth == 0 => {
                 brace_depth += 1;
                 current.push(c);
             }
-            '}' if !in_quote => {
+            '}' if !in_quote && bracket_depth == 0 => {
                 brace_depth = brace_depth.saturating_sub(1);
                 current.push(c);
             }
-            ws if ws.is_whitespace() && !in_quote && brace_depth == 0 => {
+            '[' if !in_quote && brace_depth == 0 => {
+                bracket_depth += 1;
+                current.push(c);
+            }
+            ']' if !in_quote && brace_depth == 0 => {
+                bracket_depth = bracket_depth.saturating_sub(1);
+                current.push(c);
+            }
+            ws if ws.is_whitespace() && !in_quote && brace_depth == 0 && bracket_depth == 0 => {
                 if !current.is_empty() {
                     parts.push((start_idx, idx, current.clone()));
                     current.clear();
@@ -2816,7 +2836,10 @@ pub fn apply_smart_input(
         } else if pref == Some(PrefixToken::Url) {
             task.url = Some(strip_quotes(rem_original));
         } else if token.starts_with("[[") && token.ends_with("]]") {
-            task.url = Some(token[2..token.len() - 2].to_string());
+            let inner = &token[2..token.len() - 2];
+            if inner.starts_with("http://") || inner.starts_with("https://") {
+                task.url = Some(inner.to_string());
+            }
         } else if token_lower == "+cal" {
             task.create_event = Some(true);
         } else if token_lower == "-cal" {

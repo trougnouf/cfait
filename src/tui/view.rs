@@ -31,13 +31,47 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
     use ratatui::text::Text;
     let mut lines = Vec::new();
 
+    let parse_wiki_links = |text: &str, base_style: Style| -> Vec<Span<'static>> {
+        let mut spans = Vec::new();
+        let mut current_idx = 0;
+        while let Some(start) = text[current_idx..].find("[[") {
+            let abs_start = current_idx + start;
+            if abs_start > current_idx {
+                spans.push(Span::styled(
+                    text[current_idx..abs_start].to_string(),
+                    base_style,
+                ));
+            }
+            if let Some(end) = text[abs_start..].find("]]") {
+                let abs_end = abs_start + end + 2;
+                let inner = &text[abs_start + 2..abs_end - 2];
+                let (_, display) = if let Some((t, d)) = inner.split_once('|') {
+                    (t, d)
+                } else {
+                    (inner, inner)
+                };
+                spans.push(Span::styled(
+                    format!("[[{}]]", display),
+                    Style::default().fg(Color::Cyan),
+                ));
+                current_idx = abs_end;
+            } else {
+                break;
+            }
+        }
+        if current_idx < text.len() {
+            spans.push(Span::styled(text[current_idx..].to_string(), base_style));
+        }
+        spans
+    };
+
     for line in input.split_inclusive('\n') {
         let trimmed = line.trim_start();
         let mut spans = Vec::new();
 
         if trimmed.starts_with('#') {
-            spans.push(Span::styled(
-                line.to_string(),
+            spans.extend(parse_wiki_links(
+                line,
                 Style::default()
                     .fg(if is_dark_theme {
                         Color::Blue
@@ -47,8 +81,8 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                     .add_modifier(Modifier::BOLD),
             ));
         } else if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
-            spans.push(Span::styled(
-                line.to_string(),
+            spans.extend(parse_wiki_links(
+                line,
                 Style::default().fg(if is_dark_theme {
                     Color::Yellow
                 } else {
@@ -56,15 +90,15 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                 }),
             ));
         } else if trimmed.starts_with("> ") {
-            spans.push(Span::styled(
-                line.to_string(),
+            spans.extend(parse_wiki_links(
+                line,
                 Style::default()
                     .fg(Color::DarkGray)
                     .add_modifier(Modifier::ITALIC),
             ));
         } else if trimmed.starts_with("```") {
-            spans.push(Span::styled(
-                line.to_string(),
+            spans.extend(parse_wiki_links(
+                line,
                 Style::default().fg(if is_dark_theme {
                     Color::Green
                 } else {
@@ -72,7 +106,7 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                 }),
             ));
         } else {
-            spans.push(Span::raw(line.to_string()));
+            spans.extend(parse_wiki_links(line, Style::default()));
         }
 
         lines.push(Line::from(spans));
@@ -843,6 +877,47 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         selected_task_was_truncated = true;
                     }
 
+                    let mut title_spans = Vec::new();
+                    let mut current_idx = 0;
+                    while let Some(start) = display_title[current_idx..].find("[[") {
+                        let abs_start = current_idx + start;
+                        if abs_start > current_idx {
+                            title_spans.push(Span::styled(
+                                display_title[current_idx..abs_start].to_string(),
+                                base_style,
+                            ));
+                        }
+                        if let Some(end) = display_title[abs_start..].find("]]") {
+                            let abs_end = abs_start + end + 2;
+                            let inner = &display_title[abs_start + 2..abs_end - 2];
+                            let (_, display_text) =
+                                if let Some((_, display_name)) = inner.split_once('|') {
+                                    (inner, display_name)
+                                } else {
+                                    (inner, inner)
+                                };
+
+                            let mut link_style = Style::default().fg(Color::Cyan);
+                            if (t.status.is_done() && state.strikethrough_completed) || is_trash {
+                                link_style = link_style.add_modifier(Modifier::CROSSED_OUT);
+                            }
+                            title_spans
+                                .push(Span::styled(format!("[[{}]]", display_text), link_style));
+                            current_idx = abs_end;
+                        } else {
+                            break;
+                        }
+                    }
+                    if current_idx < display_title.len() {
+                        title_spans.push(Span::styled(
+                            display_title[current_idx..].to_string(),
+                            base_style,
+                        ));
+                    }
+                    if title_spans.is_empty() {
+                        title_spans.push(Span::styled(display_title, base_style));
+                    }
+
                     let mut spans = vec![
                         prefix_indent,
                         prefix_bracket_l,
@@ -850,8 +925,8 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         prefix_bracket_r,
                         tree_indicator,
                         prefix_blocked,
-                        Span::styled(display_title, base_style),
                     ];
+                    spans.extend(title_spans);
                     spans.extend(metadata_spans);
 
                     if !right_spans.is_empty() {
@@ -866,7 +941,36 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         spans.extend(right_spans);
                     }
 
-                    ListItem::new(Line::from(spans))
+                    let mut lines = vec![Line::from(spans)];
+
+                    if state.show_inline_descriptions && !t.description.is_empty() {
+                        let mut line_count = 0;
+                        for desc_line in t.description.lines() {
+                            if desc_line.trim().is_empty() {
+                                continue;
+                            }
+
+                            let indent = if state.active_cal_href.is_some() {
+                                "  ".repeat(t.depth + 3)
+                            } else {
+                                "      ".to_string()
+                            };
+
+                            lines.push(Line::from(vec![
+                                Span::raw(indent),
+                                Span::styled(
+                                    desc_line.to_string(),
+                                    Style::default().fg(Color::DarkGray),
+                                ),
+                            ]));
+                            line_count += 1;
+                            if line_count >= 3 {
+                                break;
+                            }
+                        }
+                    }
+
+                    ListItem::new(Text::from(lines))
                 }
             }
         })
@@ -1395,6 +1499,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                         SyntaxType::Calendar => Style::default().fg(Color::Magenta), // Added for +cal/-cal
                         SyntaxType::Pin => Style::default().fg(Color::LightRed), // Added for +pin/-pin
                         SyntaxType::Filter => Style::default().fg(Color::Cyan), // Added for search operators / filters
+                        SyntaxType::WikiLink => Style::default().fg(Color::Cyan),
                     };
                     input_spans.push(Span::styled(text, style));
                 }

@@ -103,6 +103,13 @@ impl Highlighter for SmartInputHighlighter {
                         color: Some(Color::from_rgb(0.2, 0.2, 0.8)),
                         font: None,
                     },
+                    SyntaxType::WikiLink => highlighter::Format {
+                        color: Some(Color::from_rgb(0.2, 0.7, 1.0)),
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
                     SyntaxType::Geo => highlighter::Format {
                         color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
                         font: None,

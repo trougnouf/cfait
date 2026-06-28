@@ -576,27 +576,75 @@ pub fn view_task_row<'a>(
                     color
                 };
 
-                let summary_text: Element<'a, Message> = if (app.strikethrough_completed
-                    && task.status.is_done())
-                    || task.calendar_href == "local://trash"
-                {
-                    Into::<Element<'a, Message>>::into(
-                        rich_text![
-                            span::<Message, iced::Font>(task.summary.clone()).strikethrough(true)
-                        ]
-                        .size(20)
-                        .color(title_color)
-                        .width(Length::Fill),
-                    )
-                } else {
-                    Into::<Element<'a, Message>>::into(
-                        text(&task.summary)
-                            .size(20)
-                            .color(title_color)
-                            .width(Length::Fill)
-                            .wrapping(iced::widget::text::Wrapping::Word),
-                    )
-                };
+                let is_strikethrough = (app.strikethrough_completed && task.status.is_done())
+                    || task.calendar_href == "local://trash";
+
+                let mut summary_spans = vec![];
+                let mut current_idx = 0;
+                let summary = &task.summary;
+
+                while let Some(start) = summary[current_idx..].find("[[") {
+                    let abs_start = current_idx + start;
+                    if abs_start > current_idx {
+                        let mut sp = span(&summary[current_idx..abs_start]).color(title_color);
+                        if is_strikethrough {
+                            sp = sp.strikethrough(true);
+                        }
+                        summary_spans.push(sp);
+                    }
+
+                    if let Some(end) = summary[abs_start..].find("]]") {
+                        let abs_end = abs_start + end + 2;
+                        let inner = &summary[abs_start + 2..abs_end - 2];
+
+                        let (target, display) = if let Some((t, d)) = inner.split_once('|') {
+                            (t.to_string(), d.to_string())
+                        } else {
+                            (inner.to_string(), inner.to_string())
+                        };
+
+                        let mut sp = span(format!("[[{}]]", display))
+                            .color(Color::from_rgb(0.2, 0.7, 1.0))
+                            .link(target);
+
+                        if is_strikethrough {
+                            sp = sp.strikethrough(true);
+                        }
+                        summary_spans.push(sp);
+
+                        current_idx = abs_end;
+                    } else {
+                        break;
+                    }
+                }
+
+                if current_idx < summary.len() {
+                    let mut sp = span(&summary[current_idx..]).color(title_color);
+                    if is_strikethrough {
+                        sp = sp.strikethrough(true);
+                    }
+                    summary_spans.push(sp);
+                }
+
+                if summary_spans.is_empty() {
+                    let mut sp = span(summary.to_string()).color(title_color);
+                    if is_strikethrough {
+                        sp = sp.strikethrough(true);
+                    }
+                    summary_spans.push(sp);
+                }
+
+                let summary_text: Element<'a, Message> = rich_text(summary_spans)
+                    .size(20)
+                    .width(Length::Fill)
+                    .on_link_click(|target: String| {
+                        if target.starts_with("http://") || target.starts_with("https://") {
+                            Message::OpenUrl(target)
+                        } else {
+                            Message::OpenWikiLink(target)
+                        }
+                    })
+                    .into();
 
                 if place_inline {
                     row![
@@ -1698,7 +1746,32 @@ pub fn view_task_row<'a>(
 
                 column![task_button, desc_row].spacing(5)
             } else {
-                column![task_button]
+                let mut base_col = column![task_button];
+                if app.show_inline_descriptions && !task.description.is_empty() && !is_expanded {
+                    let mut desc_lines = Vec::new();
+                    let mut line_count = 0;
+                    for line in task.description.lines() {
+                        if line.trim().is_empty() {
+                            continue;
+                        }
+                        desc_lines.push(line.to_string());
+                        line_count += 1;
+                        if line_count >= 3 {
+                            break;
+                        }
+                    }
+                    if !desc_lines.is_empty() {
+                        let inline_txt = desc_lines.join("\n");
+                        let inline_desc = row![
+                            Space::new().width(Length::Fixed(indent_size as f32 + 34.0)),
+                            text(inline_txt)
+                                .size(14)
+                                .color(Color::from_rgb(0.6, 0.6, 0.6))
+                        ];
+                        base_col = base_col.push(inline_desc).spacing(2);
+                    }
+                }
+                base_col
             };
 
             let container_content: Element<'a, Message> = iced::widget::MouseArea::new(col_content)

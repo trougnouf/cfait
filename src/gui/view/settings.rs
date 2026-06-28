@@ -362,6 +362,9 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                 )
                 .style(crate::gui::view::tooltip_style)
                 .delay(std::time::Duration::from_millis(700)),
+                checkbox::<Message, iced::Theme, iced::Renderer>(app.show_inline_descriptions)
+                    .label("Show inline descriptions (preview up to 3 lines)")
+                    .on_toggle(Message::SetShowInlineDescriptions),
                 checkbox::<Message, iced::Theme, iced::Renderer>(app.show_priority_numbers)
                     .label(rust_i18n::t!("show_priority_numbers"))
                     .on_toggle(Message::SetShowPriorityNumbers),
