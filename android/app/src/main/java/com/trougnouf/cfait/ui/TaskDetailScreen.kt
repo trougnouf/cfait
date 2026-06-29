@@ -29,6 +29,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -227,7 +228,13 @@ fun TaskDetailScreen(
                     if (enabledCalendarCount > 1) {
                         TextButton(onClick = {
                             showMoveDialog = true
-                        }) { Text(stringResource(R.string.menu_move)) }
+                        }) { 
+                            Text(
+                                stringResource(R.string.menu_move),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            ) 
+                        }
                     }
                     TextButton(
                         onClick = {
@@ -236,7 +243,13 @@ fun TaskDetailScreen(
                             // so we can leave this screen immediately without killing the save process.
                             handleSaveWithGeo(smartInput, description)
                         },
-                    ) { Text(stringResource(R.string.save)) }
+                    ) { 
+                        Text(
+                            stringResource(R.string.save),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        ) 
+                    }
                 },
             )
         },
