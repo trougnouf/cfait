@@ -84,11 +84,12 @@ Users can define reusable shortcuts that expand into multiple tags, locations, o
 *   *Syntax:* `#gardening := #home:outside, @@garden, !4`
 *   Aliases are resolved retroactively across the database upon creation/edit. Cycle detection is strictly enforced (max depth 10).
 
-### 2.3. Markdown Subtask Extraction
-If a task's description contains a Markdown list, Cfait extracts those lines into distinct child tasks via the "Extract Subtasks" action or `Ctrl+E`.
-*   **Hierarchy:** Child tasks nest based on indentation level.
-*   **Parallel Tasks:** Unnumbered lists (`- [ ]`) create independent sibling tasks.
-*   **Sequential Dependencies:** Numbered lists (`1. [ ]`, `2. [ ]`) create `DEPENDS-ON` blocking relationships (Task 2 is blocked by Task 1).
+### 2.3. Markdown Subtask Extraction & Round-Trip Editing
+If a task's description contains Markdown lists or Headers, Cfait extracts them into distinct child tasks via the "Extract Subtasks" action or `Ctrl+E`.
+*   **Hierarchy:** Tasks nest based on indentation level (for lists) or header depth (`#`, `##`, `###`).
+*   **Parallel Tasks:** Unnumbered lists (`- [ ]`) and Headers create independent sibling tasks.
+*   **Sequential Dependencies:** Numbered lists (`1. [ ]`, `2. [ ]`) create `DEPENDS-ON` blocking relationships.
+*   **Round-Trip UIDs:** Extracted tasks append a metadata tag (e.g., `<!-- uid:abc-123 -->`) to their summary. When the tree is re-edited and saved, this tag allows Cfait to diff the text and update existing database entities rather than creating duplicates.
 
 ---
 

@@ -266,3 +266,147 @@ impl Highlighter for SessionHighlighter {
         spans.into_iter()
     }
 }
+
+pub struct MarkdownHighlighter {
+    is_dark: bool,
+}
+
+impl Default for MarkdownHighlighter {
+    fn default() -> Self {
+        Self { is_dark: true }
+    }
+}
+
+impl Highlighter for MarkdownHighlighter {
+    type Settings = bool;
+    type Highlight = highlighter::Format<Font>;
+    type Iterator<'a> = std::vec::IntoIter<(Range<usize>, Self::Highlight)>;
+
+    fn new(settings: &Self::Settings) -> Self {
+        Self { is_dark: *settings }
+    }
+
+    fn update(&mut self, settings: &Self::Settings) {
+        self.is_dark = *settings;
+    }
+
+    fn change_line(&mut self, _line: usize) {}
+    fn current_line(&self) -> usize {
+        0
+    }
+
+    fn highlight_line(&mut self, line: &str) -> Self::Iterator<'_> {
+        let mut spans = Vec::new();
+
+        let header_color = Some(Color::from_rgb(1.0, 0.6, 0.0)); // Orange
+        let link_color = Some(Color::from_rgb(0.2, 0.7, 1.0)); // Cyan
+        let dim_color = Some(Color::from_rgb(0.4, 0.4, 0.4)); // Dark Gray
+        let checkbox_color = Some(Color::from_rgb(0.4, 0.8, 0.4)); // Greenish
+
+        let trimmed = line.trim_start();
+        let is_header = trimmed.starts_with('#');
+        let is_list =
+            trimmed.starts_with("- [") || trimmed.starts_with("* [") || trimmed.starts_with("+ [");
+
+        let mut cursor = 0;
+
+        // Base format for the line
+        let base_format = if is_header {
+            highlighter::Format {
+                color: header_color,
+                font: Some(Font {
+                    weight: iced::font::Weight::Bold,
+                    ..Default::default()
+                }),
+            }
+        } else {
+            highlighter::Format {
+                color: None,
+                font: None,
+            }
+        };
+
+        // Scan for inline elements (Links and UIDs)
+        while cursor < line.len() {
+            let remaining = &line[cursor..];
+
+            if let Some(uid_start) = remaining.find("<!-- uid:")
+                && let Some(uid_end_offset) = remaining[uid_start..].find("-->")
+            {
+                let abs_start = cursor + uid_start;
+                let abs_end = abs_start + uid_end_offset + 3;
+
+                if abs_start > cursor {
+                    spans.push((cursor..abs_start, base_format));
+                }
+                spans.push((
+                    abs_start..abs_end,
+                    highlighter::Format {
+                        color: dim_color,
+                        font: Some(Font {
+                            style: iced::font::Style::Italic,
+                            ..Default::default()
+                        }),
+                    },
+                ));
+                cursor = abs_end;
+                continue;
+            }
+
+            if let Some(link_start) = remaining.find("[[")
+                && let Some(link_end_offset) = remaining[link_start..].find("]]")
+            {
+                let abs_start = cursor + link_start;
+                let abs_end = abs_start + link_end_offset + 2;
+
+                if abs_start > cursor {
+                    // Apply checkbox color if it's the start of a list item
+                    if is_list && cursor == 0 && abs_start <= line.find('[').unwrap_or(0) + 4 {
+                        spans.push((
+                            cursor..abs_start,
+                            highlighter::Format {
+                                color: checkbox_color,
+                                font: None,
+                            },
+                        ));
+                    } else {
+                        spans.push((cursor..abs_start, base_format));
+                    }
+                }
+                spans.push((
+                    abs_start..abs_end,
+                    highlighter::Format {
+                        color: link_color,
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
+                ));
+                cursor = abs_end;
+                continue;
+            }
+
+            // No more inline elements, push the rest
+            if is_list && cursor == 0 {
+                let box_end = line.find(']').unwrap_or(0) + 1;
+                if box_end > 0 {
+                    spans.push((
+                        0..box_end,
+                        highlighter::Format {
+                            color: checkbox_color,
+                            font: None,
+                        },
+                    ));
+                    cursor = box_end;
+                    continue;
+                }
+            }
+
+            spans.push((cursor..line.len(), base_format));
+            break;
+        }
+
+        spans.into_iter()
+    }
+}

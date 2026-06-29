@@ -2025,6 +2025,10 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             .id("description_input")
             .placeholder(placeholder)
             .on_action(Message::DescriptionChanged)
+            .highlight_with::<self::syntax::MarkdownHighlighter>(
+                is_dark_mode,
+                |highlight, _theme| *highlight,
+            )
             .padding(10)
             .height(Length::Shrink)
             .min_height(160.0);

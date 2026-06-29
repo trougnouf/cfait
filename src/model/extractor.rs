@@ -6,11 +6,23 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub struct ExtractedTask {
     pub uid: String,
+    pub parsed_existing_uid: Option<String>, // Found via <!-- uid:... -->
     pub parent_uid: Option<String>,
     pub dependencies: Vec<String>,
     pub raw_text: String,
     pub description: String,
     pub is_completed: bool,
+}
+
+fn extract_uid_tag(line: &str) -> (String, Option<String>) {
+    if let Some(idx) = line.rfind("<!-- uid:")
+        && let Some(end_idx) = line[idx..].find("-->")
+    {
+        let uid = line[idx + 9..idx + end_idx].trim().to_string();
+        let clean_line = line[..idx].trim().to_string();
+        return (clean_line, Some(uid));
+    }
+    (line.trim_end().to_string(), None)
 }
 
 pub fn has_extractable_subtasks(input: &str) -> bool {
@@ -24,6 +36,12 @@ pub fn has_extractable_subtasks(input: &str) -> bool {
             }
         }
         let rest = &line[byte_offset..];
+
+        // Check for headers
+        if rest.starts_with("# ") || rest.starts_with("## ") || rest.starts_with("### ") {
+            return true;
+        }
+
         if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
             let after_marker = &rest[2..];
             if after_marker.starts_with("[ ] ")
@@ -100,8 +118,21 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
         let mut is_numbered = false;
         let mut is_completed = false;
         let mut raw_text = "";
+        let mut header_depth = 0;
 
-        if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
+        if let Some(stripped) = rest.strip_prefix("# ") {
+            is_task = true;
+            raw_text = stripped;
+            header_depth = 1;
+        } else if let Some(stripped) = rest.strip_prefix("## ") {
+            is_task = true;
+            raw_text = stripped;
+            header_depth = 2;
+        } else if let Some(stripped) = rest.strip_prefix("### ") {
+            is_task = true;
+            raw_text = stripped;
+            header_depth = 3;
+        } else if rest.starts_with("- ") || rest.starts_with("* ") || rest.starts_with("+ ") {
             let after_marker = &rest[2..];
             if let Some(stripped) = after_marker.strip_prefix("[ ] ") {
                 is_task = true;
@@ -148,11 +179,21 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
         }
 
         if is_task {
-            let uid = Uuid::new_v4().to_string();
+            let (clean_text, parsed_uid) = extract_uid_tag(raw_text);
+            let uid = parsed_uid
+                .clone()
+                .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+            // For headers, depth is absolute. For lists, it's relative to indentation.
+            let effective_indent = if header_depth > 0 {
+                (header_depth - 1) * 4 // Treat H1 as 0, H2 as 4, H3 as 8
+            } else {
+                indent
+            };
 
             // Pop stack until we find a parent that has a strictly smaller indentation
             while let Some(&(stack_indent, _)) = indent_stack.last() {
-                if stack_indent >= indent {
+                if stack_indent >= effective_indent {
                     indent_stack.pop();
                 } else {
                     break;
@@ -163,31 +204,32 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
             // Determine dependencies using the last numbered task at THIS indentation level
             let mut dependencies = Vec::new();
             if is_numbered {
-                if let Some(dep_uid) = last_numbered_at_indent.get(&indent) {
+                if let Some(dep_uid) = last_numbered_at_indent.get(&effective_indent) {
                     dependencies.push(dep_uid.clone());
                 }
-                last_numbered_at_indent.insert(indent, uid.clone());
+                last_numbered_at_indent.insert(effective_indent, uid.clone());
             } else {
                 // Breaking the numbered chain
-                last_numbered_at_indent.remove(&indent);
+                last_numbered_at_indent.remove(&effective_indent);
             }
 
             // Push ourselves to the stack to become a potential parent for the next lines
-            indent_stack.push((indent, uid.clone()));
+            indent_stack.push((effective_indent, uid.clone()));
 
             extracted.push(ExtractedTask {
                 uid,
+                parsed_existing_uid: parsed_uid,
                 parent_uid,
                 dependencies,
-                raw_text: raw_text.to_string(),
+                raw_text: clean_text,
                 description: String::new(),
                 is_completed,
             });
             active_task_idx = Some(extracted.len() - 1);
         } else {
             // Not a task line. Append it to the relevant description.
-            if indent == 0 {
-                // Indent 0 breaks the list completely. Back to root parent notes.
+            if indent == 0 || header_depth > 0 {
+                // Indent 0 or headers break the list completely. Back to root parent notes.
                 active_task_idx = None;
                 indent_stack.clear();
                 last_numbered_at_indent.clear();

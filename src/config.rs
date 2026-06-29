@@ -329,7 +329,6 @@ impl TaskAction {
         TaskAction::OpenUrl,         // First - link out
         TaskAction::OpenCoordinates, // Second - single coordinates
         TaskAction::OpenLocations,   // Third - multiple coordinates (GPX)
-        TaskAction::Focus,
         TaskAction::ToggleDetails,
         TaskAction::CompleteAndShift,
         TaskAction::ToggleTimer,
@@ -348,6 +347,7 @@ impl TaskAction {
         TaskAction::Cancel,
         TaskAction::Delete,
         TaskAction::DeleteTree,
+        TaskAction::Focus,
     ];
 
     pub fn label(&self) -> String {
@@ -417,7 +417,6 @@ fn default_pinned_actions() -> Vec<TaskAction> {
     vec![
         TaskAction::OpenUrl, // First action - open URL
         TaskAction::OpenCoordinates,
-        TaskAction::Focus,
         TaskAction::ToggleDetails,
         TaskAction::ToggleTimer,
         TaskAction::IncreasePriority,
@@ -426,6 +425,7 @@ fn default_pinned_actions() -> Vec<TaskAction> {
         TaskAction::Edit,
         TaskAction::Yank,
         TaskAction::CreateSubtask,
+        TaskAction::Focus,
     ]
 }
 
