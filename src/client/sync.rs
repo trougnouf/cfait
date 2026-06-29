@@ -594,14 +594,12 @@ impl RustyClient {
 
             let step_result = if let Some(err) = test_forced_err {
                 let err_msg = err.to_string();
-                if err_msg.contains("400") || err_msg.contains("405") || err_msg.contains("415") {
+                if err_msg.contains("400") || err_msg.contains("403") || err_msg.contains("404") || err_msg.contains("405") || err_msg.contains("409") || err_msg.contains("415") || err_msg.contains("Forbidden") {
                     Ok(StepResult::new(StepOutcome::RecoveryNeeded(err_msg)))
                 } else if err_msg.contains("413") {
                     Ok(StepResult::new(StepOutcome::Discard).with_warning(err_msg))
                 } else if err_msg.contains("401")
-                    || err_msg.contains("403")
                     || err_msg.contains("Unauthorized")
-                    || err_msg.contains("Forbidden")
                 {
                     Err(rust_i18n::t!("error_auth_failed").to_string())
                 } else {
