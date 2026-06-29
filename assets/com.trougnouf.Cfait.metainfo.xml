@@ -82,35 +82,50 @@
       <description>
         <p>Features:</p>
         <ul>
-          <li>(goals) Add data engine and details pane for habit tracking ( https://github.com/trougnouf/cfait/issues/41 )</li>
-          <li>(goals) Implement dynamic timeframe windows for habit tracking and add Goals tab</li>
+          <li
+                    >(goals) Add data engine and details pane for habit tracking ( https://github.com/trougnouf/cfait/issues/41 )</li>
+          <li
+                    >(goals) Implement dynamic timeframe windows for habit tracking and add Goals tab</li>
           <li>(goals) Add show_goals_tab</li>
-          <li>(gui) Add goal manager to the GUI settings and rm cancelled occurrences from goals count</li>
+          <li
+                    >(gui) Add goal manager to the GUI settings and rm cancelled occurrences from goals count</li>
           <li>(goals) Add inline goal parsing from smart input bar</li>
-          <li>(goals) Add smart duration formatting, implicit progression settings, and quick delete actions</li>
-          <li>(goals) Sync timestamps for goals, auto-prefix keys, enable TUI goal navigation</li>
+          <li
+                    >(goals) Add smart duration formatting, implicit progression settings, and quick delete actions</li>
+          <li
+                    >(goals) Sync timestamps for goals, auto-prefix keys, enable TUI goal navigation</li>
           <li>(goals) Android/Kotlin implementation</li>
-          <li>(goals) Replace GoalPeriod with flexible interval system for goal tracking</li>
+          <li
+                    >(goals) Replace GoalPeriod with flexible interval system for goal tracking</li>
           <li>(goals) Update goal syntax to use / spearator</li>
-          <li>Align codebase with SPECS: pinned sort, GUI shortcut tooltips, Ctrl+E docs</li>
-          <li>Implement transient sidebar auto-expansion and manual task tree collapse in searches, ensure Android feature parity ( https://github.com/trougnouf/cfait/issues/42 )</li>
+          <li
+                    >Align codebase with SPECS: pinned sort, GUI shortcut tooltips, Ctrl+E docs</li>
+          <li
+                    >Implement transient sidebar auto-expansion and manual task tree collapse in searches, ensure Android feature parity ( https://github.com/trougnouf/cfait/issues/42 )</li>
           <li>(gui) Exit settings using the escape key</li>
           <li>Add syntax highlighting for single-task goal:</li>
           <li>Show task-specific goals in sidebar (optional)</li>
-          <li>Add goal:weekly syntax and hide task-specific goals from hidden collection</li>
-          <li>(android) Support deleting goals in goals tab, move some settings to more (advanced) settings</li>
-          <li>Add #permanent tasks, weekday time logging, and human-friendly duration formatting</li>
-          <li>(goals) Implement heatmap ( https://github.com/trougnouf/cfait/issues/41 )</li>
-          <li>Improve goal formatting (all clients), add log time action (Android)</li>
+          <li
+                    >Add goal:weekly syntax and hide task-specific goals from hidden collection</li>
+          <li
+                    >(android) Support deleting goals in goals tab, move some settings to more (advanced) settings</li>
+          <li
+                    >Add #permanent tasks, weekday time logging, and human-friendly duration formatting</li>
+          <li
+                    >(goals) Implement heatmap ( https://github.com/trougnouf/cfait/issues/41 )</li>
+          <li
+                    >Improve goal formatting (all clients), add log time action (Android)</li>
           <li>(goals) Ignore trash collection</li>
-          <li>Replace priority cutoff (months) with priority cutoff (days) and default to 30-days, document the sorting settings</li>
+          <li
+                    >Replace priority cutoff (months) with priority cutoff (days) and default to 30-days, document the sorting settings</li>
           <li>(android) Split save/expand button in task input bar</li>
           <li>(goals) Time sessions editor</li>
           <li>(cli) Support parent (-p)</li>
           <li>(gui) Add settings and help buttons when sidebar is hidden</li>
           <li>Implement JIT sync to prevent phantom alarms across devices</li>
           <li>(parser) Implement done:now</li>
-          <li>(merge) Apply set-based 3-way merge for list fields and smart alarm merging (avoids conflict copies)</li>
+          <li
+                    >(merge) Apply set-based 3-way merge for list fields and smart alarm merging (avoids conflict copies)</li>
           <li>(goals) Apply set log level to all clients</li>
         </ul>
         <p>Bug Fixes:</p>
@@ -119,26 +134,35 @@
           <li>(goals) Implicit duration math, help docs</li>
           <li>(goals) Duration goal top-up logic</li>
           <li>Android build</li>
-          <li>(goals) Refine goals setting placement, localized empty message, and android tab headers</li>
+          <li
+                    >(goals) Refine goals setting placement, localized empty message, and android tab headers</li>
           <li>(goals) Prevent empty task creation on Android</li>
-          <li>(gui) Use stateless handlers for settings and onboarding hotkey subscriptions</li>
-          <li>Fix index out of bounds panic in merge_assignment_tokens by reordering bounds check</li>
-          <li>Fix TUI task creation with metadata-only inputs by falling back to raw input as summary</li>
-          <li>(android) Unify goal row click behavior and hide delete button for task goals</li>
-          <li>(merge) Add missing fields to 3-way merge and fix unmapped_properties merge logic</li>
+          <li
+                    >(gui) Use stateless handlers for settings and onboarding hotkey subscriptions</li>
+          <li
+                    >Fix index out of bounds panic in merge_assignment_tokens by reordering bounds check</li>
+          <li
+                    >Fix TUI task creation with metadata-only inputs by falling back to raw input as summary</li>
+          <li
+                    >(android) Unify goal row click behavior and hide delete button for task goals</li>
+          <li
+                    >(merge) Add missing fields to 3-way merge and fix unmapped_properties merge logic</li>
           <li>(parser) Reset create_event and goal in apply_smart_input</li>
           <li>Fix settings (and aliases, goals) synchronization</li>
-          <li>(cli) Fetch all affected calendars during sync and daemon operations to ensure the local cache is fully updated</li>
+          <li
+                    >(cli) Fetch all affected calendars during sync and daemon operations to ensure the local cache is fully updated</li>
           <li>Syntax highlight hours range (e.g. `^@16:20-17:20`)</li>
         </ul>
         <p>Documentation:</p>
         <ul>
-          <li>(goals) Show both count and duration examples, mention settings</li>
+          <li
+                    >(goals) Show both count and duration examples, mention settings</li>
           <li>Update README and CONTRIBUTING</li>
           <li>(specs) Add @after in tokens table</li>
           <li>Fix copy address in support</li>
           <li>Update goal syntax example</li>
-          <li>Rm settings keyboard shortcut from TUI help ( https://github.com/trougnouf/cfait/issues/43 )</li>
+          <li
+                    >Rm settings keyboard shortcut from TUI help ( https://github.com/trougnouf/cfait/issues/43 )</li>
           <li>(help) Clarify goals usage</li>
           <li>(i18n) Make examples localizable</li>
           <li>(i18n) French translations</li>
@@ -148,14 +172,18 @@
         </ul>
         <p>Performance:</p>
         <ul>
-          <li>(goal) Cache goal progress, fix date boundaries, wire keyboard navigation</li>
-          <li>(client) Replace REPORT with unbounded blind DELETEs and skip cleanup for new tasks</li>
+          <li
+                    >(goal) Cache goal progress, fix date boundaries, wire keyboard navigation</li>
+          <li
+                    >(client) Replace REPORT with unbounded blind DELETEs and skip cleanup for new tasks</li>
         </ul>
         <p>Styling:</p>
         <ul>
           <li>(gui) Increase right click menu width slightly</li>
-          <li>(android) Move goal and tag alias editor from advanced settings to the main settings screen</li>
-          <li>(android) Conditionally show save button iff description editor is expanded</li>
+          <li
+                    >(android) Move goal and tag alias editor from advanced settings to the main settings screen</li>
+          <li
+                    >(android) Conditionally show save button iff description editor is expanded</li>
         </ul>
         <p>Miscellaneous Tasks:</p>
         <ul>
@@ -164,7 +192,8 @@
           <li>Fix Android compilation issue</li>
           <li>Fix tests</li>
           <li>Fix Android build error</li>
-          <li>(android) Move per-task heatmap to TaskDetailScreen ( https://github.com/trougnouf/cfait/issues/41 )</li>
+          <li
+                    >(android) Move per-task heatmap to TaskDetailScreen ( https://github.com/trougnouf/cfait/issues/41 )</li>
           <li>(android) Correct goal interval formatting</li>
           <li>(android) Correct goal interval formatting</li>
           <li>(i18n) Remove "Task Manager" from about_title</li>
@@ -179,8 +208,10 @@
       <description>
         <p>Bug Fixes:</p>
         <ul>
-          <li>(tui) Calculate input cursor position using visual unicode width for CJK support ( https://github.com/trougnouf/cfait/issues/39 )</li>
-          <li>(gui) Update ACTIVE_FOCUS state when focusing text inputs (avoids toggling tasks while editing)</li>
+          <li
+                    >(tui) Calculate input cursor position using visual unicode width for CJK support ( https://github.com/trougnouf/cfait/issues/39 )</li>
+          <li
+                    >(gui) Update ACTIVE_FOCUS state when focusing text inputs (avoids toggling tasks while editing)</li>
         </ul>
         <p>Miscellaneous Tasks:</p>
         <ul>
@@ -205,20 +236,28 @@
         <p>Features:</p>
         <ul>
           <li>(sort) Sort overdue tasks by priority over due date</li>
-          <li>(cli) Expand CLI with edit command, collection listing/writing, and json outputs</li>
-          <li>(sorting) Add sort presets and default to Urgent &gt; Started &gt; Due Soon, add +pin</li>
-          <li>(cli) Add --no-wait/-w flags with background process auto-detection</li>
-          <li>(ui) Auto-expand sidebar tags and locations when selected (tui, gui, https://github.com/trougnouf/cfait/issues/38 )</li>
+          <li
+                    >(cli) Expand CLI with edit command, collection listing/writing, and json outputs</li>
+          <li
+                    >(sorting) Add sort presets and default to Urgent &gt; Started &gt; Due Soon, add +pin</li>
+          <li
+                    >(cli) Add --no-wait/-w flags with background process auto-detection</li>
+          <li
+                    >(ui) Auto-expand sidebar tags and locations when selected (tui, gui, https://github.com/trougnouf/cfait/issues/38 )</li>
           <li>(ui) Auto-expand sidebar tags when selected (tui, gui)</li>
           <li>Implement nested tag grouping and key=value rendering</li>
           <li>Expose tasks creation date</li>
-          <li>(ui) Implement GUI sidebar focus navigation and refine TUI tree indicators ( https://github.com/trougnouf/cfait/issues/38 , winter8)</li>
+          <li
+                    >(ui) Implement GUI sidebar focus navigation and refine TUI tree indicators ( https://github.com/trougnouf/cfait/issues/38 , winter8)</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
-          <li>Treat DAV:all aggregate privilege as writable in calendar discovery</li>
-          <li>(tui) Avoid redundant journal actions and syncs on no-op collapse and priority change (reported by starkgoose)</li>
-          <li>Resolve DTSTAMP fallback for modified dates, deduplicate identical timestamps, and bump storage versions</li>
+          <li
+                    >Treat DAV:all aggregate privilege as writable in calendar discovery</li>
+          <li
+                    >(tui) Avoid redundant journal actions and syncs on no-op collapse and priority change (reported by starkgoose)</li>
+          <li
+                    >Resolve DTSTAMP fallback for modified dates, deduplicate identical timestamps, and bump storage versions</li>
         </ul>
         <p>Documentation:</p>
         <ul>
@@ -234,17 +273,22 @@
       <description>
         <p>Features:</p>
         <ul>
-          <li>(tui) Add a way to delete relations (delete key in the links list (L)) and to lock yank (shift+y), add missing help items (reported by wunter8)</li>
+          <li
+                    >(tui) Add a way to delete relations (delete key in the links list (L)) and to lock yank (shift+y), add missing help items (reported by wunter8)</li>
           <li>(tui) Add context menu (enter)</li>
           <li>Add ExtractSubtasks action</li>
           <li>(gui) Right click context menu materializes at cursor height</li>
-          <li>(gui) Right click context menu materializes exactly where the cursor is positioned</li>
-          <li>(tui) Adapt TUI color contrasts dynamically to match the configured light/dark app theme ( https://codeberg.org/trougnouf/cfait/issues/77 )</li>
+          <li
+                    >(gui) Right click context menu materializes exactly where the cursor is positioned</li>
+          <li
+                    >(tui) Adapt TUI color contrasts dynamically to match the configured light/dark app theme ( https://codeberg.org/trougnouf/cfait/issues/77 )</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
-          <li>Fix RFC 5545 compliance by aligning RRULE UNTIL and EXDATE value types with DTSTART</li>
-          <li>(tui) Hide relationship menu when empty and add parent task support</li>
+          <li
+                    >Fix RFC 5545 compliance by aligning RRULE UNTIL and EXDATE value types with DTSTART</li>
+          <li
+                    >(tui) Hide relationship menu when empty and add parent task support</li>
         </ul>
         <p>Other:</p>
         <ul>
@@ -257,7 +301,8 @@
         <p>Miscellaneous Tasks:</p>
         <ul>
           <li>Unify Arch packages in packaging/arch</li>
-          <li>Add logging for notification errors ( https://codeberg.org/trougnouf/cfait/issues/80 )</li>
+          <li
+                    >Add logging for notification errors ( https://codeberg.org/trougnouf/cfait/issues/80 )</li>
         </ul>
       </description>
     </release>
@@ -269,9 +314,12 @@
         </ul>
         <p>Bug Fixes:</p>
         <ul>
-          <li>Propagate tag aliases and config updates on startup and refresh across all clients</li>
-          <li>Reorder controller logic to push settings changes upstream before journal sync</li>
-          <li>Fix initial settings and aliases sync by honoring remote payload when uninitialized</li>
+          <li
+                    >Propagate tag aliases and config updates on startup and refresh across all clients</li>
+          <li
+                    >Reorder controller logic to push settings changes upstream before journal sync</li>
+          <li
+                    >Fix initial settings and aliases sync by honoring remote payload when uninitialized</li>
         </ul>
         <p>Miscellaneous Tasks:</p>
         <ul>
@@ -283,73 +331,100 @@
       <description>
         <p>Features:</p>
         <ul>
-          <li>"complete and shift schedule" on recurrent tasks with shift+enter keyboard shortcut (TUI, GUI), add @after syntax as alternative to @every where CompleteAndShift is the default</li>
+          <li
+                    >"complete and shift schedule" on recurrent tasks with shift+space keyboard shortcut (TUI, GUI), add @after syntax as alternative to @every where CompleteAndShift is the default</li>
           <li>Complete and shift schedule: test and Android feature parity</li>
           <li>(gui) Add missing keyboard navigation when moving tasks</li>
           <li>(settings) Allow password hide/show</li>
-          <li>(gui) Make context menu (right click / more actions) scrollable</li>
+          <li
+                    >(gui) Make context menu (right click / more actions) scrollable</li>
           <li>(sorting) Sort standard tasks by priority (toggle with p)</li>
           <li>(gui) Persist ui_scale between sessions</li>
           <li>(gui) Improve selection behavior after task completion</li>
           <li>Highlight relative recurrence and hide redundant shift action</li>
-          <li>(tui) Support external editors (EDITOR/VISUAL env variable or description_editor setting, https://github.com/trougnouf/cfait/issues/36 )</li>
+          <li
+                    >(tui) Support external editors (EDITOR/VISUAL env variable or description_editor setting, https://github.com/trougnouf/cfait/issues/36 )</li>
           <li>(android) Expose sorting and priority settings in UI</li>
-          <li>Implement collapsible tag/location trees in TUI/GUI with alias hiding and persistent state ( https://github.com/trougnouf/cfait/issues/37 )</li>
-          <li>(android) Implement collapsible tag/location trees in Android UI ( https://github.com/trougnouf/cfait/issues/37 )</li>
-          <li>Implement settings and alias synchronization over CalDAV ( https://codeberg.org/trougnouf/cfait/issues/21 )</li>
+          <li
+                    >Implement collapsible tag/location trees in TUI/GUI with alias hiding and persistent state ( https://github.com/trougnouf/cfait/issues/37 )</li>
+          <li
+                    >(android) Implement collapsible tag/location trees in Android UI ( https://github.com/trougnouf/cfait/issues/37 )</li>
+          <li
+                    >Implement settings and alias synchronization over CalDAV ( https://codeberg.org/trougnouf/cfait/issues/21 )</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
-          <li>(i18n) Improve Czech translation wording for sorting/priority terms</li>
-          <li>(store) Stop_task resets time tracking instead of accumulating</li>
-          <li>(sync) Deduplicate cross-collection uids and add android parent navigation</li>
-          <li>(ci) Build Android APKs originating from PRs with dummy signing key ( https://codeberg.org/trougnouf/cfait/pulls/68 )</li>
-          <li>(ci) Move dummy keystore fallback logic from release.yml to test_roll.yml</li>
+          <li
+                    >(i18n) Improve Czech translation wording for sorting/priority terms</li>
+          <li
+                    >(store) Stop_task resets time tracking instead of accumulating</li>
+          <li
+                    >(sync) Deduplicate cross-collection uids and add android parent navigation</li>
+          <li
+                    >(ci) Build Android APKs originating from PRs with dummy signing key ( https://codeberg.org/trougnouf/cfait/pulls/68 )</li>
+          <li
+                    >(ci) Move dummy keystore fallback logic from release.yml to test_roll.yml</li>
           <li>(auth) Ensure android returns config with credentials</li>
           <li>(gui) Remove "All actions pinned" from right click menu</li>
-          <li>(gui) Move sort-by-priority to settings, change shortcut to Ctrl+P</li>
-          <li>(android) Move sort_standard_by_priority to end of Preferences section</li>
-          <li>(android) Add missing sortStandardByPriority param to saveConfig call</li>
+          <li
+                    >(gui) Move sort-by-priority to settings, change shortcut to Ctrl+P</li>
+          <li
+                    >(android) Move sort_standard_by_priority to end of Preferences section</li>
+          <li
+                    >(android) Add missing sortStandardByPriority param to saveConfig call</li>
           <li>(gui) Keep selection reasonable when task marked complete</li>
           <li>(gui) Show priority tag even without other metadata</li>
-          <li>Prevent offline description data loss and add terminal-safe save shortcuts</li>
-          <li>Prevent offline description data loss and add terminal-safe save shortcuts</li>
+          <li
+                    >Prevent offline description data loss and add terminal-safe save shortcuts</li>
+          <li
+                    >Prevent offline description data loss and add terminal-safe save shortcuts</li>
         </ul>
         <p>Other:</p>
         <ul>
           <li>Translation `location` words: `loc:` versus `geo:`</li>
           <li>Translated using Weblate (Russian)</li>
-          <li>Merge pull request 'Fix Czech translation' (#65) from MarrekNozka/cfait:master into master</li>
+          <li
+                    >Merge pull request 'Fix Czech translation' (#65) from MarrekNozka/cfait:master into master</li>
           <li>Translated using Weblate (German)</li>
           <li>Translated using Weblate (Russian)</li>
           <li>Translated using Weblate (Russian)</li>
           <li>Add cfait-bin AUR package to docs</li>
           <li>Merge pull request #34 from brandon-doornbos/cfait-bin</li>
           <li>Merge branch 'master' of https://codeberg.org/trougnouf/cfait</li>
-          <li>Merge pull request 'Fix Czech translation' (#66) from MarrekNozka/cfait:master into master</li>
+          <li
+                    >Merge pull request 'Fix Czech translation' (#66) from MarrekNozka/cfait:master into master</li>
           <li>Merge branch 'master' of https://codeberg.org/trougnouf/cfait</li>
-          <li>Merge pull request 'fix(store): stop_task resets time tracking instead of accumulating' (#67) from MarrekNozka/cfait:fix/stop-task-reset into master</li>
+          <li
+                    >Merge pull request 'fix(store): stop_task resets time tracking instead of accumulating' (#67) from MarrekNozka/cfait:fix/stop-task-reset into master</li>
           <li>Remove tui feature</li>
           <li>Merge branch 'master' into show-password-toggle</li>
           <li>Merge branch 'master' into show-password-toggle</li>
-          <li>Merge pull request 'feat(settings): Allow password hide/show' (#69) from eltower/cfait:show-password-toggle into master</li>
+          <li
+                    >Merge pull request 'feat(settings): Allow password hide/show' (#69) from eltower/cfait:show-password-toggle into master</li>
           <li>Merge branch 'master' into android-auth</li>
           <li>Merge branch 'master' into android-auth</li>
-          <li>Merge pull request 'fix(auth): Ensure android returns config with credentials' (#68) from eltower/cfait:android-auth into master</li>
+          <li
+                    >Merge pull request 'fix(auth): Ensure android returns config with credentials' (#68) from eltower/cfait:android-auth into master</li>
           <li>Merge remote-tracking branch 'refs/remotes/origin/master'</li>
           <li>Translated using Weblate (Chinese (Simplified Han script))</li>
           <li>Translated using Weblate (Spanish)</li>
           <li>Merge branch 'master' of https://codeberg.org/trougnouf/cfait</li>
-          <li>Merge pull request 'new feature: switch sorting by priority' (#70) from MarrekNozka/cfait:feature/switch-sorting-by-priority-or-date into master</li>
+          <li
+                    >Merge pull request 'new feature: switch sorting by priority' (#70) from MarrekNozka/cfait:feature/switch-sorting-by-priority-or-date into master</li>
           <li>Unify for also toggle task case</li>
-          <li>Merge pull request 'fix(gui): show priority tag even without other metadata' (#71) from MarrekNozka/cfait:fix/priority-hidden-without-metadata into master</li>
-          <li>Merge pull request 'feat(gui): persist ui_scale between sessions' (#72) from MarrekNozka/cfait:feature/persist-ui-scale into master</li>
-          <li>Merge branch 'master' into adjust-gui-selection-after-task-complete</li>
-          <li>Merge pull request 'fix(gui): Keep selection reasonable when task marked complete' (#73) from eltower/cfait:adjust-gui-selection-after-task-complete into master</li>
+          <li
+                    >Merge pull request 'fix(gui): show priority tag even without other metadata' (#71) from MarrekNozka/cfait:fix/priority-hidden-without-metadata into master</li>
+          <li
+                    >Merge pull request 'feat(gui): persist ui_scale between sessions' (#72) from MarrekNozka/cfait:feature/persist-ui-scale into master</li>
+          <li
+                    >Merge branch 'master' into adjust-gui-selection-after-task-complete</li>
+          <li
+                    >Merge pull request 'fix(gui): Keep selection reasonable when task marked complete' (#73) from eltower/cfait:adjust-gui-selection-after-task-complete into master</li>
           <li>Translated using Weblate (German)</li>
           <li>Translated using Weblate (Spanish)</li>
           <li>Merge remote-tracking branch 'refs/remotes/origin/master'</li>
-          <li>Merge pull request 'feat(android): expose sorting and priority settings in UI' (#75) from MarrekNozka/cfait:feature/android-sorting-priority-settings into master</li>
+          <li
+                    >Merge pull request 'feat(android): expose sorting and priority settings in UI' (#75) from MarrekNozka/cfait:feature/android-sorting-priority-settings into master</li>
           <li>Translated using Weblate (Chinese (Simplified Han script))</li>
           <li>Translated using Weblate (Spanish)</li>
           <li>Translated using Weblate (Czech)</li>
@@ -359,30 +434,39 @@
         </ul>
         <p>Refactor:</p>
         <ul>
-          <li>(model) Introduce CompareOptions struct for compare_with_cutoff</li>
+          <li
+                    >(model) Introduce CompareOptions struct for compare_with_cutoff</li>
           <li>(gui) Centralized actions visibility logic</li>
           <li>Disallow(clippy::too_many_arguments)</li>
         </ul>
         <p>Documentation:</p>
         <ul>
-          <li>(readme) Update sort toggle shortcut P → Ctrl+P, remove toolbar reference</li>
+          <li
+                    >(readme) Update sort toggle shortcut P → Ctrl+P, remove toolbar reference</li>
         </ul>
         <p>Performance:</p>
         <ul>
-          <li>(gui) Defer tooltips, remove CursorMoved, use dynamic context menu placement</li>
-          <li>(gui) Defer tooltips, remove CursorMoved, use dynamic context menu placement (part 2)</li>
+          <li
+                    >(gui) Defer tooltips, remove CursorMoved, use dynamic context menu placement</li>
+          <li
+                    >(gui) Defer tooltips, remove CursorMoved, use dynamic context menu placement (part 2)</li>
         </ul>
         <p>Styling:</p>
         <ul>
-          <li>Use the same tree icons for tags and locations as in the tasks list</li>
+          <li
+                    >Use the same tree icons for tags and locations as in the tasks list</li>
         </ul>
         <p>Miscellaneous Tasks:</p>
         <ul>
-          <li>(auth) Regenerate kotlin bindings ( https://codeberg.org/trougnouf/cfait/pulls/68 )</li>
-          <li>(android) Regenerate cfait.kt bindings without ktlint formatting</li>
+          <li
+                    >(auth) Regenerate kotlin bindings ( https://codeberg.org/trougnouf/cfait/pulls/68 )</li>
+          <li
+                    >(android) Regenerate cfait.kt bindings without ktlint formatting</li>
           <li>Cleanup unused SORT_PRIORITY icon and apply ktlint</li>
-          <li>Enforce code formatting and add pre-commit hooks ( https://codeberg.org/trougnouf/cfait/issues/74 )</li>
-          <li>Workspace-wide cargo fmt sweep ( https://codeberg.org/trougnouf/cfait/issues/74 )</li>
+          <li
+                    >Enforce code formatting and add pre-commit hooks ( https://codeberg.org/trougnouf/cfait/issues/74 )</li>
+          <li
+                    >Workspace-wide cargo fmt sweep ( https://codeberg.org/trougnouf/cfait/issues/74 )</li>
           <li>Register codebase formatting sweep in .git-blame-ignore-revs</li>
           <li>Update Rust toolchain to 1.96.0</li>
           <li>Cargo fmt --all</li>
@@ -395,31 +479,47 @@
       <description>
         <p>Features:</p>
         <ul>
-          <li>Add target path to recovered tasks' description ( https://github.com/trougnouf/cfait/issues/25 )</li>
-          <li>Optimize companion event sync using CalDAV REPORT queries and task UID metadata</li>
-          <li>Log level advanced setting ( https://github.com/trougnouf/cfait/issues/31 )</li>
-          <li>Add ability to create remote CalDAV collections ( https://codeberg.org/trougnouf/cfait/issues/62 )</li>
+          <li
+                    >Add target path to recovered tasks' description ( https://github.com/trougnouf/cfait/issues/25 )</li>
+          <li
+                    >Optimize companion event sync using CalDAV REPORT queries and task UID metadata</li>
+          <li
+                    >Log level advanced setting ( https://github.com/trougnouf/cfait/issues/31 )</li>
+          <li
+                    >Add ability to create remote CalDAV collections ( https://codeberg.org/trougnouf/cfait/issues/62 )</li>
           <li>Remember and synchronize task trees collapsed status</li>
-          <li>(android) Merge calendar visibility toggles into collection editors ( https://codeberg.org/trougnouf/cfait/issues/62 )</li>
-          <li>(android) Log Kotlin-related crashes to cache/android_crash.txt ( https://codeberg.org/trougnouf/cfait/issues/63 )</li>
-          <li>Set sub-tasks' implicit start datetime based on parent's (for e.g. is:ready filtering and random task selection)</li>
-          <li>Add ## and @@@ syntax to add tags and locations that remain in the title</li>
+          <li
+                    >(android) Merge calendar visibility toggles into collection editors ( https://codeberg.org/trougnouf/cfait/issues/62 )</li>
+          <li
+                    >(android) Log Kotlin-related crashes to cache/android_crash.txt ( https://codeberg.org/trougnouf/cfait/issues/63 )</li>
+          <li
+                    >Set sub-tasks' implicit start datetime based on parent's (for e.g. is:ready filtering and random task selection)</li>
+          <li
+                    >Add ## and @@@ syntax to add tags and locations that remain in the title</li>
           <li>(gui) Remember cursor position after deleting a task</li>
           <li>(i18n) Add complete Czech translation</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
-          <li>Fix cyclic parent_uid loops and prevent recursive UI event flood</li>
-          <li>Refine CalDAV path overlap detection to ignore root-only slashes and support disjoint paths ( https://github.com/trougnouf/cfait/issues/25 )</li>
-          <li>(sync) Use status codes for robust error handling and allow recovery export ( https://github.com/trougnouf/cfait/issues/31 )</li>
+          <li
+                    >Fix cyclic parent_uid loops and prevent recursive UI event flood</li>
+          <li
+                    >Refine CalDAV path overlap detection to ignore root-only slashes and support disjoint paths ( https://github.com/trougnouf/cfait/issues/25 )</li>
+          <li
+                    >(sync) Use status codes for robust error handling and allow recovery export ( https://github.com/trougnouf/cfait/issues/31 )</li>
           <li>(i18n) Fix mismatching substitution</li>
-          <li>(android) Preserve stored password only for unchanged username</li>
+          <li
+                    >(android) Preserve stored password only for unchanged username</li>
           <li>(tui) Store password to keyring during onboarding</li>
-          <li>(gui,mobile) Implement optimistic updates for remote calendar actions to prevent UI jitter ( https://codeberg.org/trougnouf/cfait/issues/62 )</li>
+          <li
+                    >(gui,mobile) Implement optimistic updates for remote calendar actions to prevent UI jitter ( https://codeberg.org/trougnouf/cfait/issues/62 )</li>
           <li>(mobile) Prevent DST gap panics in implicit alarm evaluators</li>
-          <li>Hide collapsed sub-tasks which were picked up by the fallback routine for orphaned tasks (reported by @Shadowminx )</li>
-          <li>(i18n) Improve Czech translation terminology and add missing keys</li>
-          <li>(android) Fix language switch on older (&lt;13) Android versions ( https://github.com/trougnouf/cfait/issues/32 )</li>
+          <li
+                    >Hide collapsed sub-tasks which were picked up by the fallback routine for orphaned tasks (reported by @Shadowminx )</li>
+          <li
+                    >(i18n) Improve Czech translation terminology and add missing keys</li>
+          <li
+                    >(android) Fix language switch on older (&lt;13) Android versions ( https://github.com/trougnouf/cfait/issues/32 )</li>
         </ul>
         <p>Other:</p>
         <ul>
@@ -473,8 +573,10 @@
           <li>Translated using Weblate (French)</li>
           <li>Translated using Weblate (French)</li>
           <li>Translated using Weblate (Spanish)</li>
-          <li>Merge branch 'master' into wip-fix-android-credential-not-saved</li>
-          <li>Merge pull request 'Fix Android credential persistence when password field is left blank' (#59) from zerodegress/cfait:wip-fix-android-credential-not-saved into master</li>
+          <li
+                    >Merge branch 'master' into wip-fix-android-credential-not-saved</li>
+          <li
+                    >Merge pull request 'Fix Android credential persistence when password field is left blank' (#59) from zerodegress/cfait:wip-fix-android-credential-not-saved into master</li>
           <li>Translated using Weblate (French)</li>
           <li>Translated using Weblate (Chinese (Simplified Han script))</li>
           <li>Translated using Weblate (German)</li>
@@ -486,30 +588,40 @@
           <li>Translated using Weblate (Chinese (Simplified Han script))</li>
           <li>Translated using Weblate (Spanish)</li>
           <li>Merge remote-tracking branch 'refs/remotes/origin/master'</li>
-          <li>Merge pull request 'Czech translation' (#64) from MarrekNozka/cfait:master into master</li>
+          <li
+                    >Merge pull request 'Czech translation' (#64) from MarrekNozka/cfait:master into master</li>
           <li>Translated using Weblate (Chinese (Simplified Han script))</li>
           <li>Translated using Weblate (Spanish)</li>
         </ul>
         <p>Documentation:</p>
         <ul>
           <li>Update French translations</li>
-          <li>(i18n) Localize hardcoded strings, prune unused keys, and unify TUI/CLI help</li>
-          <li>(i18n) Allow migration_complete_moved to be singular/pluralized (per gallegonovato)</li>
-          <li>(i18n) Allow migration_complete_moved to be singular/pluralized (update existing translations)</li>
-          <li>(i18n) Support singular/plural forms for calendars and sessions (reported by gallegonovato)</li>
-          <li>(i18n) Add zero plural form and use tasks_count i18n key (suggested by @gallegonovato)</li>
+          <li
+                    >(i18n) Localize hardcoded strings, prune unused keys, and unify TUI/CLI help</li>
+          <li
+                    >(i18n) Allow migration_complete_moved to be singular/pluralized (per gallegonovato)</li>
+          <li
+                    >(i18n) Allow migration_complete_moved to be singular/pluralized (update existing translations)</li>
+          <li
+                    >(i18n) Support singular/plural forms for calendars and sessions (reported by gallegonovato)</li>
+          <li
+                    >(i18n) Add zero plural form and use tasks_count i18n key (suggested by @gallegonovato)</li>
           <li>(i18n) Remove unused color strings</li>
           <li>(i18n) French translations</li>
-          <li>(i18n) Remove unnecessary formatting marks from translatable strings</li>
-          <li>(i18n) Fix pluralization usage and remove duplicate help_search_filter_by_duration string</li>
-          <li>(i18n) Replace hardcoded text with i18n strings, fix tasks_count usage</li>
+          <li
+                    >(i18n) Remove unnecessary formatting marks from translatable strings</li>
+          <li
+                    >(i18n) Fix pluralization usage and remove duplicate help_search_filter_by_duration string</li>
+          <li
+                    >(i18n) Replace hardcoded text with i18n strings, fix tasks_count usage</li>
           <li>(i18n) Replace hardcoded text with i18n strings</li>
           <li>(i18n) Remove unused strings</li>
         </ul>
         <p>Styling:</p>
         <ul>
           <li>Make the Collapse tree button/icon a random shade of green</li>
-          <li>Make Windows icons transparent ( https://codeberg.org/trougnouf/cfait/issues/60 )</li>
+          <li
+                    >Make Windows icons transparent ( https://codeberg.org/trougnouf/cfait/issues/60 )</li>
           <li>(android) Use one line per collection in the settings</li>
           <li>(gui) Improve collapsed tree icon visibility</li>
           <li>(android) Reduce space between collections in the settings</li>
@@ -531,22 +643,32 @@
       <description>
         <p>Features:</p>
         <ul>
-          <li>(parser) Support start-due time range (e.g. ^@2026-05-06 12:20-16:20)</li>
-          <li>(linux) Warn users using the volatile keyutils keystore ( https://github.com/trougnouf/cfait/issues/29 )</li>
+          <li
+                    >(parser) Support start-due time range (e.g. ^@2026-05-06 12:20-16:20)</li>
+          <li
+                    >(linux) Warn users using the volatile keyutils keystore ( https://github.com/trougnouf/cfait/issues/29 )</li>
           <li>(gui) Unsynced icon tooltip shows unsynced items</li>
-          <li>Optimize companion event sync using CalDAV REPORT queries and task UID metadata</li>
+          <li
+                    >Optimize companion event sync using CalDAV REPORT queries and task UID metadata</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
-          <li>Decouple keyring access and ensure Linux Secret Service unlocking to fix password loss ( https://github.com/trougnouf/cfait/issues/29 )</li>
+          <li
+                    >Decouple keyring access and ensure Linux Secret Service unlocking to fix password loss ( https://github.com/trougnouf/cfait/issues/29 )</li>
           <li>(gui) Restore broken GUI task list items and navigation</li>
-          <li>(linux) Handle locked keyrings and prevent redundant config save ( https://github.com/trougnouf/cfait/issues/29 )</li>
-          <li>(flatpak-gui) Resolve flatpak hang and prevent mid-session password loss</li>
-          <li>(gui) Silence calloop log noise by replacing blocking sleep with tokio sleep</li>
-          <li>Decouple disk persistence from network sync to resolve timeouts and 412 ETag conflicts ( https://github.com/trougnouf/cfait/issues/25 )</li>
-          <li>(gui) Use in-memory state for UI refreshes to fix config race condition</li>
+          <li
+                    >(linux) Handle locked keyrings and prevent redundant config save ( https://github.com/trougnouf/cfait/issues/29 )</li>
+          <li
+                    >(flatpak-gui) Resolve flatpak hang and prevent mid-session password loss</li>
+          <li
+                    >(gui) Silence calloop log noise by replacing blocking sleep with tokio sleep</li>
+          <li
+                    >Decouple disk persistence from network sync to resolve timeouts and 412 ETag conflicts ( https://github.com/trougnouf/cfait/issues/25 )</li>
+          <li
+                    >(gui) Use in-memory state for UI refreshes to fix config race condition</li>
           <li>(tui) Restore and localize About/Support help screen</li>
-          <li>(android) Fix Android filter flash by using local UI state after task dispatch</li>
+          <li
+                    >(android) Fix Android filter flash by using local UI state after task dispatch</li>
         </ul>
         <p>Other:</p>
         <ul>
@@ -568,14 +690,16 @@
           <li>Translated using Weblate (Czech)</li>
           <li>Translated using Weblate (Spanish)</li>
           <li>Merge remote-tracking branch 'refs/remotes/origin/master'</li>
-          <li>Fix stale unsynced state by triggering journal sync after local actions</li>
+          <li
+                    >Fix stale unsynced state by triggering journal sync after local actions</li>
           <li>Translated using Weblate (Chinese (Simplified Han script))</li>
           <li>Merge remote-tracking branch 'refs/remotes/origin/master'</li>
         </ul>
         <p>Refactor:</p>
         <ul>
           <li>Centralize clients logic via AppIntent</li>
-          <li>(tui) Preserve optimistic updates by using granular sync events in network actor</li>
+          <li
+                    >(tui) Preserve optimistic updates by using granular sync events in network actor</li>
           <li>Revert unified UI code (keep AppIntent, SessienState)</li>
         </ul>
         <p>Documentation:</p>
@@ -584,28 +708,37 @@
         </ul>
         <p>Performance:</p>
         <ul>
-          <li>(ui) Optimize UI responsiveness by precomputing transient visual attributes in the filtering pipeline</li>
-          <li>(client) Optimize companion event sync with concurrency and early returns</li>
+          <li
+                    >(ui) Optimize UI responsiveness by precomputing transient visual attributes in the filtering pipeline</li>
+          <li
+                    >(client) Optimize companion event sync with concurrency and early returns</li>
         </ul>
         <p>Styling:</p>
         <ul>
           <li>(gui) Restore tight layout</li>
           <li>(gui) Align tags/datetime/etc to the right</li>
           <li>(android) Improve android UI</li>
-          <li>(gui) Add "Toggle Sidebar (Ctrl+B)" button and auto-hide/show depending on window size ( https://github.com/trougnouf/cfait/issues/12 , https://codeberg.org/trougnouf/cfait/issues/53 )</li>
+          <li
+                    >(gui) Add "Toggle Sidebar (Ctrl+B)" button and auto-hide/show depending on window size ( https://github.com/trougnouf/cfait/issues/12 , https://codeberg.org/trougnouf/cfait/issues/53 )</li>
           <li>(android) Improve UI</li>
         </ul>
         <p>Miscellaneous Tasks:</p>
         <ul>
           <li>(ci) Prevent test_roll.yml jobs on new releases</li>
           <li>Fix Android version parser and bump version up to v1.0.0</li>
-          <li>(pkg) Add org.freedesktop.secrets dependency (Arch, *.deb, README, https://github.com/trougnouf/cfait/issues/29 )</li>
-          <li>Update libdav dependency (v0.10.4 is out, https://codeberg.org/trougnouf/cfait/issues/57 )</li>
-          <li>Mute zbus spam from log and show INFO messages in the terminal</li>
-          <li>(gui) Add permanent keyring subtitle in the loading screen, mute zbus log messages and unmute others</li>
+          <li
+                    >(pkg) Add org.freedesktop.secrets dependency (Arch, *.deb, README, https://github.com/trougnouf/cfait/issues/29 )</li>
+          <li
+                    >Update libdav dependency (v0.10.4 is out, https://codeberg.org/trougnouf/cfait/issues/57 )</li>
+          <li
+                    >Mute zbus spam from log and show INFO messages in the terminal</li>
+          <li
+                    >(gui) Add permanent keyring subtitle in the loading screen, mute zbus log messages and unmute others</li>
           <li>Re-log some iced info messages</li>
-          <li>Bump cache/storage versions, fix config save race condition, and remove unsafe unwraps</li>
-          <li>Update libdav to v0.10.5 (breaking change) and other rust dependencies</li>
+          <li
+                    >Bump cache/storage versions, fix config save race condition, and remove unsafe unwraps</li>
+          <li
+                    >Update libdav to v0.10.5 (breaking change) and other rust dependencies</li>
         </ul>
       </description>
     </release>
@@ -613,74 +746,122 @@
       <description>
         <p>Features:</p>
         <ul>
-          <li>(sorting) If a task depends on another task, the due date(time) of the blocking task is the sooner of its own or that of the task it blocks</li>
-          <li>Handle more ISO 8601 date formats (YYYYMMDD and YYYY-MM) as well as YYYY alone ( https://codeberg.org/trougnouf/cfait/issues/38 )</li>
-          <li>(parser) Allow decimal degrees with cardinal directions geo-coordinates format (e.g. "geo:50.13120° N, 4.50010° E", default format in OsmAnd~)</li>
-          <li>(android) Add "geo:here" syntax to map current geo-coordinates</li>
-          <li>Support sub(sub*) tasks creation and descriptions in initial task creation dialog using markdown syntax ( https://github.com/trougnouf/cfait/issues/22 )</li>
-          <li>(android) Support sub(sub*) tasks creation and descriptions in initial task creation dialog usin markdown syntax ( https://github.com/trougnouf/cfait/issues/22 )</li>
-          <li>Log to file (CLI, GUI, and TUI) and to stderr (CLI and TUI) ( https://codeberg.org/trougnouf/cfait/issues/48 )</li>
-          <li>(android) Log to file which is part of the exportable debug data ( https://codeberg.org/trougnouf/cfait/issues/48 )</li>
+          <li
+                    >(sorting) If a task depends on another task, the due date(time) of the blocking task is the sooner of its own or that of the task it blocks</li>
+          <li
+                    >Handle more ISO 8601 date formats (YYYYMMDD and YYYY-MM) as well as YYYY alone ( https://codeberg.org/trougnouf/cfait/issues/38 )</li>
+          <li
+                    >(parser) Allow decimal degrees with cardinal directions geo-coordinates format (e.g. "geo:50.13120° N, 4.50010° E", default format in OsmAnd~)</li>
+          <li
+                    >(android) Add "geo:here" syntax to map current geo-coordinates</li>
+          <li
+                    >Support sub(sub*) tasks creation and descriptions in initial task creation dialog using markdown syntax ( https://github.com/trougnouf/cfait/issues/22 )</li>
+          <li
+                    >(android) Support sub(sub*) tasks creation and descriptions in initial task creation dialog usin markdown syntax ( https://github.com/trougnouf/cfait/issues/22 )</li>
+          <li
+                    >Log to file (CLI, GUI, and TUI) and to stderr (CLI and TUI) ( https://codeberg.org/trougnouf/cfait/issues/48 )</li>
+          <li
+                    >(android) Log to file which is part of the exportable debug data ( https://codeberg.org/trougnouf/cfait/issues/48 )</li>
           <li>Build Flatpak and Windows executables in rolling release</li>
-          <li>(android) Add delete task tree, duplicate and promote actions (TUI/GUI parity)</li>
+          <li
+                    >(android) Add delete task tree, duplicate and promote actions (TUI/GUI parity)</li>
           <li>(android) Add haptic feedback</li>
-          <li>Open locations (GPX) action which opens all sub-tasks locations on a map (Android, GUI, TUI)</li>
-          <li>Improve create task with details and sub-tasks (Ctrl+e) experience (GUI, TUI)</li>
-          <li>(gui) Add Open URL action to the customizable actions and version the settings</li>
+          <li
+                    >Open locations (GPX) action which opens all sub-tasks locations on a map (Android, GUI, TUI)</li>
+          <li
+                    >Improve create task with details and sub-tasks (Ctrl+e) experience (GUI, TUI)</li>
+          <li
+                    >(gui) Add Open URL action to the customizable actions and version the settings</li>
           <li>(gui) Clickable jump to parent task</li>
           <li>Add a collapse/expand button for task trees</li>
-          <li>Add work mode / is:ready "w" keyboard shortcut and button (feature requested by Geoffrey Frogeye, ﻿T[]M_S∆W, Martin Stut)</li>
-          <li>Use OS-native keyring instead of plaintext password ( https://github.com/trougnouf/cfait/issues/9 , https://codeberg.org/trougnouf/cfait/issues/33 )</li>
-          <li>Implement 'z' tree fold shortcut in GUI and update help documentation</li>
-          <li>Implement robust history (custom) tagging and display completion info for related tasks</li>
+          <li
+                    >Add work mode / is:ready "w" keyboard shortcut and button (feature requested by Geoffrey Frogeye, ﻿T[]M_S∆W, Martin Stut)</li>
+          <li
+                    >Use OS-native keyring instead of plaintext password ( https://github.com/trougnouf/cfait/issues/9 , https://codeberg.org/trougnouf/cfait/issues/33 )</li>
+          <li
+                    >Implement 'z' tree fold shortcut in GUI and update help documentation</li>
+          <li
+                    >Implement robust history (custom) tagging and display completion info for related tasks</li>
           <li>(gui) Add missing keyboard shortcuts (TUI parity)</li>
-          <li>(gui) Add keyboard shortcuts and document them on hover, use tab to switch from search/add to task list</li>
-          <li>Filter read-only collections and handle 405 errors via task recovery ( https://github.com/trougnouf/cfait/issues/11 )</li>
-          <li>Catch unrecoverable errors with error codes only ( https://github.com/trougnouf/cfait/issues/11 )</li>
+          <li
+                    >(gui) Add keyboard shortcuts and document them on hover, use tab to switch from search/add to task list</li>
+          <li
+                    >Filter read-only collections and handle 405 errors via task recovery ( https://github.com/trougnouf/cfait/issues/11 )</li>
+          <li
+                    >Catch unrecoverable errors with error codes only ( https://github.com/trougnouf/cfait/issues/11 )</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
-          <li>Support geo coordinates in alias and fix uncategorized tasks filtering ( https://codeberg.org/trougnouf/cfait/issues/39 and https://codeberg.org/trougnouf/cfait/issues/40 )</li>
+          <li
+                    >Support geo coordinates in alias and fix uncategorized tasks filtering ( https://codeberg.org/trougnouf/cfait/issues/39 and https://codeberg.org/trougnouf/cfait/issues/40 )</li>
           <li>Fix recurence issues</li>
-          <li>Count sub-tags only once ( https://codeberg.org/trougnouf/cfait/issues/41 )</li>
-          <li>(android) Detect global locale if system is set to an untranslated regional variation (e.g. fr_FR -&gt; fr, https://codeberg.org/trougnouf/cfait/issues/42 )</li>
-          <li>(android) Use strict CalDAV Content-Type and fix coroutine cancellation handling</li>
+          <li
+                    >Count sub-tags only once ( https://codeberg.org/trougnouf/cfait/issues/41 )</li>
+          <li
+                    >(android) Detect global locale if system is set to an untranslated regional variation (e.g. fr_FR -&gt; fr, https://codeberg.org/trougnouf/cfait/issues/42 )</li>
+          <li
+                    >(android) Use strict CalDAV Content-Type and fix coroutine cancellation handling</li>
           <li>(Android) Log sync errors, show journaled tasks in tasks list</li>
-          <li>(sync) Route 404/409 errors to local recovery and prevent infinite sync loops ( https://codeberg.org/trougnouf/cfait/issues/43 )</li>
-          <li>(client) Robust strip_host logic to fix URL matching collisions (journal_apply_move_removes_from_source_and_adds_to_target test failed on the CI but passed locally)</li>
+          <li
+                    >(sync) Route 404/409 errors to local recovery and prevent infinite sync loops ( https://codeberg.org/trougnouf/cfait/issues/43 )</li>
+          <li
+                    >(client) Robust strip_host logic to fix URL matching collisions (journal_apply_move_removes_from_source_and_adds_to_target test failed on the CI but passed locally)</li>
           <li>(android) Fix geo:here feature (request permission)</li>
-          <li>(sync) Enforce RFC 5545 compliance and resolve migration duplication ( https://codeberg.org/trougnouf/cfait/issues/43 )</li>
-          <li>(model) Restore RFC 5545 duration compliance rules for ICS serialization</li>
-          <li>(ui) Use (UID, Collection) identity to resolve disappearing tags and recovery tasks ( https://codeberg.org/trougnouf/cfait/issues/43 )</li>
-          <li>Fix search result context and restore cross-collection parent-child linking</li>
-          <li>(gui) Restore theme selection lost in 31fc410fedb80bf994fbd37c3d7d143afdb1bfbb ( https://github.com/trougnouf/cfait/issues/23 )</li>
-          <li>Catch and send all network exceptions to the logger ( https://codeberg.org/trougnouf/cfait/issues/48 ), mute iced, winit and wgpu libraries ( https://codeberg.org/trougnouf/cfait/issues/50 ), increase channel size from 10 to 100</li>
-          <li>Connection timeouts and sync race conditions via transactional journal processing ( https://github.com/trougnouf/cfait/issues/25 )</li>
+          <li
+                    >(sync) Enforce RFC 5545 compliance and resolve migration duplication ( https://codeberg.org/trougnouf/cfait/issues/43 )</li>
+          <li
+                    >(model) Restore RFC 5545 duration compliance rules for ICS serialization</li>
+          <li
+                    >(ui) Use (UID, Collection) identity to resolve disappearing tags and recovery tasks ( https://codeberg.org/trougnouf/cfait/issues/43 )</li>
+          <li
+                    >Fix search result context and restore cross-collection parent-child linking</li>
+          <li
+                    >(gui) Restore theme selection lost in 31fc410fedb80bf994fbd37c3d7d143afdb1bfbb ( https://github.com/trougnouf/cfait/issues/23 )</li>
+          <li
+                    >Catch and send all network exceptions to the logger ( https://codeberg.org/trougnouf/cfait/issues/48 ), mute iced, winit and wgpu libraries ( https://codeberg.org/trougnouf/cfait/issues/50 ), increase channel size from 10 to 100</li>
+          <li
+                    >Connection timeouts and sync race conditions via transactional journal processing ( https://github.com/trougnouf/cfait/issues/25 )</li>
           <li>(gui) Fix flickering help icon</li>
           <li>(tui) Preserve create flow and add remote-only mode</li>
           <li>(tui) Create with alias</li>
           <li>(gui) Fix flickering help icon</li>
           <li>(gui) Prevent timeout from unseating the active application</li>
-          <li>Ensure fs sync on atomic writes and DRY on datetime and duration utilities</li>
-          <li>Decouple UI mutations from background sync via transactional diffing and fix tree soft-delete ( https://github.com/trougnouf/cfait/issues/25 )</li>
-          <li>(gui) Clear remote metadata on remote-to-local moves and optimize worker batching</li>
+          <li
+                    >Ensure fs sync on atomic writes and DRY on datetime and duration utilities</li>
+          <li
+                    >Decouple UI mutations from background sync via transactional diffing and fix tree soft-delete ( https://github.com/trougnouf/cfait/issues/25 )</li>
+          <li
+                    >(gui) Clear remote metadata on remote-to-local moves and optimize worker batching</li>
           <li>(gui) Stabilize widget tree reconciliation</li>
-          <li>Case-insensitive RELATED-TO parsing and auto-heal mislinked sub-tasks</li>
+          <li
+                    >Case-insensitive RELATED-TO parsing and auto-heal mislinked sub-tasks</li>
           <li>(android) Fix GPX file export</li>
-          <li>Fallback to create+delete if move failed ( https://codeberg.org/trougnouf/cfait/issues/54 )</li>
-          <li>Resolve CalDAV connection timeouts and task state reversion race conditions ( https://github.com/trougnouf/cfait/issues/25 )</li>
-          <li>(keyring) Initialize ndk-context via JNI to resolve Android startup crash</li>
-          <li>(android) Properly initialize NDK context via global JNI reference</li>
-          <li>(gui) Remote task creation was mapped to update action ( https://github.com/trougnouf/cfait/issues/27 )</li>
-          <li>Prevent recurring history snapshots from being misparsed as sub-tasks</li>
+          <li
+                    >Fallback to create+delete if move failed ( https://codeberg.org/trougnouf/cfait/issues/54 )</li>
+          <li
+                    >Resolve CalDAV connection timeouts and task state reversion race conditions ( https://github.com/trougnouf/cfait/issues/25 )</li>
+          <li
+                    >(keyring) Initialize ndk-context via JNI to resolve Android startup crash</li>
+          <li
+                    >(android) Properly initialize NDK context via global JNI reference</li>
+          <li
+                    >(gui) Remote task creation was mapped to update action ( https://github.com/trougnouf/cfait/issues/27 )</li>
+          <li
+                    >Prevent recurring history snapshots from being misparsed as sub-tasks</li>
           <li>Properly randomize "Support development" icon</li>
-          <li>Merge description tags from smart input with editor content instead of overwriting it</li>
-          <li>(windows) Correct path to cfait.ico ( https://github.com/trougnouf/cfait/discussions/28 , https://github.com/trougnouf/cfait/issues/24 )</li>
-          <li>Detect and reject cyclic parent/sub-tasks dependencies ( https://codeberg.org/trougnouf/cfait/issues/56 )</li>
-          <li>Improve CalDAV compatibility, URL encoding, and sync reliability ( https://github.com/trougnouf/cfait/issues/25 )</li>
-          <li>Robust CalDAV path reconstruction for proxies and safe character encoding</li>
+          <li
+                    >Merge description tags from smart input with editor content instead of overwriting it</li>
+          <li
+                    >(windows) Correct path to cfait.ico ( https://github.com/trougnouf/cfait/discussions/28 , https://github.com/trougnouf/cfait/issues/24 )</li>
+          <li
+                    >Detect and reject cyclic parent/sub-tasks dependencies ( https://codeberg.org/trougnouf/cfait/issues/56 )</li>
+          <li
+                    >Improve CalDAV compatibility, URL encoding, and sync reliability ( https://github.com/trougnouf/cfait/issues/25 )</li>
+          <li
+                    >Robust CalDAV path reconstruction for proxies and safe character encoding</li>
           <li>(flatpak) Add keyring support</li>
-          <li>Debounce toggling, add startup timeouts, strict error matching ( https://github.com/trougnouf/cfait/issues/25 )</li>
+          <li
+                    >Debounce toggling, add startup timeouts, strict error matching ( https://github.com/trougnouf/cfait/issues/25 )</li>
           <li>(flatpak) Fix flatpak keyring using oo7</li>
         </ul>
         <p>Other:</p>
@@ -709,7 +890,8 @@
           <li>Translated using Weblate (Spanish)</li>
           <li>Translated using Weblate (Chinese (Simplified Han script))</li>
           <li>Merge branch 'master' into master</li>
-          <li>Merge pull request '[FEATURE] add online only mode and some fixes' (#51) from d1diiego/cfait:master into master</li>
+          <li
+                    >Merge pull request '[FEATURE] add online only mode and some fixes' (#51) from d1diiego/cfait:master into master</li>
           <li>Translated using Weblate (Chinese (Simplified Han script))</li>
           <li>Translated using Weblate (Spanish)</li>
           <li>Merge remote-tracking branch 'refs/remotes/origin/master'</li>
@@ -732,41 +914,53 @@
           <li>Translated using Weblate (Spanish)</li>
           <li>Translated using Weblate (French)</li>
           <li>Added translation using Weblate (French)</li>
-          <li>Translated using Weblate (French) - restore fr description by mrjoops</li>
+          <li
+                    >Translated using Weblate (French) - restore fr description by mrjoops</li>
           <li>Translated using Weblate (French)</li>
           <li>Translated using Weblate (Chinese (Simplified Han script))</li>
           <li>Translated using Weblate (Spanish)</li>
         </ul>
         <p>Refactor:</p>
         <ul>
-          <li>Remove redundant Tokio runtime in GUI to fix UI thread blocking</li>
-          <li>Remove VirtualState from Task model and decouple UI rendering lists</li>
+          <li
+                    >Remove redundant Tokio runtime in GUI to fix UI thread blocking</li>
+          <li
+                    >Remove VirtualState from Task model and decouple UI rendering lists</li>
           <li>Better error handling with anyhow</li>
           <li>Better error handling with anyhow (up to GUI boundary)</li>
-          <li>(gui) Migrate GUI to debounced background actor to eliminate store cloning, prevent network spam, and ensure safe tree restoration</li>
+          <li
+                    >(gui) Migrate GUI to debounced background actor to eliminate store cloning, prevent network spam, and ensure safe tree restoration</li>
         </ul>
         <p>Documentation:</p>
         <ul>
-          <li>Explicitly mention the dependencies, set rfd to use xdg-portal s.t. gtk3 is not required ( https://codeberg.org/trougnouf/cfait/issues/44 )</li>
+          <li
+                    >Explicitly mention the dependencies, set rfd to use xdg-portal s.t. gtk3 is not required ( https://codeberg.org/trougnouf/cfait/issues/44 )</li>
           <li>(pkg) Add vulkan to requirements</li>
-          <li>Clarify dependencies and use PKGBUILD as ground-truth ( https://codeberg.org/trougnouf/cfait/issues/44 and https://codeberg.org/trougnouf/cfait/issues/46 )</li>
-          <li>Clarify dependencies ( https://codeberg.org/trougnouf/cfait/issues/44 and https://codeberg.org/trougnouf/cfait/issues/46 )</li>
-          <li>Rename Advanced settings to More settings ( https://codeberg.org/trougnouf/cfait/issues/52 )</li>
+          <li
+                    >Clarify dependencies and use PKGBUILD as ground-truth ( https://codeberg.org/trougnouf/cfait/issues/44 and https://codeberg.org/trougnouf/cfait/issues/46 )</li>
+          <li
+                    >Clarify dependencies ( https://codeberg.org/trougnouf/cfait/issues/44 and https://codeberg.org/trougnouf/cfait/issues/46 )</li>
+          <li
+                    >Rename Advanced settings to More settings ( https://codeberg.org/trougnouf/cfait/issues/52 )</li>
           <li>Begin refactoring the built-in help</li>
           <li>Refactor built-in help</li>
           <li>Improve built-in help</li>
           <li>Make hardcoded strings translatable</li>
           <li>Update French translations</li>
           <li>(i18n) Fix missing and hardcoded strings</li>
-          <li>(android) Remove keyboard shortcuts from Android built-in help</li>
+          <li
+                    >(android) Remove keyboard shortcuts from Android built-in help</li>
         </ul>
         <p>Performance:</p>
         <ul>
-          <li>MULTIGET parallel chunking optimization ( https://codeberg.org/trougnouf/cfait/issues/49 )</li>
+          <li
+                    >MULTIGET parallel chunking optimization ( https://codeberg.org/trougnouf/cfait/issues/49 )</li>
           <li>Prevent stack overflow in the alias validation</li>
-          <li>(gui) Debounce the search bar, make config saving asynchronous, incremental store indexing</li>
+          <li
+                    >(gui) Debounce the search bar, make config saving asynchronous, incremental store indexing</li>
           <li>(gui) Keyed columns</li>
-          <li>(gui) Fix performance and D-Bus spam by using cached config values</li>
+          <li
+                    >(gui) Fix performance and D-Bus spam by using cached config values</li>
         </ul>
         <p>Styling:</p>
         <ul>
@@ -774,7 +968,8 @@
           <li>(android) Make the help button more obvious</li>
           <li>(gui) More accurate GUI scroll-to-selected</li>
           <li>(gui) More accurate GUI scroll-to-selected</li>
-          <li>Invert random task and work mode button position (Android, GUI)</li>
+          <li
+                    >Invert random task and work mode button position (Android, GUI)</li>
         </ul>
         <p>Testing:</p>
         <ul>
@@ -783,13 +978,16 @@
         </ul>
         <p>Miscellaneous Tasks:</p>
         <ul>
-          <li>Bump up chache and local store version (required with 4adb37573ee3094a9bf1b772689d3e410105a6e9 )</li>
+          <li
+                    >Bump up chache and local store version (required with 4adb37573ee3094a9bf1b772689d3e410105a6e9 )</li>
           <li>Remove parent_map from search</li>
           <li>Update rust toolchain to 1.95.0</li>
           <li>Fix CI indentation</li>
-          <li>Update license to GPL-3.0-or-later and specify it in all source files ( https://codeberg.org/trougnouf/cfait/issues/47 )</li>
+          <li
+                    >Update license to GPL-3.0-or-later and specify it in all source files ( https://codeberg.org/trougnouf/cfait/issues/47 )</li>
           <li>Change CI permissions for flatpak build</li>
-          <li>Rename gui to cfait-gui ( https://codeberg.org/trougnouf/cfait/issues/45 )</li>
+          <li
+                    >Rename gui to cfait-gui ( https://codeberg.org/trougnouf/cfait/issues/45 )</li>
           <li>Fix CI flatpak build</li>
           <li>Fix CI flatpak build</li>
           <li>Fix CI flatpak build</li>
@@ -802,9 +1000,11 @@
           <li>(android) Fix missing strings and icon compilation error</li>
           <li>Lint</li>
           <li>Fix failing test</li>
-          <li>Fix Android compilation issue, move hardcoded strings to en.json</li>
+          <li
+                    >Fix Android compilation issue, move hardcoded strings to en.json</li>
           <li>Remove duplicate strings</li>
-          <li>Remove unused translated strings (previously removed duplicates)</li>
+          <li
+                    >Remove unused translated strings (previously removed duplicates)</li>
           <li>Fix failed test</li>
           <li>Update rust-i18n and iced_aw crates</li>
           <li>Lint</li>
@@ -815,7 +1015,8 @@
       <description>
         <p>Bug Fixes:</p>
         <ul>
-          <li>(gui) Right click on a task no longer jumps to the top of the task list</li>
+          <li
+                    >(gui) Right click on a task no longer jumps to the top of the task list</li>
         </ul>
       </description>
     </release>
@@ -828,7 +1029,8 @@
       <description>
         <p>Features:</p>
         <ul>
-          <li>(android) Font size scaling ( https://codeberg.org/trougnouf/cfait/issues/27 and https://codeberg.org/trougnouf/cfait/issues/35 )</li>
+          <li
+                    >(android) Font size scaling ( https://codeberg.org/trougnouf/cfait/issues/27 and https://codeberg.org/trougnouf/cfait/issues/35 )</li>
           <li>(android) Add permanent timer/notification for ongoing tasks</li>
         </ul>
         <p>Bug Fixes:</p>
@@ -851,7 +1053,8 @@
       <description>
         <p>Bug Fixes:</p>
         <ul>
-          <li>Handle local v4-&gt;v5 migration and test version handling ( https://github.com/trougnouf/cfait/issues/15 )</li>
+          <li
+                    >Handle local v4-&gt;v5 migration and test version handling ( https://github.com/trougnouf/cfait/issues/15 )</li>
         </ul>
       </description>
     </release>
@@ -859,14 +1062,19 @@
       <description>
         <p>Features:</p>
         <ul>
-          <li>Expose % done in the parser and UI and stop relying on % done for paused tasks ( https://github.com/trougnouf/cfait/issues/14 )</li>
-          <li>Remember the task list position when going back from editing a task</li>
+          <li
+                    >Expose % done in the parser and UI and stop relying on % done for paused tasks ( https://github.com/trougnouf/cfait/issues/14 )</li>
+          <li
+                    >Remember the task list position when going back from editing a task</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
-          <li>Fix flatpak compilation issue (AWS_LC_SYS_NO_JITTER_ENTROPY=1)</li>
-          <li>(alarm) Fix absolute time alarms (s.t. they are based on due date rather than now) and alarm recurrences ( https://github.com/trougnouf/cfait/issues/14 )</li>
-          <li>Ensure % completion does not spam the task list with 0% nor reset time spent</li>
+          <li
+                    >Fix flatpak compilation issue (AWS_LC_SYS_NO_JITTER_ENTROPY=1)</li>
+          <li
+                    >(alarm) Fix absolute time alarms (s.t. they are based on due date rather than now) and alarm recurrences ( https://github.com/trougnouf/cfait/issues/14 )</li>
+          <li
+                    >Ensure % completion does not spam the task list with 0% nor reset time spent</li>
         </ul>
         <p>Other:</p>
         <ul>
@@ -876,9 +1084,11 @@
         </ul>
         <p>Miscellaneous Tasks:</p>
         <ul>
-          <li>Fix Android compilation issues, bump local collection and cache version, update documentation</li>
+          <li
+                    >Fix Android compilation issues, bump local collection and cache version, update documentation</li>
           <li>(Android) Re-run uniffi-bindgen</li>
-          <li>Fix unused variables warnings when generating Android bindings</li>
+          <li
+                    >Fix unused variables warnings when generating Android bindings</li>
           <li>Fix Android compilation error</li>
         </ul>
       </description>
@@ -892,9 +1102,11 @@
         <p>Bug Fixes:</p>
         <ul>
           <li>(MacOS) Fix MacOS compilation issue reported by Martin Stut</li>
-          <li>(android) Show Trash calendar when it is not empty ( https://github.com/trougnouf/cfait/issues/14 )</li>
+          <li
+                    >(android) Show Trash calendar when it is not empty ( https://github.com/trougnouf/cfait/issues/14 )</li>
           <li>(Android) Compilation issue / missing import</li>
-          <li>(pkg) Fix Arch PKGBUILD compilation issue (AWS_LC_SYS_NO_JITTER_ENTROPY=1)</li>
+          <li
+                    >(pkg) Fix Arch PKGBUILD compilation issue (AWS_LC_SYS_NO_JITTER_ENTROPY=1)</li>
         </ul>
         <p>Documentation:</p>
         <ul>
@@ -913,35 +1125,56 @@
         <p>Features:</p>
         <ul>
           <li>Support i18n translations and add French</li>
-          <li>(android) Prune stale notifications (from done/canceled/snoozed/modified tasks)</li>
+          <li
+                    >(android) Prune stale notifications (from done/canceled/snoozed/modified tasks)</li>
           <li>Replace d with Delete key in TUI and GUI</li>
-          <li>(gui) Add network status to refresh icon (feature-parity with Android client)</li>
-          <li>(gui) Zoom in and out with ctrl++ ctrl+- (or ctrl+scroll), reset with ctrl+0 ( https://codeberg.org/trougnouf/cfait/issues/9 )</li>
-          <li>(alarm) Trim done/canceled notifications and refresh before firing them (GUI and TUI, feature parity with Android)</li>
-          <li>(sort) Put ongoing tasks in the ongoing bin even if they are blocked or have not started</li>
-          <li>(cli) Implement cli (non-interactive) add, list, search, toggle, start, pause, and delete commands</li>
-          <li>Yank copies task smart title and description, TUI description is selectable in edit screen</li>
-          <li>Time tracking management (list, add and delete sessions) in the UIs. Fix sessions synchronization and GUI unsynced state</li>
-          <li>Time tracking management (list, add and delete sessions) in the UIs. Fix sessions synchronization and GUI unsynced state</li>
-          <li>Create a new line (not blocking title/menus/status) for Android search, prepend completed calendar events with 🗹, opening a notification focuses on it, fix edit task/description string mismatch, fix Android compilation error</li>
-          <li>(all) show sessions with valid syntax, (android) use the same icons as in the GUI, ability to manually create sessions when none exist, reduce search input height</li>
-          <li>(parser) Parse days of the week and parse past time as the next day</li>
-          <li>(Android) Use task-bound hash for notifications s.t. newer alarms overwrite older ones</li>
-          <li>Clickable collection name (header) toggles show all collections (Android and GUI, https://codeberg.org/trougnouf/cfait/issues/24 )</li>
-          <li>Add a lock toggle for yanked tasks and create sub-tasks (GUI and Android clients, https://github.com/trougnouf/cfait/issues/13 )</li>
-          <li>(android) Swipe to switch collection ( https://codeberg.org/trougnouf/cfait/issues/3 )</li>
+          <li
+                    >(gui) Add network status to refresh icon (feature-parity with Android client)</li>
+          <li
+                    >(gui) Zoom in and out with ctrl++ ctrl+- (or ctrl+scroll), reset with ctrl+0 ( https://codeberg.org/trougnouf/cfait/issues/9 )</li>
+          <li
+                    >(alarm) Trim done/canceled notifications and refresh before firing them (GUI and TUI, feature parity with Android)</li>
+          <li
+                    >(sort) Put ongoing tasks in the ongoing bin even if they are blocked or have not started</li>
+          <li
+                    >(cli) Implement cli (non-interactive) add, list, search, toggle, start, pause, and delete commands</li>
+          <li
+                    >Yank copies task smart title and description, TUI description is selectable in edit screen</li>
+          <li
+                    >Time tracking management (list, add and delete sessions) in the UIs. Fix sessions synchronization and GUI unsynced state</li>
+          <li
+                    >Time tracking management (list, add and delete sessions) in the UIs. Fix sessions synchronization and GUI unsynced state</li>
+          <li
+                    >Create a new line (not blocking title/menus/status) for Android search, prepend completed calendar events with 🗹, opening a notification focuses on it, fix edit task/description string mismatch, fix Android compilation error</li>
+          <li
+                    >(all) show sessions with valid syntax, (android) use the same icons as in the GUI, ability to manually create sessions when none exist, reduce search input height</li>
+          <li
+                    >(parser) Parse days of the week and parse past time as the next day</li>
+          <li
+                    >(Android) Use task-bound hash for notifications s.t. newer alarms overwrite older ones</li>
+          <li
+                    >Clickable collection name (header) toggles show all collections (Android and GUI, https://codeberg.org/trougnouf/cfait/issues/24 )</li>
+          <li
+                    >Add a lock toggle for yanked tasks and create sub-tasks (GUI and Android clients, https://github.com/trougnouf/cfait/issues/13 )</li>
+          <li
+                    >(android) Swipe to switch collection ( https://codeberg.org/trougnouf/cfait/issues/3 )</li>
           <li>(android) Improve swipe collections navigation</li>
           <li>(android) Improve swipe collections navigation</li>
           <li>(android) Improve swipe collections navigation (3)</li>
           <li>(android) Improve swipe collections navigation (4)</li>
           <li>(android) Improve swipe collections navigation (5)</li>
-          <li>(android) Improve swipe collections navigation (6: jump to "Custom" list when selecting multiple collections and speed-up swiping/switching collection tab)</li>
-          <li>(android) Improve swipe collections navigation (7: eliminate visual glitch in swiping animation)</li>
+          <li
+                    >(android) Improve swipe collections navigation (6: jump to "Custom" list when selecting multiple collections and speed-up swiping/switching collection tab)</li>
+          <li
+                    >(android) Improve swipe collections navigation (7: eliminate visual glitch in swiping animation)</li>
           <li>(android) Improve swipe collections navigation (10)</li>
           <li>(android) Improve and debug swipe collections navigation (11)</li>
-          <li>(android) Improve swipe collections navigation (12: fix auto-hide toggle and unresponsive custom tab, fix post-swipe vertical scroll delay)</li>
-          <li>(android) Improve swipe collections navigation (13: switch ordering, fix unresponsive area)</li>
-          <li>(android) Change search icon color when search is active in the background and auto-focus on search bar when it pops out</li>
+          <li
+                    >(android) Improve swipe collections navigation (12: fix auto-hide toggle and unresponsive custom tab, fix post-swipe vertical scroll delay)</li>
+          <li
+                    >(android) Improve swipe collections navigation (13: switch ordering, fix unresponsive area)</li>
+          <li
+                    >(android) Change search icon color when search is active in the background and auto-focus on search bar when it pops out</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
@@ -950,29 +1183,40 @@
           <li>(help) Fix some mismatching strings</li>
           <li>(strings) Fix pluralization</li>
           <li>(android) Fix language selection overlap and application</li>
-          <li>(local) Process local tasks directly without going through the journal, fixes https://codeberg.org/trougnouf/cfait/issues/32</li>
+          <li
+                    >(local) Process local tasks directly without going through the journal, fixes https://codeberg.org/trougnouf/cfait/issues/32</li>
           <li>(android) Support BCP-47 locales</li>
           <li>(locale) Fix mismatched strings</li>
           <li>Fix some timezone edge cases</li>
-          <li>(ui) Ensure that local Trash and Recovery collections are shown on the bottom and only when not empty</li>
+          <li
+                    >(ui) Ensure that local Trash and Recovery collections are shown on the bottom and only when not empty</li>
           <li>Fix github issue templates</li>
-          <li>(android) Restore search field s.t. bottom of text is not cut-off</li>
-          <li>(gui) Fix an issue where another collection than the current active one(s) may be temporarily shown during synchronization</li>
+          <li
+                    >(android) Restore search field s.t. bottom of text is not cut-off</li>
+          <li
+                    >(gui) Fix an issue where another collection than the current active one(s) may be temporarily shown during synchronization</li>
           <li>Fix calendar events' newline character</li>
           <li>(Android) Fix error handling on addSession</li>
-          <li>(sorting) Prevent ghost alarms left by other clients from pinning future tasks to the top of the list</li>
-          <li>(android) Export local tasks dialog was shown when switching from Local to All/Custom</li>
-          <li>(android) Improve swipe collections navigation (14: restore interleaved sorting)</li>
-          <li>(android) Improve swipe collections navigation (16: fix half-swipes and panic back swipes after random)</li>
-          <li>(android) Improve swipe collections navigation (17: ensure checkboxes are still easily togglable, restore sorting (local last), unrelated/style: restore search icon color during search)</li>
-          <li>(android) Improve swipe collections navigation (17: create and jump to custom tab by selecting new write/viewable collection while focused on a different collection)</li>
+          <li
+                    >(sorting) Prevent ghost alarms left by other clients from pinning future tasks to the top of the list</li>
+          <li
+                    >(android) Export local tasks dialog was shown when switching from Local to All/Custom</li>
+          <li
+                    >(android) Improve swipe collections navigation (14: restore interleaved sorting)</li>
+          <li
+                    >(android) Improve swipe collections navigation (16: fix half-swipes and panic back swipes after random)</li>
+          <li
+                    >(android) Improve swipe collections navigation (17: ensure checkboxes are still easily togglable, restore sorting (local last), unrelated/style: restore search icon color during search)</li>
+          <li
+                    >(android) Improve swipe collections navigation (17: create and jump to custom tab by selecting new write/viewable collection while focused on a different collection)</li>
         </ul>
         <p>Other:</p>
         <ul>
           <li>Translated using Weblate (French)</li>
           <li>Translated using Weblate (French)</li>
           <li>Translated using Weblate (French)</li>
-          <li>Added translation using Weblate (Chinese (Simplified Han script))</li>
+          <li
+                    >Added translation using Weblate (Chinese (Simplified Han script))</li>
           <li>Translated using Weblate (Chinese (Simplified Han script))</li>
           <li>Translated using Weblate (French)</li>
           <li>Translated using Weblate (English)</li>
@@ -988,7 +1232,8 @@
         </ul>
         <p>Refactor:</p>
         <ul>
-          <li>Fix sync issue w/ rapidly changing states and consolidate sync logic across clients</li>
+          <li
+                    >Fix sync issue w/ rapidly changing states and consolidate sync logic across clients</li>
         </ul>
         <p>Documentation:</p>
         <ul>
@@ -1002,27 +1247,35 @@
           <li>Pluralize translations</li>
           <li>Simplify translations</li>
           <li>Improve fr translation</li>
-          <li>Add link to translation page in settings, fix Android compilation and add missing strings</li>
-          <li>Add link to translation page in settings, fix Android compilation and add missing strings</li>
-          <li>Add https://translate.codeberg.org/projects/cfait/ to README.md</li>
+          <li
+                    >Add link to translation page in settings, fix Android compilation and add missing strings</li>
+          <li
+                    >Add link to translation page in settings, fix Android compilation and add missing strings</li>
+          <li
+                    >Add https://translate.codeberg.org/projects/cfait/ to README.md</li>
           <li>Remove unused strings</li>
-          <li>Remove syntax strings which should not be translated from locales</li>
+          <li
+                    >Remove syntax strings which should not be translated from locales</li>
           <li>Add de, es, it translations and complete fr</li>
           <li>Localize short_description.txt (de, es, it)</li>
           <li>Update GUI and Android screenshots to v0.5.2</li>
         </ul>
         <p>Performance:</p>
         <ul>
-          <li>(android) Improve swipe collections navigation (15: improve switching performance)</li>
+          <li
+                    >(android) Improve swipe collections navigation (15: improve switching performance)</li>
         </ul>
         <p>Styling:</p>
         <ul>
-          <li>(android) Show collections list in the bottom by default, reduce spacing between collections, restore collection+++ behavior for Custom and replace All header</li>
-          <li>(android) Add settings+help combined icon (superposition of GNOME icons with dimmer red)</li>
+          <li
+                    >(android) Show collections list in the bottom by default, reduce spacing between collections, restore collection+++ behavior for Custom and replace All header</li>
+          <li
+                    >(android) Add settings+help combined icon (superposition of GNOME icons with dimmer red)</li>
         </ul>
         <p>Testing:</p>
         <ul>
-          <li>Fix cargo check without --all-features (reported by Geoffrey Frogeye)</li>
+          <li
+                    >Fix cargo check without --all-features (reported by Geoffrey Frogeye)</li>
         </ul>
         <p>Miscellaneous Tasks:</p>
         <ul>
@@ -1039,76 +1292,118 @@
         <p>Features:</p>
         <ul>
           <li>Add --root flag (TUI, GUI)</li>
-          <li>(client) Implement automatic CalDAV root discovery and URL correction</li>
+          <li
+                    >(client) Implement automatic CalDAV root discovery and URL correction</li>
           <li>(gui) Keep focus in input bar after entering a task</li>
-          <li>Add done/cancel actions to alarm (suggested by busterkeaton) and implement auto-refresh</li>
-          <li>(ui) Add done/completed tasks expansion arrow (and advanced settings to control # of tasks shown)</li>
+          <li
+                    >Add done/cancel actions to alarm (suggested by busterkeaton) and implement auto-refresh</li>
+          <li
+                    >(ui) Add done/completed tasks expansion arrow (and advanced settings to control # of tasks shown)</li>
           <li>Android rolling release (build a new APK on every commit)</li>
-          <li>Pre-fill sub-tasks tags and location with that of their parent</li>
-          <li>Implement time tracking (between start and done) and `spent:` syntax (suggested by savion)</li>
-          <li>Implement recursive subtask reset ( https://github.com/trougnouf/cfait/discussions/5#discussioncomment-15734983 ) and unify task completion logic</li>
-          <li>Add boolean search with |or, -not and parentheses (and implied and) ( https://github.com/trougnouf/cfait/issues/4 )</li>
-          <li>Show blocking task (in addition to blocked-by), link both ways</li>
-          <li>Highlight search and sidebar filters red when they result in an empty task list</li>
-          <li>(android) Replace {snooze (preset), snooze..., done} with {snooze..., start, done} and show time spent after start</li>
-          <li>Add work session recording w/ matching calendar events, show completed datetime in the task list and expose COMPLETED date tracking with done: property in the smart syntax</li>
-          <li>Use distinct completed/canceled icons and full datetime for done: tasks (syntax and UI)</li>
-          <li>Add Trash calendar (unrelated: fix calendar event creation datetime to better match completion time)</li>
+          <li
+                    >Pre-fill sub-tasks tags and location with that of their parent</li>
+          <li
+                    >Implement time tracking (between start and done) and `spent:` syntax (suggested by savion)</li>
+          <li
+                    >Implement recursive subtask reset ( https://github.com/trougnouf/cfait/discussions/5#discussioncomment-15734983 ) and unify task completion logic</li>
+          <li
+                    >Add boolean search with |or, -not and parentheses (and implied and) ( https://github.com/trougnouf/cfait/issues/4 )</li>
+          <li
+                    >Show blocking task (in addition to blocked-by), link both ways</li>
+          <li
+                    >Highlight search and sidebar filters red when they result in an empty task list</li>
+          <li
+                    >(android) Replace {snooze (preset), snooze..., done} with {snooze..., start, done} and show time spent after start</li>
+          <li
+                    >Add work session recording w/ matching calendar events, show completed datetime in the task list and expose COMPLETED date tracking with done: property in the smart syntax</li>
+          <li
+                    >Use distinct completed/canceled icons and full datetime for done: tasks (syntax and UI)</li>
+          <li
+                    >Add Trash calendar (unrelated: fix calendar event creation datetime to better match completion time)</li>
           <li>(gui) Keyboard shortcuts parity with TUI</li>
           <li>(store) One-step increase/decrease from default priority</li>
-          <li>(android) Second BackHandler to exit search UI, clear yanked task, clear search text, and clear tag/location filters before exiting the app</li>
+          <li
+                    >(android) Second BackHandler to exit search UI, clear yanked task, clear search text, and clear tag/location filters before exiting the app</li>
           <li>Expose blocks:link_to_other_task in GUI and Android task list</li>
-          <li>Reduce tags&amp;locations list and counts based on search terms</li>
-          <li>Handle multi-task start/pause/stop and unify alarm snooze/dismiss; add Task.handle_* helpers and mobile boxed mutator; improve time/session tracking, ICS duration &amp; recurrence handling, and settings UI typing/layout</li>
+          <li
+                    >Reduce tags&amp;locations list and counts based on search terms</li>
+          <li
+                    >Handle multi-task start/pause/stop and unify alarm snooze/dismiss; add Task.handle_* helpers and mobile boxed mutator; improve time/session tracking, ICS duration &amp; recurrence handling, and settings UI typing/layout</li>
           <li>Reduce duplicate alarms</li>
-          <li>Make sub-tasks of blocked tasks implicitly blocked and sort entire group to a lower bin</li>
-          <li>Improve calendar events creation length: all-day same-day -&gt; single all-day event, all-day different days -&gt; start and due event, specific time (&lt;24h) -&gt; span length of event, specific time (&gt;24h) -&gt; two separate 1h events</li>
-          <li>Further calendar events improvements (and fix toggle-all button)</li>
-          <li>(calendar) Improve calendar events handling: merge 2 consecutive 1-day tasks into 2, avoid copying RRULE of completed recurrent tasks</li>
+          <li
+                    >Make sub-tasks of blocked tasks implicitly blocked and sort entire group to a lower bin</li>
+          <li
+                    >Improve calendar events creation length: all-day same-day -&gt; single all-day event, all-day different days -&gt; start and due event, specific time (&lt;24h) -&gt; span length of event, specific time (&gt;24h) -&gt; two separate 1h events</li>
+          <li
+                    >Further calendar events improvements (and fix toggle-all button)</li>
+          <li
+                    >(calendar) Improve calendar events handling: merge 2 consecutive 1-day tasks into 2, avoid copying RRULE of completed recurrent tasks</li>
           <li>Centralize help and document keyboard shortcuts in GUI</li>
-          <li>Ensure sessions information is kept across clients, more calendar integration improvements&amp;fixes&amp;tests</li>
-          <li>Add background synchronization (Android) and synchronization daemon (desktop) ( https://codeberg.org/trougnouf/cfait/issues/30 )</li>
-          <li>Add AND/OR tag selection in Android, (all clients) default to AND and fix OR tags and locations selection s.t. others are not filtered out</li>
-          <li>Ensure multiple clients/instances can share the same local collection concurrently</li>
-          <li>Parse "@daily 09:00" format (shorter than "@daily @today 09:00")</li>
+          <li
+                    >Ensure sessions information is kept across clients, more calendar integration improvements&amp;fixes&amp;tests</li>
+          <li
+                    >Add background synchronization (Android) and synchronization daemon (desktop) ( https://codeberg.org/trougnouf/cfait/issues/30 )</li>
+          <li
+                    >Add AND/OR tag selection in Android, (all clients) default to AND and fix OR tags and locations selection s.t. others are not filtered out</li>
+          <li
+                    >Ensure multiple clients/instances can share the same local collection concurrently</li>
+          <li
+                    >Parse "@daily 09:00" format (shorter than "@daily @today 09:00")</li>
           <li>(gui) First esc does not clear the search</li>
         </ul>
         <p>Bug Fixes:</p>
         <ul>
-          <li>(model) Fix missing and flickering tags introduced in refactor</li>
+          <li
+                    >(model) Fix missing and flickering tags introduced in refactor</li>
           <li>(tui) Suppress alarm in completed/canceled tasks</li>
-          <li>(recurrence) Centralize task recycling logic in model and fix various recurrence (incl. cancellation, until, smart-syntax) bugs</li>
-          <li>(recurrence) Use local date for all-day search floor to prevent skipping occurrences ( https://github.com/trougnouf/cfait/discussions/5#discussioncomment-15652213 )</li>
-          <li>(android) Explicitly follow redirects (fix some Android connection issues, reported by yknip)</li>
-          <li>(android) Fix Android 13 timezone issue reported by busterkeaton</li>
+          <li
+                    >(recurrence) Centralize task recycling logic in model and fix various recurrence (incl. cancellation, until, smart-syntax) bugs</li>
+          <li
+                    >(recurrence) Use local date for all-day search floor to prevent skipping occurrences ( https://github.com/trougnouf/cfait/discussions/5#discussioncomment-15652213 )</li>
+          <li
+                    >(android) Explicitly follow redirects (fix some Android connection issues, reported by yknip)</li>
+          <li
+                    >(android) Fix Android 13 timezone issue reported by busterkeaton</li>
           <li>(gui) Retain scroll position when yanking a task</li>
-          <li>(sync) Handle fatal 400/403/415 errors and duplicate CREATEs in journal sync, unblocking stuck queues</li>
-          <li>(sync) Reconstruct missing HREF in Update actions to prevent PUT / 403 errors</li>
+          <li
+                    >(sync) Handle fatal 400/403/415 errors and duplicate CREATEs in journal sync, unblocking stuck queues</li>
+          <li
+                    >(sync) Reconstruct missing HREF in Update actions to prevent PUT / 403 errors</li>
           <li>(ci) Fix Android rolling release</li>
-          <li>(android) Resolve infinite loading in TaskDetailScreen by using direct task lookup</li>
-          <li>(android) Restore custom redirect logic but more secure, https://codeberg.org/trougnouf/cfait/issues/28</li>
-          <li>(gui) Ensure tasks from all visible calendars are shown in the task list</li>
-          <li>(windows) Force server-side decorations on Windows 10 (fixes cursor shifting issue reported by busterkeaton) and add --force-csd launch option</li>
-          <li>(gui) Hide tasks from disabled calendars (reported by busterkeaton)</li>
+          <li
+                    >(android) Resolve infinite loading in TaskDetailScreen by using direct task lookup</li>
+          <li
+                    >(android) Restore custom redirect logic but more secure, https://codeberg.org/trougnouf/cfait/issues/28</li>
+          <li
+                    >(gui) Ensure tasks from all visible calendars are shown in the task list</li>
+          <li
+                    >(windows) Force server-side decorations on Windows 10 (fixes cursor shifting issue reported by busterkeaton) and add --force-csd launch option</li>
+          <li
+                    >(gui) Hide tasks from disabled calendars (reported by busterkeaton)</li>
           <li>(android) Color past due-dates red for all-day tasks</li>
           <li>(sorting) Fix priority inheritence in paused sub-tasks</li>
           <li>(android) Fix android client initialization</li>
           <li>(android) Restore settings panel scroll</li>
           <li>(pkg) Fix Arch cfait-git PKGBUILD's pkgver</li>
-          <li>Fix deletion from recovery calendar and hide recovery and trash local calendars when empty</li>
+          <li
+                    >Fix deletion from recovery calendar and hide recovery and trash local calendars when empty</li>
           <li>(sort) Propagate sort value from sub-tasks to parents</li>
-          <li>Show timer in task list when there is no provided time estimation (GUI/TUI)</li>
+          <li
+                    >Show timer in task list when there is no provided time estimation (GUI/TUI)</li>
         </ul>
         <p>Other:</p>
         <ul>
-          <li>Implement UID-based upsert for imports and auto-repair duplicates on load ( https://github.com/trougnouf/cfait/issues/8 )</li>
+          <li
+                    >Implement UID-based upsert for imports and auto-repair duplicates on load ( https://github.com/trougnouf/cfait/issues/8 )</li>
           <li>(android) Handle coroutine cancellation gracefully</li>
           <li>Replace calendar with collection wording in CLI</li>
         </ul>
         <p>Refactor:</p>
         <ul>
-          <li>Centralize view logic (per-client shadowing logic -&gt; Task::resolve_display_properties)</li>
-          <li>Optimize TaskStore perf (O(1) lookups) and centralize visibility logic</li>
+          <li
+                    >Centralize view logic (per-client shadowing logic -&gt; Task::resolve_display_properties)</li>
+          <li
+                    >Optimize TaskStore perf (O(1) lookups) and centralize visibility logic</li>
           <li>Decompose Task god struct</li>
           <li>Modularize sync logic</li>
           <li>Transition from global AppPaths to AppContext</li>
@@ -1120,7 +1415,8 @@
         <p>Documentation:</p>
         <ul>
           <li>Self-document config file</li>
-          <li>Switch from title case to sentence case and replace the term "calendar" with "collection"</li>
+          <li
+                    >Switch from title case to sentence case and replace the term "calendar" with "collection"</li>
         </ul>
         <p>Performance:</p>
         <ul>
@@ -1128,10 +1424,14 @@
         </ul>
         <p>Styling:</p>
         <ul>
-          <li>Make overdue date(time) red in task list (suggested by Kursti)</li>
-          <li>Syntax highlighting search queries and +cal/-cal ( https://codeberg.org/trougnouf/cfait/issues/24 )</li>
-          <li>(android) Contrasting tag colors ( https://codeberg.org/trougnouf/cfait/issues/27 )</li>
-          <li>(GUI, TUI) Dim completed &amp; canceled tasks, add strikethrough_completed advanced config (suggested by busterkeaton)</li>
+          <li
+                    >Make overdue date(time) red in task list (suggested by Kursti)</li>
+          <li
+                    >Syntax highlighting search queries and +cal/-cal ( https://codeberg.org/trougnouf/cfait/issues/24 )</li>
+          <li
+                    >(android) Contrasting tag colors ( https://codeberg.org/trougnouf/cfait/issues/27 )</li>
+          <li
+                    >(GUI, TUI) Dim completed &amp; canceled tasks, add strikethrough_completed advanced config (suggested by busterkeaton)</li>
           <li>(windows) Embed application icon (reported by busterkeaton)</li>
         </ul>
         <p>Testing:</p>
@@ -1141,7 +1441,8 @@
         <p>Miscellaneous Tasks:</p>
         <ul>
           <li>(release) Update flathub screenshots</li>
-          <li>(release) Bump version up due to accidental previously yanked v0.5.0</li>
+          <li
+                    >(release) Bump version up due to accidental previously yanked v0.5.0</li>
         </ul>
       </description>
     </release>

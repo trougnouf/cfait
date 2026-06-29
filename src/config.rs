@@ -321,6 +321,7 @@ pub enum TaskAction {
     OpenCoordinates,
     ExtractSubtasks,
     TogglePin,
+    Focus,
 }
 
 impl TaskAction {
@@ -328,6 +329,7 @@ impl TaskAction {
         TaskAction::OpenUrl,         // First - link out
         TaskAction::OpenCoordinates, // Second - single coordinates
         TaskAction::OpenLocations,   // Third - multiple coordinates (GPX)
+        TaskAction::Focus,
         TaskAction::ToggleDetails,
         TaskAction::CompleteAndShift,
         TaskAction::ToggleTimer,
@@ -371,6 +373,7 @@ impl TaskAction {
             TaskAction::OpenCoordinates => rust_i18n::t!("open_coordinates").to_string(),
             TaskAction::OpenUrl => rust_i18n::t!("open_url").to_string(),
             TaskAction::TogglePin => rust_i18n::t!("action_toggle_pin").to_string(),
+            TaskAction::Focus => rust_i18n::t!("focus_hide_others").to_string(),
         }
     }
 }
@@ -414,6 +417,7 @@ fn default_pinned_actions() -> Vec<TaskAction> {
     vec![
         TaskAction::OpenUrl, // First action - open URL
         TaskAction::OpenCoordinates,
+        TaskAction::Focus,
         TaskAction::ToggleDetails,
         TaskAction::ToggleTimer,
         TaskAction::IncreasePriority,

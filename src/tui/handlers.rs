@@ -119,6 +119,7 @@ fn update_action_menu_filter(state: &mut AppState) {
                 Delete | DeleteTree => filter == "del" || filter == "rm",
                 OpenUrl => filter == "o" || filter == "url" || filter == "link",
                 OpenCoordinates | OpenLocations => filter == "g" || filter == "map",
+                Focus => filter == "f" || filter == "focus",
             };
             label.contains(&filter) || matches_alias
         })
@@ -397,6 +398,9 @@ async fn execute_task_action(
         }
         DeleteTree => {
             intent = Some(AppIntent::DeleteTaskTree { uid });
+        }
+        Focus => {
+            intent = Some(AppIntent::FocusTaskTree { uid: Some(uid) });
         }
     }
 
@@ -1493,6 +1497,11 @@ pub async fn handle_key_event(
                     state.yanked_uid = None;
                     state.yank_lock_active = false;
                     state.message = rust_i18n::t!("yank_cleared").to_string();
+                } else if state.focused_task_uid.is_some() {
+                    let intent = AppIntent::FocusTaskTree { uid: None };
+                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+                    let _ = state.apply_task_intent(&intent, &config);
+                    needs_refresh = true;
                 } else if !state.active_search_query.is_empty() {
                     state.active_search_query.clear();
                     state.search_collapsed_tasks.clear();
@@ -1534,6 +1543,14 @@ pub async fn handle_key_event(
             }
             KeyCode::Char('q') => return Some(Action::Quit),
             KeyCode::Char('r') => return Some(Action::Refresh),
+            KeyCode::Char('f') => {
+                let intent = AppIntent::FocusTaskTree {
+                    uid: state.get_selected_task().map(|t| t.uid.clone()),
+                };
+                let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+                let _ = state.apply_task_intent(&intent, &config);
+                state.refresh_filtered_view();
+            }
             KeyCode::Char('R') => {
                 // Weighted-random jump to a task (uppercase R)
                 let real_tasks: Vec<Task> = state

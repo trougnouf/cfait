@@ -53,6 +53,7 @@ fn test_search_includes_non_matching_children() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     });
 
     let results = filter_res.items;
@@ -125,6 +126,7 @@ fn test_search_includes_deep_hierarchy() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     });
 
     let results = filter_res.items;
@@ -177,6 +179,7 @@ fn test_child_match_does_not_force_parent_if_parent_does_not_match() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     });
 
     let results = filter_res.items;
@@ -245,6 +248,7 @@ fn test_multiple_parents_with_children() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     });
 
     let results = filter_res.items;
@@ -317,6 +321,7 @@ fn test_sibling_match_only_includes_matching_sibling() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     });
 
     let results = filter_res.items;
@@ -374,6 +379,7 @@ fn test_empty_search_shows_all_tasks() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     });
 
     let results = filter_res.items;
@@ -427,6 +433,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     });
 
     let results = filter_res.items;
@@ -460,6 +467,7 @@ fn test_hierarchy_expansion_with_completed_tasks() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     });
 
     let results_hidden = filter_res_hidden.items;

@@ -689,6 +689,10 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 app.search_value = text_editor::Content::new();
                 needs_refresh = true;
                 captured_action = true;
+            } else if app.session.focused_task_uid.is_some() {
+                app.session.focused_task_uid = None;
+                needs_refresh = true;
+                captured_action = true;
             } else if !app.session.selected_categories.is_empty() {
                 app.session.selected_categories.clear();
                 needs_refresh = true;

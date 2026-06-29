@@ -154,6 +154,7 @@ pub struct GuiApp {
     pub location_tab_icon: char,
     pub random_icon: char, // NEW
     pub goal_icon: char,
+    pub focus_icon: char,
 
     // Inputs - Settings (Aliases)
     pub alias_input_key: String,
@@ -354,6 +355,9 @@ impl Default for GuiApp {
         let goal_icon =
             crate::gui::icon::GOAL_ICONS[rng.usize(..crate::gui::icon::GOAL_ICONS.len())];
 
+        let focus_icon =
+            crate::gui::icon::FOCUS_ICONS[rng.usize(..crate::gui::icon::FOCUS_ICONS.len())];
+
         // Select a random theme (excluding Random itself)
         let themes: Vec<AppTheme> = AppTheme::iter()
             .filter(|&t| t != AppTheme::Random)
@@ -458,6 +462,7 @@ impl Default for GuiApp {
             location_tab_icon,
             random_icon,
             goal_icon,
+            focus_icon,
             alias_input_key: String::new(),
             alias_input_values: String::new(),
             editing_alias_key: None,

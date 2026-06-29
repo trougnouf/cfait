@@ -191,6 +191,7 @@ fn test_hierarchy_organization() {
             search_active: false,
             sort_preset: SortPreset::default(),
             search_collapsed_tasks: &HashSet::new(),
+            focused_task_uid: None,
         },
     );
 

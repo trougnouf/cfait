@@ -76,6 +76,22 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::FocusSelected => {
+            if let Some(uid) = app.selected_uid.clone() {
+                crate::gui::update::common::dispatch_intent(
+                    app,
+                    crate::model::AppIntent::FocusTaskTree { uid: Some(uid) },
+                );
+            }
+            Task::none()
+        }
+        Message::ClearFocus => {
+            crate::gui::update::common::dispatch_intent(
+                app,
+                crate::model::AppIntent::FocusTaskTree { uid: None },
+            );
+            Task::none()
+        }
         Message::ArrowRight => {
             if app.active_focus == crate::gui::state::Focus::Sidebar {
                 match app.sidebar_mode {
@@ -728,6 +744,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.sidebar_mode == SidebarMode::Categories {
                 app.sidebar_mode = SidebarMode::Calendars;
             }
+            app.session.focused_task_uid = None;
             app.active_cal_href = Some(href.clone());
             app.hidden_calendars.clear();
             for cal in &app.calendars {
@@ -815,6 +832,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             app.session.selected_locations.clear();
             app.session.search_term.clear();
             app.session.search_collapsed_tasks.clear();
+            app.session.focused_task_uid = None;
             if !app.search_value.text().is_empty() {
                 app.search_value = iced::widget::text_editor::Content::new();
             }
@@ -885,6 +903,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             if app.sidebar_mode == SidebarMode::Categories {
                 app.sidebar_mode = SidebarMode::Calendars;
             }
+            app.session.focused_task_uid = None;
             app.active_cal_href = Some(href.clone());
             if app.hidden_calendars.contains(&href) {
                 app.hidden_calendars.remove(&href);

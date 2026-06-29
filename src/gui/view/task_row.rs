@@ -932,6 +932,11 @@ pub fn view_task_row<'a>(
                             Message::ChangePriority(index, -1),
                             0,
                         ),
+                        TaskAction::Focus => (
+                            icon::icon(app.focus_icon).size(14).into(),
+                            Message::FocusSelected,
+                            0,
+                        ),
                         TaskAction::Edit => (
                             icon::icon(icon::EDIT).size(14).into(),
                             Message::EditTaskStart(index),
@@ -1041,6 +1046,7 @@ pub fn view_task_row<'a>(
 
                     let shortcut = match *action {
                         TaskAction::CompleteAndShift => " (Shift+Space)",
+                        TaskAction::Focus => " (f)",
                         TaskAction::ToggleDetails => " (L)",
                         TaskAction::ToggleTimer => " (s)",
                         TaskAction::StopTimer => " (S)",

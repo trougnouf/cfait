@@ -847,6 +847,7 @@ async fn main() -> Result<()> {
                 max_done_subtasks: usize::MAX,
                 tag_aliases: &config.tag_aliases,
                 search_collapsed_tasks: &search_collapsed_tasks,
+                focused_task_uid: None,
             });
 
             if as_json {

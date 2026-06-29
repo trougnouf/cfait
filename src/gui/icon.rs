@@ -131,6 +131,11 @@ pub const URL: char = '\u{f0c1}'; // Generic Link
 pub const URL_CHECK: char = '\u{f0789}'; // nf-md-web_check
 pub const MAP_LOCATION_DOT: char = '\u{ee69}'; // nf-fa-map_location_dot
 pub const GEO: char = '\u{f041}'; // Map Marker
+pub const FOCUS_FIELD: char = '\u{f0f4f}'; // nf-md-focus_field
+pub const FOCUS_STRONG: char = '\u{f0eff}'; // nf-md-image_filter_center_focus_strong
+pub const FOCUS_OUTLINE: char = '\u{f0f00}'; // nf-md-image_filter_center_focus_strong_outline
+pub const FOCUS_TELESCOPE: char = '\u{f0b4e}'; // nf-md-telescope
+pub const FOCUS_ICONS: &[char] = &[FOCUS_FIELD, FOCUS_STRONG, FOCUS_OUTLINE, FOCUS_TELESCOPE];
 
 // Location Tab Variations
 pub const EARTH_ASIA: char = '\u{ee47}';

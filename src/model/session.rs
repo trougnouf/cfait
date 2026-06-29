@@ -19,6 +19,7 @@ pub struct SessionState {
     pub expanded_tags: Vec<String>,
     pub expanded_locations: Vec<String>,
     pub search_collapsed_tasks: Vec<String>,
+    pub focused_task_uid: Option<String>,
 }
 
 impl SessionState {
@@ -72,6 +73,7 @@ impl SessionState {
             max_done_subtasks: config.max_done_subtasks,
             tag_aliases: &config.tag_aliases,
             search_collapsed_tasks: &search_collapsed_tasks,
+            focused_task_uid: self.focused_task_uid.as_deref(),
         })
     }
 
@@ -146,6 +148,9 @@ impl SessionState {
                     }
                 }
             }
+            AppIntent::FocusTaskTree { uid } => {
+                self.focused_task_uid = uid.clone();
+            }
             _ => {} // Ignore task-specific intents
         }
     }
@@ -187,4 +192,5 @@ pub enum AppIntent {
     ToggleDoneGroup { key: String },
     ToggleTagCollapse { tag: String },
     ToggleLocationCollapse { location: String },
+    FocusTaskTree { uid: Option<String> },
 }

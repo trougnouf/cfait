@@ -410,6 +410,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 TaskAction::AddSession => " (t)",
                 TaskAction::IncreasePriority => " (+)",
                 TaskAction::DecreasePriority => " (-)",
+                TaskAction::Focus => " (f)",
                 TaskAction::Edit => " (e)",
                 TaskAction::Yank => " (y)",
                 TaskAction::CreateSubtask => " (C)",
@@ -495,6 +496,11 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 TaskAction::DecreasePriority => (
                     icon::icon(icon::MINUS).size(14).into(),
                     Message::ChangePriority(idx, -1),
+                    false,
+                ),
+                TaskAction::Focus => (
+                    icon::icon(app.focus_icon).size(14).into(),
+                    Message::FocusSelected,
                     false,
                 ),
                 TaskAction::Edit => (
@@ -599,6 +605,7 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 TaskAction::OpenUrl,         // Add this at the top
                 TaskAction::OpenCoordinates, // Single coordinates first
                 TaskAction::OpenLocations,   // GPX export second
+                TaskAction::Focus,
                 TaskAction::ToggleDetails,
                 TaskAction::CompleteAndShift,
                 TaskAction::ToggleTimer,
@@ -643,6 +650,14 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
             {
                 unpinned_actions.remove(pos);
                 unpinned_actions.insert(insert_idx, TaskAction::OpenCoordinates);
+                insert_idx += 1;
+            }
+            if let Some(pos) = unpinned_actions
+                .iter()
+                .position(|&a| a == TaskAction::Focus)
+            {
+                unpinned_actions.remove(pos);
+                unpinned_actions.insert(insert_idx, TaskAction::Focus);
                 insert_idx += 1;
             }
             if let Some(pos) = unpinned_actions
@@ -1239,14 +1254,50 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         .as_ref()
         .and_then(|href| app.calendars.iter().find(|c| &c.href == href));
 
-    let title_text = if app.loading {
-        rust_i18n::t!("loading").to_string()
+    let (title_text, title_msg) = if let Some(focus_uid) = &app.session.focused_task_uid {
+        if let Some(t) = app.store.get_task_ref(focus_uid) {
+            // Dynamically calculate allowed title length to protect the search bar
+            // Total Width - Sidebar (~220) - Right Controls (~150) - Search Min (~200) = ~570px used.
+            let available_width = app.current_window_size.width - 570.0;
+            let max_chars = (available_width / 10.0).max(20.0) as usize;
+
+            let mut trunc = t.summary.clone();
+            if trunc.chars().count() > max_chars {
+                trunc = format!(
+                    "{}...",
+                    trunc
+                        .chars()
+                        .take(max_chars.saturating_sub(3))
+                        .collect::<String>()
+                );
+            }
+            (
+                format!("{} {} (Esc)", app.focus_icon, trunc),
+                Message::ClearFocus,
+            )
+        } else {
+            (
+                format!("{} Focused (Esc)", app.focus_icon),
+                Message::ClearFocus,
+            )
+        }
+    } else if app.loading {
+        (
+            rust_i18n::t!("loading").to_string(),
+            Message::ToggleAllCalendars(true),
+        ) // Will be overridden
     } else if let Some(cal) = active_cal {
-        cal.name.clone()
+        (cal.name.clone(), Message::ToggleAllCalendars(true))
     } else if app.session.selected_categories.is_empty() {
-        rust_i18n::t!("all_tasks").to_string()
+        (
+            rust_i18n::t!("all_tasks").to_string(),
+            Message::ToggleAllCalendars(true),
+        )
     } else {
-        rust_i18n::t!("tasks").to_string()
+        (
+            rust_i18n::t!("tasks").to_string(),
+            Message::ToggleAllCalendars(true),
+        )
     };
 
     let other_visible_cals: Vec<&crate::model::CalendarListEntry> =
@@ -1340,6 +1391,13 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
         .filter(|c| c.href != crate::storage::LOCAL_TRASH_HREF && c.href != "local://recovery")
         .all(|c| !app.hidden_calendars.contains(&c.href));
 
+    // Resolve the actual dynamic message (handles Focus clearing vs Calendar toggling)
+    let dynamic_msg = if let Message::ToggleAllCalendars(_) = title_msg {
+        Message::ToggleAllCalendars(!are_all_visible)
+    } else {
+        title_msg.clone()
+    };
+
     let title_btn = iced::widget::button(
         text(title_text)
             .size(20)
@@ -1348,7 +1406,7 @@ fn view_main_content(app: &GuiApp, show_logo: bool) -> Element<'_, Message> {
     )
     .style(iced::widget::button::text)
     .padding(0)
-    .on_press(Message::ToggleAllCalendars(!are_all_visible));
+    .on_press(dynamic_msg);
 
     title_group = title_group.push(
         tooltip(

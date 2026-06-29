@@ -1247,7 +1247,27 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
         .constraints([Constraint::Min(0), Constraint::Length(final_details_height)])
         .split(h_chunks[1]);
 
-    let mut title = if state.loading {
+    let mut title = if let Some(focus_uid) = &state.focused_task_uid {
+        if let Some(t) = state.store.get_task_ref(focus_uid) {
+            // Dynamically truncate based on the main panel's actual width
+            let available_width = h_chunks[1].width.saturating_sub(25) as usize;
+            let max_chars = available_width.max(15);
+
+            let mut trunc = t.summary.clone();
+            if trunc.chars().count() > max_chars {
+                trunc = format!(
+                    "{}...",
+                    trunc
+                        .chars()
+                        .take(max_chars.saturating_sub(3))
+                        .collect::<String>()
+                );
+            }
+            format!(" 🔭 {} (Esc) ", trunc)
+        } else {
+            " 🔭 Focused (Esc) ".to_string()
+        }
+    } else if state.loading {
         format!(
             " {} ({}) ",
             rust_i18n::t!("tasks"),

@@ -64,6 +64,7 @@ fn test_start_grace_period_keeps_tasks_in_active_section() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     };
 
     let filtered = store.filter(options).items;
@@ -152,6 +153,7 @@ fn test_grace_period_zero_pushes_all_future_starts() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     };
 
     let filtered = store.filter(options).items;
@@ -242,6 +244,7 @@ fn test_acknowledged_alarm_keeps_task_in_active_section() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     };
 
     let filtered = store.filter(options).items;
@@ -341,6 +344,7 @@ fn test_any_acknowledged_alarm_keeps_task_active() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     };
 
     let filtered = store.filter(options).items;
@@ -430,6 +434,7 @@ fn test_recurring_task_with_fresh_dates_goes_to_future() {
         max_done_subtasks: usize::MAX,
         tag_aliases: &HashMap::new(),
         search_collapsed_tasks: &HashSet::new(),
+        focused_task_uid: None,
     };
 
     let filtered = store.filter(options).items;

@@ -1738,6 +1738,7 @@ impl CfaitMobile {
             max_done_subtasks: config.max_done_subtasks,
             tag_aliases: &config.tag_aliases,
             search_collapsed_tasks: &search_collapsed_set,
+            focused_task_uid: None,
         });
 
         let tasks = filtered
@@ -1953,6 +1954,7 @@ impl CfaitMobile {
             max_done_subtasks: config.max_done_subtasks,
             tag_aliases: &config.tag_aliases,
             search_collapsed_tasks: &HashSet::new(),
+            focused_task_uid: None,
         });
         let filtered: Vec<crate::model::Task> = filter_res
             .items

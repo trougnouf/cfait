@@ -2,7 +2,7 @@
 // File: ./src/tui/state.rs
 // Manages the application state for the TUI.
 use crate::context::AppContext;
-use crate::model::{CalendarListEntry, Task};
+use crate::model::{AppIntent, CalendarListEntry, Task};
 use crate::store::{FilterOptions, TaskListItem, TaskStore};
 use crate::system::SystemEvent;
 use crate::tui::action::SidebarMode;
@@ -115,6 +115,7 @@ pub struct AppState {
     pub input_buffer: String,
     pub active_search_query: String, // Holds the committed search term
     pub cursor_position: usize,
+    pub focused_task_uid: Option<String>,
     pub edit_scroll_offset: u16,
     pub edit_scroll_x: u16,
     pub details_scroll: u16,
@@ -238,6 +239,7 @@ impl AppState {
             input_buffer: String::new(),
             active_search_query: String::new(),
             cursor_position: 0,
+            focused_task_uid: None,
             edit_scroll_offset: 0,
             edit_scroll_x: 0,
             details_scroll: 0,
@@ -356,6 +358,7 @@ impl AppState {
             max_done_subtasks: config.max_done_subtasks,
             tag_aliases: &config.tag_aliases,
             search_collapsed_tasks: &self.search_collapsed_tasks,
+            focused_task_uid: self.focused_task_uid.as_deref(),
         });
 
         self.tasks = filter_res.items;
@@ -449,6 +452,19 @@ impl AppState {
                 false
             }
         })
+    }
+
+    /// Handles Intents directly to keep state synced without a controller
+    pub fn apply_task_intent(
+        &mut self,
+        intent: &AppIntent,
+        config: &crate::config::Config,
+    ) -> Vec<crate::journal::Action> {
+        if let AppIntent::FocusTaskTree { uid } = intent {
+            self.focused_task_uid = uid.clone();
+            return Vec::new();
+        }
+        self.store.apply_task_intent(intent, config)
     }
 
     /// Get all real tasks (excluding control items)

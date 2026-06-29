@@ -277,6 +277,7 @@ fn handle_hotkey(
                     ("x", false) => Some(Message::CancelSelected),
                     ("y", false) => Some(Message::YankSelected),
                     ("y", true) => Some(Message::ToggleYankLock),
+                    ("f", false) => Some(Message::FocusSelected),
                     ("c", false) => Some(Message::KeyboardLinkChild),
                     ("c", true) => Some(Message::KeyboardCreateChild),
                     ("t", false) => Some(Message::KeyboardAddSession),

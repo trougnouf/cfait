@@ -244,6 +244,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::TagHovered(_)
         | Message::TaskClick(_, _)
         | Message::FocusLocation(_)
+        | Message::FocusSelected
+        | Message::ClearFocus
         | Message::ToggleHideCompletedToggle
         | Message::CategoryMatchModeToggle
         | Message::ToggleChildLock

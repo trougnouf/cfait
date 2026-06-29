@@ -95,6 +95,7 @@ struct HierarchyContext<'a> {
     search_active: bool,
     max_done_subtasks: usize,
     search_collapsed_tasks: &'a HashSet<String>,
+    focused_task_uid: Option<&'a str>,
 }
 
 pub struct HierarchyOptions<'a> {
@@ -106,6 +107,7 @@ pub struct HierarchyOptions<'a> {
     pub search_active: bool,
     pub sort_preset: crate::config::SortPreset,
     pub search_collapsed_tasks: &'a HashSet<String>,
+    pub focused_task_uid: Option<&'a str>,
 }
 
 /// Organize tasks into a hierarchy with proper parent/child relationships and inject
@@ -161,6 +163,7 @@ pub fn organize_hierarchy(
         search_active: options.search_active,
         max_done_subtasks: options.max_done_subtasks,
         search_collapsed_tasks: options.search_collapsed_tasks,
+        focused_task_uid: options.focused_task_uid,
     };
 
     fn mark_tree_as_visited(task: &Task, context: &mut HierarchyContext) {
@@ -248,8 +251,10 @@ pub fn organize_hierarchy(
         }
         context.visited_keys.insert(visit_key.clone());
 
-        let force_expand =
-            context.search_active && !context.search_collapsed_tasks.contains(&task.uid);
+        let is_focused_root = context.focused_task_uid == Some(task.uid.as_str());
+        let force_expand = (context.search_active
+            && !context.search_collapsed_tasks.contains(&task.uid))
+            || is_focused_root;
         let effectively_collapsed = task.collapsed && !force_expand;
 
         let mut t = task.clone();
@@ -461,6 +466,7 @@ pub struct FilterOptions<'a> {
     pub max_done_subtasks: usize,
     pub tag_aliases: &'a HashMap<String, Vec<String>>,
     pub search_collapsed_tasks: &'a HashSet<String>,
+    pub focused_task_uid: Option<&'a str>,
 }
 
 impl TaskStore {
@@ -1844,12 +1850,23 @@ impl TaskStore {
             false
         };
 
-        // 1) Build iterator over allowed calendars (respecting active/hidden calendar restrictions).
+        // 1) Handle focus state boundary (root + descendants transcend active calendar filters)
+        let focus_set: Option<HashSet<String>> = options.focused_task_uid.map(|uid| {
+            let mut set: HashSet<String> = self.get_descendant_uids(uid).into_iter().collect();
+            set.insert(uid.to_string());
+            set
+        });
+
+        // 2) Build iterator over allowed calendars (respecting active/hidden calendar restrictions).
         let all_allowed_refs: Vec<&Task> = self
             .calendars
             .iter()
             .filter(|(href, _)| {
-                if let Some(active) = options.active_cal_href {
+                if options.focused_task_uid.is_some() {
+                    // In focus mode, transcend active calendar to show all cross-calendar children.
+                    // Only hide internal systemic calendars like trash/recovery.
+                    *href != crate::storage::LOCAL_TRASH_HREF && *href != "local://recovery"
+                } else if let Some(active) = options.active_cal_href {
                     *href == active && !options.hidden_calendars.contains(*href)
                 } else {
                     !options.hidden_calendars.contains(*href)
@@ -1858,13 +1875,19 @@ impl TaskStore {
             .flat_map(|(_, map)| map.values())
             .collect();
 
-        // 2) Define the filtering pipeline as a reusable closure.
+        // 3) Define the filtering pipeline as a reusable closure.
         // This allows us to calculate the final tasks, and recalculate aggregates ignoring specific filters for OR modes.
         let run_pipeline = |ignore_categories: bool, ignore_locations: bool| -> Vec<&Task> {
             let visible_refs: Vec<&Task> = all_allowed_refs
                 .iter()
                 .copied()
                 .filter(|t| {
+                    if let Some(fs) = &focus_set
+                        && !fs.contains(&t.uid)
+                    {
+                        return false;
+                    }
+
                     if t.uid == "cfait-global-settings-v1"
                         || t.summary.starts_with("⚙ Cfait Settings")
                     {
@@ -2017,6 +2040,13 @@ impl TaskStore {
                 let query = crate::model::matcher::Query::new(options.search_term);
 
                 for t in &visible_refs {
+                    // If in focus mode, we ALWAYS force the focused root to match the search,
+                    // otherwise the tree collapses and we lose our visual anchor.
+                    if Some(t.uid.as_str()) == options.focused_task_uid {
+                        matched_uids.insert(t.uid.clone());
+                        queue.push(t.uid.clone());
+                        continue;
+                    }
                     if query.matches(t, lex) && matched_uids.insert(t.uid.clone()) {
                         queue.push(t.uid.clone());
                     }
@@ -2522,6 +2552,7 @@ impl TaskStore {
                 search_active: !options.search_term.is_empty(),
                 sort_preset: options.sort_preset,
                 search_collapsed_tasks: options.search_collapsed_tasks,
+                focused_task_uid: options.focused_task_uid,
             },
         );
 
@@ -2854,6 +2885,7 @@ mod tests {
                 search_active: false,
                 sort_preset: crate::config::SortPreset::UrgentStartedDue,
                 search_collapsed_tasks: &HashSet::new(),
+                focused_task_uid: None,
             },
         );
 
@@ -2903,6 +2935,7 @@ mod tests {
                 search_active: false,
                 sort_preset: crate::config::SortPreset::UrgentStartedDue,
                 search_collapsed_tasks: &HashSet::new(),
+                focused_task_uid: None,
             },
         );
 
@@ -2953,6 +2986,7 @@ mod tests {
                 search_active: false,
                 sort_preset: crate::config::SortPreset::UrgentStartedDue,
                 search_collapsed_tasks: &HashSet::new(),
+                focused_task_uid: None,
             },
         );
 
