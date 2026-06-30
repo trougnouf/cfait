@@ -1162,7 +1162,10 @@ impl CfaitMobile {
         let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
         let parent_uids = store.get_all_parent_uids();
         let mut results = Vec::new();
-        for map in store.calendars.values() {
+        for (href, map) in &store.calendars {
+            if href == crate::storage::LOCAL_TRASH_HREF || href == "local://recovery" {
+                continue;
+            }
             for t in map.values() {
                 if t.status == crate::model::TaskStatus::InProcess {
                     let mut cloned = t.clone();
@@ -1387,35 +1390,55 @@ impl CfaitMobile {
     }
 
     pub fn get_firing_alarms(&self) -> Vec<MobileAlarmInfo> {
-        let cached = self.alarm_index_cache.blocking_lock();
-        if let Some(ref index) = *cached
-            && !index.is_empty()
+        let mut firing_entries = Vec::new();
         {
-            let firing = index.get_firing_alarms();
-            if !firing.is_empty() {
-                return firing
-                    .into_iter()
-                    .map(|e| MobileAlarmInfo {
-                        task_uid: e.task_uid,
-                        alarm_uid: e.alarm_uid,
-                        title: e.task_title,
-                        body: e
-                            .description
-                            .unwrap_or_else(|| rust_i18n::t!("reminder").to_string()),
-                    })
-                    .collect();
-            } else {
-                return Vec::new();
+            let cached = self.alarm_index_cache.blocking_lock();
+            if let Some(ref index) = *cached {
+                firing_entries = index.get_firing_alarms();
             }
         }
-        drop(cached);
+
+        if !firing_entries.is_empty() {
+            let store = self.controller.store.blocking_lock();
+            return firing_entries
+                .into_iter()
+                .filter(|e| {
+                    if let Some(task) = store.get_task_ref(&e.task_uid) {
+                        !task.status.is_done()
+                            && task.calendar_href != crate::storage::LOCAL_TRASH_HREF
+                            && task.calendar_href != "local://recovery"
+                    } else {
+                        false
+                    }
+                })
+                .map(|e| MobileAlarmInfo {
+                    task_uid: e.task_uid,
+                    alarm_uid: e.alarm_uid,
+                    title: e.task_title,
+                    body: e
+                        .description
+                        .unwrap_or_else(|| rust_i18n::t!("reminder").to_string()),
+                })
+                .collect();
+        }
+
         let index = AlarmIndex::load(self.ctx.as_ref());
         if !index.is_empty() {
-            let firing = index.get_firing_alarms();
-            if !firing.is_empty() {
+            let firing_from_disk = index.get_firing_alarms();
+            if !firing_from_disk.is_empty() {
                 *self.alarm_index_cache.blocking_lock() = Some(index);
-                return firing
+                let store = self.controller.store.blocking_lock();
+                return firing_from_disk
                     .into_iter()
+                    .filter(|e| {
+                        if let Some(task) = store.get_task_ref(&e.task_uid) {
+                            !task.status.is_done()
+                                && task.calendar_href != crate::storage::LOCAL_TRASH_HREF
+                                && task.calendar_href != "local://recovery"
+                        } else {
+                            false
+                        }
+                    })
                     .map(|e| MobileAlarmInfo {
                         task_uid: e.task_uid,
                         alarm_uid: e.alarm_uid,

@@ -5320,6 +5320,12 @@ sealed class AppIntent {
         companion object
     }
 
+    data class CompleteTree(
+        val `uid`: kotlin.String,
+    ) : AppIntent() {
+        companion object
+    }
+
     companion object
 }
 
@@ -5518,6 +5524,12 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
             32 -> {
                 AppIntent.FocusTaskTree(
                     FfiConverterOptionalString.read(buf),
+                )
+            }
+
+            33 -> {
+                AppIntent.CompleteTree(
+                    FfiConverterString.read(buf),
                 )
             }
 
@@ -5787,6 +5799,14 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
                         FfiConverterOptionalString.allocationSize(value.`uid`)
                 )
             }
+
+            is AppIntent.CompleteTree -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterString.allocationSize(value.`uid`)
+                )
+            }
         }
 
     override fun write(
@@ -5989,6 +6009,12 @@ public object FfiConverterTypeAppIntent : FfiConverterRustBuffer<AppIntent> {
                 FfiConverterOptionalString.write(value.`uid`, buf)
                 Unit
             }
+
+            is AppIntent.CompleteTree -> {
+                buf.putInt(33)
+                FfiConverterString.write(value.`uid`, buf)
+                Unit
+            }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 }
@@ -6138,6 +6164,7 @@ enum class MobileSyntaxType {
     FILTER,
     OPERATOR,
     GOAL,
+    COLLECTION,
     WIKI_LINK,
     ;
 

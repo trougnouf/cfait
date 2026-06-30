@@ -370,6 +370,8 @@ pub async fn run(ctx: Arc<dyn AppContext>) -> Result<()> {
             let mut keep = false;
             if let Some(store_task) = app_state.store.get_task_ref(&active_task.uid)
                 && !store_task.status.is_done()
+                && store_task.calendar_href != crate::storage::LOCAL_TRASH_HREF
+                && store_task.calendar_href != "local://recovery"
             {
                 if a_uid.starts_with("implicit_") {
                     let parts: Vec<&str> = a_uid.split('|').collect();
