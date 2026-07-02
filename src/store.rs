@@ -433,6 +433,8 @@ pub struct TaskStore {
     pub related_from_index: HashMap<String, Vec<String>>,
     /// Reverse lookup for dependencies: dep_uid -> Vec<task_uid_that_depend_on_dep>
     pub blocking_index: HashMap<String, Vec<String>>,
+    /// Reverse lookup for parent_uid: parent_uid -> Vec<child_uid>
+    pub children_index: HashMap<String, Vec<String>>,
     /// AppContext used for persistence operations (if store needs to save).
     pub ctx: Arc<dyn AppContext>,
 }
@@ -477,6 +479,7 @@ impl TaskStore {
             index: HashMap::new(),
             related_from_index: HashMap::new(),
             blocking_index: HashMap::new(),
+            children_index: HashMap::new(),
             ctx,
         }
     }
@@ -519,6 +522,14 @@ impl TaskStore {
                 }
             }
         }
+        if let Some(p) = &task.parent_uid
+            && let Some(list) = self.children_index.get_mut(p)
+        {
+            list.retain(|u| u != &task.uid);
+            if list.is_empty() {
+                self.children_index.remove(p);
+            }
+        }
     }
 
     fn add_task_to_indices(&mut self, task: &Task) {
@@ -531,6 +542,12 @@ impl TaskStore {
         for dep in &task.dependencies {
             self.blocking_index
                 .entry(dep.clone())
+                .or_default()
+                .push(task.uid.clone());
+        }
+        if let Some(p) = &task.parent_uid {
+            self.children_index
+                .entry(p.clone())
                 .or_default()
                 .push(task.uid.clone());
         }
@@ -812,6 +829,7 @@ impl TaskStore {
         self.index.clear();
         self.related_from_index.clear();
         self.blocking_index.clear();
+        self.children_index.clear();
     }
 
     /// Remove an entire calendar from the store and drop related index entries.
@@ -1089,19 +1107,12 @@ impl TaskStore {
         let mut queue = vec![uid.to_string()];
         let mut visited = HashSet::new();
 
-        let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
-        for map in self.calendars.values() {
-            for t in map.values() {
-                if let Some(p) = &t.parent_uid {
-                    adjacency.entry(p.clone()).or_default().push(t.uid.clone());
-                }
-            }
-        }
-
         while let Some(current_uid) = queue.pop() {
             if !visited.insert(current_uid.clone()) {
                 continue;
             }
+
+            let children = self.children_index.get(&current_uid).cloned();
 
             if let Some((task, _)) = self.get_task_mut(&current_uid) {
                 let mut changed = false;
@@ -1127,10 +1138,10 @@ impl TaskStore {
                     task.sequence += 1;
                     updated.push(task.clone());
                 }
+            }
 
-                if let Some(children) = adjacency.get(&current_uid) {
-                    queue.extend(children.clone());
-                }
+            if let Some(c) = children {
+                queue.extend(c);
             }
         }
         updated
@@ -1142,19 +1153,12 @@ impl TaskStore {
         let mut queue = vec![uid.to_string()];
         let mut visited = HashSet::new();
 
-        let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
-        for map in self.calendars.values() {
-            for t in map.values() {
-                if let Some(p) = &t.parent_uid {
-                    adjacency.entry(p.clone()).or_default().push(t.uid.clone());
-                }
-            }
-        }
-
         while let Some(current_uid) = queue.pop() {
             if !visited.insert(current_uid.clone()) {
                 continue;
             }
+
+            let children = self.children_index.get(&current_uid).cloned();
 
             if let Some((task, _)) = self.get_task_mut(&current_uid) {
                 let mut changed = false;
@@ -1179,10 +1183,10 @@ impl TaskStore {
                     task.sequence += 1;
                     updated.push(task.clone());
                 }
+            }
 
-                if let Some(children) = adjacency.get(&current_uid) {
-                    queue.extend(children.clone());
-                }
+            if let Some(c) = children {
+                queue.extend(c);
             }
         }
         updated
@@ -1387,15 +1391,6 @@ impl TaskStore {
         let mut descendants = Vec::new();
         let mut queue = vec![root_uid.to_string()];
 
-        let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
-        for map in self.calendars.values() {
-            for t in map.values() {
-                if let Some(p) = &t.parent_uid {
-                    adjacency.entry(p.clone()).or_default().push(t.uid.clone());
-                }
-            }
-        }
-
         let mut visited = HashSet::new();
         while let Some(curr) = queue.pop() {
             if !visited.insert(curr.clone()) {
@@ -1404,7 +1399,7 @@ impl TaskStore {
             if curr != root_uid {
                 descendants.push(curr.clone());
             }
-            if let Some(children) = adjacency.get(&curr) {
+            if let Some(children) = self.children_index.get(&curr) {
                 queue.extend(children.clone());
             }
         }
@@ -1417,23 +1412,13 @@ impl TaskStore {
         let mut queue = vec![root_uid.to_string()];
         let mut descendants = Vec::new();
 
-        // Build adjacency to find descendants quickly
-        let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
-        for map in self.calendars.values() {
-            for t in map.values() {
-                if let Some(p) = &t.parent_uid {
-                    adjacency.entry(p.clone()).or_default().push(t.uid.clone());
-                }
-            }
-        }
-
         let mut visited = HashSet::new();
         while let Some(curr) = queue.pop() {
             if !visited.insert(curr.clone()) {
                 continue;
             }
             descendants.push(curr.clone());
-            if let Some(children) = adjacency.get(&curr) {
+            if let Some(children) = self.children_index.get(&curr) {
                 queue.extend(children.clone());
             }
         }
@@ -1518,10 +1503,38 @@ impl TaskStore {
                 return Err("Cycle detected: Cannot set a task as a child of its own descendant");
             }
         }
+
+        // Get old parent uid before mutating
+        let old_parent_uid = self
+            .get_task_ref(child_uid)
+            .and_then(|t| t.parent_uid.clone());
+
+        // Update children_index before mutating task
+        if let Some(old_parent) = old_parent_uid
+            && let Some(list) = self.children_index.get_mut(&old_parent)
+        {
+            list.retain(|u| u != child_uid);
+            if list.is_empty() {
+                self.children_index.remove(&old_parent);
+            }
+        }
+
+        let new_parent_uid = parent_uid.clone();
+
         if let Some((task, _)) = self.get_task_mut(child_uid) {
             task.parent_uid = parent_uid;
             task.sequence += 1;
-            return Ok(task.clone());
+            let result = Ok(task.clone());
+
+            // Add to new parent's children index after the borrow ends
+            if let Some(p_uid) = new_parent_uid {
+                self.children_index
+                    .entry(p_uid)
+                    .or_default()
+                    .push(child_uid.to_string());
+            }
+
+            return result;
         }
         Err(Box::leak(
             rust_i18n::t!("error_task_not_found")
@@ -1958,9 +1971,11 @@ impl TaskStore {
     pub fn rebuild_relation_index(&mut self) {
         self.related_from_index.clear();
         self.blocking_index.clear();
+        self.children_index.clear();
 
         let mut relationships = Vec::new();
         let mut blocking_rels = Vec::new();
+        let mut children_rels = Vec::new();
 
         // Iterate all calendars and tasks only once to collect relations
         for map in self.calendars.values() {
@@ -1971,6 +1986,9 @@ impl TaskStore {
                 for dep in &task.dependencies {
                     blocking_rels.push((dep.clone(), uid.clone()));
                 }
+                if let Some(p) = &task.parent_uid {
+                    children_rels.push((p.clone(), uid.clone()));
+                }
             }
         }
 
@@ -1980,6 +1998,9 @@ impl TaskStore {
         }
         for (from, to) in blocking_rels {
             self.blocking_index.entry(from).or_default().push(to);
+        }
+        for (from, to) in children_rels {
+            self.children_index.entry(from).or_default().push(to);
         }
     }
 
@@ -2835,15 +2856,7 @@ impl TaskStore {
 
     /// Fast lookup to see which tasks are parents
     pub fn get_all_parent_uids(&self) -> HashSet<String> {
-        let mut parents = HashSet::new();
-        for map in self.calendars.values() {
-            for t in map.values() {
-                if let Some(p) = &t.parent_uid {
-                    parents.insert(p.clone());
-                }
-            }
-        }
-        parents
+        self.children_index.keys().cloned().collect()
     }
 
     /// Applies a Task-related AppIntent to the in-memory store and returns the list of
@@ -3029,18 +3042,7 @@ impl TaskStore {
                 }
             }
             AppIntent::ToggleTreeCollapse { uid } => {
-                let mut is_parent = false;
-                for map in self.calendars.values() {
-                    for t in map.values() {
-                        if t.parent_uid.as_ref() == Some(uid) {
-                            is_parent = true;
-                            break;
-                        }
-                    }
-                    if is_parent {
-                        break;
-                    }
-                }
+                let is_parent = self.children_index.contains_key(uid);
 
                 if let Some((task, _)) = self.get_task_mut(uid)
                     && (is_parent || task.collapsed)
@@ -3052,18 +3054,7 @@ impl TaskStore {
                 }
             }
             AppIntent::SetTreeCollapse { uid, collapsed } => {
-                let mut is_parent = false;
-                for map in self.calendars.values() {
-                    for t in map.values() {
-                        if t.parent_uid.as_ref() == Some(uid) {
-                            is_parent = true;
-                            break;
-                        }
-                    }
-                    if is_parent {
-                        break;
-                    }
-                }
+                let is_parent = self.children_index.contains_key(uid);
 
                 if let Some((task, _)) = self.get_task_mut(uid)
                     && (is_parent || task.collapsed)
