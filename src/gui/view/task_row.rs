@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use super::tooltip_style;
 use iced::widget::{
-    Space, button, column, container, responsive, rich_text, row, span, text, text_editor, tooltip,
+    Space, button, column, container, rich_text, row, span, text, text_editor, tooltip,
 };
 
 pub fn parse_inline_markdown(
@@ -446,151 +446,123 @@ pub fn view_task_row<'a>(
                 || task.last_started_at.is_some()
                 || (app.show_priority_numbers && task.priority > 0);
 
-            let main_text_col = responsive(move |size| {
-                let available_width = size.width;
-                let mut tags_width = 0.0;
+            // Accurate overhead estimate:
+            // ~130px (dates) + ~120px (actions) + 24px (checkbox) + 40px (spacing) + 22px (padding) + 10px (scrollbar)
+            let overhead_allowance = 450.0;
+            let available_width = app.current_window_size.width
+                - if app.sidebar_is_hidden { 0.0 } else { 220.0 }
+                - indent_size as f32
+                - overhead_allowance;
 
-                if has_metadata {
-                    let show_pc = !task.status.is_done() && task.percent_complete.unwrap_or(0) > 0;
+            let mut tags_width = 0.0;
 
-                    if is_blocked {
-                        tags_width += 65.0;
-                    }
-                    if app.show_priority_numbers && task.priority > 0 {
-                        tags_width += 25.0;
-                    }
-                    for cat in visible_tags {
-                        tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
-                    }
-                    if let Some(l) = &visible_location {
-                        tags_width += (l.len() as f32 * 7.0) + 25.0;
-                    }
-                    if task.estimated_duration.is_some()
-                        || task.time_spent_seconds > 0
-                        || task.last_started_at.is_some()
-                        || show_pc
-                    {
-                        tags_width += 50.0;
-                        if show_pc {
-                            tags_width += 30.0; // Extra room for "100% | "
-                        }
-                    }
-                    if task.rrule.is_some() {
-                        tags_width += 30.0;
-                    }
-                    if task.url.is_some() {
-                        tags_width += 20.0;
+            if has_metadata {
+                let show_pc = !task.status.is_done() && task.percent_complete.unwrap_or(0) > 0;
+
+                if is_blocked {
+                    tags_width += 65.0;
+                }
+                if app.show_priority_numbers && task.priority > 0 {
+                    tags_width += 25.0;
+                }
+                for cat in visible_tags {
+                    tags_width += (cat.len() as f32 + 1.0) * 7.0 + 10.0;
+                }
+                if let Some(l) = &visible_location {
+                    tags_width += (l.len() as f32 * 7.0) + 25.0;
+                }
+                if task.estimated_duration.is_some()
+                    || task.time_spent_seconds > 0
+                    || task.last_started_at.is_some()
+                    || show_pc
+                {
+                    tags_width += 50.0;
+                    if show_pc {
+                        tags_width += 30.0; // Extra room for "100% | "
                     }
                 }
+                if task.rrule.is_some() {
+                    tags_width += 30.0;
+                }
+                if task.url.is_some() {
+                    tags_width += 20.0;
+                }
+            }
 
-                let build_tags = || -> Element<'a, Message> {
-                    let mut tags_row: iced::widget::Row<'_, Message> =
-                        row![].spacing(3).align_y(iced::Alignment::Center);
+            let tags_element: Element<'a, Message> = if has_metadata {
+                let mut tags_row = row![].spacing(3).align_y(iced::Alignment::Center);
 
-                    if task.pinned {
-                        tags_row = tags_row.push(
-                            container(
-                                icon::icon(icon::THUMB_TACK)
-                                    .size(12)
-                                    .color(Color::from_rgb(1.0, 0.4, 0.0)),
-                            )
-                            .padding(3),
-                        );
-                    }
+                if task.pinned {
+                    tags_row = tags_row.push(
+                        container(
+                            icon::icon(icon::THUMB_TACK)
+                                .size(12)
+                                .color(Color::from_rgb(1.0, 0.4, 0.0)),
+                        )
+                        .padding(3),
+                    );
+                }
 
-                    if is_blocked {
-                        tags_row = tags_row.push(
-                            container(text(rust_i18n::t!("blocked")).size(12).style(
-                                |theme: &Theme| text::Style {
-                                    color: Some(theme.extended_palette().background.base.text),
-                                },
-                            ))
-                            .style(|_| container::Style {
-                                background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
-                                border: iced::Border {
-                                    radius: 4.0.into(),
-                                    ..Default::default()
-                                },
+                if is_blocked {
+                    tags_row = tags_row.push(
+                        container(text(rust_i18n::t!("blocked")).size(12).style(
+                            |theme: &Theme| text::Style {
+                                color: Some(theme.extended_palette().background.base.text),
+                            },
+                        ))
+                        .style(|_| container::Style {
+                            background: Some(Color::from_rgb(0.8, 0.2, 0.2).into()),
+                            border: iced::Border {
+                                radius: 4.0.into(),
                                 ..Default::default()
-                            })
-                            .padding(3),
-                        );
-                    }
+                            },
+                            ..Default::default()
+                        })
+                        .padding(3),
+                    );
+                }
 
-                    if app.show_priority_numbers && task.priority > 0 {
-                        let priority_text =
-                            text(format!("!{}", task.priority)).size(11).color(color);
-                        tags_row = tags_row.push(container(priority_text).padding([2, 4]).style(
-                            move |_| container::Style {
+                if app.show_priority_numbers && task.priority > 0 {
+                    let priority_text = text(format!("!{}", task.priority)).size(11).color(color);
+                    tags_row =
+                        tags_row.push(container(priority_text).padding([2, 4]).style(move |_| {
+                            container::Style {
                                 border: iced::Border {
                                     radius: 4.0.into(),
                                     color: color.scale_alpha(0.5),
                                     width: 1.0,
                                 },
                                 ..Default::default()
-                            },
-                        ));
-                    }
+                            }
+                        }));
+                }
 
-                    for cat in visible_tags {
-                        let (r, g, b) = color_utils::generate_color(cat);
-                        let bg_color = Color::from_rgb(r, g, b);
+                for cat in visible_tags {
+                    let (r, g, b) = color_utils::generate_color(cat);
+                    let bg_color = Color::from_rgb(r, g, b);
 
-                        let text_color = if color_utils::is_dark(r, g, b) {
-                            Color::WHITE
-                        } else {
-                            Color::BLACK
-                        };
+                    let text_color = if color_utils::is_dark(r, g, b) {
+                        Color::WHITE
+                    } else {
+                        Color::BLACK
+                    };
 
-                        let display_cat = if cat.contains('=') {
-                            cat.rsplit(':').next().unwrap_or(cat)
-                        } else {
-                            cat.as_str()
-                        };
-                        let label = if cat.contains('=') {
-                            display_cat.to_string()
-                        } else {
-                            format!("#{}", display_cat)
-                        };
+                    let display_cat = if cat.contains('=') {
+                        cat.rsplit(':').next().unwrap_or(cat)
+                    } else {
+                        cat.as_str()
+                    };
+                    let label = if cat.contains('=') {
+                        display_cat.to_string()
+                    } else {
+                        format!("#{}", display_cat)
+                    };
 
-                        tags_row = tags_row.push(
-                            button(text(label).size(12).color(text_color))
-                                .style(move |_theme, status| {
-                                    let base = button::Style {
-                                        background: Some(bg_color.into()),
-                                        text_color,
-                                        border: iced::Border {
-                                            radius: 4.0.into(),
-                                            ..Default::default()
-                                        },
-                                        ..button::Style::default()
-                                    };
-                                    match status {
-                                        button::Status::Hovered | button::Status::Pressed => {
-                                            button::Style {
-                                                border: iced::Border {
-                                                    color: Color::BLACK.scale_alpha(0.2),
-                                                    width: 1.0,
-                                                    radius: 4.0.into(),
-                                                },
-                                                ..base
-                                            }
-                                        }
-                                        _ => base,
-                                    }
-                                })
-                                .padding(3)
-                                .on_press(Message::JumpToTag(cat.to_string())),
-                        );
-                    }
-
-                    if let Some(loc) = &visible_location {
-                        let text_color = Color::WHITE;
-
-                        let loc_btn = button(text(format!("@@{}", loc)).size(12).color(text_color))
+                    tags_row = tags_row.push(
+                        button(text(label).size(12).color(text_color))
                             .style(move |_theme, status| {
                                 let base = button::Style {
-                                    background: Some(COLOR_LOCATION.into()),
+                                    background: Some(bg_color.into()),
                                     text_color,
                                     border: iced::Border {
                                         radius: 4.0.into(),
@@ -613,178 +585,203 @@ pub fn view_task_row<'a>(
                                 }
                             })
                             .padding(3)
-                            .on_press(Message::JumpToLocation(loc.clone()));
+                            .on_press(Message::JumpToTag(cat.to_string())),
+                    );
+                }
 
-                        tags_row = tags_row.push(loc_btn);
-                    }
+                if let Some(loc) = &visible_location {
+                    let text_color = Color::WHITE;
 
-                    let now_ts = Utc::now().timestamp();
-                    let current_session = task
-                        .last_started_at
-                        .map(|start| (now_ts - start).max(0) as u64)
-                        .unwrap_or(0);
-                    let total_seconds = task.time_spent_seconds + current_session;
-                    let total_mins = (total_seconds / 60) as u32;
-
-                    let show_pc = !task.status.is_done() && task.percent_complete.unwrap_or(0) > 0;
-
-                    if total_mins > 0
-                        || task.estimated_duration.is_some()
-                        || task.last_started_at.is_some()
-                        || show_pc
-                    {
-                        let est_label = if let Some(min) = task.estimated_duration {
-                            if let Some(max) = task.estimated_duration_max {
-                                if max > min {
-                                    format!(
-                                        "~{}-{}",
-                                        crate::model::parser::format_duration_compact(min),
-                                        crate::model::parser::format_duration_compact(max)
-                                    )
-                                } else {
-                                    format!(
-                                        "~{}",
-                                        crate::model::parser::format_duration_compact(min)
-                                    )
+                    let loc_btn = button(text(format!("@@{}", loc)).size(12).color(text_color))
+                        .style(move |_theme, status| {
+                            let base = button::Style {
+                                background: Some(COLOR_LOCATION.into()),
+                                text_color,
+                                border: iced::Border {
+                                    radius: 4.0.into(),
+                                    ..Default::default()
+                                },
+                                ..button::Style::default()
+                            };
+                            match status {
+                                button::Status::Hovered | button::Status::Pressed => {
+                                    button::Style {
+                                        border: iced::Border {
+                                            color: Color::BLACK.scale_alpha(0.2),
+                                            width: 1.0,
+                                            radius: 4.0.into(),
+                                        },
+                                        ..base
+                                    }
                                 }
+                                _ => base,
+                            }
+                        })
+                        .padding(3)
+                        .on_press(Message::JumpToLocation(loc.clone()));
+
+                    tags_row = tags_row.push(loc_btn);
+                }
+
+                let now_ts = Utc::now().timestamp();
+                let current_session = task
+                    .last_started_at
+                    .map(|start| (now_ts - start).max(0) as u64)
+                    .unwrap_or(0);
+                let total_seconds = task.time_spent_seconds + current_session;
+                let total_mins = (total_seconds / 60) as u32;
+
+                let show_pc = !task.status.is_done() && task.percent_complete.unwrap_or(0) > 0;
+
+                if total_mins > 0
+                    || task.estimated_duration.is_some()
+                    || task.last_started_at.is_some()
+                    || show_pc
+                {
+                    let est_label = if let Some(min) = task.estimated_duration {
+                        if let Some(max) = task.estimated_duration_max {
+                            if max > min {
+                                format!(
+                                    "~{}-{}",
+                                    crate::model::parser::format_duration_compact(min),
+                                    crate::model::parser::format_duration_compact(max)
+                                )
                             } else {
                                 format!("~{}", crate::model::parser::format_duration_compact(min))
                             }
                         } else {
-                            String::new()
-                        };
+                            format!("~{}", crate::model::parser::format_duration_compact(min))
+                        }
+                    } else {
+                        String::new()
+                    };
 
-                        let time_label = if total_mins > 0 || task.last_started_at.is_some() {
-                            if !est_label.is_empty() {
-                                format!(
-                                    "{} / {}",
-                                    crate::model::parser::format_duration_compact(total_mins),
-                                    est_label
-                                )
-                            } else {
-                                crate::model::parser::format_duration_compact(total_mins)
-                            }
+                    let time_label = if total_mins > 0 || task.last_started_at.is_some() {
+                        if !est_label.is_empty() {
+                            format!(
+                                "{} / {}",
+                                crate::model::parser::format_duration_compact(total_mins),
+                                est_label
+                            )
                         } else {
-                            est_label
-                        };
+                            crate::model::parser::format_duration_compact(total_mins)
+                        }
+                    } else {
+                        est_label
+                    };
 
-                        let pc_str = if show_pc {
-                            task.percent_complete
-                                .map(|pc| format!("{}%", pc))
-                                .unwrap_or_default()
-                        } else {
-                            String::new()
-                        };
+                    let pc_str = if show_pc {
+                        task.percent_complete
+                            .map(|pc| format!("{}%", pc))
+                            .unwrap_or_default()
+                    } else {
+                        String::new()
+                    };
 
-                        let label = if !pc_str.is_empty() && !time_label.is_empty() {
-                            format!("{} | {}", pc_str, time_label)
-                        } else if !pc_str.is_empty() {
-                            pc_str
-                        } else {
-                            time_label
-                        };
+                    let label = if !pc_str.is_empty() && !time_label.is_empty() {
+                        format!("{} | {}", pc_str, time_label)
+                    } else if !pc_str.is_empty() {
+                        pc_str
+                    } else {
+                        time_label
+                    };
 
-                        let dur_bg = if task.last_started_at.is_some() {
-                            Color::from_rgb(0.25, 0.50, 0.25)
-                        } else {
-                            Color::from_rgb(0.50, 0.50, 0.50)
-                        };
-                        let dur_border = if task.last_started_at.is_some() {
-                            Color::from_rgb(0.25, 0.60, 0.25)
-                        } else {
-                            Color::BLACK.scale_alpha(0.05)
-                        };
+                    let dur_bg = if task.last_started_at.is_some() {
+                        Color::from_rgb(0.25, 0.50, 0.25)
+                    } else {
+                        Color::from_rgb(0.50, 0.50, 0.50)
+                    };
+                    let dur_border = if task.last_started_at.is_some() {
+                        Color::from_rgb(0.25, 0.60, 0.25)
+                    } else {
+                        Color::BLACK.scale_alpha(0.05)
+                    };
 
-                        tags_row = tags_row.push(
-                            container(text(label).size(10).style(|theme: &Theme| text::Style {
-                                color: Some(theme.extended_palette().background.base.text),
-                            }))
-                            .style(move |_| container::Style {
-                                background: Some(dur_bg.into()),
-                                border: iced::Border {
-                                    radius: 4.0.into(),
-                                    color: dur_border,
-                                    ..Default::default()
-                                },
+                    tags_row = tags_row.push(
+                        container(text(label).size(10).style(|theme: &Theme| text::Style {
+                            color: Some(theme.extended_palette().background.base.text),
+                        }))
+                        .style(move |_| container::Style {
+                            background: Some(dur_bg.into()),
+                            border: iced::Border {
+                                radius: 4.0.into(),
+                                color: dur_border,
                                 ..Default::default()
-                            })
-                            .padding(3),
-                        );
+                            },
+                            ..Default::default()
+                        })
+                        .padding(3),
+                    );
+                }
+                if task.rrule.is_some() {
+                    let r_color = if task.is_relative_recurrence() {
+                        Color::from_rgb(0.67, 0.28, 0.74) // #ab47bc
+                    } else {
+                        Color::from_rgb(0.5, 0.5, 0.5)
+                    };
+                    let recurrence_icon = icon::icon(icon::REPEAT).size(14).color(r_color);
+                    tags_row = tags_row.push(container(recurrence_icon).padding(0));
+                }
+
+                tags_row.into()
+            } else {
+                Space::new().width(Length::Fixed(0.0)).into()
+            };
+
+            let title_width_est = task.summary.len() as f32 * 10.0;
+            let required_title_space = title_width_est.min(90.0);
+            let padding_safety = 5.0;
+
+            let place_inline = if !has_metadata {
+                true
+            } else {
+                (available_width - tags_width - padding_safety) > required_title_space
+            };
+
+            let title_color = if task.status.is_done() {
+                Color { a: 0.75, ..color }
+            } else {
+                color
+            };
+
+            let is_strikethrough = (app.strikethrough_completed && task.status.is_done())
+                || task.calendar_href == "local://trash";
+
+            let summary_spans = parse_inline_markdown(&task.summary, title_color, is_strikethrough);
+
+            let summary_text: Element<'a, Message> = rich_text(summary_spans)
+                .size(20)
+                .width(Length::Fill)
+                .on_link_click(|target: String| {
+                    if target.starts_with("http://") || target.starts_with("https://") {
+                        Message::OpenUrl(target)
+                    } else {
+                        Message::OpenWikiLink(target)
                     }
-                    if task.rrule.is_some() {
-                        let r_color = if task.is_relative_recurrence() {
-                            Color::from_rgb(0.67, 0.28, 0.74) // #ab47bc
-                        } else {
-                            Color::from_rgb(0.5, 0.5, 0.5)
-                        };
-                        let recurrence_icon = icon::icon(icon::REPEAT).size(14).color(r_color);
-                        tags_row = tags_row.push(container(recurrence_icon).padding(0));
-                    }
+                })
+                .into();
 
-                    tags_row.into()
-                };
-
-                let title_width_est = task.summary.len() as f32 * 10.0;
-                let required_title_space = title_width_est.min(90.0);
-                let padding_safety = 5.0;
-
-                let place_inline = if !has_metadata {
-                    true
-                } else {
-                    (available_width - tags_width - padding_safety) > required_title_space
-                };
-
-                let title_color = if task.status.is_done() {
-                    Color { a: 0.75, ..color }
-                } else {
-                    color
-                };
-
-                let is_strikethrough = (app.strikethrough_completed && task.status.is_done())
-                    || task.calendar_href == "local://trash";
-
-                let summary_spans =
-                    parse_inline_markdown(&task.summary, title_color, is_strikethrough);
-
-                let summary_text: Element<'a, Message> = rich_text(summary_spans)
-                    .size(20)
-                    .width(Length::Fill)
-                    .on_link_click(|target: String| {
-                        if target.starts_with("http://") || target.starts_with("https://") {
-                            Message::OpenUrl(target)
-                        } else {
-                            Message::OpenWikiLink(target)
-                        }
-                    })
-                    .into();
-
-                if place_inline {
-                    row![
-                        summary_text,
-                        if has_metadata {
-                            build_tags()
-                        } else {
-                            Space::new().width(Length::Fixed(0.0)).into()
-                        }
-                    ]
+            let main_text_col: Element<'a, Message> = if place_inline {
+                row![summary_text, tags_element]
                     .spacing(6)
                     .align_y(iced::Alignment::Center)
                     .into()
-                } else {
-                    column![
-                        summary_text,
-                        if has_metadata {
-                            row![Space::new().width(Length::Fill), build_tags()]
-                        } else {
-                            row![]
-                        }
-                    ]
-                    .spacing(2)
-                    .into()
-                }
-            })
-            .width(Length::Fill)
-            .height(Length::Shrink);
+            } else {
+                column![
+                    summary_text,
+                    if has_metadata {
+                        row![Space::new().width(Length::Fill), tags_element]
+                    } else {
+                        row![]
+                    }
+                ]
+                .spacing(2)
+                .into()
+            };
+
+            let main_text_col = container(main_text_col)
+                .width(Length::Fill)
+                .height(Length::Shrink);
 
             let mut actions = row![].spacing(3).align_y(iced::Alignment::Center);
 

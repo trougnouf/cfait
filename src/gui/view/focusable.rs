@@ -12,10 +12,8 @@ use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::RwLock;
 
-/// Global registry mapping a textual representation of a widget `Id` -> its last-known bounds.
-/// We store the `Id` as a `String` (via Debug) because the concrete `Id` type may not be hashable
-/// in all versions; a string key is stable and sufficient for lookup here.
-static FOCUS_BOUNDS: Lazy<RwLock<HashMap<String, Rectangle>>> =
+/// Global registry mapping a widget `Id` -> its last-known bounds.
+static FOCUS_BOUNDS: Lazy<RwLock<HashMap<widget::Id, Rectangle>>> =
     Lazy::new(|| RwLock::new(HashMap::new()));
 
 /// Clears the entire focus bounds registry.
@@ -27,29 +25,27 @@ pub fn clear_focus_bounds() {
 
 /// Register the bounds for a focusable widget id.
 pub fn register_focus_bounds(id: &widget::Id, rect: Rectangle) {
-    let key = format!("{:?}", id);
     {
         let map = FOCUS_BOUNDS.read().unwrap();
-        if map.get(&key) == Some(&rect) {
+        if map.get(id) == Some(&rect) {
             return; // Fast-path: avoid unnecessary writes if bounds haven't changed
         }
     }
     let mut map = FOCUS_BOUNDS.write().unwrap();
-    map.insert(key, rect);
+    map.insert(id.clone(), rect);
 }
 
 /// Retrieve the last registered bounds for a focusable widget id.
 pub fn get_focus_bounds(id: &widget::Id) -> Option<Rectangle> {
-    let key = format!("{:?}", id);
     let map = FOCUS_BOUNDS.read().unwrap();
-    map.get(&key).cloned()
+    map.get(id).cloned()
 }
 
 /// Retrieve a clone of the entire focus bounds registry.
 /// This allows callers to inspect all known focusable widget bounds at once.
 ///
 /// Note: returns a shallow clone of the internal HashMap. The Rectangle values are copied.
-pub fn get_all_focus_bounds() -> HashMap<String, Rectangle> {
+pub fn get_all_focus_bounds() -> HashMap<widget::Id, Rectangle> {
     let map = FOCUS_BOUNDS.read().unwrap();
     map.clone()
 }
