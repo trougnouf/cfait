@@ -1228,6 +1228,7 @@ impl TaskStore {
         aliases: &std::collections::HashMap<String, Vec<String>>,
         default_reminder_time: Option<chrono::NaiveTime>,
         trash_retention_days: u32,
+        calendars: &[crate::model::CalendarListEntry],
     ) -> Result<Vec<crate::journal::Action>, String> {
         let mut actions = Vec::new();
         let old_descendants = self.get_descendant_uids(root_uid);
@@ -1247,9 +1248,21 @@ impl TaskStore {
         let mut tasks_to_update = Vec::new();
         let mut tasks_to_create = Vec::new();
 
+        let mut resolved_hrefs = HashMap::new();
+        resolved_hrefs.insert(root_uid.to_string(), root_calendar_href.clone());
+
         for ext in extracted {
-            let task_uid = ext.parsed_existing_uid.unwrap_or(ext.uid);
+            let task_uid = ext.parsed_existing_uid.clone().unwrap_or(ext.uid.clone());
             active_uids.insert(task_uid.clone());
+
+            let p_uid_str = ext
+                .parent_uid
+                .clone()
+                .unwrap_or_else(|| root_uid.to_string());
+            let inherited_href = resolved_hrefs
+                .get(&p_uid_str)
+                .cloned()
+                .unwrap_or_else(|| root_calendar_href.clone());
 
             let parent_uid = if task_uid == root_uid {
                 if let Some(t) = self.get_task_ref(&task_uid) {
@@ -1258,7 +1271,7 @@ impl TaskStore {
                     None
                 }
             } else {
-                Some(ext.parent_uid.unwrap_or(root_uid.to_string()))
+                Some(p_uid_str)
             };
 
             if let Some(existing) = self.get_task_ref(&task_uid) {
@@ -1302,6 +1315,14 @@ impl TaskStore {
 
                 clone.percent_complete = ext.percent_complete;
 
+                let final_href = if let Some(target) = clone.target_collection.take() {
+                    crate::model::resolve_collection(&target, calendars, &inherited_href)
+                } else {
+                    inherited_href.clone()
+                };
+                clone.calendar_href = final_href.clone();
+                resolved_hrefs.insert(task_uid.clone(), final_href);
+
                 clone.sequence += 1;
 
                 tasks_to_update.push(clone);
@@ -1338,7 +1359,14 @@ impl TaskStore {
 
                 new_task.parent_uid = parent_uid;
                 new_task.dependencies = ext.dependencies;
-                new_task.calendar_href = root_calendar_href.clone();
+
+                let final_href = if let Some(target) = new_task.target_collection.take() {
+                    crate::model::resolve_collection(&target, calendars, &inherited_href)
+                } else {
+                    inherited_href.clone()
+                };
+                new_task.calendar_href = final_href.clone();
+                resolved_hrefs.insert(task_uid.clone(), final_href);
 
                 new_task.percent_complete = ext.percent_complete;
 

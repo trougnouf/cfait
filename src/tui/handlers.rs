@@ -298,6 +298,7 @@ async fn execute_task_action(
                             &state.tag_aliases,
                             def_time,
                             config.trash_retention_days,
+                            &state.calendars,
                         ) {
                             Ok(actions) => {
                                 state.refresh_filtered_view();
@@ -584,6 +585,7 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
             &state.tag_aliases,
             def_time,
             config.trash_retention_days,
+            &state.calendars,
         ) {
             Ok(actions) => {
                 state.refresh_filtered_view();
@@ -1697,6 +1699,7 @@ pub async fn handle_key_event(
                                     &state.tag_aliases,
                                     def_time,
                                     config.trash_retention_days,
+                                    &state.calendars,
                                 ) {
                                     Ok(actions) => {
                                         state.refresh_filtered_view();

@@ -675,6 +675,7 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
                 &app.tag_aliases,
                 def_time,
                 app.core_config.trash_retention_days,
+                &app.calendars,
             ) {
                 Ok(actions) => {
                     common::refresh_filtered_tasks(app);
@@ -1279,6 +1280,7 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             &app.tag_aliases,
             config_time,
             app.core_config.trash_retention_days,
+            &app.calendars,
         ) {
             Ok(acts) => acts,
             Err(e) => {
