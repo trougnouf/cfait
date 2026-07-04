@@ -393,149 +393,24 @@ impl Highlighter for MarkdownHighlighter {
             ));
 
             let rest_of_line = &line[checkbox_end..];
-            let mut current_offset = 0;
 
-            while current_offset < rest_of_line.len() {
-                let next_uid_start = rest_of_line[current_offset..].find("<!-- uid:");
+            if rest_of_line.is_empty() {
+                return spans.into_iter();
+            }
 
-                let chunk_end = if let Some(start) = next_uid_start {
-                    current_offset + start
-                } else {
-                    rest_of_line.len()
-                };
+            let mut byte_formats = vec![base_format; rest_of_line.len()];
 
-                if chunk_end > current_offset {
-                    let chunk = &rest_of_line[current_offset..chunk_end];
-                    let tokens = crate::model::parser::tokenize_smart_input(chunk, false);
-                    let is_dark_theme = self.is_dark;
+            // 1. Apply Markdown to rest_of_line
+            let mut cursor = 0;
+            while cursor < rest_of_line.len() {
+                let remaining = &rest_of_line[cursor..];
 
-                    for t in tokens {
-                        let text = &chunk[t.start..t.end];
-                        let format = match t.kind {
-                            crate::model::parser::SyntaxType::Priority => {
-                                let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
-                                let (r, g, b) =
-                                    crate::color_utils::get_priority_rgb(p, is_dark_theme);
-                                highlighter::Format {
-                                    color: Some(Color::from_rgb(r, g, b)),
-                                    font: Some(Font {
-                                        weight: iced::font::Weight::Bold,
-                                        ..Default::default()
-                                    }),
-                                }
-                            }
-                            crate::model::parser::SyntaxType::DueDate => highlighter::Format {
-                                color: Some(Color::from_rgb(0.2, 0.6, 1.0)),
-                                font: None,
-                            },
-                            crate::model::parser::SyntaxType::StartDate => highlighter::Format {
-                                color: Some(Color::from_rgb(0.4, 0.8, 0.4)),
-                                font: None,
-                            },
-                            crate::model::parser::SyntaxType::Recurrence => highlighter::Format {
-                                color: Some(Color::from_rgb(0.8, 0.4, 0.8)),
-                                font: None,
-                            },
-                            crate::model::parser::SyntaxType::Duration => highlighter::Format {
-                                color: Some(Color::from_rgb(0.6, 0.6, 0.6)),
-                                font: None,
-                            },
-                            crate::model::parser::SyntaxType::Tag => {
-                                let tag_name = text.trim_start_matches('#');
-                                let (r, g, b) = crate::color_utils::generate_color(tag_name);
-                                highlighter::Format {
-                                    color: Some(Color::from_rgb(r, g, b)),
-                                    font: Some(Font {
-                                        weight: iced::font::Weight::Bold,
-                                        ..Default::default()
-                                    }),
-                                }
-                            }
-                            crate::model::parser::SyntaxType::Location => highlighter::Format {
-                                color: Some(Color::from_rgb(0.8, 0.5, 0.0)),
-                                font: None,
-                            },
-                            crate::model::parser::SyntaxType::Url => highlighter::Format {
-                                color: Some(Color::from_rgb(0.2, 0.2, 0.8)),
-                                font: None,
-                            },
-                            crate::model::parser::SyntaxType::WikiLink => highlighter::Format {
-                                color: Some(Color::from_rgb(0.2, 0.7, 1.0)),
-                                font: Some(Font {
-                                    weight: iced::font::Weight::Bold,
-                                    ..Default::default()
-                                }),
-                            },
-                            crate::model::parser::SyntaxType::Dependency => highlighter::Format {
-                                color: Some(Color::from_rgb(0.9, 0.6, 0.2)), // Orange
-                                font: Some(Font {
-                                    weight: iced::font::Weight::Bold,
-                                    ..Default::default()
-                                }),
-                            },
-                            crate::model::parser::SyntaxType::Geo => highlighter::Format {
-                                color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
-                                font: None,
-                            },
-                            crate::model::parser::SyntaxType::Description => highlighter::Format {
-                                color: Some(Color::from_rgb(0.6, 0.0, 0.6)),
-                                font: None,
-                            },
-                            crate::model::parser::SyntaxType::Reminder => highlighter::Format {
-                                color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
-                                font: Some(Font {
-                                    weight: iced::font::Weight::Bold,
-                                    ..Default::default()
-                                }),
-                            },
-                            crate::model::parser::SyntaxType::Operator => highlighter::Format {
-                                color: Some(Color::from_rgb(1.0, 0.0, 1.0)),
-                                font: Some(Font {
-                                    weight: iced::font::Weight::Bold,
-                                    ..Default::default()
-                                }),
-                            },
-                            crate::model::parser::SyntaxType::Goal => highlighter::Format {
-                                color: Some(Color::from_rgb(0.2, 0.8, 0.6)),
-                                font: Some(Font {
-                                    weight: iced::font::Weight::Bold,
-                                    ..Default::default()
-                                }),
-                            },
-                            crate::model::parser::SyntaxType::Calendar => highlighter::Format {
-                                color: Some(Color::from_rgb(0.91, 0.11, 0.38)),
-                                font: Some(Font {
-                                    weight: iced::font::Weight::Bold,
-                                    ..Default::default()
-                                }),
-                            },
-                            crate::model::parser::SyntaxType::Pin => highlighter::Format {
-                                color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
-                                font: Some(Font {
-                                    weight: iced::font::Weight::Bold,
-                                    ..Default::default()
-                                }),
-                            },
-                            _ => base_format,
-                        };
-                        spans.push((
-                            checkbox_end + current_offset + t.start
-                                ..checkbox_end + current_offset + t.end,
-                            format,
-                        ));
-                    }
-                }
-
-                if let Some(start) = next_uid_start {
-                    let abs_start = current_offset + start;
-                    let uid_chunk = &rest_of_line[abs_start..];
-                    let end_offset = uid_chunk
-                        .find("-->")
-                        .map(|i| i + 3)
-                        .unwrap_or(uid_chunk.len());
-
-                    spans.push((
-                        checkbox_end + abs_start..checkbox_end + abs_start + end_offset,
+                let markers = [
+                    (
+                        "<!-- uid:",
+                        "-->",
+                        9,
+                        3,
                         highlighter::Format {
                             color: dim_color,
                             font: Some(Font {
@@ -543,13 +418,329 @@ impl Highlighter for MarkdownHighlighter {
                                 ..Default::default()
                             }),
                         },
-                    ));
+                    ),
+                    (
+                        "[[",
+                        "]]",
+                        2,
+                        2,
+                        highlighter::Format {
+                            color: link_color,
+                            font: Some(Font {
+                                weight: iced::font::Weight::Bold,
+                                ..Default::default()
+                            }),
+                        },
+                    ),
+                    (
+                        "**",
+                        "**",
+                        2,
+                        2,
+                        highlighter::Format {
+                            color: None,
+                            font: Some(Font {
+                                weight: iced::font::Weight::Bold,
+                                ..Default::default()
+                            }),
+                        },
+                    ),
+                    (
+                        "__",
+                        "__",
+                        2,
+                        2,
+                        highlighter::Format {
+                            color: None,
+                            font: Some(Font {
+                                weight: iced::font::Weight::Bold,
+                                ..Default::default()
+                            }),
+                        },
+                    ),
+                    (
+                        "~~",
+                        "~~",
+                        2,
+                        2,
+                        highlighter::Format {
+                            color: None,
+                            font: None,
+                        },
+                    ),
+                    (
+                        "*",
+                        "*",
+                        1,
+                        1,
+                        highlighter::Format {
+                            color: None,
+                            font: Some(Font {
+                                style: iced::font::Style::Italic,
+                                ..Default::default()
+                            }),
+                        },
+                    ),
+                    (
+                        "_",
+                        "_",
+                        1,
+                        1,
+                        highlighter::Format {
+                            color: None,
+                            font: Some(Font {
+                                style: iced::font::Style::Italic,
+                                ..Default::default()
+                            }),
+                        },
+                    ),
+                    (
+                        "`",
+                        "`",
+                        1,
+                        1,
+                        highlighter::Format {
+                            color: Some(Color::from_rgb(0.8, 0.6, 0.4)),
+                            font: Some(Font::MONOSPACE),
+                        },
+                    ),
+                ];
 
-                    current_offset = abs_start + end_offset;
+                let mut best_match: Option<(usize, usize, highlighter::Format<Font>)> = None;
+                let mut update_best = |start, end, format| {
+                    if best_match.is_none() || start < best_match.unwrap().0 {
+                        best_match = Some((start, end, format));
+                    }
+                };
+
+                for &(start_marker, end_marker, start_len, end_len, format) in &markers {
+                    if let Some(start_pos) = remaining.find(start_marker)
+                        && let Some(end_pos) = remaining[start_pos + start_len..].find(end_marker)
+                    {
+                        let abs_start = cursor + start_pos;
+                        let abs_end = abs_start + start_len + end_pos + end_len;
+                        update_best(abs_start, abs_end, format);
+                    }
+                }
+
+                // Standard Markdown links: [label](url)
+                let mut search_idx = 0;
+                while let Some(start_pos) = remaining[search_idx..].find('[') {
+                    if remaining[search_idx + start_pos..].starts_with("[[") {
+                        search_idx += start_pos + 2;
+                        continue;
+                    }
+                    if let Some(mid_pos) = remaining[search_idx + start_pos..].find("](") {
+                        let mid_abs = search_idx + start_pos + mid_pos;
+                        if let Some(end_pos) = remaining[mid_abs..].find(')') {
+                            let abs_start = cursor + search_idx + start_pos;
+                            let abs_end = cursor + mid_abs + end_pos + 1;
+                            update_best(
+                                abs_start,
+                                abs_end,
+                                highlighter::Format {
+                                    color: link_color,
+                                    font: Some(Font {
+                                        weight: iced::font::Weight::Bold,
+                                        ..Default::default()
+                                    }),
+                                },
+                            );
+                            break;
+                        }
+                    }
+                    search_idx += start_pos + 1;
+                }
+
+                // Bare URLs (http:// or https://)
+                for scheme in &["https://", "http://"] {
+                    if let Some(start_pos) = remaining.find(scheme) {
+                        let abs_start = cursor + start_pos;
+                        let mut end_offset = 0;
+                        for c in remaining[start_pos..].chars() {
+                            if c.is_whitespace() || c == ')' || c == ']' {
+                                break;
+                            }
+                            end_offset += c.len_utf8();
+                        }
+                        let abs_end = abs_start + end_offset;
+                        update_best(
+                            abs_start,
+                            abs_end,
+                            highlighter::Format {
+                                color: link_color,
+                                font: Some(Font {
+                                    weight: iced::font::Weight::Bold,
+                                    ..Default::default()
+                                }),
+                            },
+                        );
+                    }
+                }
+
+                if let Some((abs_start, abs_end, format)) = best_match {
+                    for byte_format in byte_formats.iter_mut().take(abs_end).skip(abs_start) {
+                        if format.color.is_some() {
+                            byte_format.color = format.color;
+                        }
+                        if format.font.is_some() {
+                            byte_format.font = format.font;
+                        }
+                    }
+                    cursor = abs_end;
                 } else {
                     break;
                 }
             }
+
+            // 2. Apply Smart Syntax to rest_of_line
+            let tokens = crate::model::parser::tokenize_smart_input(rest_of_line, false);
+            let is_dark_theme = self.is_dark;
+
+            for t in tokens {
+                if t.kind == crate::model::parser::SyntaxType::Text {
+                    continue;
+                }
+                let text = &rest_of_line[t.start..t.end];
+                let format = match t.kind {
+                    crate::model::parser::SyntaxType::Priority => {
+                        let p = text.trim_start_matches('!').parse::<u8>().unwrap_or(0);
+                        let (r, g, b) = crate::color_utils::get_priority_rgb(p, is_dark_theme);
+                        highlighter::Format {
+                            color: Some(Color::from_rgb(r, g, b)),
+                            font: Some(Font {
+                                weight: iced::font::Weight::Bold,
+                                ..Default::default()
+                            }),
+                        }
+                    }
+                    crate::model::parser::SyntaxType::DueDate => highlighter::Format {
+                        color: Some(Color::from_rgb(0.2, 0.6, 1.0)),
+                        font: None,
+                    },
+                    crate::model::parser::SyntaxType::StartDate => highlighter::Format {
+                        color: Some(Color::from_rgb(0.4, 0.8, 0.4)),
+                        font: None,
+                    },
+                    crate::model::parser::SyntaxType::Recurrence => highlighter::Format {
+                        color: Some(Color::from_rgb(0.8, 0.4, 0.8)),
+                        font: None,
+                    },
+                    crate::model::parser::SyntaxType::Duration => highlighter::Format {
+                        color: Some(Color::from_rgb(0.6, 0.6, 0.6)),
+                        font: None,
+                    },
+                    crate::model::parser::SyntaxType::Tag => {
+                        let tag_name = text.trim_start_matches('#');
+                        let (r, g, b) = crate::color_utils::generate_color(tag_name);
+                        highlighter::Format {
+                            color: Some(Color::from_rgb(r, g, b)),
+                            font: Some(Font {
+                                weight: iced::font::Weight::Bold,
+                                ..Default::default()
+                            }),
+                        }
+                    }
+                    crate::model::parser::SyntaxType::Location => highlighter::Format {
+                        color: Some(Color::from_rgb(0.8, 0.5, 0.0)),
+                        font: None,
+                    },
+                    crate::model::parser::SyntaxType::Url => highlighter::Format {
+                        color: Some(Color::from_rgb(0.2, 0.2, 0.8)),
+                        font: None,
+                    },
+                    crate::model::parser::SyntaxType::WikiLink => highlighter::Format {
+                        color: Some(Color::from_rgb(0.2, 0.7, 1.0)),
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
+                    crate::model::parser::SyntaxType::Dependency => highlighter::Format {
+                        color: Some(Color::from_rgb(0.9, 0.6, 0.2)),
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
+                    crate::model::parser::SyntaxType::Geo => highlighter::Format {
+                        color: Some(Color::from_rgb(0.5, 0.5, 0.5)),
+                        font: None,
+                    },
+                    crate::model::parser::SyntaxType::Description => highlighter::Format {
+                        color: Some(Color::from_rgb(0.6, 0.0, 0.6)),
+                        font: None,
+                    },
+                    crate::model::parser::SyntaxType::Reminder => highlighter::Format {
+                        color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
+                    crate::model::parser::SyntaxType::Operator => highlighter::Format {
+                        color: Some(Color::from_rgb(1.0, 0.0, 1.0)),
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
+                    crate::model::parser::SyntaxType::Goal => highlighter::Format {
+                        color: Some(Color::from_rgb(0.2, 0.8, 0.6)),
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
+                    crate::model::parser::SyntaxType::Calendar => highlighter::Format {
+                        color: Some(Color::from_rgb(0.91, 0.11, 0.38)),
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
+                    crate::model::parser::SyntaxType::Pin => highlighter::Format {
+                        color: Some(Color::from_rgb(1.0, 0.4, 0.0)),
+                        font: Some(Font {
+                            weight: iced::font::Weight::Bold,
+                            ..Default::default()
+                        }),
+                    },
+                    _ => base_format,
+                };
+
+                for byte_format in byte_formats.iter_mut().take(t.end).skip(t.start) {
+                    if format.color.is_some() {
+                        byte_format.color = format.color;
+                    }
+                    if format.font.is_some() {
+                        byte_format.font = format.font;
+                    }
+                }
+            }
+
+            // 3. Coalesce
+            let mut current_format = byte_formats[0];
+            let mut current_start = 0;
+            for (i, byte_format) in byte_formats
+                .iter()
+                .enumerate()
+                .skip(1)
+                .take(rest_of_line.len() - 1)
+            {
+                if *byte_format != current_format && rest_of_line.is_char_boundary(i) {
+                    spans.push((
+                        checkbox_end + current_start..checkbox_end + i,
+                        current_format,
+                    ));
+                    current_format = *byte_format;
+                    current_start = i;
+                }
+            }
+            spans.push((
+                checkbox_end + current_start..checkbox_end + rest_of_line.len(),
+                current_format,
+            ));
 
             return spans.into_iter();
         }
