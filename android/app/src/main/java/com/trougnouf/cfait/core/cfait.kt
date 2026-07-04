@@ -797,8 +797,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_export_locations_gpx(): Int
 
-    external fun uniffi_cfait_checksum_method_cfaitmobile_extract_subtasks(): Int
-
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_locations(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_all_tags(): Int
@@ -824,6 +822,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_syntax_help(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_task_by_uid(): Int
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_get_task_tree_markdown(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to(): Int
 
@@ -882,6 +882,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cfait_checksum_method_cfaitmobile_sync(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_sync_journal(): Int
+
+    external fun uniffi_cfait_checksum_method_cfaitmobile_sync_task_tree_from_markdown(): Int
 
     external fun uniffi_cfait_checksum_method_cfaitmobile_toggle_all_calendars(): Int
 
@@ -1057,11 +1059,6 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
-    external fun uniffi_cfait_fn_method_cfaitmobile_extract_subtasks(
-        `ptr`: Long,
-        `uid`: RustBuffer.ByValue,
-    ): Long
-
     external fun uniffi_cfait_fn_method_cfaitmobile_get_all_locations(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_all_tags(`ptr`: Long): Long
@@ -1119,6 +1116,12 @@ internal object UniffiLib {
         `ptr`: Long,
         `uid`: RustBuffer.ByValue,
     ): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_get_task_tree_markdown(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_cfait_fn_method_cfaitmobile_get_tasks_related_to(
         `ptr`: Long,
@@ -1282,6 +1285,12 @@ internal object UniffiLib {
     external fun uniffi_cfait_fn_method_cfaitmobile_sync(`ptr`: Long): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_sync_journal(`ptr`: Long): Long
+
+    external fun uniffi_cfait_fn_method_cfaitmobile_sync_task_tree_from_markdown(
+        `ptr`: Long,
+        `uid`: RustBuffer.ByValue,
+        `markdown`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_cfait_fn_method_cfaitmobile_toggle_all_calendars(
         `ptr`: Long,
@@ -1623,9 +1632,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_export_locations_gpx() != 44122) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_cfait_checksum_method_cfaitmobile_extract_subtasks() != 8770) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_all_locations() != 55689) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1663,6 +1669,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_task_by_uid() != 45186) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_task_tree_markdown() != 50475) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_get_tasks_related_to() != 40919) {
@@ -1750,6 +1759,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_sync_journal() != 65062) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_cfait_checksum_method_cfaitmobile_sync_task_tree_from_markdown() != 20350) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_cfait_checksum_method_cfaitmobile_toggle_all_calendars() != 29217) {
@@ -2401,8 +2413,6 @@ public interface CfaitMobileInterface {
 
     fun `exportLocationsGpx`(`uid`: kotlin.String): kotlin.String
 
-    suspend fun `extractSubtasks`(`uid`: kotlin.String)
-
     suspend fun `getAllLocations`(): List<MobileLocation>
 
     suspend fun `getAllTags`(): List<MobileTag>
@@ -2432,6 +2442,8 @@ public interface CfaitMobileInterface {
     fun `getSyntaxHelp`(): List<MobileHelpSection>
 
     suspend fun `getTaskByUid`(`uid`: kotlin.String): MobileTask?
+
+    fun `getTaskTreeMarkdown`(`uid`: kotlin.String): kotlin.String
 
     suspend fun `getTasksRelatedTo`(`uid`: kotlin.String): List<MobileRelatedTask>
 
@@ -2526,6 +2538,11 @@ public interface CfaitMobileInterface {
     suspend fun `sync`(): kotlin.String
 
     suspend fun `syncJournal`(): kotlin.Boolean
+
+    suspend fun `syncTaskTreeFromMarkdown`(
+        `uid`: kotlin.String,
+        `markdown`: kotlin.String,
+    )
 
     fun `toggleAllCalendars`(`showAll`: kotlin.Boolean)
 
@@ -3133,25 +3150,6 @@ open class CfaitMobile :
             },
         )
 
-    @Throws(MobileException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `extractSubtasks`(`uid`: kotlin.String) =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_cfait_fn_method_cfaitmobile_extract_subtasks(
-                    uniffiHandle,
-                    FfiConverterString.lower(`uid`),
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
-            { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
-            // lift function
-            { Unit },
-            // Error FFI converter
-            MobileException.ErrorHandler,
-        )
-
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `getAllLocations`(): List<MobileLocation> =
         uniffiRustCallAsync(
@@ -3339,6 +3337,19 @@ open class CfaitMobile :
             { FfiConverterOptionalTypeMobileTask.lift(it) },
             // Error FFI converter
             UniffiNullRustCallStatusErrorHandler,
+        )
+
+    override fun `getTaskTreeMarkdown`(`uid`: kotlin.String): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_cfait_fn_method_cfaitmobile_get_task_tree_markdown(
+                        it,
+                        FfiConverterString.lower(`uid`),
+                        _status,
+                    )
+                }
+            },
         )
 
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -3838,6 +3849,28 @@ open class CfaitMobile :
             // Error FFI converter
             MobileException.ErrorHandler,
         )
+
+    @Throws(MobileException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `syncTaskTreeFromMarkdown`(
+        `uid`: kotlin.String,
+        `markdown`: kotlin.String,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_cfait_fn_method_cfaitmobile_sync_task_tree_from_markdown(
+                uniffiHandle,
+                FfiConverterString.lower(`uid`),
+                FfiConverterString.lower(`markdown`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_cfait_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_cfait_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_cfait_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        MobileException.ErrorHandler,
+    )
 
     @Throws(MobileException::class)
     override fun `toggleAllCalendars`(`showAll`: kotlin.Boolean) =
