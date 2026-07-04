@@ -22,6 +22,43 @@ use std::env;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+// Helper function to re-quote arguments that were grouped by the shell
+fn shell_arg_to_smart_token(arg: &str, lex: &cfait::model::parser::ParserLexicon) -> String {
+    if !arg.contains(' ') {
+        return arg.to_string();
+    }
+
+    if arg.contains(":=") {
+        return arg.to_string();
+    }
+
+    let wrap_rem = |rem: &str| -> String {
+        if (rem.starts_with('"') && rem.ends_with('"'))
+            || (rem.starts_with('{') && rem.ends_with('}'))
+        {
+            rem.to_string()
+        } else {
+            format!("\"{}\"", rem)
+        }
+    };
+
+    if let Some((_, _, rem)) = lex.extract_prefix(arg, &arg.to_lowercase()) {
+        let p_len = arg.len() - rem.len();
+        let prefix = &arg[..p_len];
+        format!("{}{}", prefix, wrap_rem(rem))
+    } else if let Some(rem) = arg.strip_prefix("@@@") {
+        format!("@@@{}", wrap_rem(rem))
+    } else if let Some(rem) = arg.strip_prefix("@@") {
+        format!("@@{}", wrap_rem(rem))
+    } else if let Some(rem) = arg.strip_prefix("##") {
+        format!("##{}", wrap_rem(rem))
+    } else if let Some(rem) = arg.strip_prefix('#') {
+        format!("#{}", wrap_rem(rem))
+    } else {
+        wrap_rem(arg)
+    }
+}
+
 // Helper to quickly build the store from local files and cache for CLI reads
 async fn build_store_cli(ctx: &Arc<dyn AppContext>) -> TaskStore {
     let mut store = TaskStore::new(ctx.clone());
@@ -396,7 +433,15 @@ async fn main() -> Result<()> {
                     i += 1;
                 }
             }
-            let input = task_args.join(" ");
+            let input = {
+                let lex_guard = cfait::model::parser::LEXICON.read().unwrap();
+                let lex = &*lex_guard;
+                task_args
+                    .iter()
+                    .map(|arg| shell_arg_to_smart_token(arg, lex))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
             if input.trim().is_empty() {
                 eprintln!("{}", rust_i18n::t!("error_empty_task_description"));
                 std::process::exit(1);
@@ -622,7 +667,16 @@ async fn main() -> Result<()> {
                 std::process::exit(1);
             }
             let partial_uid = task_args[0].clone();
-            let input = task_args[1..].join(" ");
+
+            let input = {
+                let lex_guard = cfait::model::parser::LEXICON.read().unwrap();
+                let lex = &*lex_guard;
+                task_args[1..]
+                    .iter()
+                    .map(|arg| shell_arg_to_smart_token(arg, lex))
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            };
 
             let mut store = build_store_cli(&ctx).await;
             let full_uid = match resolve_uid(&store, &partial_uid) {
