@@ -5,6 +5,7 @@
     "about_title": "Cfait",
     "about_version": "Versión %{version}",
     "action_complete_and_shift": "Horario completo y de turnos",
+    "action_complete_tree": "Árbol completo",
     "action_extract_subtasks": "Extraer subtareas de Markdown",
     "action_open_locations": "Ubicaciones disponibles (GPX)",
     "action_pin": "Fijar tarea",
