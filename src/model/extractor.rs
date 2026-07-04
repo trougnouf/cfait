@@ -29,8 +29,9 @@ fn parse_checkbox(s: &str) -> Option<(crate::model::TaskStatus, Option<u8>, &str
     match inner {
         ' ' => Some((crate::model::TaskStatus::NeedsAction, None, rest)),
         'x' | 'X' | '*' => Some((crate::model::TaskStatus::Completed, Some(100), rest)),
-        '/' => Some((crate::model::TaskStatus::InProcess, None, rest)),
-        '<' | '>' => Some((crate::model::TaskStatus::NeedsAction, Some(50), rest)),
+        '/' => Some((crate::model::TaskStatus::NeedsAction, Some(50), rest)),
+        '>' | '▶' => Some((crate::model::TaskStatus::InProcess, None, rest)),
+        '<' => Some((crate::model::TaskStatus::NeedsAction, Some(50), rest)),
         '-' | '~' => Some((crate::model::TaskStatus::Cancelled, None, rest)),
         _ => None,
     }
@@ -171,8 +172,14 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
         previous_uids: Vec<String>,
     }
 
-    // Stack stores (indent_level, task_uid)
-    let mut indent_stack: Vec<(usize, String)> = Vec::new();
+    #[derive(PartialEq, Clone, Copy, Debug)]
+    enum StackItemKind {
+        Heading(usize), // level 1, 2, 3...
+        List(usize),    // indent in spaces
+    }
+
+    // Stack stores (StackItemKind, task_uid)
+    let mut indent_stack: Vec<(StackItemKind, String)> = Vec::new();
     // Map stores indent_level -> NumberedState
     let mut numbered_state_at_indent: HashMap<usize, NumberedState> = HashMap::new();
 
@@ -271,21 +278,46 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 .clone()
                 .unwrap_or_else(|| Uuid::new_v4().to_string());
 
-            // For headers, depth is absolute. For lists, it's relative to indentation.
-            let effective_indent = if header_depth > 0 {
-                (header_depth - 1) * 4 // Treat H1 as 0, H2 as 4, H3 as 8
+            let current_kind = if header_depth > 0 {
+                StackItemKind::Heading(header_depth)
             } else {
-                indent
+                StackItemKind::List(indent)
             };
 
-            // Pop stack until we find a parent that has a strictly smaller indentation
-            while let Some(&(stack_indent, _)) = indent_stack.last() {
-                if stack_indent >= effective_indent {
-                    indent_stack.pop();
-                } else {
-                    break;
+            // Pop stack until we find a valid parent
+            while let Some(&(kind, _)) = indent_stack.last() {
+                match current_kind {
+                    StackItemKind::Heading(curr_lvl) => {
+                        match kind {
+                            StackItemKind::Heading(stack_lvl) => {
+                                if stack_lvl >= curr_lvl {
+                                    indent_stack.pop();
+                                } else {
+                                    break;
+                                }
+                            }
+                            StackItemKind::List(_) => {
+                                indent_stack.pop(); // Headings always pop lists
+                            }
+                        }
+                    }
+                    StackItemKind::List(curr_indent) => {
+                        match kind {
+                            StackItemKind::Heading(_) => {
+                                break; // Lists nest under headings
+                            }
+                            StackItemKind::List(stack_indent) => {
+                                if stack_indent >= curr_indent {
+                                    indent_stack.pop();
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
             }
+
             let parent_uid = indent_stack.last().map(|(_, id)| id.clone());
 
             // Determine dependencies using the numbered state at THIS indentation level
@@ -293,7 +325,7 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
             if is_numbered {
                 let state =
                     numbered_state_at_indent
-                        .entry(effective_indent)
+                        .entry(indent)
                         .or_insert(NumberedState {
                             current_number: 0,
                             current_uids: Vec::new(),
@@ -318,11 +350,11 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 }
             } else {
                 // Breaking the numbered chain
-                numbered_state_at_indent.remove(&effective_indent);
+                numbered_state_at_indent.remove(&indent);
             }
 
             // Push ourselves to the stack to become a potential parent for the next lines
-            indent_stack.push((effective_indent, uid.clone()));
+            indent_stack.push((current_kind, uid.clone()));
 
             extracted.push(ExtractedTask {
                 uid,
@@ -336,20 +368,30 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
             });
             active_task_idx = Some(extracted.len() - 1);
         } else {
-            // Not a task line. Append it to the relevant description.
+            // Not a task line.
             if indent == 0 || header_depth > 0 {
-                // Indent 0 or headers break the list completely. Back to root parent notes.
-                active_task_idx = None;
-                indent_stack.clear();
-                numbered_state_at_indent.clear();
-
-                if !cleaned_root_desc.is_empty() && !cleaned_root_desc.ends_with('\n') {
-                    cleaned_root_desc.push('\n');
+                // If it hits the left margin, break out of all active Lists
+                while let Some(&(kind, _)) = indent_stack.last() {
+                    if let StackItemKind::List(_) = kind {
+                        indent_stack.pop();
+                    } else {
+                        break;
+                    }
                 }
-                cleaned_root_desc.push_str(rest);
-                cleaned_root_desc.push('\n');
-            } else if let Some(idx) = active_task_idx {
-                // Belongs to the active subtask's notes
+                numbered_state_at_indent.clear();
+                active_task_idx = None;
+            }
+
+            let target_idx = if let Some(&(kind, _)) = indent_stack.last() {
+                match kind {
+                    StackItemKind::Heading(_) => None, // append to root description
+                    StackItemKind::List(_) => active_task_idx, // append to active task
+                }
+            } else {
+                None
+            };
+
+            if let Some(idx) = target_idx {
                 if !extracted[idx].description.is_empty()
                     && !extracted[idx].description.ends_with('\n')
                 {
@@ -358,7 +400,6 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 extracted[idx].description.push_str(rest);
                 extracted[idx].description.push('\n');
             } else {
-                // Indented, but no active task -> Belongs to root parent
                 if !cleaned_root_desc.is_empty() && !cleaned_root_desc.ends_with('\n') {
                     cleaned_root_desc.push('\n');
                 }
@@ -413,20 +454,24 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         depth: usize,
         out: &mut String,
         prefix: &str,
+        parent_href: &str,
     ) {
         let status_box = match task.status {
             crate::model::TaskStatus::NeedsAction => {
                 if task.is_paused() {
-                    "[<]"
+                    "[/]"
                 } else {
                     "[ ]"
                 }
             }
-            crate::model::TaskStatus::InProcess => "[/]",
+            crate::model::TaskStatus::InProcess => "[>]",
             crate::model::TaskStatus::Completed => "[x]",
             crate::model::TaskStatus::Cancelled => "[-]",
         };
-        let smart_string = task.to_smart_string();
+        let mut smart_string = task.to_smart_string();
+        if task.calendar_href != parent_href {
+            smart_string.push_str(&format!(" cal:{}", crate::model::parser::quote_value(&task.calendar_href)));
+        }
 
         let uid_tag = format!("<!-- uid:{} -->", task.uid);
         let indent = "    ".repeat(depth - 1);
@@ -506,7 +551,7 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
             }
 
             for (child, prefix) in children.iter().zip(prefixes.iter()) {
-                serialize_node(child, children_map, depth + 1, out, prefix);
+                serialize_node(child, children_map, depth + 1, out, prefix, &task.calendar_href);
             }
         }
     }
@@ -555,7 +600,7 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         }
 
         for (child, prefix) in children.iter().zip(prefixes.iter()) {
-            serialize_node(child, &children_map, 1, &mut out, prefix);
+            serialize_node(child, &children_map, 1, &mut out, prefix, &root.calendar_href);
         }
     }
 

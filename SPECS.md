@@ -88,7 +88,12 @@ Users can define reusable shortcuts that expand into multiple tags, locations, o
 ### 2.3. Markdown Subtask Extraction & Round-Trip Editing
 If a task's description contains Markdown lists or Headers, Cfait extracts them into distinct child tasks via the "Extract Subtasks" action or `Ctrl+E`.
 *   **Hierarchy:** Tasks nest based on indentation level (for lists) or header depth (`#`, `##`, `###`).
-*   **Parallel Tasks:** Unnumbered lists (`- [ ]`) and Headers create independent sibling tasks.
+*   **Parallel Tasks:** Unnumbered lists (`- [ ]`) and Headers create independent sibling tasks. Supported checkbox states are:
+    *   `[ ]` maps to `NeedsAction` (Pending / Unstarted).
+    *   `[/]` or `[<]` maps to `NeedsAction` with `percent_complete` at 50% (Paused).
+    *   `[>]` or `[▶]` maps to `InProcess` (Timer running).
+    *   `[x]`, `[X]`, or `[*]` maps to `Completed`.
+    *   `[-]` or `[~]` maps to `Cancelled`.
 *   **Sequential Dependencies:** Numbered lists (`1. [ ]`, `2. [ ]`) create `DEPENDS-ON` blocking relationships. If multiple tasks share the same number at the same indentation level (e.g., two `3. [ ]` tasks), they are extracted as parallel steps that both depend on the previous step (`2. [ ]`). The next step (`4. [ ]`) will automatically depend on *both* parallel tasks.
 *   **Cross-Tree Dependencies:** Dependencies that break standard linear sequence are appended to the task string as wiki-links (e.g. `dep:[[Install foundation]]`). The backend resolves these via fuzzy-matching against task summaries.
 *   **Round-Trip UIDs:** Extracted tasks append a metadata tag (e.g., `<!-- uid:abc-123 -->`) to their summary. When the tree is re-edited and saved, this tag allows Cfait to diff the text and update existing database entities rather than creating duplicates.

@@ -1307,9 +1307,10 @@ fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
     let mut brace_depth: usize = 0;
     let mut bracket_depth: usize = 0;
     let mut escaped = false;
-    let chars = input.char_indices().peekable();
+    let chars: Vec<(usize, char)> = input.char_indices().collect();
 
-    for (idx, c) in chars {
+    for i in 0..chars.len() {
+        let (idx, c) = chars[i];
         if current.is_empty()
             && !in_quote
             && brace_depth == 0
@@ -1329,8 +1330,29 @@ fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
                 current.push('\\');
             }
             '"' if brace_depth == 0 && bracket_depth == 0 => {
-                in_quote = !in_quote;
-                current.push(c);
+                if in_quote {
+                    in_quote = false;
+                    current.push(c);
+                } else {
+                    // Lookahead: only enter in_quote if there is another unescaped '"' ahead
+                    let mut has_pair = false;
+                    let mut look_escaped = false;
+                    for j in (i + 1)..chars.len() {
+                        let (_, lc) = chars[j];
+                        if look_escaped {
+                            look_escaped = false;
+                        } else if lc == '\\' {
+                            look_escaped = true;
+                        } else if lc == '"' {
+                            has_pair = true;
+                            break;
+                        }
+                    }
+                    if has_pair {
+                        in_quote = true;
+                    }
+                    current.push(c);
+                }
             }
             '{' if !in_quote && bracket_depth == 0 => {
                 brace_depth += 1;
