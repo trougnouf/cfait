@@ -323,14 +323,13 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
             // Determine dependencies using the numbered state at THIS indentation level
             let mut dependencies = Vec::new();
             if is_numbered {
-                let state =
-                    numbered_state_at_indent
-                        .entry(indent)
-                        .or_insert(NumberedState {
-                            current_number: 0,
-                            current_uids: Vec::new(),
-                            previous_uids: Vec::new(),
-                        });
+                let state = numbered_state_at_indent
+                    .entry(indent)
+                    .or_insert(NumberedState {
+                        current_number: 0,
+                        current_uids: Vec::new(),
+                        previous_uids: Vec::new(),
+                    });
 
                 if state.current_number == parsed_num {
                     // Parallel task: depends on the same previous tasks
@@ -470,7 +469,10 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         };
         let mut smart_string = task.to_smart_string();
         if task.calendar_href != parent_href {
-            smart_string.push_str(&format!(" cal:{}", crate::model::parser::quote_value(&task.calendar_href)));
+            smart_string.push_str(&format!(
+                " cal:{}",
+                crate::model::parser::quote_value(&task.calendar_href)
+            ));
         }
 
         let uid_tag = format!("<!-- uid:{} -->", task.uid);
@@ -551,7 +553,14 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
             }
 
             for (child, prefix) in children.iter().zip(prefixes.iter()) {
-                serialize_node(child, children_map, depth + 1, out, prefix, &task.calendar_href);
+                serialize_node(
+                    child,
+                    children_map,
+                    depth + 1,
+                    out,
+                    prefix,
+                    &task.calendar_href,
+                );
             }
         }
     }
@@ -600,7 +609,14 @@ pub fn serialize_task_tree(store: &crate::store::TaskStore, root_uid: &str) -> S
         }
 
         for (child, prefix) in children.iter().zip(prefixes.iter()) {
-            serialize_node(child, &children_map, 1, &mut out, prefix, &root.calendar_href);
+            serialize_node(
+                child,
+                &children_map,
+                1,
+                &mut out,
+                prefix,
+                &root.calendar_href,
+            );
         }
     }
 

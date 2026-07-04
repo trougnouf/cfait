@@ -1337,13 +1337,12 @@ fn split_input_respecting_quotes(input: &str) -> Vec<(usize, usize, String)> {
                     // Lookahead: only enter in_quote if there is another unescaped '"' ahead
                     let mut has_pair = false;
                     let mut look_escaped = false;
-                    for j in (i + 1)..chars.len() {
-                        let (_, lc) = chars[j];
+                    for (_, lc) in chars.iter().skip(i + 1) {
                         if look_escaped {
                             look_escaped = false;
-                        } else if lc == '\\' {
+                        } else if *lc == '\\' {
                             look_escaped = true;
-                        } else if lc == '"' {
+                        } else if *lc == '"' {
                             has_pair = true;
                             break;
                         }
