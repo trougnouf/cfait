@@ -2305,16 +2305,81 @@ impl CfaitMobile {
         uid: String,
         description: String,
     ) -> Result<(), MobileError> {
-        self.apply_store_mutation(&uid, |t, id| {
-            if let Some((task, _)) = t.get_task_mut(id) {
-                task.description = description;
-                task.sequence += 1;
-                Some(task.clone())
-            } else {
-                None
+        let config = crate::config::Config::load(self.ctx.as_ref()).unwrap_or_default();
+        let def_time =
+            chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
+        let (clean_desc, extracted) = crate::model::extractor::extract_markdown_tasks(&description);
+
+        let mut store = self.controller.store.lock().await;
+        let mut actions = Vec::new();
+        let parent_href = if let Some((task, _)) = store.get_task_mut(&uid) {
+            task.description = clean_desc;
+            task.sequence += 1;
+            let href = task.calendar_href.clone();
+            actions.push(crate::journal::Action::Update(task.clone()));
+            href
+        } else {
+            return Ok(());
+        };
+
+        for ext in extracted {
+            let mut sub = crate::model::Task::new(&ext.raw_text, &config.tag_aliases, def_time);
+            sub.uid = ext.uid;
+            if !ext.description.is_empty() {
+                if sub.description.is_empty() {
+                    sub.description = ext.description;
+                } else {
+                    sub.description
+                        .push_str(&format!("\n\n{}", ext.description));
+                }
             }
-        })
-        .await
+
+            let smart_status = sub.status;
+            sub.status = ext.status;
+            match ext.status {
+                crate::model::TaskStatus::Completed => {
+                    if sub.completion_date().is_none() {
+                        sub.set_completion_date(Some(chrono::Utc::now()));
+                    }
+                }
+                crate::model::TaskStatus::Cancelled => {
+                    if sub.completion_date().is_none() {
+                        sub.set_completion_date(Some(chrono::Utc::now()));
+                    }
+                }
+                crate::model::TaskStatus::InProcess => {
+                    if sub.last_started_at.is_none() {
+                        sub.last_started_at = Some(chrono::Utc::now().timestamp());
+                    }
+                }
+                crate::model::TaskStatus::NeedsAction => {
+                    if smart_status == crate::model::TaskStatus::Completed {
+                        sub.status = crate::model::TaskStatus::Completed;
+                    }
+                }
+            }
+
+            sub.parent_uid = Some(ext.parent_uid.unwrap_or(uid.clone()));
+            sub.dependencies = ext.dependencies;
+            sub.calendar_href = parent_href.clone();
+            if let Some(pc) = ext.percent_complete {
+                sub.percent_complete = Some(pc);
+            }
+
+            store.add_task(sub.clone());
+            actions.push(crate::journal::Action::Create(sub));
+        }
+
+        drop(store);
+        if !actions.is_empty() {
+            self.controller
+                .persist_changes(actions)
+                .await
+                .map_err(MobileError::from)?;
+            self.rebuild_alarm_index().await;
+        }
+        Ok(())
     }
 
     pub async fn toggle_task(&self, uid: String) -> Result<(), MobileError> {
@@ -2399,86 +2464,6 @@ impl CfaitMobile {
             }
             Err(e) => Err(MobileError::from(e)),
         }
-    }
-
-    pub async fn extract_subtasks(&self, uid: String) -> Result<(), MobileError> {
-        let config = Config::load(self.ctx.as_ref()).unwrap_or_default();
-        let def_time =
-            chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
-
-        let mut store = self.controller.store.lock().await;
-        let mut actions = Vec::new();
-
-        if let Some((parent, _)) = store.get_task_mut(&uid) {
-            let desc_text = parent.description.clone();
-            let (clean_desc, extracted) =
-                crate::model::extractor::extract_markdown_tasks(&desc_text);
-
-            if !extracted.is_empty() {
-                parent.description = clean_desc;
-                parent.sequence += 1;
-                let parent_copy = parent.clone();
-                let target_href = parent_copy.calendar_href.clone();
-
-                actions.push(crate::journal::Action::Update(parent_copy));
-
-                for ext in extracted {
-                    let mut sub = Task::new(&ext.raw_text, &config.tag_aliases, def_time);
-                    sub.uid = ext.uid;
-                    if !ext.description.is_empty() {
-                        if sub.description.is_empty() {
-                            sub.description = ext.description;
-                        } else {
-                            sub.description
-                                .push_str(&format!("\n\n{}", ext.description));
-                        }
-                    }
-
-                    let smart_status = sub.status;
-                    sub.status = ext.status;
-                    match ext.status {
-                        crate::model::TaskStatus::Completed => {
-                            if sub.completion_date().is_none() {
-                                sub.set_completion_date(Some(chrono::Utc::now()));
-                            }
-                        }
-                        crate::model::TaskStatus::Cancelled => {
-                            if sub.completion_date().is_none() {
-                                sub.set_completion_date(Some(chrono::Utc::now()));
-                            }
-                        }
-                        crate::model::TaskStatus::InProcess => {
-                            if sub.last_started_at.is_none() {
-                                sub.last_started_at = Some(chrono::Utc::now().timestamp());
-                            }
-                        }
-                        crate::model::TaskStatus::NeedsAction => {
-                            if smart_status == crate::model::TaskStatus::Completed {
-                                sub.status = crate::model::TaskStatus::Completed;
-                            }
-                        }
-                    }
-
-                    sub.parent_uid = Some(ext.parent_uid.unwrap_or(uid.clone()));
-                    sub.dependencies = ext.dependencies;
-                    sub.calendar_href = target_href.clone();
-
-                    store.add_task(sub.clone());
-                    actions.push(crate::journal::Action::Create(sub));
-                }
-            }
-        }
-        drop(store);
-
-        if !actions.is_empty() {
-            self.controller
-                .persist_changes(actions)
-                .await
-                .map_err(MobileError::from)?;
-            self.rebuild_alarm_index().await;
-        }
-
-        Ok(())
     }
 
     pub async fn migrate_local_to(

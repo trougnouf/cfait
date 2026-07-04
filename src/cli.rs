@@ -182,10 +182,6 @@ pub fn print_help(binary_name: &str) {
             rust_i18n::t!("cli_desc_delete").to_string(),
         );
         print_cmd(
-            &format!("{} extract <uid> [-n] [-w]", binary_name),
-            rust_i18n::t!("cli_desc_extract").to_string(),
-        );
-        print_cmd(
             &format!("{} tree <uid>", binary_name),
             rust_i18n::t!("cli_desc_tree").to_string(),
         );

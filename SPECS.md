@@ -86,7 +86,8 @@ Users can define reusable shortcuts that expand into multiple tags, locations, o
 *   Aliases are resolved retroactively across the database upon creation/edit. Cycle detection is strictly enforced (max depth 10).
 
 ### 2.3. Markdown Subtask Extraction & Round-Trip Editing
-If a task's description contains Markdown lists or Headers, Cfait extracts them into distinct child tasks via the "Extract Subtasks" action or `Ctrl+E`.
+If a task's description contains Markdown lists or Headers, Cfait automatically extracts them into distinct child tasks whenever the task is saved. 
+Users can also use the "Edit Tree" action (or `Ctrl+E`) to edit an entire existing task tree as a single Markdown document.
 *   **Hierarchy:** Tasks nest based on indentation level (for lists) or header depth (`#`, `##`, `###`).
 *   **Parallel Tasks:** Unnumbered lists (`- [ ]`) and Headers create independent sibling tasks. Supported checkbox states are:
     *   `[ ]` maps to `NeedsAction` (Pending / Unstarted).
@@ -218,7 +219,7 @@ Tasks tagged with `#permanent` act as endless trackers. When checked off (Comple
     *   *Tabs:* Desktop "Sidebar" is translated into horizontal `HorizontalPager` tabs. Pull-to-refresh triggers manual sync.
     *   *Navigation Drawer:* Swipe from the left edge to switch between Calendars, Tags, Locations, Goals view modes. (Swipe logic uses custom pointer interception to avoid conflicting with tab paging).
 *   **Task List Rendering:** `LazyColumn`. Real-time relative duration formatting via coroutines (`liveDurationMins`). Real-time syntax highlighting in input via `VisualTransformation`.
-*   **Task Details:** Tapping a task navigates to a dedicated `TaskDetailScreen`.
+*   **Task Details:** Tapping a task navigates to a dedicated `TaskDetailScreen`. Includes an "Edit Tree" action for full-screen Markdown tree editing.
 *   **Context Menu:** Long-pressing a row opens the full Dropdown Menu.
 *   **Location Integration (`geo:here`):** If a user types `geo:here`, the UI requests permissions and invokes `LocationManager.getCurrentLocation`. If it fails within 5s, falls back to the last known location.
 *   **Notifications:** 
@@ -239,7 +240,7 @@ Tasks tagged with `#permanent` act as endless trackers. When checked off (Comple
     *   `S`: Stop/Reset timer.
     *   `x`: Cancel task.
     *   `+` / `-`: Increase/Decrease priority.
-    *   `e`: Edit title. `E`: Edit description (Markdown). `Ctrl+E`: Edit tree (Markdown). `Ctrl+N`: Create new task with description.
+    *   `e`: Edit title. `E`: Edit description (Markdown). `Ctrl+E`: Edit tree (Markdown) / Switch editor mode. `Ctrl+N`: Create new task with description.
     *   `Delete`: Move to trash. `Ctrl+Delete`: Delete entire tree.
     *   `t`: Log time session manually.
 *   **Tree/Relationships:** 
@@ -271,7 +272,6 @@ Used for headless automation, scripting, and piping. Operates directly on the `T
 *   `cfait view <uid> [--json]`: Outputs detailed task info.
 *   `cfait tree <uid>`: Views the task tree starting at `<uid>` serialized into markdown format (same format used by the `Ctrl+E` editor).
 *   `cfait start|pause|toggle|done|complete|delete <uid>`: State mutation commands.
-*   `cfait extract <uid>`: Parses the task's markdown description and converts lists/headers into native child tasks in the database.
 *   `cfait export [--collection <id>]`: Dumps collection as standard ICS to stdout.
 *   `cfait import <file.ics> [--collection <id>]`: Parses and imports ICS to store.
 *   `cfait sync`: Foreground network sync.

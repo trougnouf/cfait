@@ -1085,13 +1085,6 @@ pub fn view_task_row<'a>(
                             Message::YankTask(task.uid.clone()),
                             0,
                         ),
-                        TaskAction::ExtractSubtasks => (
-                            icon::icon(icon::get_extract_subtasks_icon())
-                                .size(14)
-                                .into(),
-                            Message::ExtractSubtasks(task.uid.clone()),
-                            0,
-                        ),
                         TaskAction::TogglePin => (
                             icon::icon(icon::THUMB_TACK).size(14).into(),
                             Message::TogglePin(task.uid.clone()),

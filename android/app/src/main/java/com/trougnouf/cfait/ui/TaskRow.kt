@@ -488,14 +488,6 @@ fun TaskRow(
                         leadingIcon = { NfIcon(NfIcons.THUMB_TACK, 16.sp) }
                     )
 
-                    if (task.hasExtractableSubtasks) {
-                        DropdownMenuItem(
-                            text = { Text(androidx.compose.ui.res.stringResource(R.string.action_extract_subtasks)) },
-                            onClick = { expanded = false; onAction("extract_subtasks") },
-                            leadingIcon = { NfIcon(getRandomExtractSubtasksIcon(), 16.sp) }
-                        )
-                    }
-
                     if (!task.isDone && task.statusString != "Cancelled") {
                         DropdownMenuItem(
                             text = { Text(androidx.compose.ui.res.stringResource(R.string.help_metadata_log_time)) },

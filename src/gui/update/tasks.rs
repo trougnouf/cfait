@@ -674,38 +674,6 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        Message::ExtractSubtasks(uid) => {
-            let desc_text = if let Some(t) = app.store.get_task_ref(&uid) {
-                t.description.clone()
-            } else {
-                return Task::none();
-            };
-
-            let config = &app.core_config;
-            let def_time =
-                chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
-
-            match app.store.sync_tree_from_markdown(
-                &uid,
-                &desc_text,
-                &app.tag_aliases,
-                def_time,
-                app.core_config.trash_retention_days,
-                &app.calendars,
-            ) {
-                Ok(actions) => {
-                    common::refresh_filtered_tasks(app);
-                    if let Some(tx) = &app.bg_tx {
-                        let _ = tx.try_send(crate::gui::async_ops::WorkerCommand::Batch(actions));
-                    }
-                }
-                Err(e) => {
-                    app.error_msg = Some(e);
-                }
-            }
-            Task::none()
-        }
-
         Message::ClearYank => {
             app.yanked_uid = None;
             app.yank_lock_active = false;
@@ -1341,11 +1309,11 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
         }
 
         return Task::none();
-    } else if let Some(edit_uid) = &app.editing_uid {
-        if let Some(task_ref) = app.store.get_task_ref(edit_uid) {
+    } else if let Some(edit_uid) = app.editing_uid.clone() {
+        if let Some(task_ref) = app.store.get_task_ref(&edit_uid) {
             let old_href = task_ref.calendar_href.clone();
             let mut task = task_ref.clone();
-            task.description = desc_text;
+            task.description = cleaned_desc;
             task.apply_smart_input(&clean_input, &app.tag_aliases, config_time);
 
             if let Err(e) = app.store.resolve_dependencies(&mut task) {
@@ -1368,13 +1336,65 @@ fn handle_submit(app: &mut GuiApp) -> Task<Message> {
             app.editing_uid = None;
             app.selected_uid = Some(task_copy.uid.clone());
 
-            refresh_filtered_tasks(app);
-
             let mut actions = Vec::new();
             if old_href != new_href {
-                actions.push(crate::journal::Action::Move(task_copy.clone(), new_href));
+                actions.push(crate::journal::Action::Move(
+                    task_copy.clone(),
+                    new_href.clone(),
+                ));
             }
             actions.push(crate::journal::Action::Update(task_copy));
+
+            for ext in extracted_subtasks {
+                let mut sub = TodoTask::new(&ext.raw_text, &app.tag_aliases, config_time);
+                sub.uid = ext.uid;
+                if !ext.description.is_empty() {
+                    if sub.description.is_empty() {
+                        sub.description = ext.description;
+                    } else {
+                        sub.description
+                            .push_str(&format!("\n\n{}", ext.description));
+                    }
+                }
+
+                let smart_status = sub.status;
+                sub.status = ext.status;
+                match ext.status {
+                    crate::model::TaskStatus::Completed => {
+                        if sub.completion_date().is_none() {
+                            sub.set_completion_date(Some(chrono::Utc::now()));
+                        }
+                    }
+                    crate::model::TaskStatus::Cancelled => {
+                        if sub.completion_date().is_none() {
+                            sub.set_completion_date(Some(chrono::Utc::now()));
+                        }
+                    }
+                    crate::model::TaskStatus::InProcess => {
+                        if sub.last_started_at.is_none() {
+                            sub.last_started_at = Some(chrono::Utc::now().timestamp());
+                        }
+                    }
+                    crate::model::TaskStatus::NeedsAction => {
+                        if smart_status == crate::model::TaskStatus::Completed {
+                            sub.status = crate::model::TaskStatus::Completed;
+                        }
+                    }
+                }
+
+                sub.parent_uid = Some(ext.parent_uid.unwrap_or(edit_uid.clone()));
+                sub.dependencies = ext.dependencies;
+                sub.calendar_href = new_href.clone();
+                if let Some(pc) = ext.percent_complete {
+                    sub.percent_complete = Some(pc);
+                }
+
+                app.store.add_task(sub.clone());
+                actions.push(crate::journal::Action::Create(sub));
+            }
+
+            refresh_filtered_tasks(app);
+
             for t in retroactive_sync_batch {
                 actions.push(crate::journal::Action::Update(t));
             }

@@ -160,7 +160,6 @@ pub enum Message {
 
     // --- Navigation & Actions ---
     CopyToClipboard(String),
-    ExtractSubtasks(String),
     TogglePin(String),
     YankTask(String),
     StartCreateChild(String),

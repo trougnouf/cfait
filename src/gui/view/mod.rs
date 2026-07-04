@@ -67,7 +67,7 @@ pub fn is_action_available(
         crate::config::TaskAction::CompleteAndShift => {
             task.rrule.is_some() && !is_done_or_cancelled && !task.is_relative_recurrence()
         }
-        crate::config::TaskAction::ExtractSubtasks => task.has_extractable_subtasks(),
+        crate::config::TaskAction::EditTree => task.has_subtasks,
         crate::config::TaskAction::TogglePin => true,
         crate::config::TaskAction::Promote => task.parent_uid.is_some(),
         crate::config::TaskAction::Yank => app.yanked_uid.is_none(),
@@ -524,13 +524,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                     Message::YankTask(uid.clone()),
                     false,
                 ),
-                TaskAction::ExtractSubtasks => (
-                    icon::icon(icon::get_extract_subtasks_icon())
-                        .size(14)
-                        .into(),
-                    Message::ExtractSubtasks(uid.clone()),
-                    false,
-                ),
                 TaskAction::CreateSubtask => (
                     icon::icon(icon::CREATE_CHILD).size(14).into(),
                     Message::StartCreateChild(uid.clone()),
@@ -632,7 +625,6 @@ pub fn root_view(app: &GuiApp) -> Element<'_, Message> {
                 TaskAction::EditTree,
                 TaskAction::Yank,
                 TaskAction::CreateSubtask,
-                TaskAction::ExtractSubtasks,
                 TaskAction::DuplicateTree,
                 TaskAction::CompleteTree,
                 TaskAction::Promote,
@@ -2103,8 +2095,17 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
             rust_i18n::t!("editing").into_owned()
         };
 
+        let has_tree = if let Some(uid) = &app.editing_uid {
+            app.store
+                .get_task_ref(uid)
+                .map(|t| t.has_subtasks)
+                .unwrap_or(false)
+        } else {
+            false
+        };
+
         let switch_btn = if !app.creating_with_desc {
-            let (icon, label) = if app.editing_tree_uid.is_some() {
+            let (icon_char, label) = if app.editing_tree_uid.is_some() {
                 (
                     icon::EDIT,
                     format!(
@@ -2113,7 +2114,7 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                         rust_i18n::t!("description_label")
                     ),
                 )
-            } else {
+            } else if has_tree {
                 (
                     icon::EDIT_TREE,
                     format!(
@@ -2122,19 +2123,25 @@ fn view_input_area(app: &GuiApp) -> Element<'_, Message> {
                         rust_i18n::t!("edit_tree_title")
                     ),
                 )
+            } else {
+                ('\0', String::new())
             };
 
-            Some(
-                tooltip(
-                    iced::widget::button(icon::icon(icon).size(16))
-                        .style(iced::widget::button::secondary)
-                        .on_press(Message::SaveAndSwitchEditor),
-                    text(label).size(12),
-                    tooltip::Position::Top,
+            if icon_char != '\0' {
+                Some(
+                    tooltip(
+                        iced::widget::button(icon::icon(icon_char).size(16))
+                            .style(iced::widget::button::secondary)
+                            .on_press(Message::SaveAndSwitchEditor),
+                        text(label).size(12),
+                        tooltip::Position::Top,
+                    )
+                    .style(tooltip_style)
+                    .delay(Duration::from_millis(700)),
                 )
-                .style(tooltip_style)
-                .delay(Duration::from_millis(700)),
-            )
+            } else {
+                None
+            }
         } else {
             None
         };

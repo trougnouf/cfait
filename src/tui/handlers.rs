@@ -68,7 +68,7 @@ fn get_available_actions(state: &AppState, task: &Task) -> Vec<crate::config::Ta
             TaskAction::CompleteAndShift => {
                 task.rrule.is_some() && !is_done_or_cancelled && !task.is_relative_recurrence()
             }
-            TaskAction::ExtractSubtasks => task.has_extractable_subtasks(),
+            TaskAction::EditTree => task.has_subtasks,
             TaskAction::TogglePin => true,
             TaskAction::Promote => task.parent_uid.is_some(),
             TaskAction::Yank => state.yanked_uid.is_none(),
@@ -110,7 +110,6 @@ fn update_action_menu_filter(state: &mut AppState) {
                 Edit => filter == "e",
                 EditTree => filter == "tree" || filter == "edit",
                 Yank => filter == "y" || filter == "copy",
-                ExtractSubtasks => filter == "extract" || filter == "parse",
                 TogglePin => filter == "p" || filter == "pin",
                 CreateSubtask => filter == "c" || filter == "sub",
                 DuplicateTree => filter == "d" || filter == "dup",
@@ -349,85 +348,6 @@ async fn execute_task_action(
         }
         TogglePin => {
             intent = Some(AppIntent::TogglePin { uid });
-        }
-        ExtractSubtasks => {
-            if let Some((parent, _)) = state.store.get_task_mut(&uid) {
-                let desc_text = parent.description.clone();
-                let (clean_desc, extracted) =
-                    crate::model::extractor::extract_markdown_tasks(&desc_text);
-
-                if !extracted.is_empty() {
-                    parent.description = clean_desc;
-                    parent.sequence += 1;
-                    let parent_copy = parent.clone();
-                    let target_href = parent_copy.calendar_href.clone();
-
-                    let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
-                    let def_time =
-                        chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M")
-                            .ok();
-
-                    let mut actions = vec![crate::journal::Action::Update(parent_copy)];
-
-                    for ext in extracted {
-                        let mut sub = Task::new(&ext.raw_text, &state.tag_aliases, def_time);
-                        sub.uid = ext.uid;
-                        if !ext.description.is_empty() {
-                            if sub.description.is_empty() {
-                                sub.description = ext.description;
-                            } else {
-                                sub.description
-                                    .push_str(&format!("\n\n{}", ext.description));
-                            }
-                        }
-
-                        let smart_status = sub.status;
-                        sub.status = ext.status;
-                        match ext.status {
-                            crate::model::TaskStatus::Completed => {
-                                if sub.completion_date().is_none() {
-                                    sub.set_completion_date(Some(chrono::Utc::now()));
-                                }
-                            }
-                            crate::model::TaskStatus::Cancelled => {
-                                if sub.completion_date().is_none() {
-                                    sub.set_completion_date(Some(chrono::Utc::now()));
-                                }
-                            }
-                            crate::model::TaskStatus::InProcess => {
-                                if sub.last_started_at.is_none() {
-                                    sub.last_started_at = Some(chrono::Utc::now().timestamp());
-                                }
-                            }
-                            crate::model::TaskStatus::NeedsAction => {
-                                if smart_status == crate::model::TaskStatus::Completed {
-                                    sub.status = crate::model::TaskStatus::Completed;
-                                }
-                            }
-                        }
-
-                        sub.parent_uid = Some(ext.parent_uid.unwrap_or(uid.clone()));
-                        sub.dependencies.extend(ext.dependencies);
-                        sub.dependencies.sort();
-                        sub.dependencies.dedup();
-                        sub.calendar_href = target_href.clone();
-                        if let Some(pc) = ext.percent_complete {
-                            sub.percent_complete = Some(pc);
-                        }
-
-                        state.store.add_task(sub.clone());
-                        actions.push(crate::journal::Action::Create(sub));
-                    }
-
-                    state.refresh_filtered_view();
-                    tokio::spawn({
-                        let tx = action_tx.clone();
-                        async move {
-                            let _ = tx.send(Action::PersistBatch(actions)).await;
-                        }
-                    });
-                }
-            }
         }
         CreateSubtask => {
             let mut initial_input = String::new();
@@ -763,16 +683,74 @@ fn save_description(state: &mut AppState, action_tx: &Sender<Action>) {
         // Standard Edit (Description only)
         let target_uid: Option<String> = state.editing_uid.clone();
 
-        if let Some(uid) = target_uid
-            && let Some((t_mut, _)) = state.store.get_task_mut(&uid)
-        {
-            t_mut.description = state.input_buffer.clone();
-            t_mut.sequence += 1;
-            let clone = t_mut.clone();
+        if let Some(uid) = target_uid {
+            let desc_text = state.input_buffer.clone();
+            let (clean_desc, extracted) =
+                crate::model::extractor::extract_markdown_tasks(&desc_text);
+
+            let mut actions = Vec::new();
+            let mut parent_href = String::new();
+            let config = Config::load(state.ctx.as_ref()).unwrap_or_default();
+            let def_time =
+                chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
+            if let Some((t_mut, _)) = state.store.get_task_mut(&uid) {
+                t_mut.description = clean_desc;
+                t_mut.sequence += 1;
+                parent_href = t_mut.calendar_href.clone();
+                actions.push(crate::journal::Action::Update(t_mut.clone()));
+            }
+
+            for ext in extracted {
+                let mut sub = Task::new(&ext.raw_text, &state.tag_aliases, def_time);
+                sub.uid = ext.uid;
+                if !ext.description.is_empty() {
+                    if sub.description.is_empty() {
+                        sub.description = ext.description;
+                    } else {
+                        sub.description
+                            .push_str(&format!("\n\n{}", ext.description));
+                    }
+                }
+
+                let smart_status = sub.status;
+                sub.status = ext.status;
+                match ext.status {
+                    crate::model::TaskStatus::Completed => {
+                        if sub.completion_date().is_none() {
+                            sub.set_completion_date(Some(chrono::Utc::now()));
+                        }
+                    }
+                    crate::model::TaskStatus::Cancelled => {
+                        if sub.completion_date().is_none() {
+                            sub.set_completion_date(Some(chrono::Utc::now()));
+                        }
+                    }
+                    crate::model::TaskStatus::InProcess => {
+                        if sub.last_started_at.is_none() {
+                            sub.last_started_at = Some(chrono::Utc::now().timestamp());
+                        }
+                    }
+                    crate::model::TaskStatus::NeedsAction => {
+                        if smart_status == crate::model::TaskStatus::Completed {
+                            sub.status = crate::model::TaskStatus::Completed;
+                        }
+                    }
+                }
+
+                sub.parent_uid = Some(ext.parent_uid.unwrap_or(uid.clone()));
+                sub.dependencies = ext.dependencies;
+                sub.calendar_href = parent_href.clone();
+                if let Some(pc) = ext.percent_complete {
+                    sub.percent_complete = Some(pc);
+                }
+
+                state.store.add_task(sub.clone());
+                actions.push(crate::journal::Action::Create(sub));
+            }
+
             state.refresh_filtered_view();
-            let _ = action_tx.try_send(Action::PersistBatch(vec![crate::journal::Action::Update(
-                clone,
-            )]));
+            let _ = action_tx.try_send(Action::PersistBatch(actions));
         }
         state.mode = InputMode::Normal;
         state.reset_input();
@@ -1369,6 +1347,14 @@ pub async fn handle_key_event(
                 } else {
                     return None;
                 };
+
+                // Check has_subtasks before converting TO tree
+                if !was_tree
+                    && let Some(t) = state.store.get_task_ref(&uid)
+                    && !t.has_subtasks
+                {
+                    return None; // Prevent switching to tree if no subtasks
+                }
 
                 // Save current state
                 save_description(state, action_tx);

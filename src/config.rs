@@ -319,7 +319,6 @@ pub enum TaskAction {
     DeleteTree,
     OpenLocations,
     OpenCoordinates,
-    ExtractSubtasks,
     TogglePin,
     Focus,
     EditTree,
@@ -342,7 +341,6 @@ impl TaskAction {
         TaskAction::EditTree,
         TaskAction::Yank,
         TaskAction::CreateSubtask,
-        TaskAction::ExtractSubtasks,
         TaskAction::TogglePin,
         TaskAction::DuplicateTree,
         TaskAction::Promote,
@@ -356,7 +354,6 @@ impl TaskAction {
 
     pub fn label(&self) -> String {
         match self {
-            TaskAction::ExtractSubtasks => rust_i18n::t!("action_extract_subtasks").to_string(),
             TaskAction::CompleteAndShift => rust_i18n::t!("action_complete_and_shift").to_string(),
             TaskAction::ToggleDetails => rust_i18n::t!("show_details").to_string(),
             TaskAction::ToggleTimer => rust_i18n::t!("start_task").to_string(),

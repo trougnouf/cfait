@@ -503,9 +503,6 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
                             crate::config::TaskAction::Delete
                             | crate::config::TaskAction::DeleteTree => icon::TRASH,
                             crate::config::TaskAction::Yank => icon::LINK,
-                            crate::config::TaskAction::ExtractSubtasks => {
-                                icon::get_extract_subtasks_icon()
-                            }
                             crate::config::TaskAction::Focus => icon::FOCUS_FIELD,
                             crate::config::TaskAction::TogglePin => icon::THUMB_TACK,
                             crate::config::TaskAction::CreateSubtask => icon::CREATE_CHILD,

@@ -621,14 +621,7 @@ fun HomeScreen(
         scope.launch {
             activeOpCount++
             try {
-                if (action == "extract_subtasks") {
-                    api.extractSubtasks(task.uid)
-                    updateTaskList()
-                    onDataChanged()
-                    lastSyncFailed = false
-                    triggerBackgroundSync(context, api)
-                    return@launch
-                }
+
 
                 val intent = when(action) {
                     "delete" -> AppIntent.DeleteTask(task.uid)
