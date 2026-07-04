@@ -262,11 +262,14 @@ Tasks tagged with `#permanent` act as endless trackers. When checked off (Comple
 ## 7. Command Line Interface (CLI)
 Used for headless automation, scripting, and piping. Operates directly on the `TaskStore`.
 
+*Note on `<uid>` arguments:* Any CLI command accepting a `<uid>` also accepts partial UIDs, exact titles, partial summaries, or wiki-links (e.g. `[[My Task]]`). If a match is ambiguous, the CLI will output the matching options and exit.
+
 *   `cfait add <task...>`: Smart input task creation. Flags: `-c <href>`, `--desc <text>`, `-p <uid>` (set parent), `-n` (queue to journal, don't wait for network sync).
 *   `cfait edit <uid> <task...>`: Edits metadata using smart syntax. Flags: `--clear-due`, `--clear-start`, `--clear-tags`, `--clear-loc`, `-p <uid>` (set parent), `--clear-parent`.
 *   `cfait list [--all] [--json] [-c <id>] [-p <uid>]`: Outputs task tree (use `-p` to focus on a specific sub-tree).
 *   `cfait search <query> [--all] [--json] [-c <id>] [-p <uid>]`: Searches and outputs tasks within a specific sub-tree.
 *   `cfait view <uid> [--json]`: Outputs detailed task info.
+*   `cfait tree <uid>`: Views the task tree starting at `<uid>` serialized into markdown format (same format used by the `Ctrl+E` editor).
 *   `cfait start|pause|toggle|done|complete|delete <uid>`: State mutation commands.
 *   `cfait extract <uid>`: Parses the task's markdown description and converts lists/headers into native child tasks in the database.
 *   `cfait export [--collection <id>]`: Dumps collection as standard ICS to stdout.

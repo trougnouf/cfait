@@ -756,13 +756,15 @@ impl TaskStore {
             if exact_uid_count + exact_sum_count > 3 {
                 matches_str.push_str(", ...");
             }
-            return Err(format!(
-                "Ambiguous dependency '{}'. Matches: {}",
-                clean_ref, matches_str
-            ));
+            return Err(rust_i18n::t!(
+                "error_ambiguous_dep",
+                reference = clean_ref,
+                matches = matches_str
+            )
+            .to_string());
         }
 
-        Err(format!("No task found matching dependency '{}'", clean_ref))
+        Err(rust_i18n::t!("error_task_not_found_for_dep", reference = clean_ref).to_string())
     }
 
     pub fn resolve_dependencies(&self, task: &mut Task) -> Result<(), String> {

@@ -73,34 +73,12 @@ async fn resolve_collection_href(ctx: &Arc<dyn AppContext>, target: &str) -> Str
     }
 }
 
-// Helper to resolve short partial UIDs back to a full UID
+// Helper to resolve short partial UIDs, summaries, or wiki-links back to a full UID
 fn resolve_uid(store: &TaskStore, partial: &str) -> Option<String> {
-    let mut matches: Vec<String> = Vec::new();
-    for map in store.calendars.values() {
-        for uid in map.keys() {
-            if uid.starts_with(partial) {
-                matches.push(uid.clone());
-            }
-        }
-    }
-
-    match matches.len() {
-        1 => Some(matches.into_iter().next().unwrap()),
-        0 => {
-            eprintln!(
-                "{}",
-                rust_i18n::t!("error_no_task_matches_uid", uid = partial)
-            );
-            None
-        }
-        _ => {
-            eprintln!("{}", rust_i18n::t!("error_ambiguous_uid", uid = partial));
-            for m in matches {
-                if let Some(t) = store.get_task_ref(&m) {
-                    let short = &m[..std::cmp::min(8, m.len())];
-                    eprintln!("  {} - {}", short, t.summary);
-                }
-            }
+    match store.resolve_dependency_ref(partial) {
+        Ok(uid) => Some(uid),
+        Err(msg) => {
+            eprintln!("{}", msg);
             None
         }
     }
@@ -914,6 +892,26 @@ async fn main() -> Result<()> {
             }
             return Ok(());
         }
+        "tree" => {
+            let mut partial = String::new();
+            for arg in args.iter().skip(2) {
+                partial = arg.clone();
+            }
+            if partial.is_empty() {
+                eprintln!("{}", rust_i18n::t!("error_uid_required"));
+                std::process::exit(1);
+            }
+
+            let store = build_store_cli(&ctx).await;
+            let uid = match resolve_uid(&store, &partial) {
+                Some(uid) => uid,
+                None => std::process::exit(1),
+            };
+
+            let tree_md = cfait::model::extractor::serialize_task_tree(&store, &uid);
+            println!("{}", tree_md);
+            return Ok(());
+        }
         "view" | "show" => {
             let mut as_json = false;
             let mut partial = String::new();
@@ -930,8 +928,10 @@ async fn main() -> Result<()> {
             }
 
             let store = build_store_cli(&ctx).await;
-            let uid = resolve_uid(&store, &partial)
-                .ok_or_else(|| anyhow::anyhow!(rust_i18n::t!("error_uid_required")))?;
+            let uid = match resolve_uid(&store, &partial) {
+                Some(uid) => uid,
+                None => std::process::exit(1),
+            };
             let t = store
                 .get_task_ref(&uid)
                 .ok_or_else(|| anyhow::anyhow!(rust_i18n::t!("error_task_not_found")))?;
