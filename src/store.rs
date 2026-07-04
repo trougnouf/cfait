@@ -2368,12 +2368,14 @@ impl TaskStore {
                 visible_refs
             } else {
                 let mut children_map = HashMap::new();
+                let mut parent_map = HashMap::new();
                 for t in &visible_refs {
                     if let Some(p) = &t.parent_uid {
                         children_map
                             .entry(p.clone())
                             .or_insert_with(Vec::new)
                             .push(t.uid.clone());
+                        parent_map.insert(t.uid.clone(), p.clone());
                     }
                 }
 
@@ -2383,8 +2385,7 @@ impl TaskStore {
                 let query = crate::model::matcher::Query::new(options.search_term);
 
                 for t in &visible_refs {
-                    // If in focus mode, we ALWAYS force the focused root to match the search,
-                    // otherwise the tree collapses and we lose our visual anchor.
+                    // If in focus mode, we ALWAYS force the focused root to match the search
                     if Some(t.uid.as_str()) == options.focused_task_uid {
                         matched_uids.insert(t.uid.clone());
                         if query.matches(t, lex) {
@@ -2392,8 +2393,19 @@ impl TaskStore {
                         }
                         continue;
                     }
-                    if query.matches(t, lex) && matched_uids.insert(t.uid.clone()) {
-                        queue.push(t.uid.clone());
+                    if query.matches(t, lex) {
+                        if matched_uids.insert(t.uid.clone()) {
+                            queue.push(t.uid.clone());
+                        }
+
+                        // Add all ancestors to preserve tree structure
+                        let mut curr = t.uid.clone();
+                        while let Some(p) = parent_map.get(&curr) {
+                            if !matched_uids.insert(p.clone()) {
+                                break;
+                            }
+                            curr = p.clone();
+                        }
                     }
                 }
 

@@ -178,8 +178,8 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
         List(usize),    // indent in spaces
     }
 
-    // Stack stores (StackItemKind, task_uid)
-    let mut indent_stack: Vec<(StackItemKind, String)> = Vec::new();
+    // Stack stores (StackItemKind, task_uid, extracted_idx)
+    let mut indent_stack: Vec<(StackItemKind, String, usize)> = Vec::new();
     // Map stores indent_level -> NumberedState
     let mut numbered_state_at_indent: HashMap<usize, NumberedState> = HashMap::new();
 
@@ -285,7 +285,7 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
             };
 
             // Pop stack until we find a valid parent
-            while let Some(&(kind, _)) = indent_stack.last() {
+            while let Some(&(kind, _, _)) = indent_stack.last() {
                 match current_kind {
                     StackItemKind::Heading(curr_lvl) => {
                         match kind {
@@ -318,7 +318,7 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 }
             }
 
-            let parent_uid = indent_stack.last().map(|(_, id)| id.clone());
+            let parent_uid = indent_stack.last().map(|(_, id, _)| id.clone());
 
             // Determine dependencies using the numbered state at THIS indentation level
             let mut dependencies = Vec::new();
@@ -352,8 +352,9 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 numbered_state_at_indent.remove(&indent);
             }
 
+            let new_idx = extracted.len();
             // Push ourselves to the stack to become a potential parent for the next lines
-            indent_stack.push((current_kind, uid.clone()));
+            indent_stack.push((current_kind, uid.clone(), new_idx));
 
             extracted.push(ExtractedTask {
                 uid,
@@ -365,30 +366,25 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 status: parsed_status,
                 percent_complete: parsed_pc,
             });
-            active_task_idx = Some(extracted.len() - 1);
+            active_task_idx = Some(new_idx);
         } else {
             // Not a task line.
-            if indent == 0 || header_depth > 0 {
-                // If it hits the left margin, break out of all active Lists
-                while let Some(&(kind, _)) = indent_stack.last() {
-                    if let StackItemKind::List(_) = kind {
+
+            // Pop any List items from the stack that are at the same or deeper indentation
+            // because text belonging to a List item MUST be indented more than the item itself.
+            while let Some(&(kind, _, _)) = indent_stack.last() {
+                if let StackItemKind::List(stack_indent) = kind {
+                    if stack_indent >= indent {
                         indent_stack.pop();
                     } else {
                         break;
                     }
+                } else {
+                    break; // Stop at Headings
                 }
-                numbered_state_at_indent.clear();
-                active_task_idx = None;
             }
 
-            let target_idx = if let Some(&(kind, _)) = indent_stack.last() {
-                match kind {
-                    StackItemKind::Heading(_) => None, // append to root description
-                    StackItemKind::List(_) => active_task_idx, // append to active task
-                }
-            } else {
-                None
-            };
+            let target_idx = indent_stack.last().map(|&(_, _, idx)| idx);
 
             if let Some(idx) = target_idx {
                 if !extracted[idx].description.is_empty()
@@ -398,12 +394,14 @@ pub fn extract_markdown_tasks(input: &str) -> (String, Vec<ExtractedTask>) {
                 }
                 extracted[idx].description.push_str(rest);
                 extracted[idx].description.push('\n');
+                active_task_idx = Some(idx); // Update active_task_idx so empty lines go here
             } else {
                 if !cleaned_root_desc.is_empty() && !cleaned_root_desc.ends_with('\n') {
                     cleaned_root_desc.push('\n');
                 }
                 cleaned_root_desc.push_str(rest);
                 cleaned_root_desc.push('\n');
+                active_task_idx = None; // Update active_task_idx so empty lines go here
             }
         }
     }
