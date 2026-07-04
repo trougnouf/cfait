@@ -756,6 +756,7 @@ async fn main() -> Result<()> {
             let mut show_all = false;
             let mut as_json = false;
             let mut col_href = None;
+            let mut parent_uid_arg = None;
             let mut query_parts: Vec<String> = Vec::new();
 
             let mut i = 2;
@@ -772,6 +773,14 @@ async fn main() -> Result<()> {
                         i += 2;
                     } else {
                         eprintln!("Error: Missing value for {}", args[i]);
+                        std::process::exit(1);
+                    }
+                } else if args[i] == "--parent" || args[i] == "-p" {
+                    if i + 1 < args.len() {
+                        parent_uid_arg = Some(args[i + 1].clone());
+                        i += 2;
+                    } else {
+                        eprintln!("Error: Missing value for --parent");
                         std::process::exit(1);
                     }
                 } else {
@@ -803,6 +812,15 @@ async fn main() -> Result<()> {
             if let Some(col_id) = col_href {
                 target_href = Some(resolve_collection_href(&ctx, &col_id).await);
             }
+
+            let full_parent_uid = if let Some(partial) = parent_uid_arg {
+                match resolve_uid(&store, &partial) {
+                    Some(uid) => Some(uid),
+                    None => std::process::exit(1),
+                }
+            } else {
+                None
+            };
 
             let cutoff_date = if show_all {
                 None
@@ -847,7 +865,7 @@ async fn main() -> Result<()> {
                 max_done_subtasks: usize::MAX,
                 tag_aliases: &config.tag_aliases,
                 search_collapsed_tasks: &search_collapsed_tasks,
-                focused_task_uid: None,
+                focused_task_uid: full_parent_uid.as_deref(),
             });
 
             if as_json {
@@ -1221,6 +1239,93 @@ async fn main() -> Result<()> {
                 println!("{}", rust_i18n::t!("cli_action_queued_auto"));
             } else {
                 println!("{}", rust_i18n::t!("cli_action_queued"));
+            }
+            return Ok(());
+        }
+        "extract" => {
+            let mut partial_uid = String::new();
+            let mut no_wait = false;
+            let mut wait = false;
+            let mut i = 2;
+            while i < args.len() {
+                if args[i] == "--no-wait" || args[i] == "-n" {
+                    no_wait = true;
+                } else if args[i] == "--wait" || args[i] == "-w" {
+                    wait = true;
+                } else if partial_uid.is_empty() {
+                    partial_uid = args[i].clone();
+                }
+                i += 1;
+            }
+            if partial_uid.is_empty() {
+                eprintln!("{}", rust_i18n::t!("error_missing_uid"));
+                std::process::exit(1);
+            }
+            let mut store = build_store_cli(&ctx).await;
+            let full_uid = match resolve_uid(&store, &partial_uid) {
+                Some(uid) => uid,
+                None => std::process::exit(1),
+            };
+
+            let config =
+                cfait::config::Config::load_with_credentials(ctx.as_ref()).unwrap_or_default();
+            let def_time =
+                chrono::NaiveTime::parse_from_str(&config.default_reminder_time, "%H:%M").ok();
+
+            let task_desc = {
+                let t = store.get_task_ref(&full_uid).unwrap();
+                t.description.clone()
+            };
+
+            let mut all_cals = Vec::new();
+            if let Ok(locals) = cfait::storage::LocalCalendarRegistry::load(ctx.as_ref()) {
+                all_cals.extend(locals);
+            }
+            if let Ok(remotes) = cfait::cache::Cache::load_calendars(ctx.as_ref()) {
+                all_cals.extend(remotes);
+            }
+
+            match store.sync_tree_from_markdown(
+                &full_uid,
+                &task_desc,
+                &config.tag_aliases,
+                def_time,
+                config.trash_retention_days,
+                &all_cals,
+            ) {
+                Ok(actions) => {
+                    let store_arc = Arc::new(tokio::sync::Mutex::new(store));
+                    let client_arc = Arc::new(tokio::sync::Mutex::new(None));
+                    let controller =
+                        cfait::controller::TaskController::new(store_arc, client_arc, ctx.clone());
+
+                    controller
+                        .persist_changes(actions)
+                        .await
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                    println!("Successfully extracted subtasks for {}", partial_uid);
+
+                    let (effective_no_wait, is_auto) = get_sync_strategy(no_wait, wait, &ctx);
+                    if !effective_no_wait {
+                        if let Err(e) = maybe_sync(ctx.clone()).await {
+                            eprintln!(
+                                "{}",
+                                rust_i18n::t!(
+                                    "warning_background_sync_failed",
+                                    error = e.to_string()
+                                )
+                            );
+                        }
+                    } else if is_auto {
+                        println!("{}", rust_i18n::t!("cli_action_queued_auto"));
+                    } else {
+                        println!("{}", rust_i18n::t!("cli_action_queued"));
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error extracting subtasks: {}", e);
+                    std::process::exit(1);
+                }
             }
             return Ok(());
         }

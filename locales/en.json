@@ -73,6 +73,7 @@
     "cli_desc_daemon": "Run continuously in background and sync\nat the interval specified in settings.",
     "cli_desc_delete": "Delete a task by its UID.",
     "cli_desc_edit": "Edit an existing task using smart syntax.\nNote: Replaces metadata (dates, tags). Use 'view'\nto see existing smart string first.",
+    "cli_desc_extract": "Extract markdown subtasks from a task's description into native child tasks.",
     "cli_desc_export_default": "Export default local collection.",
     "cli_desc_export_file": "Save tasks to file.",
     "cli_desc_export_filter": "Filter output.",

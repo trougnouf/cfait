@@ -142,12 +142,12 @@ pub fn print_help(binary_name: &str) {
             rust_i18n::t!("cli_desc_edit").to_string(),
         );
         print_cmd(
-            &format!("{} list [--all] [--json] [-c <id>]", binary_name),
+            &format!("{} list [--all] [--json] [-c <id>] [-p <uid>]", binary_name),
             rust_i18n::t!("cli_desc_list").to_string(),
         );
         print_cmd(
             &format!(
-                "{} search <{}> [--all] [--json] [-c <id>]",
+                "{} search <{}> [--all] [--json] [-c <id>] [-p <uid>]",
                 binary_name,
                 rust_i18n::t!("cli_query_placeholder")
             ),
@@ -172,6 +172,10 @@ pub fn print_help(binary_name: &str) {
         print_cmd(
             &format!("{} delete <uid> [-n] [-w]", binary_name),
             rust_i18n::t!("cli_desc_delete").to_string(),
+        );
+        print_cmd(
+            &format!("{} extract <uid> [-n] [-w]", binary_name),
+            rust_i18n::t!("cli_desc_extract").to_string(),
         );
         print_cmd(
             &format!("{} collection list [--json]", binary_name),

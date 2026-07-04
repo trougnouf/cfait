@@ -264,10 +264,11 @@ Used for headless automation, scripting, and piping. Operates directly on the `T
 
 *   `cfait add <task...>`: Smart input task creation. Flags: `-c <href>`, `--desc <text>`, `-p <uid>` (set parent), `-n` (queue to journal, don't wait for network sync).
 *   `cfait edit <uid> <task...>`: Edits metadata using smart syntax. Flags: `--clear-due`, `--clear-start`, `--clear-tags`, `--clear-loc`, `-p <uid>` (set parent), `--clear-parent`.
-*   `cfait list [--all] [--json] [-c <id>]`: Outputs task tree.
-*   `cfait search <query> [--all] [--json] [-c <id>]`: Searches and outputs tasks.
+*   `cfait list [--all] [--json] [-c <id>] [-p <uid>]`: Outputs task tree (use `-p` to focus on a specific sub-tree).
+*   `cfait search <query> [--all] [--json] [-c <id>] [-p <uid>]`: Searches and outputs tasks within a specific sub-tree.
 *   `cfait view <uid> [--json]`: Outputs detailed task info.
 *   `cfait start|pause|toggle|done|complete|delete <uid>`: State mutation commands.
+*   `cfait extract <uid>`: Parses the task's markdown description and converts lists/headers into native child tasks in the database.
 *   `cfait export [--collection <id>]`: Dumps collection as standard ICS to stdout.
 *   `cfait import <file.ics> [--collection <id>]`: Parses and imports ICS to store.
 *   `cfait sync`: Foreground network sync.
