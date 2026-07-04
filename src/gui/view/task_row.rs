@@ -112,6 +112,7 @@ pub fn parse_inline_markdown(
             }
 
             let chunk = text_str[abs_start..abs_end].to_string();
+            let inner_chunk = text_str[abs_start + start_len..abs_end - end_len].to_string();
 
             let mut sp = match start_marker {
                 "[]()" => {
@@ -132,23 +133,23 @@ pub fn parse_inline_markdown(
                     } else {
                         (inner.to_string(), inner.to_string())
                     };
-                    span(format!("[[{}]]", display))
+                    span(display.to_string())
                         .color(Color::from_rgb(0.2, 0.7, 1.0))
                         .link(target)
                 }
-                "**" | "__" => span(chunk.clone()).color(base_color).font(iced::Font {
+                "**" | "__" => span(inner_chunk).color(base_color).font(iced::Font {
                     weight: iced::font::Weight::Bold,
                     ..Default::default()
                 }),
-                "*" | "_" => span(chunk.clone()).color(base_color).font(iced::Font {
+                "*" | "_" => span(inner_chunk).color(base_color).font(iced::Font {
                     style: iced::font::Style::Italic,
                     ..Default::default()
                 }),
-                "`" => span(chunk.clone())
+                "`" => span(inner_chunk)
                     .color(Color::from_rgb(0.8, 0.6, 0.4))
                     .font(iced::Font::MONOSPACE),
-                "~~" => span(chunk.clone()).color(base_color).strikethrough(true),
-                _ => span(chunk).color(base_color),
+                "~~" => span(inner_chunk).color(base_color).strikethrough(true),
+                _ => span(inner_chunk).color(base_color),
             };
 
             if is_strikethrough && start_marker != "~~" {

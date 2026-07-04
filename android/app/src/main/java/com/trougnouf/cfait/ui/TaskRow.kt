@@ -118,13 +118,17 @@ fun TaskRow(
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 val isTrash = task.calendarHref == "local://trash"
-                Text(
-                    text = task.summary,
-                    style = MaterialTheme.typography.bodyMedium,
+                val isStrikethrough = task.isDone || isTrash
+                val baseStyle = MaterialTheme.typography.bodyMedium.copy(
                     color = textColor,
                     fontWeight = if (task.priority > 0.toUByte()) FontWeight.Medium else FontWeight.Normal,
-                    textDecoration = if (task.isDone || isTrash) TextDecoration.LineThrough else null,
-                    lineHeight = 18.sp,
+                    lineHeight = 18.sp
+                )
+                val annotatedSummary = com.trougnouf.cfait.ui.parseInlineMarkdown(task.summary, textColor, isStrikethrough)
+                
+                Text(
+                    text = annotatedSummary,
+                    style = baseStyle,
                 )
 
                 FlowRow(

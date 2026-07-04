@@ -866,5 +866,6 @@ fun DynamicTaskName(api: CfaitMobile, defaultName: String, uid: String) {
         }
     }
 
-    Text(displayName, fontSize = 14.sp)
+    val annotatedText = com.trougnouf.cfait.ui.parseInlineMarkdown(displayName, androidx.compose.ui.graphics.Color.Unspecified, false)
+    Text(annotatedText, fontSize = 14.sp)
 }

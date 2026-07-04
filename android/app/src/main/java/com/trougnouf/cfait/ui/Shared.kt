@@ -59,6 +59,176 @@ import kotlin.coroutines.resume
 
 val NerdFont = FontFamily(Font(R.font.symbols_nerd_font))
 
+fun parseInlineMarkdown(textStr: String, baseColor: androidx.compose.ui.graphics.Color, isStrikethrough: Boolean): androidx.compose.ui.text.AnnotatedString {
+    val builder = androidx.compose.ui.text.AnnotatedString.Builder()
+    val baseDecoration = if (isStrikethrough) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+
+    var currentIdx = 0
+    while (currentIdx < textStr.length) {
+        val remaining = textStr.substring(currentIdx)
+
+        val markers = listOf(
+            Triple("<!-- uid:", "-->", 9),
+            Triple("**", "**", 2),
+            Triple("__", "__", 2),
+            Triple("~~", "~~", 2),
+            Triple("*", "*", 1),
+            Triple("_", "_", 1),
+            Triple("`", "`", 1)
+        )
+
+        var bestMatch: Triple<Int, Int, String>? = null
+        var matchLen = 0
+        var endLen = 0
+
+        for ((startMarker, endMarker, sLen) in markers) {
+            val startPos = remaining.indexOf(startMarker)
+            if (startPos != -1) {
+                val endPos = remaining.indexOf(endMarker, startPos + sLen)
+                if (endPos != -1) {
+                    val absStart = currentIdx + startPos
+                    val eLen = endMarker.length
+                    val absEnd = currentIdx + endPos + eLen
+                    if (bestMatch == null || absStart < bestMatch.first) {
+                        bestMatch = Triple(absStart, absEnd, startMarker)
+                        matchLen = sLen
+                        endLen = eLen
+                    }
+                }
+            }
+        }
+
+        var searchIdx = 0
+        while (true) {
+            val startPos = remaining.indexOf('[', searchIdx)
+            if (startPos == -1) break
+            if (remaining.startsWith("[[", startPos)) {
+                searchIdx = startPos + 2
+                continue
+            }
+            val midPos = remaining.indexOf("](", startPos)
+            if (midPos != -1) {
+                val endPos = remaining.indexOf(')', midPos)
+                if (endPos != -1) {
+                    val absStart = currentIdx + startPos
+                    val absEnd = currentIdx + endPos + 1
+                    if (bestMatch == null || absStart < bestMatch.first) {
+                        bestMatch = Triple(absStart, absEnd, "[]()")
+                        matchLen = 0
+                        endLen = 0
+                    }
+                    break
+                }
+            }
+            searchIdx = startPos + 1
+        }
+
+        searchIdx = 0
+        while (true) {
+            val startPos = remaining.indexOf("[[", searchIdx)
+            if (startPos == -1) break
+            val endPos = remaining.indexOf("]]", startPos + 2)
+            if (endPos != -1) {
+                val absStart = currentIdx + startPos
+                val absEnd = currentIdx + endPos + 2
+                if (bestMatch == null || absStart < bestMatch.first) {
+                    bestMatch = Triple(absStart, absEnd, "[[]]")
+                    matchLen = 2
+                    endLen = 2
+                }
+                break
+            }
+            searchIdx = startPos + 2
+        }
+
+        for (scheme in listOf("https://", "http://")) {
+            val startPos = remaining.indexOf(scheme)
+            if (startPos != -1) {
+                val absStart = currentIdx + startPos
+                var endOffset = 0
+                for (c in textStr.substring(absStart)) {
+                    if (c.isWhitespace() || c == ')' || c == ']') break
+                    endOffset += 1
+                }
+                val absEnd = absStart + endOffset
+                if (bestMatch == null || absStart < bestMatch.first) {
+                    bestMatch = Triple(absStart, absEnd, "http")
+                    matchLen = 0
+                    endLen = 0
+                }
+            }
+        }
+
+        if (bestMatch != null) {
+            val (absStart, absEnd, marker) = bestMatch
+
+            if (absStart > currentIdx) {
+                val chunk = textStr.substring(currentIdx, absStart)
+                builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, textDecoration = baseDecoration))
+                builder.append(chunk)
+                builder.pop()
+            }
+
+            val chunk = textStr.substring(absStart, absEnd)
+            val innerChunk = if (matchLen > 0) textStr.substring(absStart + matchLen, absEnd - endLen) else chunk
+
+            when (marker) {
+                "<!-- uid:" -> {}
+                "**", "__" -> {
+                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, textDecoration = baseDecoration))
+                    builder.append(innerChunk)
+                    builder.pop()
+                }
+                "*", "_" -> {
+                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, textDecoration = baseDecoration))
+                    builder.append(innerChunk)
+                    builder.pop()
+                }
+                "~~" -> {
+                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough))
+                    builder.append(innerChunk)
+                    builder.pop()
+                }
+                "`" -> {
+                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFFCC9966), fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, textDecoration = baseDecoration))
+                    builder.append(innerChunk)
+                    builder.pop()
+                }
+                "[]()" -> {
+                    val mid = chunk.indexOf("](")
+                    val display = chunk.substring(1, mid)
+                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF33B5E5), textDecoration = baseDecoration))
+                    builder.append(display)
+                    builder.pop()
+                }
+                "[[]]" -> {
+                    val split = innerChunk.indexOf('|')
+                    val display = if (split != -1) innerChunk.substring(split + 1) else innerChunk
+                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF33B5E5), textDecoration = baseDecoration))
+                    builder.append(display)
+                    builder.pop()
+                }
+                "http" -> {
+                    builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(0xFF33B5E5), textDecoration = baseDecoration))
+                    builder.append(chunk)
+                    builder.pop()
+                }
+            }
+            currentIdx = absEnd
+        } else {
+            break
+        }
+    }
+
+    if (currentIdx < textStr.length) {
+        builder.pushStyle(androidx.compose.ui.text.SpanStyle(color = baseColor, textDecoration = baseDecoration))
+        builder.append(textStr.substring(currentIdx))
+        builder.pop()
+    }
+
+    return builder.toAnnotatedString()
+}
+
 /**
  * Parses raw stringified Maps generated by the build script (e.g., "{one=1 item, other=X items}")
  * and extracts the correct pluralization string.

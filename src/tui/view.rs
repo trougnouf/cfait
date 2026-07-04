@@ -27,7 +27,7 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-fn parse_inline_elements(text: &str, base_style: Style) -> Vec<Span<'static>> {
+fn parse_inline_elements(text: &str, base_style: Style, strip_markers: bool) -> Vec<Span<'static>> {
     // FAST PATH: Skip expensive parsing if no markdown trigger characters are present.
     if !text.contains(['[', '*', '_', '~', '`']) && !text.contains("http") && !text.contains("<!--")
     {
@@ -110,10 +110,21 @@ fn parse_inline_elements(text: &str, base_style: Style) -> Vec<Span<'static>> {
             }
 
             let chunk = &text[abs_start..abs_end];
+            let inner = &text[abs_start + start_len..abs_end - end_len];
+
+            let display_text = if strip_markers {
+                inner.to_string()
+            } else {
+                chunk.to_string()
+            };
 
             let span = match start_marker {
                 "<!-- uid:" => Span::styled(
-                    chunk.to_string(),
+                    if strip_markers {
+                        "".to_string()
+                    } else {
+                        chunk.to_string()
+                    },
                     Style::default()
                         .fg(Color::DarkGray)
                         .add_modifier(Modifier::ITALIC),
@@ -121,30 +132,33 @@ fn parse_inline_elements(text: &str, base_style: Style) -> Vec<Span<'static>> {
                 "[]()" => {
                     let mid = chunk.find("](").unwrap();
                     let display = &chunk[1..mid];
-                    Span::styled(display.to_string(), Style::default().fg(Color::Cyan))
+                    let txt = if strip_markers {
+                        display.to_string()
+                    } else {
+                        chunk.to_string()
+                    };
+                    Span::styled(txt, Style::default().fg(Color::Cyan))
                 }
                 "http" => Span::styled(chunk.to_string(), Style::default().fg(Color::Cyan)),
                 "[[]" => {
-                    let inner = &text[abs_start + start_len..abs_end - end_len];
-                    let (_, display) = if let Some((t, d)) = inner.split_once('|') {
+                    let inner_content = &text[abs_start + start_len..abs_end - end_len];
+                    let (_, display) = if let Some((t, d)) = inner_content.split_once('|') {
                         (t, d)
                     } else {
-                        (inner, inner)
+                        (inner_content, inner_content)
                     };
-                    Span::styled(format!("[[{}]]", display), Style::default().fg(Color::Cyan))
+                    let txt = if strip_markers {
+                        display.to_string()
+                    } else {
+                        chunk.to_string()
+                    };
+                    Span::styled(txt, Style::default().fg(Color::Cyan))
                 }
-                "**" | "__" => {
-                    Span::styled(chunk.to_string(), base_style.add_modifier(Modifier::BOLD))
-                }
-                "*" | "_" => {
-                    Span::styled(chunk.to_string(), base_style.add_modifier(Modifier::ITALIC))
-                }
-                "`" => Span::styled(chunk.to_string(), Style::default().fg(Color::Yellow)),
-                "~~" => Span::styled(
-                    chunk.to_string(),
-                    base_style.add_modifier(Modifier::CROSSED_OUT),
-                ),
-                _ => Span::styled(chunk.to_string(), base_style),
+                "**" | "__" => Span::styled(display_text, base_style.add_modifier(Modifier::BOLD)),
+                "*" | "_" => Span::styled(display_text, base_style.add_modifier(Modifier::ITALIC)),
+                "`" => Span::styled(display_text, Style::default().fg(Color::Yellow)),
+                "~~" => Span::styled(display_text, base_style.add_modifier(Modifier::CROSSED_OUT)),
+                _ => Span::styled(display_text, base_style),
             };
 
             spans.push(span);
@@ -178,6 +192,7 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                         Color::Rgb(150, 50, 50)
                     })
                     .add_modifier(Modifier::BOLD),
+                false,
             ));
         } else if trimmed.starts_with("- ") || trimmed.starts_with("* ") {
             spans.extend(crate::tui::view::parse_inline_elements(
@@ -187,6 +202,7 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                 } else {
                     Color::Rgb(150, 100, 0)
                 }),
+                false,
             ));
         } else if trimmed.starts_with("> ") {
             spans.extend(crate::tui::view::parse_inline_elements(
@@ -194,6 +210,7 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                 Style::default()
                     .fg(Color::DarkGray)
                     .add_modifier(Modifier::ITALIC),
+                false,
             ));
         } else if trimmed.starts_with("```") {
             spans.extend(crate::tui::view::parse_inline_elements(
@@ -203,11 +220,13 @@ fn highlight_markdown_raw(input: &str, is_dark_theme: bool) -> Text<'static> {
                 } else {
                     Color::Rgb(0, 120, 0)
                 }),
+                false,
             ));
         } else {
             spans.extend(crate::tui::view::parse_inline_elements(
                 line,
                 Style::default(),
+                false,
             ));
         }
 
@@ -982,7 +1001,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                     }
 
                     let title_spans =
-                        crate::tui::view::parse_inline_elements(&display_title, base_style);
+                        crate::tui::view::parse_inline_elements(&display_title, base_style, true);
 
                     let mut spans = vec![
                         prefix_indent,
@@ -1025,6 +1044,7 @@ pub fn draw(f: &mut Frame, state: &mut AppState) {
                             let desc_spans = crate::tui::view::parse_inline_elements(
                                 desc_line,
                                 Style::default().fg(Color::DarkGray),
+                                true,
                             );
                             let mut line_spans = vec![Span::raw(indent)];
                             line_spans.extend(desc_spans);
