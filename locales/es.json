@@ -78,6 +78,8 @@
     "cli_desc_export_filter": "Filtrar la salida.",
     "cli_desc_export_specific": "Exportar colección local específica.",
     "cli_desc_extract": "Extraer las subtareas escritas en Markdown de la descripción de una tarea y convertirlas en subtareas independientes.",
+    "cli_desc_append": "Añadir tokens o texto de sintaxis inteligente a una tarea existente.",
+    "cli_usage_append": "Uso: %{binary_name} append <uid> <tarea...>",
     "cli_desc_force_csd": "Forzar el uso de la decoración de ventanas del cliente (personalizada).",
     "cli_desc_force_ssd": "Forzar los elementos decorativos de las ventanas en el servidor (nativos).",
     "cli_desc_help": "Mostrar este mensaje de ayuda.",

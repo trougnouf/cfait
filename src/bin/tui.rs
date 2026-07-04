@@ -509,7 +509,8 @@ async fn main() -> Result<()> {
             }
             return Ok(());
         }
-        "edit" => {
+        "edit" | "append" => {
+            let is_append = command == "append";
             let mut col_href = None;
             let mut desc_text = None;
             let mut parent_uid_arg = None;
@@ -530,6 +531,10 @@ async fn main() -> Result<()> {
                     wait = true;
                     i += 1;
                 } else if args[i] == "--collection" || args[i] == "-c" {
+                    if is_append {
+                        eprintln!("Error: --collection not supported for append command");
+                        std::process::exit(1);
+                    }
                     if i + 1 < args.len() {
                         col_href = Some(args[i + 1].clone());
                         i += 2;
@@ -546,6 +551,10 @@ async fn main() -> Result<()> {
                         std::process::exit(1);
                     }
                 } else if args[i] == "--parent" || args[i] == "-p" {
+                    if is_append {
+                        eprintln!("Error: --parent not supported for append command");
+                        std::process::exit(1);
+                    }
                     if i + 1 < args.len() {
                         parent_uid_arg = Some(args[i + 1].clone());
                         i += 2;
@@ -554,19 +563,44 @@ async fn main() -> Result<()> {
                         std::process::exit(1);
                     }
                 } else if args[i] == "--clear-parent" {
-                    clear_parent = true;
+                    if !is_append {
+                        clear_parent = true;
+                    } else {
+                        eprintln!("Error: --clear-parent not supported for append command");
+                        std::process::exit(1);
+                    }
                     i += 1;
                 } else if args[i] == "--clear-due" {
-                    clear_due = true;
+                    if !is_append {
+                        clear_due = true;
+                    } else {
+                        eprintln!("Error: --clear-due not supported for append command");
+                        std::process::exit(1);
+                    }
                     i += 1;
                 } else if args[i] == "--clear-start" {
-                    clear_start = true;
+                    if !is_append {
+                        clear_start = true;
+                    } else {
+                        eprintln!("Error: --clear-start not supported for append command");
+                        std::process::exit(1);
+                    }
                     i += 1;
                 } else if args[i] == "--clear-tags" {
-                    clear_tags = true;
+                    if !is_append {
+                        clear_tags = true;
+                    } else {
+                        eprintln!("Error: --clear-tags not supported for append command");
+                        std::process::exit(1);
+                    }
                     i += 1;
                 } else if args[i] == "--clear-loc" {
-                    clear_loc = true;
+                    if !is_append {
+                        clear_loc = true;
+                    } else {
+                        eprintln!("Error: --clear-loc not supported for append command");
+                        std::process::exit(1);
+                    }
                     i += 1;
                 } else {
                     task_args.push(args[i].clone());
@@ -574,10 +608,17 @@ async fn main() -> Result<()> {
                 }
             }
             if task_args.is_empty() {
-                eprintln!(
-                    "{}",
-                    rust_i18n::t!("cli_usage_edit", binary_name = binary_name)
-                );
+                if is_append {
+                    eprintln!(
+                        "{}",
+                        rust_i18n::t!("cli_usage_append", binary_name = binary_name)
+                    );
+                } else {
+                    eprintln!(
+                        "{}",
+                        rust_i18n::t!("cli_usage_edit", binary_name = binary_name)
+                    );
+                }
                 std::process::exit(1);
             }
             let partial_uid = task_args[0].clone();
@@ -634,7 +675,17 @@ async fn main() -> Result<()> {
                 }
 
                 if let Some((task_mut, _)) = store.get_task_mut(&full_uid) {
-                    task_mut.apply_smart_input(&clean_input, &config.tag_aliases, def_time);
+                    let input_to_apply = if is_append {
+                        let mut existing = task_mut.to_smart_string();
+                        if !clean_input.trim().is_empty() {
+                            existing.push(' ');
+                            existing.push_str(clean_input.trim());
+                        }
+                        existing
+                    } else {
+                        clean_input
+                    };
+                    task_mut.apply_smart_input(&input_to_apply, &config.tag_aliases, def_time);
                     changed = true;
                 }
             }
@@ -642,11 +693,20 @@ async fn main() -> Result<()> {
             if let Some(d) = desc_text
                 && let Some((task_mut, _)) = store.get_task_mut(&full_uid)
             {
-                task_mut.description = d;
+                if is_append {
+                    if !task_mut.description.is_empty() {
+                        task_mut.description.push_str("\n\n");
+                    }
+                    task_mut.description.push_str(&d);
+                } else {
+                    task_mut.description = d;
+                }
                 changed = true;
             }
 
-            if let Some((task_mut, _)) = store.get_task_mut(&full_uid) {
+            if let Some((task_mut, _)) = store.get_task_mut(&full_uid)
+                && !is_append
+            {
                 if clear_parent {
                     if task_mut.parent_uid.is_some() {
                         task_mut.parent_uid = None;
@@ -682,7 +742,7 @@ async fn main() -> Result<()> {
                 actions.push(cfait::journal::Action::Update(task_mut.clone()));
             }
 
-            if let Some(target_href_input) = col_href {
+            if !is_append && let Some(target_href_input) = col_href {
                 let matched_href = resolve_collection_href(&ctx, &target_href_input).await;
                 let intent = cfait::model::AppIntent::MoveTask {
                     uid: full_uid.clone(),

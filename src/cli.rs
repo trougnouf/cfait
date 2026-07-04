@@ -142,6 +142,14 @@ pub fn print_help(binary_name: &str) {
             rust_i18n::t!("cli_desc_edit").to_string(),
         );
         print_cmd(
+            &format!(
+                "{} append <uid> <{}> [--desc <text>] [-n] [-w]",
+                binary_name,
+                rust_i18n::t!("cli_task_placeholder")
+            ),
+            rust_i18n::t!("cli_desc_append").to_string(),
+        );
+        print_cmd(
             &format!("{} list [--all] [--json] [-c <id>] [-p <uid>]", binary_name),
             rust_i18n::t!("cli_desc_list").to_string(),
         );
