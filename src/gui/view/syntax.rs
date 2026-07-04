@@ -507,35 +507,53 @@ impl Highlighter for MarkdownHighlighter {
                 ];
 
                 let mut best_match: Option<(usize, usize, highlighter::Format<Font>)> = None;
-                let mut update_best = |start, end, format| {
-                    if best_match.is_none() || start < best_match.unwrap().0 {
-                        best_match = Some((start, end, format));
-                    }
-                };
 
-                for &(start_marker, end_marker, start_len, end_len, format) in &markers {
-                    if let Some(start_pos) = remaining.find(start_marker)
-                        && let Some(end_pos) = remaining[start_pos + start_len..].find(end_marker)
-                    {
-                        let abs_start = cursor + start_pos;
-                        let abs_end = abs_start + start_len + end_pos + end_len;
-                        update_best(abs_start, abs_end, format);
+                // Process markers first
+                {
+                    let mut update_best = |start, end, format| {
+                        if best_match.is_none() || start < best_match.unwrap().0 {
+                            best_match = Some((start, end, format));
+                        }
+                    };
+
+                    for &(start_marker, end_marker, start_len, end_len, format) in &markers {
+                        if let Some(start_pos) = remaining.find(start_marker)
+                            && let Some(end_pos) =
+                                remaining[start_pos + start_len..].find(end_marker)
+                        {
+                            let abs_start = cursor + start_pos;
+                            let abs_end = abs_start + start_len + end_pos + end_len;
+                            update_best(abs_start, abs_end, format);
+                        }
                     }
                 }
+
+                let best_match_pos = best_match.as_ref().map(|(pos, _, _)| *pos);
 
                 // Standard Markdown links: [label](url)
                 let mut search_idx = 0;
                 while let Some(start_pos) = remaining[search_idx..].find('[') {
+                    let abs_start = cursor + search_idx + start_pos;
+
+                    // Early termination: if we already have a match that starts before this position, skip
+                    if let Some(best_pos) = best_match_pos
+                        && best_pos <= abs_start
+                    {
+                        break;
+                    }
+
                     if remaining[search_idx + start_pos..].starts_with("[[") {
                         search_idx += start_pos + 2;
                         continue;
                     }
                     if let Some(mid_pos) = remaining[search_idx + start_pos..].find("](") {
                         let mid_abs = search_idx + start_pos + mid_pos;
-                        if let Some(end_pos) = remaining[mid_abs..].find(')') {
-                            let abs_start = cursor + search_idx + start_pos;
+                        let link_text = &remaining[search_idx + start_pos + 1..mid_abs];
+                        if !link_text.contains('[')
+                            && let Some(end_pos) = remaining[mid_abs..].find(')')
+                        {
                             let abs_end = cursor + mid_abs + end_pos + 1;
-                            update_best(
+                            best_match = Some((
                                 abs_start,
                                 abs_end,
                                 highlighter::Format {
@@ -545,7 +563,7 @@ impl Highlighter for MarkdownHighlighter {
                                         ..Default::default()
                                     }),
                                 },
-                            );
+                            ));
                             break;
                         }
                     }
@@ -556,6 +574,14 @@ impl Highlighter for MarkdownHighlighter {
                 for scheme in &["https://", "http://"] {
                     if let Some(start_pos) = remaining.find(scheme) {
                         let abs_start = cursor + start_pos;
+
+                        // Skip if we already have a better match
+                        if let Some(best_pos) = best_match_pos
+                            && best_pos <= abs_start
+                        {
+                            continue;
+                        }
+
                         let mut end_offset = 0;
                         for c in remaining[start_pos..].chars() {
                             if c.is_whitespace() || c == ')' || c == ']' {
@@ -564,17 +590,20 @@ impl Highlighter for MarkdownHighlighter {
                             end_offset += c.len_utf8();
                         }
                         let abs_end = abs_start + end_offset;
-                        update_best(
-                            abs_start,
-                            abs_end,
-                            highlighter::Format {
-                                color: link_color,
-                                font: Some(Font {
-                                    weight: iced::font::Weight::Bold,
-                                    ..Default::default()
-                                }),
-                            },
-                        );
+                        // Update best_match directly since we dropped the closure
+                        if best_match.is_none() || abs_start < best_match.as_ref().unwrap().0 {
+                            best_match = Some((
+                                abs_start,
+                                abs_end,
+                                highlighter::Format {
+                                    color: link_color,
+                                    font: Some(Font {
+                                        weight: iced::font::Weight::Bold,
+                                        ..Default::default()
+                                    }),
+                                },
+                            ));
+                        }
                     }
                 }
 
@@ -851,35 +880,52 @@ impl Highlighter for MarkdownHighlighter {
             ];
 
             let mut best_match: Option<(usize, usize, highlighter::Format<Font>)> = None;
-            let mut update_best = |start, end, format| {
-                if best_match.is_none() || start < best_match.unwrap().0 {
-                    best_match = Some((start, end, format));
-                }
-            };
 
-            for &(start_marker, end_marker, start_len, end_len, format) in &markers {
-                if let Some(start_pos) = remaining.find(start_marker)
-                    && let Some(end_pos) = remaining[start_pos + start_len..].find(end_marker)
-                {
-                    let abs_start = cursor + start_pos;
-                    let abs_end = abs_start + start_len + end_pos + end_len;
-                    update_best(abs_start, abs_end, format);
+            // Process markers first
+            {
+                let mut update_best = |start, end, format| {
+                    if best_match.is_none() || start < best_match.unwrap().0 {
+                        best_match = Some((start, end, format));
+                    }
+                };
+
+                for &(start_marker, end_marker, start_len, end_len, format) in &markers {
+                    if let Some(start_pos) = remaining.find(start_marker)
+                        && let Some(end_pos) = remaining[start_pos + start_len..].find(end_marker)
+                    {
+                        let abs_start = cursor + start_pos;
+                        let abs_end = abs_start + start_len + end_pos + end_len;
+                        update_best(abs_start, abs_end, format);
+                    }
                 }
             }
+
+            let best_match_pos = best_match.as_ref().map(|(pos, _, _)| *pos);
 
             // Standard Markdown links: [label](url)
             let mut search_idx = 0;
             while let Some(start_pos) = remaining[search_idx..].find('[') {
+                let abs_start = cursor + search_idx + start_pos;
+
+                // Early termination: if we already have a match that starts before this position, skip
+                if let Some(best_pos) = best_match_pos
+                    && best_pos <= abs_start
+                {
+                    break;
+                }
+
                 if remaining[search_idx + start_pos..].starts_with("[[") {
                     search_idx += start_pos + 2;
                     continue;
                 }
                 if let Some(mid_pos) = remaining[search_idx + start_pos..].find("](") {
                     let mid_abs = search_idx + start_pos + mid_pos;
-                    if let Some(end_pos) = remaining[mid_abs..].find(')') {
-                        let abs_start = cursor + search_idx + start_pos;
+                    let link_text = &remaining[search_idx + start_pos + 1..mid_abs];
+                    if !link_text.contains('[')
+                        && let Some(end_pos) = remaining[mid_abs..].find(')')
+                    {
                         let abs_end = cursor + mid_abs + end_pos + 1;
-                        update_best(
+                        best_match = Some((
                             abs_start,
                             abs_end,
                             highlighter::Format {
@@ -889,7 +935,7 @@ impl Highlighter for MarkdownHighlighter {
                                     ..Default::default()
                                 }),
                             },
-                        );
+                        ));
                         break;
                     }
                 }
@@ -900,6 +946,14 @@ impl Highlighter for MarkdownHighlighter {
             for scheme in &["https://", "http://"] {
                 if let Some(start_pos) = remaining.find(scheme) {
                     let abs_start = cursor + start_pos;
+
+                    // Skip if we already have a better match
+                    if let Some(best_pos) = best_match_pos
+                        && best_pos <= abs_start
+                    {
+                        continue;
+                    }
+
                     let mut end_offset = 0;
                     for c in line[abs_start..].chars() {
                         if c.is_whitespace() || c == ')' || c == ']' {
@@ -908,17 +962,20 @@ impl Highlighter for MarkdownHighlighter {
                         end_offset += c.len_utf8();
                     }
                     let abs_end = abs_start + end_offset;
-                    update_best(
-                        abs_start,
-                        abs_end,
-                        highlighter::Format {
-                            color: link_color,
-                            font: Some(Font {
-                                weight: iced::font::Weight::Bold,
-                                ..Default::default()
-                            }),
-                        },
-                    );
+                    // Update best_match directly since we dropped the closure
+                    if best_match.is_none() || abs_start < best_match.as_ref().unwrap().0 {
+                        best_match = Some((
+                            abs_start,
+                            abs_end,
+                            highlighter::Format {
+                                color: link_color,
+                                font: Some(Font {
+                                    weight: iced::font::Weight::Bold,
+                                    ..Default::default()
+                                }),
+                            },
+                        ));
+                    }
                 }
             }
 
