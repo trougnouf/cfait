@@ -37,6 +37,14 @@ impl TaskController {
     pub async fn persist_changes(&self, actions: Vec<Action>) -> Result<(), String> {
         let mut remote_actions = Vec::new();
 
+        enum LocalOp {
+            Upsert(Box<Task>),
+            Delete(String),
+        }
+
+        let mut local_ops_by_href: std::collections::HashMap<String, Vec<LocalOp>> =
+            std::collections::HashMap::new();
+
         for action in actions {
             // Prevent Data-Loss: Ensure Trash calendar is registered on disk during a trash-create event
             if let Action::Create(ref t) | Action::Update(ref t) = action
@@ -45,64 +53,76 @@ impl TaskController {
                 let _ = LocalCalendarRegistry::ensure_trash_calendar_exists(self.ctx.as_ref());
             }
 
-            let is_local = match &action {
-                Action::Create(t) | Action::Update(t) | Action::Delete(t) => {
-                    t.calendar_href.starts_with("local://")
+            match action {
+                Action::Create(t) => {
+                    if t.calendar_href.starts_with("local://") {
+                        local_ops_by_href
+                            .entry(t.calendar_href.clone())
+                            .or_default()
+                            .push(LocalOp::Upsert(Box::new(t)));
+                    } else {
+                        remote_actions.push(Action::Create(t));
+                    }
                 }
-                Action::Move(t, _) => t.calendar_href.starts_with("local://"),
-            };
+                Action::Update(t) => {
+                    if t.calendar_href.starts_with("local://") {
+                        local_ops_by_href
+                            .entry(t.calendar_href.clone())
+                            .or_default()
+                            .push(LocalOp::Upsert(Box::new(t)));
+                    } else {
+                        remote_actions.push(Action::Update(t));
+                    }
+                }
+                Action::Delete(t) => {
+                    if t.calendar_href.starts_with("local://") {
+                        local_ops_by_href
+                            .entry(t.calendar_href.clone())
+                            .or_default()
+                            .push(LocalOp::Delete(t.uid.clone()));
+                    } else {
+                        remote_actions.push(Action::Delete(t));
+                    }
+                }
+                Action::Move(t, target_href) => {
+                    if t.calendar_href.starts_with("local://") {
+                        local_ops_by_href
+                            .entry(t.calendar_href.clone())
+                            .or_default()
+                            .push(LocalOp::Delete(t.uid.clone()));
+                    } else {
+                        remote_actions.push(Action::Move(t.clone(), target_href.clone()));
+                    }
 
-            if is_local {
-                match &action {
-                    Action::Create(t) | Action::Update(t) => {
-                        let task_clone = t.clone();
-                        let _ = LocalStorage::modify_for_href(
-                            self.ctx.as_ref(),
-                            &t.calendar_href,
-                            |all| {
-                                if let Some(idx) =
-                                    all.iter().position(|item| item.uid == task_clone.uid)
-                                {
-                                    all[idx] = task_clone;
-                                } else {
-                                    all.push(task_clone);
-                                }
-                            },
-                        );
+                    if target_href.starts_with("local://") {
+                        let mut moved = t.clone();
+                        moved.calendar_href = target_href.clone();
+                        local_ops_by_href
+                            .entry(target_href)
+                            .or_default()
+                            .push(LocalOp::Upsert(Box::new(moved)));
                     }
-                    Action::Delete(t) => {
-                        let _ = LocalStorage::modify_for_href(
-                            self.ctx.as_ref(),
-                            &t.calendar_href,
-                            |all| {
-                                all.retain(|item| item.uid != t.uid);
-                            },
-                        );
-                    }
-                    Action::Move(t, target_href) => {
-                        let _ = LocalStorage::modify_for_href(
-                            self.ctx.as_ref(),
-                            &t.calendar_href,
-                            |all| {
-                                all.retain(|item| item.uid != t.uid);
-                            },
-                        );
-                        if target_href.starts_with("local://") {
-                            let mut moved = t.clone();
-                            moved.calendar_href = target_href.clone();
-                            let _ = LocalStorage::modify_for_href(
-                                self.ctx.as_ref(),
-                                target_href,
-                                |all| {
-                                    all.push(moved);
-                                },
-                            );
+                }
+            }
+        }
+
+        for (href, ops) in local_ops_by_href {
+            let _ = LocalStorage::modify_for_href(self.ctx.as_ref(), &href, |all| {
+                for op in ops {
+                    match op {
+                        LocalOp::Upsert(task) => {
+                            if let Some(idx) = all.iter().position(|item| item.uid == task.uid) {
+                                all[idx] = *task;
+                            } else {
+                                all.push(*task);
+                            }
+                        }
+                        LocalOp::Delete(uid) => {
+                            all.retain(|item| item.uid != uid);
                         }
                     }
                 }
-            } else {
-                remote_actions.push(action);
-            }
+            });
         }
 
         if remote_actions.is_empty() {
