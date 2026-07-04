@@ -1734,9 +1734,10 @@ impl CfaitMobile {
         let expanded_tags_set: HashSet<String> = options.expanded_tags.into_iter().collect();
         let expanded_locations_set: HashSet<String> =
             options.expanded_locations.into_iter().collect();
-        
+
         let session = self.session.lock().await;
-        let search_collapsed_set: HashSet<String> = session.search_collapsed_tasks.iter().cloned().collect();
+        let search_collapsed_set: HashSet<String> =
+            session.search_collapsed_tasks.iter().cloned().collect();
         let focused_task_uid = session.focused_task_uid.clone();
         drop(session);
 
