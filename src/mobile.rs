@@ -233,7 +233,7 @@ pub struct MobileTask {
 impl MobileTask {
     fn empty_virtual(vtype: &str, payload: &str, depth: u32) -> Self {
         Self {
-            uid: String::new(),
+            uid: format!("virtual-{}-{}", vtype, payload),
             summary: String::new(),
             description: String::new(),
             is_done: false,

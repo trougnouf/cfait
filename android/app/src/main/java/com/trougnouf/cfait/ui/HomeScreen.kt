@@ -2090,10 +2090,21 @@ fun HomeScreen(
                                         // We append the cached tasks to the bottom to prevent a blank screen.
                                         val result = ArrayList<MobileTask>(liveTasks.size + 50)
                                         result.addAll(liveTasks)
+                                        
+                                        val seenUids = HashSet<String>()
+                                        for (t in liveTasks) {
+                                            seenUids.add(t.uid)
+                                        }
 
                                         val missingHrefs = currentTab.hrefs - presentHrefs
                                         for (href in missingHrefs) {
-                                            taskCache[href]?.let { result.addAll(it) }
+                                            taskCache[href]?.let { cached -> 
+                                                for (t in cached) {
+                                                    if (seenUids.add(t.uid)) {
+                                                        result.add(t)
+                                                    }
+                                                }
+                                            }
                                         }
                                         result
                                     }
