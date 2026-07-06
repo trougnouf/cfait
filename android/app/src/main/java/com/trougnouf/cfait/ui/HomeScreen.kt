@@ -451,6 +451,12 @@ fun HomeScreen(
             newTaskText = ""
             newDescriptionText = ""
             isCreateExpanded = false
+            val currentChildUid = creatingChildUid
+
+            if (!childLockActive) {
+                creatingChildUid = null
+            }
+
             scope.launch {
                 activeOpCount++
                 try {
@@ -471,9 +477,8 @@ fun HomeScreen(
                         return@launch
                     }
 
-                    if (creatingChildUid != null) {
-                        api.setParent(newUid, creatingChildUid!!)
-                        if (!childLockActive) creatingChildUid = null
+                    if (currentChildUid != null) {
+                        api.setParent(newUid, currentChildUid)
                     }
                     highlightedUid = newUid
                     onDataChanged()
@@ -618,11 +623,16 @@ fun HomeScreen(
             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
         }
 
+        val currentYankedUid = yankedUid
+
+        // Optimistically clear it if not locked so UI updates instantly
+        if (action == "block" || action == "child" || action == "related") {
+            if (!yankLockActive) yankedUid = null
+        }
+
         scope.launch {
             activeOpCount++
             try {
-
-
                 val intent = when(action) {
                     "delete" -> AppIntent.DeleteTask(task.uid)
                     "delete_tree" -> AppIntent.DeleteTaskTree(task.uid)
@@ -643,9 +653,9 @@ fun HomeScreen(
                         clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("task_details", textToCopy)))
                         null
                     }
-                    "block" -> if (yankedUid != null) AppIntent.AddDependency(task.uid, yankedUid!!) else null
-                    "child" -> if (yankedUid != null) AppIntent.MakeChild(task.uid, yankedUid!!) else null
-                    "related" -> if (yankedUid != null) AppIntent.AddRelatedTo(task.uid, yankedUid!!) else null
+                    "block" -> if (currentYankedUid != null) AppIntent.AddDependency(task.uid, currentYankedUid) else null
+                    "child" -> if (currentYankedUid != null) AppIntent.MakeChild(task.uid, currentYankedUid) else null
+                    "related" -> if (currentYankedUid != null) AppIntent.AddRelatedTo(task.uid, currentYankedUid) else null
                     "toggle_collapse" -> AppIntent.SetTreeCollapse(task.uid, !task.isCollapsed)
                     else -> null
                 }
@@ -653,9 +663,6 @@ fun HomeScreen(
                 if (intent != null) {
                     api.dispatch(intent)
                     updateTaskList()
-                    if (action == "block" || action == "child" || action == "related") {
-                        if (!yankLockActive) yankedUid = null
-                    }
                     onDataChanged()
                     lastSyncFailed = false
                     triggerBackgroundSync(context, api)
@@ -902,9 +909,10 @@ fun HomeScreen(
                             headlineContent = { Text(cal.name) },
                             leadingContent = { NfIcon(NfIcons.CALENDAR, 16.sp) },
                             modifier = Modifier.clickable {
+                                val uid = taskToMove?.uid ?: return@clickable
                                 scope.launch {
                                     try {
-                                        api.moveTask(taskToMove!!.uid, cal.href)
+                                        api.moveTask(uid, cal.href)
                                         taskToMove = null
                                         updateTaskList()
                                         onDataChanged()

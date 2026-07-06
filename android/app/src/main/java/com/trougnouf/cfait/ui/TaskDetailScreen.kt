@@ -304,9 +304,10 @@ fun TaskDetailScreen(
                     // DELETE BUTTON
                     IconButton(
                         onClick = {
+                            val currentUid = task?.uid ?: return@IconButton
                             scope.launch {
                                 try {
-                                    api.dispatch(AppIntent.RemoveParent(task!!.uid))
+                                    api.dispatch(AppIntent.RemoveParent(currentUid))
                                     reload()
                                     triggerBackgroundSync(context, api)
                                 } catch (e: Exception) {
@@ -359,9 +360,10 @@ fun TaskDetailScreen(
                         // DELETE BUTTON
                         IconButton(
                             onClick = {
+                                val currentUid = task?.uid ?: return@IconButton
                                 scope.launch {
                                     try {
-                                        api.dispatch(AppIntent.RemoveDependency(task!!.uid, blockerUid))
+                                        api.dispatch(AppIntent.RemoveDependency(currentUid, blockerUid))
                                         reload()
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
@@ -416,10 +418,11 @@ fun TaskDetailScreen(
                         // UNLINK BUTTON (remove THIS task from the OTHER task's dependency list)
                         IconButton(
                             onClick = {
+                                val currentUid = task?.uid ?: return@IconButton
                                 scope.launch {
                                     try {
                                         // To unblock, remove this task.uid from the blocked task's dependencies
-                                        api.dispatch(AppIntent.RemoveDependency(blockedUid, task!!.uid))
+                                        api.dispatch(AppIntent.RemoveDependency(blockedUid, currentUid))
                                         reload()
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
@@ -474,9 +477,10 @@ fun TaskDetailScreen(
                         // DELETE BUTTON
                         IconButton(
                             onClick = {
+                                val currentUid = task?.uid ?: return@IconButton
                                 scope.launch {
                                     try {
-                                        api.dispatch(AppIntent.RemoveRelatedTo(task!!.uid, relatedUid))
+                                        api.dispatch(AppIntent.RemoveRelatedTo(currentUid, relatedUid))
                                         reload()
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
@@ -779,9 +783,10 @@ fun TaskDetailScreen(
                         // DELETE BUTTON
                         IconButton(
                             onClick = {
+                                val currentUid = task?.uid ?: return@IconButton
                                 scope.launch {
                                     try {
-                                        api.dispatch(AppIntent.RemoveRelatedTo(relatedTask.uid, task!!.uid))
+                                        api.dispatch(AppIntent.RemoveRelatedTo(relatedTask.uid, currentUid))
                                         reload()
                                         triggerBackgroundSync(context, api)
                                     } catch (e: Exception) {
