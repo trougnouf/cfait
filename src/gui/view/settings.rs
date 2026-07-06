@@ -895,10 +895,7 @@ pub fn view_settings(app: &GuiApp) -> Element<'_, Message> {
 
     let collections_ui: Element<_> = if is_settings {
         let mut col = column![
-            text(rust_i18n::t!("manage_collections")).size(20),
-            text(rust_i18n::t!("local_collections_explain"))
-                .size(12)
-                .color(Color::from_rgb(0.6, 0.6, 0.6)),
+            text(rust_i18n::t!("manage_collections")).size(20)
         ]
         .spacing(10);
 

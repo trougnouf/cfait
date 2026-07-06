@@ -313,7 +313,7 @@
     "local_collection": "Локальная коллекция",
     "local_collection_suffix": " (Локальная)",
     "local_collections": "Локальные коллекции",
-    "local_collections_explain": "Управление оффлайн коллекциями.",
+
     "local_label": "Локальный",
     "locations": "Локации",
     "log_level_explain": "Управление детализацией логов (в файл и терминал). Чем выше уровень, тем подробнее вывод.",

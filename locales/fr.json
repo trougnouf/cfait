@@ -398,7 +398,7 @@
     "local_collection": "Collection locale",
     "local_collection_suffix": " (Local)",
     "local_collections": "Collections locales",
-    "local_collections_explain": "Gérez vos collections hors ligne ici.",
+
     "local_label": "Local",
     "locations": "Lieux",
     "log_level_explain": "Contrôlez la verbosité de la sortie du journal (fichier et terminal). Des niveaux plus élevés produisent plus de détails.",

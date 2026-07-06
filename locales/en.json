@@ -433,7 +433,7 @@
     "local_collection": "Local collection",
     "local_collection_suffix": " (Local)",
     "local_collections": "Local collections",
-    "local_collections_explain": "Manage your offline collections here.",
+
     "local_label": "Local",
     "locations": "Locations",
     "log_level_explain": "Control the verbosity of log output for both file and terminal. Higher levels produce more output.",

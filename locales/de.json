@@ -398,7 +398,7 @@
     "local_collection": "Lokale Sammlung",
     "local_collection_suffix": " (Lokal)",
     "local_collections": "Lokale Sammlungen",
-    "local_collections_explain": "Verwalte hier deine Offline-Sammlungen.",
+
     "local_label": "Lokal",
     "locations": "Orte",
     "log_level_explain": "Steuert die Ausführlichkeit der Protokoll-Ausgabe sowohl für Datei als auch Terminal. Höhere Stufen erzeugen mehr Ausgaben.",

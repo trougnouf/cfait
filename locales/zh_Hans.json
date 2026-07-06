@@ -407,7 +407,7 @@
     "local_collection": "本地集合",
     "local_collection_suffix": " (本地)",
     "local_collections": "本地集合",
-    "local_collections_explain": "在此管理您的离线集合。",
+
     "local_label": "本地",
     "locations": "位置",
     "log_level_explain": "控制文件和终端日志输出详细程度。级别越高，输出内容越多。",

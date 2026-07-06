@@ -415,7 +415,7 @@
     "local_collection": "Colección local",
     "local_collection_suffix": " (Local)",
     "local_collections": "Colecciones locales",
-    "local_collections_explain": "Gestiona tus colecciones sin conexión aquí.",
+
     "local_label": "Local",
     "locations": "Ubicaciones",
     "log_level_explain": "Controla lo detallado que es el registro tanto para archivos como para la terminal. Los niveles más altos generan más información.",
