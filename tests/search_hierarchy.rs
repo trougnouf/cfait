@@ -183,11 +183,32 @@ fn test_child_match_does_not_force_parent_if_parent_does_not_match() {
     });
 
     let results = filter_res.items;
-    assert_eq!(results.len(), 1);
-    if let cfait::store::TaskListItem::Task(task) = &results[0] {
-        assert_eq!(task.uid, "child");
-    } else {
-        panic!("Expected Task variant");
+    assert_eq!(results.len(), 2);
+    
+    // Child should be a direct match
+    let child_result = results.iter().find(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "child"
+        } else {
+            false
+        }
+    });
+    assert!(child_result.is_some(), "Child should be in results");
+    if let Some(cfait::store::TaskListItem::Task(child_task)) = child_result {
+        assert!(!child_task.is_search_context, "Child should not be search context");
+    }
+    
+    // Parent should be included as context
+    let parent_result = results.iter().find(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "parent"
+        } else {
+            false
+        }
+    });
+    assert!(parent_result.is_some(), "Parent should be in results as context");
+    if let Some(cfait::store::TaskListItem::Task(parent_task)) = parent_result {
+        assert!(parent_task.is_search_context, "Parent should be search context");
     }
 }
 
@@ -325,12 +346,43 @@ fn test_sibling_match_only_includes_matching_sibling() {
     });
 
     let results = filter_res.items;
-    assert_eq!(results.len(), 1);
-    if let cfait::store::TaskListItem::Task(task) = &results[0] {
-        assert_eq!(task.uid, "c1");
-    } else {
-        panic!("Expected Task variant");
+    assert_eq!(results.len(), 2);
+    
+    // Child1 (Special Child) should be a direct match
+    let child1_result = results.iter().find(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "c1"
+        } else {
+            false
+        }
+    });
+    assert!(child1_result.is_some(), "Child1 should be in results");
+    if let Some(cfait::store::TaskListItem::Task(child_task)) = child1_result {
+        assert!(!child_task.is_search_context, "Child1 should not be search context");
     }
+    
+    // Parent should be included as context (to anchor the matching child)
+    let parent_result = results.iter().find(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "parent"
+        } else {
+            false
+        }
+    });
+    assert!(parent_result.is_some(), "Parent should be in results as context");
+    if let Some(cfait::store::TaskListItem::Task(parent_task)) = parent_result {
+        assert!(parent_task.is_search_context, "Parent should be search context");
+    }
+    
+    // Child2 (Regular Child) should NOT be included (no match, not an ancestor of a match)
+    let child2_result = results.iter().find(|t| {
+        if let cfait::store::TaskListItem::Task(task) = t {
+            task.uid == "c2"
+        } else {
+            false
+        }
+    });
+    assert!(child2_result.is_none(), "Child2 should not be in results");
 }
 
 #[test]
