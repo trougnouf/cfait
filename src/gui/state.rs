@@ -226,6 +226,7 @@ pub struct GuiApp {
 
     // Double click tracking
     pub last_click: Option<(std::time::Instant, String)>, // Added
+    pub last_title_click: Option<std::time::Instant>,
 
     pub pinned_actions: Vec<crate::config::TaskAction>,
     pub active_context_menu: Option<(String, bool, iced::Point)>, // (UID, is_full_menu, pt)
@@ -550,6 +551,7 @@ impl Default for GuiApp {
             active_context_menu: None,
 
             last_click: None,
+            last_title_click: None,
 
             ics_import_dialog_open: false,
             ics_import_file_path: None,

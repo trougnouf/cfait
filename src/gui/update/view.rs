@@ -1078,13 +1078,36 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             }
             Task::none()
         }
-        Message::WindowDragged => window::latest().then(|id| {
-            if let Some(id) = id {
-                window::drag(id)
-            } else {
-                Task::none()
+        Message::WindowDragged => {
+            let now = std::time::Instant::now();
+            let mut is_double = false;
+
+            if let Some(last_time) = app.last_title_click
+                && now.duration_since(last_time).as_millis() < 400
+            {
+                is_double = true;
             }
-        }),
+            app.last_title_click = Some(now);
+
+            if is_double {
+                app.last_title_click = None;
+                window::latest().then(|id| {
+                    if let Some(id) = id {
+                        window::toggle_maximize(id)
+                    } else {
+                        Task::none()
+                    }
+                })
+            } else {
+                window::latest().then(|id| {
+                    if let Some(id) = id {
+                        window::drag(id)
+                    } else {
+                        Task::none()
+                    }
+                })
+            }
+        }
         Message::MinimizeWindow => window::latest().then(|id| {
             if let Some(id) = id {
                 window::minimize(id, true)
