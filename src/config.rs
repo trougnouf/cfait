@@ -535,6 +535,14 @@ fn default_duration_goal_mins() -> u32 {
     60
 }
 
+fn default_window_width() -> f32 {
+    800.0
+}
+
+fn default_window_height() -> f32 {
+    600.0
+}
+
 fn default_log_level() -> LogLevel {
     LogLevel::Warn
 }
@@ -763,6 +771,11 @@ pub struct Config {
     pub sync_settings: bool,
     #[serde(default)]
     pub settings_updated_at: i64,
+
+    #[serde(default = "default_window_width")]
+    pub window_width: f32,
+    #[serde(default = "default_window_height")]
+    pub window_height: f32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
@@ -901,6 +914,8 @@ impl Default for Config {
             sync_settings: true,
             settings_updated_at: 0,
             goals: HashMap::new(),
+            window_width: default_window_width(),
+            window_height: default_window_height(),
         }
     }
 }
@@ -1338,6 +1353,12 @@ impl Config {
             } else if trimmed.starts_with("log_level =") {
                 out.push_str(line);
                 out.push_str(" # String: Logging verbosity level (Error, Warn, Info, Debug, Trace). Applies to both log file and terminal.");
+            } else if trimmed.starts_with("window_width =") {
+                out.push_str(line);
+                out.push_str(" # Float: Last window width (GUI).");
+            } else if trimmed.starts_with("window_height =") {
+                out.push_str(line);
+                out.push_str(" # Float: Last window height (GUI).");
             } else if trimmed.starts_with("config_version =") {
                 out.push_str(
                     "# Internal version for configuration migrations. Do not edit manually.",

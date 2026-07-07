@@ -227,6 +227,7 @@ pub enum Message {
     MinimizeWindow,
     CloseWindow,
     WindowResized(iced::Size),
+    ApplyWindowResize(usize),
     ResizeStart(ResizeDirection),
 
     // --- Settings Input Fields ---

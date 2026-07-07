@@ -37,6 +37,12 @@ pub fn run_with_ics_file(
     let window_icon =
         window_icon::from_file_data(include_bytes!("../../assets/autogen/cfait.png"), None).ok();
 
+    // Load config synchronously to get initial window size
+    let init_ctx = Arc::new(StandardContext::new(override_root.clone()));
+    let init_config = Config::load(init_ctx.as_ref()).unwrap_or_default();
+    let width = init_config.window_width.max(400.0);
+    let height = init_config.window_height.max(300.0);
+
     iced::application(
         move || GuiApp::new_with_ics(ics_file_path.clone(), override_root.clone(), force_ssd),
         GuiApp::update,
@@ -62,6 +68,8 @@ pub fn run_with_ics_file(
         }
     })
     .window(window::Settings {
+        size: iced::Size::new(width, height),
+        min_size: Some(iced::Size::new(400.0, 300.0)),
         icon: window_icon,
         decorations: force_ssd,
         transparent: !force_ssd,

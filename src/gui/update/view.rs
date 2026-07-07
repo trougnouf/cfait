@@ -1122,12 +1122,31 @@ pub fn handle(app: &mut GuiApp, message: Message) -> Task<Message> {
             let was_narrow = app.current_window_size.width < 750.0;
             let is_narrow = size.width < 750.0;
             app.current_window_size = size;
+            app.core_config.window_width = size.width;
+            app.core_config.window_height = size.height;
 
             if !was_narrow && is_narrow {
                 app.sidebar_is_hidden = true;
                 save_config(app);
+                Task::none()
             } else if was_narrow && !is_narrow {
                 app.sidebar_is_hidden = false;
+                save_config(app);
+                Task::none()
+            } else {
+                app.resize_debounce_version = app.resize_debounce_version.wrapping_add(1);
+                let version = app.resize_debounce_version;
+                Task::perform(
+                    async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        version
+                    },
+                    Message::ApplyWindowResize,
+                )
+            }
+        }
+        Message::ApplyWindowResize(version) => {
+            if version == app.resize_debounce_version {
                 save_config(app);
             }
             Task::none()

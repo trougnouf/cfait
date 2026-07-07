@@ -20,7 +20,8 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
             Message::OpenContextMenu(_, _)
             | Message::CloseContextMenu
             | Message::Tick
-            | Message::WindowResized(_) => {}
+            | Message::WindowResized(_)
+            | Message::ApplyWindowResize(_) => {}
             _ => {
                 app.active_context_menu = None;
             }
@@ -228,6 +229,7 @@ pub fn update(app: &mut GuiApp, message: Message) -> Task<Message> {
         | Message::CloseWindow
         | Message::ResizeStart(_)
         | Message::WindowResized(_)
+        | Message::ApplyWindowResize(_)
         | Message::JumpToTag(_)
         | Message::JumpToLocation(_)
         | Message::SelectNext
