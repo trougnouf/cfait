@@ -495,7 +495,7 @@ impl Default for GuiApp {
             sidebar_scrollable_id: iced::widget::Id::unique(),
 
             resize_direction: None,
-            current_window_size: iced::Size::new(800.0, 600.0),
+            current_window_size: iced::Size::new(1024.0, 768.0),
             resize_debounce_version: 0,
             ob_urgent_days_input: "1".to_string(),
             ob_urgent_prio_input: "1".to_string(),

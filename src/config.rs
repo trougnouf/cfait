@@ -536,11 +536,11 @@ fn default_duration_goal_mins() -> u32 {
 }
 
 fn default_window_width() -> f32 {
-    800.0
+    1024.0
 }
 
 fn default_window_height() -> f32 {
-    600.0
+    768.0
 }
 
 fn default_log_level() -> LogLevel {
